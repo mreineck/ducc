@@ -1,6 +1,12 @@
-#include "error_handling.h"
+#include "mr_util/error_handling.h"
 
 using namespace std;
+
+namespace mr {
+
+namespace error_handling {
+
+namespace detail {
 
 bool abort_in_progress__ = false;
 
@@ -16,3 +22,5 @@ void killjob__()
   // perhaps print stack trace?
   exit(1);
   }
+
+}}}

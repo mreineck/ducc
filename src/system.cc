@@ -3,10 +3,16 @@
 #include <fstream>
 #include <sstream>
 
-#include "system.h"
-#include "string_utils.h"
+#include "mr_util/error_handling.h"
+#include "mr_util/system.h"
+#include "mr_util/string_utils.h"
 
 using namespace std;
+using namespace mr::string_utils;
+
+namespace mr {
+
+namespace system {
 
 namespace {
 
@@ -23,28 +29,30 @@ template<typename T> T find(const string &s, const string &pattern)
   regex re(pattern);
   sregex_iterator it(s.begin(), s.end(), re);
   sregex_iterator it_end;
-  myassert (it!=it_end, "did not find pattern '", pattern, "'");
+  MR_assert (it!=it_end, "did not find pattern '", pattern, "'");
   return stringToData<T>(it->str(1));
   }
 
 } // unnamed namespace
 
-tsize getProcessInfo(const string &quantity)
+size_t getProcessInfo(const string &quantity)
   {
   string text = fileToString("/proc/self/status");
-  return find<tsize>(text, quantity + R"(:\s+(\d+))");
+  return find<size_t>(text, quantity + R"(:\s+(\d+))");
   }
 
-tsize getMemInfo(const string &quantity)
+size_t getMemInfo(const string &quantity)
   {
   string text = fileToString("/proc/meminfo");
-  return find<tsize>(text, quantity + R"(:\s+(\d+) kB)");
+  return find<size_t>(text, quantity + R"(:\s+(\d+) kB)");
   }
 
-tsize usable_memory()
+size_t usable_memory()
   {
   string text = fileToString("/proc/meminfo");
-  tsize MemTotal = find<tsize>(text, R"(MemTotal:\s+(\d+) kB)");
-  tsize Committed = find<tsize>(text, R"(Committed_AS:\s+(\d+) kB)");
+  size_t MemTotal = find<size_t>(text, R"(MemTotal:\s+(\d+) kB)");
+  size_t Committed = find<size_t>(text, R"(Committed_AS:\s+(\d+) kB)");
   return MemTotal-Committed;
   }
+
+}}

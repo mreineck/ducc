@@ -1,11 +1,17 @@
-#ifndef MRBASE_SYSTEM_H
-#define MRBASE_SYSTEM_H
+#ifndef MRUTIL_SYSTEM_H
+#define MRUTIL_SYSTEM_H
 
 #include <string>
-#include "datatypes.h"
+#include <cstdlib>
 
-tsize getProcessInfo(const std::string &quantity);
-tsize getMemInfo(const std::string &quantity);
-tsize usable_memory();
+namespace mr {
+
+namespace system {
+
+std::size_t getProcessInfo(const std::string &quantity);
+std::size_t getMemInfo(const std::string &quantity);
+std::size_t usable_memory();
+
+}}
 
 #endif

@@ -1,12 +1,16 @@
-#ifndef MRBASE_TIMERS_H
-#define MRBASE_TIMERS_H
+#ifndef MRUTIL_TIMERS_H
+#define MRUTIL_TIMERS_H
 
 #include <chrono>
 #include <string>
 #include <map>
 
-#include "error_handling.h"
-#include "string_utils.h"
+#include "mr_util/error_handling.h"
+#include "mr_util/string_utils.h"
+
+namespace mr {
+
+namespace timers {
 
 class SimpleTimer
   {
@@ -65,7 +69,7 @@ class TimerHierarchy
       auto it=curnode->child.find(name);
       if (it==curnode->child.end())
         {
-        myassert(name.find(':') == std::string::npos, "reserved character");
+        MR_assert(name.find(':') == std::string::npos, "reserved character");
         it = curnode->child.insert(make_pair(name,tstack_node(curnode))).first;
         }
       curnode=&(it->second);
@@ -83,7 +87,7 @@ class TimerHierarchy
       {
       adjust_time();
       curnode = curnode->parent;
-      myassert(curnode!=nullptr, "tried to pop from empty timer stack");
+      MR_assert(curnode!=nullptr, "tried to pop from empty timer stack");
       }
     void poppush(const std::string &name)
       {
@@ -98,5 +102,7 @@ class TimerHierarchy
       return res;
       }
   };
+
+}}
 
 #endif

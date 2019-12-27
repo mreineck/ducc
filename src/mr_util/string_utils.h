@@ -29,12 +29,15 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRBASE_STRING_UTILS_H
-#define MRBASE_STRING_UTILS_H
+#ifndef MRUTIL_STRING_UTILS_H
+#define MRUTIL_STRING_UTILS_H
 
 #include <vector>
 #include <map>
-#include "datatypes.h"
+
+namespace mr {
+
+namespace string_utils {
 
 /*! \defgroup stringutilsgroup String handling helper functions */
 /*! \{ */
@@ -53,7 +56,7 @@ template<> std::string dataToString (const long double &x);
 
 /*! Returns a string containing the text representation of \a x, padded
     with leading zeroes to \a width characters. */
-std::string intToString(int64 x, tsize width);
+std::string intToString(std::int64_t x, std::size_t width);
 
 /*! Reads a value of a given datatype from a string */
 template<typename T> void stringToData (const std::string &x, T &value);
@@ -119,5 +122,7 @@ void parse_words_from_file (const std::string &filename,
   std::vector<std::string> &words);
 
 /*! \} */
+
+}}
 
 #endif

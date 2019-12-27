@@ -31,37 +31,21 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRBASE_DATATYPES_H
-#define MRBASE_DATATYPES_H
+#ifndef MRUTIL_DATATYPES_H
+#define MRUTIL_DATATYPES_H
 
 #include <string>
 #include <cstddef>
 #include <cstdint>
-#include "error_handling.h"
+#include "mr_util/error_handling.h"
 
-using int8 = std::int8_t;
-using uint8 = std::uint8_t;
+namespace mr {
 
-using int16 = std::int16_t;
-using uint16 = std::uint16_t;
-
-using int32 = std::int32_t;
-using uint32 = std::uint32_t;
-
-using int64 = std::int64_t;
-using uint64 = std::uint64_t;
-
-using float32 = float;
-using float64 = double;
-
-/*! unsigned integer type which should be used for array sizes */
-using tsize = std::size_t;
-/*! signed integer type which should be used for relative array indices */
-using tdiff = std::ptrdiff_t;
+namespace datatypes {
 
 /*! Returns a C string describing the data type \a T. */
 template<typename T> inline const char *type2typename ()
-  { myfail(T::UNSUPPORTED_DATA_TYPE); }
+  { MR_fail(T::UNSUPPORTED_DATA_TYPE); }
 template<> inline const char *type2typename<signed char> ()
   { return "signed char"; }
 template<> inline const char *type2typename<unsigned char> ()
@@ -114,7 +98,7 @@ enum NDT {
 
 /*! Returns the \a NDT constant associated with \a T. */
 template<typename T> inline NDT nativeType()
-  { myfail(T::UNSUPPORTED_DATA_TYPE); }
+  { MR_fail(T::UNSUPPORTED_DATA_TYPE); }
 template<> inline NDT nativeType<char>              () { return NAT_CHAR;      }
 template<> inline NDT nativeType<signed char>       () { return NAT_SCHAR;     }
 template<> inline NDT nativeType<unsigned char>     () { return NAT_UCHAR;     }
@@ -153,8 +137,10 @@ inline int ndt2size (NDT type)
     case NAT_LONGDOUBLE: return sizeof(long double);
     case NAT_BOOL      : return sizeof(bool);
     default:
-      myfail ("ndt2size: unsupported data type");
+      MR_fail ("ndt2size: unsupported data type");
     }
   }
+
+}}
 
 #endif

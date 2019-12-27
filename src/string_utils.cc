@@ -37,9 +37,17 @@
 #include <string>
 #include <cstring>
 #include <cctype>
-#include "string_utils.h"
+#include "mr_util/string_utils.h"
+#include "mr_util/error_handling.h"
+#include "mr_util/datatypes.h"
 
 using namespace std;
+
+namespace mr {
+
+namespace string_utils {
+
+using namespace mr::datatypes;
 
 string trim (const string &orig)
   {
@@ -90,13 +98,13 @@ template string dataToString (const unsigned long &x);
 template string dataToString (const long long &x);
 template string dataToString (const unsigned long long &x);
 
-string intToString(int64 x, tsize width)
+string intToString(int64_t x, size_t width)
   {
   ostringstream strstrm;
   (x>=0) ? strstrm << setw(width) << setfill('0') << x
          : strstrm << "-" << setw(width-1) << setfill('0') << -x;
   string res = strstrm.str();
-  myassert(res.size()==width,"number too large");
+  MR_assert(res.size()==width,"number too large");
   return trim(res);
   }
 
@@ -104,12 +112,12 @@ namespace {
 
 void end_stringToData (const string &x, const char *tn, istringstream &strstrm)
   {
-  myassert (strstrm,
+  MR_assert (strstrm,
     "conversion error in stringToData<", tn, ">('", x, "')");
   string rest;
   strstrm >> rest;
 //  rest=trim(rest);
-  myassert (rest.length()==0,
+  MR_assert (rest.length()==0,
     "conversion error in stringToData<", tn, ">('", x, "')");
   }
 
@@ -129,11 +137,11 @@ template<> void stringToData (const string &x, bool &value)
   {
   const char *fval[] = {"f","n","false",".false."};
   const char *tval[] = {"t","y","true",".true."};
-  for (tsize i=0; i< sizeof(fval)/sizeof(fval[0]); ++i)
+  for (size_t i=0; i< sizeof(fval)/sizeof(fval[0]); ++i)
     if (equal_nocase(x,fval[i])) { value=false; return; }
-  for (tsize i=0; i< sizeof(tval)/sizeof(tval[0]); ++i)
+  for (size_t i=0; i< sizeof(tval)/sizeof(tval[0]); ++i)
     if (equal_nocase(x,tval[i])) { value=true; return; }
-  myfail("conversion error in stringToData<bool>(",x,")");
+  MR_fail("conversion error in stringToData<bool>(",x,")");
   }
 
 template void stringToData (const string &x, signed char &value);
@@ -153,16 +161,16 @@ template void stringToData (const string &x, long double &value);
 bool equal_nocase (const string &a, const string &b)
   {
   if (a.size()!=b.size()) return false;
-  for (tsize m=0; m<a.size(); ++m)
-    if (tolower(a[m])!=tolower(b[m])) return false;
+  for (size_t m=0; m<a.size(); ++m)
+    if (std::tolower(a[m])!=std::tolower(b[m])) return false;
   return true;
   }
 
 string tolower(const string &input)
   {
   string result=input;
-  for (tsize m=0; m<result.size(); ++m)
-    result[m]=char(tolower(result[m]));
+  for (size_t m=0; m<result.size(); ++m)
+    result[m]=char(std::tolower(result[m]));
   return result;
   }
 
@@ -171,7 +179,7 @@ void parse_file (const string &filename, map<string,string> &dict)
   int lineno=0;
   dict.clear();
   ifstream inp(filename.c_str());
-  myassert (inp, "Could not open parameter file '", filename, "'.");
+  MR_assert (inp, "Could not open parameter file '", filename, "'.");
   while (inp)
     {
     string line;
@@ -221,14 +229,14 @@ void parse_cmdline_classic (int argc, const char **argv,
   const vector<string> &leading_args, map<string,string> &dict)
   {
   dict.clear();
-  myassert(tsize(argc)>leading_args.size(),"not enough arguments");
-  for (tsize i=0; i<leading_args.size(); ++i)
+  MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
+  for (size_t i=0; i<leading_args.size(); ++i)
     dict[leading_args[i]] = argv[i+1];
   int curarg=leading_args.size()+1;
   while (curarg<argc)
     {
     string param=argv[curarg];
-    myassert(isParam(param),"unrecognized command line format");
+    MR_assert(isParam(param),"unrecognized command line format");
     if ((curarg==argc-1) || isParam(argv[curarg+1]))
       {
       dict[param.substr(1)]="true";
@@ -250,8 +258,8 @@ void parse_cmdline_equalsign (int argc, const char **argv,
   const vector<string> &leading_args, map<string,string> &dict)
   {
   dict.clear();
-  myassert(tsize(argc)>leading_args.size(),"not enough arguments");
-  for (tsize i=0; i<leading_args.size(); ++i)
+  MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
+  for (size_t i=0; i<leading_args.size(); ++i)
     dict[leading_args[i]] = argv[i+1];
   for (int i=leading_args.size()+1; i<argc; ++i)
     {
@@ -292,7 +300,7 @@ template<typename T> void split (istream &stream, vector<T> &list)
     {
     string word;
     stream >> word;
-    myassert (stream||stream.eof(),
+    MR_assert (stream||stream.eof(),
       "error while splitting stream into ", type2typename<T>(), " components");
     if (stream) list.push_back(stringToData<T>(word));
     }
@@ -325,7 +333,7 @@ void parse_words_from_file (const string &filename, vector<string> &words)
   {
   words.clear();
   ifstream inp(filename.c_str());
-  myassert (inp,"Could not open file '", filename, "'.");
+  MR_assert (inp,"Could not open file '", filename, "'.");
   while (inp)
     {
     string word;
@@ -334,3 +342,5 @@ void parse_words_from_file (const string &filename, vector<string> &words)
     if (word!="") words.push_back(word);
     }
   }
+
+}}
