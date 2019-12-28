@@ -54,7 +54,7 @@ namespace detail {
     else { MR_fail("Assertion failure\n", ##__VA_ARGS__); } \
     } while(0)
 
-// to be replaced with std::source_location once available
+// to be replaced with std::source_location once generally available
 class CodeLocation
   {
   private:
@@ -74,7 +74,11 @@ inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
 extern bool abort_in_progress__;
 void killjob__();
 
-#if 1
+#if (__cplusplus>=201703L) // hyper-elegant C++2017 version
+template<typename ...Args>
+inline void streamDump__(::std::ostream &os, Args&&... args)
+  { (os << ... << args); }
+#else
 template<typename T>
 inline void streamDump__(::std::ostream &os, const T& value)
   { os << value; }
@@ -86,11 +90,6 @@ inline void streamDump__(::std::ostream &os, const T& value,
   os << value;
   streamDump__(os, args...);
   }
-#else
-// hyper-elegant C++2017 version
-template<typename ...Args>
-inline void streamDump__(::std::ostream &os, Args&&... args)
-  { (os << ... << args); }
 #endif
 
 }}}

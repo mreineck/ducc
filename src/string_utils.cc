@@ -39,15 +39,12 @@
 #include <cctype>
 #include "mr_util/string_utils.h"
 #include "mr_util/error_handling.h"
-#include "mr_util/datatypes.h"
 
 using namespace std;
 
 namespace mr {
 
 namespace string_utils {
-
-using namespace mr::datatypes;
 
 string trim (const string &orig)
   {
@@ -108,26 +105,18 @@ string intToString(int64_t x, size_t width)
   return trim(res);
   }
 
-namespace {
-
-void end_stringToData (const string &x, const char *tn, istringstream &strstrm)
-  {
-  MR_assert (strstrm,
-    "conversion error in stringToData<", tn, ">('", x, "')");
-  string rest;
-  strstrm >> rest;
-//  rest=trim(rest);
-  MR_assert (rest.length()==0,
-    "conversion error in stringToData<", tn, ">('", x, "')");
-  }
-
-} // unnamed namespace
-
 template<typename T> void stringToData (const string &x, T &value)
   {
   istringstream strstrm(x);
   strstrm >> value;
-  end_stringToData (x,type2typename<T>(),strstrm);
+  bool ok = bool(strstrm);
+  if (ok)
+    {
+    string rest;
+    strstrm >> rest;
+    ok = rest.length()==0;
+    }
+  MR_assert(ok, "could not convert '", x, "' to desired data type.");
   }
 
 template<> void stringToData (const string &x, string &value)
@@ -301,7 +290,7 @@ template<typename T> void split (istream &stream, vector<T> &list)
     string word;
     stream >> word;
     MR_assert (stream||stream.eof(),
-      "error while splitting stream into ", type2typename<T>(), " components");
+      "error while splitting stream into components");
     if (stream) list.push_back(stringToData<T>(word));
     }
   }
