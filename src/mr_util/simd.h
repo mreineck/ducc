@@ -19,17 +19,32 @@
 /* Copyright (C) 2019 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_VECSUPPORT_H
-#define MRUTIL_VECSUPPORT_H
+#ifndef MRUTIL_SIMD_H
+#define MRUTIL_SIMD_H
 
+// only enable SIMD support for gcc>=5.0 and clang>=5.0
+#ifndef MRUTIL_NO_SIMD
+#define MRUTIL_NO_SIMD
+#if defined(__INTEL_COMPILER)
+// do nothing. This is necessary because this compiler also sets __GNUC__.
+#elif defined(__clang__)
+#if __clang_major__>=5
+#undef MRUTIL_NO_SIMD
+#endif
+#elif defined(__GNUC__)
+#if __GNUC__>=5
+#undef MRUTIL_NO_SIMD
+#endif
+#endif
+#endif
+
+#ifndef MRUTIL_NO_SIMD
 #include <cstdlib>
 #include <cmath>
 
 namespace mr {
 
-namespace vecsupport {
-
-namespace detail {
+namespace detail_simd {
 
 using namespace std;
 
@@ -51,7 +66,8 @@ template<typename T, size_t len=vbytes/sizeof(T)> class vtp
     Tv v;
 
     void from_scalar(T other)
-      { for (size_t i=0; i<len; ++i) v[i]=other; }
+//      { for (size_t i=0; i<len; ++i) v[i]=other; }
+      { v=v*0+other; }
 
   public:
     static constexpr size_t vlen=len;
@@ -72,7 +88,7 @@ template<typename T, size_t len=vbytes/sizeof(T)> class vtp
     vtp &operator-=(vtp other) { v-=other.v; return *this; }
     vtp &operator*=(vtp other) { v*=other.v; return *this; }
     vtp &operator/=(vtp other) { v/=other.v; return *this; }
-    vtp exp() const
+    inline vtp exp() const
       {
       vtp res;
       for (size_t i=0; i<len; ++i) res.v[i] = std::exp(v[i]);
@@ -89,67 +105,12 @@ template<typename T, size_t len=vbytes/sizeof(T)> class vtp
     template<typename I> T operator[](I i) const { return v[i]; }
   };
 
-template<typename T> class aligned_array
-  {
-  private:
-    T *p;
-    size_t sz;
+}
 
-#if (__cplusplus >= 201703L)
-    static T *ralloc(size_t num)
-      {
-      if (num==0) return nullptr;
-      void *res = aligned_alloc(64,num*sizeof(T));
-      if (!res) throw bad_alloc();
-      return reinterpret_cast<T *>(res);
-      }
-    static void dealloc(T *ptr)
-      { free(ptr); }
-#else // portable emulation
-    static T *ralloc(size_t num)
-      {
-      if (num==0) return nullptr;
-      void *ptr = malloc(num*sizeof(T)+64);
-      if (!ptr) throw bad_alloc();
-      T *res = reinterpret_cast<T *>
-        ((reinterpret_cast<size_t>(ptr) & ~(size_t(63))) + 64);
-      (reinterpret_cast<void**>(res))[-1] = ptr;
-      return res;
-      }
-    static void dealloc(T *ptr)
-      { if (ptr) free((reinterpret_cast<void**>(ptr))[-1]); }
-#endif
-
-  public:
-    aligned_array() : p(0), sz(0) {}
-    aligned_array(size_t n) : p(ralloc(n)), sz(n) {}
-    aligned_array(aligned_array &&other)
-      : p(other.p), sz(other.sz)
-      { other.p=nullptr; other.sz=0; }
-    ~aligned_array() { dealloc(p); }
-
-    void resize(size_t n)
-      {
-      if (n==sz) return;
-      dealloc(p);
-      p = ralloc(n);
-      sz = n;
-      }
-
-    T &operator[](size_t idx) { return p[idx]; }
-    const T &operator[](size_t idx) const { return p[idx]; }
-
-    T *data() { return p; }
-    const T *data() const { return p; }
-
-    size_t size() const { return sz; }
-  };
+using detail_simd::vtp;
 
 }
 
-using detail::vtp;
-using detail::aligned_array;
-
-}}
+#endif
 
 #endif
