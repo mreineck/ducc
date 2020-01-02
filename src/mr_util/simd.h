@@ -104,6 +104,8 @@ template<typename T, size_t len=vbytes/sizeof(T)> class vtp
     template<typename I> void Set (I i, T val) { v[i]=val; }
     template<typename I> T operator[](I i) const { return v[i]; }
   };
+template<typename T, size_t len> vtp<T, len> operator*(T a, vtp<T, len> b)
+  { return b*a; }
 }
 
 using detail_simd::vtp;
