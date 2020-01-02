@@ -61,7 +61,7 @@ constexpr size_t vbytes = 16;
 template<typename T, size_t len=vbytes/sizeof(T)> class vtp
   {
   protected:
-    using Tv __attribute__ ((vector_size (len*sizeof(T)))) = T;
+    using Tv [[gnu::vector_size (len*sizeof(T))]] = T;
     static_assert((len>0) && ((len&(len-1))==0), "bad vector length");
     Tv v;
 
@@ -104,7 +104,6 @@ template<typename T, size_t len=vbytes/sizeof(T)> class vtp
     template<typename I> void Set (I i, T val) { v[i]=val; }
     template<typename I> T operator[](I i) const { return v[i]; }
   };
-
 }
 
 using detail_simd::vtp;

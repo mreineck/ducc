@@ -38,9 +38,7 @@
 
 namespace mr {
 
-namespace threading {
-
-namespace detail {
+namespace detail_threading {
 
 using namespace std;
 
@@ -346,15 +344,14 @@ template<typename Func> void execGuided(size_t nwork,
   }
 } // end of namespace detail
 
-using detail::Scheduler;
-using detail::execSingle;
-using detail::execStatic;
-using detail::execDynamic;
-using detail::execGuided;
+using detail_threading::Scheduler;
+using detail_threading::execSingle;
+using detail_threading::execStatic;
+using detail_threading::execDynamic;
+using detail_threading::execGuided;
 
 // FIXME: missing execParallel(), my_thread(), num_threads()
 
-} // end of namespace threading
 } // end of namespace mr
 
 #endif

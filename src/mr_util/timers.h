@@ -6,7 +6,6 @@
 #include <map>
 
 #include "mr_util/error_handling.h"
-#include "mr_util/string_utils.h"
 
 namespace mr {
 

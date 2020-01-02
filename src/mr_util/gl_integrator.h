@@ -28,12 +28,9 @@
 
 namespace mr {
 
-namespace gl_integrator {
-
-namespace detail {
+namespace detail_gl_integrator {
 
 using namespace std;
-using namespace mr::threading;
 
 class GL_Integrator
   {
@@ -125,8 +122,8 @@ class GL_Integrator
 
 }
 
-using detail::GL_Integrator;
+using detail_gl_integrator::GL_Integrator;
 
-}}
+}
 
 #endif

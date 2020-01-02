@@ -27,8 +27,6 @@
 
 namespace mr {
 
-namespace string_utils {
-
 /*! \defgroup stringutilsgroup String handling helper functions */
 /*! \{ */
 
@@ -113,6 +111,6 @@ void parse_words_from_file (const std::string &filename,
 
 /*! \} */
 
-}}
+}
 
 #endif

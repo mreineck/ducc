@@ -25,9 +25,7 @@ using namespace std;
 
 namespace mr {
 
-namespace error_handling {
-
-namespace detail {
+namespace detail_error_handling {
 
 bool abort_in_progress__ = false;
 
@@ -45,4 +43,4 @@ void killjob__()
   exit(1);
   }
 
-}}}
+}}

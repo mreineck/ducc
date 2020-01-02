@@ -27,23 +27,21 @@
 
 namespace mr {
 
-namespace error_handling {
-
-namespace detail {
+namespace detail_error_handling {
 
 #if defined (__GNUC__)
-#define MR_ERROR_HANDLING_LOC_ ::mr::error_handling::detail::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+#define MRUTIL_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
-#define MRERROR_HANDLING_LOC_ ::mr::error_handling::detail::CodeLocation(__FILE__, __LINE__)
+#define MRUTIL_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
 
 #define MR_fail(...) \
   do { \
-    if (!::mr::error_handling::detail::abort_in_progress__) \
+    if (!::mr::detail_error_handling::abort_in_progress__) \
       { \
-      ::mr::error_handling::detail::abort_in_progress__ = true; \
-      ::mr::error_handling::detail::streamDump__(::std::cerr, MR_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
-      ::mr::error_handling::detail::killjob__(); \
+      ::mr::detail_error_handling::abort_in_progress__ = true; \
+      ::mr::detail_error_handling::streamDump__(::std::cerr, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+      ::mr::detail_error_handling::killjob__(); \
       } \
     ::std::exit(1); \
     } while(0)
@@ -92,6 +90,6 @@ inline void streamDump__(::std::ostream &os, const T& value,
   }
 #endif
 
-}}}
+}}
 
 #endif

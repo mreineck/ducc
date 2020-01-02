@@ -26,7 +26,7 @@
  *  This file contains the implementation of various convenience functions
  *  used by the Planck LevelS package.
  *
- *  Copyright (C) 2002-2014 Max-Planck-Society
+ *  Copyright (C) 2002-2019 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -43,8 +43,6 @@
 using namespace std;
 
 namespace mr {
-
-namespace string_utils {
 
 string trim (const string &orig)
   {
@@ -332,4 +330,4 @@ void parse_words_from_file (const string &filename, vector<string> &words)
     }
   }
 
-}}
+}
