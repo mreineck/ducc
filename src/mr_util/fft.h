@@ -54,7 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <array>
 #endif
 #include "mr_util/threading.h"
-#include "mr_util/simd.h"
+#include <experimental/simd>
 #include "mr_util/cmplx.h"
 #include "mr_util/aligned_array.h"
 #include "mr_util/unity_roots.h"
@@ -75,11 +75,10 @@ namespace mr {
 namespace detail_fft {
 
 using namespace std;
+using namespace std::experimental;
 
 using shape_t = vector<size_t>;
 using stride_t = vector<ptrdiff_t>;
-
-template<typename T> using arr=aligned_array<T>;
 
 constexpr bool FORWARD  = true,
                BACKWARD = false;
@@ -103,8 +102,8 @@ constexpr bool FORWARD  = true,
 template<typename T> struct VLEN { static constexpr size_t val=1; };
 
 #ifndef MRUTIL_NO_VECTORS
-template<> struct VLEN<float> { static constexpr size_t val=vtp<float>::vlen; };
-template<> struct VLEN<double> { static constexpr size_t val=vtp<double>::vlen; };
+template<> struct VLEN<float> { static constexpr size_t val=simd<float>::size(); };
+template<> struct VLEN<double> { static constexpr size_t val=simd<double>::size(); };
 #endif
 
 template<typename T> inline void PM(T &a, T &b, T c, T d)
@@ -158,7 +157,7 @@ struct util // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
-  static POCKETFFT_NOINLINE size_t good_size_Cmplx(size_t n)
+  static POCKETFFT_NOINLINE size_t good_size_cmplx(size_t n)
     {
     if (n<=12) return n;
 
@@ -288,7 +287,7 @@ template<typename T0> class cfftp
       };
 
     size_t length;
-    arr<Cmplx<T0>> mem;
+    aligned_array<Cmplx<T0>> mem;
     vector<fctdata> fact;
 
     void add_factor(size_t factor)
@@ -785,7 +784,7 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
   auto CH2 = [ch, idl1](size_t a, size_t b) -> const T&
     { return ch[a+idl1*b]; };
 
-  arr<Cmplx<T0>> wal(ip);
+  aligned_array<Cmplx<T0>> wal(ip);
   wal[0] = Cmplx<T0>(1., 0.);
   for (size_t i=1; i<ip; ++i)
     wal[i]=Cmplx<T0>(csarr[i].r,fwd ? -csarr[i].i : csarr[i].i);
@@ -878,7 +877,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
   {
   if (length==1) { c[0]*=fct; return; }
   size_t l1=1;
-  arr<T> ch(length);
+  aligned_array<T> ch(length);
   T *p1=c, *p2=ch.data();
 
   for(size_t k1=0; k1<fact.size(); k1++)
@@ -1014,7 +1013,7 @@ template<typename T0> class rfftp
       };
 
     size_t length;
-    arr<T0> mem;
+    aligned_array<T0> mem;
     vector<fctdata> fact;
 
     void add_factor(size_t factor)
@@ -1683,7 +1682,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       {
       if (length==1) { c[0]*=fct; return; }
       size_t n=length, nf=fact.size();
-      arr<T> ch(n);
+      aligned_array<T> ch(n);
       T *p1=c, *p2=ch.data();
 
       if (r2hc)
@@ -1818,12 +1817,12 @@ template<typename T0> class fftblue
   private:
     size_t n, n2;
     cfftp<T0> plan;
-    arr<Cmplx<T0>> mem;
+    aligned_array<Cmplx<T0>> mem;
     Cmplx<T0> *bk, *bkf;
 
     template<bool fwd, typename T> void fft(Cmplx<T> c[], T0 fct) const
       {
-      arr<Cmplx<T>> akf(n2);
+      aligned_array<Cmplx<T>> akf(n2);
 
       /* initialize a_k and FFT it */
       for (size_t m=0; m<n; ++m)
@@ -1854,7 +1853,7 @@ template<typename T0> class fftblue
 
   public:
     POCKETFFT_NOINLINE fftblue(size_t length)
-      : n(length), n2(util::good_size_Cmplx(n*2-1)), plan(n2), mem(n+n2/2+1),
+      : n(length), n2(util::good_size_cmplx(n*2-1)), plan(n2), mem(n+n2/2+1),
         bk(mem.data()), bkf(mem.data()+n)
       {
       /* initialize b_k */
@@ -1870,7 +1869,7 @@ template<typename T0> class fftblue
         }
 
       /* initialize the zero-padded, Fourier transformed b_k. Add normalisation. */
-      arr<Cmplx<T0>> tbkf(n2);
+      aligned_array<Cmplx<T0>> tbkf(n2);
       T0 xn2 = T0(1)/T0(n2);
       tbkf[0] = bk[0]*xn2;
       for (size_t m=1; m<n; ++m)
@@ -1887,7 +1886,7 @@ template<typename T0> class fftblue
 
     template<typename T> void exec_r(T c[], T0 fct, bool fwd)
       {
-      arr<Cmplx<T>> tmp(n);
+      aligned_array<Cmplx<T>> tmp(n);
       if (fwd)
         {
         auto zero = T0(0)*c[0];
@@ -1935,7 +1934,7 @@ template<typename T0> class pocketfft_c
         return;
         }
       double comp1 = util::cost_guess(length);
-      double comp2 = 2*util::cost_guess(util::good_size_Cmplx(2*length-1));
+      double comp2 = 2*util::cost_guess(util::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
         blueplan=unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
@@ -1972,7 +1971,7 @@ template<typename T0> class pocketfft_r
         return;
         }
       double comp1 = 0.5*util::cost_guess(length);
-      double comp2 = 2*util::cost_guess(util::good_size_Cmplx(2*length-1));
+      double comp2 = 2*util::cost_guess(util::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
         blueplan=unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
@@ -2007,7 +2006,7 @@ template<typename T0> class T_dct1
       size_t N=fftplan.length(), n=N/2+1;
       if (ortho)
         { c[0]*=sqrt2; c[n-1]*=sqrt2; }
-      arr<T> tmp(N);
+      aligned_array<T> tmp(N);
       tmp[0] = c[0];
       for (size_t i=1; i<n; ++i)
         tmp[i] = tmp[N-i] = c[i];
@@ -2035,7 +2034,7 @@ template<typename T0> class T_dst1
       bool /*ortho*/, int /*type*/, bool /*cosine*/) const
       {
       size_t N=fftplan.length(), n=N/2-1;
-      arr<T> tmp(N);
+      aligned_array<T> tmp(N);
       tmp[0] = tmp[n+1] = c[0]*0;
       for (size_t i=0; i<n; ++i)
         { tmp[i+1]=c[i]; tmp[N-1-i]=-c[i]; }
@@ -2123,7 +2122,7 @@ template<typename T0> class T_dcst4
     size_t N;
     unique_ptr<pocketfft_c<T0>> fft;
     unique_ptr<pocketfft_r<T0>> rfft;
-    arr<Cmplx<T0>> C2;
+    aligned_array<Cmplx<T0>> C2;
 
   public:
     POCKETFFT_NOINLINE T_dcst4(size_t length)
@@ -2153,7 +2152,7 @@ template<typename T0> class T_dcst4
         // and is released under the 3-clause BSD license with friendly
         // permission of Matteo Frigo and Steven G. Johnson.
 
-        arr<T> y(N);
+        aligned_array<T> y(N);
         {
         size_t i=0, m=n2;
         for (; m<N; ++i, m+=4)
@@ -2196,7 +2195,7 @@ template<typename T0> class T_dcst4
         {
         // even length algorithm from
         // https://www.appletonaudio.com/blog/2013/derivation-of-fast-dct-4-algorithm-based-on-dft/
-        arr<Cmplx<T>> y(n2);
+        aligned_array<Cmplx<T>> y(n2);
         for(size_t i=0; i<n2; ++i)
           {
           y[i].Set(c[2*i],c[N-1-2*i]);
@@ -2502,26 +2501,26 @@ template <typename T> using vtype_t = typename VTYPE<T>::type;
 #ifndef POCKETFFT_NO_VECTORS
 template<> struct VTYPE<float>
   {
-  using type = vtp<float>;
+  using type = simd<float>;
   };
 template<> struct VTYPE<double>
   {
-  using type = vtp<double>;
+  using type = simd<double>;
   };
 template<> struct VTYPE<long double>
   {
-  using type =vtp<long double>;
+  using type =simd<long double, simd_abi::fixed_size<1>>;
   };
 #endif
 
-template<typename T> arr<char> alloc_tmp(const shape_t &shape,
+template<typename T> aligned_array<char> alloc_tmp(const shape_t &shape,
   size_t axsize, size_t elemsize)
   {
   auto othersize = util::prod(shape)/axsize;
   auto tmpsize = axsize*((othersize>=VLEN<T>::val) ? VLEN<T>::val : 1);
-  return arr<char>(tmpsize*elemsize);
+  return aligned_array<char>(tmpsize*elemsize);
   }
-template<typename T> arr<char> alloc_tmp(const shape_t &shape,
+template<typename T> aligned_array<char> alloc_tmp(const shape_t &shape,
   const shape_t &axes, size_t elemsize)
   {
   size_t fullsize=util::prod(shape);
@@ -2533,7 +2532,7 @@ template<typename T> arr<char> alloc_tmp(const shape_t &shape,
     auto sz = axsize*((othersize>=VLEN<T>::val) ? VLEN<T>::val : 1);
     if (sz>tmpsize) tmpsize=sz;
     }
-  return arr<char>(tmpsize*elemsize);
+  return aligned_array<char>(tmpsize*elemsize);
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
@@ -2542,8 +2541,8 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
       {
-      dst[i].r.Set(j,src[it.iofs(j,i)].r);
-      dst[i].i.Set(j,src[it.iofs(j,i)].i);
+      dst[i].r[j] = src[it.iofs(j,i)].r;
+      dst[i].i[j] = src[it.iofs(j,i)].i;
       }
   }
 
@@ -2786,11 +2785,17 @@ template<typename T> POCKETFFT_NOINLINE void general_c2r(
           if (forward)
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen; ++j)
-                in[it.iofs(j,ii)].SplitConj(tdatav[i][j], tdatav[i+1][j]);
+                {
+                tdatav[i  ][j] =  in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = -in[it.iofs(j,ii)].i;
+                }
           else
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen; ++j)
-                in[it.iofs(j,ii)].Split(tdatav[i][j], tdatav[i+1][j]);
+                {
+                tdatav[i  ][j] = in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = in[it.iofs(j,ii)].i;
+                }
           if (i<len)
             for (size_t j=0; j<vlen; ++j)
               tdatav[i][j] = in[it.iofs(j,ii)].r;
@@ -2808,10 +2813,16 @@ template<typename T> POCKETFFT_NOINLINE void general_c2r(
         size_t i=1, ii=1;
         if (forward)
           for (; i<len-1; i+=2, ++ii)
-            in[it.iofs(ii)].SplitConj(tdata[i], tdata[i+1]);
+            {
+            tdata[i  ] =  in[it.iofs(ii)].r;
+            tdata[i+1] = -in[it.iofs(ii)].i;
+            }
         else
           for (; i<len-1; i+=2, ++ii)
-            in[it.iofs(ii)].Split(tdata[i], tdata[i+1]);
+            {
+            tdata[i  ] = in[it.iofs(ii)].r;
+            tdata[i+1] = in[it.iofs(ii)].i;
+            }
         if (i<len)
           tdata[i] = in[it.iofs(ii)].r;
         }
@@ -2953,7 +2964,7 @@ template<typename T> void c2r(const shape_t &shape_out,
   for (int i=int(shape_in.size())-2; i>=0; --i)
     stride_inter[size_t(i)] =
       stride_inter[size_t(i+1)]*ptrdiff_t(shape_in[size_t(i+1)]);
-  arr<complex<T>> tmp(nval);
+  aligned_array<complex<T>> tmp(nval);
   auto newaxes = shape_t({axes.begin(), --axes.end()});
   c2c(shape_in, stride_in, stride_inter, newaxes, forward, data_in, tmp.data(),
     T(1), nthreads);
@@ -2997,7 +3008,7 @@ template<typename T> void r2r_genuine_hartley(const shape_t &shape,
   util::sanity_check(shape, stride_in, stride_out, data_in==data_out, axes);
   shape_t tshp(shape);
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  arr<complex<T>> tdata(util::prod(tshp));
+  aligned_array<complex<T>> tdata(util::prod(tshp));
   stride_t tstride(shape.size());
   tstride.back()=sizeof(complex<T>);
   for (size_t i=tstride.size()-1; i>0; --i)
