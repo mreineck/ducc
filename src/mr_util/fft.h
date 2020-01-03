@@ -58,17 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mr_util/cmplx.h"
 #include "mr_util/aligned_array.h"
 #include "mr_util/unity_roots.h"
-
-#if defined(__GNUC__)
-#define POCKETFFT_NOINLINE __attribute__((noinline))
-#define POCKETFFT_RESTRICT __restrict__
-#elif defined(_MSC_VER)
-#define POCKETFFT_NOINLINE __declspec(noinline)
-#define POCKETFFT_RESTRICT __restrict
-#else
-#define POCKETFFT_NOINLINE
-#define POCKETFFT_RESTRICT
-#endif
+#include "mr_util/useful_macros.h"
 
 namespace mr {
 
@@ -127,7 +117,7 @@ template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
 
 struct util // hack to avoid duplicate symbols
   {
-  static POCKETFFT_NOINLINE size_t largest_prime_factor (size_t n)
+  static MRUTIL_NOINLINE size_t largest_prime_factor (size_t n)
     {
     size_t res=1;
     while ((n&1)==0)
@@ -139,7 +129,7 @@ struct util // hack to avoid duplicate symbols
     return res;
     }
 
-  static POCKETFFT_NOINLINE double cost_guess (size_t n)
+  static MRUTIL_NOINLINE double cost_guess (size_t n)
     {
     constexpr double lfp=1.1; // penalty for non-hardcoded larger factors
     size_t ni=n;
@@ -157,7 +147,7 @@ struct util // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
-  static POCKETFFT_NOINLINE size_t good_size_cmplx(size_t n)
+  static MRUTIL_NOINLINE size_t good_size_cmplx(size_t n)
     {
     if (n<=12) return n;
 
@@ -186,7 +176,7 @@ struct util // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5 which is >= n */
-  static POCKETFFT_NOINLINE size_t good_size_real(size_t n)
+  static MRUTIL_NOINLINE size_t good_size_real(size_t n)
     {
     if (n<=6) return n;
 
@@ -220,7 +210,7 @@ struct util // hack to avoid duplicate symbols
     return res;
     }
 
-  static POCKETFFT_NOINLINE void sanity_check(const shape_t &shape,
+  static MRUTIL_NOINLINE void sanity_check(const shape_t &shape,
     const stride_t &stride_in, const stride_t &stride_out, bool inplace)
     {
     auto ndim = shape.size();
@@ -231,7 +221,7 @@ struct util // hack to avoid duplicate symbols
       throw runtime_error("stride mismatch");
     }
 
-  static POCKETFFT_NOINLINE void sanity_check(const shape_t &shape,
+  static MRUTIL_NOINLINE void sanity_check(const shape_t &shape,
     const stride_t &stride_in, const stride_t &stride_out, bool inplace,
     const shape_t &axes)
     {
@@ -245,7 +235,7 @@ struct util // hack to avoid duplicate symbols
       }
     }
 
-  static POCKETFFT_NOINLINE void sanity_check(const shape_t &shape,
+  static MRUTIL_NOINLINE void sanity_check(const shape_t &shape,
     const stride_t &stride_in, const stride_t &stride_out, bool inplace,
     size_t axis)
     {
@@ -294,8 +284,8 @@ template<typename T0> class cfftp
       { fact.push_back({factor, nullptr, nullptr}); }
 
 template<bool fwd, typename T> void pass2 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -341,8 +331,8 @@ template<bool fwd, typename T> void pass2 (size_t ido, size_t l1,
         special_mul<fwd>(ca-cb,WA(u2-1,i),CH(i,k,u2)); \
         }
 template<bool fwd, typename T> void pass3 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tw1r=-0.5,
                tw1i= (fwd ? -1: 1) * T0(0.8660254037844386467637231707529362L);
@@ -380,8 +370,8 @@ template<bool fwd, typename T> void pass3 (size_t ido, size_t l1,
 #undef POCKETFFT_PREP3
 
 template<bool fwd, typename T> void pass4 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -454,8 +444,8 @@ template<bool fwd, typename T> void pass4 (size_t ido, size_t l1,
         special_mul<fwd>(ca-cb,WA(u2-1,i),CH(i,k,u2)); \
         }
 template<bool fwd, typename T> void pass5 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.3090169943749474241022934171828191L),
                tw1i= (fwd ? -1: 1) * T0(0.9510565162951535721164393333793821L),
@@ -525,8 +515,8 @@ template<bool fwd, typename T> void pass5 (size_t ido, size_t l1,
         }
 
 template<bool fwd, typename T> void pass7(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.6234898018587335305250048840042398L),
                tw1i= (fwd ? -1 : 1) * T0(0.7818314824680298087084445266740578L),
@@ -592,8 +582,8 @@ template <bool fwd, typename T> void ROTX135(T &a) const
   }
 
 template<bool fwd, typename T> void pass8 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -705,8 +695,8 @@ template<bool fwd, typename T> void pass8 (size_t ido, size_t l1,
         }
 
 template<bool fwd, typename T> void pass11 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.8412535328311811688618116489193677L),
                tw1i= (fwd ? -1 : 1) * T0(0.5406408174555975821076359543186917L),
@@ -765,9 +755,9 @@ template<bool fwd, typename T> void pass11 (size_t ido, size_t l1,
 #undef POCKETFFT_PREP11
 
 template<bool fwd, typename T> void passg (size_t ido, size_t ip,
-  size_t l1, T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const Cmplx<T0> * POCKETFFT_RESTRICT wa,
-  const Cmplx<T0> * POCKETFFT_RESTRICT csarr) const
+  size_t l1, T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const Cmplx<T0> * MRUTIL_RESTRICT wa,
+  const Cmplx<T0> * MRUTIL_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph = (ip+1)/2;
@@ -926,7 +916,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       { fwd ? pass_all<true>(c, fct) : pass_all<false>(c, fct); }
 
   private:
-    POCKETFFT_NOINLINE void factorize()
+    MRUTIL_NOINLINE void factorize()
       {
       size_t len=length;
       while ((len&7)==0)
@@ -988,7 +978,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       }
 
   public:
-    POCKETFFT_NOINLINE cfftp(size_t length_)
+    MRUTIL_NOINLINE cfftp(size_t length_)
       : length(length_)
       {
       if (length==0) throw runtime_error("zero-length FFT requested");
@@ -1025,8 +1015,8 @@ template<typename T1, typename T2, typename T3> inline void MULPM
   {  a=c*e+d*f; b=c*f-d*e; }
 
 template<typename T> void radf2 (size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   auto WA = [wa,ido](size_t x, size_t i) { return wa[i+x*(ido-1)]; };
   auto CC = [cc,ido,l1](size_t a, size_t b, size_t c) -> const T&
@@ -1062,8 +1052,8 @@ template<typename T> void radf2 (size_t ido, size_t l1,
   }
 
 template<typename T> void radf3(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 taur=-0.5, taui=T0(0.8660254037844386467637231707529362L);
 
@@ -1101,8 +1091,8 @@ template<typename T> void radf3(size_t ido, size_t l1,
   }
 
 template<typename T> void radf4(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 hsqt2=T0(0.707106781186547524400844362104849L);
 
@@ -1148,8 +1138,8 @@ template<typename T> void radf4(size_t ido, size_t l1,
   }
 
 template<typename T> void radf5(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tr11= T0(0.3090169943749474241022934171828191L),
                ti11= T0(0.9510565162951535721164393333793821L),
@@ -1204,8 +1194,8 @@ template<typename T> void radf5(size_t ido, size_t l1,
 #undef POCKETFFT_REARRANGE
 
 template<typename T> void radfg(size_t ido, size_t ip, size_t l1,
-  T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa, const T0 * POCKETFFT_RESTRICT csarr) const
+  T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa, const T0 * MRUTIL_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph=(ip+1)/2;
@@ -1346,8 +1336,8 @@ template<typename T> void radfg(size_t ido, size_t ip, size_t l1,
   }
 
 template<typename T> void radb2(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   auto WA = [wa,ido](size_t x, size_t i) { return wa[i+x*(ido-1)]; };
   auto CC = [cc,ido](size_t a, size_t b, size_t c) -> const T&
@@ -1376,8 +1366,8 @@ template<typename T> void radb2(size_t ido, size_t l1,
   }
 
 template<typename T> void radb3(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 taur=-0.5, taui=T0(0.8660254037844386467637231707529362L);
 
@@ -1416,8 +1406,8 @@ template<typename T> void radb3(size_t ido, size_t l1,
   }
 
 template<typename T> void radb4(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
 
@@ -1468,8 +1458,8 @@ template<typename T> void radb4(size_t ido, size_t l1,
   }
 
 template<typename T> void radb5(size_t ido, size_t l1,
-  const T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa) const
+  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa) const
   {
   constexpr T0 tr11= T0(0.3090169943749474241022934171828191L),
                ti11= T0(0.9510565162951535721164393333793821L),
@@ -1527,8 +1517,8 @@ template<typename T> void radb5(size_t ido, size_t l1,
   }
 
 template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
-  T * POCKETFFT_RESTRICT cc, T * POCKETFFT_RESTRICT ch,
-  const T0 * POCKETFFT_RESTRICT wa, const T0 * POCKETFFT_RESTRICT csarr) const
+  T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
+  const T0 * MRUTIL_RESTRICT wa, const T0 * MRUTIL_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph=(ip+1)/ 2;
@@ -1797,7 +1787,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       }
 
   public:
-    POCKETFFT_NOINLINE rfftp(size_t length_)
+    MRUTIL_NOINLINE rfftp(size_t length_)
       : length(length_)
       {
       if (length==0) throw runtime_error("zero-length FFT requested");
@@ -1852,7 +1842,7 @@ template<typename T0> class fftblue
       }
 
   public:
-    POCKETFFT_NOINLINE fftblue(size_t length)
+    MRUTIL_NOINLINE fftblue(size_t length)
       : n(length), n2(util::good_size_cmplx(n*2-1)), plan(n2), mem(n+n2/2+1),
         bk(mem.data()), bkf(mem.data()+n)
       {
@@ -1923,7 +1913,7 @@ template<typename T0> class pocketfft_c
     size_t len;
 
   public:
-    POCKETFFT_NOINLINE pocketfft_c(size_t length)
+    MRUTIL_NOINLINE pocketfft_c(size_t length)
       : len(length)
       {
       if (length==0) throw runtime_error("zero-length FFT requested");
@@ -1942,7 +1932,7 @@ template<typename T0> class pocketfft_c
         packplan=unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
       }
 
-    template<typename T> POCKETFFT_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
+    template<typename T> MRUTIL_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec(c,fct,fwd); }
 
     size_t length() const { return len; }
@@ -1960,7 +1950,7 @@ template<typename T0> class pocketfft_r
     size_t len;
 
   public:
-    POCKETFFT_NOINLINE pocketfft_r(size_t length)
+    MRUTIL_NOINLINE pocketfft_r(size_t length)
       : len(length)
       {
       if (length==0) throw runtime_error("zero-length FFT requested");
@@ -1979,7 +1969,7 @@ template<typename T0> class pocketfft_r
         packplan=unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
       }
 
-    template<typename T> POCKETFFT_NOINLINE void exec(T c[], T0 fct, bool fwd) const
+    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec_r(c,fct,fwd); }
 
     size_t length() const { return len; }
@@ -1996,10 +1986,10 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    POCKETFFT_NOINLINE T_dct1(size_t length)
+    MRUTIL_NOINLINE T_dct1(size_t length)
       : fftplan(2*(length-1)) {}
 
-    template<typename T> POCKETFFT_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -2027,10 +2017,10 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    POCKETFFT_NOINLINE T_dst1(size_t length)
+    MRUTIL_NOINLINE T_dst1(size_t length)
       : fftplan(2*(length+1)) {}
 
-    template<typename T> POCKETFFT_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/) const
       {
       size_t N=fftplan.length(), n=N/2-1;
@@ -2053,7 +2043,7 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
-    POCKETFFT_NOINLINE T_dcst23(size_t length)
+    MRUTIL_NOINLINE T_dcst23(size_t length)
       : fftplan(length), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
@@ -2061,7 +2051,7 @@ template<typename T0> class T_dcst23
         twiddle[i] = tw[i+1].r;
       }
 
-    template<typename T> POCKETFFT_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -2125,7 +2115,7 @@ template<typename T0> class T_dcst4
     aligned_array<Cmplx<T0>> C2;
 
   public:
-    POCKETFFT_NOINLINE T_dcst4(size_t length)
+    MRUTIL_NOINLINE T_dcst4(size_t length)
       : N(length),
         fft((N&1) ? nullptr : new pocketfft_c<T0>(N/2)),
         rfft((N&1)? new pocketfft_r<T0>(N) : nullptr),
@@ -2139,7 +2129,7 @@ template<typename T0> class T_dcst4
         }
       }
 
-    template<typename T> POCKETFFT_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine) const
       {
       size_t n2 = N/2;
@@ -2536,7 +2526,7 @@ template<typename T> aligned_array<char> alloc_tmp(const shape_t &shape,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cndarr<Cmplx<T>> &src, Cmplx<vtype_t<T>> *POCKETFFT_RESTRICT dst)
+  const cndarr<Cmplx<T>> &src, Cmplx<vtype_t<T>> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -2547,7 +2537,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cndarr<T> &src, vtype_t<T> *POCKETFFT_RESTRICT dst)
+  const cndarr<T> &src, vtype_t<T> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -2555,7 +2545,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cndarr<T> &src, T *POCKETFFT_RESTRICT dst)
+  const cndarr<T> &src, T *MRUTIL_RESTRICT dst)
   {
   if (dst == &src[it.iofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_in(); ++i)
@@ -2563,7 +2553,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const Cmplx<vtype_t<T>> *POCKETFFT_RESTRICT src, ndarr<Cmplx<T>> &dst)
+  const Cmplx<vtype_t<T>> *MRUTIL_RESTRICT src, ndarr<Cmplx<T>> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -2571,7 +2561,7 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const vtype_t<T> *POCKETFFT_RESTRICT src, ndarr<T> &dst)
+  const vtype_t<T> *MRUTIL_RESTRICT src, ndarr<T> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -2579,7 +2569,7 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const T *POCKETFFT_RESTRICT src, ndarr<T> &dst)
+  const T *MRUTIL_RESTRICT src, ndarr<T> &dst)
   {
   if (src == &dst[it.oofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_out(); ++i)
@@ -2592,7 +2582,7 @@ template <typename T> struct add_vec<Cmplx<T>>
 template <typename T> using add_vec_t = typename add_vec<T>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
-POCKETFFT_NOINLINE void general_nd(const cndarr<T> &in, ndarr<T> &out,
+MRUTIL_NOINLINE void general_nd(const cndarr<T> &in, ndarr<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec & exec,
   const bool allow_inplace=true)
   {
@@ -2647,7 +2637,7 @@ struct ExecC2C
   };
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
-  const vtype_t<T> *POCKETFFT_RESTRICT src, ndarr<T> &dst)
+  const vtype_t<T> *MRUTIL_RESTRICT src, ndarr<T> &dst)
   {
   for (size_t j=0; j<vlen; ++j)
     dst[it.oofs(j,0)] = src[0][j];
@@ -2664,7 +2654,7 @@ template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
-  const T *POCKETFFT_RESTRICT src, ndarr<T> &dst)
+  const T *MRUTIL_RESTRICT src, ndarr<T> &dst)
   {
   dst[it.oofs(0)] = src[0];
   size_t i=1, i1=1, i2=it.length_out()-1;
@@ -2705,7 +2695,7 @@ struct ExecDcst
     }
   };
 
-template<typename T> POCKETFFT_NOINLINE void general_r2c(
+template<typename T> MRUTIL_NOINLINE void general_r2c(
   const cndarr<T> &in, ndarr<Cmplx<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
@@ -2760,7 +2750,7 @@ template<typename T> POCKETFFT_NOINLINE void general_r2c(
       }
     });  // end of parallel region
   }
-template<typename T> POCKETFFT_NOINLINE void general_c2r(
+template<typename T> MRUTIL_NOINLINE void general_c2r(
   const cndarr<Cmplx<T>> &in, ndarr<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
@@ -3043,8 +3033,5 @@ using detail_fft::dct;
 using detail_fft::dst;
 
 } // namespace mr
-
-#undef POCKETFFT_NOINLINE
-#undef POCKETFFT_RESTRICT
 
 #endif // POCKETFFT_HDRONLY_H
