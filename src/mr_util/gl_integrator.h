@@ -43,7 +43,7 @@ class GL_Integrator
 
   public:
     GL_Integrator(int n, size_t nthreads=1)
-      n_(n)
+      : n_(n)
       {
       MR_assert(n>=1, "number of points must be at least 1");
       constexpr double pi = 3.141592653589793238462643383279502884197;
