@@ -43,8 +43,6 @@ namespace detail_threading {
 using namespace std;
 
 #ifndef MRUTIL_NO_THREADING
-thread_local size_t thread_id = 0;
-thread_local size_t num_threads_ = 1;
 static const size_t max_threads_ = max(1u, thread::hardware_concurrency());
 
 class latch
@@ -174,7 +172,7 @@ class thread_pool
       }
   };
 
-thread_pool & get_pool()
+inline thread_pool &get_pool()
   {
   static thread_pool pool;
 #if __has_include(<pthread.h>)
@@ -192,41 +190,15 @@ thread_pool & get_pool()
   return pool;
   }
 
-/** Map a function f over nthreads */
-template <typename Func>
-void thread_map(size_t nthreads, Func f)
+struct Range
   {
-  if (nthreads == 0)
-    nthreads = max_threads_;
+  size_t lo, hi;
+  Range() : lo(0), hi(0) {}
+  Range(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
+  operator bool() const { return hi>lo; }
+  };
 
-  if (nthreads == 1)
-    { f(); return; }
-
-  auto & pool = get_pool();
-  latch counter(nthreads);
-  exception_ptr ex;
-  mutex ex_mut;
-  for (size_t i=0; i<nthreads; ++i)
-    {
-    pool.submit(
-      [&f, &counter, &ex, &ex_mut, i, nthreads] {
-      thread_id = i;
-      num_threads_ = nthreads;
-      try { f(); }
-      catch (...)
-        {
-        lock_guard<mutex> lock(ex_mut);
-        ex = current_exception();
-        }
-      counter.count_down();
-      });
-    }
-  counter.wait();
-  if (ex)
-    rethrow_exception(ex);
-  }
-
-class Scheduler
+class Distribution
   {
   private:
     size_t nthreads_;
@@ -239,24 +211,19 @@ class Scheduler
     typedef enum { SINGLE, STATIC, DYNAMIC } SchedMode;
     SchedMode mode;
     bool single_done;
-    struct Range
-      {
-      size_t lo, hi;
-      Range() : lo(0), hi(0) {}
-      Range(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
-      operator bool() const { return hi>lo; }
-      };
+
+    template <typename Func> void thread_map(Func f);
 
   public:
     size_t nthreads() const { return nthreads_; }
-    mutex &mut() { return mut_; }
 
     template<typename Func> void execSingle(size_t nwork, Func f)
       {
       mode = SINGLE;
       single_done = false;
       nwork_ = nwork;
-      f(*this);
+      nthreads_ = 1;
+      thread_map(move(f));
       }
     template<typename Func> void execStatic(size_t nwork,
       size_t nthreads, size_t chunksize, Func f)
@@ -270,7 +237,7 @@ class Scheduler
       nextstart.resize(nthreads_);
       for (size_t i=0; i<nextstart.size(); ++i)
         nextstart[i] = i*chunksize_;
-      thread_map(nthreads_, [&]() {f(*this);});
+      thread_map(move(f));
       }
     template<typename Func> void execDynamic(size_t nwork,
       size_t nthreads, size_t chunksize_min, double fact_max, Func f)
@@ -283,9 +250,17 @@ class Scheduler
         return execStatic(nwork, nthreads, 0, move(f));
       fact_max_ = fact_max;
       cur_ = 0;
-      thread_map(nthreads_, [&]() {f(*this);});
+      thread_map(move(f));
       }
-    Range getNext()
+    template<typename Func> void execParallel(size_t nthreads, Func f)
+      {
+      mode = STATIC;
+      nthreads_ = (nthreads==0) ? max_threads_ : nthreads;
+      nwork_ = nthreads_;
+      chunksize_ = 1;
+      thread_map(move(f));
+      }
+    Range getNext(size_t thread_id)
       {
       switch (mode)
         {
@@ -320,38 +295,64 @@ class Scheduler
       }
   };
 
-template<typename Func> void execParallel(size_t nthreads, Func f)
+class Scheduler
   {
-  nthreads = (nthreads==0) ? max_threads_ : nthreads;
-  thread_map(nthreads, move(f));
+  private:
+    Distribution &dist_;
+    size_t ithread_;
+
+  public:
+    Scheduler(Distribution &dist, size_t ithread)
+      : dist_(dist), ithread_(ithread) {}
+    size_t num_threads() const { return dist_.nthreads(); }
+    size_t thread_num() const { return ithread_; }
+    Range getNext() { return dist_.getNext(ithread_); }
+  };
+
+template <typename Func> void Distribution::thread_map(Func f)
+  {
+  auto & pool = get_pool();
+  latch counter(nthreads_);
+  exception_ptr ex;
+  mutex ex_mut;
+  for (size_t i=0; i<nthreads_; ++i)
+    {
+    pool.submit(
+      [this, &f, i, &counter, &ex, &ex_mut] {
+      try
+        {
+        Scheduler sched(*this, i);
+        f(sched);
+        }
+      catch (...)
+        {
+        lock_guard<mutex> lock(ex_mut);
+        ex = current_exception();
+        }
+      counter.count_down();
+      });
+    }
+  counter.wait();
+  if (ex)
+    rethrow_exception(ex);
   }
 
 #else
 
-constexpr size_t thread_id = 0;
-constexpr size_t num_threads_ = 1;
 constexpr size_t max_threads_ = 1;
 
-class Scheduler
+class Sched0
   {
   private:
     size_t nwork_;
-    struct Range
-      {
-      size_t lo, hi;
-      Range() : lo(0), hi(0) {}
-      Range(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
-      operator bool() const { return hi>lo; }
-      };
 
   public:
     size_t nthreads() const { return 1; }
- //   mutex &mut() { return mut_; }
 
     template<typename Func> void execSingle(size_t nwork, Func f)
       {
       nwork_ = nwork;
-      f(*this);
+      f(Scheduler(*this,0));
       }
     template<typename Func> void execStatic(size_t nwork,
       size_t /*nthreads*/, size_t /*chunksize*/, Func f)
@@ -362,8 +363,9 @@ class Scheduler
       {  execSingle(nwork, move(f)); }
     Range getNext()
       {
-      return Range(0, nwork_);
+      Range res(0, nwork_);
       nwork_=0;
+      return res;
       }
   };
 
@@ -372,36 +374,43 @@ template<typename Func> void execParallel(size_t /*nthreads*/, Func f)
 
 #endif
 
+namespace {
+
 template<typename Func> void execSingle(size_t nwork, Func f)
   {
-  Scheduler sched;
-  sched.execSingle(nwork, move(f));
+  Distribution dist;
+  dist.execSingle(nwork, move(f));
   }
 template<typename Func> void execStatic(size_t nwork,
   size_t nthreads, size_t chunksize, Func f)
   {
-  Scheduler sched;
-  sched.execStatic(nwork, nthreads, chunksize, move(f));
+  Distribution dist;
+  dist.execStatic(nwork, nthreads, chunksize, move(f));
   }
 template<typename Func> void execDynamic(size_t nwork,
   size_t nthreads, size_t chunksize_min, Func f)
   {
-  Scheduler sched;
-  sched.execDynamic(nwork, nthreads, chunksize_min, 0., move(f));
+  Distribution dist;
+  dist.execDynamic(nwork, nthreads, chunksize_min, 0., move(f));
   }
 template<typename Func> void execGuided(size_t nwork,
   size_t nthreads, size_t chunksize_min, double fact_max, Func f)
   {
-  Scheduler sched;
-  sched.execDynamic(nwork, nthreads, chunksize_min, fact_max, move(f));
+  Distribution dist;
+  dist.execDynamic(nwork, nthreads, chunksize_min, fact_max, move(f));
   }
 
-size_t num_threads()
-  { return num_threads_; }
-size_t thread_num()
-  { return thread_id; }
-size_t max_threads()
+template<typename Func> static void execParallel(size_t nthreads, Func f)
+  {
+  Distribution dist;
+  dist.execParallel(nthreads, move(f));
+  }
+
+inline size_t max_threads()
   { return max_threads_; }
+
+}
+
 } // end of namespace detail
 
 using detail_threading::Scheduler;
@@ -409,8 +418,6 @@ using detail_threading::execSingle;
 using detail_threading::execStatic;
 using detail_threading::execDynamic;
 using detail_threading::execGuided;
-using detail_threading::num_threads;
-using detail_threading::thread_num;
 using detail_threading::max_threads;
 using detail_threading::execParallel;
 

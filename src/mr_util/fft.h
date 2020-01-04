@@ -2343,15 +2343,14 @@ template<size_t N> class multi_iter
       }
 
   public:
-    multi_iter(const arr_info &iarr_, const arr_info &oarr_, size_t idim_)
+    multi_iter(const arr_info &iarr_, const arr_info &oarr_, size_t idim_,
+        size_t nshares, size_t myshare)
       : pos(iarr_.ndim(), 0), iarr(iarr_), oarr(oarr_), p_ii(0),
         str_i(iarr.stride(idim_)), p_oi(0), str_o(oarr.stride(idim_)),
         idim(idim_), rem(iarr.size()/iarr.shape(idim))
       {
-      auto nshares = num_threads();
       if (nshares==1) return;
       if (nshares==0) throw runtime_error("can't run with zero threads");
-      auto myshare = thread_num();
       if (myshare>=nshares) throw runtime_error("impossible share requested");
       size_t nbase = rem/nshares;
       size_t additional = rem%nshares;
@@ -2596,11 +2595,11 @@ MRUTIL_NOINLINE void general_nd(const cndarr<T> &in, ndarr<T> &out,
 
     execParallel(
       util::thread_count(nthreads, in.shape(), axes[iax], VLEN<T>::val),
-      [&] {
+      [&](Scheduler &sched) {
         constexpr auto vlen = VLEN<T0>::val;
         auto storage = alloc_tmp<T0>(in.shape(), len, sizeof(T));
         const auto &tin(iax==0? in : out);
-        multi_iter<vlen> it(tin, out, axes[iax]);
+        multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 #ifndef POCKETFFT_NO_VECTORS
         if (vlen>1)
           while (it.remaining()>=vlen)
@@ -2703,10 +2702,10 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
   size_t len=in.shape(axis);
   execParallel(
     util::thread_count(nthreads, in.shape(), axis, VLEN<T>::val),
-    [&] {
+    [&](Scheduler &sched) {
     constexpr auto vlen = VLEN<T>::val;
     auto storage = alloc_tmp<T>(in.shape(), len, sizeof(T));
-    multi_iter<vlen> it(in, out, axis);
+    multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef POCKETFFT_NO_VECTORS
     if (vlen>1)
       while (it.remaining()>=vlen)
@@ -2758,10 +2757,10 @@ template<typename T> MRUTIL_NOINLINE void general_c2r(
   size_t len=out.shape(axis);
   execParallel(
     util::thread_count(nthreads, in.shape(), axis, VLEN<T>::val),
-    [&] {
+    [&](Scheduler &sched) {
       constexpr auto vlen = VLEN<T>::val;
       auto storage = alloc_tmp<T>(out.shape(), len, sizeof(T));
-      multi_iter<vlen> it(in, out, axis);
+      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef POCKETFFT_NO_VECTORS
       if (vlen>1)
         while (it.remaining()>=vlen)

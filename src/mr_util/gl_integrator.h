@@ -35,7 +35,7 @@ using namespace std;
 class GL_Integrator
   {
   private:
-    int m;
+    int n_;
     vector<double> x, w;
 
     static inline double one_minus_x2 (double x)
@@ -43,11 +43,12 @@ class GL_Integrator
 
   public:
     GL_Integrator(int n, size_t nthreads=1)
+      n_(n)
       {
       MR_assert(n>=1, "number of points must be at least 1");
       constexpr double pi = 3.141592653589793238462643383279502884197;
       constexpr double eps = 3e-14;
-      m = (n+1)>>1;
+      int m = (n+1)>>1;
       x.resize(m);
       w.resize(m);
 
@@ -99,7 +100,7 @@ class GL_Integrator
     template<typename Func> double integrate(Func f)
       {
       double res=0, istart=0;
-      if (x[0]==0.)
+      if (n_&1)
         {
         res = f(x[0])*w[0];
         istart=1;
@@ -113,10 +114,29 @@ class GL_Integrator
       {
       using T = decltype(f(0.));
       T res=f(x[0])*w[0];
-      if (x[0]==0.) res *= 0.5;
+      if (n_&1) res *= 0.5;
       for (size_t i=1; i<x.size(); ++i)
         res += f(x[i])*w[i];
       return res*2;
+      }
+
+    vector<double> coords() const
+      {
+      vector<double> res(n_);
+      for (size_t i=0; i<x.size(); ++i)
+        {
+        res[i]=-x[x.size()-1-i];
+        res[n_-1-i] = x[x.size()-1-i];
+        }
+      return res;
+      }
+
+    vector<double> weights() const
+      {
+      vector<double> res(n_);
+      for (size_t i=0; i<w.size(); ++i)
+        res[i]=res[n_-1-i]=w[w.size()-1-i];
+      return res;
       }
   };
 
