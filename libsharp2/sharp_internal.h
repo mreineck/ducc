@@ -44,7 +44,7 @@ typedef struct
   void **alm;
   int s_m, s_th; // strides in m and theta direction
   complex<double> *phase;
-  double *norm_l;
+  vector<double> norm_l;
   complex<double> *almtmp;
   const sharp_geom_info *ginfo;
   const sharp_alm_info *ainfo;
@@ -53,7 +53,7 @@ typedef struct
   } sharp_job;
 
 void inner_loop (sharp_job *job, const int *ispair,const double *cth,
-  const double *sth, int llim, int ulim, sharp_Ylmgen_C *gen, int mi,
+  const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,
   const int *mlim);
 
 int sharp_max_nvec(int spin);

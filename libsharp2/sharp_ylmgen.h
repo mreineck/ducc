@@ -28,62 +28,58 @@
 #ifndef SHARP2_YLMGEN_H
 #define SHARP2_YLMGEN_H
 
+#include <vector>
+using std::vector;
+
 enum { sharp_minscale=0, sharp_limscale=1, sharp_maxscale=1 };
-static const double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
-static const double sharp_ftol=0x1p-60;
-static const double sharp_fbighalf=0x1p+400;
+static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
+static constexpr double sharp_ftol=0x1p-60;
+static constexpr double sharp_fbighalf=0x1p+400;
 
 typedef struct { double a, b; } sharp_ylmgen_dbl2;
 
-typedef struct
+class sharp_Ylmgen
   {
-/* for public use; immutable during lifetime */
-  int lmax, mmax, s;
-  double *cf;
-  double *powlimit;
+  public:
+    sharp_Ylmgen(int l_max, int m_max, int spin);
 
-/* for public use; will typically change after call to Ylmgen_prepare() */
-  int m;
+    /*! Prepares the object for the calculation at \a m. */
+    void prepare(int m);
+    /*! Returns a vector with \a lmax+1 entries containing
+        normalisation factors that must be applied to Y_lm values computed for
+        \a spin. */
+    static vector<double> get_norm(int lmax, int spin);
+    /*! Returns a vectorwith \a lmax+1 entries containing
+        normalisation factors that must be applied to Y_lm values computed for
+        first derivatives. */
+    static vector<double> get_d1norm(int lmax);
 
-  double *alpha;
-  sharp_ylmgen_dbl2 *coef;
+    /* for public use; immutable during lifetime */
+    int lmax, mmax, s;
+    vector<double> cf;
+    vector<double> powlimit;
 
-/* used if s==0 */
-  double *mfac, *eps;
+    /* for public use; will typically change after call to Ylmgen_prepare() */
+    int m;
 
-/* used if s!=0 */
-  int sinPow, cosPow, preMinus_p, preMinus_m;
-  double *prefac;
-  int *fscale;
+    vector<double> alpha;
+    vector<sharp_ylmgen_dbl2> coef;
 
-/* internal usage only */
-/* used if s==0 */
-  double *root, *iroot;
+    /* used if s==0 */
+    vector<double> mfac, eps;
 
-/* used if s!=0 */
-  double *flm1, *flm2, *inv;
-  int mlo, mhi;
-  } sharp_Ylmgen_C;
+    /* used if s!=0 */
+    int sinPow, cosPow, preMinus_p, preMinus_m;
+    vector<double> prefac;
+    vector<int> fscale;
 
-/*! Creates a generator which will calculate helper data for Y_lm calculation
-    up to \a l=l_max and \a m=m_max. */
-void sharp_Ylmgen_init (sharp_Ylmgen_C *gen, int l_max, int m_max, int spin);
+    int mlo, mhi;
+  private:
+    /* used if s==0 */
+    vector<double> root, iroot;
 
-/*! Deallocates a generator previously initialised by Ylmgen_init(). */
-void sharp_Ylmgen_destroy (sharp_Ylmgen_C *gen);
-
-/*! Prepares the object for the calculation at \a m. */
-void sharp_Ylmgen_prepare (sharp_Ylmgen_C *gen, int m);
-
-/*! Returns a pointer to an array with \a lmax+1 entries containing
-    normalisation factors that must be applied to Y_lm values computed for
-    \a spin. The array must be deallocated (using free()) by the user. */
-double *sharp_Ylmgen_get_norm (int lmax, int spin);
-
-/*! Returns a pointer to an array with \a lmax+1 entries containing
-    normalisation factors that must be applied to Y_lm values computed for
-    first derivatives. The array must be deallocated (using free()) by the
-    user. */
-double *sharp_Ylmgen_get_d1norm (int lmax);
+    /* used if s!=0 */
+    vector<double> flm1, flm2, inv;
+  };
 
 #endif

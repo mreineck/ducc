@@ -846,8 +846,8 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
       mmax=sharp_get_mmax(job->ainfo->mval, job->ainfo->nm);
 
   job->norm_l = (job->type==SHARP_ALM2MAP_DERIV1) ?
-     sharp_Ylmgen_get_d1norm (lmax) :
-     sharp_Ylmgen_get_norm (lmax, job->spin);
+     sharp_Ylmgen::get_d1norm (lmax) :
+     sharp_Ylmgen::get_norm (lmax, job->spin);
 
 /* clear output arrays if requested */
   init_output (job);
@@ -881,8 +881,7 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
       {
       sharp_job ljob = *job;
       ljob.opcnt=0;
-      sharp_Ylmgen_C generator;
-      sharp_Ylmgen_init (&generator,lmax,mmax,ljob.spin);
+      sharp_Ylmgen generator(lmax,mmax,ljob.spin);
       alloc_almtmp(&ljob,lmax);
 
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
@@ -890,13 +889,12 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
 /* alm->alm_tmp where necessary */
         alm2almtmp (&ljob, lmax, mi);
 
-        inner_loop (&ljob, ispair, cth, sth, llim, ulim, &generator, mi, mlim);
+        inner_loop (&ljob, ispair, cth, sth, llim, ulim, generator, mi, mlim);
 
 /* alm_tmp->alm where necessary */
         almtmp2alm (&ljob, lmax, mi);
         }
 
-      sharp_Ylmgen_destroy(&generator);
       dealloc_almtmp(&ljob);
 
       opcnt+=ljob.opcnt;
@@ -911,7 +909,6 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
     DEALLOC(sth);
     } /* end of chunk loop */
 
-  DEALLOC(job->norm_l);
   dealloc_phase (job);
   job->opcnt = opcnt;
   job->time=timer();
@@ -929,7 +926,6 @@ static void sharp_build_job_common (sharp_job *job, sharp_jobtype type,
   MR_assert((spin>=0)&&(spin<=alm_info->lmax), "bad spin");
   job->type = type;
   job->spin = spin;
-  job->norm_l = NULL;
   job->nmaps = (type==SHARP_ALM2MAP_DERIV1) ? 2 : ((spin>0) ? 2 : 1);
   job->nalm = (type==SHARP_ALM2MAP_DERIV1) ? 1 : ((spin>0) ? 2 : 1);
   job->ginfo = geom_info;

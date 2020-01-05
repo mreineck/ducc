@@ -33,7 +33,7 @@
 
 typedef void (*t_inner_loop) (sharp_job *job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
-  sharp_Ylmgen_C *gen, int mi, const int *mlim);
+  sharp_Ylmgen &gen, int mi, const int *mlim);
 typedef int (*t_veclen) (void);
 typedef int (*t_max_nvec) (int spin);
 typedef const char *(*t_architecture) (void);
@@ -64,7 +64,7 @@ static int XCONCATX2(have,arch)(void) \
 \
 void XCONCATX2(inner_loop,arch) (sharp_job *job, const int *ispair, \
   const double *cth_, const double *sth_, int llim, int ulim, \
-  sharp_Ylmgen_C *gen, int mi, const int *mlim); \
+  sharp_Ylmgen &gen, int mi, const int *mlim); \
 int XCONCATX2(sharp_veclen,arch) (void); \
 int XCONCATX2(sharp_max_nvec,arch) (int spin); \
 const char *XCONCATX2(sharp_architecture,arch) (void);
@@ -108,7 +108,7 @@ DECL2(avx)
 #pragma GCC visibility push(hidden)
 
 void inner_loop (sharp_job *job, const int *ispair,const double *cth,
-  const double *sth, int llim, int ulim, sharp_Ylmgen_C *gen, int mi,
+  const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,
   const int *mlim)
   {
   if (!inner_loop_) assign_funcs();
