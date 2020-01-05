@@ -33,10 +33,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 void *sharp_malloc_ (size_t sz);
 void sharp_free_ (void *ptr);
 
@@ -87,9 +83,5 @@ void sharp_free_ (void *ptr);
 
 #define SWAP(a,b,type) \
   do { type tmp_=(a); (a)=(b); (b)=tmp_; } while(0)
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

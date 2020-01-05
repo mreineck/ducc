@@ -30,10 +30,6 @@
 
 #include "libsharp2/sharp.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*! Initialises an a_lm data structure according to the scheme used by
     Healpix_cxx.
     \ingroup almgroup */
@@ -53,9 +49,5 @@ void sharp_make_rectangular_alm_info (int lmax, int mmax, int stride,
     \ingroup almgroup */
 void sharp_make_mmajor_real_packed_alm_info (int lmax, int stride,
   int nm, const int *ms, sharp_alm_info **alm_info);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

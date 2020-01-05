@@ -30,10 +30,6 @@
 
 #include "libsharp2/sharp.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside. \a weight contains the relative ring
     weights and must have \a 2*nside entries. The rings array contains
@@ -141,9 +137,5 @@ void sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
     \ingroup geominfogroup */
 void sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
   int stride_lon, int stride_lat, sharp_geom_info **geom_info);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

@@ -30,7 +30,7 @@
 
 #include <complex>
 #include "libsharp2/sharp.h"
-#include "libsharp2/sharp_ylmgen_c.h"
+#include "libsharp2/sharp_ylmgen.h"
 
 using std::complex;
 

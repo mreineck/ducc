@@ -29,7 +29,7 @@
 #include <cstring>
 #include <atomic>
 #include "mr_util/fft.h"
-#include "libsharp2/sharp_ylmgen_c.h"
+#include "libsharp2/sharp_ylmgen.h"
 #include "libsharp2/sharp_internal.h"
 #include "libsharp2/sharp_utils.h"
 #include "libsharp2/sharp_almhelpers.h"

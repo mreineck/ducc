@@ -30,10 +30,6 @@
 
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*! \internal
     Helper type containing information about a single ring. */
 typedef struct
@@ -256,9 +252,5 @@ int sharp_execute_mpi_maybe (void *pcomm, sharp_jobtype type, int spin,
 int sharp_get_mlim (int lmax, int spin, double sth, double cth);
 int sharp_veclen(void);
 const char *sharp_architecture(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

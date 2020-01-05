@@ -18,19 +18,15 @@
 
 /* libsharp2 is being developed at the Max-Planck-Institut fuer Astrophysik */
 
-/*! \file sharp_ylmgen_c.h
+/*! \file sharp_ylmgen.h
  *  Code for efficient calculation of Y_lm(phi=0,theta)
  *
  *  Copyright (C) 2005-2019 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
-#ifndef SHARP2_YLMGEN_C_H
-#define SHARP2_YLMGEN_C_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#ifndef SHARP2_YLMGEN_H
+#define SHARP2_YLMGEN_H
 
 enum { sharp_minscale=0, sharp_limscale=1, sharp_maxscale=1 };
 static const double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
@@ -89,9 +85,5 @@ double *sharp_Ylmgen_get_norm (int lmax, int spin);
     first derivatives. The array must be deallocated (using free()) by the
     user. */
 double *sharp_Ylmgen_get_d1norm (int lmax);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif
