@@ -37,13 +37,25 @@
 #include <complex>
 #include <math.h>
 #include <string.h>
-#include "libsharp2/sharp_vecsupport.h"
+#include <experimental/simd>
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_internal.h"
 #include "libsharp2/sharp_utils.h"
 #include "mr_util/error_handling.h"
+#include "mr_util/useful_macros.h"
 
 #pragma GCC visibility push(hidden)
+
+using Tv=std::experimental::native_simd<double>;
+static constexpr size_t VLEN=Tv::size();
+
+static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
+  complex<double> * MRUTIL_RESTRICT cc)
+  {
+  using std::experimental::reduce;
+  cc[0] += complex<double>(reduce(a,std::plus<>()),reduce(b,std::plus<>()));
+  cc[1] += complex<double>(reduce(c,std::plus<>()),reduce(d,std::plus<>()));
+  }
 
 // In the following, we explicitly allow the compiler to contract floating
 // point operations, like multiply-and-add.

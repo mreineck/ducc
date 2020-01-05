@@ -53,13 +53,6 @@ void sharp_free_ (void *ptr);
     \a RALLOC. */
 #define DEALLOC(ptr) \
   do { sharp_free_(ptr); (ptr)=NULL; } while(0)
-/*! \def SET_ARRAY(ptr,i1,i2,val)
-    Set the entries \a ptr[i1] ... \a ptr[i2-1] to \a val. */
-#define SET_ARRAY(ptr,i1,i2,val) \
-  do { \
-    ptrdiff_t cnt_; \
-    for (cnt_=(i1);cnt_<(i2);++cnt_) (ptr)[cnt_]=(val); \
-    } while(0)
 
 #define ALLOC2D(ptr,type,num1,num2) \
   do { \

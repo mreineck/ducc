@@ -11,7 +11,6 @@ libmrutil_la_SOURCES = \
   libsharp2/sharp_geomhelpers.cc \
   libsharp2/sharp_ylmgen.cc \
   libsharp2/sharp_internal.h \
-  libsharp2/sharp_vecsupport.h \
   libsharp2/sharp_ylmgen.h \
   mr_util/cmplx.h \
   mr_util/error_handling.cc \
