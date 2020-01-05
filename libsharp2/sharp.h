@@ -226,28 +226,6 @@ void sharp_execute (sharp_jobtype type, int spin, void *alm, void *map,
 void sharp_set_chunksize_min(int new_chunksize_min);
 void sharp_set_nchunks_max(int new_nchunks_max);
 
-
-typedef enum { SHARP_ERROR_NO_MPI = 1,
-               /*!< libsharp2 not compiled with MPI support */
-              } sharp_errors;
-
-/*! Works like sharp_execute_mpi, but is always present whether or not libsharp2
-    is compiled with USE_MPI. This is primarily useful for wrapper code etc.
-
-    Note that \a pcomm has the type MPI_Comm*, except we declare void* to avoid
-    pulling in MPI headers. I.e., the comm argument of sharp_execute_mpi
-    is *(MPI_Comm*)pcomm.
-
-    Other parameters are the same as sharp_execute_mpi.
-
-    Returns 0 if successful, or SHARP_ERROR_NO_MPI if MPI is not available
-    (in which case nothing is done).
- */
-int sharp_execute_mpi_maybe (void *pcomm, sharp_jobtype type, int spin,
-  void *alm, void *map, const sharp_geom_info *geom_info,
-  const sharp_alm_info *alm_info, int flags, double *time,
-  unsigned long long *opcnt);
-
 /*! \} */
 
 int sharp_get_mlim (int lmax, int spin, double sth, double cth);
