@@ -42,12 +42,9 @@ void sharp_make_subset_healpix_geom_info (int nside, int stride, int nrings,
   ptrdiff_t npix=(ptrdiff_t)nside*nside*12;
   ptrdiff_t ncap=2*(ptrdiff_t)nside*(nside-1);
 
-  double *theta=RALLOC(double,nrings);
-  double *weight_=RALLOC(double,nrings);
-  int *nph=RALLOC(int,nrings);
-  double *phi0=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<double> theta(nrings), weight_(nrings), phi0(nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
   ptrdiff_t curofs=0, checkofs; /* checkofs used for assertion introduced when adding rings arg */
   for (int m=0; m<nrings; ++m)
     {
@@ -88,15 +85,8 @@ void sharp_make_subset_healpix_geom_info (int nside, int stride, int nrings,
     curofs+=nph[m];
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0, theta, weight_,
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0.data(), theta.data(), weight_.data(),
     geom_info);
-
-  DEALLOC(theta);
-  DEALLOC(weight_);
-  DEALLOC(nph);
-  DEALLOC(phi0);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }
 
 void sharp_make_weighted_healpix_geom_info (int nside, int stride,
@@ -110,10 +100,9 @@ void sharp_make_gauss_geom_info (int nrings, int nphi, double phi0,
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  int *nph=RALLOC(int,nrings);
-  double *phi0_=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<double> phi0_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
 
   mr::GL_Integrator integ(nrings);
   auto theta = integ.coords();
@@ -128,13 +117,8 @@ void sharp_make_gauss_geom_info (int nrings, int nphi, double phi0,
     weight[m]*=2*pi/nphi;
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta.data(), weight.data(),
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data(),
     geom_info);
-
-  DEALLOC(nph);
-  DEALLOC(phi0_);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -143,12 +127,9 @@ void sharp_make_fejer1_geom_info (int nrings, int ppring, double phi0,
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  double *theta=RALLOC(double,nrings);
-  double *weight=RALLOC(double,nrings);
-  int *nph=RALLOC(int,nrings);
-  double *phi0_=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<double> theta(nrings), weight(nrings), phi0_(nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
 
   weight[0]=2.;
   for (int k=1; k<=(nrings-1)/2; ++k)
@@ -157,7 +138,7 @@ void sharp_make_fejer1_geom_info (int nrings, int ppring, double phi0,
     weight[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
     }
   if ((nrings&1)==0) weight[nrings-1]=0.;
-  mr::r2r_fftpack({size_t(nrings)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight, weight, 1.);
+  mr::r2r_fftpack({size_t(nrings)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
 
   for (int m=0; m<(nrings+1)/2; ++m)
     {
@@ -171,15 +152,8 @@ void sharp_make_fejer1_geom_info (int nrings, int ppring, double phi0,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight,
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data(),
     geom_info);
-
-  DEALLOC(theta);
-  DEALLOC(weight);
-  DEALLOC(nph);
-  DEALLOC(phi0_);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -188,12 +162,9 @@ void sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  double *theta=RALLOC(double,nrings);
-  vector<double> weight(nrings,0.);
-  int *nph=RALLOC(int,nrings);
-  double *phi0_=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
 
   int n=nrings-1;
   double dw=-1./(n*n-1.+(n&1));
@@ -217,14 +188,8 @@ void sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight.data(),
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data(),
     geom_info);
-
-  DEALLOC(theta);
-  DEALLOC(nph);
-  DEALLOC(phi0_);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -233,12 +198,9 @@ void sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  double *theta=RALLOC(double,nrings);
-  vector<double> weight(nrings+1, 0.);
-  int *nph=RALLOC(int,nrings);
-  double *phi0_=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<double> theta(nrings), weight(nrings+1, 0.), phi0_(nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
 
   int n=nrings+1;
   weight[0]=2.;
@@ -261,14 +223,8 @@ void sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight.data(),
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data(),
     geom_info);
-
-  DEALLOC(theta);
-  DEALLOC(nph);
-  DEALLOC(phi0_);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }
 
 void sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
@@ -276,11 +232,9 @@ void sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  double *theta=RALLOC(double,nrings);
-  int *nph=RALLOC(int,nrings);
-  double *phi0_=RALLOC(double,nrings);
-  ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
-  int *stride_=RALLOC(int,nrings);
+  vector<double> theta(nrings), phi0_(nrings);
+  vector<int> nph(nrings), stride_(nrings);
+  vector<ptrdiff_t> ofs(nrings);
 
   for (int m=0; m<nrings; ++m)
     {
@@ -292,12 +246,6 @@ void sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
     stride_[m]=stride_lon;
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, NULL,
+  sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), NULL,
     geom_info);
-
-  DEALLOC(theta);
-  DEALLOC(nph);
-  DEALLOC(phi0_);
-  DEALLOC(ofs);
-  DEALLOC(stride_);
   }

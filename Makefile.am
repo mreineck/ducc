@@ -61,8 +61,7 @@ nobase_include_HEADERS = \
   libsharp2/sharp.h \
   libsharp2/sharp_mpi.h \
   libsharp2/sharp_geomhelpers.h \
-  libsharp2/sharp_almhelpers.h \
-  libsharp2/sharp_cxx.h
+  libsharp2/sharp_almhelpers.h
 
 EXTRA_DIST = \
   runtest.sh fortran/sharp.f90 fortran/test_sharp.f90 libsharp2/sharp_mpi.cc
