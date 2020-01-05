@@ -482,7 +482,7 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   double **map;
   ALLOC2D(map,double,ncomp*ntrans,npix);
   for (int i=0; i<ncomp*ntrans; ++i)
-    SET_ARRAY(map[i],0,(int)npix,0);
+    fill(map[i],map[i]+npix,0);
 
   dcmplx **alm;
   ALLOC2D(alm,dcmplx,ncomp*ntrans,nalms);

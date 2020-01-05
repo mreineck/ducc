@@ -116,13 +116,13 @@ sharp_Ylmgen::sharp_Ylmgen (int l_max, int m_max, int spin)
       }
     for (int m=0; m<=mmax; ++m)
       {
-      int mlo=s, mhi=m;
-      if (mhi<mlo) SWAP(mhi,mlo,int);
-      double tfac=fac[2*mhi]/fac[mhi+mlo];
-      int tscale=facscale[2*mhi]-facscale[mhi+mlo];
+      int mlo_=s, mhi_=m;
+      if (mhi_<mlo_) swap(mhi_,mlo_);
+      double tfac=fac[2*mhi_]/fac[mhi_+mlo_];
+      int tscale=facscale[2*mhi_]-facscale[mhi_+mlo_];
       normalize(tfac,tscale,sharp_fbighalf);
-      tfac/=fac[mhi-mlo];
-      tscale-=facscale[mhi-mlo];
+      tfac/=fac[mhi_-mlo_];
+      tscale-=facscale[mhi_-mlo_];
       normalize(tfac,tscale,sharp_fbighalf);
       prefac[m]=tfac;
       fscale[m]=tscale;

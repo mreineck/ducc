@@ -53,8 +53,6 @@ void sharp_free_ (void *ptr);
     \a RALLOC. */
 #define DEALLOC(ptr) \
   do { sharp_free_(ptr); (ptr)=NULL; } while(0)
-#define RESIZE(ptr,type,num) \
-  do { sharp_free_(ptr); ALLOC(ptr,type,num); } while(0)
 /*! \def SET_ARRAY(ptr,i1,i2,val)
     Set the entries \a ptr[i1] ... \a ptr[i2-1] to \a val. */
 #define SET_ARRAY(ptr,i1,i2,val) \
@@ -76,12 +74,5 @@ void sharp_free_ (void *ptr);
 
 #define FAPPROX(a,b,eps) \
   (fabs((a)-(b))<((eps)*fabs(b)))
-#define IMAX(a,b) \
-  (((a)>(b)) ? (a) : (b))
-#define IMIN(a,b) \
-  (((a)<(b)) ? (a) : (b))
-
-#define SWAP(a,b,type) \
-  do { type tmp_=(a); (a)=(b); (b)=tmp_; } while(0)
 
 #endif

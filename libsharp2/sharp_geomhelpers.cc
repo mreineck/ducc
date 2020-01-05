@@ -25,12 +25,15 @@
  *  \author Martin Reinecke
  */
 
-#include <math.h>
+#include <cmath>
+#include <vector>
 #include "libsharp2/sharp_geomhelpers.h"
 #include "mr_util/gl_integrator.h"
 #include "libsharp2/sharp_utils.h"
 #include "mr_util/fft.h"
 #include "mr_util/error_handling.h"
+
+using namespace std;
 
 void sharp_make_subset_healpix_geom_info (int nside, int stride, int nrings,
   const int *rings, const double *weight, sharp_geom_info **geom_info)
@@ -186,20 +189,19 @@ void sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
   const double pi=3.141592653589793238462643383279502884197;
 
   double *theta=RALLOC(double,nrings);
-  double *weight=RALLOC(double,nrings);
+  vector<double> weight(nrings,0.);
   int *nph=RALLOC(int,nrings);
   double *phi0_=RALLOC(double,nrings);
   ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
   int *stride_=RALLOC(int,nrings);
 
   int n=nrings-1;
-  SET_ARRAY(weight,0,nrings,0.);
   double dw=-1./(n*n-1.+(n&1));
   weight[0]=2.+dw;
   for (int k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k) + dw;
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
-  mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight, weight, 1.);
+  mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
   weight[n]=weight[0];
 
   for (int m=0; m<(nrings+1)/2; ++m)
@@ -215,11 +217,10 @@ void sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight,
+  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight.data(),
     geom_info);
 
   DEALLOC(theta);
-  DEALLOC(weight);
   DEALLOC(nph);
   DEALLOC(phi0_);
   DEALLOC(ofs);
@@ -233,19 +234,18 @@ void sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
   const double pi=3.141592653589793238462643383279502884197;
 
   double *theta=RALLOC(double,nrings);
-  double *weight=RALLOC(double,nrings+1);
+  vector<double> weight(nrings+1, 0.);
   int *nph=RALLOC(int,nrings);
   double *phi0_=RALLOC(double,nrings);
   ptrdiff_t *ofs=RALLOC(ptrdiff_t,nrings);
   int *stride_=RALLOC(int,nrings);
 
   int n=nrings+1;
-  SET_ARRAY(weight,0,n,0.);
   weight[0]=2.;
   for (int k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k);
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1.;
-  mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight, weight, 1.);
+  mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
   for (int m=0; m<nrings; ++m)
     weight[m]=weight[m+1];
 
@@ -261,11 +261,10 @@ void sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight,
+  sharp_make_geom_info (nrings, nph, ofs, stride_, phi0_, theta, weight.data(),
     geom_info);
 
   DEALLOC(theta);
-  DEALLOC(weight);
   DEALLOC(nph);
   DEALLOC(phi0_);
   DEALLOC(ofs);
