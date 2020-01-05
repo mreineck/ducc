@@ -186,7 +186,7 @@ static void reduce_geom_info(sharp_geom_info *ginfo)
   {
   int npairsnew=0;
   ptrdiff_t ofs = 0;
-  for (int i=mytask; i<ginfo->npairs; i+=ntasks,++npairsnew)
+  for (int i=mytask; i<ginfo->pair.size(); i+=ntasks,++npairsnew)
     {
     ginfo->pair[npairsnew]=ginfo->pair[i];
     ginfo->pair[npairsnew].r1.ofs=ofs;
@@ -194,7 +194,7 @@ static void reduce_geom_info(sharp_geom_info *ginfo)
     ginfo->pair[npairsnew].r2.ofs=ofs;
     if (ginfo->pair[npairsnew].r2.nph>0) ofs+=ginfo->pair[npairsnew].r2.nph;
     }
-  ginfo->npairs=npairsnew;
+  ginfo.pair.resize(npairsnew);
   }
 #endif
 
@@ -209,7 +209,7 @@ static ptrdiff_t get_nalms(const sharp_alm_info *ainfo)
 static ptrdiff_t get_npix(const sharp_geom_info *ginfo)
   {
   ptrdiff_t res=0;
-  for (int i=0; i<ginfo->npairs; ++i)
+  for (int i=0; i<ginfo->pair.size(); ++i)
     {
     res += ginfo->pair[i].r1.nph;
     if (ginfo->pair[i].r2.nph>0) res += ginfo->pair[i].r2.nph;
@@ -217,9 +217,9 @@ static ptrdiff_t get_npix(const sharp_geom_info *ginfo)
   return res;
   }
 
-static double *get_sqsum_and_invert (dcmplx **alm, ptrdiff_t nalms, int ncomp)
+static vector<double> get_sqsum_and_invert (dcmplx **alm, ptrdiff_t nalms, int ncomp)
   {
-  double *sqsum=RALLOC(double,ncomp);
+  vector<double> sqsum(ncomp);
   for (int i=0; i<ncomp; ++i)
     {
     sqsum[i]=0;
@@ -232,16 +232,16 @@ static double *get_sqsum_and_invert (dcmplx **alm, ptrdiff_t nalms, int ncomp)
   return sqsum;
   }
 
-static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, double *sqsum,
-  double **err_abs, double **err_rel)
+static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, const vector<double> &sqsum,
+  vector<double> &err_abs, vector<double> &err_rel)
   {
   long nalms_tot=nalms;
 #ifdef USE_MPI
   MPI_Allreduce(&nalms,&nalms_tot,1,MPI_LONG,MPI_SUM,MPI_COMM_WORLD);
 #endif
 
-  *err_abs=RALLOC(double,ncomp);
-  *err_rel=RALLOC(double,ncomp);
+  err_abs.resize(ncomp);
+  err_rel.resize(ncomp);
   for (int i=0; i<ncomp; ++i)
     {
     double sum=0, maxdiff=0, sumtot, sqsumtot, maxdifftot;
@@ -264,8 +264,8 @@ static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, double *sqsum,
 #endif
     sumtot=sqrt(sumtot/nalms_tot);
     sqsumtot=sqrt(sqsumtot/nalms_tot);
-    (*err_abs)[i]=maxdifftot;
-    (*err_rel)[i]=sumtot/sqsumtot;
+    err_abs[i]=maxdifftot;
+    err_rel[i]=sumtot/sqsumtot;
     }
   }
 
@@ -343,7 +343,7 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon, ginfo);
     ptrdiff_t npix_o=get_npix(*ginfo);
     size_t ofs=0;
-    for (int i=0; i<(*ginfo)->npairs; ++i)
+    for (int i=0; i<(*ginfo)->pair.size(); ++i)
       {
       sharp_ringpair *pair=&((*ginfo)->pair[i]);
       int pring=1+2*sharp_get_mlim(lmax,0,pair->r1.sth,pair->r1.cth);
@@ -387,7 +387,7 @@ static void check_sign_scale(void)
   sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring, &tinfo);
 
   /* flip theta to emulate the "old" Gaussian grid geometry */
-  for (int i=0; i<tinfo->npairs; ++i)
+  for (int i=0; i<tinfo->pair.size(); ++i)
     {
     const double pi=3.141592653589793238462643383279502884197;
     tinfo->pair[i].r1.cth=-tinfo->pair[i].r1.cth;
@@ -471,7 +471,7 @@ static void check_sign_scale(void)
   }
 
 static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
-  int spin, double **err_abs, double **err_rel,
+  int spin, vector<double> &err_abs, vector<double> &err_rel,
   double *t_a2m, double *t_m2a, unsigned long long *op_a2m,
   unsigned long long *op_m2a, size_t ntrans)
   {
@@ -506,7 +506,7 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
     if (t_a2m!=NULL) *t_a2m+=maxTime(tta2m);
     if (op_a2m!=NULL) *op_a2m+=totalops(toa2m);
     }
-  double *sqsum=get_sqsum_and_invert(alm,nalms,ntrans*ncomp);
+  auto sqsum=get_sqsum_and_invert(alm,nalms,ntrans*ncomp);
   if (t_m2a!=NULL) *t_m2a=0;
   if (op_m2a!=NULL) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
@@ -523,7 +523,6 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
     }
   get_errors(alm, nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
 
-  DEALLOC(sqsum);
   DEALLOC2D(map);
   DEALLOC2D(alm);
   }
@@ -532,13 +531,11 @@ static void check_accuracy (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   int spin)
   {
   int ncomp = (spin==0) ? 1 : 2;
-  double *err_abs, *err_rel;
-  do_sht (ginfo, ainfo, spin, &err_abs, &err_rel, NULL, NULL,
+  vector<double> err_abs, err_rel;
+  do_sht (ginfo, ainfo, spin, err_abs, err_rel, NULL, NULL,
     NULL, NULL, 1);
   for (int i=0; i<ncomp; ++i)
     MR_assert((err_rel[i]<1e-10) && (err_abs[i]<1e-10),"error");
-  DEALLOC(err_rel);
-  DEALLOC(err_abs);
   }
 
 static void run(int lmax, int mmax, int nlat, int nlon, int spin)
@@ -596,7 +593,7 @@ static void sharp_test (int argc, const char **argv)
   int ncomp = (spin==0) ? 1 : 2;
   double t_a2m=1e30, t_m2a=1e30;
   unsigned long long op_a2m, op_m2a;
-  double *err_abs,*err_rel;
+  vector<double> err_abs, err_rel;
 
   double t_acc=0;
   int nrpt=0;
@@ -604,7 +601,7 @@ static void sharp_test (int argc, const char **argv)
     {
     ++nrpt;
     double ta2m2, tm2a2;
-    do_sht (ginfo, ainfo, spin, &err_abs, &err_rel, &ta2m2, &tm2a2,
+    do_sht (ginfo, ainfo, spin, err_abs, err_rel, &ta2m2, &tm2a2,
       &op_a2m, &op_m2a, ntrans);
     if (ta2m2<t_a2m) t_a2m=ta2m2;
     if (tm2a2<t_m2a) t_m2a=tm2a2;
@@ -614,8 +611,6 @@ static void sharp_test (int argc, const char **argv)
       if (mytask==0) printf("Best of %d runs\n",nrpt);
       break;
       }
-    DEALLOC(err_abs);
-    DEALLOC(err_rel);
     }
 
   if (mytask==0) printf("wall time for alm2map: %fs\n",t_a2m);
@@ -659,9 +654,6 @@ static void sharp_test (int argc, const char **argv)
       getenv("HOST"),argv[2],spin,sharp_veclen(),nomp,ntasks,lmax,mmax,gpar1,gpar2,
       t_a2m,1e-9*op_a2m/t_a2m,t_m2a,1e-9*op_m2a/t_m2a,tmem/(1<<20),
       100.*(1.-iosize/tmem),maxerel,maxeabs);
-
-  DEALLOC(err_abs);
-  DEALLOC(err_rel);
   }
 
 int main(int argc, const char **argv)

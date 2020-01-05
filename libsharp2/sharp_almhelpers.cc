@@ -31,11 +31,11 @@
 void sharp_make_triangular_alm_info (int lmax, int mmax, int stride,
   sharp_alm_info **alm_info)
   {
-  sharp_alm_info *info = RALLOC(sharp_alm_info,1);
+  sharp_alm_info *info = new sharp_alm_info;
   info->lmax = lmax;
   info->nm = mmax+1;
-  info->mval = RALLOC(int,mmax+1);
-  info->mvstart = RALLOC(ptrdiff_t,mmax+1);
+  info->mval.resize(mmax+1);
+  info->mvstart.resize(mmax+1);
   info->stride = stride;
   info->flags = 0;
   ptrdiff_t tval = 2*lmax+1;
@@ -50,11 +50,11 @@ void sharp_make_triangular_alm_info (int lmax, int mmax, int stride,
 void sharp_make_rectangular_alm_info (int lmax, int mmax, int stride,
   sharp_alm_info **alm_info)
   {
-  sharp_alm_info *info = RALLOC(sharp_alm_info,1);
+  sharp_alm_info *info = new sharp_alm_info;
   info->lmax = lmax;
   info->nm = mmax+1;
-  info->mval = RALLOC(int,mmax+1);
-  info->mvstart = RALLOC(ptrdiff_t,mmax+1);
+  info->mval.resize(mmax+1);
+  info->mvstart.resize(mmax+1);
   info->stride = stride;
   info->flags = 0;
   for (ptrdiff_t m=0; m<=mmax; ++m)
@@ -70,11 +70,11 @@ void sharp_make_mmajor_real_packed_alm_info (int lmax, int stride,
   {
   ptrdiff_t idx;
   int f;
-  sharp_alm_info *info = RALLOC(sharp_alm_info,1);
+  sharp_alm_info *info = new sharp_alm_info;
   info->lmax = lmax;
   info->nm = nm;
-  info->mval = RALLOC(int,nm);
-  info->mvstart = RALLOC(ptrdiff_t,nm);
+  info->mval.resize(nm);
+  info->mvstart.resize(nm);
   info->stride = stride;
   info->flags = SHARP_PACKED | SHARP_REAL_HARMONICS;
   idx = 0;  /* tracks the number of 'consumed' elements so far; need to correct by m */

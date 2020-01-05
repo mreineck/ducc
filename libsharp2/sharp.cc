@@ -130,11 +130,11 @@ static int ringpair_compare (const void *xa, const void *xb)
 void sharp_make_general_alm_info (int lmax, int nm, int stride, const int *mval,
   const ptrdiff_t *mstart, int flags, sharp_alm_info **alm_info)
   {
-  sharp_alm_info *info = RALLOC(sharp_alm_info,1);
+  sharp_alm_info *info = new sharp_alm_info;
   info->lmax = lmax;
   info->nm = nm;
-  info->mval = RALLOC(int,nm);
-  info->mvstart = RALLOC(ptrdiff_t,nm);
+  info->mval.resize(nm);
+  info->mvstart.resize(nm);
   info->stride = stride;
   info->flags = flags;
   for (int mi=0; mi<nm; ++mi)
@@ -176,21 +176,19 @@ ptrdiff_t sharp_alm_count(const sharp_alm_info *self)
 
 void sharp_destroy_alm_info (sharp_alm_info *info)
   {
-  DEALLOC (info->mval);
-  DEALLOC (info->mvstart);
-  DEALLOC (info);
+  delete info;
   }
 
 void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
   const int *stride, const double *phi0, const double *theta,
   const double *wgt, sharp_geom_info **geom_info)
   {
-  sharp_geom_info *info = RALLOC(sharp_geom_info,1);
+  sharp_geom_info *info = new sharp_geom_info;
   vector<sharp_ringinfo> infos(nrings);
 
   int pos=0;
-  info->pair=RALLOC(sharp_ringpair,nrings);
-  info->npairs=0;
+  info->pair.resize(nrings);
+  int npairs=0;
   info->nphmax=0;
   *geom_info = info;
 
@@ -209,31 +207,32 @@ void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
   qsort(infos.data(),nrings,sizeof(sharp_ringinfo),ringinfo_compare);
   while (pos<nrings)
     {
-    info->pair[info->npairs].r1=infos[pos];
+    info->pair[npairs].r1=infos[pos];
     if ((pos<nrings-1) && FAPPROX(infos[pos].cth,-infos[pos+1].cth,1e-12))
       {
       if (infos[pos].cth>0)  // make sure northern ring is in r1
-        info->pair[info->npairs].r2=infos[pos+1];
+        info->pair[npairs].r2=infos[pos+1];
       else
         {
-        info->pair[info->npairs].r1=infos[pos+1];
-        info->pair[info->npairs].r2=infos[pos];
+        info->pair[npairs].r1=infos[pos+1];
+        info->pair[npairs].r2=infos[pos];
         }
       ++pos;
       }
     else
-      info->pair[info->npairs].r2.nph=-1;
+      info->pair[npairs].r2.nph=-1;
     ++pos;
-    ++info->npairs;
+    ++npairs;
     }
 
-  qsort(info->pair,info->npairs,sizeof(sharp_ringpair),ringpair_compare);
+  qsort(info->pair.data(),npairs,sizeof(sharp_ringpair),ringpair_compare);
+  info->pair.resize(npairs);
   }
 
 ptrdiff_t sharp_map_size(const sharp_geom_info *info)
   {
   ptrdiff_t result = 0;
-  for (int m=0; m<info->npairs; ++m)
+  for (int m=0; m<info->pair.size(); ++m)
     {
       result+=info->pair[m].r1.nph;
       result+=(info->pair[m].r2.nph>=0) ? (info->pair[m].r2.nph) : 0;
@@ -243,16 +242,16 @@ ptrdiff_t sharp_map_size(const sharp_geom_info *info)
 
 void sharp_destroy_geom_info (sharp_geom_info *geom_info)
   {
-  DEALLOC (geom_info->pair);
-  DEALLOC (geom_info);
+  delete geom_info;
   }
 
 /* This currently requires all m values from 0 to nm-1 to be present.
    It might be worthwhile to relax this criterion such that holes in the m
    distribution are permissible. */
-static int sharp_get_mmax (int *mval, int nm)
+static int sharp_get_mmax (const vector<int> &mval)
   {
   //FIXME: if gaps are allowed, we have to search the maximum m in the array
+  auto nm=mval.size();
   vector<int> mcheck(nm,0);
   for (int i=0; i<nm; ++i)
     {
@@ -377,7 +376,7 @@ MRUTIL_NOINLINE static void clear_map (const sharp_geom_info *ginfo, void *map,
   {
   if (flags & SHARP_NO_FFT)
     {
-    for (int j=0;j<ginfo->npairs;++j)
+    for (int j=0;j<ginfo->pair.size();++j)
       {
       if (flags&SHARP_DP)
         {
@@ -399,7 +398,7 @@ MRUTIL_NOINLINE static void clear_map (const sharp_geom_info *ginfo, void *map,
     {
     if (flags&SHARP_DP)
       {
-      for (int j=0;j<ginfo->npairs;++j)
+      for (int j=0;j<ginfo->pair.size();++j)
         {
         double *dmap=(double *)map;
         if (ginfo->pair[j].r1.stride==1)
@@ -418,7 +417,7 @@ MRUTIL_NOINLINE static void clear_map (const sharp_geom_info *ginfo, void *map,
       }
     else
       {
-      for (int j=0;j<ginfo->npairs;++j)
+      for (int j=0;j<ginfo->pair.size();++j)
         {
         for (ptrdiff_t i=0;i<ginfo->pair[j].r1.nph;++i)
           ((float *)map)[ginfo->pair[j].r1.ofs+i*ginfo->pair[j].r1.stride]=0;
@@ -639,7 +638,7 @@ MRUTIL_NOINLINE static void almtmp2alm (sharp_job *job, int lmax, int mi)
 #undef COPY_LOOP
   }
 
-MRUTIL_NOINLINE static void ringtmp2ring (sharp_job *job, sharp_ringinfo *ri,
+MRUTIL_NOINLINE static void ringtmp2ring (sharp_job *job, const sharp_ringinfo *ri,
   const vector<double> &ringtmp, int rstride)
   {
   if (job->flags & SHARP_DP)
@@ -671,7 +670,7 @@ MRUTIL_NOINLINE static void ringtmp2ring (sharp_job *job, sharp_ringinfo *ri,
     }
   }
 
-MRUTIL_NOINLINE static void ring2ringtmp (sharp_job *job, sharp_ringinfo *ri,
+MRUTIL_NOINLINE static void ring2ringtmp (sharp_job *job, const sharp_ringinfo *ri,
   vector<double> &ringtmp, int rstride)
   {
   if (job->flags & SHARP_DP)
@@ -691,7 +690,7 @@ MRUTIL_NOINLINE static void ring2ringtmp (sharp_job *job, sharp_ringinfo *ri,
         ringtmp[i*rstride+m+1] = ((float *)(job->map[i]))[ri->ofs+m*ri->stride];
   }
 
-static void ring2phase_direct (sharp_job *job, sharp_ringinfo *ri, int mmax,
+static void ring2phase_direct (sharp_job *job, const sharp_ringinfo *ri, int mmax,
   dcmplx *phase)
   {
   if (ri->nph<0)
@@ -713,7 +712,7 @@ static void ring2phase_direct (sharp_job *job, sharp_ringinfo *ri, int mmax,
           ((fcmplx *)(job->map[i]))[ri->ofs+m*ri->stride]*float(wgt);
     }
   }
-static void phase2ring_direct (sharp_job *job, sharp_ringinfo *ri, int mmax,
+static void phase2ring_direct (sharp_job *job, const sharp_ringinfo *ri, int mmax,
   dcmplx *phase)
   {
   if (ri->nph<0) return;
@@ -821,7 +820,7 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
   mr::timers::SimpleTimer timer;
   job->opcnt=0;
   int lmax = job->ainfo->lmax,
-      mmax=sharp_get_mmax(job->ainfo->mval, job->ainfo->nm);
+      mmax=sharp_get_mmax(job->ainfo->mval);
 
   job->norm_l = (job->type==SHARP_ALM2MAP_DERIV1) ?
      sharp_Ylmgen::get_d1norm (lmax) :
@@ -831,7 +830,7 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
   init_output (job);
 
   int nchunks, chunksize;
-  get_chunk_info(job->ginfo->npairs,sharp_veclen()*sharp_max_nvec(job->spin),
+  get_chunk_info(job->ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(job->spin),
                  &nchunks,&chunksize);
 //FIXME: needs to be changed to "nm"
   alloc_phase (job,mmax+1,chunksize);
@@ -840,7 +839,7 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
 /* chunk loop */
   for (int chunk=0; chunk<nchunks; ++chunk)
     {
-    int llim=chunk*chunksize, ulim=min(llim+chunksize,job->ginfo->npairs);
+    int llim=chunk*chunksize, ulim=min<int>(llim+chunksize,job->ginfo->pair.size());
     vector<int> ispair(ulim-llim);
     vector<int> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);

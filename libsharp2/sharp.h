@@ -28,7 +28,8 @@
 #ifndef SHARP_SHARP_H
 #define SHARP_SHARP_H
 
-#include <stddef.h>
+#include <cstddef>
+#include <vector>
 
 /*! \internal
     Helper type containing information about a single ring. */
@@ -51,8 +52,8 @@ typedef struct
     Type holding all required information about a map geometry. */
 typedef struct
   {
-  sharp_ringpair *pair;
-  int npairs, nphmax;
+  std::vector<sharp_ringpair> pair;
+  int nphmax;
   } sharp_geom_info;
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
@@ -67,12 +68,12 @@ typedef struct
   /*! Number of different \a m values in this object */
   int nm;
   /*! Array with \a nm entries containing the individual m values */
-  int *mval;
+  std::vector<int> mval;
   /*! Combination of flags from sharp_almflags */
   int flags;
   /*! Array with \a nm entries containing the (hypothetical) indices of
       the coefficients with quantum numbers 0,\a mval[i] */
-  ptrdiff_t *mvstart;
+  std::vector<ptrdiff_t> mvstart;
   /*! Stride between a_lm and a_(l+1),m */
   ptrdiff_t stride;
   } sharp_alm_info;
