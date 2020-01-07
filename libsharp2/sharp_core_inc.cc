@@ -37,26 +37,46 @@
 #include <complex>
 #include <math.h>
 #include <string.h>
-#include <experimental/simd>
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_internal.h"
 #include "libsharp2/sharp_utils.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/useful_macros.h"
+#include "mr_util/simd.h"
 
 #pragma GCC visibility push(hidden)
+
+using namespace std::experimental;
 
 using Tv=std::experimental::native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
+#if (defined(__AVX__) && (!defined(__AVX512F__)))
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * MRUTIL_RESTRICT cc)
   {
-  using std::experimental::reduce;
+  auto tmp1=_mm256_hadd_pd(__data(a),__data(b)), tmp2=_mm256_hadd_pd(__data(c),__data(d));
+  auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
+       tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
+  tmp1=tmp3+tmp4;
+  union U
+    {
+    decltype(tmp1) v;
+    complex<double> c[2];
+    U() {}
+    };
+  U u;
+  u.v=tmp1;
+  cc[0]+=u.c[0]; cc[1]+=u.c[1];
+  }
+#else
+static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
+  complex<double> * MRUTIL_RESTRICT cc)
+  {
   cc[0] += complex<double>(reduce(a,std::plus<>()),reduce(b,std::plus<>()));
   cc[1] += complex<double>(reduce(c,std::plus<>()),reduce(d,std::plus<>()));
   }
-
+#endif
 // In the following, we explicitly allow the compiler to contract floating
 // point operations, like multiply-and-add.
 // Unfortunately, most compilers don't act on this pragma yet.

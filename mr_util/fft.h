@@ -50,15 +50,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory>
 #include <vector>
 #include <complex>
+#include <algorithm>
 #if POCKETFFT_CACHE_SIZE!=0
 #include <array>
 #endif
 #include "mr_util/threading.h"
-#include <experimental/simd>
 #include "mr_util/cmplx.h"
 #include "mr_util/aligned_array.h"
 #include "mr_util/unity_roots.h"
 #include "mr_util/useful_macros.h"
+#include "mr_util/simd.h"
 
 namespace mr {
 
@@ -258,7 +259,7 @@ struct util // hack to avoid duplicate symbols
       parallel /= 4;
     size_t max_threads = nthreads == 0 ?
       thread::hardware_concurrency() : nthreads;
-    return max(size_t(1), min(parallel, max_threads));
+    return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
   };
@@ -2498,7 +2499,11 @@ template<> struct VTYPE<double>
   };
 template<> struct VTYPE<long double>
   {
+#ifdef MRUTIL_HOMEGROWN_SIMD
+  using type = detail_simd::vtp<long double, 1>;
+#else
   using type = simd<long double, simd_abi::fixed_size<1>>;
+#endif
   };
 #endif
 
