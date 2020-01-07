@@ -92,8 +92,8 @@ constexpr bool FORWARD  = true,
 template<typename T> struct VLEN { static constexpr size_t val=1; };
 
 #ifndef MRUTIL_NO_VECTORS
-template<> struct VLEN<float> { static constexpr size_t val=simd<float>::size(); };
-template<> struct VLEN<double> { static constexpr size_t val=simd<double>::size(); };
+template<> struct VLEN<float> { static constexpr size_t val=native_simd<float>::size(); };
+template<> struct VLEN<double> { static constexpr size_t val=native_simd<double>::size(); };
 #endif
 
 template<typename T> inline void PM(T &a, T &b, T c, T d)
@@ -2490,15 +2490,15 @@ template <typename T> using vtype_t = typename VTYPE<T>::type;
 #ifndef POCKETFFT_NO_VECTORS
 template<> struct VTYPE<float>
   {
-  using type = simd<float>;
+  using type = native_simd<float>;
   };
 template<> struct VTYPE<double>
   {
-  using type = simd<double>;
+  using type = native_simd<double>;
   };
 template<> struct VTYPE<long double>
   {
-  using type =simd<long double, simd_abi::fixed_size<1>>;
+  using type = simd<long double, simd_abi::fixed_size<1>>;
   };
 #endif
 
