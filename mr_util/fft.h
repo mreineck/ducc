@@ -80,8 +80,12 @@ constexpr bool FORWARD  = true,
 #if defined(__INTEL_COMPILER)
 // do nothing. This is necessary because this compiler also sets __GNUC__.
 #elif defined(__clang__)
-#if __clang_major__>=5
-#undef POCKETFFT_NO_VECTORS
+#ifdef __APPLE__
+#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 3)
+#     undef POCKETFFT_NO_VECTORS
+#  endif
+#elif __clang_major__ >= 5
+#  undef POCKETFFT_NO_VECTORS
 #endif
 #elif defined(__GNUC__)
 #if __GNUC__>=5
