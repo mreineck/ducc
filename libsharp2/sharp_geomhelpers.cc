@@ -47,7 +47,7 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int 
   ptrdiff_t curofs=0, checkofs; /* checkofs used for assertion introduced when adding rings arg */
   for (int m=0; m<nrings; ++m)
     {
-    int ring = (rings==NULL)? (m+1) : rings[m];
+    int ring = (rings==nullptr)? (m+1) : rings[m];
     ptrdiff_t northring = (ring>2*nside) ? 4*nside-ring : ring;
     stride_[m] = stride;
     if (northring < nside)
@@ -76,21 +76,21 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int 
       checkofs = (npix - nph[m])*stride - checkofs;
       ofs[m] = curofs;
       }
-    weight_[m]=4.*pi/npix*((weight==NULL) ? 1. : weight[northring-1]);
-    if (rings==NULL) {
+    weight_[m]=4.*pi/npix*((weight==nullptr) ? 1. : weight[northring-1]);
+    if (rings==nullptr) {
       MR_assert(curofs==checkofs, "Bug in computing ofs[m]");
     }
     ofs[m] = curofs;
     curofs+=nph[m];
     }
 
-  return sharp_make_geom_info(nrings, nph.data(), ofs.data(), stride_.data(), phi0.data(), theta.data(), weight_.data());
+  return make_unique<sharp_geom_info>(nrings, nph.data(), ofs.data(), stride_.data(), phi0.data(), theta.data(), weight_.data());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (int nside, int stride,
   const double *weight)
   {
-  return sharp_make_subset_healpix_geom_info(nside, stride, 4 * nside - 1, NULL, weight);
+  return sharp_make_subset_healpix_geom_info(nside, stride, 4 * nside - 1, nullptr, weight);
   }
 
 unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, double phi0,
@@ -115,7 +115,7 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, do
     weight[m]*=2*pi/nphi;
     }
 
-  return sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
+  return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -149,7 +149,7 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int ppring,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
     }
 
-  return sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
+  return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -184,7 +184,7 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring, dou
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  return sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
+  return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -218,7 +218,7 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int ppring,
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  return sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
+  return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
@@ -240,5 +240,5 @@ unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (int nrings, int ppring, dou
     stride_[m]=stride_lon;
     }
 
-  return sharp_make_geom_info (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), NULL);
+  return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), nullptr);
   }

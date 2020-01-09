@@ -322,7 +322,7 @@ static void check_sign_scale(void)
   vector<dcmplx *>alm({&balm[0], &balm[nalms]});
 
   sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
-    NULL,NULL);
+    nullptr,nullptr);
   MR_assert(approx(map[0][0     ], 3.588246976618616912e+00,1e-12),
     "error");
   MR_assert(approx(map[0][npix/2], 4.042209792157496651e+01,1e-12),
@@ -331,7 +331,7 @@ static void check_sign_scale(void)
     "error");
 
   sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
-    NULL,NULL);
+    nullptr,nullptr);
   MR_assert(approx(map[0][0     ], 2.750897760535633285e+00,1e-12),
     "error");
   MR_assert(approx(map[0][npix/2], 3.137704477368562905e+01,1e-12),
@@ -346,7 +346,7 @@ static void check_sign_scale(void)
     "error");
 
   sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
-    NULL,NULL);
+    nullptr,nullptr);
   MR_assert(approx(map[0][0     ],-1.398186224727334448e+00,1e-12),
     "error");
   MR_assert(approx(map[0][npix/2],-2.456676000884031197e+01,1e-12),
@@ -361,7 +361,7 @@ static void check_sign_scale(void)
     "error");
 
   sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),*tinfo,*alms,
-    SHARP_DP,NULL,NULL);
+    SHARP_DP,nullptr,nullptr);
   MR_assert(approx(map[0][0     ],-6.859393905369091105e-01,1e-11),
     "error");
   MR_assert(approx(map[0][npix/2],-2.103947835973212364e+02,1e-12),
@@ -401,24 +401,24 @@ static void do_sht (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   double tta2m, ttm2a;
   unsigned long long toa2m, tom2a;
 
-  if (t_a2m!=NULL) *t_a2m=0;
-  if (op_a2m!=NULL) *op_a2m=0;
+  if (t_a2m!=nullptr) *t_a2m=0;
+  if (op_a2m!=nullptr) *op_a2m=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
     sharp_execute(SHARP_ALM2MAP,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
       SHARP_DP,&tta2m,&toa2m);
-    if (t_a2m!=NULL) *t_a2m+=maxTime(tta2m);
-    if (op_a2m!=NULL) *op_a2m+=totalops(toa2m);
+    if (t_a2m!=nullptr) *t_a2m+=maxTime(tta2m);
+    if (op_a2m!=nullptr) *op_a2m+=totalops(toa2m);
     }
   auto sqsum=get_sqsum_and_invert(alm.data(),nalms,ntrans*ncomp);
-  if (t_m2a!=NULL) *t_m2a=0;
-  if (op_m2a!=NULL) *op_m2a=0;
+  if (t_m2a!=nullptr) *t_m2a=0;
+  if (op_m2a!=nullptr) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
     sharp_execute(SHARP_MAP2ALM,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
       SHARP_DP|SHARP_ADD,&ttm2a,&tom2a);
-    if (t_m2a!=NULL) *t_m2a+=maxTime(ttm2a);
-    if (op_m2a!=NULL) *op_m2a+=totalops(tom2a);
+    if (t_m2a!=nullptr) *t_m2a+=maxTime(ttm2a);
+    if (op_m2a!=nullptr) *op_m2a+=totalops(tom2a);
     }
   get_errors(alm.data(), nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
   }
@@ -428,8 +428,8 @@ static void check_accuracy (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   {
   int ncomp = (spin==0) ? 1 : 2;
   vector<double> err_abs, err_rel;
-  do_sht (ginfo, ainfo, spin, err_abs, err_rel, NULL, NULL,
-    NULL, NULL, 1);
+  do_sht (ginfo, ainfo, spin, err_abs, err_rel, nullptr, nullptr,
+    nullptr, nullptr, 1);
   for (int i=0; i<ncomp; ++i)
     MR_assert((err_rel[i]<1e-10) && (err_abs[i]<1e-10),"error");
   }

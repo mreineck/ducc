@@ -110,6 +110,110 @@ struct ringhelper
       length=nph;
       }
     }
+  MRUTIL_NOINLINE void phase2ring (const sharp_ringinfo &info,
+    double *data, int mmax, const dcmplx *phase, int pstride, int flags)
+    {
+    int nph = info.nph;
+
+    update (nph, mmax, info.phi0);
+
+    double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1.;
+    if (flags&SHARP_REAL_HARMONICS)
+      wgt *= sqrt_one_half;
+
+    if (nph>=2*mmax+1)
+      {
+      if (norot)
+        for (int m=0; m<=mmax; ++m)
+          {
+          data[2*m]=phase[m*pstride].real()*wgt;
+          data[2*m+1]=phase[m*pstride].imag()*wgt;
+          }
+      else
+        for (int m=0; m<=mmax; ++m)
+          {
+          dcmplx tmp = phase[m*pstride]*shiftarr[m];
+          data[2*m]=tmp.real()*wgt;
+          data[2*m+1]=tmp.imag()*wgt;
+          }
+      for (int m=2*(mmax+1); m<nph+2; ++m)
+        data[m]=0.;
+      }
+    else
+      {
+      data[0]=phase[0].real()*wgt;
+      fill(data+1,data+nph+2,0.);
+
+      int idx1=1, idx2=nph-1;
+      for (int m=1; m<=mmax; ++m)
+        {
+        dcmplx tmp = phase[m*pstride]*wgt;
+        if(!norot) tmp*=shiftarr[m];
+        if (idx1<(nph+2)/2)
+          {
+          data[2*idx1]+=tmp.real();
+          data[2*idx1+1]+=tmp.imag();
+          }
+        if (idx2<(nph+2)/2)
+          {
+          data[2*idx2]+=tmp.real();
+          data[2*idx2+1]-=tmp.imag();
+          }
+        if (++idx1>=nph) idx1=0;
+        if (--idx2<0) idx2=nph-1;
+        }
+      }
+    data[1]=data[0];
+    plan->exec(&(data[1]), 1., false);
+    }
+  MRUTIL_NOINLINE void ring2phase (const sharp_ringinfo &info,
+    double *data, int mmax, dcmplx *phase, int pstride, int flags)
+    {
+    int nph = info.nph;
+  #if 1
+    int maxidx = mmax; /* Enable this for traditional Healpix compatibility */
+  #else
+    int maxidx = min(nph-1,mmax);
+  #endif
+
+    update (nph, mmax, -info.phi0);
+    double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1;
+    if (flags&SHARP_REAL_HARMONICS)
+      wgt *= sqrt_two;
+
+    plan->exec (&(data[1]), 1., true);
+    data[0]=data[1];
+    data[1]=data[nph+1]=0.;
+
+    if (maxidx<=nph/2)
+      {
+      if (norot)
+        for (int m=0; m<=maxidx; ++m)
+          phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]) * wgt;
+      else
+        for (int m=0; m<=maxidx; ++m)
+          phase[m*pstride] =
+            dcmplx(data[2*m], data[2*m+1]) * shiftarr[m] * wgt;
+      }
+    else
+      {
+      for (int m=0; m<=maxidx; ++m)
+        {
+        int idx=m%nph;
+        dcmplx val;
+        if (idx<(nph-idx))
+          val = dcmplx(data[2*idx], data[2*idx+1]) * wgt;
+        else
+          val = dcmplx(data[2*(nph-idx)], -data[2*(nph-idx)+1]) * wgt;
+        if (!norot)
+          val *= shiftarr[m];
+        phase[m*pstride]=val;
+        }
+      }
+
+    for (int m=maxidx+1;m<=mmax; ++m)
+      phase[m*pstride]=0.;
+    }
   };
 
 sharp_alm_info::sharp_alm_info (int lmax, int nm, int stride, const int *mval,
@@ -141,54 +245,51 @@ ptrdiff_t sharp_alm_info::index (int l, int mi)
   return mvstart[mi]+stride*l;
   }
 
-unique_ptr<sharp_geom_info> sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
-  const int *stride, const double *phi0, const double *theta,
-  const double *wgt)
+sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *ofs,
+  const int *stride, const double *phi0, const double *theta, const double *wgt)
   {
-  sharp_geom_info *info = new sharp_geom_info;
   vector<sharp_ringinfo> infos(nrings);
 
   int pos=0;
-  info->pair.resize(nrings);
+
   int npairs=0;
-  info->nphmax=0;
+  nphmax=0;
 
   for (int m=0; m<nrings; ++m)
     {
     infos[m].theta = theta[m];
     infos[m].cth = cos(theta[m]);
     infos[m].sth = sin(theta[m]);
-    infos[m].weight = (wgt != NULL) ? wgt[m] : 1.;
+    infos[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
     infos[m].phi0 = phi0[m];
     infos[m].ofs = ofs[m];
     infos[m].stride = stride[m];
     infos[m].nph = nph[m];
-    if (info->nphmax<nph[m]) info->nphmax=nph[m];
+    if (nphmax<nph[m]) nphmax=nph[m];
     }
   sort(infos.begin(), infos.end(),[](const sharp_ringinfo &a, const sharp_ringinfo &b)
     { return (a.sth<b.sth); });
   while (pos<nrings)
     {
-    info->pair[npairs].r1=infos[pos];
+    pair.push_back(sharp_ringpair());
+    pair.back().r1=infos[pos];
     if ((pos<nrings-1) && approx(infos[pos].cth,-infos[pos+1].cth,1e-12))
       {
       if (infos[pos].cth>0)  // make sure northern ring is in r1
-        info->pair[npairs].r2=infos[pos+1];
+        pair.back().r2=infos[pos+1];
       else
         {
-        info->pair[npairs].r1=infos[pos+1];
-        info->pair[npairs].r2=infos[pos];
+        pair.back().r1=infos[pos+1];
+        pair.back().r2=infos[pos];
         }
       ++pos;
       }
     else
-      info->pair[npairs].r2.nph=-1;
+      pair.back().r2.nph=-1;
     ++pos;
-    ++npairs;
     }
-  info->pair.resize(npairs);
 
-  sort(info->pair.begin(), info->pair.end(), [] (const sharp_ringpair &a, const sharp_ringpair &b)
+  sort(pair.begin(), pair.end(), [] (const sharp_ringpair &a, const sharp_ringpair &b)
     {
     if (a.r1.nph==b.r1.nph)
     return (a.r1.phi0 < b.r1.phi0) ? true :
@@ -196,7 +297,6 @@ unique_ptr<sharp_geom_info> sharp_make_geom_info (int nrings, const int *nph, co
         (a.r1.cth>b.r1.cth));
     return a.r1.nph<b.r1.nph;
     });
-  return unique_ptr<sharp_geom_info>(info);
   }
 
 /* This currently requires all m values from 0 to nm-1 to be present.
@@ -215,114 +315,6 @@ static int sharp_get_mmax (const vector<int> &mval)
     mcheck[m_cur]=1;
     }
   return nm-1;
-  }
-
-MRUTIL_NOINLINE static void ringhelper_phase2ring (ringhelper &self,
-  const sharp_ringinfo &info, double *data, int mmax, const dcmplx *phase,
-  int pstride, int flags)
-  {
-  int nph = info.nph;
-
-  self.update (nph, mmax, info.phi0);
-
-  double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1.;
-  if (flags&SHARP_REAL_HARMONICS)
-    wgt *= sqrt_one_half;
-
-  if (nph>=2*mmax+1)
-    {
-    if (self.norot)
-      for (int m=0; m<=mmax; ++m)
-        {
-        data[2*m]=phase[m*pstride].real()*wgt;
-        data[2*m+1]=phase[m*pstride].imag()*wgt;
-        }
-    else
-      for (int m=0; m<=mmax; ++m)
-        {
-        dcmplx tmp = phase[m*pstride]*self.shiftarr[m];
-        data[2*m]=tmp.real()*wgt;
-        data[2*m+1]=tmp.imag()*wgt;
-        }
-    for (int m=2*(mmax+1); m<nph+2; ++m)
-      data[m]=0.;
-    }
-  else
-    {
-    data[0]=phase[0].real()*wgt;
-    fill(data+1,data+nph+2,0.);
-
-    int idx1=1, idx2=nph-1;
-    for (int m=1; m<=mmax; ++m)
-      {
-      dcmplx tmp = phase[m*pstride]*wgt;
-      if(!self.norot) tmp*=self.shiftarr[m];
-      if (idx1<(nph+2)/2)
-        {
-        data[2*idx1]+=tmp.real();
-        data[2*idx1+1]+=tmp.imag();
-        }
-      if (idx2<(nph+2)/2)
-        {
-        data[2*idx2]+=tmp.real();
-        data[2*idx2+1]-=tmp.imag();
-        }
-      if (++idx1>=nph) idx1=0;
-      if (--idx2<0) idx2=nph-1;
-      }
-    }
-  data[1]=data[0];
-  self.plan->exec(&(data[1]), 1., false);
-  }
-
-MRUTIL_NOINLINE static void ringhelper_ring2phase (ringhelper &self,
-  const sharp_ringinfo &info, double *data, int mmax, dcmplx *phase,
-  int pstride, int flags)
-  {
-  int nph = info.nph;
-#if 1
-  int maxidx = mmax; /* Enable this for traditional Healpix compatibility */
-#else
-  int maxidx = min(nph-1,mmax);
-#endif
-
-  self.update (nph, mmax, -info.phi0);
-  double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1;
-  if (flags&SHARP_REAL_HARMONICS)
-    wgt *= sqrt_two;
-
-  self.plan->exec (&(data[1]), 1., true);
-  data[0]=data[1];
-  data[1]=data[nph+1]=0.;
-
-  if (maxidx<=nph/2)
-    {
-    if (self.norot)
-      for (int m=0; m<=maxidx; ++m)
-        phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]) * wgt;
-    else
-      for (int m=0; m<=maxidx; ++m)
-        phase[m*pstride] =
-          dcmplx(data[2*m], data[2*m+1]) * self.shiftarr[m] * wgt;
-    }
-  else
-    {
-    for (int m=0; m<=maxidx; ++m)
-      {
-      int idx=m%nph;
-      dcmplx val;
-      if (idx<(nph-idx))
-        val = dcmplx(data[2*idx], data[2*idx+1]) * wgt;
-      else
-        val = dcmplx(data[2*(nph-idx)], -data[2*(nph-idx)+1]) * wgt;
-      if (!self.norot)
-        val *= self.shiftarr[m];
-      phase[m*pstride]=val;
-      }
-    }
-
-  for (int m=maxidx+1;m<=mmax; ++m)
-    phase[m*pstride]=0.;
   }
 
 MRUTIL_NOINLINE static void clear_map (const sharp_geom_info *ginfo, void *map,
@@ -711,14 +703,14 @@ MRUTIL_NOINLINE static void map2phase (sharp_job &job, int mmax, int llim, int u
         int dim2 = job.s_th*(ith-llim);
         ring2ringtmp(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
         for (int i=0; i<job.nmaps; ++i)
-          ringhelper_ring2phase (helper,job.ginfo->pair[ith].r1,
+          helper.ring2phase (job.ginfo->pair[ith].r1,
             &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
         if (job.ginfo->pair[ith].r2.nph>0)
           {
           ring2ringtmp(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
           for (int i=0; i<job.nmaps; ++i)
-            ringhelper_ring2phase (helper,job.ginfo->pair[ith].r2,
-             &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
+            helper.ring2phase (job.ginfo->pair[ith].r2,
+              &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
           }
         }
       }); /* end of parallel region */
@@ -752,13 +744,13 @@ MRUTIL_NOINLINE static void phase2map (sharp_job &job, int mmax, int llim, int u
         {
         int dim2 = job.s_th*(ith-llim);
         for (int i=0; i<job.nmaps; ++i)
-          ringhelper_phase2ring (helper,job.ginfo->pair[ith].r1,
+          helper.phase2ring (job.ginfo->pair[ith].r1,
             &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
         ringtmp2ring(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
         if (job.ginfo->pair[ith].r2.nph>0)
           {
           for (int i=0; i<job.nmaps; ++i)
-            ringhelper_phase2ring (helper,job.ginfo->pair[ith].r2,
+            helper.phase2ring (job.ginfo->pair[ith].r2,
               &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
           ringtmp2ring(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
           }
@@ -871,8 +863,8 @@ void sharp_execute (sharp_jobtype type, int spin, void *alm, void *map,
     flags);
 
   sharp_execute_job (job);
-  if (time!=NULL) *time = job.time;
-  if (opcnt!=NULL) *opcnt = job.opcnt;
+  if (time!=nullptr) *time = job.time;
+  if (opcnt!=nullptr) *opcnt = job.opcnt;
   }
 
 void sharp_set_chunksize_min(int new_chunksize_min)

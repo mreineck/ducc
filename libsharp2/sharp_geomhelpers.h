@@ -35,8 +35,8 @@
     Nside parameter \a nside. \a weight contains the relative ring
     weights and must have \a 2*nside entries. The rings array contains
     the indices of the rings, with 1 being the first ring at the north
-    pole; if NULL then we take them to be sequential. Pass 4 * nside - 1
-    as nrings and NULL to rings to get the full HEALPix grid.
+    pole; if nullptr then we take them to be sequential. Pass 4 * nside - 1
+    as nrings and nullptr to rings to get the full HEALPix grid.
     \note if \a weight is a null pointer, all weights are assumed to be 1.
     \note if \a rings is a null pointer, take all rings
     \ingroup geominfogroup */
@@ -55,7 +55,7 @@ std::unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (int nsid
     Nside parameter \a nside.
     \ingroup geominfogroup */
 static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (int nside, int stride)
-  { return sharp_make_weighted_healpix_geom_info (nside, stride, NULL); }
+  { return sharp_make_weighted_healpix_geom_info (nside, stride, nullptr); }
 
 /*! Creates a geometry information describing a Gaussian map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first

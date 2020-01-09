@@ -55,6 +55,21 @@ struct sharp_geom_info
   {
   std::vector<sharp_ringpair> pair;
   int nphmax;
+/*! Creates a geometry information from a set of ring descriptions.
+    All arrays passed to this function must have \a nrings elements.
+    \param nrings the number of rings in the map
+    \param nph the number of pixels in each ring
+    \param ofs the index of the first pixel in each ring in the map array
+    \param stride the stride between consecutive pixels
+    \param phi0 the azimuth (in radians) of the first pixel in each ring
+    \param theta the colatitude (in radians) of each ring
+    \param wgt the pixel weight to be used for the ring in map2alm
+      and adjoint map2alm transforms.
+      Pass nullptr to use 1.0 as weight for all rings.
+ */
+  sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *ofs,
+    const int *stride, const double *phi0, const double *theta,
+    const double *wgt);
   };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
@@ -130,23 +145,6 @@ enum sharp_almflags { SHARP_PACKED = 1,
 /*! \defgroup geominfogroup Functions for dealing with geometry information */
 /*! \{ */
 
-/*! Creates a geometry information from a set of ring descriptions.
-    All arrays passed to this function must have \a nrings elements.
-    \param nrings the number of rings in the map
-    \param nph the number of pixels in each ring
-    \param ofs the index of the first pixel in each ring in the map array
-    \param stride the stride between consecutive pixels
-    \param phi0 the azimuth (in radians) of the first pixel in each ring
-    \param theta the colatitude (in radians) of each ring
-    \param wgt the pixel weight to be used for the ring in map2alm
-      and adjoint map2alm transforms.
-      Pass NULL to use 1.0 as weight for all rings.
-    \param geom_info will hold a pointer to the newly created data structure
- */
-std::unique_ptr<sharp_geom_info> sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
-  const int *stride, const double *phi0, const double *theta,
-  const double *wgt);
-
 /*! \} */
 
 /*! \defgroup lowlevelgroup Low-level libsharp2 SHT interface */
@@ -198,9 +196,9 @@ enum sharp_jobflags { SHARP_DP              = 1<<4,
     \a alm is expected to have the type "complex double **" and \a map is
     expected to have the type "double **"; otherwise, the expected
     types are "complex float **" and "float **", respectively.
-  \param time If not NULL, the wall clock time required for this SHT
+  \param time If not nullptr, the wall clock time required for this SHT
     (in seconds) will be written here.
-  \param opcnt If not NULL, a conservative estimate of the total floating point
+  \param opcnt If not nullptr, a conservative estimate of the total floating point
     operation count for this SHT will be written here. */
 void sharp_execute (sharp_jobtype type, int spin, void *alm, void *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,

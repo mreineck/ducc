@@ -38,10 +38,10 @@ using t_veclen = int (*) (void);
 using t_max_nvec = int (*) (int spin);
 using t_architecture = const char *(*) (void);
 
-static t_inner_loop inner_loop_ = NULL;
-static t_veclen veclen_ = NULL;
-static t_max_nvec max_nvec_ = NULL;
-static t_architecture architecture_ = NULL;
+static t_inner_loop inner_loop_ = nullptr;
+static t_veclen veclen_ = nullptr;
+static t_max_nvec max_nvec_ = nullptr;
+static t_architecture architecture_ = nullptr;
 
 #ifdef MULTIARCH
 
