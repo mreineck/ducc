@@ -25,7 +25,6 @@
  */
 
 #include <iostream>
-#include <stdio.h>
 #include <string.h>
 #include <complex>
 using std::complex;
@@ -52,32 +51,32 @@ static void threading_status(void)
 static void MPI_status(void)
   {
 #ifndef USE_MPI
-  printf("MPI: not supported by this binary\n");
+  cout << "MPI: not supported by this binary" << endl;
 #else
   int tasks;
   MPI_Comm_size(MPI_COMM_WORLD,&tasks);
   if (tasks>1)
-    printf("MPI active with %d tasks.\n",tasks);
+    cout << "MPI active with " << tasks << " tasks." << endl;
   else
-    printf("MPI active, but running with 1 task only.\n");
+    cout << "MPI active, but running with 1 task only." << endl);
 #endif
   }
 
 static void sharp_announce (const char *name)
   {
   size_t m, nlen=strlen(name);
-  printf("\n+-");
-  for (m=0; m<nlen; ++m) printf("-");
-  printf("-+\n");
-  printf("| %s |\n", name);
-  printf("+-");
-  for (m=0; m<nlen; ++m) printf("-");
-  printf("-+\n\n");
-  printf("Detected hardware architecture: %s\n", sharp_architecture());
-  printf("Supported vector length: %d\n", sharp_veclen());
+  cout << "\n+-";
+  for (m=0; m<nlen; ++m) cout << "-";
+  cout << "-+\n";
+  cout << "| " << name << " |\n";
+  cout << "+-";
+  for (m=0; m<nlen; ++m) cout << "-";
+  cout << "-+\n\n";
+  cout << "Detected hardware architecture: " << sharp_architecture() << endl;
+  cout << "Supported vector length: " << sharp_veclen() << endl;
   threading_status();
   MPI_status();
-  printf("\n");
+  cout << endl;
   }
 
 static void sharp_module_startup (const char *name, int argc, int argc_expected,
@@ -85,7 +84,7 @@ static void sharp_module_startup (const char *name, int argc, int argc_expected,
   {
   if (verbose) sharp_announce (name);
   if (argc==argc_expected) return;
-  if (verbose) fprintf(stderr, "Usage: %s %s\n", name, argv_expected);
+  if (verbose) cerr << "Usage: " << name << " " << argv_expected << endl;
   exit(1);
   }
 
@@ -290,7 +289,7 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
   MR_assert(*mmax<=lmax,"mmax larger than lmax");
 
   verbose &= (mytask==0);
-  if (verbose) printf ("lmax: %d, mmax: %d\n",lmax,*mmax);
+  if (verbose) cout << "lmax: " << lmax << ", mmax: " << *mmax << endl;
 
   sharp_make_triangular_alm_info(lmax,*mmax,1,ainfo);
 #ifdef USE_MPI
@@ -302,7 +301,7 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     if (*gpar1<1) *gpar1=lmax/2;
     if (*gpar1==0) ++(*gpar1);
     sharp_make_healpix_geom_info (*gpar1, 1, ginfo);
-    if (verbose) printf ("HEALPix grid, nside=%d\n",*gpar1);
+    if (verbose) cout << "HEALPix grid, nside=" << *gpar1 << endl;
     }
   else if (strcmp(gname,"gauss")==0)
     {
@@ -310,21 +309,23 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     if (*gpar2<1) *gpar2=2*(*mmax)+1;
     sharp_make_gauss_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
     if (verbose)
-      printf ("Gauss-Legendre grid, nlat=%d, nlon=%d\n",*gpar1,*gpar2);
+      cout << "Gauss-Legendre grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
     }
   else if (strcmp(gname,"fejer1")==0)
     {
     if (*gpar1<1) *gpar1=2*lmax+1;
     if (*gpar2<1) *gpar2=2*(*mmax)+1;
     sharp_make_fejer1_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
-    if (verbose) printf ("Fejer1 grid, nlat=%d, nlon=%d\n",*gpar1,*gpar2);
+    if (verbose)
+      cout << "Fejer1 grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
     }
   else if (strcmp(gname,"fejer2")==0)
     {
     if (*gpar1<1) *gpar1=2*lmax+1;
     if (*gpar2<1) *gpar2=2*(*mmax)+1;
     sharp_make_fejer2_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
-    if (verbose) printf ("Fejer2 grid, nlat=%d, nlon=%d\n",*gpar1,*gpar2);
+    if (verbose)
+      cout << "Fejer2 grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
     }
   else if (strcmp(gname,"cc")==0)
     {
@@ -332,7 +333,7 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     if (*gpar2<1) *gpar2=2*(*mmax)+1;
     sharp_make_cc_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
     if (verbose)
-      printf("Clenshaw-Curtis grid, nlat=%d, nlon=%d\n",*gpar1,*gpar2);
+      cout << "Clenshaw-Curtis grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
     }
   else if (strcmp(gname,"smallgauss")==0)
     {
@@ -364,8 +365,8 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     if (verbose)
       {
       ptrdiff_t npix=get_npix(*ginfo);
-      printf("Small Gauss grid, nlat=%d, npix=%ld, savings=%.2f%%\n",
-        nlat,(long)npix,(npix_o-npix)*100./npix_o);
+      cout << "Small Gauss grid, nlat=" << nlat << ", npix=" << npix
+           << ", savings=" << ((npix_o-npix)*100./npix_o) << "\%" << endl;
       }
     }
   else
@@ -549,11 +550,11 @@ static void sharp_acctest(void)
   {
   if (mytask==0) sharp_module_startup("sharp_acctest",1,1,"",1);
 
-  if (mytask==0) printf("Checking signs and scales.\n");
+  if (mytask==0) cout << "Checking signs and scales.\n";
   check_sign_scale();
-  if (mytask==0) printf("Passed.\n\n");
+  if (mytask==0) cout << "Passed.\n\n";
 
-  if (mytask==0) printf("Testing map analysis accuracy.\n");
+  if (mytask==0) cout << "Testing map analysis accuracy.\n";
 
   run(127, 127, 128, 256, 0);
   run(127, 127, 128, 256, 1);
@@ -564,7 +565,7 @@ static void sharp_acctest(void)
   run(5, 0, 7, 2, 0);
   run(8, 8, 9, 17, 0);
   run(8, 8, 9, 17, 2);
-  if (mytask==0) printf("Passed.\n\n");
+  if (mytask==0) cout << "Passed.\n\n";
   }
 
 static void sharp_test (int argc, const char **argv)
@@ -579,9 +580,9 @@ static void sharp_test (int argc, const char **argv)
   int ntrans=1;
   if (argc>=9) ntrans=atoi(argv[8]);
 
-  if (mytask==0) printf("Testing map analysis accuracy.\n");
-  if (mytask==0) printf("spin=%d\n", spin);
-  if (mytask==0) printf("ntrans=%d\n", ntrans);
+  if (mytask==0) cout << "Testing map analysis accuracy.\n";
+  if (mytask==0) cout << "spin=" << spin << endl;
+  if (mytask==0) cout << "ntrans=" << ntrans << endl;
 
   sharp_geom_info *ginfo;
   sharp_alm_info *ainfo;
@@ -605,19 +606,19 @@ static void sharp_test (int argc, const char **argv)
     t_acc+=t_a2m+t_m2a;
     if (t_acc>2.)
       {
-      if (mytask==0) printf("Best of %d runs\n",nrpt);
+      if (mytask==0) cout << "Best of " << nrpt << " runs\n";
       break;
       }
     }
 
-  if (mytask==0) printf("wall time for alm2map: %fs\n",t_a2m);
-  if (mytask==0) printf("Performance: %fGFLOPs/s\n",1e-9*op_a2m/t_a2m);
-  if (mytask==0) printf("wall time for map2alm: %fs\n",t_m2a);
-  if (mytask==0) printf("Performance: %fGFLOPs/s\n",1e-9*op_m2a/t_m2a);
+  if (mytask==0) cout << "wall time for alm2map: " << t_a2m << "s\n";
+  if (mytask==0) cout << "Performance: " << 1e-9*op_a2m/t_a2m << "GFLOPs/s\n";
+  if (mytask==0) cout << "wall time for map2alm: " << t_m2a << "s\n";
+  if (mytask==0) cout << "Performance: " << 1e-9*op_m2a/t_m2a << "GFLOPs/s\n";
 
   if (mytask==0)
     for (int i=0; i<ntrans*ncomp; ++i)
-      printf("component %i: rms %e, maxerr %e\n",i,err_rel[i], err_abs[i]);
+      cout << "component " << i << ": rms " << err_rel[i] << ", maxerr " << err_abs[i] << endl;
 
   double iosize = ntrans*ncomp*(16.*get_nalms(ainfo) + 8.*get_npix(ginfo));
   iosize = allreduceSumDouble(iosize);
@@ -627,10 +628,10 @@ static void sharp_test (int argc, const char **argv)
 
   double tmem=totalMem();
   if (mytask==0)
-    printf("\nMemory high water mark: %.2f MB\n",tmem/(1<<20));
+    cout << "\nMemory high water mark: " << tmem/(1<<20) << " MB\n";
   if (mytask==0)
-    printf("Memory overhead: %.2f MB (%.2f%% of working set)\n",
-      (tmem-iosize)/(1<<20),100.*(1.-iosize/tmem));
+    cout << "Memory overhead: " << (tmem-iosize)/(1<<20) << " MB ("
+         << 100.*(1.-iosize/tmem) << "\% of working set)\n";
 
 #ifdef _OPENMP
   int nomp=omp_get_max_threads();
@@ -645,12 +646,12 @@ static void sharp_test (int argc, const char **argv)
     if (maxeabs<err_abs[i]) maxeabs=err_abs[i];
     }
 
-  if (mytask==0)
-    printf("%-12s %-10s %2d %d %2d %3d %6d %6d %6d %6d %.2e %7.2f %.2e %7.2f"
-           " %9.2f %6.2f %.2e %.2e\n",
-      getenv("HOST"),argv[2],spin,sharp_veclen(),nomp,ntasks,lmax,mmax,gpar1,gpar2,
-      t_a2m,1e-9*op_a2m/t_a2m,t_m2a,1e-9*op_m2a/t_m2a,tmem/(1<<20),
-      100.*(1.-iosize/tmem),maxerel,maxeabs);
+//  if (mytask==0)
+//    printf("%-12s %-10s %2d %d %2d %3d %6d %6d %6d %6d %.2e %7.2f %.2e %7.2f"
+//           " %9.2f %6.2f %.2e %.2e\n",
+//      getenv("HOST"),argv[2],spin,sharp_veclen(),nomp,ntasks,lmax,mmax,gpar1,gpar2,
+//      t_a2m,1e-9*op_a2m/t_a2m,t_m2a,1e-9*op_m2a/t_m2a,tmem/(1<<20),
+//      100.*(1.-iosize/tmem),maxerel,maxeabs);
   }
 
 int main(int argc, const char **argv)

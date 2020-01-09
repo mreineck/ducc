@@ -29,7 +29,6 @@
 #include <vector>
 #include "libsharp2/sharp_geomhelpers.h"
 #include "mr_util/gl_integrator.h"
-#include "libsharp2/sharp_utils.h"
 #include "mr_util/fft.h"
 #include "mr_util/error_handling.h"
 
