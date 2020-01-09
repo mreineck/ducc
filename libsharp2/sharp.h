@@ -70,6 +70,8 @@ struct sharp_geom_info
   sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *ofs,
     const int *stride, const double *phi0, const double *theta,
     const double *wgt);
+  void clear_map(double *map) const;
+  void clear_map(float *map) const;
   };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
@@ -169,8 +171,6 @@ enum sharp_jobflags { SHARP_DP              = 1<<4,
 
                /* NOTE: SHARP_REAL_HARMONICS, 1<<6, is also available in sharp_jobflags,
                   but its use here is deprecated in favor of having it in the sharp_alm_info */
-
-               SHARP_NO_FFT          = 1<<7,
 
                SHARP_USE_WEIGHTS     = 1<<20,    /* internal use only */
              };

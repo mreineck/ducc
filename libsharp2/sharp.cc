@@ -170,11 +170,6 @@ struct ringhelper
     double *data, int mmax, dcmplx *phase, int pstride, int flags)
     {
     int nph = info.nph;
-  #if 1
-    int maxidx = mmax; /* Enable this for traditional Healpix compatibility */
-  #else
-    int maxidx = min(nph-1,mmax);
-  #endif
 
     update (nph, mmax, -info.phi0);
     double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1;
@@ -185,19 +180,19 @@ struct ringhelper
     data[0]=data[1];
     data[1]=data[nph+1]=0.;
 
-    if (maxidx<=nph/2)
+    if (mmax<=nph/2)
       {
       if (norot)
-        for (int m=0; m<=maxidx; ++m)
+        for (int m=0; m<=mmax; ++m)
           phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]) * wgt;
       else
-        for (int m=0; m<=maxidx; ++m)
+        for (int m=0; m<=mmax; ++m)
           phase[m*pstride] =
             dcmplx(data[2*m], data[2*m+1]) * shiftarr[m] * wgt;
       }
     else
       {
-      for (int m=0; m<=maxidx; ++m)
+      for (int m=0; m<=mmax; ++m)
         {
         int idx=m%nph;
         dcmplx val;
@@ -210,9 +205,6 @@ struct ringhelper
         phase[m*pstride]=val;
         }
       }
-
-    for (int m=maxidx+1;m<=mmax; ++m)
-      phase[m*pstride]=0.;
     }
   };
 
@@ -317,60 +309,36 @@ static int sharp_get_mmax (const vector<int> &mval)
   return nm-1;
   }
 
-MRUTIL_NOINLINE static void clear_map (const sharp_geom_info *ginfo, void *map,
-  int flags)
+MRUTIL_NOINLINE void sharp_geom_info::clear_map (double *map) const
   {
-  if (flags & SHARP_NO_FFT)
+  for (int j=0;j<pair.size();++j)
     {
-    for (int j=0;j<ginfo->pair.size();++j)
-      {
-      if (flags&SHARP_DP)
-        {
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r1.nph;++i)
-          ((dcmplx *)map)[ginfo->pair[j].r1.ofs+i*ginfo->pair[j].r1.stride]=0;
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r2.nph;++i)
-          ((dcmplx *)map)[ginfo->pair[j].r2.ofs+i*ginfo->pair[j].r2.stride]=0;
-        }
-      else
-        {
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r1.nph;++i)
-          ((fcmplx *)map)[ginfo->pair[j].r1.ofs+i*ginfo->pair[j].r1.stride]=0;
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r2.nph;++i)
-          ((fcmplx *)map)[ginfo->pair[j].r2.ofs+i*ginfo->pair[j].r2.stride]=0;
-        }
-      }
-    }
-  else
-    {
-    if (flags&SHARP_DP)
-      {
-      for (int j=0;j<ginfo->pair.size();++j)
-        {
-        double *dmap=(double *)map;
-        if (ginfo->pair[j].r1.stride==1)
-          memset(&dmap[ginfo->pair[j].r1.ofs],0,
-            ginfo->pair[j].r1.nph*sizeof(double));
-        else
-          for (ptrdiff_t i=0;i<ginfo->pair[j].r1.nph;++i)
-            dmap[ginfo->pair[j].r1.ofs+i*ginfo->pair[j].r1.stride]=0;
-        if ((ginfo->pair[j].r2.nph>0)&&(ginfo->pair[j].r2.stride==1))
-          memset(&dmap[ginfo->pair[j].r2.ofs],0,
-            ginfo->pair[j].r2.nph*sizeof(double));
-        else
-          for (ptrdiff_t i=0;i<ginfo->pair[j].r2.nph;++i)
-            dmap[ginfo->pair[j].r2.ofs+i*ginfo->pair[j].r2.stride]=0;
-        }
-      }
+    if (pair[j].r1.stride==1)
+      memset(&map[pair[j].r1.ofs],0,pair[j].r1.nph*sizeof(double));
     else
-      {
-      for (int j=0;j<ginfo->pair.size();++j)
-        {
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r1.nph;++i)
-          ((float *)map)[ginfo->pair[j].r1.ofs+i*ginfo->pair[j].r1.stride]=0;
-        for (ptrdiff_t i=0;i<ginfo->pair[j].r2.nph;++i)
-          ((float *)map)[ginfo->pair[j].r2.ofs+i*ginfo->pair[j].r2.stride]=0;
-        }
-      }
+      for (ptrdiff_t i=0;i<pair[j].r1.nph;++i)
+        map[pair[j].r1.ofs+i*pair[j].r1.stride]=0;
+    if ((pair[j].r2.nph>0)&&(pair[j].r2.stride==1))
+      memset(&map[pair[j].r2.ofs],0,pair[j].r2.nph*sizeof(double));
+    else
+      for (ptrdiff_t i=0;i<pair[j].r2.nph;++i)
+        map[pair[j].r2.ofs+i*pair[j].r2.stride]=0;
+    }
+  }
+MRUTIL_NOINLINE void sharp_geom_info::clear_map (float *map) const
+  {
+  for (int j=0;j<pair.size();++j)
+    {
+    if (pair[j].r1.stride==1)
+      memset(&map[pair[j].r1.ofs],0,pair[j].r1.nph*sizeof(float));
+    else
+      for (ptrdiff_t i=0;i<pair[j].r1.nph;++i)
+        map[pair[j].r1.ofs+i*pair[j].r1.stride]=0;
+    if ((pair[j].r2.nph>0)&&(pair[j].r2.stride==1))
+      memset(&map[pair[j].r2.ofs],0,pair[j].r2.nph*sizeof(float));
+    else
+      for (ptrdiff_t i=0;i<pair[j].r2.nph;++i)
+        map[pair[j].r2.ofs+i*pair[j].r2.stride]=0;
     }
   }
 
@@ -411,15 +379,16 @@ MRUTIL_NOINLINE static void clear_alm (const sharp_alm_info *ainfo, void *alm,
     }
   }
 
-MRUTIL_NOINLINE static void init_output (sharp_job *job)
+MRUTIL_NOINLINE static void init_output (sharp_job &job)
   {
-  if (job->flags&SHARP_ADD) return;
-  if (job->type == SHARP_MAP2ALM)
-    for (int i=0; i<job->nalm; ++i)
-      clear_alm (job->ainfo,job->alm[i],job->flags);
+  if (job.flags&SHARP_ADD) return;
+  if (job.type == SHARP_MAP2ALM)
+    for (int i=0; i<job.nalm; ++i)
+      clear_alm (job.ainfo,job.alm[i],job.flags);
   else
-    for (int i=0; i<job->nmaps; ++i)
-      clear_map (job->ginfo,job->map[i],job->flags);
+    for (int i=0; i<job.nmaps; ++i)
+      (job.flags&SHARP_DP) ? job.ginfo->clear_map((double *)job.map[i])
+                           : job.ginfo->clear_map((float  *)job.map[i]);
   }
 
 MRUTIL_NOINLINE static void alloc_phase (sharp_job *job, int nm, int ntheta, aligned_array<dcmplx> &data)
@@ -679,84 +648,56 @@ MRUTIL_NOINLINE static void map2phase (sharp_job &job, int mmax, int llim, int u
   {
   if (job.type != SHARP_MAP2ALM) return;
   int pstride = job.s_m;
-  if (job.flags & SHARP_NO_FFT)
+  mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
-    for (int ith=llim; ith<ulim; ++ith)
+    ringhelper helper;
+    int rstride=job.ginfo->nphmax+2;
+    vector<double> ringtmp(job.nmaps*rstride);
+
+    while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = job.s_th*(ith-llim);
-      ring2phase_direct(job,job.ginfo->pair[ith].r1,mmax,
-        &(job.phase[dim2]));
-      ring2phase_direct(job,job.ginfo->pair[ith].r2,mmax,
-        &(job.phase[dim2+1]));
-      }
-    }
-  else
-    {
-    mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
-      {
-      ringhelper helper;
-      int rstride=job.ginfo->nphmax+2;
-      vector<double> ringtmp(job.nmaps*rstride);
-
-      while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
+      ring2ringtmp(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
+      for (int i=0; i<job.nmaps; ++i)
+        helper.ring2phase (job.ginfo->pair[ith].r1,
+          &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
+      if (job.ginfo->pair[ith].r2.nph>0)
         {
-        int dim2 = job.s_th*(ith-llim);
-        ring2ringtmp(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
+        ring2ringtmp(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
         for (int i=0; i<job.nmaps; ++i)
-          helper.ring2phase (job.ginfo->pair[ith].r1,
-            &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
-        if (job.ginfo->pair[ith].r2.nph>0)
-          {
-          ring2ringtmp(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
-          for (int i=0; i<job.nmaps; ++i)
-            helper.ring2phase (job.ginfo->pair[ith].r2,
-              &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
-          }
+          helper.ring2phase (job.ginfo->pair[ith].r2,
+            &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
         }
-      }); /* end of parallel region */
-    }
+      }
+    }); /* end of parallel region */
   }
 
 MRUTIL_NOINLINE static void phase2map (sharp_job &job, int mmax, int llim, int ulim)
   {
   if (job.type == SHARP_MAP2ALM) return;
   int pstride = job.s_m;
-  if (job.flags & SHARP_NO_FFT)
+  mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
-    for (int ith=llim; ith<ulim; ++ith)
+    ringhelper helper;
+    int rstride=job.ginfo->nphmax+2;
+    vector<double> ringtmp(job.nmaps*rstride);
+
+    while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = job.s_th*(ith-llim);
-      phase2ring_direct(job,job.ginfo->pair[ith].r1,mmax,
-        &(job.phase[dim2]));
-      phase2ring_direct(job,job.ginfo->pair[ith].r2,mmax,
-        &(job.phase[dim2+1]));
-      }
-    }
-  else
-    {
-    mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
-      {
-      ringhelper helper;
-      int rstride=job.ginfo->nphmax+2;
-      vector<double> ringtmp(job.nmaps*rstride);
-
-      while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
+      for (int i=0; i<job.nmaps; ++i)
+        helper.phase2ring (job.ginfo->pair[ith].r1,
+          &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
+      ringtmp2ring(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
+      if (job.ginfo->pair[ith].r2.nph>0)
         {
-        int dim2 = job.s_th*(ith-llim);
         for (int i=0; i<job.nmaps; ++i)
-          helper.phase2ring (job.ginfo->pair[ith].r1,
-            &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i],pstride,job.flags);
-        ringtmp2ring(job,job.ginfo->pair[ith].r1,ringtmp,rstride);
-        if (job.ginfo->pair[ith].r2.nph>0)
-          {
-          for (int i=0; i<job.nmaps; ++i)
-            helper.phase2ring (job.ginfo->pair[ith].r2,
-              &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
-          ringtmp2ring(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
-          }
+          helper.phase2ring (job.ginfo->pair[ith].r2,
+            &ringtmp[i*rstride],mmax,&job.phase[dim2+2*i+1],pstride,job.flags);
+        ringtmp2ring(job,job.ginfo->pair[ith].r2,ringtmp,rstride);
         }
-      }); /* end of parallel region */
-    }
+      }
+    }); /* end of parallel region */
   }
 
 MRUTIL_NOINLINE static void sharp_execute_job (sharp_job &job)
@@ -771,7 +712,7 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job &job)
      sharp_Ylmgen::get_norm (lmax, job.spin);
 
 /* clear output arrays if requested */
-  init_output (&job);
+  init_output(job);
 
   int nchunks, chunksize;
   get_chunk_info(job.ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(job.spin),
