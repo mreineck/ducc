@@ -3,8 +3,6 @@ ACLOCAL_AMFLAGS = -I m4
 lib_LTLIBRARIES = libmrutil.la
 
 libmrutil_la_SOURCES = \
-  libsharp2/sharp_utils.h \
-  libsharp2/sharp_utils.cc \
   libsharp2/sharp.cc \
   libsharp2/sharp_almhelpers.cc \
   libsharp2/sharp_core.cc \
@@ -12,6 +10,7 @@ libmrutil_la_SOURCES = \
   libsharp2/sharp_ylmgen.cc \
   libsharp2/sharp_internal.h \
   libsharp2/sharp_ylmgen.h \
+  mr_util/math_utils.h \
   mr_util/cmplx.h \
   mr_util/error_handling.cc \
   mr_util/error_handling.h \

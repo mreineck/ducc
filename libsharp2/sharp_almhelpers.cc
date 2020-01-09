@@ -26,7 +26,6 @@
  */
 
 #include "libsharp2/sharp_almhelpers.h"
-#include "libsharp2/sharp_utils.h"
 
 void sharp_make_triangular_alm_info (int lmax, int mmax, int stride,
   sharp_alm_info **alm_info)

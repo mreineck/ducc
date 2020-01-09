@@ -35,11 +35,10 @@
 #define XARCH(a) XCONCATX2(a,ARCH)
 
 #include <complex>
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_internal.h"
-#include "libsharp2/sharp_utils.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/useful_macros.h"
 #include "mr_util/simd.h"
@@ -84,8 +83,8 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
 
 using dcmplx = complex<double>;
 
-#define nv0 (128/VLEN)
-#define nvx (64/VLEN)
+constexpr size_t nv0 = 128/VLEN;
+constexpr size_t nvx = 64/VLEN;
 
 using Tbv0 = Tv[nv0];
 using Tbs0 = double[nv0*VLEN];

@@ -34,15 +34,15 @@ using std::complex;
 #include "libsharp2/sharp_mpi.h"
 #endif
 #include "libsharp2/sharp.h"
-#include "libsharp2/sharp_utils.h"
-#include "libsharp2/sharp_utils.cc"
 #include "libsharp2/sharp_geomhelpers.h"
 #include "libsharp2/sharp_almhelpers.h"
 #include "mr_util/system.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/threading.h"
+#include "mr_util/math_utils.h"
 
 using namespace std;
+using namespace mr;
 
 static void threading_status(void)
   {
@@ -400,71 +400,68 @@ static void check_sign_scale(void)
   sharp_make_triangular_alm_info(lmax,mmax,1,&alms);
   ptrdiff_t nalms = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
 
-  double **map;
-  ALLOC2D(map,double,2,npix);
+  vector<double> bmap(2*npix);
+  vector<double *>map({&bmap[0], &bmap[npix]});
 
-  dcmplx **alm;
-  ALLOC2D(alm,dcmplx,2,nalms);
+  vector<dcmplx> balm(2*nalms);
+  vector<dcmplx *>alm({&balm[0], &balm[nalms]});
   for (int i=0; i<2; ++i)
     for (int j=0; j<nalms; ++j)
       alm[i][j]=dcmplx(1.,1.);
 
-  sharp_execute(SHARP_ALM2MAP,0,&alm[0],&map[0],tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),tinfo,alms,SHARP_DP,
     NULL,NULL);
-  MR_assert(FAPPROX(map[0][0     ], 3.588246976618616912e+00,1e-12),
+  MR_assert(approx(map[0][0     ], 3.588246976618616912e+00,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix/2], 4.042209792157496651e+01,1e-12),
+  MR_assert(approx(map[0][npix/2], 4.042209792157496651e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix-1],-1.234675107554816442e+01,1e-12),
+  MR_assert(approx(map[0][npix-1],-1.234675107554816442e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,1,&alm[0],&map[0],tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),tinfo,alms,SHARP_DP,
     NULL,NULL);
-  MR_assert(FAPPROX(map[0][0     ], 2.750897760535633285e+00,1e-12),
+  MR_assert(approx(map[0][0     ], 2.750897760535633285e+00,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix/2], 3.137704477368562905e+01,1e-12),
+  MR_assert(approx(map[0][npix/2], 3.137704477368562905e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix-1],-8.405730859837063917e+01,1e-12),
+  MR_assert(approx(map[0][npix-1],-8.405730859837063917e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][0     ],-2.398026536095463346e+00,1e-12),
+  MR_assert(approx(map[1][0     ],-2.398026536095463346e+00,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix/2],-4.961140548331700728e+01,1e-12),
+  MR_assert(approx(map[1][npix/2],-4.961140548331700728e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix-1],-1.412765834230440021e+01,1e-12),
+  MR_assert(approx(map[1][npix-1],-1.412765834230440021e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,2,&alm[0],&map[0],tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),tinfo,alms,SHARP_DP,
     NULL,NULL);
-  MR_assert(FAPPROX(map[0][0     ],-1.398186224727334448e+00,1e-12),
+  MR_assert(approx(map[0][0     ],-1.398186224727334448e+00,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix/2],-2.456676000884031197e+01,1e-12),
+  MR_assert(approx(map[0][npix/2],-2.456676000884031197e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix-1],-1.516249174408820863e+02,1e-12),
+  MR_assert(approx(map[0][npix-1],-1.516249174408820863e+02,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][0     ],-3.173406200299964119e+00,1e-12),
+  MR_assert(approx(map[1][0     ],-3.173406200299964119e+00,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix/2],-5.831327404513146462e+01,1e-12),
+  MR_assert(approx(map[1][npix/2],-5.831327404513146462e+01,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix-1],-1.863257892248353897e+01,1e-12),
+  MR_assert(approx(map[1][npix-1],-1.863257892248353897e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP_DERIV1,1,&alm[0],&map[0],tinfo,alms,
+  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),tinfo,alms,
     SHARP_DP,NULL,NULL);
-  MR_assert(FAPPROX(map[0][0     ],-6.859393905369091105e-01,1e-11),
+  MR_assert(approx(map[0][0     ],-6.859393905369091105e-01,1e-11),
     "error");
-  MR_assert(FAPPROX(map[0][npix/2],-2.103947835973212364e+02,1e-12),
+  MR_assert(approx(map[0][npix/2],-2.103947835973212364e+02,1e-12),
     "error");
-  MR_assert(FAPPROX(map[0][npix-1],-1.092463246472086439e+03,1e-12),
+  MR_assert(approx(map[0][npix-1],-1.092463246472086439e+03,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][0     ],-1.411433220713928165e+02,1e-12),
+  MR_assert(approx(map[1][0     ],-1.411433220713928165e+02,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix/2],-1.146122859381925082e+03,1e-12),
+  MR_assert(approx(map[1][npix/2],-1.146122859381925082e+03,1e-12),
     "error");
-  MR_assert(FAPPROX(map[1][npix-1], 7.821618677689795049e+02,1e-12),
+  MR_assert(approx(map[1][npix-1], 7.821618677689795049e+02,1e-12),
     "error");
-
-  DEALLOC2D(map);
-  DEALLOC2D(alm);
 
   sharp_destroy_alm_info(alms);
   sharp_destroy_geom_info(tinfo);
@@ -479,15 +476,18 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   int ncomp = (spin==0) ? 1 : 2;
 
   size_t npix = get_npix(ginfo);
-  double **map;
-  ALLOC2D(map,double,ncomp*ntrans,npix);
+  vector<double> bmap(ncomp*ntrans*npix, 0.);
+  vector<double *>map(ncomp*ntrans);
   for (int i=0; i<ncomp*ntrans; ++i)
-    fill(map[i],map[i]+npix,0);
+    map[i]=&bmap[i*npix];
 
-  dcmplx **alm;
-  ALLOC2D(alm,dcmplx,ncomp*ntrans,nalms);
+  vector<dcmplx> balm(ncomp*ntrans*nalms);
+  vector<dcmplx *>alm(ncomp*ntrans);
   for (int i=0; i<ncomp*ntrans; ++i)
+    {
+    alm[i] = &balm[i*nalms];
     random_alm(alm[i],ainfo,spin,i+1);
+    }
 
   double tta2m, ttm2a;
   unsigned long long toa2m, tom2a;
@@ -497,8 +497,8 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
 #ifdef USE_MPI
-    sharp_execute_mpi(MPI_COMM_WORLD,SHARP_ALM2MAP,spin,&alm[itrans*ncomp],
-      &map[itrans*ncomp],ginfo,ainfo, SHARP_DP|SHARP_ADD,&tta2m,&toa2m);
+    sharp_execute_mpi(MPI_COMM_WORLD,SHARP_ALM2MAP,spin,alm[itrans*ncomp],
+      map[itrans*ncomp],ginfo,ainfo, SHARP_DP|SHARP_ADD,&tta2m,&toa2m);
 #else
     sharp_execute(SHARP_ALM2MAP,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
       SHARP_DP,&tta2m,&toa2m);
@@ -506,7 +506,7 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
     if (t_a2m!=NULL) *t_a2m+=maxTime(tta2m);
     if (op_a2m!=NULL) *op_a2m+=totalops(toa2m);
     }
-  auto sqsum=get_sqsum_and_invert(alm,nalms,ntrans*ncomp);
+  auto sqsum=get_sqsum_and_invert(alm.data(),nalms,ntrans*ncomp);
   if (t_m2a!=NULL) *t_m2a=0;
   if (op_m2a!=NULL) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
@@ -521,10 +521,7 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
     if (t_m2a!=NULL) *t_m2a+=maxTime(ttm2a);
     if (op_m2a!=NULL) *op_m2a+=totalops(tom2a);
     }
-  get_errors(alm, nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
-
-  DEALLOC2D(map);
-  DEALLOC2D(alm);
+  get_errors(alm.data(), nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
   }
 
 static void check_accuracy (sharp_geom_info *ginfo, sharp_alm_info *ainfo,

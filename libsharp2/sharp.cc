@@ -26,13 +26,13 @@
  */
 
 #include <cmath>
-#include <cstring>
 #include <atomic>
 #include <memory>
+#include "mr_util/math_utils.h"
 #include "mr_util/fft.h"
+#include "mr_util/aligned_array.h"
 #include "libsharp2/sharp_ylmgen.h"
 #include "libsharp2/sharp_internal.h"
-#include "libsharp2/sharp_utils.h"
 #include "libsharp2/sharp_almhelpers.h"
 #include "libsharp2/sharp_geomhelpers.h"
 #include "mr_util/threading.h"
@@ -41,6 +41,7 @@
 #include "mr_util/timers.h"
 
 using namespace std;
+using namespace mr;
 
 using dcmplx = complex<double>;
 using fcmplx = complex<float>;
@@ -92,7 +93,7 @@ struct ringhelper
     {
     norot = (fabs(phi0)<1e-14);
     if (!(norot))
-      if ((mmax!=s_shift-1) || (!FAPPROX(phi0,phi0_,1e-12)))
+      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-12)))
       {
       shiftarr.resize(mmax+1);
       s_shift = mmax+1;
@@ -110,22 +111,6 @@ struct ringhelper
       }
     }
   };
-
-static int ringinfo_compare (const void *xa, const void *xb)
-  {
-  const sharp_ringinfo *a=(const sharp_ringinfo *)xa, *b=(const sharp_ringinfo *)xb;
-  return (a->sth < b->sth) ? -1 : (a->sth > b->sth) ? 1 : 0;
-  }
-static int ringpair_compare (const void *xa, const void *xb)
-  {
-  const sharp_ringpair *a=(const sharp_ringpair *)xa, *b=(const sharp_ringpair *)xb;
-//  return (a->r1.sth < b->r1.sth) ? -1 : (a->r1.sth > b->r1.sth) ? 1 : 0;
-  if (a->r1.nph==b->r1.nph)
-    return (a->r1.phi0 < b->r1.phi0) ? -1 :
-      ((a->r1.phi0 > b->r1.phi0) ? 1 :
-        (a->r1.cth>b->r1.cth ? -1 : 1));
-  return (a->r1.nph<b->r1.nph) ? -1 : 1;
-  }
 
 void sharp_make_general_alm_info (int lmax, int nm, int stride, const int *mval,
   const ptrdiff_t *mstart, int flags, sharp_alm_info **alm_info)
@@ -204,11 +189,12 @@ void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
     infos[m].nph = nph[m];
     if (info->nphmax<nph[m]) info->nphmax=nph[m];
     }
-  qsort(infos.data(),nrings,sizeof(sharp_ringinfo),ringinfo_compare);
+  sort(infos.begin(), infos.end(),[](const sharp_ringinfo &a, const sharp_ringinfo &b)
+    { return (a.sth<b.sth); });
   while (pos<nrings)
     {
     info->pair[npairs].r1=infos[pos];
-    if ((pos<nrings-1) && FAPPROX(infos[pos].cth,-infos[pos+1].cth,1e-12))
+    if ((pos<nrings-1) && approx(infos[pos].cth,-infos[pos+1].cth,1e-12))
       {
       if (infos[pos].cth>0)  // make sure northern ring is in r1
         info->pair[npairs].r2=infos[pos+1];
@@ -224,9 +210,16 @@ void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
     ++pos;
     ++npairs;
     }
-
-  qsort(info->pair.data(),npairs,sizeof(sharp_ringpair),ringpair_compare);
   info->pair.resize(npairs);
+
+  sort(info->pair.begin(), info->pair.end(), [] (const sharp_ringpair &a, const sharp_ringpair &b)
+    {
+    if (a.r1.nph==b.r1.nph)
+    return (a.r1.phi0 < b.r1.phi0) ? true :
+      ((a.r1.phi0 > b.r1.phi0) ? false :
+        (a.r1.cth>b.r1.cth));
+    return a.r1.nph<b.r1.nph;
+    });
   }
 
 ptrdiff_t sharp_map_size(const sharp_geom_info *info)
@@ -476,7 +469,7 @@ MRUTIL_NOINLINE static void init_output (sharp_job *job)
       clear_map (job->ginfo,job->map[i],job->flags);
   }
 
-MRUTIL_NOINLINE static void alloc_phase (sharp_job *job, int nm, int ntheta)
+MRUTIL_NOINLINE static void alloc_phase (sharp_job *job, int nm, int ntheta, aligned_array<dcmplx> &data)
   {
   if (job->type==SHARP_MAP2ALM)
     {
@@ -490,17 +483,15 @@ MRUTIL_NOINLINE static void alloc_phase (sharp_job *job, int nm, int ntheta)
     if (((job->s_th*16*ntheta)&1023)==0) ntheta+=3; // hack to avoid critical strides
     job->s_m=job->s_th*ntheta;
     }
-  job->phase=RALLOC(dcmplx,2*job->nmaps*nm*ntheta);
+  data.resize(2*job->nmaps*nm*ntheta);
+  job->phase=data.data();
   }
 
-static void dealloc_phase (sharp_job *job)
-  { DEALLOC(job->phase); }
-
-static void alloc_almtmp (sharp_job *job, int lmax)
-  { job->almtmp=RALLOC(dcmplx,job->nalm*(lmax+2)); }
-
-static void dealloc_almtmp (sharp_job *job)
-  { DEALLOC(job->almtmp); }
+static void alloc_almtmp (sharp_job *job, int lmax, aligned_array<dcmplx> &data)
+  {
+  data.resize(job->nalm*(lmax+2));
+  job->almtmp=data.data();
+  }
 
 MRUTIL_NOINLINE static void alm2almtmp (sharp_job *job, int lmax, int mi)
   {
@@ -832,8 +823,9 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
   int nchunks, chunksize;
   get_chunk_info(job->ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(job->spin),
                  &nchunks,&chunksize);
+  aligned_array<dcmplx> phasebuffer;
 //FIXME: needs to be changed to "nm"
-  alloc_phase (job,mmax+1,chunksize);
+  alloc_phase (job,mmax+1,chunksize, phasebuffer);
   std::atomic<size_t> opcnt = 0;
 
 /* chunk loop */
@@ -859,7 +851,8 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
       sharp_job ljob = *job;
       ljob.opcnt=0;
       sharp_Ylmgen generator(lmax,mmax,ljob.spin);
-      alloc_almtmp(&ljob,lmax);
+      aligned_array<dcmplx> almbuffer;
+      alloc_almtmp(&ljob,lmax,almbuffer);
 
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
@@ -872,8 +865,6 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
         almtmp2alm (&ljob, lmax, mi);
         }
 
-      dealloc_almtmp(&ljob);
-
       opcnt+=ljob.opcnt;
       }); /* end of parallel region */
 
@@ -881,7 +872,6 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
     phase2map (job, mmax, llim, ulim);
     } /* end of chunk loop */
 
-  dealloc_phase (job);
   job->opcnt = opcnt;
   job->time=timer();
   }
