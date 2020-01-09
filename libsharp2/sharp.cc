@@ -112,38 +112,33 @@ struct ringhelper
     }
   };
 
-void sharp_make_general_alm_info (int lmax, int nm, int stride, const int *mval,
-  const ptrdiff_t *mstart, int flags, sharp_alm_info **alm_info)
+sharp_alm_info::sharp_alm_info (int lmax, int nm, int stride, const int *mval,
+  const ptrdiff_t *mstart, int flags)
+  : lmax(lmax), nm(nm), mval(nm), mvstart(nm), stride(stride), flags(flags)
   {
-  sharp_alm_info *info = new sharp_alm_info;
-  info->lmax = lmax;
-  info->nm = nm;
-  info->mval.resize(nm);
-  info->mvstart.resize(nm);
-  info->stride = stride;
-  info->flags = flags;
   for (int mi=0; mi<nm; ++mi)
     {
-    info->mval[mi] = mval[mi];
-    info->mvstart[mi] = mstart[mi];
+    this->mval[mi] = mval[mi];
+    this->mvstart[mi] = mstart[mi];
     }
-  *alm_info = info;
   }
 
-void sharp_make_alm_info (int lmax, int mmax, int stride,
-  const ptrdiff_t *mstart, sharp_alm_info **alm_info)
+sharp_alm_info::sharp_alm_info (int lmax, int mmax, int stride,
+  const ptrdiff_t *mstart)
+  : lmax(lmax), nm(mmax+1), mval(mmax+1), mvstart(mmax+1), stride(stride), flags(0)
   {
-  vector<int> mval(mmax+1);
   for (int i=0; i<=mmax; ++i)
+    {
     mval[i]=i;
-  sharp_make_general_alm_info (lmax, mmax+1, stride, mval.data(), mstart, 0, alm_info);
+    this->mvstart[i] = mstart[i];
+    }
   }
 
-ptrdiff_t sharp_alm_index (const sharp_alm_info *self, int l, int mi)
+ptrdiff_t sharp_alm_info::index (int l, int mi)
   {
-  MR_assert(!(self->flags & SHARP_PACKED),
-            "sharp_alm_index not applicable with SHARP_PACKED alms");
-  return self->mvstart[mi]+self->stride*l;
+  MR_assert(!(flags & SHARP_PACKED),
+    "sharp_alm_index not applicable with SHARP_PACKED alms");
+  return mvstart[mi]+stride*l;
   }
 
 ptrdiff_t sharp_alm_count(const sharp_alm_info *self)
@@ -159,14 +154,9 @@ ptrdiff_t sharp_alm_count(const sharp_alm_info *self)
   return result;
   }
 
-void sharp_destroy_alm_info (sharp_alm_info *info)
-  {
-  delete info;
-  }
-
-void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
+unique_ptr<sharp_geom_info> sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
   const int *stride, const double *phi0, const double *theta,
-  const double *wgt, sharp_geom_info **geom_info)
+  const double *wgt)
   {
   sharp_geom_info *info = new sharp_geom_info;
   vector<sharp_ringinfo> infos(nrings);
@@ -175,7 +165,6 @@ void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
   info->pair.resize(nrings);
   int npairs=0;
   info->nphmax=0;
-  *geom_info = info;
 
   for (int m=0; m<nrings; ++m)
     {
@@ -220,22 +209,7 @@ void sharp_make_geom_info (int nrings, const int *nph, const ptrdiff_t *ofs,
         (a.r1.cth>b.r1.cth));
     return a.r1.nph<b.r1.nph;
     });
-  }
-
-ptrdiff_t sharp_map_size(const sharp_geom_info *info)
-  {
-  ptrdiff_t result = 0;
-  for (int m=0; m<info->pair.size(); ++m)
-    {
-      result+=info->pair[m].r1.nph;
-      result+=(info->pair[m].r2.nph>=0) ? (info->pair[m].r2.nph) : 0;
-    }
-  return result;
-  }
-
-void sharp_destroy_geom_info (sharp_geom_info *geom_info)
-  {
-  delete geom_info;
+  return unique_ptr<sharp_geom_info>(info);
   }
 
 /* This currently requires all m values from 0 to nm-1 to be present.
@@ -806,49 +780,49 @@ MRUTIL_NOINLINE static void phase2map (sharp_job *job, int mmax, int llim, int u
     }
   }
 
-MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
+MRUTIL_NOINLINE static void sharp_execute_job (sharp_job &job)
   {
   mr::timers::SimpleTimer timer;
-  job->opcnt=0;
-  int lmax = job->ainfo->lmax,
-      mmax=sharp_get_mmax(job->ainfo->mval);
+  job.opcnt=0;
+  int lmax = job.ainfo->lmax,
+      mmax=sharp_get_mmax(job.ainfo->mval);
 
-  job->norm_l = (job->type==SHARP_ALM2MAP_DERIV1) ?
+  job.norm_l = (job.type==SHARP_ALM2MAP_DERIV1) ?
      sharp_Ylmgen::get_d1norm (lmax) :
-     sharp_Ylmgen::get_norm (lmax, job->spin);
+     sharp_Ylmgen::get_norm (lmax, job.spin);
 
 /* clear output arrays if requested */
-  init_output (job);
+  init_output (&job);
 
   int nchunks, chunksize;
-  get_chunk_info(job->ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(job->spin),
+  get_chunk_info(job.ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(job.spin),
                  &nchunks,&chunksize);
   aligned_array<dcmplx> phasebuffer;
 //FIXME: needs to be changed to "nm"
-  alloc_phase (job,mmax+1,chunksize, phasebuffer);
+  alloc_phase (&job,mmax+1,chunksize, phasebuffer);
   std::atomic<size_t> opcnt = 0;
 
 /* chunk loop */
   for (int chunk=0; chunk<nchunks; ++chunk)
     {
-    int llim=chunk*chunksize, ulim=min<int>(llim+chunksize,job->ginfo->pair.size());
+    int llim=chunk*chunksize, ulim=min<int>(llim+chunksize,job.ginfo->pair.size());
     vector<int> ispair(ulim-llim);
     vector<int> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);
     for (int i=0; i<ulim-llim; ++i)
       {
-      ispair[i] = job->ginfo->pair[i+llim].r2.nph>0;
-      cth[i] = job->ginfo->pair[i+llim].r1.cth;
-      sth[i] = job->ginfo->pair[i+llim].r1.sth;
-      mlim[i] = sharp_get_mlim(lmax, job->spin, sth[i], cth[i]);
+      ispair[i] = job.ginfo->pair[i+llim].r2.nph>0;
+      cth[i] = job.ginfo->pair[i+llim].r1.cth;
+      sth[i] = job.ginfo->pair[i+llim].r1.sth;
+      mlim[i] = sharp_get_mlim(lmax, job.spin, sth[i], cth[i]);
       }
 
 /* map->phase where necessary */
-    map2phase (job, mmax, llim, ulim);
+    map2phase (&job, mmax, llim, ulim);
 
-    mr::execDynamic(job->ainfo->nm, 0, 1, [&](mr::Scheduler &sched)
+    mr::execDynamic(job.ainfo->nm, 0, 1, [&](mr::Scheduler &sched)
       {
-      sharp_job ljob = *job;
+      sharp_job ljob = job;
       ljob.opcnt=0;
       sharp_Ylmgen generator(lmax,mmax,ljob.spin);
       aligned_array<dcmplx> almbuffer;
@@ -869,47 +843,47 @@ MRUTIL_NOINLINE static void sharp_execute_job (sharp_job *job)
       }); /* end of parallel region */
 
 /* phase->map where necessary */
-    phase2map (job, mmax, llim, ulim);
+    phase2map (&job, mmax, llim, ulim);
     } /* end of chunk loop */
 
-  job->opcnt = opcnt;
-  job->time=timer();
+  job.opcnt = opcnt;
+  job.time=timer();
   }
 
-static void sharp_build_job_common (sharp_job *job, sharp_jobtype type,
-  int spin, void *alm, void *map, const sharp_geom_info *geom_info,
-  const sharp_alm_info *alm_info, int flags)
+static void sharp_build_job_common (sharp_job &job, sharp_jobtype type,
+  int spin, void *alm, void *map, const sharp_geom_info &geom_info,
+  const sharp_alm_info &alm_info, int flags)
   {
   if (type==SHARP_ALM2MAP_DERIV1) spin=1;
   if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
   if (type==SHARP_Yt) type=SHARP_MAP2ALM;
   if (type==SHARP_WY) { type=SHARP_ALM2MAP; flags|=SHARP_USE_WEIGHTS; }
 
-  MR_assert((spin>=0)&&(spin<=alm_info->lmax), "bad spin");
-  job->type = type;
-  job->spin = spin;
-  job->nmaps = (type==SHARP_ALM2MAP_DERIV1) ? 2 : ((spin>0) ? 2 : 1);
-  job->nalm = (type==SHARP_ALM2MAP_DERIV1) ? 1 : ((spin>0) ? 2 : 1);
-  job->ginfo = geom_info;
-  job->ainfo = alm_info;
-  job->flags = flags;
-  if (alm_info->flags&SHARP_REAL_HARMONICS)
-    job->flags|=SHARP_REAL_HARMONICS;
-  job->time = 0.;
-  job->opcnt = 0;
-  job->alm=(void **)alm;
-  job->map=(void **)map;
+  MR_assert((spin>=0)&&(spin<=alm_info.lmax), "bad spin");
+  job.type = type;
+  job.spin = spin;
+  job.nmaps = (type==SHARP_ALM2MAP_DERIV1) ? 2 : ((spin>0) ? 2 : 1);
+  job.nalm = (type==SHARP_ALM2MAP_DERIV1) ? 1 : ((spin>0) ? 2 : 1);
+  job.ginfo = &geom_info;
+  job.ainfo = &alm_info;
+  job.flags = flags;
+  if (alm_info.flags&SHARP_REAL_HARMONICS)
+    job.flags|=SHARP_REAL_HARMONICS;
+  job.time = 0.;
+  job.opcnt = 0;
+  job.alm=(void **)alm;
+  job.map=(void **)map;
   }
 
 void sharp_execute (sharp_jobtype type, int spin, void *alm, void *map,
-  const sharp_geom_info *geom_info, const sharp_alm_info *alm_info,
+  const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   int flags, double *time, unsigned long long *opcnt)
   {
   sharp_job job;
-  sharp_build_job_common (&job, type, spin, alm, map, geom_info, alm_info,
+  sharp_build_job_common (job, type, spin, alm, map, geom_info, alm_info,
     flags);
 
-  sharp_execute_job (&job);
+  sharp_execute_job (job);
   if (time!=NULL) *time = job.time;
   if (opcnt!=NULL) *opcnt = job.opcnt;
   }

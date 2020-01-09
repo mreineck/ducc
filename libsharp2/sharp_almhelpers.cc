@@ -27,63 +27,22 @@
 
 #include "libsharp2/sharp_almhelpers.h"
 
-void sharp_make_triangular_alm_info (int lmax, int mmax, int stride,
-  sharp_alm_info **alm_info)
+using namespace std;
+
+unique_ptr<sharp_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, int stride)
   {
-  sharp_alm_info *info = new sharp_alm_info;
-  info->lmax = lmax;
-  info->nm = mmax+1;
-  info->mval.resize(mmax+1);
-  info->mvstart.resize(mmax+1);
-  info->stride = stride;
-  info->flags = 0;
+  vector<ptrdiff_t> mvstart(mmax+1);
   ptrdiff_t tval = 2*lmax+1;
   for (ptrdiff_t m=0; m<=mmax; ++m)
-    {
-    info->mval[m] = m;
-    info->mvstart[m] = stride*((m*(tval-m))>>1);
-    }
-  *alm_info = info;
+    mvstart[m] = stride*((m*(tval-m))>>1);
+  return make_unique<sharp_alm_info>(lmax, mmax, stride, mvstart.data());
   }
 
-void sharp_make_rectangular_alm_info (int lmax, int mmax, int stride,
-  sharp_alm_info **alm_info)
+unique_ptr<sharp_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride)
   {
-  sharp_alm_info *info = new sharp_alm_info;
-  info->lmax = lmax;
-  info->nm = mmax+1;
-  info->mval.resize(mmax+1);
-  info->mvstart.resize(mmax+1);
-  info->stride = stride;
-  info->flags = 0;
+  vector<ptrdiff_t> mvstart(mmax+1);
+  ptrdiff_t tval = 2*lmax+1;
   for (ptrdiff_t m=0; m<=mmax; ++m)
-    {
-    info->mval[m] = m;
-    info->mvstart[m] = stride*m*(lmax+1);
-    }
-  *alm_info = info;
-  }
-
-void sharp_make_mmajor_real_packed_alm_info (int lmax, int stride,
-  int nm, const int *ms, sharp_alm_info **alm_info)
-  {
-  ptrdiff_t idx;
-  int f;
-  sharp_alm_info *info = new sharp_alm_info;
-  info->lmax = lmax;
-  info->nm = nm;
-  info->mval.resize(nm);
-  info->mvstart.resize(nm);
-  info->stride = stride;
-  info->flags = SHARP_PACKED | SHARP_REAL_HARMONICS;
-  idx = 0;  /* tracks the number of 'consumed' elements so far; need to correct by m */
-  for (int im=0; im!=nm; ++im)
-    {
-    int m=(ms==NULL)?im:ms[im];
-    f = (m==0) ? 1 : 2;
-    info->mval[im] = m;
-    info->mvstart[im] = stride * (idx - f * m);
-    idx += f * (lmax + 1 - m);
-    }
-  *alm_info = info;
+    mvstart[m] = stride*m*(lmax+1);
+  return make_unique<sharp_alm_info>(lmax, mmax, stride, mvstart.data());
   }

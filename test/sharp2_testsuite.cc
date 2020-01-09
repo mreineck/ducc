@@ -25,13 +25,8 @@
  */
 
 #include <iostream>
-#include <string.h>
 #include <complex>
 using std::complex;
-#ifdef USE_MPI
-#include "mpi.h"
-#include "libsharp2/sharp_mpi.h"
-#endif
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_geomhelpers.h"
 #include "libsharp2/sharp_almhelpers.h"
@@ -50,21 +45,12 @@ static void threading_status(void)
 
 static void MPI_status(void)
   {
-#ifndef USE_MPI
   cout << "MPI: not supported by this binary" << endl;
-#else
-  int tasks;
-  MPI_Comm_size(MPI_COMM_WORLD,&tasks);
-  if (tasks>1)
-    cout << "MPI active with " << tasks << " tasks." << endl;
-  else
-    cout << "MPI active, but running with 1 task only." << endl);
-#endif
   }
 
-static void sharp_announce (const char *name)
+static void sharp_announce (const string &name)
   {
-  size_t m, nlen=strlen(name);
+  size_t m, nlen=name.length();
   cout << "\n+-";
   for (m=0; m<nlen; ++m) cout << "-";
   cout << "-+\n";
@@ -79,8 +65,8 @@ static void sharp_announce (const char *name)
   cout << endl;
   }
 
-static void sharp_module_startup (const char *name, int argc, int argc_expected,
-  const char *argv_expected, int verbose)
+static void sharp_module_startup (const string &name, int argc, int argc_expected,
+  const string &argv_expected, int verbose)
   {
   if (verbose) sharp_announce (name);
   if (argc==argc_expected) return;
@@ -98,25 +84,25 @@ static double drand (double min, double max, unsigned *state)
   return min + (max-min)*(*state)/(0x7fffffff+1.0);
   }
 
-static void random_alm (dcmplx *alm, sharp_alm_info *helper, int spin, int cnt)
+static void random_alm (dcmplx *alm, sharp_alm_info &helper, int spin, int cnt)
   {
 #pragma omp parallel
 {
   int mi;
 #pragma omp for schedule (dynamic,100)
-  for (mi=0;mi<helper->nm; ++mi)
+  for (mi=0;mi<helper.nm; ++mi)
     {
-    int m=helper->mval[mi];
+    int m=helper.mval[mi];
     unsigned state=1234567u*(unsigned)cnt+8912u*(unsigned)m; // random seed
-    for (int l=m;l<=helper->lmax; ++l)
+    for (int l=m;l<=helper.lmax; ++l)
       {
       if ((l<spin)&&(m<spin))
-        alm[sharp_alm_index(helper,l,mi)] = 0.;
+        alm[helper.index(l,mi)] = 0.;
       else
         {
         double rv = drand(-1,1,&state);
         double iv = (m==0) ? 0 : drand(-1,1,&state);
-        alm[sharp_alm_index(helper,l,mi)] = dcmplx(rv,iv);
+        alm[helper.index(l,mi)] = dcmplx(rv,iv);
         }
       }
     }
@@ -125,93 +111,39 @@ static void random_alm (dcmplx *alm, sharp_alm_info *helper, int spin, int cnt)
 
 static unsigned long long totalops (unsigned long long val)
   {
-#ifdef USE_MPI
-  unsigned long long tmp;
-  MPI_Allreduce (&val, &tmp,1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-  return tmp;
-#else
   return val;
-#endif
   }
 
 static double maxTime (double val)
   {
-#ifdef USE_MPI
-  double tmp;
-  MPI_Allreduce (&val, &tmp,1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-  return tmp;
-#else
   return val;
-#endif
   }
 
 static double allreduceSumDouble (double val)
   {
-#ifdef USE_MPI
-  double tmp;
-  MPI_Allreduce (&val, &tmp,1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  return tmp;
-#else
   return val;
-#endif
   }
 
 static double totalMem()
   {
-#ifdef USE_MPI
-  double tmp, val=mr::getProcessInfo("VmHWM")*1024;
-  MPI_Allreduce (&val, &tmp,1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  return tmp;
-#else
   return mr::getProcessInfo("VmHWM")*1024;
-#endif
   }
 
-#ifdef USE_MPI
-static void reduce_alm_info(sharp_alm_info *ainfo)
-  {
-  int nmnew=0;
-  ptrdiff_t ofs = 0;
-  for (int i=mytask; i<ainfo->nm; i+=ntasks,++nmnew)
-    {
-    ainfo->mval[nmnew]=ainfo->mval[i];
-    ainfo->mvstart[nmnew]=ofs-ainfo->mval[nmnew];
-    ofs+=ainfo->lmax-ainfo->mval[nmnew]+1;
-    }
-  ainfo->nm=nmnew;
-  }
-
-static void reduce_geom_info(sharp_geom_info *ginfo)
-  {
-  int npairsnew=0;
-  ptrdiff_t ofs = 0;
-  for (int i=mytask; i<ginfo->pair.size(); i+=ntasks,++npairsnew)
-    {
-    ginfo->pair[npairsnew]=ginfo->pair[i];
-    ginfo->pair[npairsnew].r1.ofs=ofs;
-    ofs+=ginfo->pair[npairsnew].r1.nph;
-    ginfo->pair[npairsnew].r2.ofs=ofs;
-    if (ginfo->pair[npairsnew].r2.nph>0) ofs+=ginfo->pair[npairsnew].r2.nph;
-    }
-  ginfo.pair.resize(npairsnew);
-  }
-#endif
-
-static ptrdiff_t get_nalms(const sharp_alm_info *ainfo)
+static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
   {
   ptrdiff_t res=0;
-  for (int i=0; i<ainfo->nm; ++i)
-    res += ainfo->lmax-ainfo->mval[i]+1;
+  for (int i=0; i<ainfo.nm; ++i)
+    res += ainfo.lmax-ainfo.mval[i]+1;
   return res;
   }
 
-static ptrdiff_t get_npix(const sharp_geom_info *ginfo)
+static ptrdiff_t get_npix(const sharp_geom_info &ginfo)
   {
   ptrdiff_t res=0;
-  for (int i=0; i<ginfo->pair.size(); ++i)
+  for (int i=0; i<ginfo.pair.size(); ++i)
     {
-    res += ginfo->pair[i].r1.nph;
-    if (ginfo->pair[i].r2.nph>0) res += ginfo->pair[i].r2.nph;
+    res += ginfo.pair[i].r1.nph;
+    if (ginfo.pair[i].r2.nph>0) res += ginfo.pair[i].r2.nph;
     }
   return res;
   }
@@ -235,9 +167,6 @@ static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, const vector<d
   vector<double> &err_abs, vector<double> &err_rel)
   {
   long nalms_tot=nalms;
-#ifdef USE_MPI
-  MPI_Allreduce(&nalms,&nalms_tot,1,MPI_LONG,MPI_SUM,MPI_COMM_WORLD);
-#endif
 
   err_abs.resize(ncomp);
   err_rel.resize(ncomp);
@@ -252,15 +181,9 @@ static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, const vector<d
       }
    maxdiff=sqrt(maxdiff);
 
-#ifdef USE_MPI
-    MPI_Allreduce(&sum,&sumtot,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-    MPI_Allreduce(&sqsum[i],&sqsumtot,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-    MPI_Allreduce(&maxdiff,&maxdifftot,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-#else
     sumtot=sum;
     sqsumtot=sqsum[i];
     maxdifftot=maxdiff;
-#endif
     sumtot=sqrt(sumtot/nalms_tot);
     sqsumtot=sqrt(sqsumtot/nalms_tot);
     err_abs[i]=maxdifftot;
@@ -281,84 +204,81 @@ static int good_fft_size(int n)
   return bestfac;
   }
 
-static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
-  int *gpar2, sharp_geom_info **ginfo, sharp_alm_info **ainfo, int verbose)
+static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
+  int &gpar2, unique_ptr<sharp_geom_info> &ginfo, unique_ptr<sharp_alm_info> &ainfo, int verbose)
   {
   MR_assert(lmax>=0,"lmax must not be negative");
-  if (*mmax<0) *mmax=lmax;
-  MR_assert(*mmax<=lmax,"mmax larger than lmax");
+  if (mmax<0) mmax=lmax;
+  MR_assert(mmax<=lmax,"mmax larger than lmax");
 
   verbose &= (mytask==0);
-  if (verbose) cout << "lmax: " << lmax << ", mmax: " << *mmax << endl;
+  if (verbose) cout << "lmax: " << lmax << ", mmax: " << mmax << endl;
 
-  sharp_make_triangular_alm_info(lmax,*mmax,1,ainfo);
-#ifdef USE_MPI
-  reduce_alm_info(*ainfo);
-#endif
+  ainfo=sharp_make_triangular_alm_info(lmax,mmax,1);
 
-  if (strcmp(gname,"healpix")==0)
+  if (gname=="healpix")
     {
-    if (*gpar1<1) *gpar1=lmax/2;
-    if (*gpar1==0) ++(*gpar1);
-    sharp_make_healpix_geom_info (*gpar1, 1, ginfo);
-    if (verbose) cout << "HEALPix grid, nside=" << *gpar1 << endl;
+    if (gpar1<1) gpar1=lmax/2;
+    if (gpar1==0) ++gpar1;
+    ginfo=sharp_make_healpix_geom_info (gpar1, 1);
+    if (verbose) cout << "HEALPix grid, nside=" << gpar1 << endl;
     }
-  else if (strcmp(gname,"gauss")==0)
+  else if (gname=="gauss")
     {
-    if (*gpar1<1) *gpar1=lmax+1;
-    if (*gpar2<1) *gpar2=2*(*mmax)+1;
-    sharp_make_gauss_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
+    if (gpar1<1) gpar1=lmax+1;
+    if (gpar2<1) gpar2=2*mmax+1;
+    ginfo=sharp_make_gauss_geom_info (gpar1, gpar2, 0., 1, gpar2);
     if (verbose)
-      cout << "Gauss-Legendre grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
+      cout << "Gauss-Legendre grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
     }
-  else if (strcmp(gname,"fejer1")==0)
+  else if (gname=="fejer1")
     {
-    if (*gpar1<1) *gpar1=2*lmax+1;
-    if (*gpar2<1) *gpar2=2*(*mmax)+1;
-    sharp_make_fejer1_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
+    if (gpar1<1) gpar1=2*lmax+1;
+    if (gpar2<1) gpar2=2*mmax+1;
+    ginfo=sharp_make_fejer1_geom_info (gpar1, gpar2, 0., 1, gpar2);
     if (verbose)
-      cout << "Fejer1 grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
+      cout << "Fejer1 grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
     }
-  else if (strcmp(gname,"fejer2")==0)
+  else if (gname=="fejer2")
     {
-    if (*gpar1<1) *gpar1=2*lmax+1;
-    if (*gpar2<1) *gpar2=2*(*mmax)+1;
-    sharp_make_fejer2_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
+    if (gpar1<1) gpar1=2*lmax+1;
+    if (gpar2<1) gpar2=2*mmax+1;
+    ginfo=sharp_make_fejer2_geom_info (gpar1, gpar2, 0., 1, gpar2);
     if (verbose)
-      cout << "Fejer2 grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
+      cout << "Fejer2 grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
     }
-  else if (strcmp(gname,"cc")==0)
+  else if (gname=="cc")
     {
-    if (*gpar1<1) *gpar1=2*lmax+1;
-    if (*gpar2<1) *gpar2=2*(*mmax)+1;
-    sharp_make_cc_geom_info (*gpar1, *gpar2, 0., 1, *gpar2, ginfo);
+    if (gpar1<1) gpar1=2*lmax+1;
+    if (gpar2<1) gpar2=2*mmax+1;
+    ginfo=sharp_make_cc_geom_info (gpar1, gpar2, 0., 1, gpar2);
     if (verbose)
-      cout << "Clenshaw-Curtis grid, nlat=" << *gpar1 << ", nlon=" << *gpar2 << endl;
+      cout << "Clenshaw-Curtis grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
     }
-  else if (strcmp(gname,"smallgauss")==0)
+  else if (gname=="smallgauss")
     {
-    int nlat=*gpar1, nlon=*gpar2;
+    int nlat=gpar1, nlon=gpar2;
     if (nlat<1) nlat=lmax+1;
-    if (nlon<1) nlon=2*(*mmax)+1;
-    *gpar1=nlat; *gpar2=nlon;
-    sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon, ginfo);
+    if (nlon<1) nlon=2*mmax+1;
+    gpar1=nlat; gpar2=nlon;
+    ginfo=sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon);
     ptrdiff_t npix_o=get_npix(*ginfo);
     size_t ofs=0;
-    for (int i=0; i<(*ginfo)->pair.size(); ++i)
+    for (int i=0; i<ginfo->pair.size(); ++i)
       {
-      sharp_ringpair *pair=&((*ginfo)->pair[i]);
-      int pring=1+2*sharp_get_mlim(lmax,0,pair->r1.sth,pair->r1.cth);
+      sharp_ringpair &pair(ginfo->pair[i]);
+      int pring=1+2*sharp_get_mlim(lmax,0,pair.r1.sth,pair.r1.cth);
       if (pring>nlon) pring=nlon;
       pring=good_fft_size(pring);
-      pair->r1.nph=pring;
-      pair->r1.weight*=nlon*1./pring;
-      pair->r1.ofs=ofs;
+      pair.r1.nph=pring;
+      pair.r1.weight*=nlon*1./pring;
+      pair.r1.ofs=ofs;
       ofs+=pring;
-      if (pair->r2.nph>0)
+      if (pair.r2.nph>0)
         {
-        pair->r2.nph=pring;
-        pair->r2.weight*=nlon*1./pring;
-        pair->r2.ofs=ofs;
+        pair.r2.nph=pring;
+        pair.r2.weight*=nlon*1./pring;
+        pair.r2.ofs=ofs;
         ofs+=pring;
         }
       }
@@ -371,21 +291,16 @@ static void get_infos (const char *gname, int lmax, int *mmax, int *gpar1,
     }
   else
     MR_fail("unknown grid geometry");
-
-#ifdef USE_MPI
-  reduce_geom_info(*ginfo);
-#endif
   }
 
 static void check_sign_scale(void)
   {
   int lmax=50;
   int mmax=lmax;
-  sharp_geom_info *tinfo;
   int nrings=lmax+1;
   int ppring=2*lmax+2;
   ptrdiff_t npix=(ptrdiff_t)nrings*ppring;
-  sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring, &tinfo);
+  auto tinfo = sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring);
 
   /* flip theta to emulate the "old" Gaussian grid geometry */
   for (int i=0; i<tinfo->pair.size(); ++i)
@@ -397,20 +312,16 @@ static void check_sign_scale(void)
     tinfo->pair[i].r2.theta=pi-tinfo->pair[i].r2.theta;
     }
 
-  sharp_alm_info *alms;
-  sharp_make_triangular_alm_info(lmax,mmax,1,&alms);
+  auto alms = sharp_make_triangular_alm_info(lmax,mmax,1);
   ptrdiff_t nalms = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
 
   vector<double> bmap(2*npix);
   vector<double *>map({&bmap[0], &bmap[npix]});
 
-  vector<dcmplx> balm(2*nalms);
+  vector<dcmplx> balm(2*nalms,dcmplx(1.,1.));
   vector<dcmplx *>alm({&balm[0], &balm[nalms]});
-  for (int i=0; i<2; ++i)
-    for (int j=0; j<nalms; ++j)
-      alm[i][j]=dcmplx(1.,1.);
 
-  sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     NULL,NULL);
   MR_assert(approx(map[0][0     ], 3.588246976618616912e+00,1e-12),
     "error");
@@ -419,7 +330,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map[0][npix-1],-1.234675107554816442e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     NULL,NULL);
   MR_assert(approx(map[0][0     ], 2.750897760535633285e+00,1e-12),
     "error");
@@ -434,7 +345,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map[1][npix-1],-1.412765834230440021e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),tinfo,alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     NULL,NULL);
   MR_assert(approx(map[0][0     ],-1.398186224727334448e+00,1e-12),
     "error");
@@ -449,7 +360,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map[1][npix-1],-1.863257892248353897e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),tinfo,alms,
+  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),*tinfo,*alms,
     SHARP_DP,NULL,NULL);
   MR_assert(approx(map[0][0     ],-6.859393905369091105e-01,1e-11),
     "error");
@@ -463,12 +374,9 @@ static void check_sign_scale(void)
     "error");
   MR_assert(approx(map[1][npix-1], 7.821618677689795049e+02,1e-12),
     "error");
-
-  sharp_destroy_alm_info(alms);
-  sharp_destroy_geom_info(tinfo);
   }
 
-static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
+static void do_sht (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   int spin, vector<double> &err_abs, vector<double> &err_rel,
   double *t_a2m, double *t_m2a, unsigned long long *op_a2m,
   unsigned long long *op_m2a, size_t ntrans)
@@ -497,13 +405,8 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   if (op_a2m!=NULL) *op_a2m=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-#ifdef USE_MPI
-    sharp_execute_mpi(MPI_COMM_WORLD,SHARP_ALM2MAP,spin,alm[itrans*ncomp],
-      map[itrans*ncomp],ginfo,ainfo, SHARP_DP|SHARP_ADD,&tta2m,&toa2m);
-#else
     sharp_execute(SHARP_ALM2MAP,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
       SHARP_DP,&tta2m,&toa2m);
-#endif
     if (t_a2m!=NULL) *t_a2m+=maxTime(tta2m);
     if (op_a2m!=NULL) *op_a2m+=totalops(toa2m);
     }
@@ -512,20 +415,15 @@ static void do_sht (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
   if (op_m2a!=NULL) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-#ifdef USE_MPI
-    sharp_execute_mpi(MPI_COMM_WORLD,SHARP_MAP2ALM,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,
-      ainfo,SHARP_DP|SHARP_ADD,&ttm2a,op_&tom2a);
-#else
     sharp_execute(SHARP_MAP2ALM,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
       SHARP_DP|SHARP_ADD,&ttm2a,&tom2a);
-#endif
     if (t_m2a!=NULL) *t_m2a+=maxTime(ttm2a);
     if (op_m2a!=NULL) *op_m2a+=totalops(tom2a);
     }
   get_errors(alm.data(), nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
   }
 
-static void check_accuracy (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
+static void check_accuracy (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   int spin)
   {
   int ncomp = (spin==0) ? 1 : 2;
@@ -538,12 +436,10 @@ static void check_accuracy (sharp_geom_info *ginfo, sharp_alm_info *ainfo,
 
 static void run(int lmax, int mmax, int nlat, int nlon, int spin)
   {
-  sharp_geom_info *ginfo;
-  sharp_alm_info *ainfo;
-  get_infos ("gauss", lmax, &mmax, &nlat, &nlon, &ginfo, &ainfo, 0);
-  check_accuracy(ginfo,ainfo,spin);
-  sharp_destroy_alm_info(ainfo);
-  sharp_destroy_geom_info(ginfo);
+  unique_ptr<sharp_geom_info> ginfo;
+  unique_ptr<sharp_alm_info> ainfo;
+  get_infos ("gauss", lmax, mmax, nlat, nlon, ginfo, ainfo, 0);
+  check_accuracy(*ginfo,*ainfo,spin);
   }
 
 static void sharp_acctest(void)
@@ -584,9 +480,9 @@ static void sharp_test (int argc, const char **argv)
   if (mytask==0) cout << "spin=" << spin << endl;
   if (mytask==0) cout << "ntrans=" << ntrans << endl;
 
-  sharp_geom_info *ginfo;
-  sharp_alm_info *ainfo;
-  get_infos (argv[2], lmax, &mmax, &gpar1, &gpar2, &ginfo, &ainfo, 1);
+  unique_ptr<sharp_geom_info> ginfo;
+  unique_ptr<sharp_alm_info> ainfo;
+  get_infos (argv[2], lmax, mmax, gpar1, gpar2, ginfo, ainfo, 1);
 
   int ncomp = (spin==0) ? 1 : 2;
   double t_a2m=1e30, t_m2a=1e30;
@@ -599,7 +495,7 @@ static void sharp_test (int argc, const char **argv)
     {
     ++nrpt;
     double ta2m2, tm2a2;
-    do_sht (ginfo, ainfo, spin, err_abs, err_rel, &ta2m2, &tm2a2,
+    do_sht (*ginfo, *ainfo, spin, err_abs, err_rel, &ta2m2, &tm2a2,
       &op_a2m, &op_m2a, ntrans);
     if (ta2m2<t_a2m) t_a2m=ta2m2;
     if (tm2a2<t_m2a) t_m2a=tm2a2;
@@ -620,11 +516,8 @@ static void sharp_test (int argc, const char **argv)
     for (int i=0; i<ntrans*ncomp; ++i)
       cout << "component " << i << ": rms " << err_rel[i] << ", maxerr " << err_abs[i] << endl;
 
-  double iosize = ntrans*ncomp*(16.*get_nalms(ainfo) + 8.*get_npix(ginfo));
+  double iosize = ntrans*ncomp*(16.*get_nalms(*ainfo) + 8.*get_npix(*ginfo));
   iosize = allreduceSumDouble(iosize);
-
-  sharp_destroy_alm_info(ainfo);
-  sharp_destroy_geom_info(ginfo);
 
   double tmem=totalMem();
   if (mytask==0)
@@ -633,48 +526,27 @@ static void sharp_test (int argc, const char **argv)
     cout << "Memory overhead: " << (tmem-iosize)/(1<<20) << " MB ("
          << 100.*(1.-iosize/tmem) << "\% of working set)\n";
 
-#ifdef _OPENMP
-  int nomp=omp_get_max_threads();
-#else
-  int nomp=1;
-#endif
-
   double maxerel=0., maxeabs=0.;
   for (int i=0; i<ncomp; ++i)
     {
     if (maxerel<err_rel[i]) maxerel=err_rel[i];
     if (maxeabs<err_abs[i]) maxeabs=err_abs[i];
     }
-
-//  if (mytask==0)
-//    printf("%-12s %-10s %2d %d %2d %3d %6d %6d %6d %6d %.2e %7.2f %.2e %7.2f"
-//           " %9.2f %6.2f %.2e %.2e\n",
-//      getenv("HOST"),argv[2],spin,sharp_veclen(),nomp,ntasks,lmax,mmax,gpar1,gpar2,
-//      t_a2m,1e-9*op_a2m/t_a2m,t_m2a,1e-9*op_m2a/t_m2a,tmem/(1<<20),
-//      100.*(1.-iosize/tmem),maxerel,maxeabs);
   }
 
 int main(int argc, const char **argv)
   {
-#ifdef USE_MPI
-  MPI_Init(NULL,NULL);
-  MPI_Comm_size(MPI_COMM_WORLD,&ntasks);
-  MPI_Comm_rank(MPI_COMM_WORLD,&mytask);
-#else
   mytask=0; ntasks=1;
-#endif
 
   MR_assert(argc>=2,"need at least one command line argument");
+  auto mode = string(argv[1]);
 
-  if (strcmp(argv[1],"acctest")==0)
+  if (mode=="acctest")
     sharp_acctest();
-  else if (strcmp(argv[1],"test")==0)
+  else if (mode=="test")
     sharp_test(argc,argv);
   else
     MR_fail("unknown command");
 
-#ifdef USE_MPI
-  MPI_Finalize();
-#endif
   return 0;
   }

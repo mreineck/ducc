@@ -28,26 +28,18 @@
 #ifndef SHARP2_ALMHELPERS_H
 #define SHARP2_ALMHELPERS_H
 
+
+#include <memory>
 #include "libsharp2/sharp.h"
 
 /*! Initialises an a_lm data structure according to the scheme used by
     Healpix_cxx.
     \ingroup almgroup */
-void sharp_make_triangular_alm_info (int lmax, int mmax, int stride,
-  sharp_alm_info **alm_info);
+std::unique_ptr<sharp_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, int stride);
 
 /*! Initialises an a_lm data structure according to the scheme used by
     Fortran Healpix
     \ingroup almgroup */
-void sharp_make_rectangular_alm_info (int lmax, int mmax, int stride,
-  sharp_alm_info **alm_info);
-
-/*! Initialises alm_info for mmajor, real, packed spherical harmonics.
-    Pass \a mmax + 1 to nm and NULL to \a ms in order to use everything;
-    otherwise you can pick a subset of m to process (should only be used
-    for MPI parallelization).
-    \ingroup almgroup */
-void sharp_make_mmajor_real_packed_alm_info (int lmax, int stride,
-  int nm, const int *ms, sharp_alm_info **alm_info);
+std::unique_ptr<sharp_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride);
 
 #endif
