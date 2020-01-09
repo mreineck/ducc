@@ -52,7 +52,7 @@ struct sharp_job
   unsigned long long opcnt;
   };
 
-void inner_loop (sharp_job *job, const int *ispair,const double *cth,
+void inner_loop (sharp_job &job, const int *ispair,const double *cth,
   const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,
   const int *mlim);
 

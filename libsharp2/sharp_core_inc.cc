@@ -320,18 +320,18 @@ MRUTIL_NOINLINE static void alm2map_kernel(s0data_v * MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map (sharp_job * MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v * MRUTIL_RESTRICT d, int nth)
   {
   int l,il,lmax=gen.lmax;
   int nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee(gen, d, &l, &il, nv2);
-  job->opcnt += il * 4*nth;
+  job.opcnt += il * 4*nth;
   if (l>lmax) return;
-  job->opcnt += (lmax+1-l) * 6*nth;
+  job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
   int full_ieee=1;
   for (int i=0; i<nv2; ++i)
     {
@@ -414,18 +414,18 @@ MRUTIL_NOINLINE static void map2alm_kernel(s0data_v * MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm (sharp_job * MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v * MRUTIL_RESTRICT d, int nth)
   {
   int l,il,lmax=gen.lmax;
   int nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee(gen, d, &l, &il, nv2);
-  job->opcnt += il * 4*nth;
+  job.opcnt += il * 4*nth;
   if (l>lmax) return;
-  job->opcnt += (lmax+1-l) * 6*nth;
+  job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+  dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
   int full_ieee=1;
   for (int i=0; i<nv2; ++i)
     {
@@ -593,18 +593,18 @@ MRUTIL_NOINLINE static void alm2map_spin_kernel(sxdata_v * MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job * MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v * MRUTIL_RESTRICT d, int nth)
   {
   int l,lmax=gen.lmax;
   int nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee_spin(gen, d, &l, nv2);
-  job->opcnt += (l-gen.mhi) * 7*nth;
+  job.opcnt += (l-gen.mhi) * 7*nth;
   if (l>lmax) return;
-  job->opcnt += (lmax+1-l) * 23*nth;
+  job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
   int full_ieee=1;
   for (int i=0; i<nv2; ++i)
     {
@@ -727,18 +727,18 @@ MRUTIL_NOINLINE static void map2alm_spin_kernel(sxdata_v * MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job * MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v * MRUTIL_RESTRICT d, int nth)
   {
   int l,lmax=gen.lmax;
   int nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee_spin(gen, d, &l, nv2);
-  job->opcnt += (l-gen.mhi) * 7*nth;
+  job.opcnt += (l-gen.mhi) * 7*nth;
   if (l>lmax) return;
-  job->opcnt += (lmax+1-l) * 23*nth;
+  job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+  dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
   int full_ieee=1;
   for (int i=0; i<nv2; ++i)
     {
@@ -848,18 +848,18 @@ MRUTIL_NOINLINE static void alm2map_deriv1_kernel(sxdata_v * MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job * MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v * MRUTIL_RESTRICT d, int nth)
   {
   int l,lmax=gen.lmax;
   int nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee_spin(gen, d, &l, nv2);
-  job->opcnt += (l-gen.mhi) * 7*nth;
+  job.opcnt += (l-gen.mhi) * 7*nth;
   if (l>lmax) return;
-  job->opcnt += (lmax+1-l) * 15*nth;
+  job.opcnt += (lmax+1-l) * 15*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
   int full_ieee=1;
   for (int i=0; i<nv2; ++i)
     {
@@ -929,22 +929,22 @@ MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job * MRUTIL_RESTRICT job,
 
 #define VZERO(var) do { memset(&(var),0,sizeof(var)); } while(0)
 
-MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
+MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
   sharp_Ylmgen &gen, int mi, const int *mlim)
   {
-  const int m = job->ainfo->mval[mi];
+  const int m = job.ainfo->mval[mi];
   gen.prepare(m);
 
-  switch (job->type)
+  switch (job.type)
     {
     case SHARP_ALM2MAP:
     case SHARP_ALM2MAP_DERIV1:
       {
-      if (job->spin==0)
+      if (job.spin==0)
         {
         //adjust the a_lm for the new algorithm
-        dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+        dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
         for (int il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
           {
           dcmplx al = alm[l];
@@ -973,8 +973,8 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
               }
             else
               {
-              int phas_idx = ith*job->s_th + mi*job->s_m;
-              job->phase[phas_idx] = job->phase[phas_idx+1] = 0;
+              int phas_idx = ith*job.s_th + mi*job.s_m;
+              job.phase[phas_idx] = job.phase[phas_idx+1] = 0;
               }
             ++ith;
             }
@@ -994,12 +994,12 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
               //adjust for new algorithm
               d.s.p2r[i]*=cth_[tgt];
               d.s.p2i[i]*=cth_[tgt];
-              int phas_idx = tgt*job->s_th + mi*job->s_m;
+              int phas_idx = tgt*job.s_th + mi*job.s_m;
               complex<double> r1(d.s.p1r[i], d.s.p1i[i]),
                               r2(d.s.p2r[i], d.s.p2i[i]);
-              job->phase[phas_idx] = r1+r2;
+              job.phase[phas_idx] = r1+r2;
               if (ispair[tgt])
-                job->phase[phas_idx+1] = r1-r2;
+                job.phase[phas_idx+1] = r1-r2;
               }
             }
           }
@@ -1007,15 +1007,15 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
       else
         {
         //adjust the a_lm for the new algorithm
-        if (job->nalm==2)
+        if (job.nalm==2)
           for (int l=gen.mhi; l<=gen.lmax+1; ++l)
             {
-            job->almtmp[2*l  ]*=gen.alpha[l];
-            job->almtmp[2*l+1]*=gen.alpha[l];
+            job.almtmp[2*l  ]*=gen.alpha[l];
+            job.almtmp[2*l+1]*=gen.alpha[l];
             }
         else
           for (int l=gen.mhi; l<=gen.lmax+1; ++l)
-            job->almtmp[l]*=gen.alpha[l];
+            job.almtmp[l]*=gen.alpha[l];
 
         const int nval=nvx*VLEN;
         int ith=0;
@@ -1036,9 +1036,9 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
               }
             else
               {
-              int phas_idx = ith*job->s_th + mi*job->s_m;
-              job->phase[phas_idx  ] = job->phase[phas_idx+1] = 0;
-              job->phase[phas_idx+2] = job->phase[phas_idx+3] = 0;
+              int phas_idx = ith*job.s_th + mi*job.s_m;
+              job.phase[phas_idx  ] = job.phase[phas_idx+1] = 0;
+              job.phase[phas_idx+2] = job.phase[phas_idx+3] = 0;
               }
             ++ith;
             }
@@ -1052,23 +1052,23 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
               d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
               d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
               }
-            (job->type==SHARP_ALM2MAP) ?
+            (job.type==SHARP_ALM2MAP) ?
               calc_alm2map_spin  (job, gen, &d.v, nth) :
               calc_alm2map_deriv1(job, gen, &d.v, nth);
             for (int i=0; i<nth; ++i)
               {
               int tgt=itgt[i];
-              int phas_idx = tgt*job->s_th + mi*job->s_m;
+              int phas_idx = tgt*job.s_th + mi*job.s_m;
               complex<double> q1(d.s.p1pr[i], d.s.p1pi[i]),
                               q2(d.s.p2pr[i], d.s.p2pi[i]),
                               u1(d.s.p1mr[i], d.s.p1mi[i]),
                               u2(d.s.p2mr[i], d.s.p2mi[i]);
-              job->phase[phas_idx  ] = q1+q2;
-              job->phase[phas_idx+2] = u1+u2;
+              job.phase[phas_idx  ] = q1+q2;
+              job.phase[phas_idx+2] = u1+u2;
               if (ispair[tgt])
                 {
-                dcmplx *phQ = &(job->phase[phas_idx+1]),
-                       *phU = &(job->phase[phas_idx+3]);
+                dcmplx *phQ = &(job.phase[phas_idx+1]),
+                       *phU = &(job.phase[phas_idx+3]);
                 *phQ = q1-q2;
                 *phU = u1-u2;
                 if ((gen.mhi-gen.m+gen.s)&1)
@@ -1088,18 +1088,18 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job *job, const int *ispair,
     }
   }
 
-MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
+MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
   sharp_Ylmgen &gen, int mi, const int *mlim)
   {
-  const int m = job->ainfo->mval[mi];
+  const int m = job.ainfo->mval[mi];
   gen.prepare(m);
 
-  switch (job->type)
+  switch (job.type)
     {
     case SHARP_MAP2ALM:
       {
-      if (job->spin==0)
+      if (job.spin==0)
         {
         const int nval=nv0*VLEN;
         int ith=0;
@@ -1112,9 +1112,9 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
             if (mlim[ith]>=m)
               {
               d.s.csq[nth]=cth_[ith]*cth_[ith]; d.s.sth[nth]=sth_[ith];
-              int phas_idx = ith*job->s_th + mi*job->s_m;
-              dcmplx ph1=job->phase[phas_idx];
-              dcmplx ph2=ispair[ith] ? job->phase[phas_idx+1] : 0.;
+              int phas_idx = ith*job.s_th + mi*job.s_m;
+              dcmplx ph1=job.phase[phas_idx];
+              dcmplx ph2=ispair[ith] ? job.phase[phas_idx+1] : 0.;
               d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
               d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
               //adjust for new algorithm
@@ -1137,7 +1137,7 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
             }
           }
         //adjust the a_lm for the new algorithm
-        dcmplx * MRUTIL_RESTRICT alm=job->almtmp;
+        dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
         dcmplx alm2 = 0.;
         double alold=0;
         for (int il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
@@ -1163,11 +1163,11 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
             if (mlim[ith]>=m)
               {
               d.s.cth[nth]=cth_[ith]; d.s.sth[nth]=sth_[ith];
-              int phas_idx = ith*job->s_th + mi*job->s_m;
-              dcmplx p1Q=job->phase[phas_idx],
-                     p1U=job->phase[phas_idx+2],
-                     p2Q=ispair[ith] ? job->phase[phas_idx+1]:0.,
-                     p2U=ispair[ith] ? job->phase[phas_idx+3]:0.;
+              int phas_idx = ith*job.s_th + mi*job.s_m;
+              dcmplx p1Q=job.phase[phas_idx],
+                     p1U=job.phase[phas_idx+2],
+                     p2Q=ispair[ith] ? job.phase[phas_idx+1]:0.,
+                     p2U=ispair[ith] ? job.phase[phas_idx+3]:0.;
               if ((gen.mhi-gen.m+gen.s)&1)
                 { p2Q=-p2Q; p2U=-p2U; }
               d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
@@ -1194,8 +1194,8 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
         //adjust the a_lm for the new algorithm
         for (int l=gen.mhi; l<=gen.lmax; ++l)
           {
-          job->almtmp[2*l  ]*=gen.alpha[l];
-          job->almtmp[2*l+1]*=gen.alpha[l];
+          job.almtmp[2*l  ]*=gen.alpha[l];
+          job.almtmp[2*l+1]*=gen.alpha[l];
           }
         }
       break;
@@ -1208,14 +1208,14 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job *job, const int *ispair,
     }
   }
 
-void XARCH(inner_loop) (sharp_job *job, const int *ispair,
+void XARCH(inner_loop) (sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
   sharp_Ylmgen &gen, int mi, const int *mlim);
-void XARCH(inner_loop) (sharp_job *job, const int *ispair,
+void XARCH(inner_loop) (sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
   sharp_Ylmgen &gen, int mi, const int *mlim)
   {
-  (job->type==SHARP_MAP2ALM) ?
+  (job.type==SHARP_MAP2ALM) ?
     inner_loop_m2a(job,ispair,cth_,sth_,llim,ulim,gen,mi,mlim) :
     inner_loop_a2m(job,ispair,cth_,sth_,llim,ulim,gen,mi,mlim);
   }
