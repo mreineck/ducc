@@ -31,12 +31,12 @@
 #undef GENERIC_ARCH
 #undef ARCH
 
-typedef void (*t_inner_loop) (sharp_job *job, const int *ispair,
+using t_inner_loop = void (*) (sharp_job *job, const int *ispair,
   const double *cth_, const double *sth_, int llim, int ulim,
   sharp_Ylmgen &gen, int mi, const int *mlim);
-typedef int (*t_veclen) (void);
-typedef int (*t_max_nvec) (int spin);
-typedef const char *(*t_architecture) (void);
+using t_veclen = int (*) (void);
+using t_max_nvec = int (*) (int spin);
+using t_architecture = const char *(*) (void);
 
 static t_inner_loop inner_loop_ = NULL;
 static t_veclen veclen_ = NULL;

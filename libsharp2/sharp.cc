@@ -42,8 +42,8 @@
 
 using namespace std;
 
-typedef complex<double> dcmplx;
-typedef complex<float>  fcmplx;
+using dcmplx = complex<double>;
+using fcmplx = complex<float>;
 
 static const double sqrt_one_half = 0.707106781186547572737310929369;
 static const double sqrt_two = 1.414213562373095145474621858739;

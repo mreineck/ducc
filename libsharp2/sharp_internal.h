@@ -34,7 +34,7 @@
 
 using std::complex;
 
-typedef struct
+struct sharp_job
   {
   sharp_jobtype type;
   int spin;
@@ -50,7 +50,7 @@ typedef struct
   const sharp_alm_info *ainfo;
   double time;
   unsigned long long opcnt;
-  } sharp_job;
+  };
 
 void inner_loop (sharp_job *job, const int *ispair,const double *cth,
   const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,

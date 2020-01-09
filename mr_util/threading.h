@@ -208,7 +208,7 @@ class Distribution
     size_t chunksize_;
     double fact_max_;
     vector<size_t> nextstart;
-    typedef enum { SINGLE, STATIC, DYNAMIC } SchedMode;
+    enum SchedMode { SINGLE, STATIC, DYNAMIC };
     SchedMode mode;
     bool single_done;
 

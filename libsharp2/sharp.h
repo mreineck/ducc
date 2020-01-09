@@ -33,35 +33,35 @@
 
 /*! \internal
     Helper type containing information about a single ring. */
-typedef struct
+struct sharp_ringinfo
   {
   double theta, phi0, weight, cth, sth;
   ptrdiff_t ofs;
   int nph, stride;
-  } sharp_ringinfo;
+  };
 
 /*! \internal
     Helper type containing information about a pair of rings with colatitudes
     symmetric around the equator. */
-typedef struct
+struct sharp_ringpair
   {
   sharp_ringinfo r1,r2;
-  } sharp_ringpair;
+  };
 
 /*! \internal
     Type holding all required information about a map geometry. */
-typedef struct
+struct sharp_geom_info
   {
   std::vector<sharp_ringpair> pair;
   int nphmax;
-  } sharp_geom_info;
+  };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
 /*! \{ */
 
 /*! \internal
     Helper type for index calculation in a_lm arrays. */
-typedef struct
+struct sharp_alm_info
   {
   /*! Maximum \a l index of the array */
   int lmax;
@@ -76,10 +76,10 @@ typedef struct
   std::vector<ptrdiff_t> mvstart;
   /*! Stride between a_lm and a_(l+1),m */
   ptrdiff_t stride;
-  } sharp_alm_info;
+  };
 
 /*! alm_info flags */
-typedef enum { SHARP_PACKED = 1,
+enum sharp_almflags { SHARP_PACKED = 1,
                /*!< m=0-coefficients are packed so that the (zero) imaginary part is
                     not present. mvstart is in units of *real* float/double for all
                     m; stride is in units of reals for m=0 and complex for m!=0 */
@@ -94,7 +94,7 @@ typedef enum { SHARP_PACKED = 1,
                     corresponding complex coefficient (when accessed
                     as complex).
                 */
-             } sharp_almflags;
+             };
 
 
 
@@ -170,17 +170,17 @@ void sharp_destroy_geom_info (sharp_geom_info *info);
 /*! \{ */
 
 /*! Enumeration of SHARP job types. */
-typedef enum { SHARP_YtW=0,               /*!< analysis */
+enum sharp_jobtype { SHARP_YtW=0,               /*!< analysis */
                SHARP_MAP2ALM=SHARP_YtW,   /*!< analysis */
                SHARP_Y=1,                 /*!< synthesis */
                SHARP_ALM2MAP=SHARP_Y,     /*!< synthesis */
                SHARP_Yt=2,                /*!< adjoint synthesis */
                SHARP_WY=3,                /*!< adjoint analysis */
                SHARP_ALM2MAP_DERIV1=4     /*!< synthesis of first derivatives */
-             } sharp_jobtype;
+             };
 
 /*! Job flags */
-typedef enum { SHARP_DP              = 1<<4,
+enum sharp_jobflags { SHARP_DP              = 1<<4,
                /*!< map and a_lm are in double precision */
                SHARP_ADD             = 1<<5,
                /*!< results are added to the output arrays, instead of
@@ -192,7 +192,7 @@ typedef enum { SHARP_DP              = 1<<4,
                SHARP_NO_FFT          = 1<<7,
 
                SHARP_USE_WEIGHTS     = 1<<20,    /* internal use only */
-             } sharp_jobflags;
+             };
 
 /*! Performs a libsharp2 SHT job. The interface deliberately does not use
   the C99 "complex" data type, in order to be callable from C89 and C++.

@@ -82,50 +82,50 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
 // Unfortunately, most compilers don't act on this pragma yet.
 #pragma STDC FP_CONTRACT ON
 
-typedef complex<double> dcmplx;
+using dcmplx = complex<double>;
 
 #define nv0 (128/VLEN)
 #define nvx (64/VLEN)
 
-typedef Tv Tbv0[nv0];
-typedef double Tbs0[nv0*VLEN];
+using Tbv0 = Tv[nv0];
+using Tbs0 = double[nv0*VLEN];
 
-typedef struct
+struct s0data_v
   {
   Tbv0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i;
-  } s0data_v;
+  };
 
-typedef struct
+struct s0data_s
   {
   Tbs0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i;
-  } s0data_s;
+  };
 
-typedef union
+union s0data_u
   {
   s0data_v v;
   s0data_s s;
-  } s0data_u;
+  };
 
-typedef Tv Tbvx[nvx];
-typedef double Tbsx[nvx*VLEN];
+using Tbvx = Tv[nvx];
+using Tbsx = double[nvx*VLEN];
 
-typedef struct
+struct sxdata_v
   {
   Tbvx sth, cfp, cfm, scp, scm, l1p, l2p, l1m, l2m, cth,
        p1pr, p1pi, p2pr, p2pi, p1mr, p1mi, p2mr, p2mi;
-  } sxdata_v;
+  };
 
-typedef struct
+struct sxdata_s
   {
   Tbsx sth, cfp, cfm, scp, scm, l1p, l2p, l1m, l2m, cth,
        p1pr, p1pi, p2pr, p2pi, p1mr, p1mi, p2mr, p2mi;
-  } sxdata_s;
+  };
 
-typedef union
+union sxdata_u
   {
   sxdata_v v;
   sxdata_s s;
-  } sxdata_u;
+  };
 
 static inline void Tvnormalize (Tv * MRUTIL_RESTRICT val, Tv * MRUTIL_RESTRICT scale,
   double maxval)
@@ -191,8 +191,8 @@ static void mypow(Tv val, int npow, const vector<double> &powlimit,
 static inline void getCorfac(Tv scale, Tv * MRUTIL_RESTRICT corfac,
   const vector<double> &cf)
   {
-  typedef union
-    { Tv v; double s[VLEN]; } Tvu;
+  union Tvu
+    { Tv v; double s[VLEN]; };
 
   Tvu sc, corf;
   sc.v=scale;
