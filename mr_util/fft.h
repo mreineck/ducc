@@ -60,6 +60,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mr_util/unity_roots.h"
 #include "mr_util/useful_macros.h"
 #include "mr_util/simd.h"
+#ifndef MRUTIL_NO_THREADING
+#include <mutex>
+#endif
 
 namespace mr {
 
@@ -268,7 +271,7 @@ struct util // hack to avoid duplicate symbols
     if (shape[axis] < 1000)
       parallel /= 4;
     size_t max_threads = nthreads == 0 ?
-      std::thread::hardware_concurrency() : nthreads;
+      mr::max_threads() : nthreads;
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
@@ -2250,7 +2253,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length)
 
     return nullptr;
     };
-#if MRUTIL_NO_THREADING
+#ifdef MRUTIL_NO_THREADING
   auto p = find_in_cache();
   if (p) return p;
   auto plan = std::make_shared<T>(length);

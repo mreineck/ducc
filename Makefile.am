@@ -21,6 +21,7 @@ libmrutil_la_SOURCES = \
   mr_util/string_utils.h \
   mr_util/system.cc \
   mr_util/system.h \
+  mr_util/threading.cc \
   mr_util/threading.h \
   mr_util/timers.h \
   mr_util/unity_roots.h \
