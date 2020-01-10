@@ -163,7 +163,7 @@ template<typename T, size_t len> inline bool any_of(const vmask_<T, len> &mask)
 template<typename T, size_t len> inline bool none_of(const vmask_<T, len> &mask)
   { return mask.bits()==0; }
 template<typename T, size_t len> inline bool all_of(const vmask_<T, len> &mask)
-  { return mask.bits()==(1<<len)-1; }
+  { return mask.bits()==(size_t(1)<<len)-1; }
 template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op op)
   {
   T res=v[0];
@@ -221,7 +221,7 @@ template<> class helper_<float,8>
     static constexpr size_t len = 8;
   public:
     using Tv = __m512;
-    using Tm = __mmask8;
+    using Tm = __mmask16;
 
     static Tv from_scalar(T v) { return _mm512_set1_ps(v); }
     static Tv abs(Tv v) { return (__m512)_mm512_andnot_epi32((__m512i)_mm512_set1_ps(-0.),(__m512i)v); }
