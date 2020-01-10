@@ -25,11 +25,10 @@
 // only enable SIMD support for gcc>=5.0 and clang>=5.0
 #ifndef MRUTIL_NO_SIMD
 #define MRUTIL_NO_SIMD
-#if defined(__INTEL_COMPILER)
-// do nothing. This is necessary because this compiler also sets __GNUC__.
-#elif defined(__clang__)
-#ifdef __APPLE__
-#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 3)
+#if defined(__clang__)
+// AppleClang has their own version numbering
+#ifdef __apple_build_version__
+#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 1)
 #     undef MRUTIL_NO_SIMD
 #  endif
 #elif __clang_major__ >= 5
@@ -206,7 +205,7 @@ template<> class helper_<double,8>
     static Tv from_scalar(T v) { return _mm512_set1_pd(v); }
     static Tv abs(Tv v) { return (__m512d)_mm512_andnot_epi64((__m512i)_mm512_set1_pd(-0.),(__m512i)v); }
     static Tv max(Tv v1, Tv v2) { return _mm512_max_pd(v1, v2); }
-    static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_pd(m, v1, v2); }
+    static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_pd(m, v2, v1); }
     static Tv sqrt(Tv v) { return _mm512_sqrt_pd(v); }
     static Tm gt (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_GT_OQ); }
     static Tm ge (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_GE_OQ); }
@@ -227,7 +226,7 @@ template<> class helper_<float,8>
     static Tv from_scalar(T v) { return _mm512_set1_ps(v); }
     static Tv abs(Tv v) { return (__m512)_mm512_andnot_epi32((__m512i)_mm512_set1_ps(-0.),(__m512i)v); }
     static Tv max(Tv v1, Tv v2) { return _mm512_max_ps(v1, v2); }
-    static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_ps(m, v1, v2); }
+    static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_ps(m, v2, v1); }
     static Tv sqrt(Tv v) { return _mm512_sqrt_ps(v); }
     static Tm gt (Tv v1, Tv v2) { return _mm512_cmp_ps_mask(v1,v2,_CMP_GT_OQ); }
     static Tm ge (Tv v1, Tv v2) { return _mm512_cmp_ps_mask(v1,v2,_CMP_GE_OQ); }
