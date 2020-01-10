@@ -45,16 +45,16 @@
 
 #pragma GCC visibility push(hidden)
 
-using namespace std::experimental;
+using namespace mr;
 
-using Tv=std::experimental::native_simd<double>;
+using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
 #if (defined(__AVX__) && (!defined(__AVX512F__)))
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * MRUTIL_RESTRICT cc)
   {
-  auto tmp1=_mm256_hadd_pd(__data(a),__data(b)), tmp2=_mm256_hadd_pd(__data(c),__data(d));
+  auto tmp1=_mm256_hadd_pd(a,b), tmp2=_mm256_hadd_pd(c,d);
   auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
        tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
   tmp1=tmp3+tmp4;

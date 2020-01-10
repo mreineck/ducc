@@ -612,7 +612,7 @@ MRUTIL_NOINLINE void sharp_job::execute()
   vector<dcmplx> phasebuffer;
 //FIXME: needs to be changed to "nm"
   alloc_phase(mmax+1,chunksize, phasebuffer);
-  std::atomic<size_t> a_opcnt = 0;
+  std::atomic<unsigned long long> a_opcnt = 0;
 
 /* chunk loop */
   for (int chunk=0; chunk<nchunks; ++chunk)

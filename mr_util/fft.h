@@ -65,11 +65,16 @@ namespace mr {
 
 namespace detail_fft {
 
-using namespace std;
-using namespace std::experimental;
+using std::size_t;
+using std::ptrdiff_t;
 
-using shape_t = vector<size_t>;
-using stride_t = vector<ptrdiff_t>;
+// Always use std:: for <cmath> functions
+template <typename T> T cos(T) = delete;
+template <typename T> T sin(T) = delete;
+template <typename T> T sqrt(T) = delete;
+
+using shape_t = std::vector<size_t>;
+using stride_t = std::vector<ptrdiff_t>;
 
 constexpr bool FORWARD  = true,
                BACKWARD = false;
@@ -80,8 +85,9 @@ constexpr bool FORWARD  = true,
 #if defined(__INTEL_COMPILER)
 // do nothing. This is necessary because this compiler also sets __GNUC__.
 #elif defined(__clang__)
-#ifdef __APPLE__
-#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 3)
+// AppleClang has their own version numbering
+#ifdef __apple_build_version__
+#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 1)
 #     undef POCKETFFT_NO_VECTORS
 #  endif
 #elif __clang_major__ >= 5
@@ -219,11 +225,11 @@ struct util // hack to avoid duplicate symbols
     const stride_t &stride_in, const stride_t &stride_out, bool inplace)
     {
     auto ndim = shape.size();
-    if (ndim<1) throw runtime_error("ndim must be >= 1");
+    if (ndim<1) throw std::runtime_error("ndim must be >= 1");
     if ((stride_in.size()!=ndim) || (stride_out.size()!=ndim))
-      throw runtime_error("stride dimension mismatch");
+      throw std::runtime_error("stride dimension mismatch");
     if (inplace && (stride_in!=stride_out))
-      throw runtime_error("stride mismatch");
+      throw std::runtime_error("stride mismatch");
     }
 
   static MRUTIL_NOINLINE void sanity_check(const shape_t &shape,
@@ -235,8 +241,8 @@ struct util // hack to avoid duplicate symbols
     shape_t tmp(ndim,0);
     for (auto ax : axes)
       {
-      if (ax>=ndim) throw invalid_argument("bad axis number");
-      if (++tmp[ax]>1) throw invalid_argument("axis specified repeatedly");
+      if (ax>=ndim) throw std::invalid_argument("bad axis number");
+      if (++tmp[ax]>1) throw std::invalid_argument("axis specified repeatedly");
       }
     }
 
@@ -245,7 +251,7 @@ struct util // hack to avoid duplicate symbols
     size_t axis)
     {
     sanity_check(shape, stride_in, stride_out, inplace);
-    if (axis>=shape.size()) throw invalid_argument("bad axis number");
+    if (axis>=shape.size()) throw std::invalid_argument("bad axis number");
     }
 
 #ifdef MRUTIL_NO_THREADING
@@ -262,7 +268,7 @@ struct util // hack to avoid duplicate symbols
     if (shape[axis] < 1000)
       parallel /= 4;
     size_t max_threads = nthreads == 0 ?
-      thread::hardware_concurrency() : nthreads;
+      std::thread::hardware_concurrency() : nthreads;
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
@@ -283,7 +289,7 @@ template<typename T0> class cfftp
 
     size_t length;
     aligned_array<Cmplx<T0>> mem;
-    vector<fctdata> fact;
+    std::vector<fctdata> fact;
 
     void add_factor(size_t factor)
       { fact.push_back({factor, nullptr, nullptr}); }
@@ -897,9 +903,9 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
     else
       {
       passg<fwd>(ido, ip, l1, p1, p2, fact[k1].tw, fact[k1].tws);
-      swap(p1,p2);
+      std::swap(p1,p2);
       }
-    swap(p1,p2);
+    std::swap(p1,p2);
     l1=l2;
     }
   if (p1!=c)
@@ -933,7 +939,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
         len>>=1;
         // factor 2 should be at the front of the factor list
         add_factor(2);
-        swap(fact[0].fct, fact.back().fct);
+        std::swap(fact[0].fct, fact.back().fct);
         }
       for (size_t divisor=3; divisor*divisor<=len; divisor+=2)
         while ((len%divisor)==0)
@@ -986,7 +992,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
     MRUTIL_NOINLINE cfftp(size_t length_)
       : length(length_)
       {
-      if (length==0) throw runtime_error("zero-length FFT requested");
+      if (length==0) throw std::runtime_error("zero-length FFT requested");
       if (length==1) return;
       factorize();
       mem.resize(twsize());
@@ -1009,7 +1015,7 @@ template<typename T0> class rfftp
 
     size_t length;
     aligned_array<T0> mem;
-    vector<fctdata> fact;
+    std::vector<fctdata> fact;
 
     void add_factor(size_t factor)
       { fact.push_back({factor, nullptr, nullptr}); }
@@ -1696,8 +1702,8 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           else if(ip==5)
             radf5(ido, l1, p1, p2, fact[k].tw);
           else
-            { radfg(ido, ip, l1, p1, p2, fact[k].tw, fact[k].tws); swap (p1,p2); }
-          swap (p1,p2);
+            { radfg(ido, ip, l1, p1, p2, fact[k].tw, fact[k].tws); std::swap (p1,p2); }
+          std::swap (p1,p2);
           }
       else
         for(size_t k=0, l1=1; k<nf; k++)
@@ -1714,7 +1720,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
             radb5(ido, l1, p1, p2, fact[k].tw);
           else
             radbg(ido, ip, l1, p1, p2, fact[k].tw, fact[k].tws);
-          swap (p1,p2);
+          std::swap (p1,p2);
           l1*=ip;
           }
 
@@ -1732,7 +1738,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
         len>>=1;
         // factor 2 should be at the front of the factor list
         add_factor(2);
-        swap(fact[0].fct, fact.back().fct);
+        std::swap(fact[0].fct, fact.back().fct);
         }
       for (size_t divisor=3; divisor*divisor<=len; divisor+=2)
         while ((len%divisor)==0)
@@ -1795,7 +1801,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
     MRUTIL_NOINLINE rfftp(size_t length_)
       : length(length_)
       {
-      if (length==0) throw runtime_error("zero-length FFT requested");
+      if (length==0) throw std::runtime_error("zero-length FFT requested");
       if (length==1) return;
       factorize();
       mem.resize(twsize());
@@ -1913,28 +1919,28 @@ template<typename T0> class fftblue
 template<typename T0> class pocketfft_c
   {
   private:
-    unique_ptr<cfftp<T0>> packplan;
-    unique_ptr<fftblue<T0>> blueplan;
+    std::unique_ptr<cfftp<T0>> packplan;
+    std::unique_ptr<fftblue<T0>> blueplan;
     size_t len;
 
   public:
     MRUTIL_NOINLINE pocketfft_c(size_t length)
       : len(length)
       {
-      if (length==0) throw runtime_error("zero-length FFT requested");
+      if (length==0) throw std::runtime_error("zero-length FFT requested");
       size_t tmp = (length<50) ? 0 : util::largest_prime_factor(length);
       if (tmp*tmp <= length)
         {
-        packplan=unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
+        packplan=std::unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
         return;
         }
       double comp1 = util::cost_guess(length);
       double comp2 = 2*util::cost_guess(util::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
-        blueplan=unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
+        blueplan=std::unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
       else
-        packplan=unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
+        packplan=std::unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
       }
 
     template<typename T> MRUTIL_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
@@ -1950,28 +1956,28 @@ template<typename T0> class pocketfft_c
 template<typename T0> class pocketfft_r
   {
   private:
-    unique_ptr<rfftp<T0>> packplan;
-    unique_ptr<fftblue<T0>> blueplan;
+    std::unique_ptr<rfftp<T0>> packplan;
+    std::unique_ptr<fftblue<T0>> blueplan;
     size_t len;
 
   public:
     MRUTIL_NOINLINE pocketfft_r(size_t length)
       : len(length)
       {
-      if (length==0) throw runtime_error("zero-length FFT requested");
+      if (length==0) throw std::runtime_error("zero-length FFT requested");
       size_t tmp = (length<50) ? 0 : util::largest_prime_factor(length);
       if (tmp*tmp <= length)
         {
-        packplan=unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
+        packplan=std::unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
         return;
         }
       double comp1 = 0.5*util::cost_guess(length);
       double comp2 = 2*util::cost_guess(util::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
-        blueplan=unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
+        blueplan=std::unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
       else
-        packplan=unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
+        packplan=std::unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
       }
 
     template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool fwd) const
@@ -2045,7 +2051,7 @@ template<typename T0> class T_dcst23
   {
   private:
     pocketfft_r<T0> fftplan;
-    vector<T0> twiddle;
+    std::vector<T0> twiddle;
 
   public:
     MRUTIL_NOINLINE T_dcst23(size_t length)
@@ -2082,7 +2088,7 @@ template<typename T0> class T_dcst23
           c[NS2] *= twiddle[NS2-1];
         if (!cosine)
           for (size_t k=0, kc=N-1; k<kc; ++k, --kc)
-            swap(c[k], c[kc]);
+            std::swap(c[k], c[kc]);
         if (ortho) c[0]*=sqrt2*T0(0.5);
         }
       else
@@ -2090,7 +2096,7 @@ template<typename T0> class T_dcst23
         if (ortho) c[0]*=sqrt2;
         if (!cosine)
           for (size_t k=0, kc=N-1; k<NS2; ++k, --kc)
-            swap(c[k], c[kc]);
+            std::swap(c[k], c[kc]);
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
           {
           T t1=c[k]+c[kc], t2=c[k]-c[kc];
@@ -2115,8 +2121,8 @@ template<typename T0> class T_dcst4
   {
   private:
     size_t N;
-    unique_ptr<pocketfft_c<T0>> fft;
-    unique_ptr<pocketfft_r<T0>> rfft;
+    std::unique_ptr<pocketfft_c<T0>> fft;
+    std::unique_ptr<pocketfft_r<T0>> rfft;
     aligned_array<Cmplx<T0>> C2;
 
   public:
@@ -2216,17 +2222,17 @@ template<typename T0> class T_dcst4
 // multi-D infrastructure
 //
 
-template<typename T> shared_ptr<T> get_plan(size_t length)
+template<typename T> std::shared_ptr<T> get_plan(size_t length)
   {
 #if POCKETFFT_CACHE_SIZE==0
-  return make_shared<T>(length);
+  return std::make_shared<T>(length);
 #else
   constexpr size_t nmax=POCKETFFT_CACHE_SIZE;
-  static array<shared_ptr<T>, nmax> cache;
-  static array<size_t, nmax> last_access{{0}};
+  static std::array<std::shared_ptr<T>, nmax> cache;
+  static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
 
-  auto find_in_cache = [&]() -> shared_ptr<T>
+  auto find_in_cache = [&]() -> std::shared_ptr<T>
     {
     for (size_t i=0; i<nmax; ++i)
       if (cache[i] && (cache[i]->length()==length))
@@ -2247,7 +2253,7 @@ template<typename T> shared_ptr<T> get_plan(size_t length)
 #if MRUTIL_NO_THREADING
   auto p = find_in_cache();
   if (p) return p;
-  auto plan = make_shared<T>(length);
+  auto plan = std::make_shared<T>(length);
   size_t lru = 0;
   for (size_t i=1; i<nmax; ++i)
     if (last_access[i] < last_access[lru])
@@ -2257,16 +2263,16 @@ template<typename T> shared_ptr<T> get_plan(size_t length)
   last_access[lru] = ++access_counter;
   return plan;
 #else
-  static mutex mut;
+  static std::mutex mut;
 
   {
-  lock_guard<mutex> lock(mut);
+  std::lock_guard<std::mutex> lock(mut);
   auto p = find_in_cache();
   if (p) return p;
   }
-  auto plan = make_shared<T>(length);
+  auto plan = std::make_shared<T>(length);
   {
-  lock_guard<mutex> lock(mut);
+  std::lock_guard<std::mutex> lock(mut);
   auto p = find_in_cache();
   if (p) return p;
 
@@ -2355,8 +2361,8 @@ template<size_t N> class multi_iter
         idim(idim_), rem(iarr.size()/iarr.shape(idim))
       {
       if (nshares==1) return;
-      if (nshares==0) throw runtime_error("can't run with zero threads");
-      if (myshare>=nshares) throw runtime_error("impossible share requested");
+      if (nshares==0) throw std::runtime_error("can't run with zero threads");
+      if (myshare>=nshares) throw std::runtime_error("impossible share requested");
       size_t nbase = rem/nshares;
       size_t additional = rem%nshares;
       size_t lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
@@ -2378,7 +2384,7 @@ template<size_t N> class multi_iter
       }
     void advance(size_t n)
       {
-      if (rem<n) throw runtime_error("underrun");
+      if (rem<n) throw std::runtime_error("underrun");
       for (size_t i=0; i<n; ++i)
         {
         p_i[i] = p_ii;
@@ -2431,8 +2437,8 @@ class rev_iter
   private:
     shape_t pos;
     const arr_info &arr;
-    vector<char> rev_axis;
-    vector<char> rev_jump;
+    std::vector<char> rev_axis;
+    std::vector<char> rev_jump;
     size_t last_axis, last_size;
     shape_t shp;
     ptrdiff_t p, rp;
@@ -2503,11 +2509,7 @@ template<> struct VTYPE<double>
   };
 template<> struct VTYPE<long double>
   {
-#ifdef MRUTIL_HOMEGROWN_SIMD
   using type = detail_simd::vtp<long double, 1>;
-#else
-  using type = simd<long double, simd_abi::fixed_size<1>>;
-#endif
   };
 #endif
 
@@ -2594,7 +2596,7 @@ MRUTIL_NOINLINE void general_nd(const cndarr<T> &in, ndarr<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec & exec,
   const bool allow_inplace=true)
   {
-  shared_ptr<Tplan> plan;
+  std::shared_ptr<Tplan> plan;
 
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
@@ -2852,7 +2854,7 @@ struct ExecR2R
 
 template<typename T> void c2c(const shape_t &shape, const stride_t &stride_in,
   const stride_t &stride_out, const shape_t &axes, bool forward,
-  const complex<T> *data_in, complex<T> *data_out, T fct,
+  const std::complex<T> *data_in, std::complex<T> *data_out, T fct,
   size_t nthreads=1)
   {
   if (util::prod(shape)==0) return;
@@ -2866,7 +2868,7 @@ template<typename T> void dct(const shape_t &shape,
   const stride_t &stride_in, const stride_t &stride_out, const shape_t &axes,
   int type, const T *data_in, T *data_out, T fct, bool ortho, size_t nthreads=1)
   {
-  if ((type<1) || (type>4)) throw invalid_argument("invalid DCT type");
+  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
   if (util::prod(shape)==0) return;
   util::sanity_check(shape, stride_in, stride_out, data_in==data_out, axes);
   cndarr<T> ain(data_in, shape, stride_in);
@@ -2884,7 +2886,7 @@ template<typename T> void dst(const shape_t &shape,
   const stride_t &stride_in, const stride_t &stride_out, const shape_t &axes,
   int type, const T *data_in, T *data_out, T fct, bool ortho, size_t nthreads=1)
   {
-  if ((type<1) || (type>4)) throw invalid_argument("invalid DST type");
+  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
   if (util::prod(shape)==0) return;
   util::sanity_check(shape, stride_in, stride_out, data_in==data_out, axes);
   cndarr<T> ain(data_in, shape, stride_in);
@@ -2900,7 +2902,7 @@ template<typename T> void dst(const shape_t &shape,
 
 template<typename T> void r2c(const shape_t &shape_in,
   const stride_t &stride_in, const stride_t &stride_out, size_t axis,
-  bool forward, const T *data_in, complex<T> *data_out, T fct,
+  bool forward, const T *data_in, std::complex<T> *data_out, T fct,
   size_t nthreads=1)
   {
   if (util::prod(shape_in)==0) return;
@@ -2914,7 +2916,7 @@ template<typename T> void r2c(const shape_t &shape_in,
 
 template<typename T> void r2c(const shape_t &shape_in,
   const stride_t &stride_in, const stride_t &stride_out, const shape_t &axes,
-  bool forward, const T *data_in, complex<T> *data_out, T fct,
+  bool forward, const T *data_in, std::complex<T> *data_out, T fct,
   size_t nthreads=1)
   {
   if (util::prod(shape_in)==0) return;
@@ -2932,7 +2934,7 @@ template<typename T> void r2c(const shape_t &shape_in,
 
 template<typename T> void c2r(const shape_t &shape_out,
   const stride_t &stride_in, const stride_t &stride_out, size_t axis,
-  bool forward, const complex<T> *data_in, T *data_out, T fct,
+  bool forward, const std::complex<T> *data_in, T *data_out, T fct,
   size_t nthreads=1)
   {
   if (util::prod(shape_out)==0) return;
@@ -2946,7 +2948,7 @@ template<typename T> void c2r(const shape_t &shape_out,
 
 template<typename T> void c2r(const shape_t &shape_out,
   const stride_t &stride_in, const stride_t &stride_out, const shape_t &axes,
-  bool forward, const complex<T> *data_in, T *data_out, T fct,
+  bool forward, const std::complex<T> *data_in, T *data_out, T fct,
   size_t nthreads=1)
   {
   if (util::prod(shape_out)==0) return;
@@ -2962,7 +2964,7 @@ template<typename T> void c2r(const shape_t &shape_out,
   for (int i=int(shape_in.size())-2; i>=0; --i)
     stride_inter[size_t(i)] =
       stride_inter[size_t(i+1)]*ptrdiff_t(shape_in[size_t(i+1)]);
-  aligned_array<complex<T>> tmp(nval);
+  aligned_array<std::complex<T>> tmp(nval);
   auto newaxes = shape_t({axes.begin(), --axes.end()});
   c2c(shape_in, stride_in, stride_inter, newaxes, forward, data_in, tmp.data(),
     T(1), nthreads);
@@ -3006,9 +3008,9 @@ template<typename T> void r2r_genuine_hartley(const shape_t &shape,
   util::sanity_check(shape, stride_in, stride_out, data_in==data_out, axes);
   shape_t tshp(shape);
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  aligned_array<complex<T>> tdata(util::prod(tshp));
+  aligned_array<std::complex<T>> tdata(util::prod(tshp));
   stride_t tstride(shape.size());
-  tstride.back()=sizeof(complex<T>);
+  tstride.back()=sizeof(std::complex<T>);
   for (size_t i=tstride.size()-1; i>0; --i)
     tstride[i-1]=tstride[i]*ptrdiff_t(tshp[i]);
   r2c(shape, stride_in, tstride, axes, true, data_in, tdata.data(), fct, nthreads);
