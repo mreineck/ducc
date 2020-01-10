@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Peter Bell, Max-Planck-Society
+/* Copyright (C) 2019-2020 Peter Bell, Max-Planck-Society
    Authors: Peter Bell, Martin Reinecke */
 
 #ifndef MRUTIL_THREADING_H
@@ -44,6 +44,18 @@ using namespace std;
 
 #ifndef MRUTIL_NO_THREADING
 static const size_t max_threads_ = max(1u, thread::hardware_concurrency());
+
+inline atomic<size_t> &default_nthreads()
+  {
+  static atomic<size_t> default_nthreads_=max_threads_;
+  return default_nthreads_;
+  }
+
+inline size_t get_default_nthreads()
+  { return default_nthreads(); }
+
+inline void set_default_nthreads(size_t new_default_nthreads)
+  { default_nthreads() = max<size_t>(1, new_default_nthreads); }
 
 class latch
   {
@@ -229,7 +241,7 @@ class Distribution
       size_t nthreads, size_t chunksize, Func f)
       {
       mode = STATIC;
-      nthreads_ = (nthreads==0) ? max_threads_ : nthreads;
+      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? (nwork_+nthreads_-1)/nthreads_
                                  : chunksize;
@@ -243,7 +255,7 @@ class Distribution
       size_t nthreads, size_t chunksize_min, double fact_max, Func f)
       {
       mode = DYNAMIC;
-      nthreads_ = (nthreads==0) ? max_threads_ : nthreads;
+      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
       nwork_ = nwork;
       chunksize_ = (chunksize_min<1) ? 1 : chunksize_min;
       if (chunksize_*nthreads_>=nwork_)
@@ -255,7 +267,7 @@ class Distribution
     template<typename Func> void execParallel(size_t nthreads, Func f)
       {
       mode = STATIC;
-      nthreads_ = (nthreads==0) ? max_threads_ : nthreads;
+      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
       nwork_ = nthreads_;
       chunksize_ = 1;
       thread_map(move(f));
@@ -372,6 +384,12 @@ class Sched0
 template<typename Func> void execParallel(size_t /*nthreads*/, Func f)
   { f(); }
 
+inline size_t get_default_nthreads()
+  { return 1; }
+
+inline void set_default_nthreads(size_t /*new_default_nthreads*/)
+  {}
+
 #endif
 
 namespace {
@@ -413,6 +431,8 @@ inline size_t max_threads()
 
 } // end of namespace detail
 
+using detail_threading::get_default_nthreads;
+using detail_threading::set_default_nthreads;
 using detail_threading::Scheduler;
 using detail_threading::execSingle;
 using detail_threading::execStatic;

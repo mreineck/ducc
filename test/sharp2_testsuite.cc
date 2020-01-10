@@ -20,7 +20,7 @@
 
 /*  \file sharp_testsuite.c
  *
- *  Copyright (C) 2012-2019 Max-Planck-Society
+ *  Copyright (C) 2012-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -34,13 +34,14 @@ using std::complex;
 #include "mr_util/error_handling.h"
 #include "mr_util/threading.h"
 #include "mr_util/math_utils.h"
+#include "mr_util/string_utils.h"
 
 using namespace std;
 using namespace mr;
 
 static void threading_status(void)
   {
-  cout << "Threading: " << mr::max_threads() << " threads active." << endl;
+  cout << "Threading: " << mr::get_default_nthreads() << " threads active." << endl;
   }
 
 static void MPI_status(void)
@@ -536,6 +537,13 @@ static void sharp_test (int argc, const char **argv)
 
 int main(int argc, const char **argv)
   {
+  const char *tmp = getenv("OMP_NUM_THREADS");
+  if (tmp!=nullptr)
+    {
+    string tmp2(tmp);
+    if (trim(tmp2)!="")
+      mr::set_default_nthreads(stringToData<size_t>(tmp));
+    }
   mytask=0; ntasks=1;
 
   MR_assert(argc>=2,"need at least one command line argument");
