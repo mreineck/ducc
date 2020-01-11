@@ -97,9 +97,11 @@ class GL_Integrator
       if (n&1) x[0] = 0.; // set to exact zero
       }
 
-    template<typename Func> double integrate(Func f)
+    template<typename Func> auto integrate(Func f) -> decltype(f(0.))
       {
-      double res=0, istart=0;
+      using T = decltype(f(0.));
+      T res=0;
+      size_t istart=0;
       if (n_&1)
         {
         res = f(x[0])*w[0];

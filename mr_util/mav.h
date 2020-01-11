@@ -79,12 +79,6 @@ template<typename T, size_t ndim> class mav
       { return d; }
     bool last_contiguous() const
       { return (str[ndim-1]==1) || (str[ndim-1]==0); }
-    void check_storage(const char *name) const
-      {
-      if (!last_contiguous())
-        cout << "Array '" << name << "': last dimension is not contiguous.\n"
-                "This may slow down computation significantly!\n";
-      }
     bool contiguous() const
       {
       ptrdiff_t stride=1;

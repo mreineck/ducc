@@ -224,7 +224,8 @@ class Distribution
       nthreads_ = 1;
       thread_map(move(f));
       }
-    void execStatic(size_t nwork, size_t nthreads, size_t chunksize, std::function<void(Scheduler &)> f)
+    void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
+      std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
@@ -237,8 +238,8 @@ class Distribution
         nextstart[i] = i*chunksize_;
       thread_map(move(f));
       }
-    void execDynamic(size_t nwork,
-      size_t nthreads, size_t chunksize_min, double fact_max, std::function<void(Scheduler &)> f)
+    void execDynamic(size_t nwork, size_t nthreads, size_t chunksize_min,
+      double fact_max, std::function<void(Scheduler &)> f)
       {
       mode = DYNAMIC;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
@@ -392,7 +393,8 @@ void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
   MyScheduler sched(nwork);
   func(sched);
   }
-void execStatic(size_t nwork, size_t, size_t, std::function<void(Scheduler &)> func)
+void execStatic(size_t nwork, size_t, size_t,
+  std::function<void(Scheduler &)> func)
   {
   MyScheduler sched(nwork);
   func(sched);

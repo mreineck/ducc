@@ -16,17 +16,15 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_UNITY_ROOTS_H
 #define MRUTIL_UNITY_ROOTS_H
 
-#include <complex>
 #include <cmath>
 #include <type_traits>
 #include <vector>
-#include <mr_util/cmplx.h>
 
 namespace mr {
 
@@ -34,28 +32,29 @@ namespace detail_unity_roots {
 
 using namespace std;
 
-template<typename T, typename Tc=complex<T>> class UnityRoots
+template<typename T, typename Tc> class UnityRoots
   {
   private:
     using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
+    struct cmplx_ { Thigh r, i; };
     size_t N, mask, shift;
-    vector<Cmplx<Thigh>> v1, v2;
+    vector<cmplx_> v1, v2;
 
-    static Cmplx<Thigh> calc(size_t x, size_t n, Thigh ang)
+    static cmplx_ calc(size_t x, size_t n, Thigh ang)
       {
       x<<=3;
       if (x<4*n) // first half
         {
         if (x<2*n) // first quadrant
           {
-          if (x<n) return Cmplx<Thigh>(cos(Thigh(x)*ang), sin(Thigh(x)*ang));
-          return Cmplx<Thigh>(sin(Thigh(2*n-x)*ang), cos(Thigh(2*n-x)*ang));
+          if (x<n) return {cos(Thigh(x)*ang), sin(Thigh(x)*ang)};
+          return {sin(Thigh(2*n-x)*ang), cos(Thigh(2*n-x)*ang)};
           }
         else // second quadrant
           {
           x-=2*n;
-          if (x<n) return Cmplx<Thigh>(-sin(Thigh(x)*ang), cos(Thigh(x)*ang));
-          return Cmplx<Thigh>(-cos(Thigh(2*n-x)*ang), sin(Thigh(2*n-x)*ang));
+          if (x<n) return {-sin(Thigh(x)*ang), cos(Thigh(x)*ang)};
+          return {-cos(Thigh(2*n-x)*ang), sin(Thigh(2*n-x)*ang)};
           }
         }
       else
@@ -63,14 +62,14 @@ template<typename T, typename Tc=complex<T>> class UnityRoots
         x=8*n-x;
         if (x<2*n) // third quadrant
           {
-          if (x<n) return Cmplx<Thigh>(cos(Thigh(x)*ang), -sin(Thigh(x)*ang));
-          return Cmplx<Thigh>(sin(Thigh(2*n-x)*ang), -cos(Thigh(2*n-x)*ang));
+          if (x<n) return {cos(Thigh(x)*ang), -sin(Thigh(x)*ang)};
+          return {sin(Thigh(2*n-x)*ang), -cos(Thigh(2*n-x)*ang)};
           }
         else // fourth quadrant
           {
           x-=2*n;
-          if (x<n) return Cmplx<Thigh>(-sin(Thigh(x)*ang), -cos(Thigh(x)*ang));
-          return Cmplx<Thigh>(-cos(Thigh(2*n-x)*ang), -sin(Thigh(2*n-x)*ang));
+          if (x<n) return {-sin(Thigh(x)*ang), -cos(Thigh(x)*ang)};
+          return {-cos(Thigh(2*n-x)*ang), -sin(Thigh(2*n-x)*ang)};
           }
         }
       }
@@ -86,11 +85,11 @@ template<typename T, typename Tc=complex<T>> class UnityRoots
       while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
       mask = (size_t(1)<<shift)-1;
       v1.resize(mask+1);
-      v1[0].Set(Thigh(1), Thigh(0));
+      v1[0]={Thigh(1), Thigh(0)};
       for (size_t i=1; i<v1.size(); ++i)
         v1[i]=calc(i,n,ang);
       v2.resize((nval+mask)/(mask+1));
-      v2[0].Set(Thigh(1), Thigh(0));
+      v2[0]={Thigh(1), Thigh(0)};
       for (size_t i=1; i<v2.size(); ++i)
         v2[i]=calc(i*(mask+1),n,ang);
       }
