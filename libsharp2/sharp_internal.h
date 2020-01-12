@@ -37,12 +37,12 @@ using std::complex;
 struct sharp_job
   {
   sharp_jobtype type;
-  int spin;
-  int nmaps, nalm;
-  int flags;
+  size_t spin;
+  size_t nmaps, nalm;
+  size_t flags;
   void **map;
   void **alm;
-  int s_m, s_th; // strides in m and theta direction
+  ptrdiff_t s_m, s_th; // strides in m and theta direction
   complex<double> *phase;
   vector<double> norm_l;
   complex<double> *almtmp;
@@ -51,18 +51,18 @@ struct sharp_job
   double time;
   unsigned long long opcnt;
   void build_common (sharp_jobtype type,
-    int spin, void *alm, void *map, const sharp_geom_info &geom_info,
-    const sharp_alm_info &alm_info, int flags);
-  void alloc_phase (int nm, int ntheta, std::vector<complex<double>> &data);
-  void alloc_almtmp (int lmax, std::vector<complex<double>> &data);
+    size_t spin, void *alm, void *map, const sharp_geom_info &geom_info,
+    const sharp_alm_info &alm_info, size_t flags);
+  void alloc_phase (size_t nm, size_t ntheta, std::vector<complex<double>> &data);
+  void alloc_almtmp (size_t lmax, std::vector<complex<double>> &data);
   void init_output();
-  void alm2almtmp (int lmax, int mi);
-  void almtmp2alm (int lmax, int mi);
+  void alm2almtmp (size_t lmax, size_t mi);
+  void almtmp2alm (size_t lmax, size_t mi);
   void ring2ringtmp (const sharp_geom_info::Tring &ri, std::vector<double> &ringtmp,
-    int rstride);
-  void ringtmp2ring (const sharp_geom_info::Tring &ri, const std::vector<double> &ringtmp, int rstride);
-  void map2phase (int mmax, int llim, int ulim);
-  void phase2map (int mmax, int llim, int ulim);
+    ptrdiff_t rstride);
+  void ringtmp2ring (const sharp_geom_info::Tring &ri, const std::vector<double> &ringtmp, ptrdiff_t rstride);
+  void map2phase (size_t mmax, size_t llim, size_t ulim);
+  void phase2map (size_t mmax, size_t llim, size_t ulim);
   void execute();
   };
 

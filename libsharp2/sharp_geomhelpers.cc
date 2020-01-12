@@ -42,7 +42,8 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int 
   ptrdiff_t ncap=2*(ptrdiff_t)nside*(nside-1);
 
   vector<double> theta(nrings), weight_(nrings), phi0(nrings);
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<ptrdiff_t> ofs(nrings);
   ptrdiff_t curofs=0, checkofs; /* checkofs used for assertion introduced when adding rings arg */
   for (int m=0; m<nrings; ++m)
@@ -98,7 +99,8 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, do
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<double> phi0_(nrings);
   vector<ptrdiff_t> ofs(nrings);
 
@@ -125,7 +127,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int ppring,
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings), phi0_(nrings);
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<ptrdiff_t> ofs(nrings);
 
   weight[0]=2.;
@@ -159,7 +162,8 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring, dou
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings);
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<ptrdiff_t> ofs(nrings);
 
   int n=nrings-1;
@@ -194,7 +198,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int ppring,
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings+1, 0.), phi0_(nrings);
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<ptrdiff_t> ofs(nrings);
 
   int n=nrings+1;
@@ -227,7 +232,8 @@ unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (int nrings, int ppring, dou
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), phi0_(nrings);
-  vector<int> nph(nrings), stride_(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> stride_(nrings);
   vector<ptrdiff_t> ofs(nrings);
 
   for (int m=0; m<nrings; ++m)

@@ -41,7 +41,6 @@ unique_ptr<sharp_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, i
 unique_ptr<sharp_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride)
   {
   vector<ptrdiff_t> mvstart(mmax+1);
-  ptrdiff_t tval = 2*lmax+1;
   for (ptrdiff_t m=0; m<=mmax; ++m)
     mvstart[m] = stride*m*(lmax+1);
   return make_unique<sharp_alm_info>(lmax, mmax, stride, mvstart.data());

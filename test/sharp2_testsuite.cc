@@ -85,17 +85,14 @@ static double drand (double min, double max, unsigned *state)
   return min + (max-min)*(*state)/(0x7fffffff+1.0);
   }
 
-static void random_alm (dcmplx *alm, sharp_alm_info &helper, int spin, int cnt)
+static void random_alm (dcmplx *alm, sharp_alm_info &helper, size_t spin, size_t cnt)
   {
-#pragma omp parallel
-{
-  int mi;
-#pragma omp for schedule (dynamic,100)
-  for (mi=0;mi<helper.nm; ++mi)
+// FIXME: re-introduce multi-threading?
+  for (size_t mi=0;mi<helper.nm; ++mi)
     {
-    int m=helper.mval[mi];
-    unsigned state=1234567u*(unsigned)cnt+8912u*(unsigned)m; // random seed
-    for (int l=m;l<=helper.lmax; ++l)
+    auto m=helper.mval[mi];
+    unsigned state=1234567u*unsigned(cnt)+8912u*unsigned(m); // random seed
+    for (auto l=m;l<=helper.lmax; ++l)
       {
       if ((l<spin)&&(m<spin))
         alm[helper.index(l,mi)] = 0.;
@@ -107,7 +104,6 @@ static void random_alm (dcmplx *alm, sharp_alm_info &helper, int spin, int cnt)
         }
       }
     }
-} // end of parallel region
   }
 
 static unsigned long long totalops (unsigned long long val)
@@ -133,7 +129,7 @@ static double totalMem()
 static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
   {
   ptrdiff_t res=0;
-  for (int i=0; i<ainfo.nm; ++i)
+  for (size_t i=0; i<ainfo.nm; ++i)
     res += ainfo.lmax-ainfo.mval[i]+1;
   return res;
   }
@@ -141,7 +137,7 @@ static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
 static ptrdiff_t get_npix(const sharp_geom_info &ginfo)
   {
   ptrdiff_t res=0;
-  for (int i=0; i<ginfo.pair.size(); ++i)
+  for (size_t i=0; i<ginfo.pair.size(); ++i)
     {
     res += ginfo.pair[i].r1.nph;
     if (ginfo.pair[i].r2.nph>0) res += ginfo.pair[i].r2.nph;
@@ -265,7 +261,7 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     ginfo=sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon);
     ptrdiff_t npix_o=get_npix(*ginfo);
     size_t ofs=0;
-    for (int i=0; i<ginfo->pair.size(); ++i)
+    for (size_t i=0; i<ginfo->pair.size(); ++i)
       {
       auto &pair(ginfo->pair[i]);
       int pring=1+2*sharp_get_mlim(lmax,0,pair.r1.sth,pair.r1.cth);
@@ -296,15 +292,15 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
 
 static void check_sign_scale(void)
   {
-  int lmax=50;
-  int mmax=lmax;
-  int nrings=lmax+1;
-  int ppring=2*lmax+2;
-  ptrdiff_t npix=(ptrdiff_t)nrings*ppring;
+  size_t lmax=50;
+  auto mmax=lmax;
+  auto nrings=lmax+1;
+  auto ppring=2*lmax+2;
+  auto npix=ptrdiff_t(nrings*ppring);
   auto tinfo = sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring);
 
   /* flip theta to emulate the "old" Gaussian grid geometry */
-  for (int i=0; i<tinfo->pair.size(); ++i)
+  for (size_t i=0; i<tinfo->pair.size(); ++i)
     {
     const double pi=3.141592653589793238462643383279502884197;
     tinfo->pair[i].r1.cth=-tinfo->pair[i].r1.cth;
@@ -388,12 +384,12 @@ static void do_sht (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   size_t npix = get_npix(ginfo);
   vector<double> bmap(ncomp*ntrans*npix, 0.);
   vector<double *>map(ncomp*ntrans);
-  for (int i=0; i<ncomp*ntrans; ++i)
+  for (size_t i=0; i<ncomp*ntrans; ++i)
     map[i]=&bmap[i*npix];
 
   vector<dcmplx> balm(ncomp*ntrans*nalms);
   vector<dcmplx *>alm(ncomp*ntrans);
-  for (int i=0; i<ncomp*ntrans; ++i)
+  for (size_t i=0; i<ncomp*ntrans; ++i)
     {
     alm[i] = &balm[i*nalms];
     random_alm(alm[i],ainfo,spin,i+1);

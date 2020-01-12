@@ -71,12 +71,12 @@ MRUTIL_NOINLINE int sharp_get_mlim (int lmax, int spin, double sth, double cth)
   if (ofs<100.) ofs=100.;
   double b = -2*spin*fabs(cth);
   double t1 = lmax*sth+ofs;
-  double c = (double)spin*spin-t1*t1;
+  double c = double(spin)*spin-t1*t1;
   double discr = b*b-4*c;
   if (discr<=0) return lmax;
   double res=(-b+sqrt(discr))/2.;
   if (res>lmax) res=lmax;
-  return (int)(res+0.5);
+  return int(res+0.5);
   }
 
 struct ringhelper
@@ -141,7 +141,7 @@ struct ringhelper
       data[0]=phase[0].real()*wgt;
       fill(data+1,data+nph+2,0.);
 
-      int idx1=1, idx2=nph-1;
+      ptrdiff_t idx1=1, idx2=nph-1;
       for (int m=1; m<=mmax; ++m)
         {
         dcmplx tmp = phase[m*pstride]*wgt;
@@ -203,25 +203,25 @@ struct ringhelper
     }
   };
 
-sharp_alm_info::sharp_alm_info (int lmax, int nm, int stride, const int *mval,
-  const ptrdiff_t *mstart)
-  : lmax(lmax), nm(nm), mval(nm), mvstart(nm), stride(stride)
+sharp_alm_info::sharp_alm_info (size_t lmax_, size_t nm_, ptrdiff_t stride_,
+  const size_t *mval_, const ptrdiff_t *mstart)
+  : lmax(lmax_), nm(nm_), mval(nm_), mvstart(nm), stride(stride_)
   {
-  for (int mi=0; mi<nm; ++mi)
+  for (size_t mi=0; mi<nm; ++mi)
     {
-    this->mval[mi] = mval[mi];
-    this->mvstart[mi] = mstart[mi];
+    mval[mi] = mval_[mi];
+    mvstart[mi] = mstart[mi];
     }
   }
 
-sharp_alm_info::sharp_alm_info (int lmax, int mmax, int stride,
+sharp_alm_info::sharp_alm_info (size_t lmax_, size_t mmax, ptrdiff_t stride_,
   const ptrdiff_t *mstart)
-  : lmax(lmax), nm(mmax+1), mval(mmax+1), mvstart(mmax+1), stride(stride)
+  : lmax(lmax_), nm(mmax+1), mval(mmax+1), mvstart(mmax+1), stride(stride_)
   {
-  for (int i=0; i<=mmax; ++i)
+  for (size_t i=0; i<=mmax; ++i)
     {
     mval[i]=i;
-    this->mvstart[i] = mstart[i];
+    mvstart[i] = mstart[i];
     }
   }
 
@@ -230,17 +230,16 @@ ptrdiff_t sharp_alm_info::index (int l, int mi)
   return mvstart[mi]+stride*l;
   }
 
-sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *ofs,
-  const int *stride, const double *phi0, const double *theta, const double *wgt)
+sharp_geom_info::sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
+  const ptrdiff_t *stride, const double *phi0, const double *theta, const double *wgt)
   {
   vector<Tring> infos(nrings);
 
-  int pos=0;
+  size_t pos=0;
 
-  int npairs=0;
   nphmax=0;
 
-  for (int m=0; m<nrings; ++m)
+  for (size_t m=0; m<nrings; ++m)
     {
     infos[m].theta = theta[m];
     infos[m].cth = cos(theta[m]);
@@ -270,7 +269,7 @@ sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *of
       ++pos;
       }
     else
-      pair.back().r2.nph=-1;
+      pair.back().r2.nph=0;
     ++pos;
     }
 
@@ -287,68 +286,67 @@ sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *of
 /* This currently requires all m values from 0 to nm-1 to be present.
    It might be worthwhile to relax this criterion such that holes in the m
    distribution are permissible. */
-static int sharp_get_mmax (const vector<int> &mval)
+static size_t sharp_get_mmax (const vector<size_t> &mval)
   {
   //FIXME: if gaps are allowed, we have to search the maximum m in the array
   auto nm=mval.size();
-  vector<int> mcheck(nm,0);
-  for (int i=0; i<nm; ++i)
+  vector<bool> mcheck(nm,false);
+  for (auto m_cur : mval)
     {
-    int m_cur=mval[i];
-    MR_assert((m_cur>=0) && (m_cur<nm), "not all m values are present");
-    MR_assert(mcheck[m_cur]==0, "duplicate m value");
-    mcheck[m_cur]=1;
+    MR_assert(m_cur<nm, "not all m values are present");
+    MR_assert(mcheck[m_cur]==false, "duplicate m value");
+    mcheck[m_cur]=true;
     }
   return nm-1;
   }
 
 MRUTIL_NOINLINE void sharp_geom_info::clear_map (double *map) const
   {
-  for (int j=0;j<pair.size();++j)
+  for (const auto &p: pair)
     {
-    if (pair[j].r1.stride==1)
-      memset(&map[pair[j].r1.ofs],0,pair[j].r1.nph*sizeof(double));
+    if (p.r1.stride==1)
+      memset(&map[p.r1.ofs],0,p.r1.nph*sizeof(double));
     else
-      for (ptrdiff_t i=0;i<pair[j].r1.nph;++i)
-        map[pair[j].r1.ofs+i*pair[j].r1.stride]=0;
-    if ((pair[j].r2.nph>0)&&(pair[j].r2.stride==1))
-      memset(&map[pair[j].r2.ofs],0,pair[j].r2.nph*sizeof(double));
+      for (size_t i=0;i<p.r1.nph;++i)
+        map[p.r1.ofs+i*p.r1.stride]=0;
+    if ((p.r2.nph>0)&&(p.r2.stride==1))
+      memset(&map[p.r2.ofs],0,p.r2.nph*sizeof(double));
     else
-      for (ptrdiff_t i=0;i<pair[j].r2.nph;++i)
-        map[pair[j].r2.ofs+i*pair[j].r2.stride]=0;
+      for (size_t i=0;i<p.r2.nph;++i)
+        map[p.r2.ofs+i*p.r2.stride]=0;
     }
   }
 MRUTIL_NOINLINE void sharp_geom_info::clear_map (float *map) const
   {
-  for (int j=0;j<pair.size();++j)
+  for (const auto &p: pair)
     {
-    if (pair[j].r1.stride==1)
-      memset(&map[pair[j].r1.ofs],0,pair[j].r1.nph*sizeof(float));
+    if (p.r1.stride==1)
+      memset(&map[p.r1.ofs],0,p.r1.nph*sizeof(float));
     else
-      for (ptrdiff_t i=0;i<pair[j].r1.nph;++i)
-        map[pair[j].r1.ofs+i*pair[j].r1.stride]=0;
-    if ((pair[j].r2.nph>0)&&(pair[j].r2.stride==1))
-      memset(&map[pair[j].r2.ofs],0,pair[j].r2.nph*sizeof(float));
+      for (size_t i=0;i<p.r1.nph;++i)
+        map[p.r1.ofs+i*p.r1.stride]=0;
+    if ((p.r2.nph>0)&&(p.r2.stride==1))
+      memset(&map[p.r2.ofs],0,p.r2.nph*sizeof(float));
     else
-      for (ptrdiff_t i=0;i<pair[j].r2.nph;++i)
-        map[pair[j].r2.ofs+i*pair[j].r2.stride]=0;
+      for (size_t i=0;i<p.r2.nph;++i)
+        map[p.r2.ofs+i*p.r2.stride]=0;
     }
   }
 
 MRUTIL_NOINLINE static void clear_alm (const sharp_alm_info *ainfo, void *alm,
   int flags)
   {
-  for (int mi=0;mi<ainfo->nm;++mi)
+  for (size_t mi=0;mi<ainfo->nm;++mi)
     {
-    int m=ainfo->mval[mi];
+    auto m=ainfo->mval[mi];
     ptrdiff_t mvstart = ainfo->mvstart[mi];
     ptrdiff_t stride = ainfo->stride;
     if (flags&SHARP_DP)
-      for (int l=m;l<=ainfo->lmax;++l)
-        ((dcmplx *)alm)[mvstart+l*stride]=0.;
+      for (size_t l=m;l<=ainfo->lmax;++l)
+        reinterpret_cast<dcmplx *>(alm)[mvstart+l*stride]=0.;
     else
-      for (int l=m;l<=ainfo->lmax;++l)
-        ((fcmplx *)alm)[mvstart+l*stride]=0.;
+      for (size_t l=m;l<=ainfo->lmax;++l)
+        reinterpret_cast<fcmplx *>(alm)[mvstart+l*stride]=0.;
     }
   }
 
@@ -356,15 +354,15 @@ MRUTIL_NOINLINE void sharp_job::init_output()
   {
   if (flags&SHARP_ADD) return;
   if (type == SHARP_MAP2ALM)
-    for (int i=0; i<nalm; ++i)
+    for (size_t i=0; i<nalm; ++i)
       clear_alm (ainfo,alm[i],flags);
   else
-    for (int i=0; i<nmaps; ++i)
-      (flags&SHARP_DP) ? ginfo->clear_map((double *)map[i])
-                       : ginfo->clear_map((float  *)map[i]);
+    for (size_t i=0; i<nmaps; ++i)
+      (flags&SHARP_DP) ? ginfo->clear_map(reinterpret_cast<double *>(map[i]))
+                       : ginfo->clear_map(reinterpret_cast<float  *>(map[i]));
   }
 
-MRUTIL_NOINLINE void sharp_job::alloc_phase (int nm, int ntheta, vector<dcmplx> &data)
+MRUTIL_NOINLINE void sharp_job::alloc_phase (size_t nm, size_t ntheta, vector<dcmplx> &data)
   {
   if (type==SHARP_MAP2ALM)
     {
@@ -382,42 +380,42 @@ MRUTIL_NOINLINE void sharp_job::alloc_phase (int nm, int ntheta, vector<dcmplx> 
   phase=data.data();
   }
 
-void sharp_job::alloc_almtmp (int lmax, vector<dcmplx> &data)
+void sharp_job::alloc_almtmp (size_t lmax, vector<dcmplx> &data)
   {
   data.resize(nalm*(lmax+2));
   almtmp=data.data();
   }
 
-MRUTIL_NOINLINE void sharp_job::alm2almtmp (int lmax, int mi)
+MRUTIL_NOINLINE void sharp_job::alm2almtmp (size_t lmax, size_t mi)
   {
   if (type!=SHARP_MAP2ALM)
     {
-    ptrdiff_t ofs=ainfo->mvstart[mi];
-    int stride=ainfo->stride;
-    int m=ainfo->mval[mi];
-    int lmin=(m<spin) ? spin : m;
+    auto ofs=ainfo->mvstart[mi];
+    auto stride=ainfo->stride;
+    auto m=ainfo->mval[mi];
+    auto lmin=(m<spin) ? spin : m;
     if (spin==0)
       {
       if (flags&SHARP_DP)
         {
-        for (int l=m; l<lmin; ++l)
-          for (int i=0; i<nalm; ++i)
+        for (auto l=m; l<lmin; ++l)
+          for (size_t i=0; i<nalm; ++i)
             almtmp[nalm*l+i] = 0;
-        for (int l=lmin; l<=lmax; ++l)
-          for (int i=0; i<nalm; ++i)
-            almtmp[nalm*l+i] = ((const dcmplx **)alm)[i][ofs+l*stride];
-        for (int i=0; i<nalm; ++i)
+        for (auto l=lmin; l<=lmax; ++l)
+          for (size_t i=0; i<nalm; ++i)
+            almtmp[nalm*l+i] = reinterpret_cast<dcmplx **>(alm)[i][ofs+l*stride];
+        for (size_t i=0; i<nalm; ++i)
           almtmp[nalm*(lmax+1)+i] = 0;
         }
       else
         {
-        for (int l=m; l<lmin; ++l)
-          for (int i=0; i<nalm; ++i)
+        for (auto l=m; l<lmin; ++l)
+          for (size_t i=0; i<nalm; ++i)
             almtmp[nalm*l+i] = 0;
-        for (int l=lmin; l<=lmax; ++l)
-          for (int i=0; i<nalm; ++i)
-            almtmp[nalm*l+i] = ((const fcmplx **)alm)[i][ofs+l*stride];
-        for (int i=0; i<nalm; ++i)
+        for (auto l=lmin; l<=lmax; ++l)
+          for (size_t i=0; i<nalm; ++i)
+            almtmp[nalm*l+i] = reinterpret_cast<fcmplx **>(alm)[i][ofs+l*stride];
+        for (size_t i=0; i<nalm; ++i)
           almtmp[nalm*(lmax+1)+i] = 0;
         }
       }
@@ -425,71 +423,71 @@ MRUTIL_NOINLINE void sharp_job::alm2almtmp (int lmax, int mi)
       {
       if (flags&SHARP_DP)
         {
-        for (int l=m; l<lmin; ++l)
-          for (int i=0; i<nalm; ++i)
+        for (auto l=m; l<lmin; ++l)
+          for (size_t i=0; i<nalm; ++i)
             almtmp[nalm*l+i] = 0;
-        for (int l=lmin; l<=lmax; ++l)
-          for (int i=0; i<nalm; ++i)
-            almtmp[nalm*l+i] = ((const dcmplx **)alm)[i][ofs+l*stride]*norm_l[l];
-        for (int i=0; i<nalm; ++i)
+        for (auto l=lmin; l<=lmax; ++l)
+          for (size_t i=0; i<nalm; ++i)
+            almtmp[nalm*l+i] = reinterpret_cast<dcmplx **>(alm)[i][ofs+l*stride]*norm_l[l];
+        for (size_t i=0; i<nalm; ++i)
           almtmp[nalm*(lmax+1)+i] = 0;
         }
       else
         {
-        for (int l=m; l<lmin; ++l)
-          for (int i=0; i<nalm; ++i)
+        for (auto l=m; l<lmin; ++l)
+          for (size_t i=0; i<nalm; ++i)
             almtmp[nalm*l+i] = 0;
-        for (int l=lmin; l<=lmax; ++l)
-          for (int i=0; i<nalm; ++i)
-            almtmp[nalm*l+i] = dcmplx(((const fcmplx **)alm)[i][ofs+l*stride])*norm_l[l];
-        for (int i=0; i<nalm; ++i)
+        for (auto l=lmin; l<=lmax; ++l)
+          for (size_t i=0; i<nalm; ++i)
+            almtmp[nalm*l+i] = dcmplx(reinterpret_cast<fcmplx **>(alm)[i][ofs+l*stride])*norm_l[l];
+        for (size_t i=0; i<nalm; ++i)
           almtmp[nalm*(lmax+1)+i] = 0;
         }
       }
     }
   else
-    memset (almtmp+nalm*ainfo->mval[mi], 0,
-      nalm*(lmax+2-ainfo->mval[mi])*sizeof(dcmplx));
+    for (size_t i=nalm*ainfo->mval[mi]; i<nalm*(lmax+2); ++i)
+      almtmp[i]=0;
   }
 
-MRUTIL_NOINLINE void sharp_job::almtmp2alm (int lmax, int mi)
+MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t lmax, size_t mi)
   {
   if (type != SHARP_MAP2ALM) return;
-  ptrdiff_t ofs=ainfo->mvstart[mi];
-  int stride=ainfo->stride;
-  int m=ainfo->mval[mi];
-  int lmin=(m<spin) ? spin : m;
+  auto ofs=ainfo->mvstart[mi];
+  auto stride=ainfo->stride;
+  auto m=ainfo->mval[mi];
+  auto lmin=(m<spin) ? spin : m;
   if (spin==0)
     {
     if (flags&SHARP_DP)
-      for (int l=lmin; l<=lmax; ++l)
-        for (int i=0; i<nalm; ++i)
+      for (auto l=lmin; l<=lmax; ++l)
+        for (size_t i=0; i<nalm; ++i)
           ((dcmplx **)alm)[i][ofs+l*stride] += almtmp[nalm*l+i];
     else
-      for (int l=lmin; l<=lmax; ++l)
-        for (int i=0; i<nalm; ++i)
+      for (auto l=lmin; l<=lmax; ++l)
+        for (size_t i=0; i<nalm; ++i)
           ((fcmplx **)alm)[i][ofs+l*stride] += fcmplx(almtmp[nalm*l+i]);
     }
   else
     {
     if (flags&SHARP_DP)
-      for (int l=lmin; l<=lmax; ++l)
-        for (int i=0; i<nalm; ++i)
+      for (auto l=lmin; l<=lmax; ++l)
+        for (size_t i=0; i<nalm; ++i)
           ((dcmplx **)alm)[i][ofs+l*stride] += almtmp[nalm*l+i]*norm_l[l];
     else
-      for (int l=lmin; l<=lmax; ++l)
-        for (int i=0; i<nalm; ++i)
+      for (auto l=lmin; l<=lmax; ++l)
+        for (size_t i=0; i<nalm; ++i)
           ((fcmplx **)alm)[i][ofs+l*stride] += fcmplx(almtmp[nalm*l+i]*norm_l[l]);
     }
   }
 
 MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info::Tring &ri,
-  const vector<double> &ringtmp, int rstride)
+  const vector<double> &ringtmp, ptrdiff_t rstride)
   {
   if (flags & SHARP_DP)
     {
     double **dmap = (double **)map;
-    for (int i=0; i<nmaps; ++i)
+    for (size_t i=0; i<nmaps; ++i)
       {
       double *MRUTIL_RESTRICT p1=&dmap[i][ri.ofs];
       const double *MRUTIL_RESTRICT p2=&ringtmp[i*rstride+1];
@@ -502,41 +500,41 @@ MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info::Tring &ri,
           memcpy(p1,p2,ri.nph*sizeof(double));
         }
       else
-        for (int m=0; m<ri.nph; ++m)
+        for (size_t m=0; m<ri.nph; ++m)
           p1[m*ri.stride] += p2[m];
       }
     }
   else
     {
     float  **fmap = (float  **)map;
-    for (int i=0; i<nmaps; ++i)
-      for (int m=0; m<ri.nph; ++m)
+    for (size_t i=0; i<nmaps; ++i)
+      for (size_t m=0; m<ri.nph; ++m)
         fmap[i][ri.ofs+m*ri.stride] += (float)ringtmp[i*rstride+m+1];
     }
   }
 
 MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info::Tring &ri,
-  vector<double> &ringtmp, int rstride)
+  vector<double> &ringtmp, ptrdiff_t rstride)
   {
   if (flags & SHARP_DP)
-    for (int i=0; i<nmaps; ++i)
+    for (size_t i=0; i<nmaps; ++i)
       {
       double *MRUTIL_RESTRICT p1=&ringtmp[i*rstride+1],
              *MRUTIL_RESTRICT p2=&(((double *)(map[i]))[ri.ofs]);
       if (ri.stride==1)
         memcpy(p1,p2,ri.nph*sizeof(double));
       else
-        for (int m=0; m<ri.nph; ++m)
+        for (size_t m=0; m<ri.nph; ++m)
           p1[m] = p2[m*ri.stride];
       }
   else
-    for (int i=0; i<nmaps; ++i)
-      for (int m=0; m<ri.nph; ++m)
+    for (size_t i=0; i<nmaps; ++i)
+      for (size_t m=0; m<ri.nph; ++m)
         ringtmp[i*rstride+m+1] = ((float *)(map[i]))[ri.ofs+m*ri.stride];
   }
 
 //FIXME: set phase to zero if not SHARP_MAP2ALM?
-MRUTIL_NOINLINE void sharp_job::map2phase (int mmax, int llim, int ulim)
+MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
   {
   if (type != SHARP_MAP2ALM) return;
   int pstride = s_m;
@@ -550,13 +548,13 @@ MRUTIL_NOINLINE void sharp_job::map2phase (int mmax, int llim, int ulim)
       {
       int dim2 = s_th*(ith-llim);
       ring2ringtmp(ginfo->pair[ith].r1,ringtmp,rstride);
-      for (int i=0; i<nmaps; ++i)
+      for (size_t i=0; i<nmaps; ++i)
         helper.ring2phase (ginfo->pair[ith].r1,
           &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
       if (ginfo->pair[ith].r2.nph>0)
         {
         ring2ringtmp(ginfo->pair[ith].r2,ringtmp,rstride);
-        for (int i=0; i<nmaps; ++i)
+        for (size_t i=0; i<nmaps; ++i)
           helper.ring2phase (ginfo->pair[ith].r2,
             &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
         }
@@ -564,7 +562,7 @@ MRUTIL_NOINLINE void sharp_job::map2phase (int mmax, int llim, int ulim)
     }); /* end of parallel region */
   }
 
-MRUTIL_NOINLINE void sharp_job::phase2map (int mmax, int llim, int ulim)
+MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
   {
   if (type == SHARP_MAP2ALM) return;
   int pstride = s_m;
@@ -577,13 +575,13 @@ MRUTIL_NOINLINE void sharp_job::phase2map (int mmax, int llim, int ulim)
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = s_th*(ith-llim);
-      for (int i=0; i<nmaps; ++i)
+      for (size_t i=0; i<nmaps; ++i)
         helper.phase2ring (ginfo->pair[ith].r1,
           &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
       ringtmp2ring(ginfo->pair[ith].r1,ringtmp,rstride);
       if (ginfo->pair[ith].r2.nph>0)
         {
-        for (int i=0; i<nmaps; ++i)
+        for (size_t i=0; i<nmaps; ++i)
           helper.phase2ring (ginfo->pair[ith].r2,
             &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
         ringtmp2ring(ginfo->pair[ith].r2,ringtmp,rstride);
@@ -596,8 +594,8 @@ MRUTIL_NOINLINE void sharp_job::execute()
   {
   mr::SimpleTimer timer;
   opcnt=0;
-  int lmax = ainfo->lmax,
-      mmax=sharp_get_mmax(ainfo->mval);
+  size_t lmax = ainfo->lmax,
+         mmax = sharp_get_mmax(ainfo->mval);
 
   norm_l = (type==SHARP_ALM2MAP_DERIV1) ?
      sharp_Ylmgen::get_d1norm (lmax) :
@@ -617,11 +615,11 @@ MRUTIL_NOINLINE void sharp_job::execute()
 /* chunk loop */
   for (int chunk=0; chunk<nchunks; ++chunk)
     {
-    int llim=chunk*chunksize, ulim=min<int>(llim+chunksize,ginfo->pair.size());
+    size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo->pair.size());
     vector<int> ispair(ulim-llim);
     vector<int> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);
-    for (int i=0; i<ulim-llim; ++i)
+    for (size_t i=0; i<ulim-llim; ++i)
       {
       ispair[i] = ginfo->pair[i+llim].r2.nph>0;
       cth[i] = ginfo->pair[i+llim].r1.cth;
@@ -663,8 +661,8 @@ MRUTIL_NOINLINE void sharp_job::execute()
   }
 
 void sharp_job::build_common (sharp_jobtype type,
-  int spin, void *alm, void *map, const sharp_geom_info &geom_info,
-  const sharp_alm_info &alm_info, int flags)
+  size_t spin, void *alm, void *map, const sharp_geom_info &geom_info,
+  const sharp_alm_info &alm_info, size_t flags)
   {
   if (type==SHARP_ALM2MAP_DERIV1) spin=1;
   if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
