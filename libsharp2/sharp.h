@@ -178,8 +178,8 @@ void sharp_set_nchunks_max(int new_nchunks_max);
 
 /*! \} */
 
-int sharp_get_mlim (int lmax, int spin, double sth, double cth);
-int sharp_veclen(void);
+size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth);
+size_t sharp_veclen(void);
 const char *sharp_architecture(void);
 
 #endif

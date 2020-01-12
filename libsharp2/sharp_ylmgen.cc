@@ -42,13 +42,12 @@ static inline void normalize (double &val, int &scale, double xfmax)
     while (abs(val)<xfmax*sharp_fsmall) { val*=sharp_fbig; --scale; }
   }
 
-sharp_Ylmgen::sharp_Ylmgen (int l_max, int m_max, int spin)
+sharp_Ylmgen::sharp_Ylmgen (size_t l_max, size_t m_max, size_t spin)
   {
   constexpr double inv_sqrt4pi = 0.2820947917738781434740397257803862929220;
 
   lmax = l_max;
   mmax = m_max;
-  MR_assert(spin>=0,"incorrect spin: must be nonnegative");
   MR_assert(l_max>=spin,"incorrect l_max: must be >= spin");
   MR_assert(l_max>=m_max,"incorrect l_max: must be >= m_max");
   s = spin;
@@ -56,30 +55,30 @@ sharp_Ylmgen::sharp_Ylmgen (int l_max, int m_max, int spin)
     "bad value for min/maxscale");
   cf.resize(sharp_maxscale-sharp_minscale+1);
   cf[-sharp_minscale]=1.;
-  for (int m=-sharp_minscale-1; m>=0; --m)
-    cf[m]=cf[m+1]*sharp_fsmall;
-  for (int m=-sharp_minscale+1; m<(sharp_maxscale-sharp_minscale+1); ++m)
-    cf[m]=cf[m-1]*sharp_fbig;
+  for (int sc=-sharp_minscale-1; sc>=0; --sc)
+    cf[sc]=cf[sc+1]*sharp_fsmall;
+  for (int sc=-sharp_minscale+1; sc<(sharp_maxscale-sharp_minscale+1); ++sc)
+    cf[sc]=cf[sc-1]*sharp_fbig;
   powlimit.resize(m_max+spin+1);
   powlimit[0]=0.;
   constexpr double ln2 = 0.6931471805599453094172321214581766;
   constexpr double expo=-400*ln2;
-  for (int m=1; m<=m_max+spin; ++m)
-    powlimit[m]=exp(expo/m);
+  for (size_t i=1; i<=m_max+spin; ++i)
+    powlimit[i]=exp(expo/i);
 
-  m = -1;
+  m = ~size_t(0);
   if (spin==0)
     {
     mfac.resize(mmax+1);
     mfac[0] = inv_sqrt4pi;
-    for (int m=1; m<=mmax; ++m)
-      mfac[m] = mfac[m-1]*sqrt((2*m+1.)/(2*m));
+    for (size_t i=1; i<=mmax; ++i)
+      mfac[i] = mfac[i-1]*sqrt((2*i+1.)/(2*i));
     root.resize(2*lmax+8);
     iroot.resize(2*lmax+8);
-    for (int m=0; m<2*lmax+8; ++m)
+    for (size_t i=0; i<2*lmax+8; ++i)
       {
-      root[m] = sqrt(m);
-      iroot[m] = (m==0) ? 0. : 1./root[m];
+      root[i] = sqrt(i);
+      iroot[i] = (i==0) ? 0. : 1./root[i];
       }
     eps.resize(lmax+4);
     alpha.resize(lmax/2+2);
@@ -87,35 +86,35 @@ sharp_Ylmgen::sharp_Ylmgen (int l_max, int m_max, int spin)
     }
   else
     {
-    m=mlo=mhi=-1234567890;
+    m=mlo=mhi=~size_t(0);
     coef.resize(lmax+3);
-    for (int m=0; m<lmax+3; ++m)
-      coef[m].a=coef[m].b=0.;
+    for (size_t i=0; i<lmax+3; ++i)
+      coef[i].a=coef[i].b=0.;
     alpha.resize(lmax+3);
     inv.resize(lmax+2);
     inv[0]=0;
-    for (int m=1; m<lmax+2; ++m) inv[m]=1./m;
+    for (size_t i=1; i<lmax+2; ++i) inv[i]=1./i;
     flm1.resize(2*lmax+3);
     flm2.resize(2*lmax+3);
-    for (int m=0; m<2*lmax+3; ++m)
+    for (size_t i=0; i<2*lmax+3; ++i)
       {
-      flm1[m] = sqrt(1./(m+1.));
-      flm2[m] = sqrt(m/(m+1.));
+      flm1[i] = sqrt(1./(i+1.));
+      flm2[i] = sqrt(i/(i+1.));
       }
     prefac.resize(mmax+1);
     fscale.resize(mmax+1);
     vector<double> fac(2*lmax+1);
     vector<int> facscale(2*lmax+1);
     fac[0]=1; facscale[0]=0;
-    for (int m=1; m<2*lmax+1; ++m)
+    for (size_t i=1; i<2*lmax+1; ++i)
       {
-      fac[m]=fac[m-1]*sqrt(m);
-      facscale[m]=facscale[m-1];
-      normalize(fac[m],facscale[m],sharp_fbighalf);
+      fac[i]=fac[i-1]*sqrt(i);
+      facscale[i]=facscale[i-1];
+      normalize(fac[i],facscale[i],sharp_fbighalf);
       }
-    for (int m=0; m<=mmax; ++m)
+    for (size_t i=0; i<=mmax; ++i)
       {
-      int mlo_=s, mhi_=m;
+      int mlo_=s, mhi_=i;
       if (mhi_<mlo_) swap(mhi_,mlo_);
       double tfac=fac[2*mhi_]/fac[mhi_+mlo_];
       int tscale=facscale[2*mhi_]-facscale[mhi_+mlo_];
@@ -123,28 +122,27 @@ sharp_Ylmgen::sharp_Ylmgen (int l_max, int m_max, int spin)
       tfac/=fac[mhi_-mlo_];
       tscale-=facscale[mhi_-mlo_];
       normalize(tfac,tscale,sharp_fbighalf);
-      prefac[m]=tfac;
-      fscale[m]=tscale;
+      prefac[i]=tfac;
+      fscale[i]=tscale;
       }
     }
   }
 
-void sharp_Ylmgen::prepare (int m)
+void sharp_Ylmgen::prepare (size_t m_)
   {
-  if (m==this->m) return;
-  MR_assert(m>=0,"incorrect m");
-  this->m = m;
+  if (m_==m) return;
+  m = m_;
 
   if (s==0)
     {
     eps[m] = 0.;
-    for (int l=m+1; l<lmax+4; ++l)
+    for (size_t l=m+1; l<lmax+4; ++l)
       eps[l] = root[l+m]*root[l-m]*iroot[2*l+1]*iroot[2*l-1];
     alpha[0] = 1./eps[m+1];
     alpha[1] = eps[m+1]/(eps[m+2]*eps[m+3]);
-    for (int il=1, l=m+2; l<lmax+1; ++il, l+=2)
+    for (size_t il=1, l=m+2; l<lmax+1; ++il, l+=2)
       alpha[il+1]= ((il&1) ? -1 : 1) / (eps[l+2]*eps[l+3]*alpha[il]);
-    for (int il=0, l=m; l<lmax+2; ++il, l+=2)
+    for (size_t il=0, l=m; l<lmax+2; ++il, l+=2)
       {
       coef[il].a = ((il&1) ? -1 : 1)*alpha[il]*alpha[il];
       double t1 = eps[l+2], t2 = eps[l+1];
@@ -153,9 +151,9 @@ void sharp_Ylmgen::prepare (int m)
     }
   else
     {
-    int mlo_=m, mhi_=s;
+    size_t mlo_=m, mhi_=s;
     if (mhi_<mlo_) swap(mhi_,mlo_);
-    int ms_similar = ((mhi==mhi_) && (mlo==mlo_));
+    bool ms_similar = ((mhi==mhi_) && (mlo==mlo_));
 
     mlo = mlo_; mhi = mhi_;
 
@@ -163,7 +161,7 @@ void sharp_Ylmgen::prepare (int m)
       {
       alpha[mhi] = 1.;
       coef[mhi].a = coef[mhi].b = 0.;
-      for (int l=mhi; l<=lmax; ++l)
+      for (size_t l=mhi; l<=lmax; ++l)
         {
         double t = flm1[l+m]*flm1[l-m]*flm1[l+s]*flm1[l-s];
         double lt = 2*l+1;
@@ -181,7 +179,7 @@ void sharp_Ylmgen::prepare (int m)
         }
       }
 
-    preMinus_p = preMinus_m = 0;
+    preMinus_p = preMinus_m = false;
     if (mhi==m)
       {
       cosPow = mhi+s; sinPow = mhi-s;
@@ -195,10 +193,9 @@ void sharp_Ylmgen::prepare (int m)
     }
   }
 
-vector<double> sharp_Ylmgen::get_norm (int lmax, int spin)
+vector<double> sharp_Ylmgen::get_norm (size_t lmax, size_t spin)
   {
   const double pi = 3.141592653589793238462643383279502884197;
-  vector<double> res(lmax+1);
   /* sign convention for H=1 (LensPix paper) */
 #if 1
    double spinsign = (spin>0) ? -1.0 : 1.0;
@@ -207,24 +204,21 @@ vector<double> sharp_Ylmgen::get_norm (int lmax, int spin)
 #endif
 
   if (spin==0)
-    {
-    for (int l=0; l<=lmax; ++l)
-      res[l]=1.;
-    return res;
-    }
+    return vector<double>(lmax+1,1.);
 
+  vector<double> res(lmax+1);
   spinsign = (spin&1) ? -spinsign : spinsign;
-  for (int l=0; l<=lmax; ++l)
+  for (size_t l=0; l<=lmax; ++l)
     res[l] = (l<spin) ? 0. : spinsign*0.5*sqrt((2*l+1)/(4*pi));
   return res;
   }
 
-vector<double> sharp_Ylmgen::get_d1norm (int lmax)
+vector<double> sharp_Ylmgen::get_d1norm (size_t lmax)
   {
   const double pi = 3.141592653589793238462643383279502884197;
   vector<double> res(lmax+1);
 
-  for (int l=0; l<=lmax; ++l)
+  for (size_t l=0; l<=lmax; ++l)
     res[l] = (l<1) ? 0. : 0.5*sqrt(l*(l+1.)*(2*l+1.)/(4*pi));
   return res;
   }

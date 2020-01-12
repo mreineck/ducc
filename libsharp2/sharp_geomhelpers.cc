@@ -34,22 +34,21 @@
 
 using namespace std;
 
-unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int stride, int nrings,
-  const int *rings, const double *weight)
+unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
+  const size_t *rings, const double *weight)
   {
   const double pi=3.141592653589793238462643383279502884197;
-  ptrdiff_t npix=(ptrdiff_t)nside*nside*12;
-  ptrdiff_t ncap=2*(ptrdiff_t)nside*(nside-1);
+  ptrdiff_t npix=ptrdiff_t(nside*nside*12);
+  ptrdiff_t ncap=2*ptrdiff_t(nside*(nside-1));
 
   vector<double> theta(nrings), weight_(nrings), phi0(nrings);
   vector<size_t> nph(nrings);
-  vector<ptrdiff_t> stride_(nrings);
-  vector<ptrdiff_t> ofs(nrings);
+  vector<ptrdiff_t> stride_(nrings), ofs(nrings);
   ptrdiff_t curofs=0, checkofs; /* checkofs used for assertion introduced when adding rings arg */
-  for (int m=0; m<nrings; ++m)
+  for (size_t m=0; m<nrings; ++m)
     {
-    int ring = (rings==nullptr)? (m+1) : rings[m];
-    ptrdiff_t northring = (ring>2*nside) ? 4*nside-ring : ring;
+    auto ring = (rings==nullptr)? (m+1) : rings[m];
+    size_t northring = (ring>2*nside) ? 4*nside-ring : ring;
     stride_[m] = stride;
     if (northring < nside)
       {
@@ -88,14 +87,14 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int 
   return make_unique<sharp_geom_info>(nrings, nph.data(), ofs.data(), stride_.data(), phi0.data(), theta.data(), weight_.data());
   }
 
-unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (int nside, int stride,
+unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside, ptrdiff_t stride,
   const double *weight)
   {
-  return sharp_make_subset_healpix_geom_info(nside, stride, 4 * nside - 1, nullptr, weight);
+  return sharp_make_subset_healpix_geom_info(nside, stride, 4*nside-1, nullptr, weight);
   }
 
-unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, double phi0,
-  int stride_lon, int stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t nphi, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
@@ -107,12 +106,12 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, do
   mr::GL_Integrator integ(nrings);
   auto theta = integ.coords();
   auto weight = integ.weights();
-  for (int m=0; m<nrings; ++m)
+  for (size_t m=0; m<nrings; ++m)
     {
     theta[m] = acos(-theta[m]);
     nph[m]=nphi;
     phi0_[m]=phi0;
-    ofs[m]=(ptrdiff_t)m*stride_lat;
+    ofs[m]=ptrdiff_t(m*stride_lat);
     stride_[m]=stride_lon;
     weight[m]*=2*pi/nphi;
     }
@@ -121,18 +120,17 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, do
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings), phi0_(nrings);
   vector<size_t> nph(nrings);
-  vector<ptrdiff_t> stride_(nrings);
-  vector<ptrdiff_t> ofs(nrings);
+  vector<ptrdiff_t> stride_(nrings), ofs(nrings);
 
   weight[0]=2.;
-  for (int k=1; k<=(nrings-1)/2; ++k)
+  for (size_t k=1; k<=(nrings-1)/2; ++k)
     {
     weight[2*k-1]=2./(1.-4.*k*k)*cos((k*pi)/nrings);
     weight[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
@@ -140,14 +138,14 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int ppring,
   if ((nrings&1)==0) weight[nrings-1]=0.;
   mr::r2r_fftpack({size_t(nrings)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
 
-  for (int m=0; m<(nrings+1)/2; ++m)
+  for (size_t m=0; m<(nrings+1)/2; ++m)
     {
     theta[m]=pi*(m+0.5)/nrings;
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=(ptrdiff_t)m*stride_lat;
-    ofs[nrings-1-m]=(ptrdiff_t)((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m*stride_lat);
+    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
     stride_[m]=stride_[nrings-1-m]=stride_lon;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
     }
@@ -156,34 +154,33 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int ppring,
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings);
   vector<size_t> nph(nrings);
-  vector<ptrdiff_t> stride_(nrings);
-  vector<ptrdiff_t> ofs(nrings);
+  vector<ptrdiff_t> stride_(nrings), ofs(nrings);
 
-  int n=nrings-1;
+  size_t n=nrings-1;
   double dw=-1./(n*n-1.+(n&1));
   weight[0]=2.+dw;
-  for (int k=1; k<=(n/2-1); ++k)
+  for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k) + dw;
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
   mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
   weight[n]=weight[0];
 
-  for (int m=0; m<(nrings+1)/2; ++m)
+  for (size_t m=0; m<(nrings+1)/2; ++m)
     {
     theta[m]=pi*m/(nrings-1.);
     if (theta[m]<1e-15) theta[m]=1e-15;
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=(ptrdiff_t)m*stride_lat;
-    ofs[nrings-1-m]=(ptrdiff_t)((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m*stride_lat);
+    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
     stride_[m]=stride_[nrings-1-m]=stride_lon;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
@@ -192,33 +189,32 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring, dou
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), weight(nrings+1, 0.), phi0_(nrings);
   vector<size_t> nph(nrings);
-  vector<ptrdiff_t> stride_(nrings);
-  vector<ptrdiff_t> ofs(nrings);
+  vector<ptrdiff_t> stride_(nrings), ofs(nrings);
 
-  int n=nrings+1;
+  size_t n=nrings+1;
   weight[0]=2.;
-  for (int k=1; k<=(n/2-1); ++k)
+  for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k);
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1.;
   mr::r2r_fftpack({size_t(n)}, {sizeof(double)}, {sizeof(double)}, {0}, false, false, weight.data(), weight.data(), 1.);
-  for (int m=0; m<nrings; ++m)
+  for (size_t m=0; m<nrings; ++m)
     weight[m]=weight[m+1];
 
-  for (int m=0; m<(nrings+1)/2; ++m)
+  for (size_t m=0; m<(nrings+1)/2; ++m)
     {
     theta[m]=pi*(m+1)/(nrings+1.);
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=(ptrdiff_t)m*stride_lat;
-    ofs[nrings-1-m]=(ptrdiff_t)((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m*stride_lat);
+    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
     stride_[m]=stride_[nrings-1-m]=stride_lon;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
@@ -226,23 +222,22 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int ppring,
   return make_unique<sharp_geom_info> (nrings, nph.data(), ofs.data(), stride_.data(), phi0_.data(), theta.data(), weight.data());
   }
 
-unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
   vector<double> theta(nrings), phi0_(nrings);
   vector<size_t> nph(nrings);
-  vector<ptrdiff_t> stride_(nrings);
-  vector<ptrdiff_t> ofs(nrings);
+  vector<ptrdiff_t> stride_(nrings), ofs(nrings);
 
-  for (int m=0; m<nrings; ++m)
+  for (size_t m=0; m<nrings; ++m)
     {
     theta[m]=pi*(2.*m+1.)/(2.*nrings-1.);
     if (theta[m]>pi-1e-15) theta[m]=pi-1e-15;
     nph[m]=ppring;
     phi0_[m]=phi0;
-    ofs[m]=(ptrdiff_t)m*stride_lat;
+    ofs[m]=ptrdiff_t(m*stride_lat);
     stride_[m]=stride_lon;
     }
 

@@ -40,21 +40,21 @@
     \note if \a weight is a null pointer, all weights are assumed to be 1.
     \note if \a rings is a null pointer, take all rings
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (int nside, int stride, int nrings,
-  const int *rings, const double *weight);
+std::unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
+  const size_t *rings, const double *weight);
 
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside. \a weight contains the relative ring
     weights and must have \a 2*nside entries.
     \note if \a weight is a null pointer, all weights are assumed to be 1.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (int nside, int stride,
+std::unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside, ptrdiff_t stride,
   const double *weight);
 
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside.
     \ingroup geominfogroup */
-static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (int nside, int stride)
+static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (size_t nside, ptrdiff_t stride)
   { return sharp_make_weighted_healpix_geom_info (nside, stride, nullptr); }
 
 /*! Creates a geometry information describing a Gaussian map with \a nrings
@@ -64,8 +64,8 @@ static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (int
     difference between the two start pixels in consecutive iso-latitude rings
     is \a stride_lat.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nphi, double phi0,
-  int stride_lon, int stride_lat);
+std::unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t nphi, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 /*! Creates a geometry information describing an ECP map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
@@ -80,13 +80,13 @@ std::unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (int nrings, int nph
       \a pi-0.5*(pi/nrings). There are no pixel centers at the poles.
     \note This grid corresponds to Fejer's first rule.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (int nrings, int nphi, double phi0,
-  int stride_lon, int stride_lat);
+std::unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t nphi, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 /*! Old name for sharp_make_fejer1_geom_info()
     \ingroup geominfogroup */
-static inline std::unique_ptr<sharp_geom_info> sharp_make_ecp_geom_info (int nrings, int nphi, double phi0,
-  int stride_lon, int stride_lat)
+static inline std::unique_ptr<sharp_geom_info> sharp_make_ecp_geom_info (size_t nrings, size_t nphi, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   return sharp_make_fejer1_geom_info (nrings, nphi, phi0, stride_lon, stride_lat);
   }
@@ -103,8 +103,8 @@ static inline std::unique_ptr<sharp_geom_info> sharp_make_ecp_geom_info (int nri
       is \a 0 and that of the last ring is \a pi.
     \note This grid corresponds to Clenshaw-Curtis integration.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat);
+std::unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 /*! Creates a geometry information describing an ECP map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
@@ -118,8 +118,8 @@ std::unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (int nrings, int ppring
       is \a pi/(nrings+1) and that of the last ring is \a pi-pi/(nrings+1).
     \note This grid corresponds to Fejer's second rule.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat);
+std::unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 /*! Creates a geometry information describing a map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
@@ -134,7 +134,7 @@ std::unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (int nrings, int pp
     \note This is the grid introduced by McEwen & Wiaux 2011.
     \note This function does \e not define any quadrature weights.
     \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (int nrings, int ppring, double phi0,
-  int stride_lon, int stride_lat);
+std::unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 #endif

@@ -65,18 +65,18 @@ static void get_chunk_info (int ndata, int nmult, int &nchunks, int &chunksize)
   nchunks = (ndata+chunksize-1)/chunksize;
   }
 
-MRUTIL_NOINLINE int sharp_get_mlim (int lmax, int spin, double sth, double cth)
+MRUTIL_NOINLINE size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth)
   {
   double ofs=lmax*0.01;
   if (ofs<100.) ofs=100.;
-  double b = -2*spin*fabs(cth);
+  double b = -2*double(spin)*abs(cth);
   double t1 = lmax*sth+ofs;
   double c = double(spin)*spin-t1*t1;
   double discr = b*b-4*c;
   if (discr<=0) return lmax;
   double res=(-b+sqrt(discr))/2.;
   if (res>lmax) res=lmax;
-  return int(res+0.5);
+  return size_t(res+0.5);
   }
 
 struct ringhelper
@@ -90,7 +90,7 @@ struct ringhelper
   ringhelper() : length(0) {}
   void update(int nph, int mmax, double phi0)
     {
-    norot = (fabs(phi0)<1e-14);
+    norot = (abs(phi0)<1e-14);
     if (!(norot))
       if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-12)))
       {
@@ -617,7 +617,7 @@ MRUTIL_NOINLINE void sharp_job::execute()
     {
     size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo->pair.size());
     vector<int> ispair(ulim-llim);
-    vector<int> mlim(ulim-llim);
+    vector<size_t> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);
     for (size_t i=0; i<ulim-llim; ++i)
       {
@@ -669,7 +669,7 @@ void sharp_job::build_common (sharp_jobtype type,
   if (type==SHARP_Yt) type=SHARP_MAP2ALM;
   if (type==SHARP_WY) { type=SHARP_ALM2MAP; flags|=SHARP_USE_WEIGHTS; }
 
-  MR_assert((spin>=0)&&(spin<=alm_info.lmax), "bad spin");
+  MR_assert(spin<=alm_info.lmax, "bad spin");
   this->type = type;
   this->spin = spin;
   nmaps = (type==SHARP_ALM2MAP_DERIV1) ? 2 : ((spin>0) ? 2 : 1);

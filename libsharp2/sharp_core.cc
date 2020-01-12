@@ -32,10 +32,10 @@
 #undef ARCH
 
 using t_inner_loop = void (*) (sharp_job &job, const int *ispair,
-  const double *cth_, const double *sth_, int llim, int ulim,
-  sharp_Ylmgen &gen, int mi, const int *mlim);
-using t_veclen = int (*) (void);
-using t_max_nvec = int (*) (int spin);
+  const double *cth_, const double *sth_, size_t llim, size_t ulim,
+  sharp_Ylmgen &gen, size_t mi, const size_t *mlim);
+using t_veclen = size_t (*) (void);
+using t_max_nvec = size_t (*) (size_t spin);
 using t_architecture = const char *(*) (void);
 
 static t_inner_loop inner_loop_ = nullptr;
@@ -63,10 +63,10 @@ static int XCONCATX2(have,arch)(void) \
   } \
 \
 void XCONCATX2(inner_loop,arch) (sharp_job &job, const int *ispair, \
-  const double *cth_, const double *sth_, int llim, int ulim, \
-  sharp_Ylmgen &gen, int mi, const int *mlim); \
-int XCONCATX2(sharp_veclen,arch) (void); \
-int XCONCATX2(sharp_max_nvec,arch) (int spin); \
+  const double *cth_, const double *sth_, size_t llim, size_t ulim, \
+  sharp_Ylmgen &gen, size_t mi, const size_t *mlim); \
+size_t XCONCATX2(sharp_veclen,arch) (void); \
+size_t XCONCATX2(sharp_max_nvec,arch) (size_t spin); \
 const char *XCONCATX2(sharp_architecture,arch) (void);
 
 #if (!defined(__APPLE__))
@@ -108,14 +108,14 @@ DECL2(avx)
 #pragma GCC visibility push(hidden)
 
 void inner_loop (sharp_job &job, const int *ispair,const double *cth,
-  const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,
-  const int *mlim)
+  const double *sth, size_t llim, size_t ulim, sharp_Ylmgen &gen, size_t mi,
+  const size_t *mlim)
   {
   if (!inner_loop_) assign_funcs();
   inner_loop_(job, ispair, cth, sth, llim, ulim, gen, mi, mlim);
   }
 
-int sharp_max_nvec(int spin)
+size_t sharp_max_nvec(size_t spin)
   {
   if (!max_nvec_) assign_funcs();
   return max_nvec_(spin);
@@ -123,7 +123,7 @@ int sharp_max_nvec(int spin)
 
 #pragma GCC visibility pop
 
-int sharp_veclen(void)
+size_t sharp_veclen(void)
   {
   if (!veclen_) assign_funcs();
   return veclen_();

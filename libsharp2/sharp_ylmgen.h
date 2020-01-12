@@ -41,26 +41,26 @@ struct sharp_ylmgen_dbl2 { double a, b; };
 class sharp_Ylmgen
   {
   public:
-    sharp_Ylmgen(int l_max, int m_max, int spin);
+    sharp_Ylmgen(size_t l_max, size_t m_max, size_t spin);
 
     /*! Prepares the object for the calculation at \a m. */
-    void prepare(int m);
+    void prepare(size_t m_);
     /*! Returns a vector with \a lmax+1 entries containing
         normalisation factors that must be applied to Y_lm values computed for
         \a spin. */
-    static vector<double> get_norm(int lmax, int spin);
+    static vector<double> get_norm(size_t lmax, size_t spin);
     /*! Returns a vectorwith \a lmax+1 entries containing
         normalisation factors that must be applied to Y_lm values computed for
         first derivatives. */
-    static vector<double> get_d1norm(int lmax);
+    static vector<double> get_d1norm(size_t lmax);
 
     /* for public use; immutable during lifetime */
-    int lmax, mmax, s;
+    size_t lmax, mmax, s;
     vector<double> cf;
     vector<double> powlimit;
 
     /* for public use; will typically change after call to Ylmgen_prepare() */
-    int m;
+    size_t m;
 
     vector<double> alpha;
     vector<sharp_ylmgen_dbl2> coef;
@@ -69,11 +69,12 @@ class sharp_Ylmgen
     vector<double> mfac, eps;
 
     /* used if s!=0 */
-    int sinPow, cosPow, preMinus_p, preMinus_m;
+    size_t sinPow, cosPow;
+    bool preMinus_p, preMinus_m;
     vector<double> prefac;
     vector<int> fscale;
 
-    int mlo, mhi;
+    size_t mlo, mhi;
   private:
     /* used if s==0 */
     vector<double> root, iroot;

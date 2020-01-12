@@ -67,9 +67,9 @@ struct sharp_job
   };
 
 void inner_loop (sharp_job &job, const int *ispair,const double *cth,
-  const double *sth, int llim, int ulim, sharp_Ylmgen &gen, int mi,
-  const int *mlim);
+  const double *sth, size_t llim, size_t ulim, sharp_Ylmgen &gen, size_t mi,
+  const size_t *mlim);
 
-int sharp_max_nvec(int spin);
+size_t sharp_max_nvec(size_t spin);
 
 #endif

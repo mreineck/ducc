@@ -203,7 +203,7 @@ template<> class helper_<double,8>
     using Tm = __mmask8;
 
     static Tv from_scalar(T v) { return _mm512_set1_pd(v); }
-    static Tv abs(Tv v) { return (__m512d)_mm512_andnot_epi64((__m512i)_mm512_set1_pd(-0.),(__m512i)v); }
+    static Tv abs(Tv v) { return __m512d(_mm512_andnot_epi64(__m512i(_mm512_set1_pd(-0.)),__m512i(v))); }
     static Tv max(Tv v1, Tv v2) { return _mm512_max_pd(v1, v2); }
     static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_pd(m, v2, v1); }
     static Tv sqrt(Tv v) { return _mm512_sqrt_pd(v); }
@@ -224,7 +224,7 @@ template<> class helper_<float,8>
     using Tm = __mmask16;
 
     static Tv from_scalar(T v) { return _mm512_set1_ps(v); }
-    static Tv abs(Tv v) { return (__m512)_mm512_andnot_epi32((__m512i)_mm512_set1_ps(-0.),(__m512i)v); }
+    static Tv abs(Tv v) { return __m512(_mm512_andnot_epi32(__m512i(_mm512_set1_ps(-0.)),__m512i(v))); }
     static Tv max(Tv v1, Tv v2) { return _mm512_max_ps(v1, v2); }
     static Tv blend(Tm m, Tv v1, Tv v2) { return _mm512_mask_blend_ps(m, v2, v1); }
     static Tv sqrt(Tv v) { return _mm512_sqrt_ps(v); }
