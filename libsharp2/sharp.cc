@@ -109,7 +109,7 @@ struct ringhelper
       length=nph;
       }
     }
-  MRUTIL_NOINLINE void phase2ring (const sharp_ringinfo &info,
+  MRUTIL_NOINLINE void phase2ring (const sharp_geom_info::Tring &info,
     double *data, int mmax, const dcmplx *phase, int pstride, int flags)
     {
     int nph = info.nph;
@@ -163,7 +163,7 @@ struct ringhelper
     data[1]=data[0];
     plan->exec(&(data[1]), 1., false);
     }
-  MRUTIL_NOINLINE void ring2phase (const sharp_ringinfo &info,
+  MRUTIL_NOINLINE void ring2phase (const sharp_geom_info::Tring &info,
     double *data, int mmax, dcmplx *phase, int pstride, int flags)
     {
     int nph = info.nph;
@@ -233,7 +233,7 @@ ptrdiff_t sharp_alm_info::index (int l, int mi)
 sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *ofs,
   const int *stride, const double *phi0, const double *theta, const double *wgt)
   {
-  vector<sharp_ringinfo> infos(nrings);
+  vector<Tring> infos(nrings);
 
   int pos=0;
 
@@ -252,11 +252,11 @@ sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *of
     infos[m].nph = nph[m];
     if (nphmax<nph[m]) nphmax=nph[m];
     }
-  sort(infos.begin(), infos.end(),[](const sharp_ringinfo &a, const sharp_ringinfo &b)
+  sort(infos.begin(), infos.end(),[](const Tring &a, const Tring &b)
     { return (a.sth<b.sth); });
   while (pos<nrings)
     {
-    pair.push_back(sharp_ringpair());
+    pair.push_back(Tpair());
     pair.back().r1=infos[pos];
     if ((pos<nrings-1) && approx(infos[pos].cth,-infos[pos+1].cth,1e-12))
       {
@@ -274,7 +274,7 @@ sharp_geom_info::sharp_geom_info(int nrings, const int *nph, const ptrdiff_t *of
     ++pos;
     }
 
-  sort(pair.begin(), pair.end(), [] (const sharp_ringpair &a, const sharp_ringpair &b)
+  sort(pair.begin(), pair.end(), [] (const Tpair &a, const Tpair &b)
     {
     if (a.r1.nph==b.r1.nph)
     return (a.r1.phi0 < b.r1.phi0) ? true :
@@ -483,7 +483,7 @@ MRUTIL_NOINLINE void sharp_job::almtmp2alm (int lmax, int mi)
     }
   }
 
-MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_ringinfo &ri,
+MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info::Tring &ri,
   const vector<double> &ringtmp, int rstride)
   {
   if (flags & SHARP_DP)
@@ -515,7 +515,7 @@ MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_ringinfo &ri,
     }
   }
 
-MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_ringinfo &ri,
+MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info::Tring &ri,
   vector<double> &ringtmp, int rstride)
   {
   if (flags & SHARP_DP)
@@ -594,7 +594,7 @@ MRUTIL_NOINLINE void sharp_job::phase2map (int mmax, int llim, int ulim)
 
 MRUTIL_NOINLINE void sharp_job::execute()
   {
-  mr::timers::SimpleTimer timer;
+  mr::SimpleTimer timer;
   opcnt=0;
   int lmax = ainfo->lmax,
       mmax=sharp_get_mmax(ainfo->mval);

@@ -58,9 +58,9 @@ struct sharp_job
   void init_output();
   void alm2almtmp (int lmax, int mi);
   void almtmp2alm (int lmax, int mi);
-  void ring2ringtmp (const sharp_ringinfo &ri, std::vector<double> &ringtmp,
+  void ring2ringtmp (const sharp_geom_info::Tring &ri, std::vector<double> &ringtmp,
     int rstride);
-  void ringtmp2ring (const sharp_ringinfo &ri, const std::vector<double> &ringtmp, int rstride);
+  void ringtmp2ring (const sharp_geom_info::Tring &ri, const std::vector<double> &ringtmp, int rstride);
   void map2phase (int mmax, int llim, int ulim);
   void phase2map (int mmax, int llim, int ulim);
   void execute();

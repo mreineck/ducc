@@ -33,27 +33,20 @@
 #include <memory>
 
 /*! \internal
-    Helper type containing information about a single ring. */
-struct sharp_ringinfo
-  {
-  double theta, phi0, weight, cth, sth;
-  ptrdiff_t ofs;
-  int nph, stride;
-  };
-
-/*! \internal
-    Helper type containing information about a pair of rings with colatitudes
-    symmetric around the equator. */
-struct sharp_ringpair
-  {
-  sharp_ringinfo r1,r2;
-  };
-
-/*! \internal
     Type holding all required information about a map geometry. */
 struct sharp_geom_info
   {
-  std::vector<sharp_ringpair> pair;
+  struct Tring
+    {
+    double theta, phi0, weight, cth, sth;
+    ptrdiff_t ofs;
+    int nph, stride;
+    };
+  struct Tpair
+    {
+    Tring r1,r2;
+    };
+  std::vector<Tpair> pair;
   int nphmax;
 /*! Creates a geometry information from a set of ring descriptions.
     All arrays passed to this function must have \a nrings elements.

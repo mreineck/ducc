@@ -267,7 +267,7 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     size_t ofs=0;
     for (int i=0; i<ginfo->pair.size(); ++i)
       {
-      sharp_ringpair &pair(ginfo->pair[i]);
+      auto &pair(ginfo->pair[i]);
       int pring=1+2*sharp_get_mlim(lmax,0,pair.r1.sth,pair.r1.cth);
       if (pring>nlon) pring=nlon;
       pring=good_fft_size(pring);

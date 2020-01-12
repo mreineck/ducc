@@ -9,8 +9,6 @@
 
 namespace mr {
 
-namespace timers {
-
 class SimpleTimer
   {
   private:
@@ -102,6 +100,6 @@ class TimerHierarchy
       }
   };
 
-}}
+}
 
 #endif
