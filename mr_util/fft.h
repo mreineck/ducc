@@ -917,7 +917,8 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       for (size_t i=0; i<length; ++i)
         c[i] = ch[i]*fct;
     else
-      memcpy (c,p1,length*sizeof(T));
+      for (size_t i=0; i<length; ++i)
+        c[i] = ch[i];
     }
   else
     if (fct!=1.)
@@ -1673,7 +1674,8 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           for (size_t i=0; i<n; ++i)
             c[i] = fct*p1[i];
         else
-          memcpy (c,p1,n*sizeof(T));
+          for (size_t i=0; i<n; ++i)
+            c[i] = p1[i];
         }
       else
         if (fct!=1.)
@@ -1898,13 +1900,14 @@ template<typename T0> class fftblue
           tmp[m].Set(c[m], zero);
         fft<true>(tmp.data(),fct);
         c[0] = tmp[0].r;
-        memcpy (c+1, tmp.data()+1, (n-1)*sizeof(T));
+        for (size_t m=1; m<n; ++m)
+          { c[2*m-1]=tmp[m].r; c[2*m]=tmp[m].i; }
         }
       else
         {
         tmp[0].Set(c[0],c[0]*0);
-        memcpy (reinterpret_cast<void *>(tmp.data()+1),
-                reinterpret_cast<void *>(c+1), (n-1)*sizeof(T));
+        for (size_t m=1; m<n; ++m)
+          tmp[m].Set(c[2*m-1], c[2*m]);
         if ((n&1)==0) tmp[n/2].i=T0(0)*c[0];
         for (size_t m=1; 2*m<n; ++m)
           tmp[n-m].Set(tmp[m].r, -tmp[m].i);
