@@ -63,14 +63,14 @@ X(0),X(8),X(2048),X(2056)
 uint32_t block2morton2D_32 (uint32_t v)
   {
   typedef uint32_t I;
-  return  (I)(utab[ v     &0xff])     | ((I)(utab[(v>> 8)&0xff])<<16)
-       | ((I)(utab[(v>>16)&0xff])<<1) | ((I)(utab[(v>>24)&0xff])<<17);
+  return  I(utab[ v     &0xff])     | (I(utab[(v>> 8)&0xff])<<16)
+       | (I(utab[(v>>16)&0xff])<<1) | (I(utab[(v>>24)&0xff])<<17);
   }
 uint32_t coord2morton2D_32 (uint32_t x, uint32_t y)
   {
   typedef uint32_t I;
-  return  (I)(utab[x&0xff])     | ((I)(utab[(x>>8)&0xff])<<16)
-       | ((I)(utab[y&0xff])<<1) | ((I)(utab[(y>>8)&0xff])<<17);
+  return  I(utab[x&0xff])     | (I(utab[(x>>8)&0xff])<<16)
+       | (I(utab[y&0xff])<<1) | (I(utab[(y>>8)&0xff])<<17);
   }
 uint32_t morton2block2D_32 (uint32_t v)
   {
@@ -93,18 +93,18 @@ void morton2coord2D_32 (uint32_t v, uint32_t *x, uint32_t *y)
 uint64_t block2morton2D_64 (uint64_t v)
   {
   typedef uint64_t I;
-  return  (I)(utab[ v     &0xff])      | ((I)(utab[(v>> 8)&0xff])<<16)
-       | ((I)(utab[(v>>16)&0xff])<<32) | ((I)(utab[(v>>24)&0xff])<<48)
-       | ((I)(utab[(v>>32)&0xff])<< 1) | ((I)(utab[(v>>40)&0xff])<<17)
-       | ((I)(utab[(v>>48)&0xff])<<33) | ((I)(utab[(v>>56)&0xff])<<49);
+  return  I(utab[ v     &0xff])      | (I(utab[(v>> 8)&0xff])<<16)
+       | (I(utab[(v>>16)&0xff])<<32) | (I(utab[(v>>24)&0xff])<<48)
+       | (I(utab[(v>>32)&0xff])<< 1) | (I(utab[(v>>40)&0xff])<<17)
+       | (I(utab[(v>>48)&0xff])<<33) | (I(utab[(v>>56)&0xff])<<49);
   }
 uint64_t coord2morton2D_64 (uint64_t x, uint64_t y)
   {
   typedef uint64_t I;
-  return  (I)(utab[ x     &0xff])      | ((I)(utab[(x>> 8)&0xff])<<16)
-       | ((I)(utab[(x>>16)&0xff])<<32) | ((I)(utab[(x>>24)&0xff])<<48)
-       | ((I)(utab[ y     &0xff])<< 1) | ((I)(utab[(y>> 8)&0xff])<<17)
-       | ((I)(utab[(y>>16)&0xff])<<33) | ((I)(utab[(y>>24)&0xff])<<49);
+  return  I(utab[ x     &0xff])      | (I(utab[(x>> 8)&0xff])<<16)
+       | (I(utab[(x>>16)&0xff])<<32) | (I(utab[(x>>24)&0xff])<<48)
+       | (I(utab[ y     &0xff])<< 1) | (I(utab[(y>> 8)&0xff])<<17)
+       | (I(utab[(y>>16)&0xff])<<33) | (I(utab[(y>>24)&0xff])<<49);
   }
 uint64_t morton2block2D_64 (uint64_t v)
   {
@@ -112,10 +112,10 @@ uint64_t morton2block2D_64 (uint64_t v)
   I raw1 = v&0x5555555555555555, raw2 = (v>>1)&0x5555555555555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  return (I)ctab[ raw1     &0xff]      | ((I)ctab[(raw1>> 8)&0xff]<< 4)
-      | ((I)ctab[(raw1>>32)&0xff]<<16) | ((I)ctab[(raw1>>40)&0xff]<<20)
-      | ((I)ctab[ raw2     &0xff]<<32) | ((I)ctab[(raw2>> 8)&0xff]<<36)
-      | ((I)ctab[(raw2>>32)&0xff]<<48) | ((I)ctab[(raw2>>40)&0xff]<<52);
+  return I(ctab[ raw1     &0xff])      | (I(ctab[(raw1>> 8)&0xff])<< 4)
+      | (I(ctab[(raw1>>32)&0xff])<<16) | (I(ctab[(raw1>>40)&0xff])<<20)
+      | (I(ctab[ raw2     &0xff])<<32) | (I(ctab[(raw2>> 8)&0xff])<<36)
+      | (I(ctab[(raw2>>32)&0xff])<<48) | (I(ctab[(raw2>>40)&0xff])<<52);
   }
 void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y)
   {
@@ -123,13 +123,14 @@ void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y)
   I raw1 = v&0x5555555555555555, raw2 = (v>>1)&0x5555555555555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  *x =  (I)ctab[ raw1     &0xff]      | ((I)ctab[(raw1>> 8)&0xff]<< 4)
-     | ((I)ctab[(raw1>>32)&0xff]<<16) | ((I)ctab[(raw1>>40)&0xff]<<20);
-  *y =  (I)ctab[ raw2     &0xff]      | ((I)ctab[(raw2>> 8)&0xff]<< 4)
-     | ((I)ctab[(raw2>>32)&0xff]<<16) | ((I)ctab[(raw2>>40)&0xff]<<20);
+  *x =  I(ctab[ raw1     &0xff])      | (I(ctab[(raw1>> 8)&0xff])<< 4)
+     | (I(ctab[(raw1>>32)&0xff])<<16) | (I(ctab[(raw1>>40)&0xff])<<20);
+  *y =  I(ctab[ raw2     &0xff])      | (I(ctab[(raw2>> 8)&0xff])<< 4)
+     | (I(ctab[(raw2>>32)&0xff])<<16) | (I(ctab[(raw2>>40)&0xff])<<20);
   }
 
 #else
+// alternative implementation, usually slower
 
 static inline uint64_t spread2D_64 (uint64_t v)
   {
