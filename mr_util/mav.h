@@ -27,9 +27,7 @@
 
 namespace mr {
 
-namespace mav {
-
-namespace detail {
+namespace detail_mav {
 
 using namespace std;
 
@@ -114,11 +112,11 @@ template<typename T, size_t ndim> const_mav<T, ndim> nullmav()
 
 }
 
-using detail::mav;
-using detail::const_mav;
-using detail::cmav;
-using detail::nullmav;
+using detail_mav::mav;
+using detail_mav::const_mav;
+using detail_mav::cmav;
+using detail_mav::nullmav;
 
-}}
+}
 
 #endif

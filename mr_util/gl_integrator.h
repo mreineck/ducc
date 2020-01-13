@@ -39,7 +39,7 @@ class GL_Integrator
     vector<double> x, w;
 
     static inline double one_minus_x2 (double x)
-      { return (abs(x)>0.1) ? (1.+x)*(1.-x) : 1.-x*x; }
+      { return (std::abs(x)>0.1) ? (1.+x)*(1.-x) : 1.-x*x; }
 
   public:
     GL_Integrator(int n, size_t nthreads=1)
@@ -86,7 +86,7 @@ class GL_Integrator
             x0 = x1;
             if (dobreak) break;
 
-            if (abs(dx)<=eps) dobreak=1;
+            if (std::abs(dx)<=eps) dobreak=1;
             MR_assert(++j<100, "convergence problem");
             }
 
@@ -132,12 +132,21 @@ class GL_Integrator
         }
       return res;
       }
+    const vector<double> &coordsSymmetric() const
+      { return x; }
 
     vector<double> weights() const
       {
       vector<double> res(n_);
       for (size_t i=0; i<w.size(); ++i)
         res[i]=res[n_-1-i]=w[w.size()-1-i];
+      return res;
+      }
+    vector<double> weightsSymmetric() const
+      {
+      auto res = w;
+      if (n_&1) res[0]*=0.5;
+      for (auto &v:res) v*=2;
       return res;
       }
   };
