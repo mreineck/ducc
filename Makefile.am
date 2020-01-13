@@ -12,6 +12,8 @@ libmrutil_la_SOURCES = \
   libsharp2/sharp_ylmgen.h \
   mr_util/math_utils.h \
   mr_util/cmplx.h \
+  mr_util/aligned_array.h \
+  mr_util/simd.h \
   mr_util/error_handling.cc \
   mr_util/error_handling.h \
   mr_util/morton_utils.cc \

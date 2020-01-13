@@ -63,7 +63,7 @@ template<typename T, size_t len> struct vmask_
     vmask_(const vmask_ &other) = default;
     vmask_(Tm v_): v(v_) {}
     operator Tm() const  { return v; }
-    int bits() const { return hlp::maskbits(v); }
+    size_t bits() const { return hlp::maskbits(v); }
     vmask_ operator& (const vmask_ &other) const { return hlp::mask_and(v,other.v); }
   };
 
@@ -175,6 +175,7 @@ template<typename T> class pseudoscalar
   {
   private:
     T v;
+
   public:
     pseudoscalar() = default;
     pseudoscalar(const pseudoscalar &other) = default;
@@ -188,21 +189,20 @@ template<typename T> class pseudoscalar
     pseudoscalar &operator-=(pseudoscalar other) { v-=other.v; return *this; }
     pseudoscalar &operator*=(pseudoscalar other) { v*=other.v; return *this; }
     pseudoscalar &operator/=(pseudoscalar other) { v/=other.v; return *this; }
-/*
-    pseudoscalar abs() const { return hlp::abs(v); }
-    inline pseudoscalar sqrt() const
-      { return sqrt(v); }
+
+    pseudoscalar abs() const { return std::abs(v); }
+    inline pseudoscalar sqrt() const { return std::sqrt(v); }
     pseudoscalar max(const pseudoscalar &other) const
-      { return hlp::max(v, other.v); }
-    Tm operator>(const pseudoscalar &other) const
-      { return hlp::gt(v, other.v); }
-    Tm operator>=(const pseudoscalar &other) const
-      { return hlp::ge(v, other.v); }
-    Tm operator<(const vtp &other) const
-      { return hlp::lt(v, other.v); }
-    Tm operator!=(const vtp &other) const
-      { return hlp::ne(v, other.v); }
-*/
+      { return std::max(v, other.v); }
+
+    bool operator>(const pseudoscalar &other) const
+      { return v>other.v; }
+    bool operator>=(const pseudoscalar &other) const
+      { return v>=other.v; }
+    bool operator<(const pseudoscalar &other) const
+      { return v<other.v; }
+    bool operator!=(const pseudoscalar &other) const
+      { return v!=other.v; }
     const T &operator[] (size_t /*i*/) const { return v; }
     T &operator[](size_t /*i*/) { return v; }
   };
@@ -215,10 +215,10 @@ template<typename T> class helper_<T,1>
     using Tm = bool;
 
     static Tv from_scalar(T v) { return v; }
-    static Tv abs(Tv v) { return abs(v); }
-    static Tv max(Tv v1, Tv v2) { return max(v1, v2); }
-    static Tv blend(Tm m, Tv v1, Tv v2) { m ? v1 : v2; }
-    static Tv sqrt(Tv v) { return sqrt(v); }
+    static Tv abs(Tv v) { return v.abs(); }
+    static Tv max(Tv v1, Tv v2) { return v1.max(v2); }
+    static Tv blend(Tm m, Tv v1, Tv v2) { return m ? v1 : v2; }
+    static Tv sqrt(Tv v) { return v.sqrt(); }
     static Tm gt (Tv v1, Tv v2) { return v1>v2; }
     static Tm ge (Tv v1, Tv v2) { return v1>=v2; }
     static Tm lt (Tv v1, Tv v2) { return v1<v2; }
@@ -376,6 +376,8 @@ template<> class helper_<float,4>
   };
 
 template<typename T> using native_simd = vtp<T,16/sizeof(T)>;
+#else
+template<typename T> using native_simd = vtp<T,1>;
 #endif
 }
 using detail_simd::native_simd;

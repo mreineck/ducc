@@ -323,7 +323,7 @@ MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
 MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
   {
-  size_t l,il,lmax=gen.lmax;
+  size_t l,il=0,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee(gen, d, l, il, nv2);
   job.opcnt += il * 4*nth;
@@ -417,7 +417,7 @@ MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
 MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
   {
-  size_t l,il,lmax=gen.lmax;
+  size_t l,il=0,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
   iter_to_ieee(gen, d, l, il, nv2);
   job.opcnt += il * 4*nth;
