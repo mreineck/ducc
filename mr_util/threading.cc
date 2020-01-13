@@ -282,7 +282,7 @@ class Distribution
           std::unique_lock<std::mutex> lck(mut_);
           if (cur_>=nwork_) return Range();
           auto rem = nwork_-cur_;
-          size_t tmp = size_t((fact_max_*rem)/nthreads_);
+          size_t tmp = size_t((fact_max_*double(rem))/double(nthreads_));
           auto sz = std::min(rem, std::max(chunksize_, tmp));
           size_t lo=cur_;
           cur_+=sz;

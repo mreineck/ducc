@@ -60,7 +60,7 @@ void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   double fact_max, std::function<void(Scheduler &)> func);
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func);
 
-} // end of namespace detail
+} // end of namespace detail_threading
 
 using detail_threading::max_threads;
 using detail_threading::get_default_nthreads;
