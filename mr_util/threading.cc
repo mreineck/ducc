@@ -42,7 +42,7 @@ namespace detail_threading {
 
 static const size_t max_threads_ = std::max<size_t>(1, std::thread::hardware_concurrency());
 
-std::atomic<size_t> default_nthreads_=max_threads_;
+std::atomic<size_t> default_nthreads_(max_threads_);
 
 size_t get_default_nthreads()
   { return default_nthreads_; }
@@ -310,6 +310,13 @@ class MyScheduler: public Scheduler
 
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
+  if (nthreads_ == 1)
+    {
+    MyScheduler sched(*this, 0);
+    f(sched);
+    return;
+    }
+
   auto & pool = get_pool();
   latch counter(nthreads_);
   std::exception_ptr ex;

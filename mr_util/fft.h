@@ -917,8 +917,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       for (size_t i=0; i<length; ++i)
         c[i] = ch[i]*fct;
     else
-      for (size_t i=0; i<length; ++i)
-        c[i] = ch[i];
+      memcpy (c,p1,length*sizeof(T));
     }
   else
     if (fct!=1.)
@@ -1365,8 +1364,8 @@ template<typename T> void radb2(size_t ido, size_t l1,
   if ((ido&1)==0)
     for (size_t k=0; k<l1; k++)
       {
-      CH(ido-1,k,0) = 2*CC(ido-1,0,k);
-      CH(ido-1,k,1) =-2*CC(0    ,1,k);
+      CH(ido-1,k,0) = T0( 2)*CC(ido-1,0,k);
+      CH(ido-1,k,1) = T0(-2)*CC(0    ,1,k);
       }
   if (ido<=2) return;
   for (size_t k=0; k<l1;++k)
@@ -1394,10 +1393,10 @@ template<typename T> void radb3(size_t ido, size_t l1,
 
   for (size_t k=0; k<l1; k++)
     {
-    T tr2=2*CC(ido-1,1,k);
+    T tr2=T0(2)*CC(ido-1,1,k);
     T cr2=CC(0,0,k)+taur*tr2;
     CH(0,k,0)=CC(0,0,k)+tr2;
-    T ci3=2*taui*CC(0,2,k);
+    T ci3=T0(2)*taui*CC(0,2,k);
     PM (CH(0,k,2),CH(0,k,1),cr2,ci3);
     }
   if (ido==1) return;
@@ -1436,8 +1435,8 @@ template<typename T> void radb4(size_t ido, size_t l1,
     {
     T tr1, tr2;
     PM (tr2,tr1,CC(0,0,k),CC(ido-1,3,k));
-    T tr3=2*CC(ido-1,1,k);
-    T tr4=2*CC(0,2,k);
+    T tr3=T0(2)*CC(ido-1,1,k);
+    T tr4=T0(2)*CC(0,2,k);
     PM (CH(0,k,0),CH(0,k,2),tr2,tr3);
     PM (CH(0,k,3),CH(0,k,1),tr1,tr4);
     }
@@ -1558,8 +1557,8 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
     size_t j2=2*j-1;
     for (size_t k=0; k<l1; ++k)
       {
-      CH(0,k,j ) = 2*CC(ido-1,j2,k);
-      CH(0,k,jc) = 2*CC(0,j2+1,k);
+      CH(0,k,j ) = T0(2)*CC(ido-1,j2,k);
+      CH(0,k,jc) = T0(2)*CC(0,j2+1,k);
       }
     }
 
@@ -1674,8 +1673,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           for (size_t i=0; i<n; ++i)
             c[i] = fct*p1[i];
         else
-          for (size_t i=0; i<n; ++i)
-            c[i] = p1[i];
+          memcpy (c,p1,n*sizeof(T));
         }
       else
         if (fct!=1.)
@@ -2211,8 +2209,8 @@ template<typename T0> class T_dcst4
         fft->exec(y.data(), fct, true);
         for(size_t i=0, ic=n2-1; i<n2; ++i, --ic)
           {
-          c[2*i  ] =  2*(y[i ].r*C2[i ].r-y[i ].i*C2[i ].i);
-          c[2*i+1] = -2*(y[ic].i*C2[ic].r+y[ic].r*C2[ic].i);
+          c[2*i  ] = T0( 2)*(y[i ].r*C2[i ].r-y[i ].i*C2[i ].i);
+          c[2*i+1] = T0(-2)*(y[ic].i*C2[ic].r+y[ic].r*C2[ic].i);
           }
         }
       if (!cosine)
