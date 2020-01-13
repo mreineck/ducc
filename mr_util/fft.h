@@ -1900,14 +1900,14 @@ template<typename T0> class fftblue
           tmp[m].Set(c[m], zero);
         fft<true>(tmp.data(),fct);
         c[0] = tmp[0].r;
-        for (size_t m=1; m<n; ++m)
-          { c[2*m-1]=tmp[m].r; c[2*m]=tmp[m].i; }
+        memcpy (reinterpret_cast<void *>(c+1),
+                reinterpret_cast<void *>(tmp.data()+1), (n-1)*sizeof(T));
         }
       else
         {
         tmp[0].Set(c[0],c[0]*0);
-        for (size_t m=1; m<n; ++m)
-          tmp[m].Set(c[2*m-1], c[2*m]);
+        memcpy (reinterpret_cast<void *>(tmp.data()+1),
+                reinterpret_cast<void *>(c+1), (n-1)*sizeof(T));
         if ((n&1)==0) tmp[n/2].i=T0(0)*c[0];
         for (size_t m=1; 2*m<n; ++m)
           tmp[n-m].Set(tmp[m].r, -tmp[m].i);
@@ -2152,7 +2152,7 @@ template<typename T0> class T_dcst4
       size_t n2 = N/2;
       if (!cosine)
         for (size_t k=0, kc=N-1; k<n2; ++k, --kc)
-          swap(c[k], c[kc]);
+          std::swap(c[k], c[kc]);
       if (N&1)
         {
         // The following code is derived from the FFTW3 function apply_re11()
