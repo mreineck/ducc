@@ -41,6 +41,7 @@ struct Range
 class Scheduler
   {
   public:
+    virtual ~Scheduler() {}
     virtual size_t num_threads() const = 0;
     virtual size_t thread_num() const = 0;
     virtual Range getNext() = 0;

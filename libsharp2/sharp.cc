@@ -45,9 +45,6 @@ using namespace mr;
 using dcmplx = complex<double>;
 using fcmplx = complex<float>;
 
-static constexpr double sqrt_one_half = 0.707106781186547572737310929369;
-static constexpr double sqrt_two = 1.414213562373095145474621858739;
-
 static int chunksize_min=500, nchunks_max=10;
 
 static void get_chunk_info (int ndata, int nmult, int &nchunks, int &chunksize)
@@ -231,55 +228,53 @@ ptrdiff_t sharp_alm_info::index (int l, int mi)
   }
 
 sharp_geom_info::sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
-  const ptrdiff_t *stride, const double *phi0, const double *theta, const double *wgt)
+  ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)
+  : ring(nrings), stride(stride_)
   {
-  vector<Tring> infos(nrings);
-
   size_t pos=0;
 
   nphmax=0;
 
   for (size_t m=0; m<nrings; ++m)
     {
-    infos[m].theta = theta[m];
-    infos[m].cth = cos(theta[m]);
-    infos[m].sth = sin(theta[m]);
-    infos[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
-    infos[m].phi0 = phi0[m];
-    infos[m].ofs = ofs[m];
-    infos[m].stride = stride[m];
-    infos[m].nph = nph[m];
+    ring[m].theta = theta[m];
+    ring[m].cth = cos(theta[m]);
+    ring[m].sth = sin(theta[m]);
+    ring[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
+    ring[m].phi0 = phi0[m];
+    ring[m].ofs = ofs[m];
+    ring[m].nph = nph[m];
     if (nphmax<nph[m]) nphmax=nph[m];
     }
-  sort(infos.begin(), infos.end(),[](const Tring &a, const Tring &b)
+  sort(ring.begin(), ring.end(),[](const Tring &a, const Tring &b)
     { return (a.sth<b.sth); });
   while (pos<nrings)
     {
     pair.push_back(Tpair());
-    pair.back().r1=infos[pos];
-    if ((pos<nrings-1) && approx(infos[pos].cth,-infos[pos+1].cth,1e-12))
+    pair.back().r1=pos;
+    if ((pos<nrings-1) && approx(ring[pos].cth,-ring[pos+1].cth,1e-12))
       {
-      if (infos[pos].cth>0)  // make sure northern ring is in r1
-        pair.back().r2=infos[pos+1];
+      if (ring[pos].cth>0)  // make sure northern ring is in r1
+        pair.back().r2=pos+1;
       else
         {
-        pair.back().r1=infos[pos+1];
-        pair.back().r2=infos[pos];
+        pair.back().r1=pos+1;
+        pair.back().r2=pos;
         }
       ++pos;
       }
     else
-      pair.back().r2.nph=0;
+      pair.back().r2=size_t(~0);
     ++pos;
     }
 
-  sort(pair.begin(), pair.end(), [] (const Tpair &a, const Tpair &b)
+  sort(pair.begin(), pair.end(), [this] (const Tpair &a, const Tpair &b)
     {
-    if (a.r1.nph==b.r1.nph)
-    return (a.r1.phi0 < b.r1.phi0) ? true :
-      ((a.r1.phi0 > b.r1.phi0) ? false :
-        (a.r1.cth>b.r1.cth));
-    return a.r1.nph<b.r1.nph;
+    if (ring[a.r1].nph==ring[b.r1].nph)
+    return (ring[a.r1].phi0 < ring[b.r1].phi0) ? true :
+      ((ring[a.r1].phi0 > ring[b.r1].phi0) ? false :
+        (ring[a.r1].cth>ring[b.r1].cth));
+    return ring[a.r1].nph<ring[b.r1].nph;
     });
   }
 
@@ -302,34 +297,24 @@ static size_t sharp_get_mmax (const vector<size_t> &mval)
 
 MRUTIL_NOINLINE void sharp_geom_info::clear_map (double *map) const
   {
-  for (const auto &p: pair)
+  for (const auto &r: ring)
     {
-    if (p.r1.stride==1)
-      memset(&map[p.r1.ofs],0,p.r1.nph*sizeof(double));
+    if (stride==1)
+      memset(&map[r.ofs],0,r.nph*sizeof(double));
     else
-      for (size_t i=0;i<p.r1.nph;++i)
-        map[p.r1.ofs+i*p.r1.stride]=0;
-    if ((p.r2.nph>0)&&(p.r2.stride==1))
-      memset(&map[p.r2.ofs],0,p.r2.nph*sizeof(double));
-    else
-      for (size_t i=0;i<p.r2.nph;++i)
-        map[p.r2.ofs+i*p.r2.stride]=0;
+      for (size_t i=0;i<r.nph;++i)
+        map[r.ofs+i*stride]=0;
     }
   }
 MRUTIL_NOINLINE void sharp_geom_info::clear_map (float *map) const
   {
-  for (const auto &p: pair)
+  for (const auto &r: ring)
     {
-    if (p.r1.stride==1)
-      memset(&map[p.r1.ofs],0,p.r1.nph*sizeof(float));
+    if (stride==1)
+      memset(&map[r.ofs],0,r.nph*sizeof(float));
     else
-      for (size_t i=0;i<p.r1.nph;++i)
-        map[p.r1.ofs+i*p.r1.stride]=0;
-    if ((p.r2.nph>0)&&(p.r2.stride==1))
-      memset(&map[p.r2.ofs],0,p.r2.nph*sizeof(float));
-    else
-      for (size_t i=0;i<p.r2.nph;++i)
-        map[p.r2.ofs+i*p.r2.stride]=0;
+      for (size_t i=0;i<r.nph;++i)
+        map[r.ofs+i*stride]=0;
     }
   }
 
@@ -481,56 +466,55 @@ MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t lmax, size_t mi)
     }
   }
 
-MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info::Tring &ri,
+//virtual
+void sharp_geom_info::add_ring(size_t iring, const double *ringtmp, double *map) const
+  {
+  double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    p1[m*stride] += ringtmp[m];
+  }
+//virtual
+void sharp_geom_info::add_ring(size_t iring, const double *ringtmp, float *map) const
+  {
+  float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    p1[m*stride] += float(ringtmp[m]);
+  }
+//virtual
+void sharp_geom_info::get_ring(size_t iring, const double *map, double *ringtmp) const
+  {
+  const double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    ringtmp[m] = p1[m*stride];
+  }
+//virtual
+void sharp_geom_info::get_ring(size_t iring, const float *map, double *ringtmp) const
+  {
+  const float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    ringtmp[m] = p1[m*stride];
+  }
+
+MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info &ginfo, size_t iring,
   const vector<double> &ringtmp, ptrdiff_t rstride)
   {
   if (flags & SHARP_DP)
-    {
-    double **dmap = (double **)map;
     for (size_t i=0; i<nmaps; ++i)
-      {
-      double *MRUTIL_RESTRICT p1=&dmap[i][ri.ofs];
-      const double *MRUTIL_RESTRICT p2=&ringtmp[i*rstride+1];
-      if (ri.stride==1)
-        {
-        if (flags&SHARP_ADD)
-          for (int m=0; m<ri.nph; ++m)
-            p1[m] += p2[m];
-        else
-          memcpy(p1,p2,ri.nph*sizeof(double));
-        }
-      else
-        for (size_t m=0; m<ri.nph; ++m)
-          p1[m*ri.stride] += p2[m];
-      }
-    }
+      ginfo.add_ring(iring, &ringtmp[i*rstride+1], ((double  **)map)[i]);
   else
-    {
-    float  **fmap = (float  **)map;
     for (size_t i=0; i<nmaps; ++i)
-      for (size_t m=0; m<ri.nph; ++m)
-        fmap[i][ri.ofs+m*ri.stride] += (float)ringtmp[i*rstride+m+1];
-    }
+      ginfo.add_ring(iring, &ringtmp[i*rstride+1], ((float  **)map)[i]);
   }
 
-MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info::Tring &ri,
+MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info &ginfo, size_t iring,
   vector<double> &ringtmp, ptrdiff_t rstride)
   {
   if (flags & SHARP_DP)
     for (size_t i=0; i<nmaps; ++i)
-      {
-      double *MRUTIL_RESTRICT p1=&ringtmp[i*rstride+1],
-             *MRUTIL_RESTRICT p2=&(((double *)(map[i]))[ri.ofs]);
-      if (ri.stride==1)
-        memcpy(p1,p2,ri.nph*sizeof(double));
-      else
-        for (size_t m=0; m<ri.nph; ++m)
-          p1[m] = p2[m*ri.stride];
-      }
+      ginfo.get_ring(iring, ((double  **)map)[i], &ringtmp[i*rstride+1]);
   else
     for (size_t i=0; i<nmaps; ++i)
-      for (size_t m=0; m<ri.nph; ++m)
-        ringtmp[i*rstride+m+1] = ((float *)(map[i]))[ri.ofs+m*ri.stride];
+      ginfo.get_ring(iring, ((float  **)map)[i], &ringtmp[i*rstride+1]);
   }
 
 //FIXME: set phase to zero if not SHARP_MAP2ALM?
@@ -547,15 +531,15 @@ MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = s_th*(ith-llim);
-      ring2ringtmp(ginfo->pair[ith].r1,ringtmp,rstride);
+      ring2ringtmp(*ginfo, ginfo->pair[ith].r1,ringtmp,rstride);
       for (size_t i=0; i<nmaps; ++i)
-        helper.ring2phase (ginfo->pair[ith].r1,
+        helper.ring2phase (ginfo->ring[ginfo->pair[ith].r1],
           &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
-      if (ginfo->pair[ith].r2.nph>0)
+      if (ginfo->pair[ith].r2!=~size_t(0))
         {
-        ring2ringtmp(ginfo->pair[ith].r2,ringtmp,rstride);
+        ring2ringtmp(*ginfo, ginfo->pair[ith].r2,ringtmp,rstride);
         for (size_t i=0; i<nmaps; ++i)
-          helper.ring2phase (ginfo->pair[ith].r2,
+          helper.ring2phase (ginfo->ring[ginfo->pair[ith].r2],
             &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
         }
       }
@@ -576,15 +560,15 @@ MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim
       {
       int dim2 = s_th*(ith-llim);
       for (size_t i=0; i<nmaps; ++i)
-        helper.phase2ring (ginfo->pair[ith].r1,
+        helper.phase2ring (ginfo->ring[ginfo->pair[ith].r1],
           &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
-      ringtmp2ring(ginfo->pair[ith].r1,ringtmp,rstride);
-      if (ginfo->pair[ith].r2.nph>0)
+      ringtmp2ring(*ginfo, ginfo->pair[ith].r1,ringtmp,rstride);
+      if (ginfo->pair[ith].r2!=~size_t(0))
         {
         for (size_t i=0; i<nmaps; ++i)
-          helper.phase2ring (ginfo->pair[ith].r2,
+          helper.phase2ring (ginfo->ring[ginfo->pair[ith].r2],
             &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
-        ringtmp2ring(ginfo->pair[ith].r2,ringtmp,rstride);
+        ringtmp2ring(*ginfo, ginfo->pair[ith].r2,ringtmp,rstride);
         }
       }
     }); /* end of parallel region */
@@ -621,9 +605,9 @@ MRUTIL_NOINLINE void sharp_job::execute()
     vector<double> cth(ulim-llim), sth(ulim-llim);
     for (size_t i=0; i<ulim-llim; ++i)
       {
-      ispair[i] = ginfo->pair[i+llim].r2.nph>0;
-      cth[i] = ginfo->pair[i+llim].r1.cth;
-      sth[i] = ginfo->pair[i+llim].r1.sth;
+      ispair[i] = ginfo->pair[i+llim].r2!=~size_t(0);
+      cth[i] = ginfo->ring[ginfo->pair[i+llim].r1].cth;
+      sth[i] = ginfo->ring[ginfo->pair[i+llim].r1].sth;
       mlim[i] = sharp_get_mlim(lmax, spin, sth[i], cth[i]);
       }
 

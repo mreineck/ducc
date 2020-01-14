@@ -137,11 +137,8 @@ static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
 static ptrdiff_t get_npix(const sharp_geom_info &ginfo)
   {
   ptrdiff_t res=0;
-  for (size_t i=0; i<ginfo.pair.size(); ++i)
-    {
-    res += ginfo.pair[i].r1.nph;
-    if (ginfo.pair[i].r2.nph>0) res += ginfo.pair[i].r2.nph;
-    }
+  for (const auto &r: ginfo.ring)
+    res += r.nph;
   return res;
   }
 
@@ -261,23 +258,15 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     ginfo=sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon);
     ptrdiff_t npix_o=get_npix(*ginfo);
     size_t ofs=0;
-    for (size_t i=0; i<ginfo->pair.size(); ++i)
+    for (auto &r:ginfo->ring)
       {
-      auto &pair(ginfo->pair[i]);
-      int pring=1+2*sharp_get_mlim(lmax,0,pair.r1.sth,pair.r1.cth);
+      int pring=1+2*sharp_get_mlim(lmax,0,r.sth,r.cth);
       if (pring>nlon) pring=nlon;
       pring=good_fft_size(pring);
-      pair.r1.nph=pring;
-      pair.r1.weight*=nlon*1./pring;
-      pair.r1.ofs=ofs;
+      r.nph=pring;
+      r.weight*=nlon*1./pring;
+      r.ofs=ofs;
       ofs+=pring;
-      if (pair.r2.nph>0)
-        {
-        pair.r2.nph=pring;
-        pair.r2.weight*=nlon*1./pring;
-        pair.r2.ofs=ofs;
-        ofs+=pring;
-        }
       }
     if (verbose)
       {
@@ -300,13 +289,11 @@ static void check_sign_scale(void)
   auto tinfo = sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring);
 
   /* flip theta to emulate the "old" Gaussian grid geometry */
-  for (size_t i=0; i<tinfo->pair.size(); ++i)
+  for (auto &r: tinfo->ring)
     {
     const double pi=3.141592653589793238462643383279502884197;
-    tinfo->pair[i].r1.cth=-tinfo->pair[i].r1.cth;
-    tinfo->pair[i].r2.cth=-tinfo->pair[i].r2.cth;
-    tinfo->pair[i].r1.theta=pi-tinfo->pair[i].r1.theta;
-    tinfo->pair[i].r2.theta=pi-tinfo->pair[i].r2.theta;
+    r.cth=-r.cth;
+    r.theta=pi-r.theta;
     }
 
   auto alms = sharp_make_triangular_alm_info(lmax,mmax,1);

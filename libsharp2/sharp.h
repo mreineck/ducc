@@ -32,23 +32,23 @@
 #include <vector>
 #include <memory>
 
-/*! \internal
-    Type holding all required information about a map geometry. */
-struct sharp_geom_info
+class sharp_geom_info
   {
-  struct Tring
-    {
-    double theta, phi0, weight, cth, sth;
-    ptrdiff_t ofs;
-    size_t nph;
+  public:
+    struct Tring
+      {
+      double theta, phi0, weight, cth, sth;
+      ptrdiff_t ofs;
+      size_t nph;
+      };
+    struct Tpair
+      {
+      size_t r1, r2;
+      };
+    std::vector<Tring> ring;
+    std::vector<Tpair> pair;
     ptrdiff_t stride;
-    };
-  struct Tpair
-    {
-    Tring r1,r2;
-    };
-  std::vector<Tpair> pair;
-  size_t nphmax;
+    size_t nphmax;
 /*! Creates a geometry information from a set of ring descriptions.
     All arrays passed to this function must have \a nrings elements.
     \param nrings the number of rings in the map
@@ -61,11 +61,15 @@ struct sharp_geom_info
       and adjoint map2alm transforms.
       Pass nullptr to use 1.0 as weight for all rings.
  */
-  sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
-    const ptrdiff_t *stride, const double *phi0, const double *theta,
-    const double *wgt);
-  void clear_map(double *map) const;
-  void clear_map(float *map) const;
+    sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
+      ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt);
+    virtual ~sharp_geom_info() {}
+    virtual void clear_map(double *map) const;
+    virtual void clear_map(float *map) const;
+    virtual void get_ring(size_t iring, const double *map, double *ringtmp) const;
+    virtual void get_ring(size_t iring, const float *map, double *ringtmp) const;
+    virtual void add_ring(size_t iring, const double *ringtmp, double *map) const;
+    virtual void add_ring(size_t iring, const double *ringtmp, float *map) const;
   };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
