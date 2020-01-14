@@ -33,6 +33,7 @@
 #define MRUTIL_MORTON_UTILS_H
 
 #include <cstdint>
+#include <array>
 
 #ifdef __BMI2__
 #include <x86intrin.h>
@@ -42,47 +43,48 @@ namespace mr {
 
 #ifndef __BMI2__
 uint32_t block2morton2D_32 (uint32_t v);
-uint32_t coord2morton2D_32 (uint32_t x, uint32_t y);
+uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy);
 uint32_t morton2block2D_32 (uint32_t v);
-void morton2coord2D_32 (uint32_t v, uint32_t *x, uint32_t *y);
+std::array<uint32_t,2> morton2coord2D_32 (uint32_t v);
 uint64_t block2morton2D_64 (uint64_t v);
-uint64_t coord2morton2D_64 (uint64_t x, uint64_t y);
+uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy);
 uint64_t morton2block2D_64 (uint64_t v);
-void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y);
+std::array<uint64_t,2> morton2coord2D_64 (uint64_t v);
 
 uint32_t block2morton3D_32 (uint32_t v);
-uint32_t coord2morton3D_32 (uint32_t x, uint32_t y, uint32_t z);
+uint32_t coord2morton3D_32 (std::array<uint32_t,3> xyz);
 uint32_t morton2block3D_32 (uint32_t v);
-void morton2coord3D_32 (uint32_t v, uint32_t *x, uint32_t *y, uint32_t *z);
+std::array<uint32_t,3> morton2coord3D_32 (uint32_t v);
 uint64_t block2morton3D_64 (uint64_t v);
-uint64_t coord2morton3D_64 (uint64_t x, uint64_t y, uint64_t z);
+uint64_t coord2morton3D_64 (std::array<uint64_t,3> xyz);
 uint64_t morton2block3D_64 (uint64_t v);
-void morton2coord3D_64 (uint64_t v, uint64_t *x, uint64_t *y, uint64_t *z);
+std::array<uint64_t,3> morton2coord3D_64 (uint64_t v);
 #else
 inline uint32_t block2morton2D_32 (uint32_t v)
   { return _pdep_u32(v,0x55555555u)|_pdep_u32(v>>16,0xaaaaaaaau); }
-inline uint32_t coord2morton2D_32 (uint32_t x, uint32_t y)
-  { return _pdep_u32(x,0x55555555u)|_pdep_u32(y,0xaaaaaaaau); }
+inline uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)
+  { return _pdep_u32(xy[0],0x55555555u)|_pdep_u32(xy[1],0xaaaaaaaau); }
 inline uint32_t morton2block2D_32 (uint32_t v)
   { return _pext_u32(v,0x55555555u)|(_pext_u32(v,0xaaaaaaaau)<<16); }
-inline void morton2coord2D_32 (uint32_t v, uint32_t *x, uint32_t *y)
-  { *x=_pext_u32(v,0x55555555u); *y=_pext_u32(v,0xaaaaaaaau); }
+inline std::array<uint32_t,2> morton2coord2D_32 (uint32_t v)
+  { return {_pext_u32(v,0x55555555u), _pext_u32(v,0xaaaaaaaau)}; }
 inline uint64_t block2morton2D_64 (uint64_t v)
   {
   return _pdep_u64(v,0x5555555555555555u)
         |_pdep_u64(v>>32,0xaaaaaaaaaaaaaaaau);
   }
-inline uint64_t coord2morton2D_64 (uint64_t x, uint64_t y)
-  { return _pdep_u64(x,0x5555555555555555u)|_pdep_u64(y,0xaaaaaaaaaaaaaaaau); }
+inline uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy)
+  { return _pdep_u64(xy[0],0x5555555555555555u)|
+           _pdep_u64(xy[1],0xaaaaaaaaaaaaaaaau); }
 inline uint64_t morton2block2D_64 (uint64_t v)
   {
   return _pext_u64(v,0x5555555555555555u)
        |(_pext_u64(v,0xaaaaaaaaaaaaaaaau)<<32);
   }
-inline void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y)
+inline std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
   {
-  *x=_pext_u64(v,0x5555555555555555u);
-  *y=_pext_u64(v,0xaaaaaaaaaaaaaaaau);
+  return {_pext_u64(v,0x5555555555555555u),
+          _pext_u64(v,0xaaaaaaaaaaaaaaaau)};
   }
 
 inline uint32_t block2morton3D_32 (uint32_t v)
@@ -91,11 +93,11 @@ inline uint32_t block2morton3D_32 (uint32_t v)
         |_pdep_u32(v>>10,0x12492492u)
         |_pdep_u32(v>>20,0x24924924u);
   }
-inline uint32_t coord2morton3D_32 (uint32_t x, uint32_t y, uint32_t z)
+inline uint32_t coord2morton3D_32 (std::array<uint32_t,3> xyz)
   {
-  return _pdep_u32(x,0x09249249u)
-        |_pdep_u32(y,0x12492492u)
-        |_pdep_u32(z,0x24924924u);
+  return _pdep_u32(xyz[0],0x09249249u)
+        |_pdep_u32(xyz[1],0x12492492u)
+        |_pdep_u32(xyz[2],0x24924924u);
   }
 inline uint32_t morton2block3D_32 (uint32_t v)
   {
@@ -103,12 +105,11 @@ inline uint32_t morton2block3D_32 (uint32_t v)
        |(_pext_u32(v,0x12492492u)<<10)
        |(_pext_u32(v,0x24924924u)<<20);
   }
-inline void morton2coord3D_32 (uint32_t v,
-  uint32_t *x, uint32_t *y, uint32_t *z)
+inline std::array<uint32_t,3> morton2coord3D_32 (uint32_t v)
   {
-  *x = _pext_u32(v,0x09249249u);
-  *y = _pext_u32(v,0x12492492u);
-  *z = _pext_u32(v,0x24924924u);
+  return {_pext_u32(v,0x09249249u),
+          _pext_u32(v,0x12492492u),
+          _pext_u32(v,0x24924924u)};
   }
 inline uint64_t block2morton3D_64 (uint64_t v)
   {
@@ -116,11 +117,11 @@ inline uint64_t block2morton3D_64 (uint64_t v)
         |_pdep_u64(v>>21,0x2492492492492492u)
         |_pdep_u64(v>>42,0x4924924924924924u);
   }
-inline uint64_t coord2morton3D_64 (uint64_t x, uint64_t y, uint64_t z)
+inline uint64_t coord2morton3D_64 (std::array<uint64_t,3> xyz)
   {
-  return _pdep_u64(x,0x1249249249249249u)
-        |_pdep_u64(y,0x2492492492492492u)
-        |_pdep_u64(z,0x4924924924924924u);
+  return _pdep_u64(xyz[0],0x1249249249249249u)
+        |_pdep_u64(xyz[1],0x2492492492492492u)
+        |_pdep_u64(xyz[2],0x4924924924924924u);
   }
 inline uint64_t morton2block3D_64 (uint64_t v)
   {
@@ -128,12 +129,11 @@ inline uint64_t morton2block3D_64 (uint64_t v)
        |(_pext_u64(v,0x2492492492492492u)<<21)
        |(_pext_u64(v,0x4924924924924924u)<<42);
   }
-inline void morton2coord3D_64 (uint64_t v,
-  uint64_t *x, uint64_t *y, uint64_t *z)
+inline std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
   {
-  *x = _pext_u64(v,0x1249249249249249u);
-  *y = _pext_u64(v,0x2492492492492492u);
-  *z = _pext_u64(v,0x4924924924924924u);
+  return {_pext_u64(v,0x1249249249249249u),
+          _pext_u64(v,0x2492492492492492u),
+          _pext_u64(v,0x4924924924924924u)};
   }
 #endif
 
@@ -149,25 +149,23 @@ uint32_t peano2morton3D_32(uint32_t v, int bits);
 uint64_t morton2peano3D_64(uint64_t v, int bits);
 uint64_t peano2morton3D_64(uint64_t v, int bits);
 
-inline uint32_t coord2block2D_32(uint32_t x, uint32_t y)
-  { return (x&0xffff) | (y<<16); }
-inline void block2coord2D_32(uint32_t v, uint32_t *x, uint32_t *y)
-  { *x=v&0xffff; *y=v>>16; }
-inline uint32_t coord2block3D_32(uint32_t x, uint32_t y, uint32_t z)
-  { return (x&0x3ff) | ((y&0x3ff)<<10) | ((z&0x3ff)<<20); }
-inline void block2coord3D_32(uint32_t v,
-  uint32_t *x, uint32_t *y, uint32_t *z)
-  { *x=v&0x3ff; *y=(v>>10)&0x3ff; *z=(v>>20)&0x3ff; }
+inline uint32_t coord2block2D_32(std::array<uint32_t,2> xy)
+  { return (xy[0]&0xffff) | (xy[1]<<16); }
+inline std::array<uint32_t,2> block2coord2D_32(uint32_t v)
+  { return {v&0xffff,v>>16}; }
+inline uint32_t coord2block3D_32(std::array<uint32_t,3> xyz)
+  { return (xyz[0]&0x3ff) | ((xyz[1]&0x3ff)<<10) | ((xyz[2]&0x3ff)<<20); }
+inline std::array<uint32_t,3> block2coord3D_32(uint32_t v)
+  { return {v&0x3ff, (v>>10)&0x3ff, (v>>20)&0x3ff}; }
 
-inline uint64_t coord2block2D_64(uint64_t x, uint64_t y)
-  { return (x&0xffffffff) | (y<<32); }
-inline void block2coord2D_64(uint64_t v, uint64_t *x, uint64_t *y)
-  { *x=v&0xffffffff; *y=v>>32; }
-inline uint64_t coord2block3D_64(uint64_t x, uint64_t y, uint64_t z)
-  { return (x&0x1fffff) | ((y&0x1fffff)<<21) | ((z&0x1fffff)<<42); }
-inline void block2coord3D_64(uint64_t v,
-  uint64_t *x, uint64_t *y, uint64_t *z)
-  { *x=v&0x1fffff; *y=(v>>21)&0x1fffff; *z=(v>>42)&0x1fffff; }
+inline uint64_t coord2block2D_64(std::array<uint64_t,2> xy)
+  { return (xy[0]&0xffffffff) | (xy[1]<<32); }
+inline std::array<uint64_t,2> block2coord2D_64(uint64_t v)
+  { return {v&0xffffffff, v>>32}; }
+inline uint64_t coord2block3D_64(std::array<uint64_t,3> xyz)
+  { return (xyz[0]&0x1fffff) | ((xyz[1]&0x1fffff)<<21) | ((xyz[2]&0x1fffff)<<42); }
+inline std::array<uint64_t,3> block2coord3D_64(uint64_t v)
+  { return {v&0x1fffff, (v>>21)&0x1fffff, (v>>42)&0x1fffff}; }
 
 }
 

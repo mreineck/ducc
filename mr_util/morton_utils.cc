@@ -66,11 +66,11 @@ uint32_t block2morton2D_32 (uint32_t v)
   return  I(utab[ v     &0xff])     | (I(utab[(v>> 8)&0xff])<<16)
        | (I(utab[(v>>16)&0xff])<<1) | (I(utab[(v>>24)&0xff])<<17);
   }
-uint32_t coord2morton2D_32 (uint32_t x, uint32_t y)
+uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)
   {
   typedef uint32_t I;
-  return  I(utab[x&0xff])     | (I(utab[(x>>8)&0xff])<<16)
-       | (I(utab[y&0xff])<<1) | (I(utab[(y>>8)&0xff])<<17);
+  return  I(utab[xy[0]&0xff])     | (I(utab[(xy[0]>>8)&0xff])<<16)
+       | (I(utab[xy[1]&0xff])<<1) | (I(utab[(xy[1]>>8)&0xff])<<17);
   }
 uint32_t morton2block2D_32 (uint32_t v)
   {
@@ -81,14 +81,14 @@ uint32_t morton2block2D_32 (uint32_t v)
   return ctab[raw1&0xff]      | (ctab[(raw1>>8)&0xff]<< 4)
       | (ctab[raw2&0xff]<<16) | (ctab[(raw2>>8)&0xff]<<20);
   }
-void morton2coord2D_32 (uint32_t v, uint32_t *x, uint32_t *y)
+std::array<uint32_t,2> morton2coord2D_32 (uint32_t v)
   {
   typedef uint32_t I;
   I raw1 = v&0x55555555, raw2 = (v>>1)&0x55555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  *x =  ctab[raw1&0xff] | (ctab[(raw1>>8)&0xff]<<4);
-  *y =  ctab[raw2&0xff] | (ctab[(raw2>>8)&0xff]<<4);
+  return {ctab[raw1&0xff] | (ctab[(raw1>>8)&0xff]<<4),
+          ctab[raw2&0xff] | (ctab[(raw2>>8)&0xff]<<4)};
   }
 uint64_t block2morton2D_64 (uint64_t v)
   {
@@ -98,13 +98,13 @@ uint64_t block2morton2D_64 (uint64_t v)
        | (I(utab[(v>>32)&0xff])<< 1) | (I(utab[(v>>40)&0xff])<<17)
        | (I(utab[(v>>48)&0xff])<<33) | (I(utab[(v>>56)&0xff])<<49);
   }
-uint64_t coord2morton2D_64 (uint64_t x, uint64_t y)
+uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy)
   {
   typedef uint64_t I;
-  return  I(utab[ x     &0xff])      | (I(utab[(x>> 8)&0xff])<<16)
-       | (I(utab[(x>>16)&0xff])<<32) | (I(utab[(x>>24)&0xff])<<48)
-       | (I(utab[ y     &0xff])<< 1) | (I(utab[(y>> 8)&0xff])<<17)
-       | (I(utab[(y>>16)&0xff])<<33) | (I(utab[(y>>24)&0xff])<<49);
+  return  I(utab[ xy[0]     &0xff])      | (I(utab[(xy[0]>> 8)&0xff])<<16)
+       | (I(utab[(xy[0]>>16)&0xff])<<32) | (I(utab[(xy[0]>>24)&0xff])<<48)
+       | (I(utab[ xy[1]     &0xff])<< 1) | (I(utab[(xy[1]>> 8)&0xff])<<17)
+       | (I(utab[(xy[1]>>16)&0xff])<<33) | (I(utab[(xy[1]>>24)&0xff])<<49);
   }
 uint64_t morton2block2D_64 (uint64_t v)
   {
@@ -117,16 +117,16 @@ uint64_t morton2block2D_64 (uint64_t v)
       | (I(ctab[ raw2     &0xff])<<32) | (I(ctab[(raw2>> 8)&0xff])<<36)
       | (I(ctab[(raw2>>32)&0xff])<<48) | (I(ctab[(raw2>>40)&0xff])<<52);
   }
-void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y)
+std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
   {
   typedef uint64_t I;
   I raw1 = v&0x5555555555555555, raw2 = (v>>1)&0x5555555555555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  *x =  I(ctab[ raw1     &0xff])      | (I(ctab[(raw1>> 8)&0xff])<< 4)
-     | (I(ctab[(raw1>>32)&0xff])<<16) | (I(ctab[(raw1>>40)&0xff])<<20);
-  *y =  I(ctab[ raw2     &0xff])      | (I(ctab[(raw2>> 8)&0xff])<< 4)
-     | (I(ctab[(raw2>>32)&0xff])<<16) | (I(ctab[(raw2>>40)&0xff])<<20);
+  return { I(ctab[ raw1     &0xff])      | (I(ctab[(raw1>> 8)&0xff])<< 4)
+        | (I(ctab[(raw1>>32)&0xff])<<16) | (I(ctab[(raw1>>40)&0xff])<<20),
+           I(ctab[ raw2     &0xff])      | (I(ctab[(raw2>> 8)&0xff])<< 4)
+        | (I(ctab[(raw2>>32)&0xff])<<16) | (I(ctab[(raw2>>40)&0xff])<<20)};
   }
 
 #else
@@ -225,12 +225,12 @@ uint32_t block2morton3D_32 (uint32_t v)
   v3=(v3|(v3>>29))&0x1fffffff;
   return v3|(spread3D_32(v>>20)<<2);
   }
-uint32_t coord2morton3D_32 (uint32_t x, uint32_t y, uint32_t z)
+uint32_t coord2morton3D_32 (std::array<uint32_t,3> xyz)
   {
-  uint32_t v2=(x&0x3ff)|((y&0x3ff)<<10);
+  uint32_t v2=(xyz[0]&0x3ff)|((xyz[1]&0x3ff)<<10);
   uint64_t v3=spread3D_64(v2);
   v3=(v3|(v3>>29))&0x1fffffff;
-  return v3|(spread3D_32(z&0x3ff)<<2);
+  return v3|(spread3D_32(xyz[2]&0x3ff)<<2);
   }
 uint32_t morton2block3D_32 (uint32_t v)
   {
@@ -238,11 +238,11 @@ uint32_t morton2block3D_32 (uint32_t v)
       | (compress3D_32(v>>1)<<10)
       | (compress3D_32(v>>2)<<20);
   }
-void morton2coord3D_32 (uint32_t v, uint32_t *x, uint32_t *y, uint32_t *z)
+std::array<uint32_t,3> morton2coord3D_32 (uint32_t v)
   {
-  *x = compress3D_32(v);
-  *y = compress3D_32(v>>1);
-  *z = compress3D_32(v>>2);
+  return {compress3D_32(v),
+          compress3D_32(v>>1),
+          compress3D_32(v>>2)};
   }
 
 uint64_t block2morton3D_64 (uint64_t v)
@@ -251,11 +251,11 @@ uint64_t block2morton3D_64 (uint64_t v)
       | (spread3D_64(v>>21)<<1)
       | (spread3D_64(v>>42)<<2);
   }
-uint64_t coord2morton3D_64 (uint64_t x, uint64_t y, uint64_t z)
+uint64_t coord2morton3D_64 (std::array<uint64_t,3> xyz)
   {
-  return spread3D_64(x)
-      | (spread3D_64(y)<<1)
-      | (spread3D_64(z)<<2);
+  return spread3D_64(xyz[0])
+      | (spread3D_64(xyz[1])<<1)
+      | (spread3D_64(xyz[2])<<2);
   }
 uint64_t morton2block3D_64 (uint64_t v)
   {
@@ -263,11 +263,11 @@ uint64_t morton2block3D_64 (uint64_t v)
       | (compress3D_64(v>>1)<<21)
       | (compress3D_64(v>>2)<<42);
   }
-void morton2coord3D_64 (uint64_t v, uint64_t *x, uint64_t *y, uint64_t *z)
+std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
   {
-  *x = compress3D_64(v);
-  *y = compress3D_64(v>>1);
-  *z = compress3D_64(v>>2);
+  return { compress3D_64(v),
+           compress3D_64(v>>1),
+           compress3D_64(v>>2)};
   }
 
 #endif
