@@ -288,14 +288,6 @@ static void check_sign_scale(void)
   auto npix=ptrdiff_t(nrings*ppring);
   auto tinfo = sharp_make_gauss_geom_info (nrings, ppring, 0., 1, ppring);
 
-  /* flip theta to emulate the "old" Gaussian grid geometry */
-  for (auto &r: tinfo->ring)
-    {
-    const double pi=3.141592653589793238462643383279502884197;
-    r.cth=-r.cth;
-    r.theta=pi-r.theta;
-    }
-
   auto alms = sharp_make_triangular_alm_info(lmax,mmax,1);
   ptrdiff_t nalms = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
 
@@ -305,58 +297,61 @@ static void check_sign_scale(void)
   vector<dcmplx> balm(2*nalms,dcmplx(1.,1.));
   vector<dcmplx *>alm({&balm[0], &balm[nalms]});
 
+  /* use mirrored indices to emulate the "old" Gaussian grid geometry */
+  /* original indices were 0, npix/2 and npix-1 */
+  size_t i0=npix-ppring, i1=npix/2, i2=ppring-1;
   sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     nullptr,nullptr);
-  MR_assert(approx(map[0][0     ], 3.588246976618616912e+00,1e-12),
+  MR_assert(approx(map[0][i0], 3.588246976618616912e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][npix/2], 4.042209792157496651e+01,1e-12),
+  MR_assert(approx(map[0][i1], 4.042209792157496651e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][npix-1],-1.234675107554816442e+01,1e-12),
+  MR_assert(approx(map[0][i2],-1.234675107554816442e+01,1e-12),
     "error");
 
   sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     nullptr,nullptr);
-  MR_assert(approx(map[0][0     ], 2.750897760535633285e+00,1e-12),
+  MR_assert(approx(map[0][i0], 2.750897760535633285e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][npix/2], 3.137704477368562905e+01,1e-12),
+  MR_assert(approx(map[0][i1], 3.137704477368562905e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][npix-1],-8.405730859837063917e+01,1e-12),
+  MR_assert(approx(map[0][i2],-8.405730859837063917e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][0     ],-2.398026536095463346e+00,1e-12),
+  MR_assert(approx(map[1][i0],-2.398026536095463346e+00,1e-12),
     "error");
-  MR_assert(approx(map[1][npix/2],-4.961140548331700728e+01,1e-12),
+  MR_assert(approx(map[1][i1],-4.961140548331700728e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][npix-1],-1.412765834230440021e+01,1e-12),
+  MR_assert(approx(map[1][i2],-1.412765834230440021e+01,1e-12),
     "error");
 
   sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
     nullptr,nullptr);
-  MR_assert(approx(map[0][0     ],-1.398186224727334448e+00,1e-12),
+  MR_assert(approx(map[0][i0],-1.398186224727334448e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][npix/2],-2.456676000884031197e+01,1e-12),
+  MR_assert(approx(map[0][i1],-2.456676000884031197e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][npix-1],-1.516249174408820863e+02,1e-12),
+  MR_assert(approx(map[0][i2],-1.516249174408820863e+02,1e-12),
     "error");
-  MR_assert(approx(map[1][0     ],-3.173406200299964119e+00,1e-12),
+  MR_assert(approx(map[1][i0],-3.173406200299964119e+00,1e-12),
     "error");
-  MR_assert(approx(map[1][npix/2],-5.831327404513146462e+01,1e-12),
+  MR_assert(approx(map[1][i1],-5.831327404513146462e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][npix-1],-1.863257892248353897e+01,1e-12),
+  MR_assert(approx(map[1][i2],-1.863257892248353897e+01,1e-12),
     "error");
 
   sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),*tinfo,*alms,
     SHARP_DP,nullptr,nullptr);
-  MR_assert(approx(map[0][0     ],-6.859393905369091105e-01,1e-11),
+  MR_assert(approx(map[0][i0],-6.859393905369091105e-01,1e-11),
     "error");
-  MR_assert(approx(map[0][npix/2],-2.103947835973212364e+02,1e-12),
+  MR_assert(approx(map[0][i1],-2.103947835973212364e+02,1e-12),
     "error");
-  MR_assert(approx(map[0][npix-1],-1.092463246472086439e+03,1e-12),
+  MR_assert(approx(map[0][i2],-1.092463246472086439e+03,1e-12),
     "error");
-  MR_assert(approx(map[1][0     ],-1.411433220713928165e+02,1e-12),
+  MR_assert(approx(map[1][i0],-1.411433220713928165e+02,1e-12),
     "error");
-  MR_assert(approx(map[1][npix/2],-1.146122859381925082e+03,1e-12),
+  MR_assert(approx(map[1][i1],-1.146122859381925082e+03,1e-12),
     "error");
-  MR_assert(approx(map[1][npix-1], 7.821618677689795049e+02,1e-12),
+  MR_assert(approx(map[1][i2], 7.821618677689795049e+02,1e-12),
     "error");
   }
 
