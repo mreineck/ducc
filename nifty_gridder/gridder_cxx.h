@@ -157,6 +157,7 @@ template<typename T> void hartley2_2D(const const_mav<T,2> &in,
      });
   }
 
+
 class ES_Kernel
   {
   private:
@@ -180,7 +181,7 @@ class ES_Kernel
     ES_Kernel(size_t supp_, size_t nthreads)
       : ES_Kernel(supp_, 2., nthreads){}
 
-    double operator()(double v) const { return exp(beta*(sqrt(1.-v*v)-1.)); }
+    double operator()(double v) const { return (v*v>1.) ? 0. : exp(beta*(sqrt(1.-v*v)-1.)); }
     /* Compute correction factors for the ES gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
     double corfac(double v) const
@@ -200,7 +201,7 @@ class ES_Kernel
         MR_assert(supp<opt_beta.size(), "bad support size");
         return opt_beta[supp];
         }
-      if (ofactor>=1.2)
+      if (ofactor>=1.175)
         {
         // empirical, but pretty accurate approximation
         static const array<double,16> betacorr{0,0,-0.51,-0.21,-0.1,-0.05,-0.025,-0.0125,0,0,0,0,0,0,0,0};
@@ -703,7 +704,12 @@ template<typename T, typename T2=complex<T>> class Helper
       for (size_t i=nexp; i<nvecs; ++i)
         kernel[i]=0;
       for (size_t i=0; i<nvecs; ++i)
-        kernel[i] = exp(beta*(sqrt(T(1)-kernel[i]*kernel[i])-T(1)));
+        {
+        kernel[i] = T(1) - kernel[i]*kernel[i];
+        kernel[i] = (kernel[i]<0) ? T(-200.) : beta*(sqrt(kernel[i])-T(1));
+        }
+      for (size_t i=0; i<nvecs; ++i)
+        kernel[i] = exp(kernel[i]);
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
         if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
