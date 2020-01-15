@@ -249,11 +249,11 @@ template<> class helper_<double,8>
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
     static size_t maskbits(Tm v) { return v; }
   };
-template<> class helper_<float,8>
+template<> class helper_<float,16>
   {
   private:
     using T = float;
-    static constexpr size_t len = 8;
+    static constexpr size_t len = 16;
   public:
     using Tv = __m512;
     using Tm = __mmask16;
