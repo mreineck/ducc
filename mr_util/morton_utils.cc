@@ -62,37 +62,37 @@ X(0),X(8),X(2048),X(2056)
 
 uint32_t block2morton2D_32 (uint32_t v)
   {
-  typedef uint32_t I;
+  using I=uint32_t;
   return  I(utab[ v     &0xff])     | (I(utab[(v>> 8)&0xff])<<16)
        | (I(utab[(v>>16)&0xff])<<1) | (I(utab[(v>>24)&0xff])<<17);
   }
 uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)
   {
-  typedef uint32_t I;
+  using I=uint32_t;
   return  I(utab[xy[0]&0xff])     | (I(utab[(xy[0]>>8)&0xff])<<16)
        | (I(utab[xy[1]&0xff])<<1) | (I(utab[(xy[1]>>8)&0xff])<<17);
   }
 uint32_t morton2block2D_32 (uint32_t v)
   {
-  typedef uint32_t I;
+  using I=uint32_t;
   I raw1 = v&0x55555555, raw2 = (v>>1)&0x55555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  return ctab[raw1&0xff]      | (ctab[(raw1>>8)&0xff]<< 4)
-      | (ctab[raw2&0xff]<<16) | (ctab[(raw2>>8)&0xff]<<20);
+  return I(ctab[raw1&0xff]    ) | I(ctab[(raw1>>8)&0xff]<< 4)
+       | I(ctab[raw2&0xff]<<16) | I(ctab[(raw2>>8)&0xff]<<20);
   }
 std::array<uint32_t,2> morton2coord2D_32 (uint32_t v)
   {
-  typedef uint32_t I;
-  I raw1 = v&0x55555555, raw2 = (v>>1)&0x55555555;
+  using I=uint32_t;
+  I raw1 = v&0x55555555u, raw2 = (v>>1)&0x55555555u;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
-  return {ctab[raw1&0xff] | (ctab[(raw1>>8)&0xff]<<4),
-          ctab[raw2&0xff] | (ctab[(raw2>>8)&0xff]<<4)};
+  return {I(ctab[raw1&0xff]) | I(ctab[(raw1>>8)&0xff]<<4),
+          I(ctab[raw2&0xff]) | I(ctab[(raw2>>8)&0xff]<<4)};
   }
 uint64_t block2morton2D_64 (uint64_t v)
   {
-  typedef uint64_t I;
+  using I=uint64_t;
   return  I(utab[ v     &0xff])      | (I(utab[(v>> 8)&0xff])<<16)
        | (I(utab[(v>>16)&0xff])<<32) | (I(utab[(v>>24)&0xff])<<48)
        | (I(utab[(v>>32)&0xff])<< 1) | (I(utab[(v>>40)&0xff])<<17)
@@ -100,7 +100,7 @@ uint64_t block2morton2D_64 (uint64_t v)
   }
 uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy)
   {
-  typedef uint64_t I;
+  using I=uint64_t;
   return  I(utab[ xy[0]     &0xff])      | (I(utab[(xy[0]>> 8)&0xff])<<16)
        | (I(utab[(xy[0]>>16)&0xff])<<32) | (I(utab[(xy[0]>>24)&0xff])<<48)
        | (I(utab[ xy[1]     &0xff])<< 1) | (I(utab[(xy[1]>> 8)&0xff])<<17)
@@ -108,7 +108,7 @@ uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy)
   }
 uint64_t morton2block2D_64 (uint64_t v)
   {
-  typedef uint64_t I;
+  using I=uint64_t;
   I raw1 = v&0x5555555555555555, raw2 = (v>>1)&0x5555555555555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
@@ -119,7 +119,7 @@ uint64_t morton2block2D_64 (uint64_t v)
   }
 std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
   {
-  typedef uint64_t I;
+  using I=uint64_t;
   I raw1 = v&0x5555555555555555, raw2 = (v>>1)&0x5555555555555555;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
