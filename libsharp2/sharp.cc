@@ -106,42 +106,40 @@ struct ringhelper
       length=nph;
       }
     }
-  MRUTIL_NOINLINE void phase2ring (const sharp_geom_info::Tring &info,
-    double *data, int mmax, const dcmplx *phase, int pstride, int flags)
+  MRUTIL_NOINLINE void phase2ring (const sharp_geom_info &info, size_t iring,
+    double *data, int mmax, const dcmplx *phase, int pstride)
     {
-    int nph = info.nph;
+    int nph = info.nph(iring);
 
-    update (nph, mmax, info.phi0);
-
-    double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1.;
+    update (nph, mmax, info.phi0(iring));
 
     if (nph>=2*mmax+1)
       {
       if (norot)
         for (int m=0; m<=mmax; ++m)
           {
-          data[2*m]=phase[m*pstride].real()*wgt;
-          data[2*m+1]=phase[m*pstride].imag()*wgt;
+          data[2*m]=phase[m*pstride].real();
+          data[2*m+1]=phase[m*pstride].imag();
           }
       else
         for (int m=0; m<=mmax; ++m)
           {
           dcmplx tmp = phase[m*pstride]*shiftarr[m];
-          data[2*m]=tmp.real()*wgt;
-          data[2*m+1]=tmp.imag()*wgt;
+          data[2*m]=tmp.real();
+          data[2*m+1]=tmp.imag();
           }
       for (int m=2*(mmax+1); m<nph+2; ++m)
         data[m]=0.;
       }
     else
       {
-      data[0]=phase[0].real()*wgt;
+      data[0]=phase[0].real();
       fill(data+1,data+nph+2,0.);
 
       ptrdiff_t idx1=1, idx2=nph-1;
       for (int m=1; m<=mmax; ++m)
         {
-        dcmplx tmp = phase[m*pstride]*wgt;
+        dcmplx tmp = phase[m*pstride];
         if(!norot) tmp*=shiftarr[m];
         if (idx1<(nph+2)/2)
           {
@@ -160,13 +158,12 @@ struct ringhelper
     data[1]=data[0];
     plan->exec(&(data[1]), 1., false);
     }
-  MRUTIL_NOINLINE void ring2phase (const sharp_geom_info::Tring &info,
-    double *data, int mmax, dcmplx *phase, int pstride, int flags)
+  MRUTIL_NOINLINE void ring2phase (const sharp_geom_info &info, size_t iring,
+    double *data, int mmax, dcmplx *phase, int pstride)
     {
-    int nph = info.nph;
+    int nph = info.nph(iring);
 
-    update (nph, mmax, -info.phi0);
-    double wgt = (flags&SHARP_USE_WEIGHTS) ? info.weight : 1;
+    update (nph, mmax, -info.phi0(iring));
 
     plan->exec (&(data[1]), 1., true);
     data[0]=data[1];
@@ -176,11 +173,11 @@ struct ringhelper
       {
       if (norot)
         for (int m=0; m<=mmax; ++m)
-          phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]) * wgt;
+          phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]);
       else
         for (int m=0; m<=mmax; ++m)
           phase[m*pstride] =
-            dcmplx(data[2*m], data[2*m+1]) * shiftarr[m] * wgt;
+            dcmplx(data[2*m], data[2*m+1]) * shiftarr[m];
       }
     else
       {
@@ -189,9 +186,9 @@ struct ringhelper
         int idx=m%nph;
         dcmplx val;
         if (idx<(nph-idx))
-          val = dcmplx(data[2*idx], data[2*idx+1]) * wgt;
+          val = dcmplx(data[2*idx], data[2*idx+1]);
         else
-          val = dcmplx(data[2*(nph-idx)], -data[2*(nph-idx)+1]) * wgt;
+          val = dcmplx(data[2*(nph-idx)], -data[2*(nph-idx)+1]);
         if (!norot)
           val *= shiftarr[m];
         phase[m*pstride]=val;
@@ -227,13 +224,13 @@ ptrdiff_t sharp_alm_info::index (int l, int mi)
   return mvstart[mi]+stride*l;
   }
 
-sharp_geom_info::sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
+sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
   ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)
   : ring(nrings), stride(stride_)
   {
   size_t pos=0;
 
-  nphmax=0;
+  nphmax_=0;
 
   for (size_t m=0; m<nrings; ++m)
     {
@@ -244,31 +241,31 @@ sharp_geom_info::sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff
     ring[m].phi0 = phi0[m];
     ring[m].ofs = ofs[m];
     ring[m].nph = nph[m];
-    if (nphmax<nph[m]) nphmax=nph[m];
+    if (nphmax_<nph[m]) nphmax_=nph[m];
     }
   sort(ring.begin(), ring.end(),[](const Tring &a, const Tring &b)
     { return (a.sth<b.sth); });
   while (pos<nrings)
     {
-    pair.push_back(Tpair());
-    pair.back().r1=pos;
+    pair_.push_back(Tpair());
+    pair_.back().r1=pos;
     if ((pos<nrings-1) && approx(ring[pos].cth,-ring[pos+1].cth,1e-12))
       {
       if (ring[pos].cth>0)  // make sure northern ring is in r1
-        pair.back().r2=pos+1;
+        pair_.back().r2=pos+1;
       else
         {
-        pair.back().r1=pos+1;
-        pair.back().r2=pos;
+        pair_.back().r1=pos+1;
+        pair_.back().r2=pos;
         }
       ++pos;
       }
     else
-      pair.back().r2=size_t(~0);
+      pair_.back().r2=size_t(~0);
     ++pos;
     }
 
-  sort(pair.begin(), pair.end(), [this] (const Tpair &a, const Tpair &b)
+  sort(pair_.begin(), pair_.end(), [this] (const Tpair &a, const Tpair &b)
     {
     if (ring[a.r1].nph==ring[b.r1].nph)
     return (ring[a.r1].phi0 < ring[b.r1].phi0) ? true :
@@ -295,7 +292,7 @@ static size_t sharp_get_mmax (const vector<size_t> &mval)
   return nm-1;
   }
 
-MRUTIL_NOINLINE void sharp_geom_info::clear_map (double *map) const
+MRUTIL_NOINLINE void sharp_standard_geom_info::clear_map (double *map) const
   {
   for (const auto &r: ring)
     {
@@ -306,7 +303,7 @@ MRUTIL_NOINLINE void sharp_geom_info::clear_map (double *map) const
         map[r.ofs+i*stride]=0;
     }
   }
-MRUTIL_NOINLINE void sharp_geom_info::clear_map (float *map) const
+MRUTIL_NOINLINE void sharp_standard_geom_info::clear_map (float *map) const
   {
   for (const auto &r: ring)
     {
@@ -467,32 +464,36 @@ MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t lmax, size_t mi)
   }
 
 //virtual
-void sharp_geom_info::add_ring(size_t iring, const double *ringtmp, double *map) const
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const
   {
   double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += ringtmp[m];
+    p1[m*stride] += ringtmp[m]*wgt;
   }
 //virtual
-void sharp_geom_info::add_ring(size_t iring, const double *ringtmp, float *map) const
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const
   {
   float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += float(ringtmp[m]);
+    p1[m*stride] += float(ringtmp[m]*wgt);
   }
 //virtual
-void sharp_geom_info::get_ring(size_t iring, const double *map, double *ringtmp) const
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const
   {
   const double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride];
+    ringtmp[m] = p1[m*stride]*wgt;
   }
 //virtual
-void sharp_geom_info::get_ring(size_t iring, const float *map, double *ringtmp) const
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const
   {
   const float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride];
+    ringtmp[m] = p1[m*stride]*wgt;
   }
 
 MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info &ginfo, size_t iring,
@@ -500,10 +501,10 @@ MRUTIL_NOINLINE void sharp_job::ringtmp2ring (const sharp_geom_info &ginfo, size
   {
   if (flags & SHARP_DP)
     for (size_t i=0; i<nmaps; ++i)
-      ginfo.add_ring(iring, &ringtmp[i*rstride+1], ((double  **)map)[i]);
+      ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, &ringtmp[i*rstride+1], ((double  **)map)[i]);
   else
     for (size_t i=0; i<nmaps; ++i)
-      ginfo.add_ring(iring, &ringtmp[i*rstride+1], ((float  **)map)[i]);
+      ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, &ringtmp[i*rstride+1], ((float  **)map)[i]);
   }
 
 MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info &ginfo, size_t iring,
@@ -511,10 +512,10 @@ MRUTIL_NOINLINE void sharp_job::ring2ringtmp (const sharp_geom_info &ginfo, size
   {
   if (flags & SHARP_DP)
     for (size_t i=0; i<nmaps; ++i)
-      ginfo.get_ring(iring, ((double  **)map)[i], &ringtmp[i*rstride+1]);
+      ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, ((double  **)map)[i], &ringtmp[i*rstride+1]);
   else
     for (size_t i=0; i<nmaps; ++i)
-      ginfo.get_ring(iring, ((float  **)map)[i], &ringtmp[i*rstride+1]);
+      ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, ((float  **)map)[i], &ringtmp[i*rstride+1]);
   }
 
 //FIXME: set phase to zero if not SHARP_MAP2ALM?
@@ -525,22 +526,22 @@ MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim
   mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
-    int rstride=ginfo->nphmax+2;
+    int rstride=ginfo->nphmax()+2;
     vector<double> ringtmp(nmaps*rstride);
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = s_th*(ith-llim);
-      ring2ringtmp(*ginfo, ginfo->pair[ith].r1,ringtmp,rstride);
+      ring2ringtmp(*ginfo, ginfo->pair(ith).r1,ringtmp,rstride);
       for (size_t i=0; i<nmaps; ++i)
-        helper.ring2phase (ginfo->ring[ginfo->pair[ith].r1],
-          &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
-      if (ginfo->pair[ith].r2!=~size_t(0))
+        helper.ring2phase (*ginfo, ginfo->pair(ith).r1,
+          &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride);
+      if (ginfo->pair(ith).r2!=~size_t(0))
         {
-        ring2ringtmp(*ginfo, ginfo->pair[ith].r2,ringtmp,rstride);
+        ring2ringtmp(*ginfo, ginfo->pair(ith).r2,ringtmp,rstride);
         for (size_t i=0; i<nmaps; ++i)
-          helper.ring2phase (ginfo->ring[ginfo->pair[ith].r2],
-            &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
+          helper.ring2phase (*ginfo, ginfo->pair(ith).r2,
+            &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride);
         }
       }
     }); /* end of parallel region */
@@ -553,22 +554,22 @@ MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim
   mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
-    int rstride=ginfo->nphmax+2;
+    int rstride=ginfo->nphmax()+2;
     vector<double> ringtmp(nmaps*rstride);
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
       int dim2 = s_th*(ith-llim);
       for (size_t i=0; i<nmaps; ++i)
-        helper.phase2ring (ginfo->ring[ginfo->pair[ith].r1],
-          &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride,flags);
-      ringtmp2ring(*ginfo, ginfo->pair[ith].r1,ringtmp,rstride);
-      if (ginfo->pair[ith].r2!=~size_t(0))
+        helper.phase2ring (*ginfo, ginfo->pair(ith).r1,
+          &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride);
+      ringtmp2ring(*ginfo, ginfo->pair(ith).r1,ringtmp,rstride);
+      if (ginfo->pair(ith).r2!=~size_t(0))
         {
         for (size_t i=0; i<nmaps; ++i)
-          helper.phase2ring (ginfo->ring[ginfo->pair[ith].r2],
-            &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride,flags);
-        ringtmp2ring(*ginfo, ginfo->pair[ith].r2,ringtmp,rstride);
+          helper.phase2ring (*ginfo, ginfo->pair(ith).r2,
+            &ringtmp[i*rstride],mmax,&phase[dim2+2*i+1],pstride);
+        ringtmp2ring(*ginfo, ginfo->pair(ith).r2,ringtmp,rstride);
         }
       }
     }); /* end of parallel region */
@@ -589,7 +590,7 @@ MRUTIL_NOINLINE void sharp_job::execute()
   init_output();
 
   int nchunks, chunksize;
-  get_chunk_info(ginfo->pair.size(),sharp_veclen()*sharp_max_nvec(spin),
+  get_chunk_info(ginfo->npairs(),sharp_veclen()*sharp_max_nvec(spin),
                  nchunks,chunksize);
   vector<dcmplx> phasebuffer;
 //FIXME: needs to be changed to "nm"
@@ -599,15 +600,15 @@ MRUTIL_NOINLINE void sharp_job::execute()
 /* chunk loop */
   for (int chunk=0; chunk<nchunks; ++chunk)
     {
-    size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo->pair.size());
+    size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo->npairs());
     vector<int> ispair(ulim-llim);
     vector<size_t> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);
     for (size_t i=0; i<ulim-llim; ++i)
       {
-      ispair[i] = ginfo->pair[i+llim].r2!=~size_t(0);
-      cth[i] = ginfo->ring[ginfo->pair[i+llim].r1].cth;
-      sth[i] = ginfo->ring[ginfo->pair[i+llim].r1].sth;
+      ispair[i] = ginfo->pair(i+llim).r2!=~size_t(0);
+      cth[i] = ginfo->cth(ginfo->pair(i+llim).r1);
+      sth[i] = ginfo->sth(ginfo->pair(i+llim).r1);
       mlim[i] = sharp_get_mlim(lmax, spin, sth[i], cth[i]);
       }
 

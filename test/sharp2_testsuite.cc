@@ -35,6 +35,7 @@ using std::complex;
 #include "mr_util/threading.h"
 #include "mr_util/math_utils.h"
 #include "mr_util/string_utils.h"
+#include "mr_util/gl_integrator.h"
 
 using namespace std;
 using namespace mr;
@@ -134,11 +135,11 @@ static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
   return res;
   }
 
-static ptrdiff_t get_npix(const sharp_geom_info &ginfo)
+static size_t get_npix(const sharp_geom_info &ginfo)
   {
-  ptrdiff_t res=0;
-  for (const auto &r: ginfo.ring)
-    res += r.nph;
+  size_t res=0;
+  for (size_t i=0; i<ginfo.nrings(); ++i)
+    res += ginfo.nph(i);
   return res;
   }
 
@@ -254,23 +255,32 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     int nlat=gpar1, nlon=gpar2;
     if (nlat<1) nlat=lmax+1;
     if (nlon<1) nlon=2*mmax+1;
+    size_t npix_o = nlat*nlon;
     gpar1=nlat; gpar2=nlon;
-    ginfo=sharp_make_gauss_geom_info (nlat, nlon, 0., 1, nlon);
-    ptrdiff_t npix_o=get_npix(*ginfo);
-    size_t ofs=0;
-    for (auto &r:ginfo->ring)
+    const double pi=3.141592653589793238462643383279502884197;
+
+    vector<size_t> nph(nlat);
+    vector<double> phi0_(nlat);
+    vector<ptrdiff_t> ofs(nlat);
+
+    GL_Integrator integ(nlat);
+    auto theta = integ.coords();
+    auto weight = integ.weights();
+    size_t ofs_ = 0;
+    for (int m=0; m<nlat; ++m)
       {
-      int pring=1+2*sharp_get_mlim(lmax,0,r.sth,r.cth);
-      if (pring>nlon) pring=nlon;
-      pring=good_fft_size(pring);
-      r.nph=pring;
-      r.weight*=nlon*1./pring;
-      r.ofs=ofs;
-      ofs+=pring;
+      theta[m] = acos(-theta[m]);
+      nph[m] = good_fft_size(min<int>(nlon, 1+2*sharp_get_mlim(lmax,0,sin(theta[m]),cos(theta[m]))));
+      phi0_[m] = 0.;
+      ofs[m]=ofs_;
+      ofs_+=nph[m];
+      weight[m]*=2*pi/nph[m];
       }
+
+    ginfo = unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nlat, nph.data(), ofs.data(), 1, phi0_.data(), theta.data(), weight.data()));
     if (verbose)
       {
-      ptrdiff_t npix=get_npix(*ginfo);
+      auto npix=get_npix(*ginfo);
       cout << "Small Gauss grid, nlat=" << nlat << ", npix=" << npix
            << ", savings=" << ((npix_o-npix)*100./npix_o) << "\%" << endl;
       }

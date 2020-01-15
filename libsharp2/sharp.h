@@ -35,20 +35,44 @@
 class sharp_geom_info
   {
   public:
+    virtual ~sharp_geom_info() {}
+    virtual size_t nrings() const = 0;
+    virtual size_t npairs() const = 0;
+    struct Tpair
+      {
+      size_t r1, r2;
+      };
+    virtual size_t nph(size_t iring) const = 0;
+    virtual size_t nphmax() const = 0;
+    virtual double theta(size_t iring) const = 0;
+    virtual double cth(size_t iring) const = 0;
+    virtual double sth(size_t iring) const = 0;
+    virtual double phi0(size_t iring) const = 0;
+    virtual Tpair pair(size_t ipair) const = 0;
+
+    virtual void clear_map(double *map) const = 0;
+    virtual void clear_map(float *map) const = 0;
+    virtual void get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const = 0;
+    virtual void get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const = 0;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const = 0;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const = 0;
+  };
+
+class sharp_standard_geom_info: public sharp_geom_info
+  {
+  private:
     struct Tring
       {
       double theta, phi0, weight, cth, sth;
       ptrdiff_t ofs;
       size_t nph;
       };
-    struct Tpair
-      {
-      size_t r1, r2;
-      };
     std::vector<Tring> ring;
-    std::vector<Tpair> pair;
+    std::vector<Tpair> pair_;
     ptrdiff_t stride;
-    size_t nphmax;
+    size_t nphmax_;
+
+  public:
 /*! Creates a geometry information from a set of ring descriptions.
     All arrays passed to this function must have \a nrings elements.
     \param nrings the number of rings in the map
@@ -61,15 +85,23 @@ class sharp_geom_info
       and adjoint map2alm transforms.
       Pass nullptr to use 1.0 as weight for all rings.
  */
-    sharp_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
-      ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt);
-    virtual ~sharp_geom_info() {}
+    sharp_standard_geom_info(size_t nrings, const size_t *nph_, const ptrdiff_t *ofs,
+      ptrdiff_t stride_, const double *phi0_, const double *theta_, const double *wgt);
+    virtual size_t nrings() const { return ring.size(); }
+    virtual size_t npairs() const { return pair_.size(); }
+    virtual size_t nph(size_t iring) const { return ring[iring].nph; }
+    virtual size_t nphmax() const { return nphmax_; }
+    virtual double theta(size_t iring) const { return ring[iring].theta; }
+    virtual double cth(size_t iring) const { return ring[iring].cth; }
+    virtual double sth(size_t iring) const { return ring[iring].sth; }
+    virtual double phi0(size_t iring) const { return ring[iring].phi0; }
+    virtual Tpair pair(size_t ipair) const { return pair_[ipair]; }
     virtual void clear_map(double *map) const;
     virtual void clear_map(float *map) const;
-    virtual void get_ring(size_t iring, const double *map, double *ringtmp) const;
-    virtual void get_ring(size_t iring, const float *map, double *ringtmp) const;
-    virtual void add_ring(size_t iring, const double *ringtmp, double *map) const;
-    virtual void add_ring(size_t iring, const double *ringtmp, float *map) const;
+    virtual void get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const;
+    virtual void get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const;
   };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
