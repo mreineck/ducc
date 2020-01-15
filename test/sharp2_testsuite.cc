@@ -86,14 +86,14 @@ static double drand (double min, double max, unsigned *state)
   return min + (max-min)*(*state)/(0x7fffffff+1.0);
   }
 
-static void random_alm (dcmplx *alm, sharp_alm_info &helper, size_t spin, size_t cnt)
+static void random_alm (dcmplx *alm, sharp_standard_alm_info &helper, size_t spin, size_t cnt)
   {
 // FIXME: re-introduce multi-threading?
-  for (size_t mi=0;mi<helper.nm; ++mi)
+  for (size_t mi=0;mi<helper.nm(); ++mi)
     {
-    auto m=helper.mval[mi];
+    auto m=helper.mval(mi);
     unsigned state=1234567u*unsigned(cnt)+8912u*unsigned(m); // random seed
-    for (auto l=m;l<=helper.lmax; ++l)
+    for (auto l=m;l<=helper.lmax(); ++l)
       {
       if ((l<spin)&&(m<spin))
         alm[helper.index(l,mi)] = 0.;
@@ -130,8 +130,8 @@ static double totalMem()
 static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
   {
   ptrdiff_t res=0;
-  for (size_t i=0; i<ainfo.nm; ++i)
-    res += ainfo.lmax-ainfo.mval[i]+1;
+  for (size_t i=0; i<ainfo.nm(); ++i)
+    res += ainfo.lmax()-ainfo.mval(i)+1;
   return res;
   }
 
@@ -200,7 +200,7 @@ static int good_fft_size(int n)
   }
 
 static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
-  int &gpar2, unique_ptr<sharp_geom_info> &ginfo, unique_ptr<sharp_alm_info> &ainfo, int verbose)
+  int &gpar2, unique_ptr<sharp_geom_info> &ginfo, unique_ptr<sharp_standard_alm_info> &ainfo, int verbose)
   {
   MR_assert(lmax>=0,"lmax must not be negative");
   if (mmax<0) mmax=lmax;
@@ -365,7 +365,7 @@ static void check_sign_scale(void)
     "error");
   }
 
-static void do_sht (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
+static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   int spin, vector<double> &err_abs, vector<double> &err_rel,
   double *t_a2m, double *t_m2a, unsigned long long *op_a2m,
   unsigned long long *op_m2a, size_t ntrans)
@@ -412,7 +412,7 @@ static void do_sht (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
   get_errors(alm.data(), nalms, ntrans*ncomp, sqsum, err_abs, err_rel);
   }
 
-static void check_accuracy (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
+static void check_accuracy (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   int spin)
   {
   int ncomp = (spin==0) ? 1 : 2;
@@ -426,7 +426,7 @@ static void check_accuracy (sharp_geom_info &ginfo, sharp_alm_info &ainfo,
 static void run(int lmax, int mmax, int nlat, int nlon, int spin)
   {
   unique_ptr<sharp_geom_info> ginfo;
-  unique_ptr<sharp_alm_info> ainfo;
+  unique_ptr<sharp_standard_alm_info> ainfo;
   get_infos ("gauss", lmax, mmax, nlat, nlon, ginfo, ainfo, 0);
   check_accuracy(*ginfo,*ainfo,spin);
   }
@@ -470,7 +470,7 @@ static void sharp_test (int argc, const char **argv)
   if (mytask==0) cout << "ntrans=" << ntrans << endl;
 
   unique_ptr<sharp_geom_info> ginfo;
-  unique_ptr<sharp_alm_info> ainfo;
+  unique_ptr<sharp_standard_alm_info> ainfo;
   get_infos (argv[2], lmax, mmax, gpar1, gpar2, ginfo, ainfo, 1);
 
   int ncomp = (spin==0) ? 1 : 2;

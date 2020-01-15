@@ -35,11 +35,11 @@
 /*! Initialises an a_lm data structure according to the scheme used by
     Healpix_cxx.
     \ingroup almgroup */
-std::unique_ptr<sharp_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, int stride);
+std::unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, int stride);
 
 /*! Initialises an a_lm data structure according to the scheme used by
     Fortran Healpix
     \ingroup almgroup */
-std::unique_ptr<sharp_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride);
+std::unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride);
 
 #endif

@@ -943,7 +943,7 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const size_t *mlim)
   {
-  const size_t m = job.ainfo->mval[mi];
+  const size_t m = job.ainfo->mval(mi);
   gen.prepare(m);
 
   switch (job.type)
@@ -1102,7 +1102,7 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job &job, const int *ispair,
   const double *cth_, const double *sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const size_t *mlim)
   {
-  const size_t m = job.ainfo->mval[mi];
+  const size_t m = job.ainfo->mval(mi);
   gen.prepare(m);
 
   switch (job.type)
