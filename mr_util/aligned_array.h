@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_ALIGNED_ARRAY_H
@@ -65,7 +65,7 @@ template<typename T> class aligned_array
 #endif
 
   public:
-    aligned_array() : p(0), sz(0) {}
+    aligned_array() : p(nullptr), sz(0) {}
     aligned_array(size_t n) : p(ralloc(n)), sz(n) {}
     aligned_array(aligned_array &&other)
       : p(other.p), sz(other.sz)

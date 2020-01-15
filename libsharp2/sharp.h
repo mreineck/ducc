@@ -21,7 +21,7 @@
 /*! \file sharp.h
  *  Portable interface for the spherical transform library.
  *
- *  Copyright (C) 2012-2019 Max-Planck-Society
+ *  Copyright (C) 2012-2020 Max-Planck-Society
  *  \author Martin Reinecke \author Dag Sverre Seljebotn
  */
 

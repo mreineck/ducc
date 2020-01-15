@@ -21,7 +21,7 @@
 /*! \file sharp_core_inc.c
  *  Computational core
  *
- *  Copyright (C) 2012-2019 Max-Planck-Society
+ *  Copyright (C) 2012-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -252,54 +252,64 @@ MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
   const vector<sharp_ylmgen_dbl2> &coef, const dcmplx * MRUTIL_RESTRICT alm,
   size_t l, size_t il, size_t lmax, size_t nv2)
   {
-  if (nv2==nv0)
+  for (; l+6<=lmax; il+=4, l+=8)
     {
-    for (; l<=lmax-2; il+=2, l+=4)
+    Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
+    Tv ar2=alm[l+1].real(), ai2=alm[l+1].imag();
+    Tv ar3=alm[l+2].real(), ai3=alm[l+2].imag();
+    Tv ar4=alm[l+3].real(), ai4=alm[l+3].imag();
+    Tv ar5=alm[l+4].real(), ai5=alm[l+4].imag();
+    Tv ar6=alm[l+5].real(), ai6=alm[l+5].imag();
+    Tv ar7=alm[l+6].real(), ai7=alm[l+6].imag();
+    Tv ar8=alm[l+7].real(), ai8=alm[l+7].imag();
+    Tv a1=coef[il  ].a, b1=coef[il  ].b;
+    Tv a2=coef[il+1].a, b2=coef[il+1].b;
+    Tv a3=coef[il+2].a, b3=coef[il+2].b;
+    Tv a4=coef[il+3].a, b4=coef[il+3].b;
+    for (size_t i=0; i<nv2; ++i)
       {
-      Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
-      Tv ar2=alm[l+1].real(), ai2=alm[l+1].imag();
-      Tv ar3=alm[l+2].real(), ai3=alm[l+2].imag();
-      Tv ar4=alm[l+3].real(), ai4=alm[l+3].imag();
-      Tv a1=coef[il  ].a, b1=coef[il  ].b;
-      Tv a2=coef[il+1].a, b2=coef[il+1].b;
-      for (size_t i=0; i<nv0; ++i)
-        {
-        d.p1r[i] += d.lam2[i]*ar1;
-        d.p1i[i] += d.lam2[i]*ai1;
-        d.p2r[i] += d.lam2[i]*ar2;
-        d.p2i[i] += d.lam2[i]*ai2;
-        d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
-        d.p1r[i] += d.lam1[i]*ar3;
-        d.p1i[i] += d.lam1[i]*ai3;
-        d.p2r[i] += d.lam1[i]*ar4;
-        d.p2i[i] += d.lam1[i]*ai4;
-        d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
-        }
+      d.p1r[i] += d.lam2[i]*ar1;
+      d.p1i[i] += d.lam2[i]*ai1;
+      d.p2r[i] += d.lam2[i]*ar2;
+      d.p2i[i] += d.lam2[i]*ai2;
+      d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
+      d.p1r[i] += d.lam1[i]*ar3;
+      d.p1i[i] += d.lam1[i]*ai3;
+      d.p2r[i] += d.lam1[i]*ar4;
+      d.p2i[i] += d.lam1[i]*ai4;
+      d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
+      d.p1r[i] += d.lam2[i]*ar5;
+      d.p1i[i] += d.lam2[i]*ai5;
+      d.p2r[i] += d.lam2[i]*ar6;
+      d.p2i[i] += d.lam2[i]*ai6;
+      d.lam1[i] = (a3*d.csq[i] + b3)*d.lam2[i] + d.lam1[i];
+      d.p1r[i] += d.lam1[i]*ar7;
+      d.p1i[i] += d.lam1[i]*ai7;
+      d.p2r[i] += d.lam1[i]*ar8;
+      d.p2i[i] += d.lam1[i]*ai8;
+      d.lam2[i] = (a4*d.csq[i] + b4)*d.lam1[i] + d.lam2[i];
       }
     }
-  else
+  for (; l+2<=lmax; il+=2, l+=4)
     {
-    for (; l<=lmax-2; il+=2, l+=4)
+    Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
+    Tv ar2=alm[l+1].real(), ai2=alm[l+1].imag();
+    Tv ar3=alm[l+2].real(), ai3=alm[l+2].imag();
+    Tv ar4=alm[l+3].real(), ai4=alm[l+3].imag();
+    Tv a1=coef[il  ].a, b1=coef[il  ].b;
+    Tv a2=coef[il+1].a, b2=coef[il+1].b;
+    for (size_t i=0; i<nv2; ++i)
       {
-      Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
-      Tv ar2=alm[l+1].real(), ai2=alm[l+1].imag();
-      Tv ar3=alm[l+2].real(), ai3=alm[l+2].imag();
-      Tv ar4=alm[l+3].real(), ai4=alm[l+3].imag();
-      Tv a1=coef[il  ].a, b1=coef[il  ].b;
-      Tv a2=coef[il+1].a, b2=coef[il+1].b;
-      for (size_t i=0; i<nv2; ++i)
-        {
-        d.p1r[i] += d.lam2[i]*ar1;
-        d.p1i[i] += d.lam2[i]*ai1;
-        d.p2r[i] += d.lam2[i]*ar2;
-        d.p2i[i] += d.lam2[i]*ai2;
-        d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
-        d.p1r[i] += d.lam1[i]*ar3;
-        d.p1i[i] += d.lam1[i]*ai3;
-        d.p2r[i] += d.lam1[i]*ar4;
-        d.p2i[i] += d.lam1[i]*ai4;
-        d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
-        }
+      d.p1r[i] += d.lam2[i]*ar1;
+      d.p1i[i] += d.lam2[i]*ai1;
+      d.p2r[i] += d.lam2[i]*ar2;
+      d.p2i[i] += d.lam2[i]*ai2;
+      d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
+      d.p1r[i] += d.lam1[i]*ar3;
+      d.p1i[i] += d.lam1[i]*ai3;
+      d.p2r[i] += d.lam1[i]*ar4;
+      d.p2i[i] += d.lam1[i]*ai4;
+      d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
       }
     }
   for (; l<=lmax; ++il, l+=2)
@@ -374,7 +384,7 @@ MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
   const vector<sharp_ylmgen_dbl2> &coef, dcmplx * MRUTIL_RESTRICT alm, size_t l,
   size_t il, size_t lmax, size_t nv2)
   {
-  for (; l<=lmax-2; il+=2, l+=4)
+  for (; l+2<=lmax; il+=2, l+=4)
     {
     Tv a1=coef[il  ].a, b1=coef[il  ].b;
     Tv a2=coef[il+1].a, b2=coef[il+1].b;
