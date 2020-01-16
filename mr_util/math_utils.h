@@ -32,14 +32,14 @@
 #ifndef MRUTIL_MATH_UTILS_H
 #define MRUTIL_MATH_UTILS_H
 
+#include <cmath>
 
 namespace mr {
 
 /*! Returns \e true if | \a a-b | <= \a epsilon * | \a b |, else \e false. */
 template<typename F> inline bool approx (F a, F b, F epsilon=1e-5)
   {
-  using namespace std;
-  return abs(a-b) <= (epsilon*abs(b));
+  return std::abs(a-b) <= (epsilon*std::abs(b));
   }
 
 }

@@ -31,8 +31,118 @@
 #include "mr_util/gl_integrator.h"
 #include "mr_util/fft.h"
 #include "mr_util/error_handling.h"
+#include "mr_util/math_utils.h"
 
 using namespace std;
+using namespace mr;
+
+sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
+  ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)
+  : ring(nrings), stride(stride_)
+  {
+  size_t pos=0;
+
+  nphmax_=0;
+
+  for (size_t m=0; m<nrings; ++m)
+    {
+    ring[m].theta = theta[m];
+    ring[m].cth = cos(theta[m]);
+    ring[m].sth = sin(theta[m]);
+    ring[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
+    ring[m].phi0 = phi0[m];
+    ring[m].ofs = ofs[m];
+    ring[m].nph = nph[m];
+    if (nphmax_<nph[m]) nphmax_=nph[m];
+    }
+  sort(ring.begin(), ring.end(),[](const Tring &a, const Tring &b)
+    { return (a.sth<b.sth); });
+  while (pos<nrings)
+    {
+    pair_.push_back(Tpair());
+    pair_.back().r1=pos;
+    if ((pos<nrings-1) && approx(ring[pos].cth,-ring[pos+1].cth,1e-12))
+      {
+      if (ring[pos].cth>0)  // make sure northern ring is in r1
+        pair_.back().r2=pos+1;
+      else
+        {
+        pair_.back().r1=pos+1;
+        pair_.back().r2=pos;
+        }
+      ++pos;
+      }
+    else
+      pair_.back().r2=size_t(~0);
+    ++pos;
+    }
+
+  sort(pair_.begin(), pair_.end(), [this] (const Tpair &a, const Tpair &b)
+    {
+    if (ring[a.r1].nph==ring[b.r1].nph)
+    return (ring[a.r1].phi0 < ring[b.r1].phi0) ? true :
+      ((ring[a.r1].phi0 > ring[b.r1].phi0) ? false :
+        (ring[a.r1].cth>ring[b.r1].cth));
+    return ring[a.r1].nph<ring[b.r1].nph;
+    });
+  }
+
+void sharp_standard_geom_info::clear_map (double *map) const
+  {
+  for (const auto &r: ring)
+    {
+    if (stride==1)
+      memset(&map[r.ofs],0,r.nph*sizeof(double));
+    else
+      for (size_t i=0;i<r.nph;++i)
+        map[r.ofs+i*stride]=0;
+    }
+  }
+
+void sharp_standard_geom_info::clear_map (float *map) const
+  {
+  for (const auto &r: ring)
+    {
+    if (stride==1)
+      memset(&map[r.ofs],0,r.nph*sizeof(float));
+    else
+      for (size_t i=0;i<r.nph;++i)
+        map[r.ofs+i*stride]=0;
+    }
+  }
+
+//virtual
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const
+  {
+  double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    p1[m*stride] += ringtmp[m]*wgt;
+  }
+//virtual
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const
+  {
+  float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    p1[m*stride] += float(ringtmp[m]*wgt);
+  }
+//virtual
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const
+  {
+  const double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    ringtmp[m] = p1[m*stride]*wgt;
+  }
+//virtual
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const
+  {
+  const float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    ringtmp[m] = p1[m*stride]*wgt;
+  }
 
 unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
   const size_t *rings, const double *weight)

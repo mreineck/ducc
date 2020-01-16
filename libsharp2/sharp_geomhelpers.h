@@ -31,6 +31,52 @@
 #include <memory>
 #include "libsharp2/sharp.h"
 
+class sharp_standard_geom_info: public sharp_geom_info
+  {
+  private:
+    struct Tring
+      {
+      double theta, phi0, weight, cth, sth;
+      ptrdiff_t ofs;
+      size_t nph;
+      };
+    std::vector<Tring> ring;
+    std::vector<Tpair> pair_;
+    ptrdiff_t stride;
+    size_t nphmax_;
+
+  public:
+/*! Creates a geometry information from a set of ring descriptions.
+    All arrays passed to this function must have \a nrings elements.
+    \param nrings the number of rings in the map
+    \param nph the number of pixels in each ring
+    \param ofs the index of the first pixel in each ring in the map array
+    \param stride the stride between consecutive pixels
+    \param phi0 the azimuth (in radians) of the first pixel in each ring
+    \param theta the colatitude (in radians) of each ring
+    \param wgt the pixel weight to be used for the ring in map2alm
+      and adjoint map2alm transforms.
+      Pass nullptr to use 1.0 as weight for all rings.
+ */
+    sharp_standard_geom_info(size_t nrings, const size_t *nph_, const ptrdiff_t *ofs,
+      ptrdiff_t stride_, const double *phi0_, const double *theta_, const double *wgt);
+    virtual size_t nrings() const { return ring.size(); }
+    virtual size_t npairs() const { return pair_.size(); }
+    virtual size_t nph(size_t iring) const { return ring[iring].nph; }
+    virtual size_t nphmax() const { return nphmax_; }
+    virtual double theta(size_t iring) const { return ring[iring].theta; }
+    virtual double cth(size_t iring) const { return ring[iring].cth; }
+    virtual double sth(size_t iring) const { return ring[iring].sth; }
+    virtual double phi0(size_t iring) const { return ring[iring].phi0; }
+    virtual Tpair pair(size_t ipair) const { return pair_[ipair]; }
+    virtual void clear_map(double *map) const;
+    virtual void clear_map(float *map) const;
+    virtual void get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const;
+    virtual void get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const;
+  };
+
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside. \a weight contains the relative ring
     weights and must have \a 2*nside entries. The rings array contains

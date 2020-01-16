@@ -197,137 +197,6 @@ struct ringhelper
     }
   };
 
-sharp_standard_alm_info::sharp_standard_alm_info (size_t lmax__, size_t nm_, ptrdiff_t stride_,
-  const size_t *mval__, const ptrdiff_t *mstart)
-  : lmax_(lmax__), mval_(nm_), mvstart(nm_), stride(stride_)
-  {
-  for (size_t mi=0; mi<nm_; ++mi)
-    {
-    mval_[mi] = mval__[mi];
-    mvstart[mi] = mstart[mi];
-    }
-  }
-
-sharp_standard_alm_info::sharp_standard_alm_info (size_t lmax__, size_t mmax_, ptrdiff_t stride_,
-  const ptrdiff_t *mstart)
-  : lmax_(lmax__), mval_(mmax_+1), mvstart(mmax_+1), stride(stride_)
-  {
-  for (size_t i=0; i<=mmax_; ++i)
-    {
-    mval_[i]=i;
-    mvstart[i] = mstart[i];
-    }
-  }
-
-ptrdiff_t sharp_standard_alm_info::index (int l, int mi)
-  {
-  return mvstart[mi]+stride*l;
-  }
-
-sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
-  ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)
-  : ring(nrings), stride(stride_)
-  {
-  size_t pos=0;
-
-  nphmax_=0;
-
-  for (size_t m=0; m<nrings; ++m)
-    {
-    ring[m].theta = theta[m];
-    ring[m].cth = cos(theta[m]);
-    ring[m].sth = sin(theta[m]);
-    ring[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
-    ring[m].phi0 = phi0[m];
-    ring[m].ofs = ofs[m];
-    ring[m].nph = nph[m];
-    if (nphmax_<nph[m]) nphmax_=nph[m];
-    }
-  sort(ring.begin(), ring.end(),[](const Tring &a, const Tring &b)
-    { return (a.sth<b.sth); });
-  while (pos<nrings)
-    {
-    pair_.push_back(Tpair());
-    pair_.back().r1=pos;
-    if ((pos<nrings-1) && approx(ring[pos].cth,-ring[pos+1].cth,1e-12))
-      {
-      if (ring[pos].cth>0)  // make sure northern ring is in r1
-        pair_.back().r2=pos+1;
-      else
-        {
-        pair_.back().r1=pos+1;
-        pair_.back().r2=pos;
-        }
-      ++pos;
-      }
-    else
-      pair_.back().r2=size_t(~0);
-    ++pos;
-    }
-
-  sort(pair_.begin(), pair_.end(), [this] (const Tpair &a, const Tpair &b)
-    {
-    if (ring[a.r1].nph==ring[b.r1].nph)
-    return (ring[a.r1].phi0 < ring[b.r1].phi0) ? true :
-      ((ring[a.r1].phi0 > ring[b.r1].phi0) ? false :
-        (ring[a.r1].cth>ring[b.r1].cth));
-    return ring[a.r1].nph<ring[b.r1].nph;
-    });
-  }
-
-/* This currently requires all m values from 0 to nm-1 to be present.
-   It might be worthwhile to relax this criterion such that holes in the m
-   distribution are permissible. */
-size_t sharp_standard_alm_info::mmax() const
-  {
-  //FIXME: if gaps are allowed, we have to search the maximum m in the array
-  auto nm_=mval_.size();
-  vector<bool> mcheck(nm_,false);
-  for (auto m_cur : mval_)
-    {
-    MR_assert(m_cur<nm_, "not all m values are present");
-    MR_assert(mcheck[m_cur]==false, "duplicate m value");
-    mcheck[m_cur]=true;
-    }
-  return nm_-1;
-  }
-
-MRUTIL_NOINLINE void sharp_standard_geom_info::clear_map (double *map) const
-  {
-  for (const auto &r: ring)
-    {
-    if (stride==1)
-      memset(&map[r.ofs],0,r.nph*sizeof(double));
-    else
-      for (size_t i=0;i<r.nph;++i)
-        map[r.ofs+i*stride]=0;
-    }
-  }
-MRUTIL_NOINLINE void sharp_standard_geom_info::clear_map (float *map) const
-  {
-  for (const auto &r: ring)
-    {
-    if (stride==1)
-      memset(&map[r.ofs],0,r.nph*sizeof(float));
-    else
-      for (size_t i=0;i<r.nph;++i)
-        map[r.ofs+i*stride]=0;
-    }
-  }
-
-void sharp_standard_alm_info::clear_alm (dcmplx *alm) const
-  {
-  for (size_t mi=0;mi<mval_.size();++mi)
-    for (size_t l=mval_[mi];l<=lmax_;++l)
-      reinterpret_cast<dcmplx *>(alm)[mvstart[mi]+l*stride]=0.;
-  }
-void sharp_standard_alm_info::clear_alm (fcmplx *alm) const
-  {
-  for (size_t mi=0;mi<mval_.size();++mi)
-    for (size_t l=mval_[mi];l<=lmax_;++l)
-      reinterpret_cast<fcmplx *>(alm)[mvstart[mi]+l*stride]=0.;
-  }
-
 MRUTIL_NOINLINE void sharp_job::init_output()
   {
   if (flags&SHARP_ADD) return;
@@ -363,27 +232,6 @@ void sharp_job::alloc_almtmp (size_t lmax, vector<dcmplx> &data)
   {
   data.resize(nalm*(lmax+2));
   almtmp=data.data();
-  }
-
-void sharp_standard_alm_info::get_alm(size_t mi, const dcmplx *alm, dcmplx *almtmp, size_t nalm) const
-  {
-  for (auto l=mval_[mi]; l<=lmax_; ++l)
-    almtmp[nalm*l] = alm[mvstart[mi]+l*stride];
-  }
-void sharp_standard_alm_info::get_alm(size_t mi, const fcmplx *alm, dcmplx *almtmp, size_t nalm) const
-  {
-  for (auto l=mval_[mi]; l<=lmax_; ++l)
-    almtmp[nalm*l] = alm[mvstart[mi]+l*stride];
-  }
-void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, dcmplx *alm, size_t nalm) const
-  {
-  for (auto l=mval_[mi]; l<=lmax_; ++l)
-    alm[mvstart[mi]+l*stride] += almtmp[nalm*l];
-  }
-void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, fcmplx *alm, size_t nalm) const
-  {
-  for (auto l=mval_[mi]; l<=lmax_; ++l)
-    alm[mvstart[mi]+l*stride] += fcmplx(almtmp[nalm*l]);
   }
 
 MRUTIL_NOINLINE void sharp_job::alm2almtmp (size_t lmax, size_t mi)
@@ -437,39 +285,6 @@ MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t lmax, size_t mi)
   else
     for (size_t i=0; i<nalm; ++i)
       ainfo->add_alm(mi, almtmp+i, reinterpret_cast<fcmplx **>(alm)[i],nalm);
-  }
-
-//virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const
-  {
-  double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += ringtmp[m]*wgt;
-  }
-//virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const
-  {
-  float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += float(ringtmp[m]*wgt);
-  }
-//virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const
-  {
-  const double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride]*wgt;
-  }
-//virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const
-  {
-  const float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride]*wgt;
   }
 
 MRUTIL_NOINLINE void sharp_job::ringtmp2ring (size_t iring,

@@ -282,7 +282,7 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
       {
       auto npix=get_npix(*ginfo);
       cout << "Small Gauss grid, nlat=" << nlat << ", npix=" << npix
-           << ", savings=" << ((npix_o-npix)*100./npix_o) << "\%" << endl;
+           << ", savings=" << ((npix_o-npix)*100./npix_o) << "%" << endl;
       }
     }
   else
@@ -513,7 +513,7 @@ static void sharp_test (int argc, const char **argv)
     cout << "\nMemory high water mark: " << tmem/(1<<20) << " MB\n";
   if (mytask==0)
     cout << "Memory overhead: " << (tmem-iosize)/(1<<20) << " MB ("
-         << 100.*(1.-iosize/tmem) << "\% of working set)\n";
+         << 100.*(1.-iosize/tmem) << "% of working set)\n";
 
   double maxerel=0., maxeabs=0.;
   for (int i=0; i<ncomp; ++i)
