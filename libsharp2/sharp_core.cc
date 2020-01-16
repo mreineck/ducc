@@ -31,7 +31,7 @@
 #undef GENERIC_ARCH
 #undef ARCH
 
-using t_inner_loop = void (*) (sharp_job &job, const int *ispair,
+using t_inner_loop = void (*) (sharp_protojob &job, const int *ispair,
   const double *cth_, const double *sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const size_t *mlim);
 using t_veclen = size_t (*) (void);
@@ -62,7 +62,7 @@ static int XCONCATX2(have,arch)(void) \
   return res; \
   } \
 \
-void XCONCATX2(inner_loop,arch) (sharp_job &job, const int *ispair, \
+void XCONCATX2(inner_loop,arch) (sharp_protojob &job, const int *ispair, \
   const double *cth_, const double *sth_, size_t llim, size_t ulim, \
   sharp_Ylmgen &gen, size_t mi, const size_t *mlim); \
 size_t XCONCATX2(sharp_veclen,arch) (void); \
@@ -107,7 +107,7 @@ DECL2(avx)
 
 #pragma GCC visibility push(hidden)
 
-void inner_loop (sharp_job &job, const int *ispair,const double *cth,
+void inner_loop (sharp_protojob &job, const int *ispair,const double *cth,
   const double *sth, size_t llim, size_t ulim, sharp_Ylmgen &gen, size_t mi,
   const size_t *mlim)
   {

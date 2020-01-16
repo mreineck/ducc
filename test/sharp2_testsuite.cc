@@ -302,66 +302,68 @@ static void check_sign_scale(void)
   ptrdiff_t nalms = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
 
   vector<double> bmap(2*npix);
-  vector<double *>map({&bmap[0], &bmap[npix]});
+  vector<double *>map1({&bmap[0]});
+  vector<double *>map2({&bmap[0], &bmap[npix]});
 
   vector<dcmplx> balm(2*nalms,dcmplx(1.,1.));
-  vector<dcmplx *>alm({&balm[0], &balm[nalms]});
+  vector<dcmplx *>alm1({&balm[0]});
+  vector<dcmplx *>alm2({&balm[0], &balm[nalms]});
 
   /* use mirrored indices to emulate the "old" Gaussian grid geometry */
   /* original indices were 0, npix/2 and npix-1 */
   size_t i0=npix-ppring, i1=npix/2, i2=ppring-1;
-  sharp_execute(SHARP_ALM2MAP,0,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,0,alm1,map1,*tinfo,*alms,0,
     nullptr,nullptr);
-  MR_assert(approx(map[0][i0], 3.588246976618616912e+00,1e-12),
+  MR_assert(approx(map1[0][i0], 3.588246976618616912e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][i1], 4.042209792157496651e+01,1e-12),
+  MR_assert(approx(map1[0][i1], 4.042209792157496651e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][i2],-1.234675107554816442e+01,1e-12),
+  MR_assert(approx(map1[0][i2],-1.234675107554816442e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,1,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,1,alm2,map2,*tinfo,*alms,0,
     nullptr,nullptr);
-  MR_assert(approx(map[0][i0], 2.750897760535633285e+00,1e-12),
+  MR_assert(approx(map2[0][i0], 2.750897760535633285e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][i1], 3.137704477368562905e+01,1e-12),
+  MR_assert(approx(map2[0][i1], 3.137704477368562905e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][i2],-8.405730859837063917e+01,1e-12),
+  MR_assert(approx(map2[0][i2],-8.405730859837063917e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][i0],-2.398026536095463346e+00,1e-12),
+  MR_assert(approx(map2[1][i0],-2.398026536095463346e+00,1e-12),
     "error");
-  MR_assert(approx(map[1][i1],-4.961140548331700728e+01,1e-12),
+  MR_assert(approx(map2[1][i1],-4.961140548331700728e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][i2],-1.412765834230440021e+01,1e-12),
+  MR_assert(approx(map2[1][i2],-1.412765834230440021e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,2,alm.data(),map.data(),*tinfo,*alms,SHARP_DP,
+  sharp_execute(SHARP_ALM2MAP,2,alm2,map2,*tinfo,*alms,0,
     nullptr,nullptr);
-  MR_assert(approx(map[0][i0],-1.398186224727334448e+00,1e-12),
+  MR_assert(approx(map2[0][i0],-1.398186224727334448e+00,1e-12),
     "error");
-  MR_assert(approx(map[0][i1],-2.456676000884031197e+01,1e-12),
+  MR_assert(approx(map2[0][i1],-2.456676000884031197e+01,1e-12),
     "error");
-  MR_assert(approx(map[0][i2],-1.516249174408820863e+02,1e-12),
+  MR_assert(approx(map2[0][i2],-1.516249174408820863e+02,1e-12),
     "error");
-  MR_assert(approx(map[1][i0],-3.173406200299964119e+00,1e-12),
+  MR_assert(approx(map2[1][i0],-3.173406200299964119e+00,1e-12),
     "error");
-  MR_assert(approx(map[1][i1],-5.831327404513146462e+01,1e-12),
+  MR_assert(approx(map2[1][i1],-5.831327404513146462e+01,1e-12),
     "error");
-  MR_assert(approx(map[1][i2],-1.863257892248353897e+01,1e-12),
+  MR_assert(approx(map2[1][i2],-1.863257892248353897e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm.data(),map.data(),*tinfo,*alms,
-    SHARP_DP,nullptr,nullptr);
-  MR_assert(approx(map[0][i0],-6.859393905369091105e-01,1e-11),
+  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm1,map2,*tinfo,*alms,
+    0,nullptr,nullptr);
+  MR_assert(approx(map2[0][i0],-6.859393905369091105e-01,1e-11),
     "error");
-  MR_assert(approx(map[0][i1],-2.103947835973212364e+02,1e-12),
+  MR_assert(approx(map2[0][i1],-2.103947835973212364e+02,1e-12),
     "error");
-  MR_assert(approx(map[0][i2],-1.092463246472086439e+03,1e-12),
+  MR_assert(approx(map2[0][i2],-1.092463246472086439e+03,1e-12),
     "error");
-  MR_assert(approx(map[1][i0],-1.411433220713928165e+02,1e-12),
+  MR_assert(approx(map2[1][i0],-1.411433220713928165e+02,1e-12),
     "error");
-  MR_assert(approx(map[1][i1],-1.146122859381925082e+03,1e-12),
+  MR_assert(approx(map2[1][i1],-1.146122859381925082e+03,1e-12),
     "error");
-  MR_assert(approx(map[1][i2], 7.821618677689795049e+02,1e-12),
+  MR_assert(approx(map2[1][i2], 7.821618677689795049e+02,1e-12),
     "error");
   }
 
@@ -371,7 +373,7 @@ static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   unsigned long long *op_m2a, size_t ntrans)
   {
   ptrdiff_t nalms = get_nalms(ainfo);
-  int ncomp = (spin==0) ? 1 : 2;
+  size_t ncomp = (spin==0) ? 1 : 2;
 
   size_t npix = get_npix(ginfo);
   vector<double> bmap(ncomp*ntrans*npix, 0.);
@@ -394,8 +396,14 @@ static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   if (op_a2m!=nullptr) *op_a2m=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-    sharp_execute(SHARP_ALM2MAP,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
-      SHARP_DP,&tta2m,&toa2m);
+    vector<dcmplx *> av;
+    vector<double *> mv;
+    for (size_t i=0; i<ncomp; ++i)
+      {
+      av.push_back(alm[itrans*ncomp+i]);
+      mv.push_back(map[itrans*ncomp+i]);
+      }
+    sharp_execute(SHARP_ALM2MAP,spin,av,mv,ginfo,ainfo, 0,&tta2m,&toa2m);
     if (t_a2m!=nullptr) *t_a2m+=maxTime(tta2m);
     if (op_a2m!=nullptr) *op_a2m+=totalops(toa2m);
     }
@@ -404,8 +412,15 @@ static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   if (op_m2a!=nullptr) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-    sharp_execute(SHARP_MAP2ALM,spin,&alm[itrans*ncomp],&map[itrans*ncomp],ginfo,ainfo,
-      SHARP_DP|SHARP_ADD,&ttm2a,&tom2a);
+    vector<dcmplx *> av;
+    vector<double *> mv;
+    for (size_t i=0; i<ncomp; ++i)
+      {
+      av.push_back(alm[itrans*ncomp+i]);
+      mv.push_back(map[itrans*ncomp+i]);
+      }
+    sharp_execute(SHARP_MAP2ALM,spin,av,mv,ginfo,ainfo,
+      SHARP_ADD,&ttm2a,&tom2a);
     if (t_m2a!=nullptr) *t_m2a+=maxTime(ttm2a);
     if (op_m2a!=nullptr) *op_m2a+=totalops(tom2a);
     }

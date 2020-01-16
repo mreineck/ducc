@@ -99,8 +99,7 @@ enum sharp_jobtype { SHARP_YtW=0,               /*!< analysis */
              };
 
 /*! Job flags */
-enum sharp_jobflags { SHARP_DP              = 1<<4,
-               /*!< map and a_lm are in double precision */
+enum sharp_jobflags {
                SHARP_ADD             = 1<<5,
                /*!< results are added to the output arrays, instead of
                     overwriting them */
@@ -132,7 +131,8 @@ enum sharp_jobflags { SHARP_DP              = 1<<4,
     (in seconds) will be written here.
   \param opcnt If not nullptr, a conservative estimate of the total floating point
     operation count for this SHT will be written here. */
-void sharp_execute (sharp_jobtype type, int spin, void *alm, void *map,
+template<typename T> void sharp_execute (sharp_jobtype type, int spin, const std::vector<std::complex<T> *> &alm,
+  const std::vector<T *> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   int flags, double *time, unsigned long long *opcnt);
 

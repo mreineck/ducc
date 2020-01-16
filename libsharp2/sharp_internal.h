@@ -31,42 +31,68 @@
 #include <complex>
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_ylmgen.h"
+#include "mr_util/error_handling.h"
 
 using std::complex;
 
-struct sharp_job
+class sharp_protojob
   {
-  sharp_jobtype type;
-  size_t spin;
-  size_t nmaps, nalm;
-  size_t flags;
-  void **map;
-  void **alm;
-  ptrdiff_t s_m, s_th; // strides in m and theta direction
-  complex<double> *phase;
-  vector<double> norm_l;
-  complex<double> *almtmp;
-  const sharp_geom_info *ginfo;
-  const sharp_alm_info *ainfo;
-  double time;
-  unsigned long long opcnt;
-  void build_common (sharp_jobtype type,
-    size_t spin, void *alm, void *map, const sharp_geom_info &geom_info,
-    const sharp_alm_info &alm_info, size_t flags);
-  void alloc_phase (size_t nm, size_t ntheta, std::vector<complex<double>> &data);
-  void alloc_almtmp (size_t lmax, std::vector<complex<double>> &data);
-  void init_output();
-  void alm2almtmp (size_t lmax, size_t mi);
-  void almtmp2alm (size_t lmax, size_t mi);
-  void ring2ringtmp (size_t iring, std::vector<double> &ringtmp,
-    ptrdiff_t rstride);
-  void ringtmp2ring (size_t iring, const std::vector<double> &ringtmp, ptrdiff_t rstride);
-  void map2phase (size_t mmax, size_t llim, size_t ulim);
-  void phase2map (size_t mmax, size_t llim, size_t ulim);
-  void execute();
+  public:
+    sharp_jobtype type;
+    size_t spin;
+    size_t flags;
+    ptrdiff_t s_m, s_th; // strides in m and theta direction
+    complex<double> *phase;
+    vector<double> norm_l;
+    complex<double> *almtmp;
+    const sharp_geom_info &ginfo;
+    const sharp_alm_info &ainfo;
+    double time;
+    unsigned long long opcnt;
+
+    sharp_protojob(sharp_jobtype type_, size_t spin_, const sharp_geom_info &ginfo_,
+      const sharp_alm_info &ainfo_, size_t flags_)
+      : type(type_), spin(spin_), flags(flags_), ginfo(ginfo_), ainfo(ainfo_),
+        time(0.), opcnt(0)
+      {
+      if (type==SHARP_ALM2MAP_DERIV1) spin_=1;
+      if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
+      if (type==SHARP_Yt) type=SHARP_MAP2ALM;
+      if (type==SHARP_WY) { type=SHARP_ALM2MAP; flags|=SHARP_USE_WEIGHTS; }
+
+      MR_assert(spin<=ainfo.lmax(), "bad spin");
+      }
+    void alloc_phase (size_t nm, size_t ntheta, std::vector<complex<double>> &data);
+    void alloc_almtmp (size_t lmax, std::vector<complex<double>> &data);
+    size_t nmaps() const { return 1+(spin>0); }
+    size_t nalm() const { return (type==SHARP_ALM2MAP_DERIV1) ? 1 : (1+(spin>0)); }
   };
 
-void inner_loop (sharp_job &job, const int *ispair,const double *cth,
+template<typename T> class sharp_job: public sharp_protojob
+  {
+  private:
+    std::vector<std::complex<T> *> alm;
+    std::vector<T *> map;
+
+    void init_output();
+    void alm2almtmp (size_t mi);
+    void almtmp2alm (size_t mi);
+    void ring2ringtmp (size_t iring, std::vector<double> &ringtmp,
+      ptrdiff_t rstride);
+    void ringtmp2ring (size_t iring, const std::vector<double> &ringtmp, ptrdiff_t rstride);
+    void map2phase (size_t mmax, size_t llim, size_t ulim);
+    void phase2map (size_t mmax, size_t llim, size_t ulim);
+
+  public:
+    sharp_job(sharp_jobtype type,
+      size_t spin, const std::vector<std::complex<T> *> &alm_,
+      const std::vector<T *> &map, const sharp_geom_info &geom_info,
+      const sharp_alm_info &alm_info, size_t flags);
+
+      void execute();
+  };
+
+void inner_loop (sharp_protojob &job, const int *ispair,const double *cth,
   const double *sth, size_t llim, size_t ulim, sharp_Ylmgen &gen, size_t mi,
   const size_t *mlim);
 
