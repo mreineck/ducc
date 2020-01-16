@@ -939,9 +939,9 @@ MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_protojob & MRUTIL_RESTRICT
 
 #define VZERO(var) do { memset(&(var),0,sizeof(var)); } while(0)
 
-MRUTIL_NOINLINE static void inner_loop_a2m(sharp_protojob &job, const int *ispair,
-  const double *cth_, const double *sth_, size_t llim, size_t ulim,
-  sharp_Ylmgen &gen, size_t mi, const size_t *mlim)
+MRUTIL_NOINLINE static void inner_loop_a2m(sharp_protojob &job, const vector<bool> & ispair,
+  const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
+  sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
   const size_t m = job.ainfo.mval(mi);
   gen.prepare(m);
@@ -1093,9 +1093,9 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_protojob &job, const int *ispai
     }
   }
 
-MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const int *ispair,
-  const double *cth_, const double *sth_, size_t llim, size_t ulim,
-  sharp_Ylmgen &gen, size_t mi, const size_t *mlim)
+MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const vector<bool> &ispair,
+  const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
+  sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
   const size_t m = job.ainfo.mval(mi);
   gen.prepare(m);
@@ -1213,12 +1213,9 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const int *ispai
     }
   }
 
-void XARCH(inner_loop) (sharp_protojob &job, const int *ispair,
-  const double *cth_, const double *sth_, size_t llim, size_t ulim,
-  sharp_Ylmgen &gen, size_t mi, const size_t *mlim);
-void XARCH(inner_loop) (sharp_protojob &job, const int *ispair,
-  const double *cth_, const double *sth_, size_t llim, size_t ulim,
-  sharp_Ylmgen &gen, size_t mi, const size_t *mlim)
+void XARCH(inner_loop) (sharp_protojob &job, const vector<bool> &ispair,
+  const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
+  sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
   (job.type==SHARP_MAP2ALM) ?
     inner_loop_m2a(job,ispair,cth_,sth_,llim,ulim,gen,mi,mlim) :
@@ -1228,22 +1225,15 @@ void XARCH(inner_loop) (sharp_protojob &job, const int *ispair,
 #undef VZERO
 
 size_t XARCH(sharp_veclen)(void)
-  {
-  return VLEN;
-  }
+  { return VLEN; }
 
 size_t XARCH(sharp_max_nvec)(size_t spin)
-  {
-  return (spin==0) ? nv0 : nvx;
-  }
+  { return (spin==0) ? nv0 : nvx; }
 
 #define xstr(a) str(a)
 #define str(a) #a
-const char *XARCH(sharp_architecture)(void);
-const char *XARCH(sharp_architecture)(void)
-  {
-  return xstr(ARCH);
-  }
+const char *XARCH(sharp_architecture)()
+  { return xstr(ARCH); }
 
 #pragma GCC visibility pop
 

@@ -369,7 +369,7 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::execute()
   for (int chunk=0; chunk<nchunks; ++chunk)
     {
     size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo.npairs());
-    vector<int> ispair(ulim-llim);
+    vector<bool> ispair(ulim-llim);
     vector<size_t> mlim(ulim-llim);
     vector<double> cth(ulim-llim), sth(ulim-llim);
     for (size_t i=0; i<ulim-llim; ++i)
@@ -396,7 +396,7 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::execute()
 /* alm->alm_tmp where necessary */
         ljob.alm2almtmp(mi);
 
-        inner_loop (ljob, ispair.data(), cth.data(), sth.data(), llim, ulim, generator, mi, mlim.data());
+        inner_loop (ljob, ispair, cth, sth, llim, ulim, generator, mi, mlim);
 
 /* alm_tmp->alm where necessary */
         ljob.almtmp2alm(mi);

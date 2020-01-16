@@ -92,9 +92,9 @@ template<typename T> class sharp_job: public sharp_protojob
       void execute();
   };
 
-void inner_loop (sharp_protojob &job, const int *ispair,const double *cth,
-  const double *sth, size_t llim, size_t ulim, sharp_Ylmgen &gen, size_t mi,
-  const size_t *mlim);
+void inner_loop (sharp_protojob &job, const std::vector<bool> &ispair,
+  const std::vector<double> &cth, const std::vector<double> &sth, size_t llim,
+  size_t ulim, sharp_Ylmgen &gen, size_t mi, const std::vector<size_t> &mlim);
 
 size_t sharp_max_nvec(size_t spin);
 
