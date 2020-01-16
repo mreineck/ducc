@@ -225,7 +225,7 @@ class ES_Kernel
           if (epssq>maxmaperr[i]) return i;
         MR_fail("requested epsilon too small - minimum is 1e-13");
         }
-      if (ofactor>=1.2)
+      if (ofactor>=1.175)
         {
         for (size_t w=2; w<16; ++w)
           {
@@ -373,7 +373,8 @@ class GridderConfig
       MR_assert(epsilon>0, "epsilon must be positive");
       MR_assert(pixsize_x>0, "pixsize_x must be positive");
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
-      MR_assert(ofactor>=1.2, "oversampling factor smaller than 1.2");
+      MR_assert(ofactor>=1.175,
+        "oversampling factor too small (>=1.2 recommended)");
       }
     GridderConfig(size_t nxdirty, size_t nydirty,
       double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
