@@ -14,6 +14,10 @@ libmrutil_la_SOURCES = \
   mr_util/cmplx.h \
   mr_util/aligned_array.h \
   mr_util/simd.h \
+  mr_util/pointing.cc \
+  mr_util/pointing.h \
+  mr_util/vec3.h \
+  mr_util/constants.h \
   mr_util/error_handling.cc \
   mr_util/error_handling.h \
   mr_util/morton_utils.cc \

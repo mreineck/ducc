@@ -76,7 +76,7 @@ static void sharp_module_startup (const string &name, int argc, int argc_expecte
   exit(1);
   }
 
-typedef complex<double> dcmplx;
+using dcmplx = complex<double>;
 
 int ntasks, mytask;
 
