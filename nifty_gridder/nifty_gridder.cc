@@ -85,7 +85,7 @@ template<size_t ndim, typename T> mav<T,ndim> make_mav(pyarr<T> &in)
     }
   return mav<T, ndim>(in.mutable_data(),dims,str);
   }
-template<size_t ndim, typename T> const_mav<T,ndim> make_const_mav(const pyarr<T> &in)
+template<size_t ndim, typename T> cmav<T,ndim> make_cmav(const pyarr<T> &in)
   {
   MR_assert(ndim==in.ndim(), "dimension mismatch");
   array<size_t,ndim> dims;
@@ -96,7 +96,7 @@ template<size_t ndim, typename T> const_mav<T,ndim> make_const_mav(const pyarr<T
     str[i]=in.strides(i)/sizeof(T);
     MR_assert(str[i]*ptrdiff_t(sizeof(T))==in.strides(i), "weird strides");
     }
-  return const_mav<T, ndim>(in.data(),dims,str);
+  return cmav<T, ndim>(in.data(),dims,str);
   }
 
 template<typename T> py::array ms2dirty_general2(const py::array &uvw_,
@@ -105,13 +105,13 @@ template<typename T> py::array ms2dirty_general2(const py::array &uvw_,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
   auto uvw = getPyarr<double>(uvw_, "uvw");
-  auto uvw2 = make_const_mav<2>(uvw);
+  auto uvw2 = make_cmav<2>(uvw);
   auto freq = getPyarr<double>(freq_, "freq");
-  auto freq2 = make_const_mav<1>(freq);
+  auto freq2 = make_cmav<1>(freq);
   auto ms = getPyarr<complex<T>>(ms_, "ms");
-  auto ms2 = make_const_mav<2>(ms);
+  auto ms2 = make_cmav<2>(ms);
   auto wgt = providePotentialArray<T>(wgt_, "wgt", {ms2.shape(0),ms2.shape(1)});
-  auto wgt2 = make_const_mav<2>(wgt);
+  auto wgt2 = make_cmav<2>(wgt);
   auto dirty = makeArray<T>({npix_x,npix_y});
   auto dirty2 = make_mav<2>(dirty);
   {
@@ -187,13 +187,13 @@ template<typename T> py::array dirty2ms_general2(const py::array &uvw_,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
   auto uvw = getPyarr<double>(uvw_, "uvw");
-  auto uvw2 = make_const_mav<2>(uvw);
+  auto uvw2 = make_cmav<2>(uvw);
   auto freq = getPyarr<double>(freq_, "freq");
-  auto freq2 = make_const_mav<1>(freq);
+  auto freq2 = make_cmav<1>(freq);
   auto dirty = getPyarr<T>(dirty_, "dirty");
-  auto dirty2 = make_const_mav<2>(dirty);
+  auto dirty2 = make_cmav<2>(dirty);
   auto wgt = providePotentialArray<T>(wgt_, "wgt", {uvw2.shape(0),freq2.shape(0)});
-  auto wgt2 = make_const_mav<2>(wgt);
+  auto wgt2 = make_cmav<2>(wgt);
   auto ms = makeArray<complex<T>>({uvw2.shape(0),freq2.shape(0)});
   auto ms2 = make_mav<2>(ms);
   {

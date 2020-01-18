@@ -76,7 +76,6 @@ template<typename T, size_t ndim> class tmpStorage
     tmpStorage(const array<size_t,ndim> &shp)
       : d(prod(shp)), mav_(d.data(), shp) {}
     mav<T,ndim> &getMav() { return mav_; }
-    const_mav<T,ndim> getCmav() { return cmav(mav_); }
     void fill(const T & val)
       { std::fill(d.begin(), d.end(), val); }
   };
@@ -86,7 +85,7 @@ template<typename T, size_t ndim> class tmpStorage
 //
 
 template<typename T> void complex2hartley
-  (const const_mav<complex<T>, 2> &grid, const mav<T,2> &grid2, size_t nthreads)
+  (const cmav<complex<T>, 2> &grid, const mav<T,2> &grid2, size_t nthreads)
   {
   checkShape(grid.shape(), grid2.shape());
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -107,7 +106,7 @@ template<typename T> void complex2hartley
   }
 
 template<typename T> void hartley2complex
-  (const const_mav<T,2> &grid, const mav<complex<T>,2> &grid2, size_t nthreads)
+  (const cmav<T,2> &grid, const mav<complex<T>,2> &grid2, size_t nthreads)
   {
   checkShape(grid.shape(), grid2.shape());
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -128,17 +127,13 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(const const_mav<T,2> &in,
+template<typename T> void hartley2_2D(const cmav<T,2> &in,
   const mav<T,2> &out, size_t nthreads)
   {
   checkShape(in.shape(), out.shape());
   size_t nu=in.shape(0), nv=in.shape(1);
-  stride_t stri{in.stride(0), in.stride(1)};
-  stride_t stro{out.stride(0), out.stride(1)};
-  auto d_i = in.data();
   auto ptmp = out.data();
-  r2r_separable_hartley({nu, nv}, stri, stro, {0,1}, d_i, ptmp, T(1),
-    nthreads);
+  r2r_separable_hartley(cfmav<T>(in), fmav<T>(out), {0,1}, T(1), nthreads);
   execStatic((nu+1)/2-1, nthreads, 0, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext()) for(auto i=rng.lo+1; i<rng.hi+1; ++i)
@@ -285,8 +280,8 @@ class Baselines
     idx_t shift, mask;
 
   public:
-    template<typename T> Baselines(const const_mav<T,2> &coord_,
-      const const_mav<T,1> &freq, bool negate_v=false)
+    template<typename T> Baselines(const cmav<T,2> &coord_,
+      const cmav<T,1> &freq, bool negate_v=false)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -457,7 +452,7 @@ class GridderConfig
         });
       }
 
-    template<typename T> void grid2dirty(const const_mav<T,2> &grid,
+    template<typename T> void grid2dirty(const cmav<T,2> &grid,
       const mav<T,2> &dirty) const
       {
       checkShape(grid.shape(), {nu,nv});
@@ -471,13 +466,12 @@ class GridderConfig
       (const mav<complex<T>,2> &grid, const mav<T,2> &dirty, T w) const
       {
       checkShape(grid.shape(), {nu,nv});
-      c2c({nu,nv},{grid.stride(0),grid.stride(1)},
-        {grid.stride(0), grid.stride(1)}, {0,1}, BACKWARD,
-        grid.data(), grid.data(), T(1), nthreads);
+      fmav<complex<T>> inout(grid);
+      c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
       grid2dirty_post2(grid, dirty, w);
       }
 
-    template<typename T> void dirty2grid_pre(const const_mav<T,2> &dirty,
+    template<typename T> void dirty2grid_pre(const cmav<T,2> &dirty,
       const mav<T,2> &grid) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
@@ -502,7 +496,7 @@ class GridderConfig
           }
         });
       }
-    template<typename T> void dirty2grid_pre2(const const_mav<T,2> &dirty,
+    template<typename T> void dirty2grid_pre2(const cmav<T,2> &dirty,
       const mav<complex<T>,2> &grid, T w) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
@@ -544,20 +538,19 @@ class GridderConfig
         });
       }
 
-    template<typename T> void dirty2grid(const const_mav<T,2> &dirty,
+    template<typename T> void dirty2grid(const cmav<T,2> &dirty,
       const mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
-      hartley2_2D<T>(cmav(grid), grid, nthreads);
+      hartley2_2D<T>(grid, grid, nthreads);
       }
 
-    template<typename T> void dirty2grid_c_wscreen(const const_mav<T,2> &dirty,
+    template<typename T> void dirty2grid_c_wscreen(const cmav<T,2> &dirty,
       const mav<complex<T>,2> &grid, T w) const
       {
       dirty2grid_pre2(dirty, grid, w);
-      stride_t strides{grid.stride(0),grid.stride(1)};
-      c2c({nu,nv}, strides, strides, {0,1}, FORWARD,
-        grid.data(), grid.data(), T(1), nthreads);
+      fmav<complex<T>> inout(grid);
+      c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
       }
 
     void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
@@ -568,7 +561,7 @@ class GridderConfig
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
       }
 
-    template<typename T> void apply_wscreen(const const_mav<complex<T>,2> &dirty,
+    template<typename T> void apply_wscreen(const cmav<complex<T>,2> &dirty,
       mav<complex<T>,2> &dirty2, double w, bool adjoint) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
@@ -724,10 +717,10 @@ template<class T, class Serv> class SubServ
   {
   private:
     const Serv &srv;
-    const_mav<idx_t,1> subidx;
+    cmav<idx_t,1> subidx;
 
   public:
-    SubServ(const Serv &orig, const const_mav<idx_t,1> &subidx_)
+    SubServ(const Serv &orig, const cmav<idx_t,1> &subidx_)
       : srv(orig), subidx(subidx_){}
     size_t Nvis() const { return subidx.size(); }
     const Baselines &getBaselines() const { return srv.getBaselines(); }
@@ -746,9 +739,9 @@ template<class T, class T2> class MsServ
   {
   private:
     const Baselines &baselines;
-    const_mav<idx_t,1> idx;
+    cmav<idx_t,1> idx;
     T2 ms;
-    const_mav<T,2> wgt;
+    cmav<T,2> wgt;
     size_t nvis;
     bool have_wgt;
 
@@ -756,14 +749,14 @@ template<class T, class T2> class MsServ
     using Tsub = SubServ<T, MsServ>;
 
     MsServ(const Baselines &baselines_,
-    const const_mav<idx_t,1> &idx_, T2 ms_, const const_mav<T,2> &wgt_)
+    const cmav<idx_t,1> &idx_, T2 ms_, const cmav<T,2> &wgt_)
       : baselines(baselines_), idx(idx_), ms(ms_), wgt(wgt_),
         nvis(idx.shape(0)), have_wgt(wgt.size()!=0)
       {
       checkShape(ms.shape(), {baselines.Nrows(), baselines.Nchannels()});
       if (have_wgt) checkShape(wgt.shape(), ms.shape());
       }
-    Tsub getSubserv(const const_mav<idx_t,1> &subidx) const
+    Tsub getSubserv(const cmav<idx_t,1> &subidx) const
       { return Tsub(*this, subidx); }
     size_t Nvis() const { return nvis; }
     const Baselines &getBaselines() const { return baselines; }
@@ -789,7 +782,7 @@ template<class T, class T2> class MsServ
   };
 template<class T, class T2> MsServ<T, T2> makeMsServ
   (const Baselines &baselines,
-   const const_mav<idx_t,1> &idx, const T2 &ms, const const_mav<T,2> &wgt)
+   const cmav<idx_t,1> &idx, const T2 &ms, const cmav<T,2> &wgt)
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
 
 template<typename T, typename Serv> void x2grid_c
@@ -840,7 +833,7 @@ template<typename T, typename Serv> void x2grid_c
   }
 
 template<typename T, typename Serv> void grid2x_c
-  (const GridderConfig &gconf, const const_mav<complex<T>,2> &grid,
+  (const GridderConfig &gconf, const cmav<complex<T>,2> &grid,
   const Serv &srv, double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
@@ -1059,7 +1052,7 @@ template<typename Serv> class WgridHelper
 
     typename Serv::Tsub getSubserv() const
       {
-      auto subidx2 = const_mav<idx_t, 1>(subidx.data(), {subidx.size()});
+      auto subidx2 = cmav<idx_t, 1>(subidx.data(), {subidx.size()});
       return srv.getSubserv(subidx2);
       }
     double W() const { return wmin+curplane*dw; }
@@ -1112,13 +1105,13 @@ template<typename T, typename Serv> void x2dirty(
     x2grid_c(gconf, srv, grid);
     tmpStorage<T,2> rgrid_(grid.shape());
     auto rgrid=rgrid_.getMav();
-    complex2hartley(cmav(grid), rgrid, gconf.Nthreads());
-    gconf.grid2dirty(cmav(rgrid), dirty);
+    complex2hartley(grid, rgrid, gconf.Nthreads());
+    gconf.grid2dirty(rgrid, dirty);
     }
   }
 
 template<typename T, typename Serv> void dirty2x(
-  const GridderConfig &gconf,  const const_mav<T,2> &dirty,
+  const GridderConfig &gconf,  const cmav<T,2> &dirty,
   const Serv &srv, bool do_wstacking, size_t verbosity)
   {
   if (do_wstacking)
@@ -1140,8 +1133,8 @@ template<typename T, typename Serv> void dirty2x(
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
-      gconf.dirty2grid_c_wscreen(cmav(tdirty), grid, T(hlp.W()));
-      grid2x_c(gconf, cmav(grid), hlp.getSubserv(), hlp.W(), dw);
+      gconf.dirty2grid_c_wscreen(tdirty, grid, T(hlp.W()));
+      grid2x_c(gconf, grid, hlp.getSubserv(), hlp.W(), dw);
       }
     }
   else
@@ -1156,8 +1149,8 @@ template<typename T, typename Serv> void dirty2x(
     gconf.dirty2grid(dirty, grid);
     tmpStorage<complex<T>,2> grid2_(grid.shape());
     auto grid2=grid2_.getMav();
-    hartley2complex(cmav(grid), grid2, gconf.Nthreads());
-    grid2x_c(gconf, cmav(grid2), srv);
+    hartley2complex(grid, grid2, gconf.Nthreads());
+    grid2x_c(gconf, grid2, srv);
     }
   }
 
@@ -1172,8 +1165,8 @@ void calc_share(size_t nshares, size_t myshare, size_t nwork, size_t &lo,
 
 
 template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
-  const GridderConfig &gconf, const const_mav<T,2> &wgt,
-  const const_mav<complex<T>,2> &ms)
+  const GridderConfig &gconf, const cmav<T,2> &wgt,
+  const cmav<complex<T>,2> &ms)
   {
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
@@ -1217,21 +1210,21 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   return res;
   }
 
-template<typename T> void ms2dirty_general(const const_mav<double,2> &uvw,
-  const const_mav<double,1> &freq, const const_mav<complex<T>,2> &ms,
-  const const_mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
+template<typename T> void ms2dirty_general(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<complex<T>,2> &ms,
+  const cmav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, const mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
   GridderConfig gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
-  auto idx2 = const_mav<idx_t,1>(idx.data(),{idx.size()});
+  auto idx2 = cmav<idx_t,1>(idx.data(),{idx.size()});
   x2dirty(gconf, makeMsServ(baselines,idx2,ms,wgt), dirty, do_wstacking, verbosity);
   }
-template<typename T> void ms2dirty(const const_mav<double,2> &uvw,
-  const const_mav<double,1> &freq, const const_mav<complex<T>,2> &ms,
-  const const_mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
+template<typename T> void ms2dirty(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<complex<T>,2> &ms,
+  const cmav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wstacking, size_t nthreads, const mav<T,2> &dirty, size_t verbosity)
   {
   ms2dirty_general(uvw, freq, ms, wgt, pixsize_x, pixsize_y,
@@ -1239,23 +1232,23 @@ template<typename T> void ms2dirty(const const_mav<double,2> &uvw,
     dirty, verbosity);
   }
 
-template<typename T> void dirty2ms_general(const const_mav<double,2> &uvw,
-  const const_mav<double,1> &freq, const const_mav<T,2> &dirty,
-  const const_mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv,double epsilon,
+template<typename T> void dirty2ms_general(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<T,2> &dirty,
+  const cmav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv,double epsilon,
   bool do_wstacking, size_t nthreads, const mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
   GridderConfig gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
-  const_mav<complex<T>,2> null_ms(nullptr, {0,0});
+  cmav<complex<T>,2> null_ms(nullptr, {0,0});
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
-  auto idx2 = const_mav<idx_t,1>(idx.data(),{idx.size()});
+  auto idx2 = cmav<idx_t,1>(idx.data(),{idx.size()});
   ms.fill(0);
   dirty2x(gconf, dirty, makeMsServ(baselines,idx2,ms,wgt), do_wstacking, verbosity);
   }
-template<typename T> void dirty2ms(const const_mav<double,2> &uvw,
-  const const_mav<double,1> &freq, const const_mav<T,2> &dirty,
-  const const_mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
+template<typename T> void dirty2ms(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<T,2> &dirty,
+  const cmav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wstacking, size_t nthreads, const mav<complex<T>,2> &ms, size_t verbosity)
   {
   dirty2ms_general(uvw, freq, dirty, wgt, pixsize_x, pixsize_y,

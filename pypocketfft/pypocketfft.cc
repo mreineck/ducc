@@ -22,6 +22,8 @@ namespace {
 
 using mr::shape_t;
 using mr::stride_t;
+using mr::fmav;
+using mr::cfmav;
 using std::size_t;
 using std::ptrdiff_t;
 
@@ -110,7 +112,7 @@ template<typename T> T norm_fct(int inorm, const shape_t &shape,
   }
 
 template<typename T> py::array_t<T> prepare_output(py::object &out_,
-  shape_t &dims)
+  const shape_t &dims)
   {
   if (out_.is_none()) return py::array_t<T>(dims);
   auto tmp = out_.cast<py::array_t<T>>();
@@ -119,23 +121,31 @@ template<typename T> py::array_t<T> prepare_output(py::object &out_,
   return tmp;
   }
 
+template<typename T> fmav<T> to_fmav(py::array &arr)
+  {
+  return fmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_shape(arr), copy_strides<T>(arr));
+  }
+template<typename T> cfmav<T> to_cfmav(const py::array &arr)
+  {
+  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
+    copy_shape(arr), copy_strides<T>(arr));
+  }
+
 template<typename T> py::array c2c_internal(const py::array &in,
   const py::object &axes_, bool forward, int inorm, py::object &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims(copy_shape(in));
-  auto res = prepare_output<std::complex<T>>(out_, dims);
-  auto s_in=copy_strides<std::complex<T>>(in);
-  auto s_out=copy_strides<std::complex<T>>(res);
-  auto d_in=reinterpret_cast<const std::complex<T> *>(in.data());
-  auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
+  auto ain = to_cfmav<std::complex<T>>(in);
+  auto out = prepare_output<std::complex<T>>(out_, ain.shape());
+  auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims, axes);
-  mr::c2c(dims, s_in, s_out, axes, forward, d_in, d_out, fct, nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::c2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return move(res);
+  return move(out);
   }
 
 template<typename T> py::array c2c_sym_internal(const py::array &in,
@@ -143,28 +153,24 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims(copy_shape(in));
-  auto res = prepare_output<std::complex<T>>(out_, dims);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<std::complex<T>>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<std::complex<T>>(out_, ain.shape());
+  auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims, axes);
-  mr::r2c(dims, s_in, s_out, axes, forward, d_in, d_out, fct, nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::r2c(ain, aout, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace mr::detail_fft;
-  const mr::fmav<std::complex<T>> ares(res.mutable_data(), dims, s_out);
-  rev_iter iter(ares, axes);
+  rev_iter iter(aout, axes);
   while(iter.remaining()>0)
     {
-    auto v = ares[iter.ofs()];
-    ares[iter.rev_ofs()] = conj(v);
+    auto v = aout[iter.ofs()];
+    aout[iter.rev_ofs()] = conj(v);
     iter.advance();
     }
   }
-  return move(res);
+  return move(out);
   }
 
 py::array c2c(const py::array &a, const py::object &axes_, bool forward,
@@ -183,20 +189,17 @@ template<typename T> py::array r2c_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims_in(copy_shape(in)), dims_out(dims_in);
+  auto ain = to_cfmav<T>(in);
+  auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
-  py::array res = prepare_output<std::complex<T>>(out_, dims_out);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<std::complex<T>>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
+  auto out = prepare_output<std::complex<T>>(out_, dims_out);
+  auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims_in, axes);
-  mr::r2c(dims_in, s_in, s_out, axes, forward, d_in, d_out, fct,
-    nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::r2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return res;
+  return move(out);
   }
 
 py::array r2c(const py::array &in, const py::object &axes_, bool forward,
@@ -211,19 +214,15 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims(copy_shape(in));
-  py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims, axes);
-  mr::r2r_fftpack(dims, s_in, s_out, axes, real2hermitian, forward,
-    d_in, d_out, fct, nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array r2r_fftpack(const py::array &in, const py::object &axes_,
@@ -239,21 +238,17 @@ template<typename T> py::array dct_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims(copy_shape(in));
-  py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = (type==1) ? norm_fct<T>(inorm, dims, axes, 2, -1)
-                    : norm_fct<T>(inorm, dims, axes, 2);
-  bool ortho = inorm == 1;
-  mr::dct(dims, s_in, s_out, axes, type, d_in, d_out, fct, ortho,
-    nthreads);
+  T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
+                    : norm_fct<T>(inorm, ain.shape(), axes, 2);
+  bool ortho = inorm == true;
+  mr::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array dct(const py::array &in, int type, const py::object &axes_,
@@ -269,21 +264,17 @@ template<typename T> py::array dst_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto dims(copy_shape(in));
-  py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = (type==1) ? norm_fct<T>(inorm, dims, axes, 2, 1)
-                    : norm_fct<T>(inorm, dims, axes, 2);
-  bool ortho = inorm == 1;
-  mr::dst(dims, s_in, s_out, axes, type, d_in, d_out, fct, ortho,
-    nthreads);
+  T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
+                    : norm_fct<T>(inorm, ain.shape(), axes, 2);
+  bool ortho = inorm == true;
+  mr::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array dst(const py::array &in, int type, const py::object &axes_,
@@ -300,23 +291,20 @@ template<typename T> py::array c2r_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   size_t axis = axes.back();
-  shape_t dims_in(copy_shape(in)), dims_out=dims_in;
-  if (lastsize==0) lastsize=2*dims_in[axis]-1;
-  if ((lastsize/2) + 1 != dims_in[axis])
+  auto ain = to_cfmav<std::complex<T>>(in);
+  shape_t dims_out(ain.shape());
+  if (lastsize==0) lastsize=2*ain.shape(axis)-1;
+  if ((lastsize/2) + 1 != ain.shape(axis))
     throw std::invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
-  py::array res = prepare_output<T>(out_, dims_out);
-  auto s_in=copy_strides<std::complex<T>>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const std::complex<T> *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto out = prepare_output<T>(out_, dims_out);
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims_out, axes);
-  mr::c2r(dims_out, s_in, s_out, axes, forward, d_in, d_out, fct,
-    nthreads);
+  T fct = norm_fct<T>(inorm, aout.shape(), axes);
+  mr::c2r(ain, aout, axes, forward, fct, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array c2r(const py::array &in, const py::object &axes_, size_t lastsize,
@@ -329,20 +317,16 @@ py::array c2r(const py::array &in, const py::object &axes_, size_t lastsize,
 template<typename T> py::array separable_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
-  auto dims(copy_shape(in));
-  py::array res = prepare_output<T>(out_, dims);
   auto axes = makeaxes(in, axes_);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims, axes);
-  mr::r2r_separable_hartley(dims, s_in, s_out, axes, d_in, d_out, fct,
-    nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array separable_hartley(const py::array &in, const py::object &axes_,
@@ -355,20 +339,16 @@ py::array separable_hartley(const py::array &in, const py::object &axes_,
 template<typename T> py::array genuine_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
-  auto dims(copy_shape(in));
-  py::array res = prepare_output<T>(out_, dims);
   auto axes = makeaxes(in, axes_);
-  auto s_in=copy_strides<T>(in);
-  auto s_out=copy_strides<T>(res);
-  auto d_in=reinterpret_cast<const T *>(in.data());
-  auto d_out=reinterpret_cast<T *>(res.mutable_data());
+  auto ain = to_cfmav<T>(in);
+  auto out = prepare_output<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
-  T fct = norm_fct<T>(inorm, dims, axes);
-  mr::r2r_genuine_hartley(dims, s_in, s_out, axes, d_in, d_out, fct,
-    nthreads);
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  mr::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
-  return res;
+  return out;
   }
 
 py::array genuine_hartley(const py::array &in, const py::object &axes_,
