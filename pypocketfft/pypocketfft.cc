@@ -47,11 +47,16 @@ shape_t copy_shape(const py::array &arr)
   return res;
   }
 
-stride_t copy_strides(const py::array &arr)
+template<typename T> stride_t copy_strides(const py::array &arr)
   {
   stride_t res(size_t(arr.ndim()));
+  constexpr auto st = ptrdiff_t(sizeof(T));
   for (size_t i=0; i<res.size(); ++i)
-    res[i] = arr.strides(int(i));
+    {
+    auto tmp = arr.strides(int(i));
+    MR_assert((tmp/st)*st==tmp, "bad stride");
+    res[i] = tmp/st;
+    }
   return res;
   }
 
@@ -121,8 +126,8 @@ template<typename T> py::array c2c_internal(const py::array &in,
   auto axes = makeaxes(in, axes_);
   auto dims(copy_shape(in));
   auto res = prepare_output<std::complex<T>>(out_, dims);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<std::complex<T>>(in);
+  auto s_out=copy_strides<std::complex<T>>(res);
   auto d_in=reinterpret_cast<const std::complex<T> *>(in.data());
   auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
   {
@@ -140,8 +145,8 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   auto axes = makeaxes(in, axes_);
   auto dims(copy_shape(in));
   auto res = prepare_output<std::complex<T>>(out_, dims);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<std::complex<T>>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
   {
@@ -150,7 +155,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   mr::r2c(dims, s_in, s_out, axes, forward, d_in, d_out, fct, nthreads);
   // now fill in second half
   using namespace mr::detail_fft;
-  ndarr<std::complex<T>> ares(res.mutable_data(), dims, s_out);
+  const mr::fmav<std::complex<T>> ares(res.mutable_data(), dims, s_out);
   rev_iter iter(ares, axes);
   while(iter.remaining()>0)
     {
@@ -181,8 +186,8 @@ template<typename T> py::array r2c_internal(const py::array &in,
   auto dims_in(copy_shape(in)), dims_out(dims_in);
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
   py::array res = prepare_output<std::complex<T>>(out_, dims_out);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<std::complex<T>>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<std::complex<T> *>(res.mutable_data());
   {
@@ -208,8 +213,8 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   auto axes = makeaxes(in, axes_);
   auto dims(copy_shape(in));
   py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {
@@ -236,8 +241,8 @@ template<typename T> py::array dct_internal(const py::array &in,
   auto axes = makeaxes(in, axes_);
   auto dims(copy_shape(in));
   py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {
@@ -266,8 +271,8 @@ template<typename T> py::array dst_internal(const py::array &in,
   auto axes = makeaxes(in, axes_);
   auto dims(copy_shape(in));
   py::array res = prepare_output<T>(out_, dims);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {
@@ -301,8 +306,8 @@ template<typename T> py::array c2r_internal(const py::array &in,
     throw std::invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
   py::array res = prepare_output<T>(out_, dims_out);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<std::complex<T>>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const std::complex<T> *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {
@@ -327,8 +332,8 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   auto dims(copy_shape(in));
   py::array res = prepare_output<T>(out_, dims);
   auto axes = makeaxes(in, axes_);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {
@@ -353,8 +358,8 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   auto dims(copy_shape(in));
   py::array res = prepare_output<T>(out_, dims);
   auto axes = makeaxes(in, axes_);
-  auto s_in=copy_strides(in);
-  auto s_out=copy_strides(res);
+  auto s_in=copy_strides<T>(in);
+  auto s_out=copy_strides<T>(res);
   auto d_in=reinterpret_cast<const T *>(in.data());
   auto d_out=reinterpret_cast<T *>(res.mutable_data());
   {

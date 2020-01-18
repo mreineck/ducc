@@ -87,3 +87,4 @@ libtool
 ar-lib
 *-uninstalled.sh
 missing
+test-driver

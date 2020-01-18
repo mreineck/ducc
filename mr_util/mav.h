@@ -24,6 +24,8 @@
 
 #include <cstdlib>
 #include <array>
+#include <vector>
+#include "mr_util/error_handling.h"
 
 namespace mr {
 
@@ -31,7 +33,100 @@ namespace detail_mav {
 
 using namespace std;
 
+using shape_t = vector<size_t>;
+using stride_t = vector<ptrdiff_t>;
+
+class fmav_info
+  {
+  protected:
+    shape_t shp;
+    stride_t str;
+
+    static size_t prod(const shape_t &shape)
+      {
+      size_t res=1;
+      for (auto sz: shape)
+        res*=sz;
+      return res;
+      }
+
+  public:
+    fmav_info(const shape_t &shape_, const stride_t &stride_)
+      : shp(shape_), str(stride_)
+      { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
+    fmav_info(const shape_t &shape_)
+      : shp(shape_), str(shape_.size())
+      {
+      auto ndim = shp.size();
+      str[ndim-1]=1;
+      for (size_t i=2; i<=ndim; ++i)
+        str[ndim-i] = str[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
+      }
+    size_t ndim() const { return shp.size(); }
+    size_t size() const { return prod(shp); }
+    const shape_t &shape() const { return shp; }
+    size_t shape(size_t i) const { return shp[i]; }
+    const stride_t &stride() const { return str; }
+    const ptrdiff_t &stride(size_t i) const { return str[i]; }
+    bool last_contiguous() const
+      { return (str.back()==1); }
+    bool contiguous() const
+      {
+      auto ndim = shp.size();
+      ptrdiff_t stride=1;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        if (str[ndim-1-i]!=stride) return false;
+        stride *= shp[ndim-1-i];
+        }
+      return true;
+      }
+    bool conformable(const fmav_info &other) const
+      { return shp==other.shp; }
+  };
+
 // "mav" stands for "multidimensional array view"
+template<typename T> class cfmav: public fmav_info
+  {
+  protected:
+    T *d;
+
+  public:
+    cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : fmav_info(shp_, str_), d(const_cast<T *>(d_)) {}
+    cfmav(const T *d_, const shape_t &shp_)
+      : fmav_info(shp_), d(const_cast<T *>(d_)) {}
+    template<typename I> const T &operator[](I i) const
+      { return d[i]; }
+    const T *data() const
+      { return d; }
+  };
+template<typename T> class fmav: public cfmav<T>
+  {
+  protected:
+    using parent = cfmav<T>;
+    using parent::d;
+    using parent::shp;
+    using parent::str;
+
+  public:
+    fmav(T *d_, const shape_t &shp_, const stride_t &str_)
+      : parent(d_, shp_, str_) {}
+    fmav(T *d_, const shape_t &shp_)
+      : parent(d_, shp_) {}
+    template<typename I> T &operator[](I i) const
+      { return d[i]; }
+    using parent::shape;
+    using parent::stride;
+    T *data() const
+      { return d; }
+    using parent::last_contiguous;
+    using parent::contiguous;
+    using parent::conformable;
+  };
+
+template<typename T> using const_fmav = fmav<const T>;
+
 template<typename T, size_t ndim> class mav
   {
   static_assert((ndim>0) && (ndim<3), "only supports 1D and 2D arrays");
@@ -49,8 +144,8 @@ template<typename T, size_t ndim> class mav
       : d(d_), shp(shp_)
       {
       str[ndim-1]=1;
-      for (size_t d=2; d<=ndim; ++d)
-        str[ndim-d] = str[ndim-d+1]*shp[ndim-d+1];
+      for (size_t i=2; i<=ndim; ++i)
+        str[ndim-i] = str[ndim-i+1]*shp[ndim-i+1];
       }
     T &operator[](size_t i) const
       { return operator()(i); }
@@ -98,6 +193,8 @@ template<typename T, size_t ndim> class mav
           for (size_t j=0; j<shp[1]; ++j)
             d[str[0]*i + str[1]*j] = val;
       }
+    template<typename T2> bool conformable(const mav<T2,ndim> &other) const
+      { return shp==other.shp; }
   };
 
 template<typename T, size_t ndim> using const_mav = mav<const T, ndim>;
@@ -112,6 +209,12 @@ template<typename T, size_t ndim> const_mav<T, ndim> nullmav()
 
 }
 
+using detail_mav::shape_t;
+using detail_mav::stride_t;
+using detail_mav::fmav_info;
+using detail_mav::fmav;
+using detail_mav::cfmav;
+using detail_mav::const_fmav;
 using detail_mav::mav;
 using detail_mav::const_mav;
 using detail_mav::cmav;
