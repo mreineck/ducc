@@ -133,9 +133,8 @@ template<typename T> void hartley2_2D(const const_mav<T,2> &in,
   {
   checkShape(in.shape(), out.shape());
   size_t nu=in.shape(0), nv=in.shape(1);
-  ptrdiff_t sz=ptrdiff_t(sizeof(T));
-  stride_t stri{sz*in.stride(0), sz*in.stride(1)};
-  stride_t stro{sz*out.stride(0), sz*out.stride(1)};
+  stride_t stri{in.stride(0), in.stride(1)};
+  stride_t stro{out.stride(0), out.stride(1)};
   auto d_i = in.data();
   auto ptmp = out.data();
   r2r_separable_hartley({nu, nv}, stri, stro, {0,1}, d_i, ptmp, T(1),
@@ -472,9 +471,8 @@ class GridderConfig
       (const mav<complex<T>,2> &grid, const mav<T,2> &dirty, T w) const
       {
       checkShape(grid.shape(), {nu,nv});
-      constexpr auto sc = ptrdiff_t(sizeof(complex<T>));
-      c2c({nu,nv},{grid.stride(0)*sc,grid.stride(1)*sc},
-        {grid.stride(0)*sc, grid.stride(1)*sc}, {0,1}, BACKWARD,
+      c2c({nu,nv},{grid.stride(0),grid.stride(1)},
+        {grid.stride(0), grid.stride(1)}, {0,1}, BACKWARD,
         grid.data(), grid.data(), T(1), nthreads);
       grid2dirty_post2(grid, dirty, w);
       }
@@ -557,8 +555,7 @@ class GridderConfig
       const mav<complex<T>,2> &grid, T w) const
       {
       dirty2grid_pre2(dirty, grid, w);
-      constexpr auto sc = ptrdiff_t(sizeof(complex<T>));
-      stride_t strides{grid.stride(0)*sc,grid.stride(1)*sc};
+      stride_t strides{grid.stride(0),grid.stride(1)};
       c2c({nu,nv}, strides, strides, {0,1}, FORWARD,
         grid.data(), grid.data(), T(1), nthreads);
       }
