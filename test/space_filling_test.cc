@@ -1,5 +1,5 @@
 #include <functional>
-#include "mr_util/morton_utils.h"
+#include "mr_util/space_filling.h"
 #include "mr_util/error_handling.h"
 
 using namespace std;

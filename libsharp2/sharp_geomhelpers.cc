@@ -243,7 +243,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
     weight[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
     }
   if ((nrings&1)==0) weight[nrings-1]=0.;
-  mr::r2r_fftpack({size_t(nrings)}, {1}, {1}, {0}, false, false, weight.data(), weight.data(), 1.);
+  auto tmp = fmav(weight.data(),{nrings});
+  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
 
   for (size_t m=0; m<(nrings+1)/2; ++m)
     {
@@ -275,7 +276,8 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
   for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k) + dw;
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
-  mr::r2r_fftpack({size_t(n)}, {1}, {1}, {0}, false, false, weight.data(), weight.data(), 1.);
+  auto tmp = fmav(weight.data(),{n});
+  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
   weight[n]=weight[0];
 
   for (size_t m=0; m<(nrings+1)/2; ++m)
@@ -308,7 +310,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t p
   for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k);
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1.;
-  mr::r2r_fftpack({size_t(n)}, {1}, {1}, {0}, false, false, weight.data(), weight.data(), 1.);
+  auto tmp = fmav(weight.data(),{n});
+  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
   for (size_t m=0; m<nrings; ++m)
     weight[m]=weight[m+1];
 

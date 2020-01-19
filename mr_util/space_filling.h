@@ -30,8 +30,8 @@
  *  Author: Martin Reinecke
  */
 
-#ifndef MRUTIL_MORTON_UTILS_H
-#define MRUTIL_MORTON_UTILS_H
+#ifndef MRUTIL_SPACE_FILLING_H
+#define MRUTIL_SPACE_FILLING_H
 
 #include <cstdint>
 #include <array>

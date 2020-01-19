@@ -20,8 +20,8 @@ libmrutil_la_SOURCES = \
   mr_util/constants.h \
   mr_util/error_handling.cc \
   mr_util/error_handling.h \
-  mr_util/morton_utils.cc \
-  mr_util/morton_utils.h \
+  mr_util/space_filling.cc \
+  mr_util/space_filling.h \
   mr_util/fft.h \
   mr_util/gl_integrator.h \
   mr_util/mav.h \
@@ -72,13 +72,13 @@ nobase_include_HEADERS = \
 
 EXTRA_DIST = runtest.sh
 
-check_PROGRAMS = sharp2_testsuite morton_test
+check_PROGRAMS = sharp2_testsuite space_filling_test
 sharp2_testsuite_SOURCES = test/sharp2_testsuite.cc
 sharp2_testsuite_LDADD = libmrutil.la
-morton_test_SOURCES = test/morton_test.cc
-morton_test_LDADD = libmrutil.la
+space_filling_test_SOURCES = test/space_filling_test.cc
+space_filling_test_LDADD = libmrutil.la
 
-TESTS = runtest.sh
+TESTS = test/test_libsharp.sh test/test_space_filling.sh
 
 pkgconfigdir = $(libdir)/pkgconfig
 nodist_pkgconfig_DATA = @PACKAGE_NAME@.pc

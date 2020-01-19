@@ -29,7 +29,7 @@
  *  Author: Martin Reinecke
  */
 
-#include "mr_util/morton_utils.h"
+#include "mr_util/space_filling.h"
 
 namespace mr {
 
