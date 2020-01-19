@@ -46,6 +46,9 @@ class sharp_standard_alm_info: public sharp_alm_info
     std::vector<ptrdiff_t> mvstart;
     /*! Stride between a_lm and a_(l+1),m */
     ptrdiff_t stride;
+    template<typename T> void tclear (T *alm) const;
+    template<typename T> void tget (size_t mi, const T *alm, std::complex<double> *almtmp, size_t nalm) const;
+    template<typename T> void tadd (size_t mi, const std::complex<double> *almtmp, T *alm, size_t nalm) const;
 
   public:
   /*! Creates an a_lm data structure from the following parameters:
@@ -80,12 +83,9 @@ class sharp_standard_alm_info: public sharp_alm_info
     virtual size_t mmax() const;
     virtual size_t nm() const { return mval_.size(); }
     virtual size_t mval(size_t i) const { return mval_[i]; }
-    virtual void clear_alm(std::complex<double> *alm) const;
-    virtual void clear_alm(std::complex<float> *alm) const;
-    virtual void get_alm(size_t mi, const std::complex<double> *alm, std::complex<double> *almtmp, size_t nalm) const;
-    virtual void get_alm(size_t mi, const std::complex<float> *alm, std::complex<double> *almtmp, size_t nalm) const;
-    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, std::complex<double> *alm, size_t nalm) const;
-    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, std::complex<float> *alm, size_t nalm) const;
+    virtual void clear_alm(std::any alm) const;
+    virtual void get_alm(size_t mi, std::any alm, std::complex<double> *almtmp, size_t nalm) const;
+    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, std::any alm, size_t nalm) const;
   };
 
 /*! Initialises an a_lm data structure according to the scheme used by

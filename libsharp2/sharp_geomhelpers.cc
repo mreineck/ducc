@@ -86,62 +86,56 @@ sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *
     return ring[a.r1].nph<ring[b.r1].nph;
     });
   }
-
-void sharp_standard_geom_info::clear_map (double *map) const
+template<typename T> bool can_cast(any val)
+  { return val.type()==typeid(T); }
+template<typename T> void sharp_standard_geom_info::tclear(T *map) const
   {
   for (const auto &r: ring)
     {
     if (stride==1)
-      memset(&map[r.ofs],0,r.nph*sizeof(double));
+      memset(&map[r.ofs],0,r.nph*sizeof(T));
     else
       for (size_t i=0;i<r.nph;++i)
-        map[r.ofs+i*stride]=0;
+        map[r.ofs+i*stride]=T(0);
     }
   }
 
-void sharp_standard_geom_info::clear_map (float *map) const
+void sharp_standard_geom_info::clear_map (any map) const
   {
-  for (const auto &r: ring)
-    {
-    if (stride==1)
-      memset(&map[r.ofs],0,r.nph*sizeof(float));
-    else
-      for (size_t i=0;i<r.nph;++i)
-        map[r.ofs+i*stride]=0;
-    }
+  if (can_cast<double *>(map)) tclear(any_cast<double *>(map));
+  else if (can_cast<float *>(map)) tclear(any_cast<float *>(map));
+  else MR_fail("bad map data type");
   }
 
-//virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, double *map) const
+template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t iring, const double *ringtmp, T *map) const
   {
-  double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += ringtmp[m]*wgt;
+    p1[m*stride] += T(ringtmp[m]*wgt);
   }
 //virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, float *map) const
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, any map) const
   {
-  float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += float(ringtmp[m]*wgt);
+  if (can_cast<double *>(map)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
+  else if (can_cast<float *>(map)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
+  else MR_fail("bad map data type");
   }
-//virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const double *map, double *ringtmp) const
+template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, double *ringtmp) const
   {
-  const double *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  const T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
     ringtmp[m] = p1[m*stride]*wgt;
   }
 //virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const float *map, double *ringtmp) const
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, any map, double *ringtmp) const
   {
-  const float *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
-  double wgt = weighted ? ring[iring].weight : 1.;
-  for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride]*wgt;
+  if (can_cast<const double *>(map)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
+  else if (can_cast<double *>(map)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
+  else if (can_cast<const float *>(map)) tget(weighted, iring, any_cast<const float *>(map), ringtmp);
+  else if (can_cast<float *>(map)) tget(weighted, iring, any_cast<float *>(map), ringtmp);
+  else MR_assert(false,"bad map data type",map.type().name());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
