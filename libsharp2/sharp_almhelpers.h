@@ -75,6 +75,7 @@ class sharp_standard_alm_info: public sharp_alm_info
       the index for the coefficient with the quantum numbers \a l, \a mi. */
     ptrdiff_t index (int l, int mi);
 
+    virtual ~sharp_standard_alm_info() {}
     virtual size_t lmax() const { return lmax_; }
     virtual size_t mmax() const;
     virtual size_t nm() const { return mval_.size(); }

@@ -119,7 +119,7 @@ template<typename T> py::array ms2dirty_general2(const py::array &uvw_,
   ms2dirty_general(uvw2,freq2,ms2,wgt2,pixsize_x,pixsize_y, nu, nv, epsilon,do_wstacking,
     nthreads,dirty2,verbosity);
   }
-  return dirty;
+  return move(dirty);
   }
 py::array Pyms2dirty_general(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
@@ -201,7 +201,7 @@ template<typename T> py::array dirty2ms_general2(const py::array &uvw_,
   dirty2ms_general(uvw2,freq2,dirty2,wgt2,pixsize_x,pixsize_y,nu, nv,epsilon,do_wstacking,
     nthreads,ms2,verbosity);
   }
-  return ms;
+  return move(ms);
   }
 py::array Pydirty2ms_general(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
