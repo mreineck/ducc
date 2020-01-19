@@ -86,8 +86,7 @@ sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *
     return ring[a.r1].nph<ring[b.r1].nph;
     });
   }
-template<typename T> bool can_cast(any val)
-  { return val.type()==typeid(T); }
+
 template<typename T> void sharp_standard_geom_info::tclear(T *map) const
   {
   for (const auto &r: ring)
@@ -102,8 +101,8 @@ template<typename T> void sharp_standard_geom_info::tclear(T *map) const
 
 void sharp_standard_geom_info::clear_map (any map) const
   {
-  if (can_cast<double *>(map)) tclear(any_cast<double *>(map));
-  else if (can_cast<float *>(map)) tclear(any_cast<float *>(map));
+  if (map.type()==typeid(double *)) tclear(any_cast<double *>(map));
+  else if (map.type()==typeid(float *)) tclear(any_cast<float *>(map));
   else MR_fail("bad map data type");
   }
 
@@ -117,8 +116,8 @@ template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t i
 //virtual
 void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, any map) const
   {
-  if (can_cast<double *>(map)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
-  else if (can_cast<float *>(map)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
+  if (map.type()==typeid(double *)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
+  else if (map.type()==typeid(float *)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
   else MR_fail("bad map data type");
   }
 template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, double *ringtmp) const
@@ -131,10 +130,10 @@ template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t i
 //virtual
 void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, any map, double *ringtmp) const
   {
-  if (can_cast<const double *>(map)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
-  else if (can_cast<double *>(map)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
-  else if (can_cast<const float *>(map)) tget(weighted, iring, any_cast<const float *>(map), ringtmp);
-  else if (can_cast<float *>(map)) tget(weighted, iring, any_cast<float *>(map), ringtmp);
+  if (map.type()==typeid(const double *)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
+  else if (map.type()==typeid(double *)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
+  else if (map.type()==typeid(const float *)) tget(weighted, iring, any_cast<const float *>(map), ringtmp);
+  else if (map.type()==typeid(float *)) tget(weighted, iring, any_cast<float *>(map), ringtmp);
   else MR_assert(false,"bad map data type",map.type().name());
   }
 
