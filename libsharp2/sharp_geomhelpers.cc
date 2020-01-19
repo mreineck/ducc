@@ -186,7 +186,7 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
     curofs+=nph[m];
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride, phi0.data(), theta.data(), weight_.data()));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride, phi0.data(), theta.data(), weight_.data());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside, ptrdiff_t stride,
@@ -216,7 +216,7 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
     weight[m]*=2*pi/nphi;
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data()));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -250,7 +250,7 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data()));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -285,7 +285,7 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data()));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
   }
 
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
@@ -319,7 +319,7 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t p
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data()));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
@@ -340,5 +340,5 @@ unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t pprin
     ofs[m]=ptrdiff_t(m*stride_lat);
     }
 
-  return unique_ptr<sharp_geom_info>(new sharp_standard_geom_info(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), nullptr));
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), nullptr);
   }
