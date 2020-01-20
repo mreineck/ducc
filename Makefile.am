@@ -9,7 +9,6 @@ libmrutil_la_SOURCES = \
   libsharp2/sharp_geomhelpers.cc \
   libsharp2/sharp_ylmgen.cc \
   libsharp2/sharp_internal.h \
-  libsharp2/sharp_ylmgen.h \
   mr_util/math_utils.h \
   mr_util/cmplx.h \
   mr_util/aligned_array.h \

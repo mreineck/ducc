@@ -28,7 +28,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
-#include "libsharp2/sharp_ylmgen.h"
+#include "libsharp2/sharp_internal.h"
 #include "mr_util/error_handling.h"
 
 using namespace std;

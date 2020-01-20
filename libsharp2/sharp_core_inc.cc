@@ -37,6 +37,7 @@
 #include <complex>
 #include <cmath>
 #include <cstring>
+#include <vector>
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_internal.h"
 #include "mr_util/error_handling.h"
@@ -46,6 +47,7 @@
 #pragma GCC visibility push(hidden)
 
 using namespace mr;
+using namespace std;
 
 using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
@@ -249,7 +251,7 @@ MRUTIL_NOINLINE static void iter_to_ieee(const sharp_Ylmgen &gen,
   }
 
 MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
-  const vector<sharp_ylmgen_dbl2> &coef, const dcmplx * MRUTIL_RESTRICT alm,
+  const vector<sharp_Ylmgen::dbl2> &coef, const dcmplx * MRUTIL_RESTRICT alm,
   size_t l, size_t il, size_t lmax, size_t nv2)
   {
   for (; l+6<=lmax; il+=4, l+=8)
@@ -381,7 +383,7 @@ MRUTIL_NOINLINE static void calc_alm2map (sharp_protojob & MRUTIL_RESTRICT job,
   }
 
 MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
-  const vector<sharp_ylmgen_dbl2> &coef, dcmplx * MRUTIL_RESTRICT alm, size_t l,
+  const vector<sharp_Ylmgen::dbl2> &coef, dcmplx * MRUTIL_RESTRICT alm, size_t l,
   size_t il, size_t lmax, size_t nv2)
   {
   for (; l+2<=lmax; il+=2, l+=4)
@@ -548,7 +550,7 @@ MRUTIL_NOINLINE static void iter_to_ieee_spin (const sharp_Ylmgen &gen,
   }
 
 MRUTIL_NOINLINE static void alm2map_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_ylmgen_dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
+  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave = l;
@@ -684,7 +686,7 @@ MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_protojob & MRUTIL_RESTRICT 
   }
 
 MRUTIL_NOINLINE static void map2alm_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_ylmgen_dbl2> &fx, dcmplx * MRUTIL_RESTRICT alm,
+  const vector<sharp_Ylmgen::dbl2> &fx, dcmplx * MRUTIL_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
@@ -815,7 +817,7 @@ MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_protojob & MRUTIL_RESTRICT 
 
 
 MRUTIL_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_ylmgen_dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
+  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
