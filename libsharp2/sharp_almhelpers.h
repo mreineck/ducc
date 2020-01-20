@@ -83,9 +83,9 @@ class sharp_standard_alm_info: public sharp_alm_info
     virtual size_t mmax() const;
     virtual size_t nm() const { return mval_.size(); }
     virtual size_t mval(size_t i) const { return mval_[i]; }
-    virtual void clear_alm(std::any alm) const;
-    virtual void get_alm(size_t mi, std::any alm, std::complex<double> *almtmp, size_t nalm) const;
-    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, std::any alm, size_t nalm) const;
+    virtual void clear_alm(const std::any &alm) const;
+    virtual void get_alm(size_t mi, const std::any &alm, std::complex<double> *almtmp, size_t nalm) const;
+    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, const std::any &alm, size_t nalm) const;
   };
 
 /*! Initialises an a_lm data structure according to the scheme used by

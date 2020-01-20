@@ -60,7 +60,7 @@ template<typename T> void sharp_standard_alm_info::tclear (T *alm) const
     for (size_t l=mval_[mi];l<=lmax_;++l)
       reinterpret_cast<T *>(alm)[mvstart[mi]+l*stride]=0.;
   }
-void sharp_standard_alm_info::clear_alm(std::any alm) const
+void sharp_standard_alm_info::clear_alm(const any &alm) const
   {
   if (alm.type()==typeid(dcmplx *)) tclear(any_cast<dcmplx *>(alm));
   else if (alm.type()==typeid(fcmplx *)) tclear(any_cast<fcmplx *>(alm));
@@ -71,7 +71,7 @@ template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm,
   for (auto l=mval_[mi]; l<=lmax_; ++l)
     almtmp[nalm*l] = alm[mvstart[mi]+l*stride];
   }
-void sharp_standard_alm_info::get_alm(size_t mi, any alm, dcmplx *almtmp, size_t nalm) const
+void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, dcmplx *almtmp, size_t nalm) const
   {
   if (alm.type()==typeid(dcmplx *)) tget(mi, any_cast<dcmplx *>(alm), almtmp, nalm);
   else if (alm.type()==typeid(const dcmplx *)) tget(mi, any_cast<const dcmplx *>(alm), almtmp, nalm);
@@ -84,7 +84,7 @@ template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const dcmplx 
   for (auto l=mval_[mi]; l<=lmax_; ++l)
     alm[mvstart[mi]+l*stride] += T(almtmp[nalm*l]);
   }
-void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, any alm, size_t nalm) const
+void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, const any &alm, size_t nalm) const
   {
   if (alm.type()==typeid(dcmplx *)) tadd(mi, almtmp, any_cast<dcmplx *>(alm), nalm);
   else if (alm.type()==typeid(fcmplx *)) tadd(mi, almtmp, any_cast<fcmplx *>(alm), nalm);

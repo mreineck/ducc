@@ -99,7 +99,7 @@ template<typename T> void sharp_standard_geom_info::tclear(T *map) const
     }
   }
 
-void sharp_standard_geom_info::clear_map (any map) const
+void sharp_standard_geom_info::clear_map (const any &map) const
   {
   if (map.type()==typeid(double *)) tclear(any_cast<double *>(map));
   else if (map.type()==typeid(float *)) tclear(any_cast<float *>(map));
@@ -114,7 +114,7 @@ template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t i
     p1[m*stride] += T(ringtmp[m]*wgt);
   }
 //virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, any map) const
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, const any &map) const
   {
   if (map.type()==typeid(double *)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
   else if (map.type()==typeid(float *)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
@@ -128,7 +128,7 @@ template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t i
     ringtmp[m] = p1[m*stride]*wgt;
   }
 //virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, any map, double *ringtmp) const
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, double *ringtmp) const
   {
   if (map.type()==typeid(const double *)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
   else if (map.type()==typeid(double *)) tget(weighted, iring, any_cast<double *>(map), ringtmp);

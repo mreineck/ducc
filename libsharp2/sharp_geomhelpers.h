@@ -72,9 +72,9 @@ class sharp_standard_geom_info: public sharp_geom_info
     virtual double sth(size_t iring) const { return ring[iring].sth; }
     virtual double phi0(size_t iring) const { return ring[iring].phi0; }
     virtual Tpair pair(size_t ipair) const { return pair_[ipair]; }
-    virtual void clear_map(std::any map) const;
-    virtual void get_ring(bool weighted, size_t iring, std::any map, double *ringtmp) const;
-    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, std::any map) const;
+    virtual void clear_map(const std::any &map) const;
+    virtual void get_ring(bool weighted, size_t iring, const std::any &map, double *ringtmp) const;
+    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, const std::any &map) const;
   };
 
 /*! Creates a geometry information describing a HEALPix map with an
