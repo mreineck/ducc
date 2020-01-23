@@ -2898,8 +2898,7 @@ template<typename T> void c2r(const cfmav<std::complex<T>> &in,
     return c2r(in, out, axes[0], forward, fct, nthreads);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
-  aligned_array<std::complex<T>> tmp(in.size());
-  fmav<std::complex<T>> atmp(tmp.data(), in);
+  fmav<std::complex<T>> atmp(in.shape());
   auto newaxes = shape_t({axes.begin(), --axes.end()});
   c2c(in, atmp, newaxes, forward, T(1), nthreads);
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
@@ -2933,9 +2932,7 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   if (in.size()==0) return;
   shape_t tshp(in.shape());
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  auto tinfo = fmav_info(tshp);
-  aligned_array<std::complex<T>> tdata(tinfo.size());
-  fmav<std::complex<T>> atmp(tdata.data(), tinfo);
+  fmav<std::complex<T>> atmp(tshp);
   r2c(in, atmp, axes, true, fct, nthreads);
   simple_iter iin(atmp);
   rev_iter iout(out, axes);

@@ -59,27 +59,6 @@ template<size_t ndim> void checkShape
 template<typename T> inline T fmod1 (T v)
   { return v-floor(v); }
 
-template<typename T, size_t ndim> class tmpStorage
-  {
-  private:
-    vector<T> d;
-    mav<T,ndim> mav_;
-
-    static size_t prod(const array<size_t,ndim> &shp)
-      {
-      size_t res=1;
-      for (auto v: shp) res*=v;
-      return res;
-      }
-
-  public:
-    tmpStorage(const array<size_t,ndim> &shp)
-      : d(prod(shp)), mav_(d.data(), shp) {}
-    mav<T,ndim> &getMav() { return mav_; }
-    void fill(const T & val)
-      { std::fill(d.begin(), d.end(), val); }
-  };
-
 //
 // Start of real gridder functionality
 //
@@ -98,8 +77,8 @@ template<typename T> void complex2hartley
       for (size_t v=0; v<nv; ++v)
         {
         size_t xv = (v==0) ? 0 : nv-v;
-        grid2(u,v) += T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
-                              grid(xu,xv).real()-grid(xu,xv).imag());
+        grid2(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
+                             grid(xu,xv).real()-grid(xu,xv).imag());
         }
       }
     });
@@ -456,8 +435,7 @@ class GridderConfig
       const mav<T,2> &dirty) const
       {
       checkShape(grid.shape(), {nu,nv});
-      tmpStorage<T,2> tmpdat({nu,nv});
-      auto tmav = tmpdat.getMav();
+      mav<T,2> tmav({nu,nv});
       hartley2_2D<T>(grid, tmav, nthreads);
       grid2dirty_post(tmav, dirty);
       }
@@ -1080,8 +1058,7 @@ template<typename T, typename Serv> void x2dirty(
     WgridHelper<Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
-    tmpStorage<complex<T>,2> grid_({gconf.Nu(),gconf.Nv()});
-    auto grid=grid_.getMav();
+    mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
@@ -1099,12 +1076,10 @@ template<typename T, typename Serv> void x2dirty(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    tmpStorage<complex<T>,2> grid_({gconf.Nu(), gconf.Nv()});
-    auto grid=grid_.getMav();
-    grid_.fill(0.);
+    mav<complex<T>,2> grid({gconf.Nu(), gconf.Nv()});
+    grid.fill(0.);
     x2grid_c(gconf, srv, grid);
-    tmpStorage<T,2> rgrid_(grid.shape());
-    auto rgrid=rgrid_.getMav();
+    mav<T,2> rgrid(grid.shape());
     complex2hartley(grid, rgrid, gconf.Nthreads());
     gconf.grid2dirty(rgrid, dirty);
     }
@@ -1121,15 +1096,13 @@ template<typename T, typename Serv> void dirty2x(
     if (verbosity>0) cout << "Degridding using improved w-stacking" << endl;
     WgridHelper<Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
-    tmpStorage<T,2> tdirty_({nx_dirty,ny_dirty});
-    auto tdirty=tdirty_.getMav();
+    mav<T,2> tdirty({nx_dirty,ny_dirty});
     for (size_t i=0; i<nx_dirty; ++i)
       for (size_t j=0; j<ny_dirty; ++j)
         tdirty(i,j) = dirty(i,j);
     // correct for w gridding etc.
     apply_global_corrections(gconf, tdirty, ES_Kernel(gconf.Supp(), gconf.Ofactor(), nthreads), dw, true);
-    tmpStorage<complex<T>,2> grid_({gconf.Nu(),gconf.Nv()});
-    auto grid=grid_.getMav();
+    mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
@@ -1144,11 +1117,9 @@ template<typename T, typename Serv> void dirty2x(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    tmpStorage<T,2> grid_({gconf.Nu(), gconf.Nv()});
-    auto grid=grid_.getMav();
+    mav<T,2> grid({gconf.Nu(), gconf.Nv()});
     gconf.dirty2grid(dirty, grid);
-    tmpStorage<complex<T>,2> grid2_(grid.shape());
-    auto grid2=grid2_.getMav();
+    mav<complex<T>,2> grid2(grid.shape());
     hartley2complex(grid, grid2, gconf.Nthreads());
     grid2x_c(gconf, grid2, srv);
     }

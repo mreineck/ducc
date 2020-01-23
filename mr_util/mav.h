@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <array>
 #include <vector>
+#include <memory>
 #include "mr_util/error_handling.h"
 
 namespace mr {
@@ -85,10 +86,14 @@ class fmav_info
       { return shp==other.shp; }
   };
 
+template<typename T, size_t ndim> class cmav;
+
 // "mav" stands for "multidimensional array view"
 template<typename T> class cfmav: public fmav_info
   {
   protected:
+    using Tsp = shared_ptr<vector<T>>;
+    Tsp ptr;
     T *d;
 
   public:
@@ -96,16 +101,26 @@ template<typename T> class cfmav: public fmav_info
       : fmav_info(shp_, str_), d(const_cast<T *>(d_)) {}
     cfmav(const T *d_, const shape_t &shp_)
       : fmav_info(shp_), d(const_cast<T *>(d_)) {}
+    cfmav(const shape_t &shp_)
+      : fmav_info(shp_), ptr(make_unique<vector<T>>(size())),
+        d(const_cast<T *>(ptr->data())) {}
     cfmav(const T* d_, const fmav_info &info)
       : fmav_info(info), d(const_cast<T *>(d_)) {}
+    cfmav(const cfmav &other) = default;
+    cfmav(cfmav &&other) = default;
+// Not for public use!
+    cfmav(const T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_)
+      : fmav_info(shp_, str_), ptr(p), d(const_cast<T *>(d_)) {}
     template<typename I> const T &operator[](I i) const
       { return d[i]; }
     const T *data() const
       { return d; }
   };
+
 template<typename T> class fmav: public cfmav<T>
   {
   protected:
+    using Tsp = shared_ptr<vector<T>>;
     using parent = cfmav<T>;
     using parent::d;
     using parent::shp;
@@ -116,8 +131,16 @@ template<typename T> class fmav: public cfmav<T>
       : parent(d_, shp_, str_) {}
     fmav(T *d_, const shape_t &shp_)
       : parent(d_, shp_) {}
+    fmav(const shape_t &shp_)
+      : parent(shp_) {}
     fmav(T* d_, const fmav_info &info)
       : parent(d_, info) {}
+    fmav(const fmav &other) = default;
+    fmav(fmav &&other) = default;
+// Not for public use!
+    fmav(T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_)
+      : parent(d_, p, shp_, str_) {}
+
     template<typename I> T &operator[](I i) const
       { return d[i]; }
     using parent::shape;
@@ -129,31 +152,40 @@ template<typename T> class fmav: public cfmav<T>
     using parent::conformable;
   };
 
-
-
 template<typename T, size_t ndim> class cmav
   {
-  static_assert((ndim>0) && (ndim<3), "only supports 1D and 2D arrays");
+  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
 
   protected:
-    T *d;
+    using Tsp = shared_ptr<vector<T>>;
     array<size_t, ndim> shp;
     array<ptrdiff_t, ndim> str;
+    Tsp ptr;
+    T *d;
 
   public:
     cmav(const T *d_, const array<size_t,ndim> &shp_,
         const array<ptrdiff_t,ndim> &str_)
-      : d(const_cast<T *>(d_)), shp(shp_), str(str_) {}
+      : shp(shp_), str(str_), d(const_cast<T *>(d_)) {}
     cmav(const T *d_, const array<size_t,ndim> &shp_)
-      : d(const_cast<T *>(d_)), shp(shp_)
+      : shp(shp_), d(const_cast<T *>(d_))
       {
       str[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         str[ndim-i] = str[ndim-i+1]*shp[ndim-i+1];
       }
+    cmav(const array<size_t,ndim> &shp_)
+      : shp(shp_), ptr(make_unique<vector<T>>(size())), d(ptr->data())
+      {
+      str[ndim-1]=1;
+      for (size_t i=2; i<=ndim; ++i)
+        str[ndim-i] = str[ndim-i+1]*shp[ndim-i+1];
+      }
+    cmav(const cmav &other) = default;
+    cmav(cmav &&other) = default;
     operator cfmav<T>() const
       {
-      return cfmav<T>(d, {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return cfmav<T>(d, ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     const T &operator[](size_t i) const
       { return operator()(i); }
@@ -166,6 +198,11 @@ template<typename T, size_t ndim> class cmav
       {
       static_assert(ndim==2, "ndim must be 2");
       return d[str[0]*i + str[1]*j];
+      }
+    const T &operator()(size_t i, size_t j, size_t k) const
+      {
+      static_assert(ndim==3, "ndim must be 3");
+      return d[str[0]*i + str[1]*j + str[2]*k];
       }
     size_t shape(size_t i) const { return shp[i]; }
     const array<size_t,ndim> &shape() const { return shp; }
@@ -196,8 +233,10 @@ template<typename T, size_t ndim> class cmav
 template<typename T, size_t ndim> class mav: public cmav<T, ndim>
   {
   protected:
+    using Tsp = shared_ptr<vector<T>>;
     using parent = cmav<T, ndim>;
     using parent::d;
+    using parent::ptr;
     using parent::shp;
     using parent::str;
 
@@ -207,9 +246,13 @@ template<typename T, size_t ndim> class mav: public cmav<T, ndim>
       : parent(d_, shp_, str_) {}
     mav(T *d_, const array<size_t,ndim> &shp_)
       : parent(d_, shp_) {}
+    mav(const array<size_t,ndim> &shp_)
+      : parent(shp_) {}
+    mav(const mav &other) = default;
+    mav(mav &&other) = default;
     operator fmav<T>() const
       {
-      return fmav<T>(d, {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return fmav<T>(d, ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     T &operator[](size_t i) const
       { return operator()(i); }
@@ -222,6 +265,11 @@ template<typename T, size_t ndim> class mav: public cmav<T, ndim>
       {
       static_assert(ndim==2, "ndim must be 2");
       return d[str[0]*i + str[1]*j];
+      }
+    T &operator()(size_t i, size_t j, size_t k) const
+      {
+      static_assert(ndim==3, "ndim must be 3");
+      return d[str[0]*i + str[1]*j + str[2]*k];
       }
     using parent::shape;
     using parent::stride;
@@ -240,6 +288,11 @@ template<typename T, size_t ndim> class mav: public cmav<T, ndim>
         for (size_t i=0; i<shp[0]; ++i)
           for (size_t j=0; j<shp[1]; ++j)
             d[str[0]*i + str[1]*j] = val;
+      else if (ndim==3)
+        for (size_t i=0; i<shp[0]; ++i)
+          for (size_t j=0; j<shp[1]; ++j)
+            for (size_t k=0; k<shp[2]; ++k)
+              d[str[0]*i + str[1]*j + str[2]*k] = val;
       }
     using parent::conformable;
   };
