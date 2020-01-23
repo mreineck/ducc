@@ -16,13 +16,13 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_ERROR_HANDLING_H
 #define MRUTIL_ERROR_HANDLING_H
 
-#include <iostream>
+#include <sstream>
 #include <exception>
 
 namespace mr {
@@ -37,8 +37,9 @@ namespace detail_error_handling {
 
 #define MR_fail(...) \
   do { \
-    ::mr::detail_error_handling::streamDump__(::std::cerr, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
-    throw ::std::runtime_error("error exit"); \
+    ::std::ostringstream msg; \
+    ::mr::detail_error_handling::streamDump__(msg, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    throw ::std::runtime_error(msg.str()); \
     } while(0)
 
 #define MR_assert(cond,...) \
@@ -58,19 +59,17 @@ class CodeLocation
     CodeLocation(const char *file_, int line_, const char *func_=nullptr)
       : file(file_), func(func_), line(line_) {}
 
-    ::std::ostream &print(::std::ostream &os) const;
+    inline ::std::ostream &print(::std::ostream &os) const
+      {
+      os << "\n" << file <<  ": " <<  line;
+      if (func) os << " (" << func << ")";
+      os << ":\n";
+      return os;
+      }
   };
 
 inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
   { return loc.print(os); }
-
-inline std::ostream &CodeLocation::print(std::ostream &os) const
-  {
-  os << file <<  ": " <<  line;
-  if (func) os << " (" << func << ")";
-  os << ":\n";
-  return os;
-  }
 
 #if (__cplusplus>=201703L) // hyper-elegant C++2017 version
 template<typename ...Args>

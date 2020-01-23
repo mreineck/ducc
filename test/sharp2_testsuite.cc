@@ -26,7 +26,6 @@
 
 #include <iostream>
 #include <complex>
-using std::complex;
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_geomhelpers.h"
 #include "libsharp2/sharp_almhelpers.h"
@@ -472,13 +471,13 @@ static void sharp_test (int argc, const char **argv)
   {
   if (mytask==0) sharp_announce("sharp_test");
   MR_assert(argc>=8,"usage: grid lmax mmax geom1 geom2 spin [ntrans]");
-  int lmax=atoi(argv[3]);
-  int mmax=atoi(argv[4]);
-  int gpar1=atoi(argv[5]);
-  int gpar2=atoi(argv[6]);
-  int spin=atoi(argv[7]);
+  auto lmax=stringToData<int>(argv[3]);
+  auto mmax=stringToData<int>(argv[4]);
+  auto gpar1=stringToData<int>(argv[5]);
+  auto gpar2=stringToData<int>(argv[6]);
+  auto spin=stringToData<int>(argv[7]);
   int ntrans=1;
-  if (argc>=9) ntrans=atoi(argv[8]);
+  if (argc>=9) ntrans=stringToData<int>(argv[8]);
 
   if (mytask==0) cout << "Testing map analysis accuracy.\n";
   if (mytask==0) cout << "spin=" << spin << endl;
