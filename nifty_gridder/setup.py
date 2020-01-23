@@ -32,7 +32,7 @@ else:
 
 def get_extension_modules():
     return [Extension('nifty_gridder',
-                      sources=['nifty_gridder.cc', '../mr_util/threading.cc', '../mr_util/error_handling.cc'],
+                      sources=['nifty_gridder.cc', '../mr_util/threading.cc'],
                       depends=['../mr_util/error_handling.h', '../mr_util/fft.h', '../mr_util/threading.h',
                                '../mr_util/aligned_array.h', '../mr_util/simd.h', '../mr_util/mav.h',
                                '../mr_util/cmplx.h', '../mr_util/unity_roots.h',

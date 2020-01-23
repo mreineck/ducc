@@ -23,7 +23,7 @@
 #define MRUTIL_ERROR_HANDLING_H
 
 #include <iostream>
-#include <cstdlib>
+#include <exception>
 
 namespace mr {
 
@@ -37,13 +37,8 @@ namespace detail_error_handling {
 
 #define MR_fail(...) \
   do { \
-    if (!::mr::detail_error_handling::abort_in_progress__) \
-      { \
-      ::mr::detail_error_handling::abort_in_progress__ = true; \
-      ::mr::detail_error_handling::streamDump__(::std::cerr, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
-      ::mr::detail_error_handling::killjob__(); \
-      } \
-    ::std::exit(1); \
+    ::mr::detail_error_handling::streamDump__(::std::cerr, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    throw ::std::runtime_error("error exit"); \
     } while(0)
 
 #define MR_assert(cond,...) \
@@ -69,8 +64,13 @@ class CodeLocation
 inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
   { return loc.print(os); }
 
-extern bool abort_in_progress__;
-void killjob__();
+inline std::ostream &CodeLocation::print(std::ostream &os) const
+  {
+  os << file <<  ": " <<  line;
+  if (func) os << " (" << func << ")";
+  os << ":\n";
+  return os;
+  }
 
 #if (__cplusplus>=201703L) // hyper-elegant C++2017 version
 template<typename ...Args>

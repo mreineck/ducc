@@ -17,7 +17,6 @@ libmrutil_la_SOURCES = \
   mr_util/pointing.h \
   mr_util/vec3.h \
   mr_util/constants.h \
-  mr_util/error_handling.cc \
   mr_util/error_handling.h \
   mr_util/space_filling.cc \
   mr_util/space_filling.h \
