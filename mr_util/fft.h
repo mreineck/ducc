@@ -2899,7 +2899,7 @@ template<typename T> void c2r(const cfmav<std::complex<T>> &in,
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
   fmav<std::complex<T>> atmp(in.shape());
-  auto newaxes = shape_t({axes.begin(), --axes.end()});
+  auto newaxes = shape_t{axes.begin(), --axes.end()};
   c2c(in, atmp, newaxes, forward, T(1), nthreads);
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
