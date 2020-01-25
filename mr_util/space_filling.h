@@ -43,6 +43,10 @@
 namespace mr {
 
 #ifndef __BMI2__
+
+uint32_t spread_bits_2D_32 (uint32_t v);
+uint64_t spread_bits_2D_64 (uint64_t v);
+
 uint32_t block2morton2D_32 (uint32_t v);
 uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy);
 uint32_t morton2block2D_32 (uint32_t v);
@@ -60,7 +64,14 @@ uint64_t block2morton3D_64 (uint64_t v);
 uint64_t coord2morton3D_64 (std::array<uint64_t,3> xyz);
 uint64_t morton2block3D_64 (uint64_t v);
 std::array<uint64_t,3> morton2coord3D_64 (uint64_t v);
+
 #else
+
+inline uint32_t spread_bits_2D_32 (uint32_t v)
+  { return _pdep_u32(v,0x55555555u); }
+inline uint64_t spread_bits_2D_64 (uint64_t v)
+  { return _pdep_u64(v,0x5555555555555555u); }
+
 inline uint32_t block2morton2D_32 (uint32_t v)
   { return _pdep_u32(v,0x55555555u)|_pdep_u32(v>>16,0xaaaaaaaau); }
 inline uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)

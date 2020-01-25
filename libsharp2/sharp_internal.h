@@ -92,7 +92,7 @@ class sharp_protojob
     sharp_jobtype type;
     size_t spin;
     size_t flags;
-    ptrdiff_t s_m, s_th; // strides in m and theta direction
+    size_t s_m, s_th; // strides in m and theta direction
     complex<double> *phase;
     std::vector<double> norm_l;
     complex<double> *almtmp;
@@ -129,8 +129,8 @@ template<typename T> class sharp_job: public sharp_protojob
     void alm2almtmp (size_t mi);
     void almtmp2alm (size_t mi);
     void ring2ringtmp (size_t iring, std::vector<double> &ringtmp,
-      ptrdiff_t rstride);
-    void ringtmp2ring (size_t iring, const std::vector<double> &ringtmp, ptrdiff_t rstride);
+      size_t rstride);
+    void ringtmp2ring (size_t iring, const std::vector<double> &ringtmp, size_t rstride);
     void map2phase (size_t mmax, size_t llim, size_t ulim);
     void phase2map (size_t mmax, size_t llim, size_t ulim);
 

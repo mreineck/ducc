@@ -58,7 +58,7 @@ template<typename T> void sharp_standard_alm_info::tclear (T *alm) const
   {
   for (size_t mi=0;mi<mval_.size();++mi)
     for (size_t l=mval_[mi];l<=lmax_;++l)
-      reinterpret_cast<T *>(alm)[mvstart[mi]+l*stride]=0.;
+      reinterpret_cast<T *>(alm)[mvstart[mi]+ptrdiff_t(l)*stride]=0.;
   }
 void sharp_standard_alm_info::clear_alm(const any &alm) const
   {
@@ -69,7 +69,7 @@ void sharp_standard_alm_info::clear_alm(const any &alm) const
 template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm, dcmplx *almtmp, size_t nalm) const
   {
   for (auto l=mval_[mi]; l<=lmax_; ++l)
-    almtmp[nalm*l] = alm[mvstart[mi]+l*stride];
+    almtmp[nalm*l] = alm[mvstart[mi]+ptrdiff_t(l)*stride];
   }
 void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, dcmplx *almtmp, size_t nalm) const
   {
@@ -82,7 +82,7 @@ void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, dcmplx *almtmp,
 template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const dcmplx *almtmp, T *alm, size_t nalm) const
   {
   for (auto l=mval_[mi]; l<=lmax_; ++l)
-    alm[mvstart[mi]+l*stride] += T(almtmp[nalm*l]);
+    alm[mvstart[mi]+ptrdiff_t(l)*stride] += T(almtmp[nalm*l]);
   }
 void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, const any &alm, size_t nalm) const
   {
@@ -91,9 +91,9 @@ void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, const any
   else MR_fail("bad a_lm data type");
   }
 
-ptrdiff_t sharp_standard_alm_info::index (int l, int mi)
+ptrdiff_t sharp_standard_alm_info::index (size_t l, size_t mi)
   {
-  return mvstart[mi]+stride*l;
+  return mvstart[mi]+stride*ptrdiff_t(l);
   }
 /* This currently requires all m values from 0 to nm-1 to be present.
    It might be worthwhile to relax this criterion such that holes in the m
@@ -112,19 +112,19 @@ size_t sharp_standard_alm_info::mmax() const
   return nm_-1;
   }
 
-unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (int lmax, int mmax, int stride)
+unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride)
   {
   vector<ptrdiff_t> mvstart(mmax+1);
-  ptrdiff_t tval = 2*lmax+1;
-  for (ptrdiff_t m=0; m<=mmax; ++m)
-    mvstart[m] = stride*((m*(tval-m))>>1);
+  size_t tval = 2*lmax+1;
+  for (size_t m=0; m<=mmax; ++m)
+    mvstart[m] = stride*ptrdiff_t((m*(tval-m))>>1);
   return make_unique<sharp_standard_alm_info>(lmax, mmax, stride, mvstart.data());
   }
 
-unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (int lmax, int mmax, int stride)
+unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride)
   {
   vector<ptrdiff_t> mvstart(mmax+1);
-  for (ptrdiff_t m=0; m<=mmax; ++m)
-    mvstart[m] = stride*m*(lmax+1);
+  for (size_t m=0; m<=mmax; ++m)
+    mvstart[m] = stride*ptrdiff_t(m*(lmax+1));
   return make_unique<sharp_standard_alm_info>(lmax, mmax, stride, mvstart.data());
   }

@@ -199,7 +199,7 @@ static inline void getCorfac(Tv scale, Tv * MRUTIL_RESTRICT corfac,
   sc.v=scale;
   for (size_t i=0; i<VLEN; ++i)
     corf.s[i] = (sc.s[i]<sharp_minscale) ?
-      0. : cf[int(sc.s[i])-sharp_minscale];
+      0. : cf[size_t(int(sc.s[i])-sharp_minscale)];
   *corfac=corf.v;
   }
 
@@ -1170,7 +1170,7 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const vector<boo
             if (mlim[ith]>=m)
               {
               d.s.cth[nth]=cth_[ith]; d.s.sth[nth]=sth_[ith];
-              ptrdiff_t phas_idx = ith*job.s_th + mi*job.s_m;
+              size_t phas_idx = ith*job.s_th + mi*job.s_m;
               dcmplx p1Q=job.phase[phas_idx],
                      p1U=job.phase[phas_idx+2],
                      p2Q=ispair[ith] ? job.phase[phas_idx+1]:0.,

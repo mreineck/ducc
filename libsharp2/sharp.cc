@@ -44,9 +44,9 @@ using namespace mr;
 using dcmplx = complex<double>;
 using fcmplx = complex<float>;
 
-static int chunksize_min=500, nchunks_max=10;
+static size_t chunksize_min=500, nchunks_max=10;
 
-static void get_chunk_info (int ndata, int nmult, int &nchunks, int &chunksize)
+static void get_chunk_info (size_t ndata, size_t nmult, size_t &nchunks, size_t &chunksize)
   {
   chunksize = (ndata+nchunks_max-1)/nchunks_max;
   if (chunksize>=chunksize_min) // use max number of chunks
@@ -79,55 +79,55 @@ struct ringhelper
   {
   double phi0_;
   vector<dcmplx> shiftarr;
-  int s_shift;
+  size_t s_shift;
   unique_ptr<mr::detail_fft::rfftp<double>> plan;
-  int length;
-  int norot;
+  size_t length;
+  bool norot;
   ringhelper() : length(0) {}
-  void update(int nph, int mmax, double phi0)
+  void update(size_t nph, size_t mmax, double phi0)
     {
     norot = (abs(phi0)<1e-14);
-    if (!(norot))
+    if (!norot)
       if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-12)))
       {
       shiftarr.resize(mmax+1);
       s_shift = mmax+1;
       phi0_ = phi0;
 // FIXME: improve this by using sincos2pibyn(nph) etc.
-      for (int m=0; m<=mmax; ++m)
+      for (size_t m=0; m<=mmax; ++m)
         shiftarr[m] = dcmplx(cos(m*phi0),sin(m*phi0));
 //      double *tmp=(double *) self->shiftarr;
 //      sincos_multi (mmax+1, phi0, &tmp[1], &tmp[0], 2);
       }
-    if (nph!=int(length))
+    if (nph!=length)
       {
       plan.reset(new mr::detail_fft::rfftp<double>(nph));
       length=nph;
       }
     }
   MRUTIL_NOINLINE void phase2ring (const sharp_geom_info &info, size_t iring,
-    double *data, int mmax, const dcmplx *phase, int pstride)
+    double *data, size_t mmax, const dcmplx *phase, size_t pstride)
     {
-    int nph = info.nph(iring);
+    size_t nph = info.nph(iring);
 
     update (nph, mmax, info.phi0(iring));
 
     if (nph>=2*mmax+1)
       {
       if (norot)
-        for (int m=0; m<=mmax; ++m)
+        for (size_t m=0; m<=mmax; ++m)
           {
           data[2*m]=phase[m*pstride].real();
           data[2*m+1]=phase[m*pstride].imag();
           }
       else
-        for (int m=0; m<=mmax; ++m)
+        for (size_t m=0; m<=mmax; ++m)
           {
           dcmplx tmp = phase[m*pstride]*shiftarr[m];
           data[2*m]=tmp.real();
           data[2*m+1]=tmp.imag();
           }
-      for (int m=2*(mmax+1); m<nph+2; ++m)
+      for (size_t m=2*(mmax+1); m<nph+2; ++m)
         data[m]=0.;
       }
     else
@@ -135,8 +135,8 @@ struct ringhelper
       data[0]=phase[0].real();
       fill(data+1,data+nph+2,0.);
 
-      ptrdiff_t idx1=1, idx2=nph-1;
-      for (int m=1; m<=mmax; ++m)
+      size_t idx1=1, idx2=nph-1;
+      for (size_t m=1; m<=mmax; ++m)
         {
         dcmplx tmp = phase[m*pstride];
         if(!norot) tmp*=shiftarr[m];
@@ -151,16 +151,16 @@ struct ringhelper
           data[2*idx2+1]-=tmp.imag();
           }
         if (++idx1>=nph) idx1=0;
-        if (--idx2<0) idx2=nph-1;
+        idx2 = (idx2==0) ? nph-1 : idx2-1;
         }
       }
     data[1]=data[0];
     plan->exec(&(data[1]), 1., false);
     }
   MRUTIL_NOINLINE void ring2phase (const sharp_geom_info &info, size_t iring,
-    double *data, int mmax, dcmplx *phase, int pstride)
+    double *data, size_t mmax, dcmplx *phase, size_t pstride)
     {
-    int nph = info.nph(iring);
+    size_t nph = info.nph(iring);
 
     update (nph, mmax, -info.phi0(iring));
 
@@ -171,18 +171,18 @@ struct ringhelper
     if (mmax<=nph/2)
       {
       if (norot)
-        for (int m=0; m<=mmax; ++m)
+        for (size_t m=0; m<=mmax; ++m)
           phase[m*pstride] = dcmplx(data[2*m], data[2*m+1]);
       else
-        for (int m=0; m<=mmax; ++m)
+        for (size_t m=0; m<=mmax; ++m)
           phase[m*pstride] =
             dcmplx(data[2*m], data[2*m+1]) * shiftarr[m];
       }
     else
       {
-      for (int m=0; m<=mmax; ++m)
+      for (size_t m=0; m<=mmax; ++m)
         {
-        int idx=m%nph;
+        auto idx=m%nph;
         dcmplx val;
         if (idx<(nph-idx))
           val = dcmplx(data[2*idx], data[2*idx+1]);
@@ -272,14 +272,14 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::almtmp2alm (size_t mi)
   }
 
 template<typename T> MRUTIL_NOINLINE void sharp_job<T>::ringtmp2ring (size_t iring,
-  const vector<double> &ringtmp, ptrdiff_t rstride)
+  const vector<double> &ringtmp, size_t rstride)
   {
   for (size_t i=0; i<nmaps(); ++i)
     ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, &ringtmp[i*rstride+1], map[i]);
   }
 
 template<typename T> MRUTIL_NOINLINE void sharp_job<T>::ring2ringtmp (size_t iring,
-  vector<double> &ringtmp, ptrdiff_t rstride)
+  vector<double> &ringtmp, size_t rstride)
   {
   for (size_t i=0; i<nmaps(); ++i)
     ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, map[i], &ringtmp[i*rstride+1]);
@@ -289,16 +289,16 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::ring2ringtmp (size_t iri
 template<typename T> MRUTIL_NOINLINE void sharp_job<T>::map2phase (size_t mmax, size_t llim, size_t ulim)
   {
   if (type != SHARP_MAP2ALM) return;
-  int pstride = s_m;
+  size_t pstride = s_m;
   mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
-    int rstride=ginfo.nphmax()+2;
+    size_t rstride=ginfo.nphmax()+2;
     vector<double> ringtmp(nmaps()*rstride);
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
-      int dim2 = s_th*(ith-llim);
+      size_t dim2 = s_th*(ith-llim);
       ring2ringtmp(ginfo.pair(ith).r1,ringtmp,rstride);
       for (size_t i=0; i<nmaps(); ++i)
         helper.ring2phase (ginfo, ginfo.pair(ith).r1,
@@ -317,16 +317,16 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::map2phase (size_t mmax, 
 template<typename T> MRUTIL_NOINLINE void sharp_job<T>::phase2map (size_t mmax, size_t llim, size_t ulim)
   {
   if (type == SHARP_MAP2ALM) return;
-  int pstride = s_m;
+  size_t pstride = s_m;
   mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
-    int rstride=ginfo.nphmax()+2;
+    size_t rstride=ginfo.nphmax()+2;
     vector<double> ringtmp(nmaps()*rstride);
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
-      int dim2 = s_th*(ith-llim);
+      size_t dim2 = s_th*(ith-llim);
       for (size_t i=0; i<nmaps(); ++i)
         helper.phase2ring (ginfo, ginfo.pair(ith).r1,
           &ringtmp[i*rstride],mmax,&phase[dim2+2*i],pstride);
@@ -356,7 +356,7 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::execute()
 /* clear output arrays if requested */
   init_output();
 
-  int nchunks, chunksize;
+  size_t nchunks, chunksize;
   get_chunk_info(ginfo.npairs(),sharp_veclen()*sharp_max_nvec(spin),
                  nchunks,chunksize);
   vector<dcmplx> phasebuffer;
@@ -365,7 +365,7 @@ template<typename T> MRUTIL_NOINLINE void sharp_job<T>::execute()
   std::atomic<unsigned long long> a_opcnt(0);
 
 /* chunk loop */
-  for (int chunk=0; chunk<nchunks; ++chunk)
+  for (size_t chunk=0; chunk<nchunks; ++chunk)
     {
     size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo.npairs());
     vector<bool> ispair(ulim-llim);
@@ -421,10 +421,10 @@ template<typename T> sharp_job<T>::sharp_job (sharp_jobtype type_,
   MR_assert(map.size()==nmaps(), "incorrect # of a_lm components");
   }
 
-template<typename T> void sharp_execute (sharp_jobtype type, int spin, const vector<complex<T> *> &alm,
+template<typename T> void sharp_execute (sharp_jobtype type, size_t spin, const vector<complex<T> *> &alm,
   const vector<T *> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  int flags, double *time, unsigned long long *opcnt)
+  size_t flags, double *time, unsigned long long *opcnt)
   {
   sharp_job job(type, spin, alm, map, geom_info, alm_info, flags);
 
@@ -433,16 +433,16 @@ template<typename T> void sharp_execute (sharp_jobtype type, int spin, const vec
   if (opcnt!=nullptr) *opcnt = job.opcnt;
   }
 
-template void sharp_execute<double> (sharp_jobtype type, int spin, const vector<complex<double> *> &alm,
+template void sharp_execute<double> (sharp_jobtype type, size_t spin, const vector<complex<double> *> &alm,
   const vector<double *> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  int flags, double *time, unsigned long long *opcnt);
-template void sharp_execute<float> (sharp_jobtype type, int spin, const vector<complex<float> *> &alm,
+  size_t flags, double *time, unsigned long long *opcnt);
+template void sharp_execute<float> (sharp_jobtype type, size_t spin, const vector<complex<float> *> &alm,
   const vector<float *> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  int flags, double *time, unsigned long long *opcnt);
+  size_t flags, double *time, unsigned long long *opcnt);
 
-void sharp_set_chunksize_min(int new_chunksize_min)
+void sharp_set_chunksize_min(size_t new_chunksize_min)
   { chunksize_min=new_chunksize_min; }
-void sharp_set_nchunks_max(int new_nchunks_max)
+void sharp_set_nchunks_max(size_t new_nchunks_max)
   { nchunks_max=new_nchunks_max; }

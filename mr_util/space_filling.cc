@@ -60,6 +60,17 @@ X(0),X(8),X(2048),X(2056)
 
 }
 
+uint32_t spread_bits_2D_32 (uint32_t v)
+  {
+  using I=uint32_t;
+  return  I(utab[ v     &0xff])     | (I(utab[(v>> 8)&0xff])<<16);
+  }
+uint64_t spread_bits_2D_64 (uint64_t v)
+  {
+  using I=uint64_t;
+  return  I(utab[ v     &0xff])      | (I(utab[(v>> 8)&0xff])<<16)
+       | (I(utab[(v>>16)&0xff])<<32) | (I(utab[(v>>24)&0xff])<<48);
+  }
 uint32_t block2morton2D_32 (uint32_t v)
   {
   using I=uint32_t;

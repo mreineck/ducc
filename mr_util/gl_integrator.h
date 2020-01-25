@@ -35,34 +35,35 @@ using namespace std;
 class GL_Integrator
   {
   private:
-    int n_;
+    size_t n_;
     vector<double> x, w;
 
     static inline double one_minus_x2 (double x)
       { return (std::abs(x)>0.1) ? (1.+x)*(1.-x) : 1.-x*x; }
 
   public:
-    GL_Integrator(int n, size_t nthreads=1)
+    GL_Integrator(size_t n, size_t nthreads=1)
       : n_(n)
       {
       MR_assert(n>=1, "number of points must be at least 1");
       constexpr double pi = 3.141592653589793238462643383279502884197;
       constexpr double eps = 3e-14;
-      int m = (n+1)>>1;
+      size_t m = (n+1)>>1;
       x.resize(m);
       w.resize(m);
 
-      const double t0 = 1 - (1-1./n) / (8.*n*n);
-      const double t1 = 1./(4.*n+2.);
+      double dn=double(n);
+      const double t0 = 1 - (1-1./dn) / (8.*dn*dn);
+      const double t1 = 1./(4.*dn+2.);
 
       execDynamic(m, nthreads, 1, [&](Scheduler &sched)
         {
         while (auto rng=sched.getNext()) for(auto i=rng.lo+1; i<rng.hi+1; ++i)
           {
-          double x0 = cos(pi * ((i<<2)-1) * t1) * t0;
+          double x0 = cos(pi * double((i<<2)-1) * t1) * t0;
 
-          int dobreak=0;
-          int j=0;
+          bool dobreak=false;
+          size_t j=0;
           double dpdx;
           while(1)
             {
@@ -70,7 +71,7 @@ class GL_Integrator
             double P0 = x0;
             double dx, x1;
 
-            for (int k=2; k<=n; k++)
+            for (size_t k=2; k<=n; k++)
               {
               double P_2 = P_1;
               P_1 = P0;

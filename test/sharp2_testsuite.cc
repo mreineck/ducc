@@ -126,9 +126,9 @@ static double totalMem()
   return mr::getProcessInfo("VmHWM")*1024;
   }
 
-static ptrdiff_t get_nalms(const sharp_alm_info &ainfo)
+static size_t get_nalms(const sharp_alm_info &ainfo)
   {
-  ptrdiff_t res=0;
+  size_t res=0;
   for (size_t i=0; i<ainfo.nm(); ++i)
     res += ainfo.lmax()-ainfo.mval(i)+1;
   return res;
@@ -142,13 +142,13 @@ static size_t get_npix(const sharp_geom_info &ginfo)
   return res;
   }
 
-static vector<double> get_sqsum_and_invert (dcmplx **alm, ptrdiff_t nalms, int ncomp)
+static vector<double> get_sqsum_and_invert (dcmplx **alm, size_t nalms, size_t ncomp)
   {
   vector<double> sqsum(ncomp);
-  for (int i=0; i<ncomp; ++i)
+  for (size_t i=0; i<ncomp; ++i)
     {
     sqsum[i]=0;
-    for (ptrdiff_t j=0; j<nalms; ++j)
+    for (size_t j=0; j<nalms; ++j)
       {
       sqsum[i]+=norm(alm[i][j]);
       alm[i][j]=-alm[i][j];
@@ -157,23 +157,23 @@ static vector<double> get_sqsum_and_invert (dcmplx **alm, ptrdiff_t nalms, int n
   return sqsum;
   }
 
-static void get_errors (dcmplx **alm, ptrdiff_t nalms, int ncomp, const vector<double> &sqsum,
+static void get_errors (dcmplx **alm, size_t nalms, size_t ncomp, const vector<double> &sqsum,
   vector<double> &err_abs, vector<double> &err_rel)
   {
-  long nalms_tot=nalms;
+  size_t nalms_tot=nalms;
 
   err_abs.resize(ncomp);
   err_rel.resize(ncomp);
-  for (int i=0; i<ncomp; ++i)
+  for (size_t i=0; i<ncomp; ++i)
     {
     double sum=0, maxdiff=0, sumtot, sqsumtot, maxdifftot;
-    for (ptrdiff_t j=0; j<nalms; ++j)
+    for (size_t j=0; j<nalms; ++j)
       {
       double sqr=norm(alm[i][j]);
       sum+=sqr;
       if (sqr>maxdiff) maxdiff=sqr;
       }
-   maxdiff=sqrt(maxdiff);
+    maxdiff=sqrt(maxdiff);
 
     sumtot=sum;
     sqsumtot=sqsum[i];

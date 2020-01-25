@@ -97,7 +97,7 @@ template<typename I> struct isqrt_helper__ <I, true>
     {
     using namespace std;
     I res = std::sqrt(double(arg)+0.5);
-    if (arg<(std::uint64_t(1)<<50)) return std::uint32_t(res);
+    if (std::uint64_t(arg)<(std::uint64_t(1)<<50)) return std::uint32_t(res);
     if (res*res>arg)
       --res;
     else if ((res+1)*(res+1)<=arg)
