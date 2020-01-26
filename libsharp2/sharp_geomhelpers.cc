@@ -95,7 +95,7 @@ template<typename T> void sharp_standard_geom_info::tclear(T *map) const
       memset(&map[r.ofs],0,r.nph*sizeof(T));
     else
       for (size_t i=0;i<r.nph;++i)
-        map[r.ofs+i*stride]=T(0);
+        map[r.ofs+ptrdiff_t(i)*stride]=T(0);
     }
   }
 
@@ -111,7 +111,7 @@ template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t i
   T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[m*stride] += T(ringtmp[m]*wgt);
+    p1[ptrdiff_t(m)*stride] += T(ringtmp[m]*wgt);
   }
 //virtual
 void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, const any &map) const
@@ -125,7 +125,7 @@ template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t i
   const T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[m*stride]*wgt;
+    ringtmp[m] = p1[ptrdiff_t(m)*stride]*wgt;
   }
 //virtual
 void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, double *ringtmp) const
@@ -141,8 +141,8 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
   const size_t *rings, const double *weight)
   {
   const double pi=3.141592653589793238462643383279502884197;
-  ptrdiff_t npix=ptrdiff_t(nside*nside*12);
-  ptrdiff_t ncap=2*ptrdiff_t(nside*(nside-1));
+  size_t npix=nside*nside*12;
+  size_t ncap=2*nside*(nside-1);
 
   vector<double> theta(nrings), weight_(nrings), phi0(nrings);
   vector<size_t> nph(nrings);
@@ -157,25 +157,25 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
       theta[m] = 2*asin(northring/(sqrt(6.)*nside));
       nph[m] = 4*northring;
       phi0[m] = pi/nph[m];
-      checkofs = 2*northring*(northring-1)*stride;
+      checkofs = ptrdiff_t(2*northring*(northring-1))*stride;
       }
     else
       {
       double fact1 = (8.*nside)/npix;
-      double costheta = (2*nside-northring)*fact1;
+      double costheta = 2*nside-northring*fact1;
       theta[m] = acos(costheta);
       nph[m] = 4*nside;
       if ((northring-nside) & 1)
         phi0[m] = 0;
       else
         phi0[m] = pi/nph[m];
-      checkofs = (ncap + (northring-nside)*nph[m])*stride;
+      checkofs = ptrdiff_t(ncap + (northring-nside)*nph[m])*stride;
       ofs[m] = curofs;
       }
     if (northring != ring) /* southern hemisphere */
       {
       theta[m] = pi-theta[m];
-      checkofs = (npix - nph[m])*stride - checkofs;
+      checkofs = ptrdiff_t(npix - nph[m])*stride - checkofs;
       ofs[m] = curofs;
       }
     weight_[m]=4.*pi/npix*((weight==nullptr) ? 1. : weight[northring-1]);
@@ -183,7 +183,7 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
       MR_assert(curofs==checkofs, "Bug in computing ofs[m]");
     }
     ofs[m] = curofs;
-    curofs+=nph[m];
+    curofs+=ptrdiff_t(nph[m]);
     }
 
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride, phi0.data(), theta.data(), weight_.data());
@@ -212,7 +212,7 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
     theta[m] = acos(-theta[m]);
     nph[m]=nphi;
     phi0_[m]=phi0;
-    ofs[m]=ptrdiff_t(m*stride_lat);
+    ofs[m]=ptrdiff_t(m)*stride_lat;
     weight[m]*=2*pi/nphi;
     }
 
@@ -245,8 +245,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=ptrdiff_t(m*stride_lat);
-    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m)*stride_lat;
+    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
     }
 
@@ -280,8 +280,8 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=ptrdiff_t(m*stride_lat);
-    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m)*stride_lat;
+    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
@@ -314,8 +314,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t p
     theta[nrings-1-m]=pi-theta[m];
     nph[m]=nph[nrings-1-m]=ppring;
     phi0_[m]=phi0_[nrings-1-m]=phi0;
-    ofs[m]=ptrdiff_t(m*stride_lat);
-    ofs[nrings-1-m]=ptrdiff_t((nrings-1-m)*stride_lat);
+    ofs[m]=ptrdiff_t(m)*stride_lat;
+    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
     }
 
@@ -337,7 +337,7 @@ unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t pprin
     if (theta[m]>pi-1e-15) theta[m]=pi-1e-15;
     nph[m]=ppring;
     phi0_[m]=phi0;
-    ofs[m]=ptrdiff_t(m*stride_lat);
+    ofs[m]=ptrdiff_t(m)*stride_lat;
     }
 
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), nullptr);
