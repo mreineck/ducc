@@ -56,9 +56,9 @@ sharp_Ylmgen::sharp_Ylmgen (size_t l_max, size_t m_max, size_t spin)
   cf.resize(sharp_maxscale-sharp_minscale+1);
   cf[-sharp_minscale]=1.;
   for (int sc=-sharp_minscale-1; sc>=0; --sc)
-    cf[sc]=cf[sc+1]*sharp_fsmall;
+    cf[size_t(sc)]=cf[size_t(sc+1)]*sharp_fsmall;
   for (int sc=-sharp_minscale+1; sc<(sharp_maxscale-sharp_minscale+1); ++sc)
-    cf[sc]=cf[sc-1]*sharp_fbig;
+    cf[size_t(sc)]=cf[size_t(sc-1)]*sharp_fbig;
   powlimit.resize(m_max+spin+1);
   powlimit[0]=0.;
   constexpr double ln2 = 0.6931471805599453094172321214581766;
@@ -114,7 +114,7 @@ sharp_Ylmgen::sharp_Ylmgen (size_t l_max, size_t m_max, size_t spin)
       }
     for (size_t i=0; i<=mmax; ++i)
       {
-      int mlo_=s, mhi_=i;
+      size_t mlo_=s, mhi_=i;
       if (mhi_<mlo_) swap(mhi_,mlo_);
       double tfac=fac[2*mhi_]/fac[mhi_+mlo_];
       int tscale=facscale[2*mhi_]-facscale[mhi_+mlo_];
