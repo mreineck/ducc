@@ -104,9 +104,9 @@ const int Healpix_Tables::nb_swaparray[][3] =
     { 6,0,0 },   // NW
     { 3,0,0 } }; // N
 
-const int Healpix_Tables::swap_clen[] =
+const size_t Healpix_Tables::swap_clen[] =
   { 0,7,5,4,12,10,13,18,14,19,18,17,27,21 };
-const int Healpix_Tables::swap_cycle[] =
+const size_t Healpix_Tables::swap_cycle[] =
   { 0,1,8,12,16,21,40,
     0,1,2,40,114,
     0,4,160,263,

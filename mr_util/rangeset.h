@@ -88,7 +88,7 @@ template<typename T> class rangeset
       size_t slo = sza<szb ? sza : szb,
             shi = sza<szb ? szb : sza;
       double cost1 = fct1 * (sza+szb);
-      double cost2 = fct2 * slo * std::max(1,ilog2(shi));
+      double cost2 = fct2 * slo * std::max(1u,ilog2(shi));
       return (cost1<=cost2) ? 1 : (slo==sza) ? 2 : 3;
       }
 

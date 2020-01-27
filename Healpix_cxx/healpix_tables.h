@@ -60,7 +60,7 @@ class Healpix_Tables
     static const int nb_xoffset[], nb_yoffset[],
                      nb_facearray[][12], nb_swaparray[][3];
 
-    static const int swap_clen[], swap_cycle[];
+    static const size_t swap_clen[], swap_cycle[];
   };
 
 }}

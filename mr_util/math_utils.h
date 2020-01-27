@@ -96,7 +96,7 @@ template<typename I> struct isqrt_helper__ <I, true>
   static std::uint32_t isqrt (I arg)
     {
     using namespace std;
-    I res = std::sqrt(double(arg)+0.5);
+    I res = I(std::sqrt(double(arg)+0.5));
     if (std::uint64_t(arg)<(std::uint64_t(1)<<50)) return std::uint32_t(res);
     if (res*res>arg)
       --res;
@@ -114,7 +114,7 @@ template<typename I> inline std::uint32_t isqrt (I arg)
 using math_utils_detail::isqrt;
 
 /*! Returns the largest integer \a n that fulfills \a 2^n<=arg. */
-template<typename I> inline int ilog2 (I arg)
+template<typename I> inline unsigned int ilog2 (I arg)
   {
 #ifdef __GNUC__
   if (arg==0) return 0;
@@ -125,7 +125,7 @@ template<typename I> inline int ilog2 (I arg)
   if (sizeof(I)==sizeof(long long))
     return 8*sizeof(long long)-1-__builtin_clzll(arg);
 #endif
-  int res=0;
+  unsigned int res=0;
   while (arg > 0xFFFF) { res+=16; arg>>=16; }
   if (arg > 0x00FF) { res|=8; arg>>=8; }
   if (arg > 0x000F) { res|=4; arg>>=4; }
@@ -134,7 +134,7 @@ template<typename I> inline int ilog2 (I arg)
   return res;
   }
 
-template<typename I> inline int ilog2_nonnull (I arg)
+template<typename I> inline unsigned int ilog2_nonnull (I arg)
   {
 #ifdef __GNUC__
   if (sizeof(I)<=sizeof(int))

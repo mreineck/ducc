@@ -100,9 +100,9 @@ namespace {
           2: pixel center is inside the shape, but maybe not the complete pixel
           3: pixel lies completely inside the shape */
 
-template<typename I, typename I2> inline void check_pixel (int o, int order_,
-  int omax, int zone, rangeset<I2> &pixset, I pix, vector<pair<I,int> > &stk,
-  bool inclusive, int &stacktop)
+template<typename I, typename I2> inline void check_pixel (size_t o, size_t order_,
+  size_t omax, size_t zone, rangeset<I2> &pixset, I pix, vector<pair<I,size_t> > &stk,
+  bool inclusive, size_t &stacktop)
   {
   if (zone==0) return;
 
@@ -114,7 +114,7 @@ template<typename I, typename I2> inline void check_pixel (int o, int order_,
       pixset.append(pix<<sdist,(pix+1)<<sdist); // output all subpixels
       }
     else // (1<=zone<=2)
-      for (int i=0; i<4; ++i)
+      for (size_t i=0; i<4; ++i)
         stk.push_back(make_pair(4*pix+3-i,o+1)); // add children
     }
   else if (o>order_) // this implies that inclusive==true
@@ -145,7 +145,7 @@ template<typename I, typename I2> inline void check_pixel (int o, int order_,
       if (order_<omax) // check sublevels
         {
         stacktop=stk.size(); // remember current stack position
-        for (int i=0; i<4; ++i) // add children in reverse order
+        for (size_t i=0; i<4; ++i) // add children in reverse order
           stk.push_back(make_pair(4*pix+3-i,o+1));
         }
       else // at resolution limit
@@ -326,12 +326,12 @@ template<typename I> template<typename I2>
       crpdr[o] = (radius+dr>pi) ? -1. : cos(radius+dr);
       crmdr[o] = (radius-dr<0.) ?  1. : cos(radius-dr);
       }
-    vector<pair<I,int> > stk; // stack for pixel numbers and their orders
+    vector<pair<I,size_t> > stk; // stack for pixel numbers and their orders
     stk.reserve(12+3*omax); // reserve maximum size to avoid reallocation
     for (int i=0; i<12; ++i) // insert the 12 base pixels in reverse order
       stk.push_back(make_pair(I(11-i),0));
 
-    int stacktop=0; // a place to save a stack position
+    size_t stacktop=0; // a place to save a stack position
 
     while (!stk.empty()) // as long as there are pixels on the stack
       {
@@ -347,7 +347,7 @@ template<typename I> template<typename I2>
 
       if (cangdist>crpdr[o])
         {
-        int zone = (cangdist<cosrad) ? 1 : ((cangdist<=crmdr[o]) ? 2 : 3);
+        size_t zone = (cangdist<cosrad) ? 1 : ((cangdist<=crmdr[o]) ? 2 : 3);
 
         check_pixel (o, order_, omax, zone, pixset, pix, stk, inclusive,
           stacktop);
@@ -477,7 +477,7 @@ template<typename I> template<typename I2>
     }
   else // scheme_ == NEST
     {
-    int oplus = 0;
+    size_t oplus = 0;
     if (inclusive)
       {
       MR_assert ((I(1)<<(order_max-order_))>=fact,
@@ -486,13 +486,13 @@ template<typename I> template<typename I2>
         "oversampling factor must be a power of 2");
       oplus=ilog2(fact);
       }
-    int omax=order_+oplus; // the order up to which we test
+    size_t omax=size_t(order_)+oplus; // the order up to which we test
 
     // TODO: ignore all disks with radius>=pi
 
     vector<T_Healpix_Base<I> > base(omax+1);
     mav<double,3> crlimit({size_t(omax)+1,nv,3});
-    for (int o=0; o<=omax; ++o) // prepare data at the required orders
+    for (size_t o=0; o<=omax; ++o) // prepare data at the required orders
       {
       base[o].Set(o,NEST);
       double dr=base[o].max_pixrad(); // safety distance
@@ -504,18 +504,18 @@ template<typename I> template<typename I2>
         }
       }
 
-    vector<pair<I,int> > stk; // stack for pixel numbers and their orders
+    vector<pair<I,size_t> > stk; // stack for pixel numbers and their orders
     stk.reserve(12+3*omax); // reserve maximum size to avoid reallocation
     for (int i=0; i<12; ++i) // insert the 12 base pixels in reverse order
       stk.push_back(make_pair(I(11-i),0));
 
-    int stacktop=0; // a place to save a stack position
+    size_t stacktop=0; // a place to save a stack position
 
     while (!stk.empty()) // as long as there are pixels on the stack
       {
       // pop current pixel number and order from the stack
       I pix=stk.back().first;
-      int o=stk.back().second;
+      size_t o=stk.back().second;
       stk.pop_back();
 
       vec3 pv(base[o].pix2vec(pix));
@@ -550,14 +550,14 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
     }
   else // scheme_ == NEST
     {
-    int oplus=inclusive ? 2 : 0;
-    int omax=min<int>(order_max,order_+oplus); // the order up to which we test
+    size_t oplus=inclusive ? 2 : 0;
+    size_t omax=min<size_t>(order_max,size_t(order_)+oplus); // the order up to which we test
 
     // TODO: ignore all disks with radius>=pi
 
     vector<T_Healpix_Base<I> > base(omax+1);
     mav<double,3> crlimit({size_t(omax+1),nv,3});
-    for (int o=0; o<=omax; ++o) // prepare data at the required orders
+    for (size_t o=0; o<=omax; ++o) // prepare data at the required orders
       {
       base[o].Set(o,NEST);
       double dr=base[o].max_pixrad(); // safety distance
@@ -569,12 +569,12 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
         }
       }
 
-    vector<pair<I,int> > stk; // stack for pixel numbers and their orders
+    vector<pair<I,size_t> > stk; // stack for pixel numbers and their orders
     stk.reserve(12+3*omax); // reserve maximum size to avoid reallocation
     for (int i=0; i<12; ++i) // insert the 12 base pixels in reverse order
       stk.push_back(make_pair(I(11-i),0));
 
-    int stacktop=0; // a place to save a stack position
+    size_t stacktop=0; // a place to save a stack position
     vector<size_t> zone(nv);
 
     vector<size_t> zstk; zstk.reserve(cmds.size());
@@ -583,7 +583,7 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
       {
       // pop current pixel number and order from the stack
       I pix=stk.back().first;
-      int o=stk.back().second;
+      size_t o=stk.back().second;
       stk.pop_back();
 
       vec3 pv(base[o].pix2vec(pix));
@@ -1161,7 +1161,7 @@ template<typename I> void T_Healpix_Base<I>::neighbors (I pix,
   if ((ix>0)&&(ix<nsm1)&&(iy>0)&&(iy<nsm1))
     {
     if (scheme_==RING)
-      for (int m=0; m<8; ++m)
+      for (size_t m=0; m<8; ++m)
         result[m] = xyf2ring(ix+nb_xoffset[m],iy+nb_yoffset[m],face_num);
     else
       {
@@ -1178,7 +1178,7 @@ template<typename I> void T_Healpix_Base<I>::neighbors (I pix,
     }
   else
     {
-    for (int i=0; i<8; ++i)
+    for (size_t i=0; i<8; ++i)
       {
       int x=ix+nb_xoffset[i], y=iy+nb_yoffset[i];
       int nbnum=4;
