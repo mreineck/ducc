@@ -25,7 +25,7 @@
 /*! \file math_utils.h
  *  Various convenience mathematical functions.
  *
- *  Copyright (C) 2002-2015 Max-Planck-Society
+ *  Copyright (C) 2002-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 

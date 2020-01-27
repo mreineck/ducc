@@ -21,7 +21,7 @@
 /*! \file sharp_internal.h
  *  Internally used functionality for the spherical transform library.
  *
- *  Copyright (C) 2006-2019 Max-Planck-Society
+ *  Copyright (C) 2006-2020 Max-Planck-Society
  *  \author Martin Reinecke \author Dag Sverre Seljebotn
  */
 

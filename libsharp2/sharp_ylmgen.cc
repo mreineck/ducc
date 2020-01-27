@@ -21,7 +21,7 @@
 /*
  *  Helper code for efficient calculation of Y_lm(theta,phi=0)
  *
- *  Copyright (C) 2005-2019 Max-Planck-Society
+ *  Copyright (C) 2005-2020 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
