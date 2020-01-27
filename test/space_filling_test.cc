@@ -132,12 +132,12 @@ int64_t t30()
 int64_t t31()
   {
   int64_t cnt=0;
-  for (uint32_t x=0; x<0x400; ++x)
-    for (uint32_t y=0; y<0x400; ++y)
-      for (uint32_t z=0; z<0x400; ++z)
+  for (uint64_t x=0; x<0x200000; x+=0xff34)
+    for (uint64_t y=0; y<0x200000; y+=0xff84)
+      for (uint64_t z=0; z<0x200000; z+=0xff96)
         {
         ++cnt;
-        auto res = block2coord3D_32(coord2block3D_32({x,y,z}));
+        auto res = block2coord3D_64(coord2block3D_64({x,y,z}));
         MR_assert(res[0]==x && res[1]==y && res[2]==z, "bug");
         }
   return cnt;

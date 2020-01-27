@@ -343,19 +343,19 @@ uint8_t m2p2D_3[4][64];
 const uint8_t p2m2D_1[4][4] = {
 { 4, 1, 3, 10},{0,6,7,13},{15,9,8,2},{11,14,12,5}};
 uint8_t p2m2D_3[4][64];
-int peano2d_done=0;
+bool peano2d_done=false;
 
 void init_peano2d (void)
   {
-  peano2d_done=1;
+  peano2d_done=true;
 
-  for (int d=0; d<4; ++d)
+  for (unsigned d=0; d<4; ++d)
     for (uint32_t p=0; p<64; ++p)
       {
       unsigned rot = d;
       uint32_t v = p<<26;
       uint32_t res = 0;
-      for (int i=0; i<3; ++i)
+      for (unsigned i=0; i<3; ++i)
         {
         unsigned tab=m2p2D_1[rot][v>>30];
         v<<=2;
@@ -364,13 +364,13 @@ void init_peano2d (void)
         }
       m2p2D_3[d][p]=res|(rot<<6);
       }
-  for (int d=0; d<4; ++d)
+  for (unsigned d=0; d<4; ++d)
     for (uint32_t p=0; p<64; ++p)
       {
       unsigned rot = d;
       uint32_t v = p<<26;
       uint32_t res = 0;
-      for (int i=0; i<3; ++i)
+      for (unsigned i=0; i<3; ++i)
         {
         unsigned tab=p2m2D_1[rot][v>>30];
         v<<=2;
@@ -383,12 +383,12 @@ void init_peano2d (void)
 
 }
 
-uint32_t morton2peano3D_32(uint32_t v, int bits)
+uint32_t morton2peano3D_32(uint32_t v, unsigned bits)
   {
   unsigned rot = 0;
   uint32_t res = 0;
   v<<=3*(10-bits)+2;
-  for (int i=0; i<bits; ++i)
+  for (unsigned i=0; i<bits; ++i)
     {
     unsigned tab=m2p3D[rot][v>>29];
     v<<=3;
@@ -397,12 +397,12 @@ uint32_t morton2peano3D_32(uint32_t v, int bits)
     }
   return res;
   }
-uint32_t peano2morton3D_32(uint32_t v, int bits)
+uint32_t peano2morton3D_32(uint32_t v, unsigned bits)
   {
   unsigned rot = 0;
   uint32_t res = 0;
   v<<=3*(10-bits)+2;
-  for (int i=0; i<bits; ++i)
+  for (unsigned i=0; i<bits; ++i)
     {
     unsigned tab=p2m3D[rot][v>>29];
     v<<=3;
@@ -412,12 +412,12 @@ uint32_t peano2morton3D_32(uint32_t v, int bits)
   return res;
   }
 
-uint64_t morton2peano3D_64(uint64_t v, int bits)
+uint64_t morton2peano3D_64(uint64_t v, unsigned bits)
   {
   unsigned rot = 0;
   uint64_t res = 0;
   v<<=3*(21-bits)+1;
-  for (int i=0; i<bits; ++i)
+  for (unsigned i=0; i<bits; ++i)
     {
     unsigned tab=m2p3D[rot][v>>61];
     v<<=3;
@@ -426,12 +426,12 @@ uint64_t morton2peano3D_64(uint64_t v, int bits)
     }
   return res;
   }
-uint64_t peano2morton3D_64(uint64_t v, int bits)
+uint64_t peano2morton3D_64(uint64_t v, unsigned bits)
   {
   unsigned rot = 0;
   uint64_t res = 0;
   v<<=3*(21-bits)+1;
-  for (int i=0; i<bits; ++i)
+  for (unsigned i=0; i<bits; ++i)
     {
     unsigned tab=p2m3D[rot][v>>61];
     v<<=3;
@@ -441,14 +441,14 @@ uint64_t peano2morton3D_64(uint64_t v, int bits)
   return res;
   }
 
-uint32_t morton2peano2D_32(uint32_t v, int bits)
+uint32_t morton2peano2D_32(uint32_t v, unsigned bits)
   {
   if (!peano2d_done) init_peano2d();
   unsigned rot = 0;
   uint32_t res = 0;
   v<<=32-(bits<<1);
-  int i=0;
-  for (; i<bits-2; i+=3)
+  unsigned i=0;
+  for (; i+2<bits; i+=3)
     {
     unsigned tab=m2p2D_3[rot][v>>26];
     v<<=6;
@@ -464,14 +464,14 @@ uint32_t morton2peano2D_32(uint32_t v, int bits)
     }
   return res;
   }
-uint32_t peano2morton2D_32(uint32_t v, int bits)
+uint32_t peano2morton2D_32(uint32_t v, unsigned bits)
   {
   if (!peano2d_done) init_peano2d();
   unsigned rot = 0;
   uint32_t res = 0;
   v<<=32-(bits<<1);
-  int i=0;
-  for (; i<bits-2; i+=3)
+  unsigned i=0;
+  for (; i+2<bits; i+=3)
     {
     unsigned tab=p2m2D_3[rot][v>>26];
     v<<=6;
@@ -487,14 +487,14 @@ uint32_t peano2morton2D_32(uint32_t v, int bits)
     }
   return res;
   }
-uint64_t morton2peano2D_64(uint64_t v, int bits)
+uint64_t morton2peano2D_64(uint64_t v, unsigned bits)
   {
   if (!peano2d_done) init_peano2d();
   unsigned rot = 0;
   uint64_t res = 0;
   v<<=64-(bits<<1);
-  int i=0;
-  for (; i<bits-2; i+=3)
+  unsigned i=0;
+  for (; i+2<bits; i+=3)
     {
     unsigned tab=m2p2D_3[rot][v>>58];
     v<<=6;
@@ -510,14 +510,14 @@ uint64_t morton2peano2D_64(uint64_t v, int bits)
     }
   return res;
   }
-uint64_t peano2morton2D_64(uint64_t v, int bits)
+uint64_t peano2morton2D_64(uint64_t v, unsigned bits)
   {
   if (!peano2d_done) init_peano2d();
   unsigned rot = 0;
   uint64_t res = 0;
   v<<=64-(bits<<1);
-  int i=0;
-  for (; i<bits-2; i+=3)
+  unsigned i=0;
+  for (; i+2<bits; i+=3)
     {
     unsigned tab=p2m2D_3[rot][v>>58];
     v<<=6;
