@@ -33,6 +33,8 @@ libmrutil_la_SOURCES = \
   mr_util/unity_roots.h \
   mr_util/useful_macros.h \
   mr_util/rangeset.h \
+  mr_util/crangeset.h \
+  mr_util/compress_utils.h \
   mr_util/geom_utils.h \
   mr_util/geom_utils.cc \
   Healpix_cxx/healpix_tables.h \
@@ -40,7 +42,8 @@ libmrutil_la_SOURCES = \
   Healpix_cxx/healpix_base.h \
   Healpix_cxx/healpix_base.cc \
   Healpix_cxx/healpix_map.h \
-  Healpix_cxx/healpix_map.cc
+  Healpix_cxx/healpix_map.cc \
+  Healpix_cxx/moc.h
 
 # format is "current:revision:age"
 # any change: increase revision

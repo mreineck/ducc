@@ -58,10 +58,10 @@ Candidates for testing the validity of the Healpix routines:
 #include "mr_util/geom_utils.h"
 #include "mr_util/timers.h"
 //#include "announce.h"
-//#include "compress_utils.h"
-//#include "moc.h"
+#include "mr_util/compress_utils.h"
+#include "Healpix_cxx/moc.h"
 //#include "moc_fitsio.h"
-//#include "crangeset.h"
+#include "mr_util/crangeset.h"
 //#include "weight_utils.h"
 //#include "powspec.h"
 
@@ -120,20 +120,20 @@ template<typename I> rangeset<I> randomRangeSet(int num, I start, int dist)
     }
   return rs;
   }
-// template<typename I> Moc<I> randomMoc(int num, I start, int dist)
-//   {
-//   Moc<I> moc;
-//   I curval=start+(I(1)<<(2*Moc<I>::maxorder));
-//   uniform_int_distribution<int> irand(0,dist-1);
-//   for (int i=0; i<num; ++i)
-//     {
-//     I v1=curval+1+irand(engine);
-//     I v2=v1+1+irand(engine);
-//     moc.addPixelRange(Moc<I>::maxorder,v1,v2);
-//     curval=v2;
-//     }
-//   return moc;
-//   }
+template<typename I> Moc<I> randomMoc(int num, I start, int dist)
+  {
+  Moc<I> moc;
+  I curval=start+(I(1)<<(2*Moc<I>::maxorder));
+  uniform_int_distribution<int> irand(0,dist-1);
+  for (int i=0; i<num; ++i)
+    {
+    I v1=curval+1+irand(engine);
+    I v2=v1+1+irand(engine);
+    moc.addPixelRange(Moc<I>::maxorder,v1,v2);
+    curval=v2;
+    }
+  return moc;
+  }
 
 template<typename I> rangeset<I> makeRS(const string &input)
   {
@@ -387,196 +387,196 @@ template<typename I> void check_rangeset()
     }
   }
   }
-// template<typename I> crangeset<I> randomCRangeSet(int num, I start, int dist)
-//   {
-//   crangeset<I> rs;
-//   I curval=start;
-//   uniform_int_distribution<int> irand(0,dist-1);
-//   for (int i=0; i<num; ++i)
-//     {
-//     I v1=curval+1+irand(engine);
-//     I v2=v1+1+irand(engine);
-//     rs.append(v1,v2);
-//     curval=v2;
-//     }
-//   return rs;
-//   }
-// template<typename I> crangeset<I> makeCRS(const string &input)
-//   {
-//   istringstream is(input);
-//   crangeset<I> res;
-//   I a,b;
-//   while (is)
-//     {
-//     is>>a>>b;
-//     MR_assert (is||is.eof(),"aargh");
-//     if (is) res.append(a,b);
-//     }
-//   return res;
-//   }
-// template<typename I> void crsOps(const crangeset<I> &a, const crangeset<I> &b)
-//   {
-//   MR_assert(!b.overlaps(a.op_andnot(b)),"error");
-//   MR_assert(a.op_or(b).nval()>=a.nval(),"error");
-//   MR_assert(a.op_or(b).nval()>=b.nval(),"error");
-//   MR_assert(a.op_and(b).nval()<=a.nval(),"error");
-//   MR_assert(a.op_and(b).nval()<=b.nval(),"error");
-//   MR_assert(a.op_or(b).contains(a),"error");
-//   MR_assert(a.op_or(b).contains(b),"error");
-//   MR_assert(!a.op_andnot(b).overlaps(b),"error");
-//   MR_assert(!b.op_andnot(a).overlaps(a),"error");
-//   MR_assert(a.op_or(b).nval()==a.nval()+b.nval()-a.op_and(b).nval(),
-//     "error");
-//   MR_assert(a.op_or(b).op_andnot(a.op_and(b)).nval()==
-//     a.op_or(b).nval()-a.op_and(b).nval(),"error");
-//   MR_assert(a.op_xor(b)==a.op_andnot(b).op_or(b.op_andnot(a)),"error");
-//   }
-// template<typename I> void check_crangeset()
-//   {
-//   cout << "testing crangeset " << bname<I>() << endl;
-//   {
-//   crangeset<I> b;
-//   b.append(1,11);
-//   MR_assert(b==makeCRS<I>("1 11"),"mismatch");
-//   b.append(10,15);
-//   MR_assert(b==makeCRS<I>("1 15"),"mismatch");
-//   b.append(1,15);
-//   MR_assert(b==makeCRS<I>("1 15"),"mismatch");
-//   b.append(7,15);
-//   MR_assert(b==makeCRS<I>("1 15"),"mismatch");
-//   b.append(30,41);
-// #if 0
-//   MR_assert(b==makeRS<I>("1 15 30 41"),"mismatch");
-//   try
-//     {
-//     b.append(29,31);
-//     MR_fail("Should have raised an IllegalArgumentException");
-//     }
-//   catch (PlanckError E) {}
-// #endif
-//   }
-//   {
-//   crangeset<I> b=makeCRS<I>("1 11 30 41");
-//   MR_assert(!b.contains(0),"error");
-//   MR_assert(b.contains(1),"error");
-//   MR_assert(b.contains(5),"error");
-//   MR_assert(b.contains(10),"error");
-//   MR_assert(!b.contains(11),"error");
-//   MR_assert(!b.contains(29),"error");
-//   MR_assert(b.contains(30),"error");
-//   MR_assert(b.contains(35),"error");
-//   MR_assert(b.contains(40),"error");
-//   MR_assert(!b.contains(41),"errror");
-//   }
-//   {
-//   MR_assert(makeCRS<I>("1 11 20 31 40 56")==
-//                 makeCRS<I>("20 31 40 51").op_or
-//                 (makeCRS<I>("1 11 45 56")),"error");
-//   MR_assert(makeCRS<I>("1 11 45 56")==
-//                 makeCRS<I>("").op_or
-//                 (makeCRS<I>("1 11 45 56")),"error");
-//   MR_assert(makeCRS<I>("1 11 45 56")==
-//                 makeCRS<I>("1 11 45 56").op_or
-//                 (makeCRS<I>("")),"error");
-//   }
-//   {
-//   MR_assert(makeCRS<I>("22 24 45 51")==
-//                 makeCRS<I>("20 31 40 51").op_and
-//                 (makeCRS<I>("1 11 22 24 45 56")),"error");
-//   MR_assert(makeCRS<I>("20 31 40 51 90 101 110 121 200 201")==
-//                 makeCRS<I>("10 101 110 121 200 221").op_and
-//                 (makeCRS<I>("20 31 40 51 90 201")),"error");
-//   MR_assert(makeCRS<I>("")==
-//                 makeCRS<I>("20 31 40 51").op_and
-//                 (makeCRS<I>("")),"error");
-//   MR_assert(makeCRS<I>("")==
-//                 makeCRS<I>("").op_and
-//                 (makeCRS<I>("20 31 40 51")),"error");
-//   }
-//   {
-//   MR_assert(makeCRS<I>("20 31 40 45")==
-//                 makeCRS<I>("20 31 40 51").op_andnot
-//                 (makeCRS<I>("1 11 45 56")),"error");
-//   MR_assert(makeCRS<I>("")==
-//                 makeCRS<I>("").op_andnot
-//                 (makeCRS<I>("1 11 45 56")),"error");
-//   MR_assert(makeCRS<I>("1 11 45 56")==
-//                 makeCRS<I>("1 11 45 56").op_andnot
-//                 (makeCRS<I>("")),"error");
-//   }
-//   {
-//   crangeset<I> b = makeCRS<I>("20 31 40 51");
-//
-//   MR_assert(!b.contains(0,11),"error");
-//   MR_assert(!b.contains(10,21),"error");
-//   MR_assert(!b.contains(19,20),"error");
-//   MR_assert(b.contains(20,21),"error");
-//   MR_assert(b.contains(21,22),"error");
-//   MR_assert(b.contains(20,31),"error");
-//   MR_assert(!b.contains(25,36),"error");
-//   MR_assert(b.contains(30,31),"error");
-//   MR_assert(!b.contains(31,32),"error");
-//   MR_assert(!b.contains(35,38),"error");
-//   MR_assert(!b.contains(35,46),"error");
-//   MR_assert(b.contains(40,41),"error");
-//   MR_assert(!b.contains(45,56),"error");
-//   MR_assert(!b.contains(60,71),"error");
-//   }
-//   {
-//   crangeset<I> b = makeCRS<I>("20 31 40 51");
-//
-//   MR_assert(b.contains(makeCRS<I>("20 31 40 51")),"error");
-//   MR_assert(b.contains(makeCRS<I>("20 21")),"error");
-//   MR_assert(b.contains(makeCRS<I>("50 51")),"error");
-//   MR_assert(!b.contains(makeCRS<I>("19 31 40 51")),"error");
-//   MR_assert(!b.contains(makeCRS<I>("20 31 40 52")),"error");
-//   MR_assert(!b.contains(makeCRS<I>("20 51")),"error");
-//   MR_assert(!b.contains(makeCRS<I>("0 1")),"error");
-//   MR_assert(!b.contains(makeCRS<I>("0 20 31 40 51 100")),"error");
-//   }
-//   {
-//   crangeset<I> b = makeCRS<I>("20 31 40 51");
-//
-//   MR_assert(!b.overlaps(0,11),"error");
-//   MR_assert(b.overlaps(10,21),"error");
-//   MR_assert(!b.overlaps(19,20),"error");
-//   MR_assert(b.overlaps(20,21),"error");
-//   MR_assert(b.overlaps(21,22),"error");
-//   MR_assert(b.overlaps(20,31),"error");
-//   MR_assert(b.overlaps(25,36),"error");
-//   MR_assert(b.overlaps(30,37),"error");
-//   MR_assert(!b.overlaps(31,32),"error");
-//   MR_assert(!b.overlaps(35,38),"error");
-//   MR_assert(b.overlaps(35,46),"error");
-//   MR_assert(b.overlaps(40,41),"error");
-//   MR_assert(b.overlaps(45,56),"error");
-//   MR_assert(!b.overlaps(60,71),"error");
-//   }
-//   {
-//   crangeset<I> b = makeCRS<I>("20 31 40 51");
-//
-//   MR_assert(b.overlaps(makeCRS<I>("20 31 40 51")),"error");
-//   MR_assert(b.overlaps(makeCRS<I>("20 21")),"error");
-//   MR_assert(b.overlaps(makeCRS<I>("50 51")),"error");
-//   MR_assert(b.overlaps(makeCRS<I>("19 31 40 51")),"error");
-//   MR_assert(b.overlaps(makeCRS<I>("20 31 40 52")),"error");
-//   MR_assert(b.overlaps(makeCRS<I>("20 51")),"error");
-//   MR_assert(!b.overlaps(makeCRS<I>("0 1")),"error");
-//   MR_assert(!b.overlaps(makeCRS<I>("0 20 31 40 51 100")),"error");
-//   }
-//   {
-//   const int niter = 1000;
-//   for (int iter=0; iter<niter; ++iter)
-//     {
-//     crangeset<I> a = randomCRangeSet<I>(1000, 0, 100);
-//     crangeset<I> b = randomCRangeSet<I>(1000, 0, 100);
-//     crangeset<I> c = randomCRangeSet<I>(10, 10000, 100);
-//     crsOps(a,b);
-//     crsOps(a,c);
-//     crsOps(c,a);
-//     }
-//   }
-//   }
+template<typename I> crangeset<I> randomCRangeSet(int num, I start, int dist)
+  {
+  crangeset<I> rs;
+  I curval=start;
+  uniform_int_distribution<int> irand(0,dist-1);
+  for (int i=0; i<num; ++i)
+    {
+    I v1=curval+1+irand(engine);
+    I v2=v1+1+irand(engine);
+    rs.append(v1,v2);
+    curval=v2;
+    }
+  return rs;
+  }
+template<typename I> crangeset<I> makeCRS(const string &input)
+  {
+  istringstream is(input);
+  crangeset<I> res;
+  I a,b;
+  while (is)
+    {
+    is>>a>>b;
+    MR_assert (is||is.eof(),"aargh");
+    if (is) res.append(a,b);
+    }
+  return res;
+  }
+template<typename I> void crsOps(const crangeset<I> &a, const crangeset<I> &b)
+  {
+  MR_assert(!b.overlaps(a.op_andnot(b)),"error");
+  MR_assert(a.op_or(b).nval()>=a.nval(),"error");
+  MR_assert(a.op_or(b).nval()>=b.nval(),"error");
+  MR_assert(a.op_and(b).nval()<=a.nval(),"error");
+  MR_assert(a.op_and(b).nval()<=b.nval(),"error");
+  MR_assert(a.op_or(b).contains(a),"error");
+  MR_assert(a.op_or(b).contains(b),"error");
+  MR_assert(!a.op_andnot(b).overlaps(b),"error");
+  MR_assert(!b.op_andnot(a).overlaps(a),"error");
+  MR_assert(a.op_or(b).nval()==a.nval()+b.nval()-a.op_and(b).nval(),
+    "error");
+  MR_assert(a.op_or(b).op_andnot(a.op_and(b)).nval()==
+    a.op_or(b).nval()-a.op_and(b).nval(),"error");
+  MR_assert(a.op_xor(b)==a.op_andnot(b).op_or(b.op_andnot(a)),"error");
+  }
+template<typename I> void check_crangeset()
+  {
+  cout << "testing crangeset " << bname<I>() << endl;
+  {
+  crangeset<I> b;
+  b.append(1,11);
+  MR_assert(b==makeCRS<I>("1 11"),"mismatch");
+  b.append(10,15);
+  MR_assert(b==makeCRS<I>("1 15"),"mismatch");
+  b.append(1,15);
+  MR_assert(b==makeCRS<I>("1 15"),"mismatch");
+  b.append(7,15);
+  MR_assert(b==makeCRS<I>("1 15"),"mismatch");
+  b.append(30,41);
+#if 0
+  MR_assert(b==makeRS<I>("1 15 30 41"),"mismatch");
+  try
+    {
+    b.append(29,31);
+    MR_fail("Should have raised an IllegalArgumentException");
+    }
+  catch (PlanckError E) {}
+#endif
+  }
+  {
+  crangeset<I> b=makeCRS<I>("1 11 30 41");
+  MR_assert(!b.contains(0),"error");
+  MR_assert(b.contains(1),"error");
+  MR_assert(b.contains(5),"error");
+  MR_assert(b.contains(10),"error");
+  MR_assert(!b.contains(11),"error");
+  MR_assert(!b.contains(29),"error");
+  MR_assert(b.contains(30),"error");
+  MR_assert(b.contains(35),"error");
+  MR_assert(b.contains(40),"error");
+  MR_assert(!b.contains(41),"errror");
+  }
+  {
+  MR_assert(makeCRS<I>("1 11 20 31 40 56")==
+                makeCRS<I>("20 31 40 51").op_or
+                (makeCRS<I>("1 11 45 56")),"error");
+  MR_assert(makeCRS<I>("1 11 45 56")==
+                makeCRS<I>("").op_or
+                (makeCRS<I>("1 11 45 56")),"error");
+  MR_assert(makeCRS<I>("1 11 45 56")==
+                makeCRS<I>("1 11 45 56").op_or
+                (makeCRS<I>("")),"error");
+  }
+  {
+  MR_assert(makeCRS<I>("22 24 45 51")==
+                makeCRS<I>("20 31 40 51").op_and
+                (makeCRS<I>("1 11 22 24 45 56")),"error");
+  MR_assert(makeCRS<I>("20 31 40 51 90 101 110 121 200 201")==
+                makeCRS<I>("10 101 110 121 200 221").op_and
+                (makeCRS<I>("20 31 40 51 90 201")),"error");
+  MR_assert(makeCRS<I>("")==
+                makeCRS<I>("20 31 40 51").op_and
+                (makeCRS<I>("")),"error");
+  MR_assert(makeCRS<I>("")==
+                makeCRS<I>("").op_and
+                (makeCRS<I>("20 31 40 51")),"error");
+  }
+  {
+  MR_assert(makeCRS<I>("20 31 40 45")==
+                makeCRS<I>("20 31 40 51").op_andnot
+                (makeCRS<I>("1 11 45 56")),"error");
+  MR_assert(makeCRS<I>("")==
+                makeCRS<I>("").op_andnot
+                (makeCRS<I>("1 11 45 56")),"error");
+  MR_assert(makeCRS<I>("1 11 45 56")==
+                makeCRS<I>("1 11 45 56").op_andnot
+                (makeCRS<I>("")),"error");
+  }
+  {
+  crangeset<I> b = makeCRS<I>("20 31 40 51");
+
+  MR_assert(!b.contains(0,11),"error");
+  MR_assert(!b.contains(10,21),"error");
+  MR_assert(!b.contains(19,20),"error");
+  MR_assert(b.contains(20,21),"error");
+  MR_assert(b.contains(21,22),"error");
+  MR_assert(b.contains(20,31),"error");
+  MR_assert(!b.contains(25,36),"error");
+  MR_assert(b.contains(30,31),"error");
+  MR_assert(!b.contains(31,32),"error");
+  MR_assert(!b.contains(35,38),"error");
+  MR_assert(!b.contains(35,46),"error");
+  MR_assert(b.contains(40,41),"error");
+  MR_assert(!b.contains(45,56),"error");
+  MR_assert(!b.contains(60,71),"error");
+  }
+  {
+  crangeset<I> b = makeCRS<I>("20 31 40 51");
+
+  MR_assert(b.contains(makeCRS<I>("20 31 40 51")),"error");
+  MR_assert(b.contains(makeCRS<I>("20 21")),"error");
+  MR_assert(b.contains(makeCRS<I>("50 51")),"error");
+  MR_assert(!b.contains(makeCRS<I>("19 31 40 51")),"error");
+  MR_assert(!b.contains(makeCRS<I>("20 31 40 52")),"error");
+  MR_assert(!b.contains(makeCRS<I>("20 51")),"error");
+  MR_assert(!b.contains(makeCRS<I>("0 1")),"error");
+  MR_assert(!b.contains(makeCRS<I>("0 20 31 40 51 100")),"error");
+  }
+  {
+  crangeset<I> b = makeCRS<I>("20 31 40 51");
+
+  MR_assert(!b.overlaps(0,11),"error");
+  MR_assert(b.overlaps(10,21),"error");
+  MR_assert(!b.overlaps(19,20),"error");
+  MR_assert(b.overlaps(20,21),"error");
+  MR_assert(b.overlaps(21,22),"error");
+  MR_assert(b.overlaps(20,31),"error");
+  MR_assert(b.overlaps(25,36),"error");
+  MR_assert(b.overlaps(30,37),"error");
+  MR_assert(!b.overlaps(31,32),"error");
+  MR_assert(!b.overlaps(35,38),"error");
+  MR_assert(b.overlaps(35,46),"error");
+  MR_assert(b.overlaps(40,41),"error");
+  MR_assert(b.overlaps(45,56),"error");
+  MR_assert(!b.overlaps(60,71),"error");
+  }
+  {
+  crangeset<I> b = makeCRS<I>("20 31 40 51");
+
+  MR_assert(b.overlaps(makeCRS<I>("20 31 40 51")),"error");
+  MR_assert(b.overlaps(makeCRS<I>("20 21")),"error");
+  MR_assert(b.overlaps(makeCRS<I>("50 51")),"error");
+  MR_assert(b.overlaps(makeCRS<I>("19 31 40 51")),"error");
+  MR_assert(b.overlaps(makeCRS<I>("20 31 40 52")),"error");
+  MR_assert(b.overlaps(makeCRS<I>("20 51")),"error");
+  MR_assert(!b.overlaps(makeCRS<I>("0 1")),"error");
+  MR_assert(!b.overlaps(makeCRS<I>("0 20 31 40 51 100")),"error");
+  }
+  {
+  const int niter = 1000;
+  for (int iter=0; iter<niter; ++iter)
+    {
+    crangeset<I> a = randomCRangeSet<I>(1000, 0, 100);
+    crangeset<I> b = randomCRangeSet<I>(1000, 0, 100);
+    crangeset<I> c = randomCRangeSet<I>(10, 10000, 100);
+    crsOps(a,b);
+    crsOps(a,c);
+    crsOps(c,a);
+    }
+  }
+  }
 // void check_Moc0()
 //   {
 //   {
@@ -606,79 +606,79 @@ template<typename I> void check_rangeset()
 //   cout << r1.size() << " " << r2.size() << " " << r3.size() << endl;
 //   }
 //   }
-// template<typename I> void check_Moc()
-//   {
-//   cout << "testing MOC " << bname<I>() << endl;
-//   Moc<I> moc;
-//   moc.addPixelRange(0,4,5);
-//   moc.addPixelRange(0,6,7);
-//   moc.addPixelRange(2,4,17);
-//   moc.addPixelRange(10,3000000,3000001);
-//
-//   MR_assert(moc==moc.complement().complement(),"error");
-//   MR_assert(moc==Moc<I>::fromUniq(moc.toUniq()),"error");
-//   MR_assert(moc.maxOrder()==10,"error");
-//   Moc<I> xtmp = moc.degradedToOrder(8,false);
-//   MR_assert(moc.contains(xtmp),"error");
-//   MR_assert(!xtmp.contains(moc),"error");
-//   MR_assert(xtmp.overlaps(moc),"error");
-//   xtmp=moc.degradedToOrder(8,true);
-//   MR_assert(!moc.contains(xtmp),"error");
-//   MR_assert(xtmp.contains(moc),"error");
-//   MR_assert(xtmp.overlaps(moc),"error");
-//   MR_assert(moc==Moc<I>::fromCompressed(moc.toCompressed()),"error");
-// #if 0
-//   assertEquals("inconsistency",moc,MocUtil.mocFromString(" 0/4, 6 2/ \t 4 -16 10/3000000 \t\n "));
-//   assertEquals("inconsistency",moc,MocUtil.mocFromString("0/6 2/ 5 2/4 2/6- 16 0/4  10/3000000"));
-//   assertEquals("inconsistency",moc,MocUtil.mocFromString
-//     ("{\"0\":[6] , \"2\": [5 ], \"2\":[  4,6,7,8,9,10,11,12,13,14,15,16], \"0\":[4],  \"10\":[3000000]}"));
-//   assertEquals("inconsistency",moc,MocUtil.mocFromString(MocUtil.mocToStringASCII(moc)));
-//   assertEquals("inconsistency",moc,MocUtil.mocFromString(MocUtil.mocToStringJSON(moc)));
-//   ByteArrayOutputStream out= new ByteArrayOutputStream();
-//   MocUtil.mocToFits(moc,out);
-//   ByteArrayInputStream inp = new ByteArrayInputStream(out.toByteArray());
-//   assertEquals("inconsistency",moc,MocUtil.mocFromFits(inp));
-// #endif
-//   {
-//   size_t niter = 100;
-//   Moc<I> full; full.addPixelRange(0,0,12);
-//   Moc<I> empty;
-//   for (size_t iter=0; iter<niter; ++iter)
-//     {
-//     Moc<I> a = randomMoc<I>(1000, 0, 100);
-//     MR_assert(a.complement().complement()==a,"error");
-//     MR_assert(!a.overlaps(a.complement()),"error");
-//     MR_assert(a.op_or(a.complement())==full,"error");
-//     MR_assert(a.op_and(a.complement())==empty,"error");
-// #if 0
-//     write_Moc_to_fits("!healpixtestmoctmp",a);
-//     MR_assert(a==read_Moc_from_fits<I>("healpixtestmoctmp"),"FITS problem");
-// #endif
-//     }
-//   }
-//   }
-// template<typename I> void check_compress()
-//   {
-//   cout << "testing interpolation coding " << bname<I>() << endl;
-//   MR_assert(trailingZeros(4)==2,"error");
-//   MR_assert(trailingZeros(5)==0,"error");
-//   MR_assert(trailingZeros(int64_t(1)<<48)==48,"error");
-//   for (size_t x=0; x<100; ++x)
-//     {
-//     rangeset<I> a = randomRangeSet<I>(1000, 0, 100);
-//     rangeset<I> b;
-//     for (size_t i=0; i<a.nranges(); ++i)
-//       b.append(a.ivbegin(i)<<6,a.ivend(i)<<6);
-//     const vector<I> &v=b.data();
-//     obitstream obs;
-//     interpol_encode(v.begin(),v.end(),obs);
-//     vector<uint8> comp=obs.state();
-//     vector<I> v2;
-//     ibitstream ibs(comp);
-//     interpol_decode(v2,ibs);
-//     MR_assert(v==v2,"data mismatch");
-//     }
-//   }
+template<typename I> void check_Moc()
+  {
+  cout << "testing MOC " << bname<I>() << endl;
+  Moc<I> moc;
+  moc.addPixelRange(0,4,5);
+  moc.addPixelRange(0,6,7);
+  moc.addPixelRange(2,4,17);
+  moc.addPixelRange(10,3000000,3000001);
+
+  MR_assert(moc==moc.complement().complement(),"error");
+  MR_assert(moc==Moc<I>::fromUniq(moc.toUniq()),"error");
+  MR_assert(moc.maxOrder()==10,"error");
+  Moc<I> xtmp = moc.degradedToOrder(8,false);
+  MR_assert(moc.contains(xtmp),"error");
+  MR_assert(!xtmp.contains(moc),"error");
+  MR_assert(xtmp.overlaps(moc),"error");
+  xtmp=moc.degradedToOrder(8,true);
+  MR_assert(!moc.contains(xtmp),"error");
+  MR_assert(xtmp.contains(moc),"error");
+  MR_assert(xtmp.overlaps(moc),"error");
+  MR_assert(moc==Moc<I>::fromCompressed(moc.toCompressed()),"error");
+#if 0
+  assertEquals("inconsistency",moc,MocUtil.mocFromString(" 0/4, 6 2/ \t 4 -16 10/3000000 \t\n "));
+  assertEquals("inconsistency",moc,MocUtil.mocFromString("0/6 2/ 5 2/4 2/6- 16 0/4  10/3000000"));
+  assertEquals("inconsistency",moc,MocUtil.mocFromString
+    ("{\"0\":[6] , \"2\": [5 ], \"2\":[  4,6,7,8,9,10,11,12,13,14,15,16], \"0\":[4],  \"10\":[3000000]}"));
+  assertEquals("inconsistency",moc,MocUtil.mocFromString(MocUtil.mocToStringASCII(moc)));
+  assertEquals("inconsistency",moc,MocUtil.mocFromString(MocUtil.mocToStringJSON(moc)));
+  ByteArrayOutputStream out= new ByteArrayOutputStream();
+  MocUtil.mocToFits(moc,out);
+  ByteArrayInputStream inp = new ByteArrayInputStream(out.toByteArray());
+  assertEquals("inconsistency",moc,MocUtil.mocFromFits(inp));
+#endif
+  {
+  size_t niter = 100;
+  Moc<I> full; full.addPixelRange(0,0,12);
+  Moc<I> empty;
+  for (size_t iter=0; iter<niter; ++iter)
+    {
+    Moc<I> a = randomMoc<I>(1000, 0, 100);
+    MR_assert(a.complement().complement()==a,"error");
+    MR_assert(!a.overlaps(a.complement()),"error");
+    MR_assert(a.op_or(a.complement())==full,"error");
+    MR_assert(a.op_and(a.complement())==empty,"error");
+#if 0
+    write_Moc_to_fits("!healpixtestmoctmp",a);
+    MR_assert(a==read_Moc_from_fits<I>("healpixtestmoctmp"),"FITS problem");
+#endif
+    }
+  }
+  }
+template<typename I> void check_compress()
+  {
+  cout << "testing interpolation coding " << bname<I>() << endl;
+  MR_assert(trailingZeros(4)==2,"error");
+  MR_assert(trailingZeros(5)==0,"error");
+  MR_assert(trailingZeros(int64_t(1)<<48)==48,"error");
+  for (size_t x=0; x<100; ++x)
+    {
+    rangeset<I> a = randomRangeSet<I>(1000, 0, 100);
+    rangeset<I> b;
+    for (size_t i=0; i<a.nranges(); ++i)
+      b.append(a.ivbegin(i)<<6,a.ivend(i)<<6);
+    const vector<I> &v=b.data();
+    obitstream obs;
+    interpol_encode(v.begin(),v.end(),obs);
+    vector<uint8_t> comp=obs.state();
+    vector<I> v2;
+    ibitstream ibs(comp);
+    interpol_decode(v2,ibs);
+    MR_assert(v==v2,"data mismatch");
+    }
+  }
 
 template<typename I> void check_ringnestring()
   {
@@ -871,21 +871,21 @@ template<typename I> void check_neighbors()
     }
   }
 
-// void check_swap_scheme()
-//   {
-//   cout << "testing whether double swap_scheme() returns the original map"
-//        << endl << "(for orders 0 to 10)." << endl;
-//   for (int order=0; order<=10; ++order)
-//     {
-//     Healpix_Map<uint8> map(order,NEST);
-//     for (int m=0; m<map.Npix(); ++m) map[m]=uint8(m&0xFF);
-//     map.swap_scheme();
-//     map.swap_scheme();
-//     for (int m=0; m<map.Npix(); ++m)
-//       if (map[m]!=(m&0xFF))
-//         FAIL(cout<<"  PROBLEM: order = "<<order<<", pix = "<<m<<endl)
-//     }
-//   }
+void check_swap_scheme()
+  {
+  cout << "testing whether double swap_scheme() returns the original map"
+       << endl << "(for orders 0 to 10)." << endl;
+  for (int order=0; order<=10; ++order)
+    {
+    Healpix_Map<uint8_t> map(order,NEST);
+    for (int m=0; m<map.Npix(); ++m) map[m]=uint8_t(m&0xFF);
+    map.swap_scheme();
+    map.swap_scheme();
+    for (int m=0; m<map.Npix(); ++m)
+      if (map[m]!=(m&0xFF))
+        FAIL(cout<<"  PROBLEM: order = "<<order<<", pix = "<<m<<endl)
+    }
+  }
 
 void check_issue_229 (Ordering_Scheme scheme)
   {
@@ -953,7 +953,7 @@ template<typename I>void check_query_disc()
   {
   cout << "checking query_disc() " << bname<I>() << endl;
   int omax=min<int>(20,T_Healpix_Base<I>::order_max);
-  for (int order=0; order<=omax; ++order)
+  for (int order=1; order<=omax; ++order)
     {
     T_Healpix_Base<I> rbase (order,RING), nbase (order,NEST);
     int niter=max(1,min(1000,100000>>order));
@@ -964,13 +964,14 @@ template<typename I>void check_query_disc()
       double rad = pi/1 * frand();
       auto pixset = rbase.query_disc(ptg,rad);
       rangeset<I> pslast=pixset;
-      for (size_t fct=5; fct>0; --fct)
-        {
-        auto psi = rbase.query_disc_inclusive(ptg,rad,fct);
-        if (!psi.contains(pslast))
-          cout << "  Potential problem: RING pixel sets inconsistent" << endl;
-        swap(pslast,psi);
-        }
+      if (order>0) // for order==0, it's possible (and OK) that this check fails
+        for (size_t fct=5; fct>0; --fct)
+          {
+          auto psi = rbase.query_disc_inclusive(ptg,rad,fct);
+          if (!psi.contains(pslast))
+            cout << "  Potential problem: RING pixel sets inconsistent" << endl;
+          swap(pslast,psi);
+          }
       I nval = pixset.nval();
       pixset = nbase.query_disc(ptg,rad);
       pslast=pixset;
@@ -1591,16 +1592,16 @@ int main(int argc, const char **argv)
   {
 //   module_startup ("hpxtest",argc,argv,1,"");
   perftest();
-//   check_compress<int>();
-//   check_compress<unsigned>();
-//   check_compress<int64_t>();
-//   check_compress<uint64_t>();
-//   check_Moc<int>();
-//   check_Moc<int64_t>();
+  check_compress<int>();
+  check_compress<unsigned>();
+  check_compress<int64_t>();
+  check_compress<uint64_t>();
+  check_Moc<int>();
+  check_Moc<int64_t>();
   check_rangeset<int>();
   check_rangeset<int64_t>();
-//   check_crangeset<int>();
-//   check_crangeset<int64_t>();
+  check_crangeset<int>();
+  check_crangeset<int64_t>();
   check_isqrt();
   check_pix2ang_acc();
 //   check_smooth_alm();
@@ -1621,7 +1622,7 @@ int main(int argc, const char **argv)
   check_pixangpix<int64_t>();
   check_neighbors<int>();
   check_neighbors<int64_t>();
-//   check_swap_scheme();
+  check_swap_scheme();
   check_query_disc_strict(RING);
   check_query_disc_strict(NEST);
   check_issue_229(RING);
