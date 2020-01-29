@@ -34,6 +34,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace mr {
 
@@ -174,6 +175,37 @@ inline bool multiequal (const T1 &a, const T2 &b)
 template<typename T1, typename T2, typename... Args>
 inline bool multiequal (const T1 &a, const T2 &b, Args... args)
   { return (a==b) && multiequal (a, args...); }
+
+template<typename T> class tree_adder
+  {
+  private:
+    std::vector<T> state;
+    size_t n;
+
+  public:
+    tree_adder(): state(1,T(0)), n(0) {}
+
+    void add (const T &val)
+      {
+      state[0]+=val; ++n;
+      if (n>(size_t(1)<<(state.size()-1)))
+        state.push_back(T(0));
+      int shift=0;
+      while (((n>>shift)&1)==0)
+        {
+        state[shift+1]+=state[shift];
+        state[shift]=T(0);
+        ++shift;
+        }
+      }
+    T result() const
+      {
+      T sum(0);
+      for (size_t i=0; i<state.size(); ++i)
+        sum+=state[i];
+      return sum;
+      }
+  };
 
 /*! Returns \a atan2(y,x) if \a x!=0 or \a y!=0; else returns 0. */
 inline double safe_atan2 (double y, double x)

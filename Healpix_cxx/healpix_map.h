@@ -240,15 +240,15 @@ template<typename T> class Healpix_Map: public Healpix_Base
       }
 
     /*! Returns the average of all defined map pixels. */
-//     double average() const
-//       {
-//       kahan_adder<double> adder;
-//       int pix=0;
-//       for (int m=0; m<npix_; ++m)
-//         if (!approx<double>(map[m],Healpix_undef))
-//           { ++pix; adder.add(map[m]); }
-//       return (pix>0) ? adder.result()/pix : Healpix_undef;
-//       }
+    double average() const
+      {
+      tree_adder<double> adder;
+      int pix=0;
+      for (int m=0; m<npix_; ++m)
+        if (!approx<double>(map[m],Healpix_undef))
+          { ++pix; adder.add(map[m]); }
+      return (pix>0) ? adder.result()/pix : Healpix_undef;
+      }
 
     /*! Adds \a val to all defined map pixels. */
     void Add (T val)

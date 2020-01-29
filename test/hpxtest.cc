@@ -1020,81 +1020,81 @@ template<typename I>void check_query_polygon()
     }
   }
 
-// void helper_oop (int order)
-//   {
-//   Healpix_Map<double> map (order,RING), map2 (order,NEST), map3 (order,RING);
-//   for (int m=0; m<map.Npix(); ++m) map[m] = rng.rand_uni()+0.01;
-//   map2.Import(map);
-//   map3.Import(map2);
-//   for (int m=0; m<map.Npix(); ++m)
-//     if (!approx(map[m],map3[m],1e-12))
-//       FAIL(cout << "PROBLEM: order = " << order << endl)
-//   }
-// void helper_udgrade (int order, Ordering_Scheme s1,
-//   Ordering_Scheme s2)
-//   {
-//   Healpix_Map<double> map (order,s1), map2 (order+2,s2), map3 (order, s1);
-//   for (int m=0; m<map.Npix(); ++m) map[m] = rng.rand_uni()+0.01;
-//   map2.Import(map);
-//   map3.Import(map2);
-//   for (int m=0; m<map.Npix(); ++m)
-//     if (!approx(map[m],map3[m],1e-12))
-//       FAIL(cout << "PROBLEM: order = " << order << endl)
-//   }
-// void helper_udgrade2 (int nside)
-//   {
-//   Healpix_Map<double> map (nside,RING,SET_NSIDE), map2 (nside*3,RING,SET_NSIDE),
-//     map3 (nside, RING,SET_NSIDE);
-//   for (int m=0; m<map.Npix(); ++m) map[m] = rng.rand_uni()+0.01;
-//   map2.Import(map);
-//   map3.Import(map2);
-//   for (int m=0; m<map.Npix(); ++m)
-//     if (!approx(map[m],map3[m],1e-12))
-//       FAIL(cout << "PROBLEM: nside = " << nside << endl)
-//   }
-//
-// void check_import()
-//   {
-//   cout << "testing out-of-place swapping" << endl;
-//   for (int order=0; order<=7; ++order)
-//     helper_oop(order);
-//   cout << "testing downgrade(upgrade(map)) == map" << endl;
-//   for (int order=0; order<=7; ++order)
-//     {
-//     helper_udgrade(order,RING,RING);
-//     helper_udgrade(order,RING,NEST);
-//     helper_udgrade(order,NEST,NEST);
-//     helper_udgrade(order,NEST,RING);
-//     }
-//   for (int nside=3; nside<500; nside+=nside/2+1)
-//     helper_udgrade2(nside);
-//   }
-//
-// void check_average()
-//   {
-//   cout << "testing whether average(map) == average(downgraded map)" << endl;
-//   for (int order=1; order<=10; ++order)
-//     {
-//     Healpix_Map<double> map (order,RING), map2(1,RING);
-//     for (int m=0; m<map.Npix(); ++m)
-//       map[m] = rng.rand_uni()+0.01;
-//     map2.Import(map);
-//     double avg=map.average(), avg2=map2.average();
-//     if (!approx(avg,avg2,1e-13))
-//       FAIL(cout << "PROBLEM: order = " << order << " " << avg/avg2-1 << endl)
-//     }
-//   for (int nside=3; nside<1000; nside += nside/2+1)
-//     {
-//     Healpix_Map<double> map (nside,RING,SET_NSIDE), map2(1,RING,SET_NSIDE);
-//     for (int m=0; m<map.Npix(); ++m)
-//       map[m] = rng.rand_uni()+0.01;
-//     map2.Import(map);
-//     double avg=map.average(), avg2=map2.average();
-//     if (!approx(avg,avg2,1e-13))
-//       FAIL(cout << "PROBLEM: nside = " << nside << " " << avg/avg2-1 << endl)
-//     }
-//   }
-//
+void helper_oop (int order)
+  {
+  Healpix_Map<double> map (order,RING), map2 (order,NEST), map3 (order,RING);
+  for (int m=0; m<map.Npix(); ++m) map[m] = frand()+0.01;
+  map2.Import(map);
+  map3.Import(map2);
+  for (int m=0; m<map.Npix(); ++m)
+    if (!approx(map[m],map3[m],1e-12))
+      FAIL(cout << "PROBLEM: order = " << order << endl)
+  }
+void helper_udgrade (int order, Ordering_Scheme s1,
+  Ordering_Scheme s2)
+  {
+  Healpix_Map<double> map (order,s1), map2 (order+2,s2), map3 (order, s1);
+  for (int m=0; m<map.Npix(); ++m) map[m] = frand()+0.01;
+  map2.Import(map);
+  map3.Import(map2);
+  for (int m=0; m<map.Npix(); ++m)
+    if (!approx(map[m],map3[m],1e-12))
+      FAIL(cout << "PROBLEM: order = " << order << endl)
+  }
+void helper_udgrade2 (int nside)
+  {
+  Healpix_Map<double> map (nside,RING,SET_NSIDE), map2 (nside*3,RING,SET_NSIDE),
+    map3 (nside, RING,SET_NSIDE);
+  for (int m=0; m<map.Npix(); ++m) map[m] = frand()+0.01;
+  map2.Import(map);
+  map3.Import(map2);
+  for (int m=0; m<map.Npix(); ++m)
+    if (!approx(map[m],map3[m],1e-12))
+      FAIL(cout << "PROBLEM: nside = " << nside << endl)
+  }
+
+void check_import()
+  {
+  cout << "testing out-of-place swapping" << endl;
+  for (int order=0; order<=7; ++order)
+    helper_oop(order);
+  cout << "testing downgrade(upgrade(map)) == map" << endl;
+  for (int order=0; order<=7; ++order)
+    {
+    helper_udgrade(order,RING,RING);
+    helper_udgrade(order,RING,NEST);
+    helper_udgrade(order,NEST,NEST);
+    helper_udgrade(order,NEST,RING);
+    }
+  for (int nside=3; nside<500; nside+=nside/2+1)
+    helper_udgrade2(nside);
+  }
+
+void check_average()
+  {
+  cout << "testing whether average(map) == average(downgraded map)" << endl;
+  for (int order=1; order<=10; ++order)
+    {
+    Healpix_Map<double> map (order,RING), map2(1,RING);
+    for (int m=0; m<map.Npix(); ++m)
+      map[m] = frand()+0.01;
+    map2.Import(map);
+    double avg=map.average(), avg2=map2.average();
+    if (!approx(avg,avg2,1e-13))
+      FAIL(cout << "PROBLEM: order = " << order << " " << avg/avg2-1 << endl)
+    }
+  for (int nside=3; nside<1000; nside += nside/2+1)
+    {
+    Healpix_Map<double> map (nside,RING,SET_NSIDE), map2(1,RING,SET_NSIDE);
+    for (int m=0; m<map.Npix(); ++m)
+      map[m] = frand()+0.01;
+    map2.Import(map);
+    double avg=map.average(), avg2=map2.average();
+    if (!approx(avg,avg2,1e-13))
+      FAIL(cout << "PROBLEM: nside = " << nside << " " << avg/avg2-1 << endl)
+    }
+  }
+
 // void random_alm (Alm<xcomplex<double> >&almT, Alm<xcomplex<double> >&almG,
 //   Alm<xcomplex<double> >&almC, int lmax, int mmax)
 //   {
@@ -1608,8 +1608,8 @@ int main(int argc, const char **argv)
 //   check_rot_alm();
 //   check_alm2map2alm(620,620,256);
 //   check_alm2map2alm(620,2,256);
-//   check_average();
-//   check_import();
+  check_average();
+  check_import();
   check_ringnestring<int>();
   check_ringnestring<int64_t>();
   check_nestpeanonest<int>();
