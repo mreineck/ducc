@@ -38,7 +38,9 @@ libmrutil_la_SOURCES = \
   Healpix_cxx/healpix_tables.h \
   Healpix_cxx/healpix_tables.cc \
   Healpix_cxx/healpix_base.h \
-  Healpix_cxx/healpix_base.cc
+  Healpix_cxx/healpix_base.cc \
+  Healpix_cxx/healpix_map.h \
+  Healpix_cxx/healpix_map.cc
 
 # format is "current:revision:age"
 # any change: increase revision
@@ -77,11 +79,13 @@ nobase_include_HEADERS = \
 
 EXTRA_DIST = test/test_libsharp.sh test/test_space_filling.sh
 
-check_PROGRAMS = sharp2_testsuite space_filling_test
+check_PROGRAMS = sharp2_testsuite space_filling_test hpxtest
 sharp2_testsuite_SOURCES = test/sharp2_testsuite.cc
 sharp2_testsuite_LDADD = libmrutil.la
 space_filling_test_SOURCES = test/space_filling_test.cc
 space_filling_test_LDADD = libmrutil.la
+hpxtest_SOURCES = test/hpxtest.cc
+hpxtest_LDADD = libmrutil.la
 
 TESTS = test/test_libsharp.sh test/test_space_filling.sh
 

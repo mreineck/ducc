@@ -86,7 +86,8 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
 
     I nest_peano_helper (I pix, int dir) const;
 
-    using swapfunc = I(I) const;
+    typedef I (T_Healpix_Base::*swapfunc)(I pix) const;
+//    using swapfunc = I(I) const;
 
   public:
     enum {order_max=Orderhelper__<I>::omax};
