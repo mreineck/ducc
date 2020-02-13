@@ -311,8 +311,7 @@ static void check_sign_scale(void)
   /* use mirrored indices to emulate the "old" Gaussian grid geometry */
   /* original indices were 0, npix/2 and npix-1 */
   size_t i0=npix-ppring, i1=npix/2, i2=ppring-1;
-  sharp_execute(SHARP_ALM2MAP,0,alm1,map1,*tinfo,*alms,0,
-    nullptr,nullptr);
+  sharp_alm2map(&balm[0],&bmap[0],*tinfo,*alms,0,nullptr,nullptr);
   MR_assert(approx(map1[0][i0], 3.588246976618616912e+00,1e-12),
     "error");
   MR_assert(approx(map1[0][i1], 4.042209792157496651e+01,1e-12),
@@ -320,7 +319,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map1[0][i2],-1.234675107554816442e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,1,alm2,map2,*tinfo,*alms,0,
+  sharp_alm2map_spin(1, &balm[0], &balm[nalms], &bmap[0], &bmap[npix],*tinfo,*alms,0,
     nullptr,nullptr);
   MR_assert(approx(map2[0][i0], 2.750897760535633285e+00,1e-12),
     "error");
@@ -335,7 +334,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map2[1][i2],-1.412765834230440021e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP,2,alm2,map2,*tinfo,*alms,0,
+  sharp_alm2map_spin(2,&balm[0], &balm[nalms],&bmap[0], &bmap[npix],*tinfo,*alms,0,
     nullptr,nullptr);
   MR_assert(approx(map2[0][i0],-1.398186224727334448e+00,1e-12),
     "error");
@@ -350,7 +349,7 @@ static void check_sign_scale(void)
   MR_assert(approx(map2[1][i2],-1.863257892248353897e+01,1e-12),
     "error");
 
-  sharp_execute(SHARP_ALM2MAP_DERIV1,1,alm1,map2,*tinfo,*alms,
+  sharp_execute(SHARP_ALM2MAP_DERIV1,1,{&balm[0]},{&bmap[0], &bmap[npix]},*tinfo,*alms,
     0,nullptr,nullptr);
   MR_assert(approx(map2[0][i0],-6.859393905369091105e-01,1e-11),
     "error");
@@ -395,8 +394,7 @@ static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   if (op_a2m!=nullptr) *op_a2m=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-    vector<dcmplx *> av;
-    vector<double *> mv;
+    vector<any> av, mv;
     for (size_t i=0; i<ncomp; ++i)
       {
       av.push_back(alm[itrans*ncomp+i]);
@@ -411,8 +409,7 @@ static void do_sht (sharp_geom_info &ginfo, sharp_standard_alm_info &ainfo,
   if (op_m2a!=nullptr) *op_m2a=0;
   for (size_t itrans=0; itrans<ntrans; ++itrans)
     {
-    vector<dcmplx *> av;
-    vector<double *> mv;
+    vector<any> av, mv;
     for (size_t i=0; i<ncomp; ++i)
       {
       av.push_back(alm[itrans*ncomp+i]);

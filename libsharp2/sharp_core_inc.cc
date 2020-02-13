@@ -332,7 +332,7 @@ MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map (sharp_protojob & MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
   {
   size_t l,il=0,lmax=gen.lmax;
@@ -426,7 +426,7 @@ MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm (sharp_protojob & MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
   {
   size_t l,il=0,lmax=gen.lmax;
@@ -605,7 +605,7 @@ MRUTIL_NOINLINE static void alm2map_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_protojob & MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
@@ -739,7 +739,7 @@ MRUTIL_NOINLINE static void map2alm_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_protojob & MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
@@ -860,7 +860,7 @@ MRUTIL_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_protojob & MRUTIL_RESTRICT job,
+MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job & MRUTIL_RESTRICT job,
   const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
@@ -941,7 +941,7 @@ MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_protojob & MRUTIL_RESTRICT
 
 #define VZERO(var) do { memset(&(var),0,sizeof(var)); } while(0)
 
-MRUTIL_NOINLINE static void inner_loop_a2m(sharp_protojob &job, const vector<bool> & ispair,
+MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & ispair,
   const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
@@ -1095,7 +1095,7 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_protojob &job, const vector<boo
     }
   }
 
-MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const vector<bool> &ispair,
+MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &ispair,
   const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
@@ -1215,7 +1215,7 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_protojob &job, const vector<boo
     }
   }
 
-void XARCH(inner_loop) (sharp_protojob &job, const vector<bool> &ispair,
+void XARCH(inner_loop) (sharp_job &job, const vector<bool> &ispair,
   const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {

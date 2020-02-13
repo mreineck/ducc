@@ -101,33 +101,8 @@ enum sharp_jobflags {
                SHARP_USE_WEIGHTS     = 1<<20,    /* internal use only */
              };
 
-/*! Performs a libsharp2 SHT job. The interface deliberately does not use
-  the C99 "complex" data type, in order to be callable from C89 and C++.
-  \param type the type of SHT
-  \param spin the spin of the quantities to be transformed
-  \param alm contains pointers to the a_lm coefficients. If \a spin==0,
-    alm[0] points to the a_lm of the SHT. If \a spin>0, alm[0] and alm[1]
-    point to the two a_lm sets of the SHT. The exact data type of \a alm
-    depends on whether the SHARP_DP flag is set.
-  \param map contains pointers to the maps. If \a spin==0,
-    map[0] points to the map of the SHT. If \a spin>0, or \a type is
-    SHARP_ALM2MAP_DERIV1, map[0] and map[1] point to the two maps of the SHT.
-    The exact data type of \a map depends on whether the SHARP_DP flag is set.
-  \param geom_info A \c sharp_geom_info object compatible with the provided
-    \a map arrays.
-  \param alm_info A \c sharp_alm_info object compatible with the provided
-    \a alm arrays. All \c m values from 0 to some \c mmax<=lmax must be present
-    exactly once.
-  \param flags See sharp_jobflags. In particular, if SHARP_DP is set, then
-    \a alm is expected to have the type "complex double **" and \a map is
-    expected to have the type "double **"; otherwise, the expected
-    types are "complex float **" and "float **", respectively.
-  \param time If not nullptr, the wall clock time required for this SHT
-    (in seconds) will be written here.
-  \param opcnt If not nullptr, a conservative estimate of the total floating point
-    operation count for this SHT will be written here. */
-template<typename T> void sharp_execute (sharp_jobtype type, size_t spin, const std::vector<std::complex<T> *> &alm,
-  const std::vector<T *> &map,
+void sharp_execute (sharp_jobtype type, size_t spin, const std::vector<std::any> &alm,
+  const std::vector<std::any> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   size_t flags, double *time, unsigned long long *opcnt);
 
@@ -135,45 +110,25 @@ template<typename T> void sharp_alm2map(const std::complex<T> *alm, T *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   size_t flags, double *time, unsigned long long *opcnt)
   {
-  std::vector<std::complex<T> *> va;
-  va.push_back(const_cast<std::complex<T> *>(alm));
-  std::vector<T *> vm;
-  vm.push_back(map);
-  sharp_execute(SHARP_Y, 0, va, vm, geom_info, alm_info, flags, time, opcnt);
+  sharp_execute(SHARP_Y, 0, {alm}, {map}, geom_info, alm_info, flags, time, opcnt);
   }
 template<typename T> void sharp_alm2map_spin(size_t spin, const std::complex<T> *alm1, const std::complex<T> *alm2, T *map1, T *map2,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   size_t flags, double *time, unsigned long long *opcnt)
   {
-  std::vector<std::complex<T> *> va;
-  va.push_back(const_cast<std::complex<T> *>(alm1));
-  va.push_back(const_cast<std::complex<T> *>(alm2));
-  std::vector<T *> vm;
-  vm.push_back(map1);
-  vm.push_back(map2);
-  sharp_execute(SHARP_Y, spin, va, vm, geom_info, alm_info, flags, time, opcnt);
+  sharp_execute(SHARP_Y, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, time, opcnt);
   }
 template<typename T> void sharp_map2alm(std::complex<T> *alm, const T *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   size_t flags, double *time, unsigned long long *opcnt)
   {
-  std::vector<std::complex<T> *> va;
-  va.push_back(alm);
-  std::vector<T *> vm;
-  vm.push_back(const_cast<T *>(map));
-  sharp_execute(SHARP_Yt, 0, va, vm, geom_info, alm_info, flags, time, opcnt);
+  sharp_execute(SHARP_Yt, 0, {alm}, {map}, geom_info, alm_info, flags, time, opcnt);
   }
 template<typename T> void sharp_map2alm_spin(size_t spin, std::complex<T> *alm1, std::complex<T> *alm2, const T *map1, const T *map2,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
   size_t flags, double *time, unsigned long long *opcnt)
   {
-  std::vector<std::complex<T> *> va;
-  va.push_back(alm1);
-  va.push_back(alm2);
-  std::vector<T *> vm;
-  vm.push_back(const_cast<T *>(map1));
-  vm.push_back(const_cast<T *>(map2));
-  sharp_execute(SHARP_Yt, spin, va, vm, geom_info, alm_info, flags, time, opcnt);
+  sharp_execute(SHARP_Yt, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, time, opcnt);
   }
 
 void sharp_set_chunksize_min(size_t new_chunksize_min);
