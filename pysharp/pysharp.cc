@@ -35,6 +35,8 @@
 #include "libsharp2/sharp.h"
 #include "libsharp2/sharp_geomhelpers.h"
 #include "libsharp2/sharp_almhelpers.h"
+#include "mr_util/string_utils.h"
+#include "mr_util/error_handling.h"
 
 using namespace std;
 using namespace mr;
@@ -148,29 +150,7 @@ template<typename T> class py_sharpjob
       }
   };
 
-a_d_c GL_weights(int64_t nlat, int64_t nlon)
-  {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
-  GL_Integrator integ(nlat);
-  auto wgt = integ.weights();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i]=wgt[i]*twopi/nlon;
-  return res;
-  }
-
-a_d_c GL_thetas(int64_t nlat)
-  {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
-  GL_Integrator integ(nlat);
-  auto coord = integ.coords();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i]=acos(-coord[i]);
-  return res;
-  }
-
-const char *pyHealpix_DS = R"DELIM(
+const char *pysharp_DS = R"DELIM(
 Python interface for some of the libsharp functionality
 
 Error conditions are reported by raising exceptions.
@@ -202,7 +182,4 @@ PYBIND11_MODULE(pysharp, m)
     .def("map2alm_spin", &py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
     .def("__repr__", &py_sharpjob<double>::repr)
     ;
-
-  m.def("GL_weights",&GL_weights, "nlat"_a, "nlon"_a);
-  m.def("GL_thetas",&GL_thetas, "nlat"_a);
   }

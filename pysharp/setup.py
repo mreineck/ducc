@@ -26,7 +26,7 @@ if sys.platform == 'darwin':
 elif sys.platform == 'win32':
     extra_compile_args = ['/Ox', '/EHsc']
 else:
-    extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-Wsign-conversion', '-Wconversion' ,'-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
+    extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
     python_module_link_args += ['-march=native', '-ffast-math', '-Wl,-rpath,$ORIGIN']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
@@ -34,10 +34,10 @@ else:
 def get_extension_modules():
     return [Extension('pysharp',
                       language='c++',
-                      sources=['pysharp.cc','../mr_util/threading.cc',
+                      sources=['pysharp.cc','../mr_util/threading.cc','../mr_util/string_utils.cc',
                                '../libsharp2/sharp.cc', '../libsharp2/sharp_core.cc', '../libsharp2/sharp_geomhelpers.cc',
                                '../libsharp2/sharp_almhelpers.cc','../libsharp2/sharp_ylmgen.cc'],
-                      depends=['../mr_util/fft.h', '../mr_util/mav.h', '../mr_util/threading.h',
+                      depends=['../mr_util/string_utils.h', '../mr_util/fft.h', '../mr_util/mav.h', '../mr_util/threading.h',
                                '../mr_util/aligned_array.h', '../mr_util/simd.h',
                                '../mr_util/cmplx.h', '../mr_util/unity_roots.h', '../mr_util/error_handling.h',
                                'setup.py'],
