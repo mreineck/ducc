@@ -30,11 +30,11 @@ job = pysharp.sharpjob_d()
 # m<=l<=lmax.
 # Symmetry: a_l,-m = (-1)**m*conj(a_l,m).
 # The symmetry implies that all coefficients with m==0 are purely real-valued.
+# The a_lm are stored in a 1D complex-valued array, in the following order:
+# a_(0,0), a(1,0), ..., a_(lmax,0), a(1,1), a(2,1), ... a(lmax,1), ..., a(lmax, mmax)
 
 # number of required a_lm coefficients
 nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
-# number of real-valued random numbers to draw
-nalm_r = nalm*2-lmax-1
 # get random a_lm
 alm = np.random.uniform(-1., 1., nalm) + 1j*np.random.uniform(-1., 1., nalm)
 # make a_lm with m==0 real-valued
