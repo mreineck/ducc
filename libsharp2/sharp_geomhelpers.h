@@ -21,7 +21,7 @@
 /*! \file sharp_geomhelpers.h
  *  SHARP helper function for the creation of grid geometries
  *
- *  Copyright (C) 2006-2019 Max-Planck-Society
+ *  Copyright (C) 2006-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -165,6 +165,20 @@ std::unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t 
     \note This grid corresponds to Fejer's second rule.
     \ingroup geominfogroup */
 std::unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
+
+/*! Creates a geometry information describing a Driscoll-Healy map with \a nrings
+    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
+    pixel in each ring is \a phi0 (in radians). The index difference between
+    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
+    difference between the two start pixels in consecutive iso-latitude rings
+    is \a stride_lat.
+    \note The spacing of pixel centers is equidistant in colatitude and
+      longitude.
+    \note The sphere is pixelized in a way that the colatitude of the first ring
+      is 0 and that of the last ring is \a pi-pi/nrings.
+    \ingroup geominfogroup */
+std::unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat);
 
 /*! Creates a geometry information describing a map with \a nrings

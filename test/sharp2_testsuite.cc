@@ -241,6 +241,14 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     if (verbose)
       cout << "Fejer2 grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
     }
+  else if (gname=="dh")
+    {
+    if (gpar1<1) gpar1=2*lmax+2;
+    if (gpar2<1) gpar2=2*mmax+1;
+    ginfo=sharp_make_dh_geom_info (gpar1, gpar2, 0., 1, gpar2);
+    if (verbose)
+      cout << "Driscoll-Healy grid, nlat=" << gpar1 << ", nlon=" << gpar2 << endl;
+    }
   else if (gname=="cc")
     {
     if (gpar1<1) gpar1=2*lmax+1;

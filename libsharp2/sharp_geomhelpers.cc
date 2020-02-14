@@ -21,7 +21,7 @@
 /*! \file sharp_geomhelpers.c
  *  Spherical transform library
  *
- *  Copyright (C) 2006-2019 Max-Planck-Society
+ *  Copyright (C) 2006-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -200,8 +200,8 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<size_t> nph(nrings);
-  vector<double> phi0_(nrings);
+  vector<size_t> nph(nrings, nphi);
+  vector<double> phi0_(nrings, phi0);
   vector<ptrdiff_t> ofs(nrings);
 
   mr::GL_Integrator integ(nrings);
@@ -210,8 +210,6 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
   for (size_t m=0; m<nrings; ++m)
     {
     theta[m] = acos(-theta[m]);
-    nph[m]=nphi;
-    phi0_[m]=phi0;
     ofs[m]=ptrdiff_t(m)*stride_lat;
     weight[m]*=2*pi/nphi;
     }
@@ -225,8 +223,8 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<double> theta(nrings), weight(nrings), phi0_(nrings);
-  vector<size_t> nph(nrings);
+  vector<double> theta(nrings), weight(nrings), phi0_(nrings, phi0);
+  vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
 
   weight[0]=2.;
@@ -243,8 +241,6 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
     {
     theta[m]=pi*(m+0.5)/nrings;
     theta[nrings-1-m]=pi-theta[m];
-    nph[m]=nph[nrings-1-m]=ppring;
-    phi0_[m]=phi0_[nrings-1-m]=phi0;
     ofs[m]=ptrdiff_t(m)*stride_lat;
     ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
@@ -259,8 +255,8 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings);
-  vector<size_t> nph(nrings);
+  vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings, phi0);
+  vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
 
   size_t n=nrings-1;
@@ -278,8 +274,6 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
     theta[m]=pi*m/(nrings-1.);
     if (theta[m]<1e-15) theta[m]=1e-15;
     theta[nrings-1-m]=pi-theta[m];
-    nph[m]=nph[nrings-1-m]=ppring;
-    phi0_[m]=phi0_[nrings-1-m]=phi0;
     ofs[m]=ptrdiff_t(m)*stride_lat;
     ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
     weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
@@ -288,23 +282,29 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
   }
 
+static vector<double> get_dh_weights(size_t nrings)
+  {
+  vector<double> weight(nrings);
+
+  weight[0]=2.;
+  for (size_t k=1; k<=(nrings/2-1); ++k)
+    weight[2*k-1]=2./(1.-4.*k*k);
+  weight[2*(nrings/2)-1]=(nrings-3.)/(2*(nrings/2)-1) -1.;
+  auto tmp = fmav(weight.data(),{nrings});
+  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
+  return weight;
+  }
+
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
 unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<double> theta(nrings), weight(nrings+1, 0.), phi0_(nrings);
-  vector<size_t> nph(nrings);
+  vector<double> theta(nrings), weight(get_dh_weights(nrings+1)), phi0_(nrings, phi0);
+  vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
 
-  size_t n=nrings+1;
-  weight[0]=2.;
-  for (size_t k=1; k<=(n/2-1); ++k)
-    weight[2*k-1]=2./(1.-4.*k*k);
-  weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1.;
-  auto tmp = fmav(weight.data(),{n});
-  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
   for (size_t m=0; m<nrings; ++m)
     weight[m]=weight[m+1];
 
@@ -312,11 +312,28 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t p
     {
     theta[m]=pi*(m+1)/(nrings+1.);
     theta[nrings-1-m]=pi-theta[m];
-    nph[m]=nph[nrings-1-m]=ppring;
-    phi0_[m]=phi0_[nrings-1-m]=phi0;
     ofs[m]=ptrdiff_t(m)*stride_lat;
     ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
-    weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
+    weight[m]=weight[nrings-1-m]=weight[m]*2*pi/((nrings+1)*nph[m]);
+    }
+
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
+  }
+
+unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
+  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
+  {
+  const double pi=3.141592653589793238462643383279502884197;
+
+  vector<double> theta(nrings), weight(get_dh_weights(nrings)), phi0_(nrings, phi0);
+  vector<size_t> nph(nrings, ppring);
+  vector<ptrdiff_t> ofs(nrings);
+
+  for (size_t m=0; m<nrings; ++m)
+    {
+    theta[m] = m*pi/nrings;
+    ofs[m] = ptrdiff_t(m)*stride_lat;
+    weight[m]*=2*pi/(nrings*ppring);
     }
 
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
@@ -327,16 +344,14 @@ unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t pprin
   {
   const double pi=3.141592653589793238462643383279502884197;
 
-  vector<double> theta(nrings), phi0_(nrings);
-  vector<size_t> nph(nrings);
+  vector<double> theta(nrings), phi0_(nrings, phi0);
+  vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
 
   for (size_t m=0; m<nrings; ++m)
     {
     theta[m]=pi*(2.*m+1.)/(2.*nrings-1.);
     if (theta[m]>pi-1e-15) theta[m]=pi-1e-15;
-    nph[m]=ppring;
-    phi0_[m]=phi0;
     ofs[m]=ptrdiff_t(m)*stride_lat;
     }
 
