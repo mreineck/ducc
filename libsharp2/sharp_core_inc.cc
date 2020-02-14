@@ -52,7 +52,7 @@ using namespace std;
 using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
-#if (defined(__AVX__) && (!defined(__AVX512F__)))
+#if ((!defined(MRUTIL_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * MRUTIL_RESTRICT cc)
   {

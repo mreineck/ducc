@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_SIMD_H
@@ -41,10 +41,11 @@
 #endif
 #endif
 
-#ifndef MRUTIL_NO_SIMD
 #include <cstdlib>
 #include <cmath>
+#ifndef MRUTIL_NO_SIMD
 #include <x86intrin.h>
+#endif
 
 namespace mr {
 
@@ -227,6 +228,8 @@ template<typename T> class helper_<T,1>
     static size_t maskbits(Tm v) { return v; }
   };
 
+#ifndef MRUTIL_NO_SIMD
+
 #if defined(__AVX512F__)
 template<> class helper_<double,8>
   {
@@ -379,7 +382,11 @@ template<typename T> using native_simd = vtp<T,16/sizeof(T)>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
+#else
+template<typename T> using native_simd = vtp<T,1>;
+#endif
 }
+
 using detail_simd::native_simd;
 using detail_simd::reduce;
 using detail_simd::max;
@@ -389,7 +396,5 @@ using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
 }
-
-#endif
 
 #endif
