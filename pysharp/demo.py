@@ -29,7 +29,7 @@ job = pysharp.sharpjob_d()
 # coefficients are termed a_lm; they are complex numbers with 0<=m<=lmax and
 # m<=l<=lmax.
 # Symmetry: a_l,-m = (-1)**m*conj(a_l,m).
-# The symmetry implies that all coefficients with m=0 are purely real-valued.
+# The symmetry implies that all coefficients with m==0 are purely real-valued.
 
 # number of required a_lm coefficients
 nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
