@@ -84,6 +84,13 @@ template<typename T> class py_sharpjob
       npix_=nrings*nphi;
       ginfo = sharp_make_ecp_geom_info (nrings, nphi, 0., 1, nphi);
       }
+    void set_DH_geometry(int64_t nrings, int64_t nphi)
+      {
+      MR_assert(nrings>1,"bad nrings value");
+      MR_assert(nphi>0,"bad nphi value");
+      npix_=nrings*nphi;
+      ginfo = sharp_make_dh_geom_info (nrings, nphi, 0., 1, nphi);
+      }
     void set_triangular_alm_info (int64_t lmax, int64_t mmax)
       {
       MR_assert(mmax>=0,"negative mmax");
@@ -171,6 +178,8 @@ PYBIND11_MODULE(pysharp, m)
     .def("set_Healpix_geometry", &py_sharpjob<double>::set_Healpix_geometry,
       "nside"_a)
     .def("set_ECP_geometry", &py_sharpjob<double>::set_ECP_geometry,
+      "nrings"_a, "nphi"_a)
+    .def("set_DH_geometry", &py_sharpjob<double>::set_ECP_geometry,
       "nrings"_a, "nphi"_a)
     .def("set_triangular_alm_info",
       &py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)

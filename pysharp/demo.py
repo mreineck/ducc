@@ -14,9 +14,6 @@ lmax = 2047
 # maximum m. For SHTOOLS this is alway equal to lmax, if I understand correctly.
 mmax = lmax
 
-# Number of iso-latitude rings required for Gauss-Legendre grid
-nlat = lmax+1
-
 # Number of pixels per ring. Must be >=2*lmax+1, but I'm choosing a larger
 # number for which the FFT is faster.
 nlon = 4096
@@ -43,8 +40,41 @@ alm[0:lmax+1].imag = 0.
 # describe the a_lm array to the job
 job.set_triangular_alm_info(lmax, mmax)
 
+
+print("testing Gauss-Legendre grid")
+
+# Number of iso-latitude rings required for Gauss-Legendre grid
+nlat = lmax+1
+
 # describe the Gauss-Legendre geometry to the job
 job.set_Gauss_geometry(nlat, nlon)
+
+# go from a_lm to map
+t0=time()
+map = job.alm2map(alm)
+print("time for map synthesis: {}s".format(time()-t0))
+
+# map is a 1D real-valued array with (nlat*nlon) entries. It can be reshaped
+# to (nlat, nlon) for plotting.
+# Libsharp woks on "1D" maps because it apso supports pixelizations that varying
+# number of pixels on each iso-latitude ring, which cannot be represented by 2D
+# arrays (e.g. Healpix)
+
+t0=time()
+alm2 = job.map2alm(map)
+print("time for map analysis: {}s".format(time()-t0))
+
+# make sure input was recovered accurately
+assert_allclose(alm, alm2)
+
+
+print("testing Driscoll-Healy grid")
+
+# Number of iso-latitude rings required for Gauss-Legendre grid
+nlat = 2*lmax
+
+# describe the Gauss-Legendre geometry to the job
+job.set_DH_geometry(nlat, nlon)
 
 # go from a_lm to map
 t0=time()
