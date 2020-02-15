@@ -380,7 +380,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
   const auto n = static_cast<size_t>(n_);
   using namespace mr::detail_fft;
   return PyLong_FromSize_t(
-    real ? util::good_size_real(n) : util::good_size_cmplx(n));
+    real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
 
 const char *pypocketfft_DS = R"""(Fast Fourier and Hartley transforms.

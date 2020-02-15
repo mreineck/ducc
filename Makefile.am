@@ -20,6 +20,7 @@ libmrutil_la_SOURCES = \
   mr_util/error_handling.h \
   mr_util/space_filling.cc \
   mr_util/space_filling.h \
+  mr_util/fft1d.h \
   mr_util/fft.h \
   mr_util/gl_integrator.h \
   mr_util/mav.h \

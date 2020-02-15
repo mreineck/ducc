@@ -29,7 +29,7 @@
 #include <atomic>
 #include <memory>
 #include "mr_util/math_utils.h"
-#include "mr_util/fft.h"
+#include "mr_util/fft1d.h"
 #include "libsharp2/sharp_internal.h"
 #include "libsharp2/sharp_almhelpers.h"
 #include "libsharp2/sharp_geomhelpers.h"
@@ -80,7 +80,7 @@ struct ringhelper
   double phi0_;
   vector<dcmplx> shiftarr;
   size_t s_shift;
-  unique_ptr<mr::detail_fft::rfftp<double>> plan;
+  unique_ptr<pocketfft_r<double>> plan;
   size_t length;
   bool norot;
   ringhelper() : length(0) {}
@@ -101,7 +101,7 @@ struct ringhelper
       }
     if (nph!=length)
       {
-      plan.reset(new mr::detail_fft::rfftp<double>(nph));
+      plan.reset(new pocketfft_r<double>(nph));
       length=nph;
       }
     }

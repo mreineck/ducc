@@ -29,7 +29,7 @@
 #include <vector>
 #include "libsharp2/sharp_geomhelpers.h"
 #include "mr_util/gl_integrator.h"
-#include "mr_util/fft.h"
+#include "mr_util/fft1d.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/math_utils.h"
 
@@ -234,8 +234,10 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
     weight[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
     }
   if ((nrings&1)==0) weight[nrings-1]=0.;
-  auto tmp = fmav(weight.data(),{nrings});
-  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
+  {
+  pocketfft_r<double> plan(nrings);
+  plan.exec(weight.data(), 1., false);
+  }
 
   for (size_t m=0; m<(nrings+1)/2; ++m)
     {
@@ -265,8 +267,10 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
   for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k) + dw;
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
-  auto tmp = fmav(weight.data(),{n});
-  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
+  {
+  pocketfft_r<double> plan(n);
+  plan.exec(weight.data(), 1., false);
+  }
   weight[n]=weight[0];
 
   for (size_t m=0; m<(nrings+1)/2; ++m)
@@ -290,8 +294,10 @@ static vector<double> get_dh_weights(size_t nrings)
   for (size_t k=1; k<=(nrings/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k);
   weight[2*(nrings/2)-1]=(nrings-3.)/(2*(nrings/2)-1) -1.;
-  auto tmp = fmav(weight.data(),{nrings});
-  mr::r2r_fftpack(tmp, tmp, {0}, false, false, 1.);
+  {
+  pocketfft_r<double> plan(nrings);
+  plan.exec(weight.data(), 1., false);
+  }
   return weight;
   }
 

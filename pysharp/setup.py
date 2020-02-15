@@ -37,7 +37,7 @@ def get_extension_modules():
                       sources=['pysharp.cc','../mr_util/threading.cc','../mr_util/string_utils.cc',
                                '../libsharp2/sharp.cc', '../libsharp2/sharp_core.cc', '../libsharp2/sharp_geomhelpers.cc',
                                '../libsharp2/sharp_almhelpers.cc','../libsharp2/sharp_ylmgen.cc'],
-                      depends=['../mr_util/string_utils.h', '../mr_util/fft.h', '../mr_util/mav.h', '../mr_util/threading.h',
+                      depends=['../mr_util/string_utils.h', '../mr_util/fft1d.h', '../mr_util/mav.h', '../mr_util/threading.h',
                                '../mr_util/aligned_array.h', '../mr_util/simd.h',
                                '../mr_util/cmplx.h', '../mr_util/unity_roots.h', '../mr_util/error_handling.h',
                                'setup.py'],
