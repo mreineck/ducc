@@ -47,6 +47,8 @@
 #include <x86intrin.h>
 #endif
 
+#include <algorithm>
+
 namespace mr {
 
 namespace detail_simd {

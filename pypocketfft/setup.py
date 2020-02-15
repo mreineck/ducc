@@ -25,7 +25,7 @@ if sys.platform == 'darwin':
     vars['LDSHARED'] = vars['LDSHARED'].replace('-bundle', '')
 elif sys.platform == 'win32':
     define_macros = []
-    extra_compile_args = ['/Ox', '/EHsc']
+    extra_compile_args = ['/Ox', '/EHsc', '/std:c++17']
 else:
     extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-Wsign-conversion', '-Wconversion' ,'-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
     python_module_link_args += ['-march=native', '-ffast-math', '-Wl,-rpath,$ORIGIN']
