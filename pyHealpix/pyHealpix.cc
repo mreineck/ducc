@@ -23,7 +23,7 @@
  */
 
 /*
- *  Copyright (C) 2017 Max-Planck-Society
+ *  Copyright (C) 2017-2020 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -31,17 +31,12 @@
 #include <pybind11/numpy.h>
 #include <iostream>
 #include <vector>
-#include <complex>
 #include <string>
 
 #include "Healpix_cxx/healpix_base.h"
 #include "mr_util/constants.h"
 #include "mr_util/string_utils.h"
 #include "mr_util/geom_utils.h"
-#include "libsharp2/sharp.h"
-#include "libsharp2/sharp_geomhelpers.h"
-#include "libsharp2/sharp_almhelpers.h"
-#include "mr_util/gl_integrator.h"
 
 using namespace std;
 using namespace mr;
@@ -123,11 +118,8 @@ template<typename T> class Itnew_r: public Itnew
   };
 
 using a_d = py::array_t<double>;
-using a_c = py::array_t<complex<double>>;
 using a_i = py::array_t<int64_t>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
-using a_c_c = py::array_t<complex<double>,
-  py::array::c_style | py::array::forcecast>;
 
 void assert_equal_shape(const py::array &a, const py::array &b)
   {
@@ -384,130 +376,7 @@ a_d local_v_angle (const a_d &v1, const a_d &v2)
   return angle;
   }
 
-template<typename T> class py_sharpjob
-  {
-  private:
-    unique_ptr<sharp_geom_info> ginfo;
-    unique_ptr<sharp_alm_info> ainfo;
-    int64_t lmax_, mmax_, npix_;
-
-  public:
-    py_sharpjob () : lmax_(0), mmax_(0), npix_(0) {}
-
-    string repr() const
-      {
-      return "<sharpjob_d: lmax=" + dataToString(lmax_) +
-        ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
-      }
-
-    void set_Gauss_geometry(int64_t nrings, int64_t nphi)
-      {
-      MR_assert((nrings>0)&&(nphi>0),"bad grid dimensions");
-      npix_=nrings*nphi;
-      ginfo = sharp_make_gauss_geom_info (nrings, nphi, 0., 1, nphi);
-      }
-    void set_Healpix_geometry(int64_t nside)
-      {
-      MR_assert(nside>0,"bad Nside value");
-      npix_=12*nside*nside;
-      ginfo = sharp_make_healpix_geom_info (nside, 1);
-      }
-    void set_ECP_geometry(int64_t nrings, int64_t nphi)
-      {
-      MR_assert(nrings>0,"bad nrings value");
-      MR_assert(nphi>0,"bad nphi value");
-      npix_=nrings*nphi;
-      ginfo = sharp_make_ecp_geom_info (nrings, nphi, 0., 1, nphi);
-      }
-    void set_triangular_alm_info (int64_t lmax, int64_t mmax)
-      {
-      MR_assert(mmax>=0,"negative mmax");
-      MR_assert(mmax<=lmax,"mmax must not be larger than lmax");
-      lmax_=lmax; mmax_=mmax;
-      ainfo = sharp_make_triangular_alm_info(lmax,mmax,1);
-      }
-
-    int64_t n_alm() const
-      { return ((mmax_+1)*(mmax_+2))/2 + (mmax_+1)*(lmax_-mmax_); }
-
-    a_d_c alm2map (const a_c_c &alm) const
-      {
-      MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (alm.size()==n_alm(),
-        "incorrect size of a_lm array");
-      a_d_c map(npix_);
-      auto mr=map.mutable_unchecked<1>();
-      auto ar=alm.unchecked<1>();
-      sharp_alm2map(&ar[0], &mr[0], *ginfo, *ainfo, 0, nullptr, nullptr);
-      return map;
-      }
-    a_c_c alm2map_adjoint (const a_d_c &map) const
-      {
-      MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map.size()==npix_,"incorrect size of map array");
-      a_c_c alm(n_alm());
-      auto mr=map.unchecked<1>();
-      auto ar=alm.mutable_unchecked<1>();
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, 0, nullptr, nullptr);
-      return alm;
-      }
-    a_c_c map2alm (const a_d_c &map) const
-      {
-      MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map.size()==npix_,"incorrect size of map array");
-      a_c_c alm(n_alm());
-      auto mr=map.unchecked<1>();
-      auto ar=alm.mutable_unchecked<1>();
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, SHARP_USE_WEIGHTS, nullptr, nullptr);
-      return alm;
-      }
-    a_d_c alm2map_spin (const a_c_c &alm, int64_t spin) const
-      {
-      MR_assert(npix_>0,"no map geometry specified");
-      auto ar=alm.unchecked<2>();
-      MR_assert((ar.shape(0)==2)&&(ar.shape(1)==n_alm()),
-        "incorrect size of a_lm array");
-      a_d_c map(vector<size_t>{2,size_t(npix_)});
-      auto mr=map.mutable_unchecked<2>();
-      sharp_alm2map_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, 0, nullptr, nullptr);
-      return map;
-      }
-    a_c_c map2alm_spin (const a_d_c &map, int64_t spin) const
-      {
-      MR_assert(npix_>0,"no map geometry specified");
-      auto mr=map.unchecked<2>();
-      MR_assert ((mr.shape(0)==2)&&(mr.shape(1)==npix_),
-        "incorrect size of map array");
-      a_c_c alm(vector<size_t>{2,size_t(n_alm())});
-      auto ar=alm.mutable_unchecked<2>();
-      sharp_map2alm_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, SHARP_USE_WEIGHTS, nullptr, nullptr);
-      return alm;
-      }
-  };
-
-a_d_c GL_weights(int64_t nlat, int64_t nlon)
-  {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
-  GL_Integrator integ(nlat);
-  auto wgt = integ.weights();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i]=wgt[i]*twopi/nlon;
-  return res;
-  }
-
-a_d_c GL_thetas(int64_t nlat)
-  {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
-  GL_Integrator integ(nlat);
-  auto coord = integ.coords();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i]=acos(-coord[i]);
-  return res;
-  }
-
-const char *pyHealpix_DS = R"DELIM(
+const char *pyHealpix_DS = R"""(
 Python interface for some of the HEALPix C++ functionality
 
 All angles are interpreted as radians.
@@ -518,94 +387,94 @@ All 3-vectors returned by the functions are normalized.
 However, 3-vectors provided as input to the functions need not be normalized.
 
 Error conditions are reported by raising exceptions.
-)DELIM";
+)""";
 
-const char *order_DS = R"DELIM(
+const char *order_DS = R"""(
 Returns the ORDER parameter of the pixelisation.
 If Nside is a power of 2, this is log_2(Nside), otherwise it is -1.
-)DELIM";
+)""";
 
-const char *nside_DS = R"DELIM(
+const char *nside_DS = R"""(
 Returns the Nside parameter of the pixelisation.
-)DELIM";
+)""";
 
-const char *npix_DS = R"DELIM(
+const char *npix_DS = R"""(
 Returns the total number of pixels of the pixelisation.
-)DELIM";
+)""";
 
-const char *scheme_DS = R"DELIM(
+const char *scheme_DS = R"""(
 Returns a string representation of the pixelisation's ordering scheme
 ("RING" or "NEST").
-)DELIM";
+)""";
 
-const char *pix_area_DS = R"DELIM(
+const char *pix_area_DS = R"""(
 Returns the area (in steradian) of a single pixel.
-)DELIM";
+)""";
 
-const char *max_pixrad_DS = R"DELIM(
+const char *max_pixrad_DS = R"""(
 Returns the maximum angular distance (in radian) between a pixel center
 and its corners for this pixelisation.
-)DELIM";
+)""";
 
-const char *pix2ang_DS = R"DELIM(
+const char *pix2ang_DS = R"""(
 Returns a (co-latitude, longitude) tuple for each value in pix.
 The result array has the same shape as pix, with an added last dimension
 of size 2.
-)DELIM";
+)""";
 
-const char *ang2pix_DS = R"DELIM(
+const char *ang2pix_DS = R"""(
 Returns the index of the containing pixel for every (co-latitude, longitude)
 tuple in ang. ang must have a last dimension of size 2; the result array
 has the same shape as ang, except that ang's last dimension is removed.
-)DELIM";
+)""";
 
-const char *pix2vec_DS = R"DELIM(
+const char *pix2vec_DS = R"""(
 Returns a normalized 3-vector for each value in pix.
 The result array has the same shape as pix, with an added last dimension
 of size 3.
-)DELIM";
+)""";
 
-const char *vec2pix_DS = R"DELIM(
+const char *vec2pix_DS = R"""(
 Returns the index of the containing pixel for every 3-vector in vec.
 vec must have a last dimension of size 3; the result array has the same shape as
 vec, except that vec's last dimension is removed.
-)DELIM";
+)""";
 
-const char *ring2nest_DS = R"DELIM(
+const char *ring2nest_DS = R"""(
 Returns the pixel index in NEST scheme for every entry of ring.
 The result array has the same shape as ring.
-)DELIM";
+)""";
 
-const char *nest2ring_DS = R"DELIM(
+const char *nest2ring_DS = R"""(
 Returns the pixel index in RING scheme for every entry of nest.
 The result array has the same shape as nest.
-)DELIM";
+)""";
 
-const char *query_disc_DS = R"DELIM(
+const char *query_disc_DS = R"""(
 Returns a range set of all pixels whose centers fall within "radius" of "ptg".
 "ptg" must be a single (co-latitude, longitude) tuple. The result is a 2D array
 with last dimension 2; the pixels lying inside the disc are
 [res[0,0] .. res[0,1]); [res[1,0] .. res[1,1]) etc.
-)DELIM";
+)""";
 
-const char *ang2vec_DS = R"DELIM(
+const char *ang2vec_DS = R"""(
 Returns a normalized 3-vector for every (co-latitude, longitude)
 tuple in ang. ang must have a last dimension of size 2; the result array
 has the same shape as ang, except that its last dimension is 3 instead of 2.
-)DELIM";
+)""";
 
-const char *vec2ang_DS = R"DELIM(
+const char *vec2ang_DS = R"""(
 Returns a (co-latitude, longitude) tuple for every 3-vector in vec.
 vec must have a last dimension of size 3; the result array has the same shape as
 vec, except that its last dimension is 2 instead of 3.
-)DELIM";
+)""";
 
-const char *v_angle_DS = R"DELIM(
+const char *v_angle_DS = R"""(
 Returns the angles between the 3-vectors in v1 and v2. The input arrays must
 have identical shapes. The result array has the same shape as v1 or v2, except
 that their last dimension is removed.
 The employed algorithm is highly accurate, even for angles close to 0 or pi.
-)DELIM";
+)""";
 
 } // unnamed namespace
 
@@ -642,28 +511,7 @@ PYBIND11_MODULE(pyHealpix, m)
     .def("__repr__", &Pyhpbase::repr)
     ;
 
-  py::class_<py_sharpjob<double>> (m, "sharpjob_d")
-    .def(py::init<>())
-    .def("set_Gauss_geometry", &py_sharpjob<double>::set_Gauss_geometry,
-      "nrings"_a,"nphi"_a)
-    .def("set_Healpix_geometry", &py_sharpjob<double>::set_Healpix_geometry,
-      "nside"_a)
-    .def("set_ECP_geometry", &py_sharpjob<double>::set_ECP_geometry,
-      "nrings"_a, "nphi"_a)
-    .def("set_triangular_alm_info",
-      &py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)
-    .def("n_alm", &py_sharpjob<double>::n_alm)
-    .def("alm2map", &py_sharpjob<double>::alm2map,"alm"_a)
-    .def("alm2map_adjoint", &py_sharpjob<double>::alm2map_adjoint,"map"_a)
-    .def("map2alm", &py_sharpjob<double>::map2alm,"map"_a)
-    .def("alm2map_spin", &py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
-    .def("map2alm_spin", &py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
-    .def("__repr__", &py_sharpjob<double>::repr)
-    ;
-
   m.def("ang2vec",&ang2vec, ang2vec_DS, "ang"_a);
   m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a);
   m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a);
- m.def("GL_weights",&GL_weights, "nlat"_a, "nlon"_a);
- m.def("GL_thetas",&GL_thetas, "nlat"_a);
   }

@@ -157,11 +157,11 @@ template<typename T> class py_sharpjob
       }
   };
 
-const char *pysharp_DS = R"DELIM(
+const char *pysharp_DS = R"""(
 Python interface for some of the libsharp functionality
 
 Error conditions are reported by raising exceptions.
-)DELIM";
+)""";
 
 } // unnamed namespace
 
