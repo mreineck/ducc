@@ -78,10 +78,6 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   cc[1] += complex<double>(reduce(c,std::plus<>()),reduce(d,std::plus<>()));
   }
 #endif
-// In the following, we explicitly allow the compiler to contract floating
-// point operations, like multiply-and-add.
-// Unfortunately, most compilers don't act on this pragma yet.
-#pragma STDC FP_CONTRACT ON
 
 using dcmplx = complex<double>;
 

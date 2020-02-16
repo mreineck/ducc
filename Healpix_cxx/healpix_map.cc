@@ -123,7 +123,7 @@ template<typename T> Healpix_Map<T> Healpix_Map<T>::median (double rad) const
         if (!approx(map[i], T(Healpix_undef)))
           list[cnt++] = map[i];
     out[m] = (cnt>0) ? mymedian(list.begin(),list.begin()+cnt)
-                     : Healpix_undef;
+                     : T(Healpix_undef);
     }
   return out;
   }

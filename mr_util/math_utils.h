@@ -39,11 +39,11 @@
 namespace mr {
 
 /*! Returns \e true if | \a a-b | <= \a epsilon * | \a b |, else \e false. */
-template<typename F> inline bool approx (F a, F b, F epsilon=1e-5)
+template<typename F> inline bool approx (F a, F b, F epsilon=F(1e-5L))
   { return std::abs(a-b) <= (epsilon*std::abs(b)); }
 
 /*! Returns \e true if | \a a-b | <= \a epsilon, else \e false. */
-template<typename F> inline bool abs_approx (F a, F b, F epsilon=1e-5)
+template<typename F> inline bool abs_approx (F a, F b, F epsilon=F(1e-5L))
   { return std::abs(a-b) <= epsilon; }
 
 /*! Returns the largest integer which is smaller than (or equal to) \a arg. */
