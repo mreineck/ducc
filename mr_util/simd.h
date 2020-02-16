@@ -53,6 +53,22 @@ namespace mr {
 
 namespace detail_simd {
 
+template<typename T> constexpr bool vectorizable;
+template<> constexpr bool vectorizable<float> = true;
+template<> constexpr bool vectorizable<double> = true;
+template<> constexpr bool vectorizable<long double> = false;
+template<> constexpr bool vectorizable<int8_t> = true;
+template<> constexpr bool vectorizable<uint8_t> = true;
+template<> constexpr bool vectorizable<int16_t> = true;
+template<> constexpr bool vectorizable<uint16_t> = true;
+template<> constexpr bool vectorizable<int32_t> = true;
+template<> constexpr bool vectorizable<uint32_t> = true;
+template<> constexpr bool vectorizable<int64_t> = true;
+template<> constexpr bool vectorizable<uint64_t> = true;
+
+template<typename T, size_t reglen> constexpr size_t vlen
+  = vectorizable<T> ? reglen/sizeof(T) : 1;
+
 template<typename T, size_t len> class helper_;
 template<typename T, size_t len> struct vmask_
   {
@@ -276,7 +292,7 @@ template<> class helper_<float,16>
     static size_t maskbits(Tm v) { return v; }
   };
 
-template<typename T> using native_simd = vtp<T,64/sizeof(T)>;
+template<typename T> using native_simd = vtp<T,vlen<T,64>>;
 #elif defined(__AVX__)
 template<> class helper_<double,4>
   {
@@ -321,7 +337,7 @@ template<> class helper_<float,8>
     static size_t maskbits(Tm v) { return size_t(_mm256_movemask_ps(v)); }
   };
 
-template<typename T> using native_simd = vtp<T,32/sizeof(T)>;
+template<typename T> using native_simd = vtp<T,vlen<T,32>>;
 #elif defined(__SSE2__)
 template<> class helper_<double,2>
   {
@@ -380,7 +396,7 @@ template<> class helper_<float,4>
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_ps(v)); }
   };
 
-template<typename T> using native_simd = vtp<T,16/sizeof(T)>;
+template<typename T> using native_simd = vtp<T,vlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif

@@ -1,7 +1,7 @@
 /*
 This file is part of pocketfft.
 
-Copyright (C) 2010-2019 Max-Planck-Society
+Copyright (C) 2010-2020 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
@@ -69,44 +69,8 @@ namespace detail_fft {
 constexpr bool FORWARD  = true,
                BACKWARD = false;
 
-// only enable vector support for gcc>=5.0 and clang>=5.0
-#ifndef POCKETFFT_NO_VECTORS
-#define POCKETFFT_NO_VECTORS
-#if defined(__INTEL_COMPILER)
-// do nothing. This is necessary because this compiler also sets __GNUC__.
-#elif defined(__clang__)
-// AppleClang has their own version numbering
-#ifdef __apple_build_version__
-#  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 1)
-#     undef POCKETFFT_NO_VECTORS
-#  endif
-#elif __clang_major__ >= 5
-#  undef POCKETFFT_NO_VECTORS
-#endif
-#elif defined(__GNUC__)
-#if __GNUC__>=5
-#undef POCKETFFT_NO_VECTORS
-#endif
-#endif
-#endif
-
-template<typename T> struct VLEN { static constexpr size_t val=1; };
-
-#ifndef MRUTIL_NO_VECTORS
-template<> struct VLEN<float> { static constexpr size_t val=native_simd<float>::size(); };
-template<> struct VLEN<double> { static constexpr size_t val=native_simd<double>::size(); };
-#endif
-
 struct util // hack to avoid duplicate symbols
   {
-  static size_t prod(const shape_t &shape)
-    {
-    size_t res=1;
-    for (auto sz: shape)
-      res*=sz;
-    return res;
-    }
-
   static void sanity_check_axes(size_t ndim, const shape_t &axes)
     {
     shape_t tmp(ndim,0);
@@ -145,20 +109,19 @@ struct util // hack to avoid duplicate symbols
     }
 
 #ifdef MRUTIL_NO_THREADING
-  static size_t thread_count (size_t /*nthreads*/, const shape_t &/*shape*/,
+  static size_t thread_count (size_t /*nthreads*/, const fmav_info &/*info*/,
     size_t /*axis*/, size_t /*vlen*/)
     { return 1; }
 #else
-  static size_t thread_count (size_t nthreads, const shape_t &shape,
+  static size_t thread_count (size_t nthreads, const fmav_info &info,
     size_t axis, size_t vlen)
     {
     if (nthreads==1) return 1;
-    size_t size = prod(shape);
-    size_t parallel = size / (shape[axis] * vlen);
-    if (shape[axis] < 1000)
+    size_t size = info.size();
+    size_t parallel = size / (info.shape(axis) * vlen);
+    if (info.shape(axis) < 1000)
       parallel /= 4;
-    size_t max_threads = nthreads == 0 ?
-      mr::max_threads() : nthreads;
+    size_t max_threads = (nthreads==0) ? mr::max_threads() : nthreads;
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
@@ -633,48 +596,32 @@ class rev_iter
     size_t remaining() const { return rem; }
   };
 
-template<typename T> struct VTYPE {};
-template <typename T> using vtype_t = typename VTYPE<T>::type;
-
-#ifndef POCKETFFT_NO_VECTORS
-template<> struct VTYPE<float>
+template<typename T, typename T0> aligned_array<T> alloc_tmp
+  (const fmav_info &info, size_t axsize)
   {
-  using type = native_simd<float>;
-  };
-template<> struct VTYPE<double>
-  {
-  using type = native_simd<double>;
-  };
-template<> struct VTYPE<long double>
-  {
-  using type = detail_simd::vtp<long double, 1>;
-  };
-#endif
-
-template<typename T, typename T0> aligned_array<T> alloc_tmp(const shape_t &shape,
-  size_t axsize)
-  {
-  auto othersize = util::prod(shape)/axsize;
-  auto tmpsize = axsize*((othersize>=VLEN<T0>::val) ? VLEN<T0>::val : 1);
+  auto othersize = info.size()/axsize;
+  constexpr auto vlen = native_simd<T0>::size();
+  auto tmpsize = axsize*((othersize>=vlen) ? vlen : 1);
   return aligned_array<T>(tmpsize);
   }
-template<typename T, typename T0> aligned_array<T> alloc_tmp(const shape_t &shape,
-  const shape_t &axes)
+template<typename T, typename T0> aligned_array<T> alloc_tmp
+  (const fmav_info &info, const shape_t &axes)
   {
-  size_t fullsize=util::prod(shape);
+  size_t fullsize=info.size();
   size_t tmpsize=0;
   for (size_t i=0; i<axes.size(); ++i)
     {
-    auto axsize = shape[axes[i]];
+    auto axsize = info.shape(axes[i]);
     auto othersize = fullsize/axsize;
-    auto sz = axsize*((othersize>=VLEN<T0>::val) ? VLEN<T0>::val : 1);
+    constexpr auto vlen = native_simd<T0>::size();
+    auto sz = axsize*((othersize>=vlen) ? vlen : 1);
     if (sz>tmpsize) tmpsize=sz;
     }
   return aligned_array<T>(tmpsize);
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cfmav<Cmplx<T>> &src, Cmplx<vtype_t<T>> *MRUTIL_RESTRICT dst)
+  const cfmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -685,7 +632,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cfmav<T> &src, vtype_t<T> *MRUTIL_RESTRICT dst)
+  const cfmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -701,7 +648,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const Cmplx<vtype_t<T>> *MRUTIL_RESTRICT src, const fmav<Cmplx<T>> &dst)
+  const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, const fmav<Cmplx<T>> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -709,7 +656,7 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const vtype_t<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const native_simd<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -724,9 +671,9 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
     dst[it.oofs(i)] = src[i];
   }
 
-template <typename T> struct add_vec { using type = vtype_t<T>; };
+template <typename T> struct add_vec { using type = native_simd<T>; };
 template <typename T> struct add_vec<Cmplx<T>>
-  { using type = Cmplx<vtype_t<T>>; };
+  { using type = Cmplx<native_simd<T>>; };
 template <typename T> using add_vec_t = typename add_vec<T>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
@@ -743,13 +690,13 @@ MRUTIL_NOINLINE void general_nd(const cfmav<T> &in, const fmav<T> &out,
       plan = get_plan<Tplan>(len);
 
     execParallel(
-      util::thread_count(nthreads, in.shape(), axes[iax], VLEN<T>::val),
+      util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
       [&](Scheduler &sched) {
-        constexpr auto vlen = VLEN<T0>::val;
-        auto storage = alloc_tmp<T,T0>(in.shape(), len);
+        constexpr auto vlen = native_simd<T0>::size();
+        auto storage = alloc_tmp<T,T0>(in, len);
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-#ifndef POCKETFFT_NO_VECTORS
+#ifndef MRUTIL_NO_SIMD
         if (vlen>1)
           while (it.remaining()>=vlen)
             {
@@ -785,7 +732,7 @@ struct ExecC2C
   };
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
-  const vtype_t<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const native_simd<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
   {
   for (size_t j=0; j<vlen; ++j)
     dst[it.oofs(j,0)] = src[0][j];
@@ -850,17 +797,17 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
   auto plan = get_plan<pocketfft_r<T>>(in.shape(axis));
   size_t len=in.shape(axis);
   execParallel(
-    util::thread_count(nthreads, in.shape(), axis, VLEN<T>::val),
+    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
     [&](Scheduler &sched) {
-    constexpr auto vlen = VLEN<T>::val;
-    auto storage = alloc_tmp<T,T>(in.shape(), len);
+    constexpr auto vlen = native_simd<T>::size();
+    auto storage = alloc_tmp<T,T>(in, len);
     multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef POCKETFFT_NO_VECTORS
+#ifndef MRUTIL_NO_SIMD
     if (vlen>1)
       while (it.remaining()>=vlen)
         {
         it.advance(vlen);
-        auto tdatav = reinterpret_cast<vtype_t<T> *>(storage.data());
+        auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true);
         for (size_t j=0; j<vlen; ++j)
@@ -905,17 +852,17 @@ template<typename T> MRUTIL_NOINLINE void general_c2r(
   auto plan = get_plan<pocketfft_r<T>>(out.shape(axis));
   size_t len=out.shape(axis);
   execParallel(
-    util::thread_count(nthreads, in.shape(), axis, VLEN<T>::val),
+    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
     [&](Scheduler &sched) {
-      constexpr auto vlen = VLEN<T>::val;
-      auto storage = alloc_tmp<T,T>(out.shape(), len);
+      constexpr auto vlen = native_simd<T>::size();
+      auto storage = alloc_tmp<T,T>(out, len);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef POCKETFFT_NO_VECTORS
+#ifndef MRUTIL_NO_SIMD
       if (vlen>1)
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
-          auto tdatav = reinterpret_cast<vtype_t<T> *>(storage.data());
+          auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
           for (size_t j=0; j<vlen; ++j)
             tdatav[0][j]=in[it.iofs(j,0)].r;
           {
