@@ -30,8 +30,10 @@
 #include <algorithm>
 #include "libsharp2/sharp_internal.h"
 #include "mr_util/error_handling.h"
+#include "mr_util/constants.h"
 
 using namespace std;
+using namespace mr;
 
 #pragma GCC visibility push(hidden)
 
@@ -44,8 +46,6 @@ static inline void normalize (double &val, int &scale, double xfmax)
 
 sharp_Ylmgen::sharp_Ylmgen (size_t l_max, size_t m_max, size_t spin)
   {
-  constexpr double inv_sqrt4pi = 0.2820947917738781434740397257803862929220;
-
   lmax = l_max;
   mmax = m_max;
   MR_assert(l_max>=spin,"incorrect l_max: must be >= spin");
@@ -61,7 +61,6 @@ sharp_Ylmgen::sharp_Ylmgen (size_t l_max, size_t m_max, size_t spin)
     cf[size_t(sc)]=cf[size_t(sc-1)]*sharp_fbig;
   powlimit.resize(m_max+spin+1);
   powlimit[0]=0.;
-  constexpr double ln2 = 0.6931471805599453094172321214581766;
   constexpr double expo=-400*ln2;
   for (size_t i=1; i<=m_max+spin; ++i)
     powlimit[i]=exp(expo/i);
@@ -195,7 +194,6 @@ void sharp_Ylmgen::prepare (size_t m_)
 
 vector<double> sharp_Ylmgen::get_norm (size_t lmax, size_t spin)
   {
-  const double pi = 3.141592653589793238462643383279502884197;
   /* sign convention for H=1 (LensPix paper) */
 #if 1
    double spinsign = (spin>0) ? -1.0 : 1.0;
@@ -215,7 +213,6 @@ vector<double> sharp_Ylmgen::get_norm (size_t lmax, size_t spin)
 
 vector<double> sharp_Ylmgen::get_d1norm (size_t lmax)
   {
-  const double pi = 3.141592653589793238462643383279502884197;
   vector<double> res(lmax+1);
 
   for (size_t l=0; l<=lmax; ++l)

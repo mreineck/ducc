@@ -16,13 +16,14 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_GL_INTEGRATOR_H
 #define MRUTIL_GL_INTEGRATOR_H
 
 #include <cmath>
+#include "mr_util/constants.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/threading.h"
 
@@ -46,7 +47,6 @@ class GL_Integrator
       : n_(n)
       {
       MR_assert(n>=1, "number of points must be at least 1");
-      constexpr double pi = 3.141592653589793238462643383279502884197;
       constexpr double eps = 3e-14;
       size_t m = (n+1)>>1;
       x.resize(m);

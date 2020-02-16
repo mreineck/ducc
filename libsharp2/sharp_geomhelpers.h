@@ -133,9 +133,7 @@ std::unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, siz
     \ingroup geominfogroup */
 static inline std::unique_ptr<sharp_geom_info> sharp_make_ecp_geom_info (size_t nrings, size_t nphi, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  {
-  return sharp_make_fejer1_geom_info (nrings, nphi, phi0, stride_lon, stride_lat);
-  }
+  { return sharp_make_fejer1_geom_info (nrings, nphi, phi0, stride_lon, stride_lat); }
 
 /*! Creates a geometry information describing an ECP map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first

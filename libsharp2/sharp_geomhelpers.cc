@@ -29,6 +29,7 @@
 #include <vector>
 #include "libsharp2/sharp_geomhelpers.h"
 #include "mr_util/gl_integrator.h"
+#include "mr_util/constants.h"
 #include "mr_util/fft1d.h"
 #include "mr_util/error_handling.h"
 #include "mr_util/math_utils.h"
@@ -140,7 +141,6 @@ void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &
 unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
   const size_t *rings, const double *weight)
   {
-  const double pi=3.141592653589793238462643383279502884197;
   size_t npix=nside*nside*12;
   size_t ncap=2*nside*(nside-1);
 
@@ -198,8 +198,6 @@ unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside,
 unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t nphi, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<size_t> nph(nrings, nphi);
   vector<double> phi0_(nrings, phi0);
   vector<ptrdiff_t> ofs(nrings);
@@ -221,8 +219,6 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
 unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<double> theta(nrings), weight(nrings), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
@@ -255,8 +251,6 @@ unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t p
 unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
@@ -305,8 +299,6 @@ static vector<double> get_dh_weights(size_t nrings)
 unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<double> theta(nrings), weight(get_dh_weights(nrings+1)), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
@@ -329,8 +321,6 @@ unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t p
 unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<double> theta(nrings), weight(get_dh_weights(nrings)), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);
@@ -348,8 +338,6 @@ unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t pprin
 unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
   ptrdiff_t stride_lon, ptrdiff_t stride_lat)
   {
-  const double pi=3.141592653589793238462643383279502884197;
-
   vector<double> theta(nrings), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
   vector<ptrdiff_t> ofs(nrings);

@@ -35,6 +35,7 @@
 #include "mr_util/math_utils.h"
 #include "mr_util/string_utils.h"
 #include "mr_util/gl_integrator.h"
+#include "mr_util/constants.h"
 
 using namespace std;
 using namespace mr;
@@ -264,7 +265,6 @@ static void get_infos (const string &gname, int lmax, int &mmax, int &gpar1,
     if (nlon<1) nlon=2*mmax+1;
     size_t npix_o = nlat*nlon;
     gpar1=nlat; gpar2=nlon;
-    const double pi=3.141592653589793238462643383279502884197;
 
     vector<size_t> nph(nlat);
     vector<double> phi0_(nlat);
