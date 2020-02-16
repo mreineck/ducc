@@ -53,10 +53,9 @@ namespace mr {
 
 namespace detail_simd {
 
-template<typename T> constexpr bool vectorizable;
+template<typename T> constexpr bool vectorizable = false;
 template<> constexpr bool vectorizable<float> = true;
 template<> constexpr bool vectorizable<double> = true;
-template<> constexpr bool vectorizable<long double> = false;
 template<> constexpr bool vectorizable<int8_t> = true;
 template<> constexpr bool vectorizable<uint8_t> = true;
 template<> constexpr bool vectorizable<int16_t> = true;
