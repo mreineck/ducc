@@ -1,0 +1,12 @@
+prune mr_util
+include mr_util/useful_macros.h
+include mr_util/fft.h
+include mr_util/fft1d.h
+include mr_util/mav.h
+include mr_util/threading.h
+include mr_util/aligned_array.h
+include mr_util/simd.h
+include mr_util/cmplx.h
+include mr_util/unity_roots.h
+include mr_util/error_handling.h
+include mr_util/threading.cc

@@ -135,7 +135,7 @@ void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &
   else if (map.type()==typeid(double *)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
   else if (map.type()==typeid(const float *)) tget(weighted, iring, any_cast<const float *>(map), ringtmp);
   else if (map.type()==typeid(float *)) tget(weighted, iring, any_cast<float *>(map), ringtmp);
-  else MR_assert(false,"bad map data type",map.type().name());
+  else MR_fail("bad map data type",map.type().name());
   }
 
 unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,

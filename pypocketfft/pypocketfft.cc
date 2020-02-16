@@ -709,6 +709,6 @@ PYBIND11_MODULE(pypocketfft, m)
     "out"_a=None, "nthreads"_a=1);
 
   static PyMethodDef good_size_meth[] =
-    {{"good_size", good_size, METH_VARARGS, good_size_DS}, {0}};
+    {{"good_size", good_size, METH_VARARGS, good_size_DS}, {0, 0, 0, 0}};
   PyModule_AddFunctions(m.ptr(), good_size_meth);
   }

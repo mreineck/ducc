@@ -92,9 +92,7 @@ void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, const any
   }
 
 ptrdiff_t sharp_standard_alm_info::index (size_t l, size_t mi)
-  {
-  return mvstart[mi]+stride*ptrdiff_t(l);
-  }
+  { return mvstart[mi]+stride*ptrdiff_t(l); }
 /* This currently requires all m values from 0 to nm-1 to be present.
    It might be worthwhile to relax this criterion such that holes in the m
    distribution are permissible. */

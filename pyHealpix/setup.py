@@ -11,7 +11,7 @@ class _deferred_pybind11_include(object):
         return pybind11.get_include(self.user)
 
 
-include_dirs = ['..', _deferred_pybind11_include(True),
+include_dirs = ['.', _deferred_pybind11_include(True),
                 _deferred_pybind11_include()]
 extra_compile_args = ['--std=c++17', '-march=native', '-ffast-math', '-O3']
 python_module_link_args = []
@@ -26,7 +26,7 @@ if sys.platform == 'darwin':
 elif sys.platform == 'win32':
     extra_compile_args = ['/Ox', '/EHsc', '/std:c++17']
 else:
-    extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-Wsign-conversion', '-Wconversion' ,'-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
+    extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion','-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
     python_module_link_args += ['-march=native', '-ffast-math', '-Wl,-rpath,$ORIGIN']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
@@ -34,15 +34,15 @@ else:
 def get_extension_modules():
     return [Extension('pyHealpix',
                       language='c++',
-                      sources=['pyHealpix.cc','../mr_util/threading.cc',
-                               '../mr_util/geom_utils.cc', '../mr_util/pointing.cc',
-                               '../mr_util/string_utils.cc', '../mr_util/space_filling.cc',
-                               '../libsharp2/sharp.cc', '../libsharp2/sharp_core.cc', '../libsharp2/sharp_geomhelpers.cc',
-                               '../libsharp2/sharp_almhelpers.cc','../libsharp2/sharp_ylmgen.cc','../Healpix_cxx/healpix_base.cc',
-                               '../Healpix_cxx/healpix_tables.cc'],
-                      depends=['../mr_util/fft1d.h', '../mr_util/mav.h', '../mr_util/threading.h',
-                               '../mr_util/aligned_array.h', '../mr_util/simd.h',
-                               '../mr_util/cmplx.h', '../mr_util/unity_roots.h', '../mr_util/error_handling.h',
+                      sources=['pyHealpix.cc','mr_util/threading.cc',
+                               'mr_util/geom_utils.cc', 'mr_util/pointing.cc',
+                               'mr_util/string_utils.cc', 'mr_util/space_filling.cc',
+                               'libsharp2/sharp.cc', 'libsharp2/sharp_core.cc', 'libsharp2/sharp_geomhelpers.cc',
+                               'libsharp2/sharp_almhelpers.cc','libsharp2/sharp_ylmgen.cc','Healpix_cxx/healpix_base.cc',
+                               'Healpix_cxx/healpix_tables.cc'],
+                      depends=['mr_util/fft1d.h', 'mr_util/mav.h', 'mr_util/threading.h',
+                               'mr_util/aligned_array.h', 'mr_util/simd.h',
+                               'mr_util/cmplx.h', 'mr_util/unity_roots.h', 'mr_util/error_handling.h',
                                'setup.py'],
 
                       include_dirs=include_dirs,
