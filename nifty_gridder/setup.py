@@ -11,7 +11,7 @@ class _deferred_pybind11_include(object):
         return pybind11.get_include(self.user)
 
 
-include_dirs = ['../', './', _deferred_pybind11_include(True),
+include_dirs = ['./', _deferred_pybind11_include(True),
                 _deferred_pybind11_include()]
 extra_compile_args = ['-Wall', '-Wextra', '-Wfatal-errors', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith', '-Wfloat-conversion']
 #, '-Wsign-conversion', '-Wconversion'
@@ -32,11 +32,22 @@ else:
 
 def get_extension_modules():
     return [Extension('nifty_gridder',
-                      sources=['nifty_gridder.cc', '../mr_util/threading.cc'],
-                      depends=['../mr_util/error_handling.h', '../mr_util/fft.h', '../mr_util/threading.h',
-                               '../mr_util/aligned_array.h', '../mr_util/simd.h', '../mr_util/mav.h',
-                               '../mr_util/cmplx.h', '../mr_util/unity_roots.h',
-                               'setup.py', 'gridder_cxx.h'],
+                      sources=['nifty_gridder.cc',
+                               'mr_util/threading.cc'],
+                      depends=['mr_util/useful_macros.h',
+                               'mr_util/constants.h',
+                               'mr_util/gl_integrator.h',
+                               'mr_util/error_handling.h',
+                               'mr_util/fft.h',
+                               'mr_util/fft1d.h',
+                               'mr_util/threading.h',
+                               'mr_util/aligned_array.h',
+                               'mr_util/simd.h',
+                               'mr_util/mav.h',
+                               'mr_util/cmplx.h',
+                               'mr_util/unity_roots.h',
+                               'gridder_cxx.h',
+                               'setup.py'],
                       include_dirs=include_dirs,
                       extra_compile_args=extra_compile_args,
                       extra_link_args=python_module_link_args)]
