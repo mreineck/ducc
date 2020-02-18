@@ -16,120 +16,54 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-
+#include "mr_util/pybind_utils.h"
 #include "gridder_cxx.h"
 
 using namespace std;
 using namespace gridder;
 using namespace mr;
-using gridder::detail::idx_t;
+
 namespace py = pybind11;
 
 namespace {
 
 auto None = py::none();
 
-template<typename T>
-  using pyarr = py::array_t<T, 0>;
-
-template<typename T> bool isPytype(const py::array &arr)
-  {
-  auto t1=arr.dtype();
-  auto t2=pybind11::dtype::of<T>();
-  auto k1=t1.kind();
-  auto k2=t2.kind();
-  auto s1=t1.itemsize();
-  auto s2=t2.itemsize();
-  return (k1==k2)&&(s1==s2);
-  }
-template<typename T> pyarr<T> getPyarr(const py::array &arr, const string &name)
-  {
-  auto t1=arr.dtype();
-  auto t2=pybind11::dtype::of<T>();
-  auto k1=t1.kind();
-  auto k2=t2.kind();
-  auto s1=t1.itemsize();
-  auto s2=t2.itemsize();
-  MR_assert((k1==k2)&&(s1==s2),
-    "type mismatch for array '", name, "': expected '", k2, s2,
-    "', but got '", k1, s1, "'.");
-  return arr.cast<pyarr<T>>();
-  }
-
-template<typename T> pyarr<T> makeArray(const vector<size_t> &shape)
-  { return pyarr<T>(shape); }
-
-template<typename T> pyarr<T> providePotentialArray(const py::object &in,
-  const string &name, const vector<size_t> &shape)
-  {
-  if (in.is_none())
-    return makeArray<T>(vector<size_t>(shape.size(), 0));
-  return getPyarr<T>(in.cast<py::array>(), name);
-  }
-
-template<size_t ndim, typename T> mav<T,ndim> make_mav(pyarr<T> &in)
-  {
-  MR_assert(ndim==in.ndim(), "dimension mismatch");
-  array<size_t,ndim> dims;
-  array<ptrdiff_t,ndim> str;
-  for (size_t i=0; i<ndim; ++i)
-    {
-    dims[i]=in.shape(i);
-    str[i]=in.strides(i)/sizeof(T);
-    MR_assert(str[i]*ptrdiff_t(sizeof(T))==in.strides(i), "weird strides");
-    }
-  return mav<T, ndim>(in.mutable_data(),dims,str);
-  }
-template<size_t ndim, typename T> cmav<T,ndim> make_cmav(const pyarr<T> &in)
-  {
-  MR_assert(ndim==in.ndim(), "dimension mismatch");
-  array<size_t,ndim> dims;
-  array<ptrdiff_t,ndim> str;
-  for (size_t i=0; i<ndim; ++i)
-    {
-    dims[i]=in.shape(i);
-    str[i]=in.strides(i)/sizeof(T);
-    MR_assert(str[i]*ptrdiff_t(sizeof(T))==in.strides(i), "weird strides");
-    }
-  return cmav<T, ndim>(in.data(),dims,str);
-  }
-
 template<typename T> py::array ms2dirty_general2(const py::array &uvw_,
   const py::array &freq_, const py::array &ms_, const py::object &wgt_,
-  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, size_t verbosity)
+  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
+  size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
+  size_t verbosity)
   {
-  auto uvw = getPyarr<double>(uvw_, "uvw");
-  auto uvw2 = make_cmav<2>(uvw);
-  auto freq = getPyarr<double>(freq_, "freq");
-  auto freq2 = make_cmav<1>(freq);
-  auto ms = getPyarr<complex<T>>(ms_, "ms");
-  auto ms2 = make_cmav<2>(ms);
-  auto wgt = providePotentialArray<T>(wgt_, "wgt", {ms2.shape(0),ms2.shape(1)});
-  auto wgt2 = make_cmav<2>(wgt);
-  auto dirty = makeArray<T>({npix_x,npix_y});
-  auto dirty2 = make_mav<2>(dirty);
+  auto uvw = to_cmav<double,2>(uvw_);
+  auto freq = to_cmav<double,1>(freq_);
+  auto ms = to_cmav<complex<T>,2>(ms_);
+  auto wgt = get_optional_const_Pyarr<T>(wgt_, {ms.shape(0),ms.shape(1)});
+  auto wgt2 = to_cmav<T,2>(wgt);
+  auto dirty = make_Pyarr<T>({npix_x,npix_y});
+  auto dirty2 = to_mav<T,2>(dirty);
   {
   py::gil_scoped_release release;
-  ms2dirty_general(uvw2,freq2,ms2,wgt2,pixsize_x,pixsize_y, nu, nv, epsilon,do_wstacking,
-    nthreads,dirty2,verbosity);
+  ms2dirty_general(uvw,freq,ms,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
+    do_wstacking,nthreads,dirty2,verbosity);
   }
   return move(dirty);
   }
 py::array Pyms2dirty_general(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
-  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, size_t verbosity)
+  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
+  size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
+  size_t verbosity)
   {
-  if (isPytype<complex<float>>(ms))
+  if (isPyarr<complex<float>>(ms))
     return ms2dirty_general2<float>(uvw, freq, ms, wgt, npix_x, npix_y,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
-  if (isPytype<complex<double>>(ms))
+  if (isPyarr<complex<double>>(ms))
     return ms2dirty_general2<double>(uvw, freq, ms, wgt, npix_x, npix_y,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   MR_fail("type matching failed: 'ms' has neither type 'c8' nor 'c16'");
@@ -186,20 +120,17 @@ template<typename T> py::array dirty2ms_general2(const py::array &uvw_,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
-  auto uvw = getPyarr<double>(uvw_, "uvw");
-  auto uvw2 = make_cmav<2>(uvw);
-  auto freq = getPyarr<double>(freq_, "freq");
-  auto freq2 = make_cmav<1>(freq);
-  auto dirty = getPyarr<T>(dirty_, "dirty");
-  auto dirty2 = make_cmav<2>(dirty);
-  auto wgt = providePotentialArray<T>(wgt_, "wgt", {uvw2.shape(0),freq2.shape(0)});
-  auto wgt2 = make_cmav<2>(wgt);
-  auto ms = makeArray<complex<T>>({uvw2.shape(0),freq2.shape(0)});
-  auto ms2 = make_mav<2>(ms);
+  auto uvw = to_cmav<double,2>(uvw_);
+  auto freq = to_cmav<double,1>(freq_);
+  auto dirty = to_cmav<T,2>(dirty_);
+  auto wgt = get_optional_const_Pyarr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
+  auto wgt2 = to_cmav<T,2>(wgt);
+  auto ms = make_Pyarr<complex<T>>({uvw.shape(0),freq.shape(0)});
+  auto ms2 = to_mav<complex<T>,2>(ms);
   {
   py::gil_scoped_release release;
-  dirty2ms_general(uvw2,freq2,dirty2,wgt2,pixsize_x,pixsize_y,nu, nv,epsilon,do_wstacking,
-    nthreads,ms2,verbosity);
+  dirty2ms_general(uvw,freq,dirty,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
+    do_wstacking,nthreads,ms2,verbosity);
   }
   return move(ms);
   }
@@ -208,10 +139,10 @@ py::array Pydirty2ms_general(const py::array &uvw,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
-  if (isPytype<float>(dirty))
+  if (isPyarr<float>(dirty))
     return dirty2ms_general2<float>(uvw, freq, dirty, wgt,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
-  if (isPytype<double>(dirty))
+  if (isPyarr<double>(dirty))
     return dirty2ms_general2<double>(uvw, freq, dirty, wgt,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");

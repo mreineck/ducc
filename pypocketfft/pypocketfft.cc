@@ -6,7 +6,7 @@
 /*
  *  Python interface.
  *
- *  Copyright (C) 2019 Max-Planck-Society
+ *  Copyright (C) 2019-2020 Max-Planck-Society
  *  Copyright (C) 2019 Peter Bell
  *  \author Martin Reinecke
  *  \author Peter Bell
@@ -17,6 +17,7 @@
 #include <pybind11/stl.h>
 
 #include "mr_util/fft.h"
+#include "mr_util/pybind_utils.h"
 
 namespace {
 
@@ -24,6 +25,9 @@ using mr::shape_t;
 using mr::stride_t;
 using mr::fmav;
 using mr::cfmav;
+using mr::to_fmav;
+using mr::to_cfmav;
+using mr::get_optional_Pyarr;
 using std::size_t;
 using std::ptrdiff_t;
 
@@ -40,27 +44,6 @@ using f32 = float;
 using f64 = double;
 using flong = ldbl_t;
 auto None = py::none();
-
-shape_t copy_shape(const py::array &arr)
-  {
-  shape_t res(size_t(arr.ndim()));
-  for (size_t i=0; i<res.size(); ++i)
-    res[i] = size_t(arr.shape(int(i)));
-  return res;
-  }
-
-template<typename T> stride_t copy_strides(const py::array &arr)
-  {
-  stride_t res(size_t(arr.ndim()));
-  constexpr auto st = ptrdiff_t(sizeof(T));
-  for (size_t i=0; i<res.size(); ++i)
-    {
-    auto tmp = arr.strides(int(i));
-    MR_assert((tmp/st)*st==tmp, "bad stride");
-    res[i] = tmp/st;
-    }
-  return res;
-  }
 
 shape_t makeaxes(const py::array &in, const py::object &axes)
   {
@@ -111,34 +94,13 @@ template<typename T> T norm_fct(int inorm, const shape_t &shape,
   return norm_fct<T>(inorm, N);
   }
 
-template<typename T> py::array_t<T> prepare_output(py::object &out_,
-  const shape_t &dims)
-  {
-  if (out_.is_none()) return py::array_t<T>(dims);
-  auto tmp = out_.cast<py::array_t<T>>();
-  if (!tmp.is(out_)) // a new object was created during casting
-    throw std::runtime_error("unexpected data type for output array");
-  return tmp;
-  }
-
-template<typename T> fmav<T> to_fmav(py::array &arr)
-  {
-  return fmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_shape(arr), copy_strides<T>(arr));
-  }
-template<typename T> cfmav<T> to_cfmav(const py::array &arr)
-  {
-  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
-    copy_shape(arr), copy_strides<T>(arr));
-  }
-
 template<typename T> py::array c2c_internal(const py::array &in,
   const py::object &axes_, bool forward, int inorm, py::object &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<std::complex<T>>(in);
-  auto out = prepare_output<std::complex<T>>(out_, ain.shape());
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
   auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
@@ -154,7 +116,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<std::complex<T>>(out_, ain.shape());
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
   auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
@@ -192,7 +154,7 @@ template<typename T> py::array r2c_internal(const py::array &in,
   auto ain = to_cfmav<T>(in);
   auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
-  auto out = prepare_output<std::complex<T>>(out_, dims_out);
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, dims_out);
   auto aout = to_fmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
@@ -215,7 +177,7 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<T>(out_, ain.shape());
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
@@ -239,7 +201,7 @@ template<typename T> py::array dct_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<T>(out_, ain.shape());
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
@@ -265,7 +227,7 @@ template<typename T> py::array dst_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<T>(out_, ain.shape());
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
@@ -297,7 +259,7 @@ template<typename T> py::array c2r_internal(const py::array &in,
   if ((lastsize/2) + 1 != ain.shape(axis))
     throw std::invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
-  auto out = prepare_output<T>(out_, dims_out);
+  auto out = get_optional_Pyarr<T>(out_, dims_out);
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
@@ -319,7 +281,7 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<T>(out_, ain.shape());
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;
@@ -341,7 +303,7 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in);
-  auto out = prepare_output<T>(out_, ain.shape());
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
   auto aout = to_fmav<T>(out);
   {
   py::gil_scoped_release release;

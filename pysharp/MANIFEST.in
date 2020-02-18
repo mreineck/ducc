@@ -13,6 +13,7 @@ include mr_util/constants.h
 include mr_util/unity_roots.h
 include mr_util/error_handling.h
 include mr_util/useful_macros.h
+include mr_util/pybind_utils.h
 include libsharp2/sharp.h
 include libsharp2/sharp_internal.h
 include libsharp2/sharp_geomhelpers.h

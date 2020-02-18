@@ -46,6 +46,7 @@ def get_extension_modules():
                                'mr_util/mav.h',
                                'mr_util/cmplx.h',
                                'mr_util/unity_roots.h',
+                               'mr_util/pybind_utils.h',
                                'gridder_cxx.h',
                                'setup.py'],
                       include_dirs=include_dirs,

@@ -37,6 +37,9 @@
 #include "libsharp2/sharp_almhelpers.h"
 #include "mr_util/string_utils.h"
 #include "mr_util/error_handling.h"
+#include "mr_util/mav.h"
+#include "mr_util/fft.h"
+#include "mr_util/constants.h"
 
 using namespace std;
 using namespace mr;
@@ -45,6 +48,7 @@ namespace py = pybind11;
 
 namespace {
 
+using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
 using a_c_c = py::array_t<complex<double>,
   py::array::c_style | py::array::forcecast>;
@@ -65,31 +69,52 @@ template<typename T> class py_sharpjob
         ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
       }
 
-    void set_Gauss_geometry(int64_t nrings, int64_t nphi)
+    void set_gauss_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert((nrings>0)&&(nphi>0),"bad grid dimensions");
       npix_=nrings*nphi;
       ginfo = sharp_make_gauss_geom_info (nrings, nphi, 0., 1, nphi);
       }
-    void set_Healpix_geometry(int64_t nside)
+    void set_healpix_geometry(int64_t nside)
       {
       MR_assert(nside>0,"bad Nside value");
       npix_=12*nside*nside;
       ginfo = sharp_make_healpix_geom_info (nside, 1);
       }
-    void set_ECP_geometry(int64_t nrings, int64_t nphi)
+    void set_fejer1_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>0,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_ecp_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_fejer1_geom_info (nrings, nphi, 0., 1, nphi);
       }
-    void set_DH_geometry(int64_t nrings, int64_t nphi)
+    void set_fejer2_geometry(int64_t nrings, int64_t nphi)
+      {
+      MR_assert(nrings>0,"bad nrings value");
+      MR_assert(nphi>0,"bad nphi value");
+      npix_=nrings*nphi;
+      ginfo = sharp_make_fejer2_geom_info (nrings, nphi, 0., 1, nphi);
+      }
+    void set_cc_geometry(int64_t nrings, int64_t nphi)
+      {
+      MR_assert(nrings>0,"bad nrings value");
+      MR_assert(nphi>0,"bad nphi value");
+      npix_=nrings*nphi;
+      ginfo = sharp_make_cc_geom_info (nrings, nphi, 0., 1, nphi);
+      }
+    void set_dh_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>1,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
       ginfo = sharp_make_dh_geom_info (nrings, nphi, 0., 1, nphi);
+      }
+    void set_mw_geometry(int64_t nrings, int64_t nphi)
+      {
+      MR_assert(nrings>0,"bad nrings value");
+      MR_assert(nphi>0,"bad nphi value");
+      npix_=nrings*nphi;
+      ginfo = sharp_make_mw_geom_info (nrings, nphi, 0., 1, nphi);
       }
     void set_triangular_alm_info (int64_t lmax, int64_t mmax)
       {
@@ -163,6 +188,76 @@ Python interface for some of the libsharp functionality
 Error conditions are reported by raising exceptions.
 )""";
 
+void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
+  const mav<double,2> &out)
+  {
+  size_t ntheta_in = in.shape(0),
+         ntheta_out = out.shape(0),
+         nphi = in.shape(1);
+  MR_assert(out.shape(1)==nphi, "phi dimensions must be equal");
+  MR_assert((nphi&1)==0, "nphi must be even");
+  size_t nrings_in = 2*ntheta_in-has_np-has_sp;
+  size_t nrings_out = 2*ntheta_out-2;
+  MR_assert(nrings_out>=nrings_in, "number of rings must increase");
+  constexpr size_t delta=128;
+  for (size_t js=0; js<nphi; js+=delta)
+    {
+    size_t je = min(js+delta, nphi);
+    mav<double,2> tmp({nrings_out,je-js});
+    mav<double,2> tmp2(tmp.data(),{nrings_in, je-js});
+    // enhance to "double sphere"
+    if (has_np)
+      for (size_t j=js; j<je; ++j)
+        tmp2(0,j-js) = in(0,j);
+    if (has_sp)
+      for (size_t j=js; j<je; ++j)
+        tmp2(ntheta_in-1,j-js) = in(ntheta_in-1,j);
+    for (size_t i=has_np, i2=nrings_in-1; i+has_sp<ntheta_in; ++i,--i2)
+      for (size_t j=js,j2=js+nphi/2; j<je; ++j,++j2)
+        {
+        if (j2>=nphi) j2-=nphi;
+        tmp2(i,j-js) = in(i,j);
+        tmp2(i2,j-js) = in(i,j2);
+        }
+    // FFT in theta direction
+    r2r_fftpack(cfmav<double>(tmp2),fmav<double>(tmp2),{0},true,true,1./nrings_in,0);
+    if (!has_np)  // shift
+      {
+      double ang = -pi/nrings_in;
+      for (size_t i=1; i<ntheta_in; ++i)
+        {
+        complex<double> rot(cos(i*ang),sin(i*ang));
+        for (size_t j=js; j<je; ++j)
+          {
+          complex<double> ctmp(tmp2(2*i-1,j-js),tmp2(2*i,j-js));
+          ctmp *= rot;
+          tmp2(2*i-1,j-js) = ctmp.real();
+          tmp2(2*i  ,j-js) = ctmp.imag();
+          }
+        }
+      }
+    // zero-padding
+    for (size_t i=nrings_in; i<nrings_out; ++i)
+      for (size_t j=js; j<je; ++j)
+        tmp(i,j-js) = 0;
+    // FFT back
+    r2r_fftpack(cfmav<double>(tmp),fmav<double>(tmp),{0},false,false,1.,0);
+    // copy to output map
+    for (size_t i=0; i<ntheta_out; ++i)
+      for (size_t j=js; j<je; ++j)
+        out(i,j) = tmp(i,j-js);
+    }
+  }
+
+void py_upsample_to_cc(const a_d_c &in, bool has_np, bool has_sp, a_d &out)
+  {
+  MR_assert(in.ndim()==2, "need 2D array");
+  MR_assert(out.ndim()==2, "need 2D array");
+  cmav<double,2> in2(in.data(),{size_t(in.shape(0)),size_t(in.shape(1))});
+  mav<double,2> out2(out.mutable_data(),{size_t(out.shape(0)),size_t(out.shape(1))});
+  upsample_to_cc(in2, has_np, has_sp, out2);
+  }
+
 } // unnamed namespace
 
 PYBIND11_MODULE(pysharp, m)
@@ -173,13 +268,19 @@ PYBIND11_MODULE(pysharp, m)
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d")
     .def(py::init<>())
-    .def("set_Gauss_geometry", &py_sharpjob<double>::set_Gauss_geometry,
+    .def("set_gauss_geometry", &py_sharpjob<double>::set_gauss_geometry,
       "nrings"_a,"nphi"_a)
-    .def("set_Healpix_geometry", &py_sharpjob<double>::set_Healpix_geometry,
+    .def("set_healpix_geometry", &py_sharpjob<double>::set_healpix_geometry,
       "nside"_a)
-    .def("set_ECP_geometry", &py_sharpjob<double>::set_ECP_geometry,
+    .def("set_fejer1_geometry", &py_sharpjob<double>::set_fejer1_geometry,
       "nrings"_a, "nphi"_a)
-    .def("set_DH_geometry", &py_sharpjob<double>::set_ECP_geometry,
+    .def("set_fejer2_geometry", &py_sharpjob<double>::set_fejer2_geometry,
+      "nrings"_a, "nphi"_a)
+    .def("set_cc_geometry", &py_sharpjob<double>::set_cc_geometry,
+      "nrings"_a, "nphi"_a)
+    .def("set_dh_geometry", &py_sharpjob<double>::set_dh_geometry,
+      "nrings"_a, "nphi"_a)
+    .def("set_mw_geometry", &py_sharpjob<double>::set_mw_geometry,
       "nrings"_a, "nphi"_a)
     .def("set_triangular_alm_info",
       &py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)
@@ -189,6 +290,6 @@ PYBIND11_MODULE(pysharp, m)
     .def("map2alm", &py_sharpjob<double>::map2alm,"map"_a)
     .def("alm2map_spin", &py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
     .def("map2alm_spin", &py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
-    .def("__repr__", &py_sharpjob<double>::repr)
-    ;
+    .def("__repr__", &py_sharpjob<double>::repr);
+  m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "has_np"_a, "has_sp"_a, "out"_a);
   }

@@ -55,6 +55,7 @@ def get_extension_modules():
                                'mr_util/unity_roots.h',
                                'mr_util/error_handling.h',
                                'mr_util/useful_macros.h',
+                               'mr_util/pybind_utils.h',
                                'libsharp2/sharp.h',
                                'libsharp2/sharp_internal.h',
                                'libsharp2/sharp_geomhelpers.h',
