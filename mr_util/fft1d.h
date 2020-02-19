@@ -1878,6 +1878,10 @@ template<typename T0> class pocketfft_r
 
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
+inline size_t good_size_complex(size_t n)
+  { return detail_fft::util1d::good_size_cmplx(n); }
+inline size_t good_size_real(size_t n)
+  { return detail_fft::util1d::good_size_real(n); }
 
 }
 
