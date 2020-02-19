@@ -40,6 +40,7 @@
 #include "mr_util/mav.h"
 #include "mr_util/fft.h"
 #include "mr_util/constants.h"
+#include "mr_util/pybind_utils.h"
 
 using namespace std;
 using namespace mr;
@@ -249,13 +250,14 @@ void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
     }
   }
 
-void py_upsample_to_cc(const a_d_c &in, bool has_np, bool has_sp, a_d &out)
+py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
+  bool has_sp, py::object &out_)
   {
-  MR_assert(in.ndim()==2, "need 2D array");
-  MR_assert(out.ndim()==2, "need 2D array");
-  cmav<double,2> in2(in.data(),{size_t(in.shape(0)),size_t(in.shape(1))});
-  mav<double,2> out2(out.mutable_data(),{size_t(out.shape(0)),size_t(out.shape(1))});
+  auto in2 = to_cmav<double,2>(in);
+  auto out = get_optional_Pyarr<double>(out_, {nrings_out,size_t(in.shape(1))});
+  auto out2 = to_mav<double,2>(out);
   upsample_to_cc(in2, has_np, has_sp, out2);
+  return out;
   }
 
 } // unnamed namespace
@@ -291,5 +293,6 @@ PYBIND11_MODULE(pysharp, m)
     .def("alm2map_spin", &py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
     .def("map2alm_spin", &py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
     .def("__repr__", &py_sharpjob<double>::repr);
-  m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "has_np"_a, "has_sp"_a, "out"_a);
+  m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "nrings_out"_a,
+    "has_np"_a, "has_sp"_a, "out"_a=py::none());
   }
