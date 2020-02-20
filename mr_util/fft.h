@@ -621,7 +621,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cfmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
+  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -632,7 +632,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cfmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
+  const fmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
   {
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -640,7 +640,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
-  const cfmav<T> &src, T *MRUTIL_RESTRICT dst)
+  const fmav<T> &src, T *MRUTIL_RESTRICT dst)
   {
   if (dst == &src[it.iofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_in(); ++i)
@@ -648,7 +648,7 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, const fmav<Cmplx<T>> &dst)
+  const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -656,7 +656,7 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const native_simd<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
@@ -664,7 +664,7 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
-  const T *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const T *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   if (src == &dst[it.oofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_out(); ++i)
@@ -677,7 +677,7 @@ template <typename T> struct add_vec<Cmplx<T>>
 template <typename T> using add_vec_t = typename add_vec<T>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
-MRUTIL_NOINLINE void general_nd(const cfmav<T> &in, const fmav<T> &out,
+MRUTIL_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec & exec,
   const bool allow_inplace=true)
   {
@@ -721,9 +721,9 @@ struct ExecC2C
   {
   bool forward;
 
-  template <typename T0, typename T, size_t vlen> void operator () (
-    const multi_iter<vlen> &it, const cfmav<Cmplx<T0>> &in,
-    const fmav<Cmplx<T0>> &out, T * buf, const pocketfft_c<T0> &plan, T0 fct) const
+  template <typename T0, typename T, size_t vlen> void operator() (
+    const multi_iter<vlen> &it, const fmav<Cmplx<T0>> &in,
+    fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);
     plan.exec(buf, fct, forward);
@@ -732,7 +732,7 @@ struct ExecC2C
   };
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
-  const native_simd<T> *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   for (size_t j=0; j<vlen; ++j)
     dst[it.oofs(j,0)] = src[0][j];
@@ -740,8 +740,8 @@ template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
     for (size_t j=0; j<vlen; ++j)
       {
-        dst[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
-        dst[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
+      dst[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
+      dst[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
       }
   if (i<it.length_out())
     for (size_t j=0; j<vlen; ++j)
@@ -749,7 +749,7 @@ template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   }
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
-  const T *MRUTIL_RESTRICT src, const fmav<T> &dst)
+  const T *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   dst[it.oofs(0)] = src[0];
   size_t i=1, i1=1, i2=it.length_out()-1;
@@ -765,7 +765,7 @@ template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
 struct ExecHartley
   {
   template <typename T0, typename T, size_t vlen> void operator () (
-    const multi_iter<vlen> &it, const cfmav<T0> &in, const fmav<T0> &out,
+    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -781,8 +781,8 @@ struct ExecDcst
   bool cosine;
 
   template <typename T0, typename T, typename Tplan, size_t vlen>
-  void operator () (const multi_iter<vlen> &it, const cfmav<T0> &in,
-    const fmav <T0> &out, T * buf, const Tplan &plan, T0 fct) const
+  void operator () (const multi_iter<vlen> &it, const fmav<T0> &in,
+    fmav <T0> &out, T * buf, const Tplan &plan, T0 fct) const
     {
     copy_input(it, in, buf);
     plan.exec(buf, fct, ortho, type, cosine);
@@ -791,7 +791,7 @@ struct ExecDcst
   };
 
 template<typename T> MRUTIL_NOINLINE void general_r2c(
-  const cfmav<T> &in, const fmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
+  const fmav<T> &in, fmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   auto plan = get_plan<pocketfft_r<T>>(in.shape(axis));
@@ -846,7 +846,7 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
     });  // end of parallel region
   }
 template<typename T> MRUTIL_NOINLINE void general_c2r(
-  const cfmav<Cmplx<T>> &in, const fmav<T> &out, size_t axis, bool forward, T fct,
+  const fmav<Cmplx<T>> &in, fmav<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   auto plan = get_plan<pocketfft_r<T>>(out.shape(axis));
@@ -922,7 +922,7 @@ struct ExecR2R
   bool r2c, forward;
 
   template <typename T0, typename T, size_t vlen> void operator () (
-    const multi_iter<vlen> &it, const cfmav<T0> &in, const fmav<T0> &out, T * buf,
+    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out, T * buf,
     const pocketfft_r<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -937,18 +937,18 @@ struct ExecR2R
     }
   };
 
-template<typename T> void c2c(const cfmav<std::complex<T>> &in,
-  const fmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+template<typename T> void c2c(const fmav<std::complex<T>> &in,
+  fmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
-  cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
-  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
+  fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
+  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out, out.writable());
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
-template<typename T> void dct(const cfmav<T> &in, const fmav<T> &out,
+template<typename T> void dct(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
@@ -963,7 +963,7 @@ template<typename T> void dct(const cfmav<T> &in, const fmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> void dst(const cfmav<T> &in, const fmav<T> &out,
+template<typename T> void dst(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
@@ -977,18 +977,18 @@ template<typename T> void dst(const cfmav<T> &in, const fmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> void r2c(const cfmav<T> &in,
-  const fmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+template<typename T> void r2c(const fmav<T> &in,
+  fmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1)
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
-  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
+  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out, out.writable());
   general_r2c(in, out2, axis, forward, fct, nthreads);
   }
 
-template<typename T> void r2c(const cfmav<T> &in,
-  const fmav<std::complex<T>> &out, const shape_t &axes,
+template<typename T> void r2c(const fmav<T> &in,
+  fmav<std::complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1)
   {
   util::sanity_check_cr(out, in, axes);
@@ -1000,17 +1000,17 @@ template<typename T> void r2c(const cfmav<T> &in,
   c2c(out, out, newaxes, forward, T(1), nthreads);
   }
 
-template<typename T> void c2r(const cfmav<std::complex<T>> &in,
-  const fmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
+template<typename T> void c2r(const fmav<std::complex<T>> &in,
+  fmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
   {
   util::sanity_check_cr(in, out, axis);
   if (in.size()==0) return;
-  cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
+  fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
   general_c2r(in2, out, axis, forward, fct, nthreads);
   }
 
-template<typename T> void c2r(const cfmav<std::complex<T>> &in,
-  const fmav<T> &out, const shape_t &axes, bool forward, T fct,
+template<typename T> void c2r(const fmav<std::complex<T>> &in,
+  fmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1)
   {
   if (axes.size()==1)
@@ -1023,8 +1023,8 @@ template<typename T> void c2r(const cfmav<std::complex<T>> &in,
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
-template<typename T> void r2r_fftpack(const cfmav<T> &in,
-  const fmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
+template<typename T> void r2r_fftpack(const fmav<T> &in,
+  fmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
@@ -1033,8 +1033,8 @@ template<typename T> void r2r_fftpack(const cfmav<T> &in,
     ExecR2R{real2hermitian, forward});
   }
 
-template<typename T> void r2r_separable_hartley(const cfmav<T> &in,
-  const fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+template<typename T> void r2r_separable_hartley(const fmav<T> &in,
+  fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
@@ -1042,8 +1042,8 @@ template<typename T> void r2r_separable_hartley(const cfmav<T> &in,
     false);
   }
 
-template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
-  const fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
+  fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);

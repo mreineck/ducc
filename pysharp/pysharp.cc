@@ -189,8 +189,8 @@ Python interface for some of the libsharp functionality
 Error conditions are reported by raising exceptions.
 )""";
 
-void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
-  const mav<double,2> &out)
+void upsample_to_cc(const mav<double,2> &in, bool has_np, bool has_sp,
+  mav<double,2> &out)
   {
   size_t ntheta_in = in.shape(0),
          ntheta_out = out.shape(0),
@@ -205,7 +205,9 @@ void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
     {
     size_t je = min(js+delta, nphi);
     mav<double,2> tmp({nrings_out,je-js});
-    mav<double,2> tmp2(tmp.data(),{nrings_in, je-js});
+    fmav<double> ftmp(tmp);
+    mav<double,2> tmp2(tmp.data(),{nrings_in, je-js}, true);
+    fmav<double> ftmp2(tmp2);
     // enhance to "double sphere"
     if (has_np)
       for (size_t j=js; j<je; ++j)
@@ -221,7 +223,7 @@ void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
         tmp2(i2,j-js) = in(i,j2);
         }
     // FFT in theta direction
-    r2r_fftpack(cfmav<double>(tmp2),fmav<double>(tmp2),{0},true,true,1./nrings_in,0);
+    r2r_fftpack(ftmp2,ftmp2,{0},true,true,1./nrings_in,0);
     if (!has_np)  // shift
       {
       double ang = -pi/nrings_in;
@@ -242,7 +244,7 @@ void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
       for (size_t j=js; j<je; ++j)
         tmp(i,j-js) = 0;
     // FFT back
-    r2r_fftpack(cfmav<double>(tmp),fmav<double>(tmp),{0},false,false,1.,0);
+    r2r_fftpack(ftmp,ftmp,{0},false,false,1.,0);
     // copy to output map
     for (size_t i=0; i<ntheta_out; ++i)
       for (size_t j=js; j<je; ++j)
@@ -253,9 +255,10 @@ void upsample_to_cc(const cmav<double,2> &in, bool has_np, bool has_sp,
 py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   bool has_sp, py::object &out_)
   {
-  auto in2 = to_cmav<double,2>(in);
+  auto in2 = to_mav<double,2>(in);
   auto out = get_optional_Pyarr<double>(out_, {nrings_out,size_t(in.shape(1))});
-  auto out2 = to_mav<double,2>(out);
+  auto out2 = to_mav<double,2>(out,true);
+    MR_assert(out2.writable(),"x1");
   upsample_to_cc(in2, has_np, has_sp, out2);
   return out;
   }

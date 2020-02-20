@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef MRUTIL_MAV_H
@@ -42,6 +42,7 @@ class fmav_info
   protected:
     shape_t shp;
     stride_t str;
+    size_t sz;
 
     static size_t prod(const shape_t &shape)
       {
@@ -53,18 +54,22 @@ class fmav_info
 
   public:
     fmav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_)
-      { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
+      : shp(shape_), str(stride_), sz(prod(shp))
+      {
+      MR_assert(shp.size()>0, "at least 1D required");
+      MR_assert(shp.size()==str.size(), "dimensions mismatch");
+      }
     fmav_info(const shape_t &shape_)
-      : shp(shape_), str(shape_.size())
+      : shp(shape_), str(shape_.size()), sz(prod(shp))
       {
       auto ndim = shp.size();
+      MR_assert(ndim>0, "at least 1D required");
       str[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         str[ndim-i] = str[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
       }
     size_t ndim() const { return shp.size(); }
-    size_t size() const { return prod(shp); }
+    size_t size() const { return sz; }
     const shape_t &shape() const { return shp; }
     size_t shape(size_t i) const { return shp[i]; }
     const stride_t &stride() const { return str; }
@@ -86,200 +91,197 @@ class fmav_info
       { return shp==other.shp; }
   };
 
-template<typename T, size_t ndim> class cmav;
-
-// "mav" stands for "multidimensional array view"
-template<typename T> class cfmav: public fmav_info
+template<typename T> class membuf
   {
   protected:
     using Tsp = shared_ptr<vector<T>>;
     Tsp ptr;
-    T *d;
+    const T *d;
+    bool rw;
 
   public:
-    cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
-      : fmav_info(shp_, str_), d(const_cast<T *>(d_)) {}
-    cfmav(const T *d_, const shape_t &shp_)
-      : fmav_info(shp_), d(const_cast<T *>(d_)) {}
-    cfmav(const shape_t &shp_)
-      : fmav_info(shp_), ptr(make_unique<vector<T>>(size())),
-        d(const_cast<T *>(ptr->data())) {}
-    cfmav(const T* d_, const fmav_info &info)
-      : fmav_info(info), d(const_cast<T *>(d_)) {}
-    cfmav(const cfmav &other) = default;
-    cfmav(cfmav &&other) = default;
+    membuf(T *d_, bool rw_=false)
+      : d(d_), rw(rw_) {}
+    membuf(const T *d_)
+      : d(d_), rw(false) {}
+    membuf(size_t sz)
+      : ptr(make_unique<vector<T>>(sz)), d(ptr->data()), rw(true) {}
+    membuf(const membuf &other) = default;
+    membuf(membuf &&other) = default;
 // Not for public use!
-    cfmav(const T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_)
-      : fmav_info(shp_, str_), ptr(p), d(const_cast<T *>(d_)) {}
+    membuf(T *d_, const Tsp &p, bool rw_)
+      : ptr(p), d(d_), rw(rw_) {}
+
+    template<typename I> const T &val(I i) const
+      { return d[i]; }
+    template<typename I> T &val(I i)
+      {
+      MR_assert(rw, "array is nor writable");
+      return const_cast<T *>(d)[i];
+      }
     template<typename I> const T &operator[](I i) const
       { return d[i]; }
+    template<typename I> T &operator[](I i)
+      {
+      MR_assert(rw, "array is nor writable");
+      return const_cast<T *>(d)[i];
+      }
     const T *data() const
       { return d; }
+    T *data()
+      {
+      MR_assert(rw, "array is nor writable");
+      return const_cast<T *>(d);
+      }
+    bool writable() const { return rw; }
   };
 
-template<typename T> class fmav: public cfmav<T>
+// "mav" stands for "multidimensional array view"
+template<typename T> class fmav: public fmav_info, public membuf<T>
   {
   protected:
-    using Tsp = shared_ptr<vector<T>>;
-    using parent = cfmav<T>;
-    using parent::d;
-    using parent::shp;
-    using parent::str;
+    using typename membuf<T>::Tsp;
 
   public:
-    fmav(T *d_, const shape_t &shp_, const stride_t &str_)
-      : parent(d_, shp_, str_) {}
-    fmav(T *d_, const shape_t &shp_)
-      : parent(d_, shp_) {}
+    fmav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : fmav_info(shp_, str_), membuf<T>(d_) {}
+    fmav(const T *d_, const shape_t &shp_)
+      : fmav_info(shp_), membuf<T>(d_) {}
+    fmav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_)
+      : fmav_info(shp_, str_), membuf<T>(d_,rw_) {}
+    fmav(T *d_, const shape_t &shp_, bool rw_)
+      : fmav_info(shp_), membuf<T>(d_,rw_) {}
     fmav(const shape_t &shp_)
-      : parent(shp_) {}
-    fmav(T* d_, const fmav_info &info)
-      : parent(d_, info) {}
-    fmav(const fmav &other) = default;
+      : fmav_info(shp_), membuf<T>(size()) {}
+    fmav(T* d_, const fmav_info &info, bool rw_=false)
+      : fmav_info(info), membuf<T>(d_, rw_) {}
+    fmav(const T* d_, const fmav_info &info)
+      : fmav_info(info), membuf<T>(d_) {}
+    fmav(const fmav &other) = delete;
     fmav(fmav &&other) = default;
 // Not for public use!
-    fmav(T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_)
-      : parent(d_, p, shp_, str_) {}
-
-    template<typename I> T &operator[](I i) const
-      { return d[i]; }
-    using parent::shape;
-    using parent::stride;
-    T *data() const
-      { return d; }
-    using parent::last_contiguous;
-    using parent::contiguous;
-    using parent::conformable;
+    fmav(T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_, bool rw_)
+      : fmav_info(shp_, str_), membuf<T>(d_, p, rw_) {}
   };
 
-template<typename T, size_t ndim> class cmav
+template<size_t ndim> class mav_info
   {
-  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
-
   protected:
-    using Tsp = shared_ptr<vector<T>>;
-    array<size_t, ndim> shp;
-    array<ptrdiff_t, ndim> str;
-    Tsp ptr;
-    T *d;
+    using shape_t = array<size_t, ndim>;
+    using stride_t = array<ptrdiff_t, ndim>;
 
-  public:
-    cmav(const T *d_, const array<size_t,ndim> &shp_,
-        const array<ptrdiff_t,ndim> &str_)
-      : shp(shp_), str(str_), d(const_cast<T *>(d_)) {}
-    cmav(const T *d_, const array<size_t,ndim> &shp_)
-      : shp(shp_), d(const_cast<T *>(d_))
-      {
-      str[ndim-1]=1;
-      for (size_t i=2; i<=ndim; ++i)
-        str[ndim-i] = str[ndim-i+1]*shp[ndim-i+1];
-      }
-    cmav(const array<size_t,ndim> &shp_)
-      : shp(shp_), ptr(make_unique<vector<T>>(size())), d(ptr->data())
-      {
-      str[ndim-1]=1;
-      for (size_t i=2; i<=ndim; ++i)
-        str[ndim-i] = str[ndim-i+1]*shp[ndim-i+1];
-      }
-    cmav(const cmav &other) = default;
-    cmav(cmav &&other) = default;
-    operator cfmav<T>() const
-      {
-      return cfmav<T>(d, ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()});
-      }
-    const T &operator[](size_t i) const
-      { return operator()(i); }
-    const T &operator()(size_t i) const
-      {
-      static_assert(ndim==1, "ndim must be 1");
-      return d[str[0]*i];
-      }
-    const T &operator()(size_t i, size_t j) const
-      {
-      static_assert(ndim==2, "ndim must be 2");
-      return d[str[0]*i + str[1]*j];
-      }
-    const T &operator()(size_t i, size_t j, size_t k) const
-      {
-      static_assert(ndim==3, "ndim must be 3");
-      return d[str[0]*i + str[1]*j + str[2]*k];
-      }
-    size_t shape(size_t i) const { return shp[i]; }
-    const array<size_t,ndim> &shape() const { return shp; }
-    size_t size() const
+    shape_t shp;
+    stride_t str;
+    size_t sz;
+
+    static size_t prod(const shape_t &shape)
       {
       size_t res=1;
-      for (auto v: shp) res*=v;
+      for (auto sz: shape)
+        res*=sz;
       return res;
       }
-    ptrdiff_t stride(size_t i) const { return str[i]; }
-    const T *data() const
-      { return d; }
+
+  public:
+    mav_info(const shape_t &shape_, const stride_t &stride_)
+      : shp(shape_), str(stride_), sz(prod(shp))
+      { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
+    mav_info(const shape_t &shape_)
+      : shp(shape_), sz(prod(shp))
+      {
+      MR_assert(ndim>0, "at least 1D required");
+      str[ndim-1]=1;
+      for (size_t i=2; i<=ndim; ++i)
+        str[ndim-i] = str[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
+      }
+//    size_t ndim() const { return shp.size(); }
+    size_t size() const { return sz; }
+    const shape_t &shape() const { return shp; }
+    size_t shape(size_t i) const { return shp[i]; }
+    const stride_t &stride() const { return str; }
+    const ptrdiff_t &stride(size_t i) const { return str[i]; }
     bool last_contiguous() const
-      { return (str[ndim-1]==1) || (str[ndim-1]==0); }
+      { return (str.back()==1); }
     bool contiguous() const
       {
       ptrdiff_t stride=1;
       for (size_t i=0; i<ndim; ++i)
         {
         if (str[ndim-1-i]!=stride) return false;
-        stride *= shp[ndim-1-i];
+        stride *= ptrdiff_t(shp[ndim-1-i]);
         }
       return true;
       }
-    template<typename T2> bool conformable(const cmav<T2,ndim> &other) const
+    bool conformable(const mav_info &other) const
       { return shp==other.shp; }
   };
-template<typename T, size_t ndim> class mav: public cmav<T, ndim>
+
+template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
   {
+  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
+  using typename mav_info<ndim>::shape_t;
+  using typename mav_info<ndim>::stride_t;
+
   protected:
-    using Tsp = shared_ptr<vector<T>>;
-    using parent = cmav<T, ndim>;
-    using parent::d;
-    using parent::ptr;
-    using parent::shp;
-    using parent::str;
+    using membuf<T>::Tsp;
+    using mav_info<ndim>::size;
+    using membuf<T>::d;
+    using membuf<T>::ptr;
+    using mav_info<ndim>::shp;
+    using mav_info<ndim>::str;
+    using membuf<T>::rw;
+    using membuf<T>::val;
 
   public:
-    mav(T *d_, const array<size_t,ndim> &shp_,
-        const array<ptrdiff_t,ndim> &str_)
-      : parent(d_, shp_, str_) {}
-    mav(T *d_, const array<size_t,ndim> &shp_)
-      : parent(d_, shp_) {}
+    mav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : mav_info<ndim>(shp_, str_), membuf<T>(d_) {}
+    mav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_=false)
+      : mav_info<ndim>(shp_, str_), membuf<T>(d_, rw_) {}
+    mav(const T *d_, const shape_t &shp_)
+      : mav_info<ndim>(shp_), membuf<T>(d_) {}
+    mav(T *d_, const shape_t &shp_, bool rw_=false)
+      : mav_info<ndim>(shp_), membuf<T>(d_, rw_) {}
     mav(const array<size_t,ndim> &shp_)
-      : parent(shp_) {}
-    mav(const mav &other) = default;
+      : mav_info<ndim>(shp_), membuf<T>(size()) {}
+    mav(const mav &other) = delete;
     mav(mav &&other) = default;
     operator fmav<T>() const
       {
-      return fmav<T>(d, ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return fmav<T>(const_cast<T *>(d), ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()}, rw);
       }
-    T &operator[](size_t i) const
-      { return operator()(i); }
-    T &operator()(size_t i) const
+    const T &operator()(size_t i) const
       {
       static_assert(ndim==1, "ndim must be 1");
-      return d[str[0]*i];
+      return val(str[0]*i);
       }
-    T &operator()(size_t i, size_t j) const
+    const T &operator()(size_t i, size_t j) const
       {
       static_assert(ndim==2, "ndim must be 2");
-      return d[str[0]*i + str[1]*j];
+      return val(str[0]*i + str[1]*j);
       }
-    T &operator()(size_t i, size_t j, size_t k) const
+    const T &operator()(size_t i, size_t j, size_t k) const
       {
       static_assert(ndim==3, "ndim must be 3");
-      return d[str[0]*i + str[1]*j + str[2]*k];
+      return val(str[0]*i + str[1]*j + str[2]*k);
       }
-    using parent::shape;
-    using parent::stride;
-    using parent::size;
-    T *data() const
-      { return d; }
-    using parent::last_contiguous;
-    using parent::contiguous;
-    void fill(const T &val) const
+    T &operator()(size_t i)
       {
+      static_assert(ndim==1, "ndim must be 1");
+      return val(str[0]*i);
+      }
+    T &operator()(size_t i, size_t j)
+      {
+      static_assert(ndim==2, "ndim must be 2");
+      return val(str[0]*i + str[1]*j);
+      }
+    T &operator()(size_t i, size_t j, size_t k)
+      {
+      static_assert(ndim==3, "ndim must be 3");
+      return val(str[0]*i + str[1]*j + str[2]*k);
+      }
+    void fill(const T &val)
+      {
+      MR_assert(rw, "array is nor writable");
       // FIXME: special cases for contiguous arrays and/or zeroing?
       if (ndim==1)
         for (size_t i=0; i<shp[0]; ++i)
@@ -294,18 +296,14 @@ template<typename T, size_t ndim> class mav: public cmav<T, ndim>
             for (size_t k=0; k<shp[2]; ++k)
               d[str[0]*i + str[1]*j + str[2]*k] = val;
       }
-    using parent::conformable;
   };
 
 }
 
 using detail_mav::shape_t;
 using detail_mav::stride_t;
-using detail_mav::fmav_info;
 using detail_mav::fmav;
-using detail_mav::cfmav;
 using detail_mav::mav;
-using detail_mav::cmav;
 
 }
 
