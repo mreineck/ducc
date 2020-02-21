@@ -206,21 +206,21 @@ void upsample_to_cc(const mav<double,2> &in, bool has_np, bool has_sp,
     size_t je = min(js+delta, nphi);
     mav<double,2> tmp({nrings_out,je-js});
     fmav<double> ftmp(tmp);
-    mav<double,2> tmp2(tmp.data(),{nrings_in, je-js}, true);
+    mav<double,2> tmp2(tmp.vdata(),{nrings_in, je-js}, true);
     fmav<double> ftmp2(tmp2);
     // enhance to "double sphere"
     if (has_np)
       for (size_t j=js; j<je; ++j)
-        tmp2(0,j-js) = in(0,j);
+        tmp2.v(0,j-js) = in(0,j);
     if (has_sp)
       for (size_t j=js; j<je; ++j)
-        tmp2(ntheta_in-1,j-js) = in(ntheta_in-1,j);
+        tmp2.v(ntheta_in-1,j-js) = in(ntheta_in-1,j);
     for (size_t i=has_np, i2=nrings_in-1; i+has_sp<ntheta_in; ++i,--i2)
       for (size_t j=js,j2=js+nphi/2; j<je; ++j,++j2)
         {
         if (j2>=nphi) j2-=nphi;
-        tmp2(i,j-js) = in(i,j);
-        tmp2(i2,j-js) = in(i,j2);
+        tmp2.v(i,j-js) = in(i,j);
+        tmp2.v(i2,j-js) = in(i,j2);
         }
     // FFT in theta direction
     r2r_fftpack(ftmp2,ftmp2,{0},true,true,1./nrings_in,0);
@@ -234,21 +234,21 @@ void upsample_to_cc(const mav<double,2> &in, bool has_np, bool has_sp,
           {
           complex<double> ctmp(tmp2(2*i-1,j-js),tmp2(2*i,j-js));
           ctmp *= rot;
-          tmp2(2*i-1,j-js) = ctmp.real();
-          tmp2(2*i  ,j-js) = ctmp.imag();
+          tmp2.v(2*i-1,j-js) = ctmp.real();
+          tmp2.v(2*i  ,j-js) = ctmp.imag();
           }
         }
       }
     // zero-padding
     for (size_t i=nrings_in; i<nrings_out; ++i)
       for (size_t j=js; j<je; ++j)
-        tmp(i,j-js) = 0;
+        tmp.v(i,j-js) = 0;
     // FFT back
     r2r_fftpack(ftmp,ftmp,{0},false,false,1.,0);
     // copy to output map
     for (size_t i=0; i<ntheta_out; ++i)
       for (size_t j=js; j<je; ++j)
-        out(i,j) = tmp(i,j-js);
+        out.v(i,j) = tmp(i,j-js);
     }
   }
 

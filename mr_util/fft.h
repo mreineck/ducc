@@ -650,25 +650,28 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
+  auto ptr=dst.vdata();
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
-      dst[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
+      ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
+  auto ptr=dst.vdata();
   for (size_t i=0; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
-      dst[it.oofs(j,i)] = src[i][j];
+      ptr[it.oofs(j,i)] = src[i][j];
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const T *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
+  auto ptr=dst.vdata();
   if (src == &dst[it.oofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_out(); ++i)
-    dst[it.oofs(i)] = src[i];
+    ptr[it.oofs(i)] = src[i];
   }
 
 template <typename T> struct add_vec { using type = native_simd<T>; };
@@ -709,7 +712,7 @@ MRUTIL_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
           {
           it.advance(1);
           auto buf = allow_inplace && it.stride_out() == 1 ?
-            &out[it.oofs(0)] : reinterpret_cast<T *>(storage.data());
+            &out.vraw(it.oofs(0)) : reinterpret_cast<T *>(storage.data());
           exec(it, tin, out, buf, *plan, fct);
           }
       });  // end of parallel region
@@ -734,32 +737,34 @@ struct ExecC2C
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
+  auto ptr = dst.vdata();
   for (size_t j=0; j<vlen; ++j)
-    dst[it.oofs(j,0)] = src[0][j];
+    ptr[it.oofs(j,0)] = src[0][j];
   size_t i=1, i1=1, i2=it.length_out()-1;
   for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
     for (size_t j=0; j<vlen; ++j)
       {
-      dst[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
-      dst[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
+      ptr[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
+      ptr[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
       }
   if (i<it.length_out())
     for (size_t j=0; j<vlen; ++j)
-      dst[it.oofs(j,i1)] = src[i][j];
+      ptr[it.oofs(j,i1)] = src[i][j];
   }
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   const T *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
-  dst[it.oofs(0)] = src[0];
+  auto ptr = dst.vdata();
+  ptr[it.oofs(0)] = src[0];
   size_t i=1, i1=1, i2=it.length_out()-1;
   for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
     {
-    dst[it.oofs(i1)] = src[i]+src[i+1];
-    dst[it.oofs(i2)] = src[i]-src[i+1];
+    ptr[it.oofs(i1)] = src[i]+src[i+1];
+    ptr[it.oofs(i2)] = src[i]-src[i+1];
     }
   if (i<it.length_out())
-    dst[it.oofs(i1)] = src[i];
+    ptr[it.oofs(i1)] = src[i];
   }
 
 struct ExecHartley
@@ -810,20 +815,21 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
         auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true);
+        auto vout = out.vdata();
         for (size_t j=0; j<vlen; ++j)
-          out[it.oofs(j,0)].Set(tdatav[0][j]);
+          vout[it.oofs(j,0)].Set(tdatav[0][j]);
         size_t i=1, ii=1;
         if (forward)
           for (; i<len-1; i+=2, ++ii)
             for (size_t j=0; j<vlen; ++j)
-              out[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
         else
           for (; i<len-1; i+=2, ++ii)
             for (size_t j=0; j<vlen; ++j)
-              out[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
         if (i<len)
           for (size_t j=0; j<vlen; ++j)
-            out[it.oofs(j,ii)].Set(tdatav[i][j]);
+            vout[it.oofs(j,ii)].Set(tdatav[i][j]);
         }
 #endif
     while (it.remaining()>0)
@@ -832,16 +838,17 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
       auto tdata = reinterpret_cast<T *>(storage.data());
       copy_input(it, in, tdata);
       plan->exec(tdata, fct, true);
-      out[it.oofs(0)].Set(tdata[0]);
+      auto vout = out.vdata();
+      vout[it.oofs(0)].Set(tdata[0]);
       size_t i=1, ii=1;
       if (forward)
         for (; i<len-1; i+=2, ++ii)
-          out[it.oofs(ii)].Set(tdata[i], tdata[i+1]);
+          vout[it.oofs(ii)].Set(tdata[i], tdata[i+1]);
       else
         for (; i<len-1; i+=2, ++ii)
-          out[it.oofs(ii)].Set(tdata[i], -tdata[i+1]);
+          vout[it.oofs(ii)].Set(tdata[i], -tdata[i+1]);
       if (i<len)
-        out[it.oofs(ii)].Set(tdata[i]);
+        vout[it.oofs(ii)].Set(tdata[i]);
       }
     });  // end of parallel region
   }
@@ -944,7 +951,7 @@ template<typename T> void c2c(const fmav<std::complex<T>> &in,
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
-  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out, out.writable());
+  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.vdata()), out, out.writable());
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
@@ -983,7 +990,7 @@ template<typename T> void r2c(const fmav<T> &in,
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
-  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out, out.writable());
+  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.vdata()), out, out.writable());
   general_r2c(in, out2, axis, forward, fct, nthreads);
   }
 
@@ -1055,11 +1062,12 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   simple_iter iin(atmp);
   rev_iter iout(out, axes);
+  auto vout = out.vdata();
   while(iin.remaining()>0)
     {
     auto v = atmp[iin.ofs()];
-    out[iout.ofs()] = v.real()+v.imag();
-    out[iout.rev_ofs()] = v.real()-v.imag();
+    vout[iout.ofs()] = v.real()+v.imag();
+    vout[iout.rev_ofs()] = v.real()-v.imag();
     iin.advance(); iout.advance();
     }
   }

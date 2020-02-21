@@ -6,8 +6,10 @@
 
 import pysharp
 import numpy as np
-from numpy.testing import assert_allclose
 from time import time
+
+def _l2error(a, b):
+    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
 
 # set maximum multipole moment
 lmax = 2047
@@ -47,7 +49,7 @@ print("testing Gauss-Legendre grid")
 nlat = lmax+1
 
 # describe the Gauss-Legendre geometry to the job
-job.set_Gauss_geometry(nlat, nlon)
+job.set_gauss_geometry(nlat, nlon)
 
 # go from a_lm to map
 t0=time()
@@ -65,16 +67,16 @@ alm2 = job.map2alm(map)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-assert_allclose(alm, alm2)
+print("L2 error: ", _l2error(alm,alm2))
 
 
 print("testing Driscoll-Healy grid")
 
-# Number of iso-latitude rings required for Gauss-Legendre grid
-nlat = 2*lmax
+# Number of iso-latitude rings required for Driscoll-Healy grid
+nlat = 2*lmax+2
 
 # describe the Gauss-Legendre geometry to the job
-job.set_DH_geometry(nlat, nlon)
+job.set_dh_geometry(nlat, nlon)
 
 # go from a_lm to map
 t0=time()
@@ -92,4 +94,4 @@ alm2 = job.map2alm(map)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-assert_allclose(alm, alm2)
+print("L2 error: ", _l2error(alm,alm2))

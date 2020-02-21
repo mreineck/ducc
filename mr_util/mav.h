@@ -107,33 +107,27 @@ template<typename T> class membuf
     membuf(size_t sz)
       : ptr(make_unique<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     membuf(const membuf &other) = default;
+    membuf(membuf &other) = default;
     membuf(membuf &&other) = default;
 // Not for public use!
     membuf(T *d_, const Tsp &p, bool rw_)
       : ptr(p), d(d_), rw(rw_) {}
 
-    template<typename I> const T &val(I i) const
-      { return d[i]; }
-    template<typename I> T &val(I i)
+    template<typename I> T &vraw(I i)
       {
-      MR_assert(rw, "array is nor writable");
+      MR_assert(rw, "array is not writable");
       return const_cast<T *>(d)[i];
       }
     template<typename I> const T &operator[](I i) const
       { return d[i]; }
-    template<typename I> T &operator[](I i)
-      {
-      MR_assert(rw, "array is nor writable");
-      return const_cast<T *>(d)[i];
-      }
     const T *data() const
       { return d; }
-    T *data()
+    T *vdata()
       {
-      MR_assert(rw, "array is nor writable");
+      MR_assert(rw, "array is not writable");
       return const_cast<T *>(d);
       }
-    bool writable() const { return rw; }
+    bool writable() { return rw; }
   };
 
 // "mav" stands for "multidimensional array view"
@@ -157,11 +151,11 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : fmav_info(info), membuf<T>(d_, rw_) {}
     fmav(const T* d_, const fmav_info &info)
       : fmav_info(info), membuf<T>(d_) {}
-    fmav(const fmav &other) = delete;
+    fmav(const fmav &other) = default;
     fmav(fmav &&other) = default;
 // Not for public use!
-    fmav(T *d_, const Tsp &p, const shape_t &shp_, const stride_t &str_, bool rw_)
-      : fmav_info(shp_, str_), membuf<T>(d_, p, rw_) {}
+    fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
+      : fmav_info(shp_, str_), membuf<T>(buf) {}
   };
 
 template<size_t ndim> class mav_info
@@ -194,7 +188,6 @@ template<size_t ndim> class mav_info
       for (size_t i=2; i<=ndim; ++i)
         str[ndim-i] = str[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
       }
-//    size_t ndim() const { return shp.size(); }
     size_t size() const { return sz; }
     const shape_t &shape() const { return shp; }
     size_t shape(size_t i) const { return shp[i]; }
@@ -214,6 +207,21 @@ template<size_t ndim> class mav_info
       }
     bool conformable(const mav_info &other) const
       { return shp==other.shp; }
+    ptrdiff_t idx(size_t i) const
+      {
+      static_assert(ndim==1, "ndim must be 1");
+      return str[0]*i;
+      }
+    ptrdiff_t idx(size_t i, size_t j) const
+      {
+      static_assert(ndim==2, "ndim must be 2");
+      return str[0]*i + str[1]*j;
+      }
+    ptrdiff_t idx(size_t i, size_t j, size_t k) const
+      {
+      static_assert(ndim==3, "ndim must be 3");
+      return str[0]*i + str[1]*j + str[2]*k;
+      }
   };
 
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
@@ -223,16 +231,21 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
   using typename mav_info<ndim>::stride_t;
 
   protected:
-    using membuf<T>::Tsp;
-    using mav_info<ndim>::size;
+//    using membuf<T>::Tsp;
     using membuf<T>::d;
     using membuf<T>::ptr;
     using mav_info<ndim>::shp;
     using mav_info<ndim>::str;
     using membuf<T>::rw;
-    using membuf<T>::val;
+    using membuf<T>::vraw;
 
   public:
+    using membuf<T>::operator[];
+    using membuf<T>::vdata;
+    using membuf<T>::data;
+    using mav_info<ndim>::size;
+    using mav_info<ndim>::idx;
+
     mav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_) {}
     mav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_=false)
@@ -243,58 +256,44 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : mav_info<ndim>(shp_), membuf<T>(d_, rw_) {}
     mav(const array<size_t,ndim> &shp_)
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
-    mav(const mav &other) = delete;
+    mav(const mav &other) = default;
     mav(mav &&other) = default;
     operator fmav<T>() const
       {
-      return fmav<T>(const_cast<T *>(d), ptr, {shp.begin(), shp.end()}, {str.begin(), str.end()}, rw);
+      return fmav<T>(data(), {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      }
+    operator fmav<T>()
+      {
+      return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     const T &operator()(size_t i) const
-      {
-      static_assert(ndim==1, "ndim must be 1");
-      return val(str[0]*i);
-      }
+      { return operator[](idx(i)); }
     const T &operator()(size_t i, size_t j) const
-      {
-      static_assert(ndim==2, "ndim must be 2");
-      return val(str[0]*i + str[1]*j);
-      }
+      { return operator[](idx(i,j)); }
     const T &operator()(size_t i, size_t j, size_t k) const
-      {
-      static_assert(ndim==3, "ndim must be 3");
-      return val(str[0]*i + str[1]*j + str[2]*k);
-      }
-    T &operator()(size_t i)
-      {
-      static_assert(ndim==1, "ndim must be 1");
-      return val(str[0]*i);
-      }
-    T &operator()(size_t i, size_t j)
-      {
-      static_assert(ndim==2, "ndim must be 2");
-      return val(str[0]*i + str[1]*j);
-      }
-    T &operator()(size_t i, size_t j, size_t k)
-      {
-      static_assert(ndim==3, "ndim must be 3");
-      return val(str[0]*i + str[1]*j + str[2]*k);
-      }
+      { return operator[](idx(i,j,k)); }
+    T &v(size_t i)
+      { return vraw(idx(i)); }
+    T &v(size_t i, size_t j)
+      { return vraw(idx(i,j)); }
+    T &v(size_t i, size_t j, size_t k)
+      { return vraw(idx(i,j,k)); }
     void fill(const T &val)
       {
-      MR_assert(rw, "array is nor writable");
+      T *d2 = vdata();
       // FIXME: special cases for contiguous arrays and/or zeroing?
       if (ndim==1)
         for (size_t i=0; i<shp[0]; ++i)
-          d[str[0]*i]=val;
+          d2[str[0]*i]=val;
       else if (ndim==2)
         for (size_t i=0; i<shp[0]; ++i)
           for (size_t j=0; j<shp[1]; ++j)
-            d[str[0]*i + str[1]*j] = val;
+            d2[str[0]*i + str[1]*j] = val;
       else if (ndim==3)
         for (size_t i=0; i<shp[0]; ++i)
           for (size_t j=0; j<shp[1]; ++j)
             for (size_t k=0; k<shp[2]; ++k)
-              d[str[0]*i + str[1]*j + str[2]*k] = val;
+              d2[str[0]*i + str[1]*j + str[2]*k] = val;
       }
   };
 
@@ -302,6 +301,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
 
 using detail_mav::shape_t;
 using detail_mav::stride_t;
+using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav;
 

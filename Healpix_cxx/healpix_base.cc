@@ -498,9 +498,9 @@ template<typename I> template<typename I2>
       double dr=base[o].max_pixrad(); // safety distance
       for (size_t i=0; i<nv; ++i)
         {
-        crlimit(o,i,0) = (rad[i]+dr>pi) ? -1. : cos(rad[i]+dr);
-        crlimit(o,i,1) = (o==0) ? cos(rad[i]) : crlimit(0,i,1);
-        crlimit(o,i,2) = (rad[i]-dr<0.) ?  1. : cos(rad[i]-dr);
+        crlimit.v(o,i,0) = (rad[i]+dr>pi) ? -1. : cos(rad[i]+dr);
+        crlimit.v(o,i,1) = (o==0) ? cos(rad[i]) : crlimit(0,i,1);
+        crlimit.v(o,i,2) = (rad[i]-dr<0.) ?  1. : cos(rad[i]-dr);
         }
       }
 
@@ -563,9 +563,9 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
       double dr=base[o].max_pixrad(); // safety distance
       for (size_t i=0; i<nv; ++i)
         {
-        crlimit(o,i,0) = (rad[i]+dr>pi) ? -1. : cos(rad[i]+dr);
-        crlimit(o,i,1) = (o==0) ? cos(rad[i]) : crlimit(0,i,1);
-        crlimit(o,i,2) = (rad[i]-dr<0.) ?  1. : cos(rad[i]-dr);
+        crlimit.v(o,i,0) = (rad[i]+dr>pi) ? -1. : cos(rad[i]+dr);
+        crlimit.v(o,i,1) = (o==0) ? cos(rad[i]) : crlimit(0,i,1);
+        crlimit.v(o,i,2) = (rad[i]-dr<0.) ?  1. : cos(rad[i]-dr);
         }
       }
 
