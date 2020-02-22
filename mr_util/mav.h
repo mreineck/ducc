@@ -106,7 +106,8 @@ template<typename T> class membuf
       : d(d_), rw(false) {}
     membuf(size_t sz)
       : ptr(make_unique<vector<T>>(sz)), d(ptr->data()), rw(true) {}
-    membuf(const membuf &other) = default;
+    membuf(const membuf &other)
+      : ptr(other.ptr), d(other.d), rw(false) {}
     membuf(membuf &other) = default;
     membuf(membuf &&other) = default;
 // Not for public use!
@@ -152,6 +153,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     fmav(const T* d_, const fmav_info &info)
       : fmav_info(info), membuf<T>(d_) {}
     fmav(const fmav &other) = default;
+    fmav(fmav &other) = default;
     fmav(fmav &&other) = default;
 // Not for public use!
     fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
@@ -231,7 +233,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
   using typename mav_info<ndim>::stride_t;
 
   protected:
-//    using membuf<T>::Tsp;
     using membuf<T>::d;
     using membuf<T>::ptr;
     using mav_info<ndim>::shp;
@@ -257,6 +258,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     mav(const array<size_t,ndim> &shp_)
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
     mav(const mav &other) = default;
+    mav(mav &other) = default;
     mav(mav &&other) = default;
     operator fmav<T>() const
       {
@@ -297,6 +299,78 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       }
   };
 
+template<typename T, size_t ndim> class MavIter
+  {
+  protected:
+    fmav<T> mav;
+    array<size_t, ndim> shp;
+    array<ptrdiff_t, ndim> str;
+    shape_t pos;
+    ptrdiff_t idx_;
+    bool done_;
+
+  public:
+    MavIter(const fmav<T> &mav_)
+      : mav(mav_), pos(mav.ndim()-ndim,0), idx_(0), done_(false)
+      {
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp[i] = mav.shape(mav.ndim()-ndim+i);
+        str[i] = mav.stride(mav.ndim()-ndim+i);
+        }
+      }
+    MavIter(fmav<T> &mav_)
+      : mav(mav_), pos(mav.ndim()-ndim,0), idx_(0), done_(false)
+      {
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp[i] = mav.shape(mav.ndim()-ndim+i);
+        str[i] = mav.stride(mav.ndim()-ndim+i);
+        }
+      }
+    bool done() const
+      { return done_; }
+    void inc()
+      {
+      for (ptrdiff_t i=mav.ndim()-ndim-1; i>=0; --i)
+        {
+        idx_+=mav.stride(i);
+        if (++pos[i]<mav.shape(i)) return;
+        pos[i]=0;
+        idx_-=mav.shape(i)*mav.stride(i);
+        }
+      done_=true;
+      }
+    size_t shape(size_t i) const { return shp[i]; }
+    ptrdiff_t idx(size_t i) const
+      {
+      static_assert(ndim==1, "ndim must be 1");
+      return idx_+i*str[0];
+      }
+    ptrdiff_t idx(size_t i, size_t j) const
+      {
+      static_assert(ndim==2, "ndim must be 2");
+      return idx_+i*str[0]+j*str[1];
+      }
+    ptrdiff_t idx(size_t i, size_t j, size_t k) const
+      {
+      static_assert(ndim==3, "ndim must be 3");
+      return idx_+i*str[0]+j*str[1]+k*str[2];
+      }
+    const T &operator()(size_t i) const
+      { return mav[idx(i)]; }
+    const T &operator()(size_t i, size_t j) const
+      { return mav[idx(i,j)]; }
+    const T &operator()(size_t i, size_t j, size_t k) const
+      { return mav[idx(i,j,k)]; }
+    T &v(size_t i)
+      { return mav.vraw(idx(i)); }
+    T &v(size_t i, size_t j)
+      { return mav.vraw(idx(i,j)); }
+    T &v(size_t i, size_t j, size_t k)
+      { return mav.vraw(idx(i,j,k)); }
+  };
+
 }
 
 using detail_mav::shape_t;
@@ -304,6 +378,7 @@ using detail_mav::stride_t;
 using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav;
+using detail_mav::MavIter;
 
 }
 

@@ -67,7 +67,6 @@ template<typename T> void complex2hartley
   (const mav<complex<T>, 2> &grid, mav<T,2> &grid2, size_t nthreads)
   {
   checkShape(grid.shape(), grid2.shape());
-  auto g2w = grid2.vdata();
   size_t nu=grid.shape(0), nv=grid.shape(1);
 
   execStatic(nu, nthreads, 0, [&](Scheduler &sched)
@@ -78,8 +77,8 @@ template<typename T> void complex2hartley
       for (size_t v=0; v<nv; ++v)
         {
         size_t xv = (v==0) ? 0 : nv-v;
-        g2w[grid2.idx(u,v)] = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
-                                      grid(xu,xv).real()-grid(xu,xv).imag());
+        grid2.v(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
+                               grid(xu,xv).real()-grid(xu,xv).imag());
         }
       }
     });
@@ -89,7 +88,6 @@ template<typename T> void hartley2complex
   (const mav<T,2> &grid, mav<complex<T>,2> &grid2, size_t nthreads)
   {
   checkShape(grid.shape(), grid2.shape());
-  auto g2w = grid2.vdata();
   size_t nu=grid.shape(0), nv=grid.shape(1);
 
   execStatic(nu, nthreads, 0, [&](Scheduler &sched)
@@ -102,7 +100,7 @@ template<typename T> void hartley2complex
         size_t xv = (v==0) ? 0 : nv-v;
         T v1 = T(0.5)*grid( u, v);
         T v2 = T(0.5)*grid(xu,xv);
-        g2w[grid2.idx(u,v)] = std::complex<T>(v1+v2, v1-v2);
+        grid2.v(u,v) = std::complex<T>(v1+v2, v1-v2);
         }
       }
     });
@@ -112,7 +110,6 @@ template<typename T> void hartley2_2D(const mav<T,2> &in,
   mav<T,2> &out, size_t nthreads)
   {
   checkShape(in.shape(), out.shape());
-  auto vout = out.vdata();
   size_t nu=in.shape(0), nv=in.shape(1);
   fmav<T> fin(in), fout(out);
   r2r_separable_hartley(fin, fout, {0,1}, T(1), nthreads);
@@ -125,10 +122,10 @@ template<typename T> void hartley2_2D(const mav<T,2> &in,
          T b = out(nu-i,j);
          T c = out(i,nv-j);
          T d = out(nu-i,nv-j);
-         vout[out.idx(i,j)] = T(0.5)*(a+b+c-d);
-         vout[out.idx(nu-i,j)] = T(0.5)*(a+b+d-c);
-         vout[out.idx(i,nv-j)] = T(0.5)*(a+c+d-b);
-         vout[out.idx(nu-i,nv-j)] = T(0.5)*(b+c+d-a);
+         out.v(i,j) = T(0.5)*(a+b+c-d);
+         out.v(nu-i,j) = T(0.5)*(a+b+d-c);
+         out.v(i,nv-j) = T(0.5)*(a+c+d-b);
+         out.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
          }
      });
   }
@@ -374,7 +371,6 @@ class GridderConfig
       mav<T,2> &dirty) const
       {
       checkShape(dirty.shape(), {nx_dirty,ny_dirty});
-      auto vdirty =dirty.vdata();
       auto cfu = correction_factors(nu, ofactor, nx_dirty/2+1, supp, nthreads);
       auto cfv = correction_factors(nv, ofactor, ny_dirty/2+1, supp, nthreads);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
@@ -391,7 +387,7 @@ class GridderConfig
             if (j2>=nv) j2-=nv;
             // FIXME: for some reason g++ warns about double-to-float conversion
             // here, even though there is an explicit cast...
-            vdirty[dirty.idx(i,j)] = tmav(i2,j2)*T(cfu[icfu]*cfv[icfv]);
+            dirty.v(i,j) = tmav(i2,j2)*T(cfu[icfu]*cfv[icfv]);
             }
           }
         });
@@ -400,7 +396,6 @@ class GridderConfig
       mav<complex<T>,2> &tmav, mav<T,2> &dirty, T w) const
       {
       checkShape(dirty.shape(), {nx_dirty,ny_dirty});
-      auto vdirty = dirty.vdata();
       double x0 = -0.5*nx_dirty*psx,
              y0 = -0.5*ny_dirty*psy;
       execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
@@ -417,7 +412,7 @@ class GridderConfig
             if (ix>=nu) ix-=nu;
             size_t jx = nv-ny_dirty/2+j;
             if (jx>=nv) jx-=nv;
-            vdirty[dirty.idx(i,j)] += (tmav(ix,jx)*ws).real(); // lower left
+            dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
             size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
             size_t ix2 = nu-nx_dirty/2+i2;
             if (ix2>=nu) ix2-=nu;
@@ -425,12 +420,12 @@ class GridderConfig
             if (jx2>=nv) jx2-=nv;
             if ((i>0)&&(i<i2))
               {
-              vdirty[dirty.idx(i2,j)] += (tmav(ix2,jx)*ws).real(); // lower right
+              dirty.v(i2,j) += (tmav(ix2,jx)*ws).real(); // lower right
               if ((j>0)&&(j<j2))
-                vdirty[dirty.idx(i2,j2)] += (tmav(ix2,jx2)*ws).real(); // upper right
+                dirty.v(i2,j2) += (tmav(ix2,jx2)*ws).real(); // upper right
               }
             if ((j>0)&&(j<j2))
-              vdirty[dirty.idx(i,j2)] += (tmav(ix,jx2)*ws).real(); // upper left
+              dirty.v(i,j2) += (tmav(ix,jx2)*ws).real(); // upper left
             }
           }
         });
@@ -462,7 +457,6 @@ class GridderConfig
       auto cfu = correction_factors(nu, ofactor, nx_dirty/2+1, supp, nthreads);
       auto cfv = correction_factors(nv, ofactor, ny_dirty/2+1, supp, nthreads);
       grid.fill(0);
-      auto vgrid = grid.vdata();
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
         {
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
@@ -475,7 +469,7 @@ class GridderConfig
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-ny_dirty/2+j;
             if (j2>=nv) j2-=nv;
-            vgrid[grid.idx(i2,j2)] = dirty(i,j)*T(cfu[icfu]*cfv[icfv]);
+            grid.v(i2,j2) = dirty(i,j)*T(cfu[icfu]*cfv[icfv]);
             }
           }
         });
@@ -486,7 +480,6 @@ class GridderConfig
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
       checkShape(grid.shape(), {nu, nv});
       grid.fill(0);
-      auto vgrid = grid.vdata();
 
       double x0 = -0.5*nx_dirty*psx,
              y0 = -0.5*ny_dirty*psy;
@@ -504,7 +497,7 @@ class GridderConfig
             if (ix>=nu) ix-=nu;
             size_t jx = nv-ny_dirty/2+j;
             if (jx>=nv) jx-=nv;
-            vgrid[grid.idx(ix,jx)] = dirty(i,j)*ws; // lower left
+            grid.v(ix,jx) = dirty(i,j)*ws; // lower left
             size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
             size_t ix2 = nu-nx_dirty/2+i2;
             if (ix2>=nu) ix2-=nu;
@@ -512,12 +505,12 @@ class GridderConfig
             if (jx2>=nv) jx2-=nv;
             if ((i>0)&&(i<i2))
               {
-              vgrid[grid.idx(ix2,jx)] = dirty(i2,j)*ws; // lower right
+              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
               if ((j>0)&&(j<j2))
-                vgrid[grid.idx(ix2,jx2)] = dirty(i2,j2)*ws; // upper right
+                grid.v(ix2,jx2) = dirty(i2,j2)*ws; // upper right
               }
             if ((j>0)&&(j<j2))
-              vgrid[grid.idx(ix,jx2)] = dirty(i,j2)*ws; // upper left
+              grid.v(ix,jx2) = dirty(i,j2)*ws; // upper left
             }
           }
         });
@@ -872,7 +865,6 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
   {
   auto nx_dirty=gconf.Nxdirty();
   auto ny_dirty=gconf.Nydirty();
-  auto vdirty = dirty.vdata();
   size_t nthreads = gconf.Nthreads();
   auto psx=gconf.Pixsize_x();
   auto psy=gconf.Pixsize_y();
@@ -913,15 +905,15 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
           }
         fct *= T(cfu[nx_dirty/2-i]*cfv[ny_dirty/2-j]);
         size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-        vdirty[dirty.idx(i,j)]*=fct;
+        dirty.v(i,j)*=fct;
         if ((i>0)&&(i<i2))
           {
-          vdirty[dirty.idx(i2,j)]*=fct;
+          dirty.v(i2,j)*=fct;
           if ((j>0)&&(j<j2))
-            vdirty[dirty.idx(i2,j2)]*=fct;
+            dirty.v(i2,j2)*=fct;
           }
         if ((j>0)&&(j<j2))
-          vdirty[dirty.idx(i,j2)]*=fct;
+          dirty.v(i,j2)*=fct;
         }
       }
     });
@@ -1108,10 +1100,9 @@ template<typename T, typename Serv> void dirty2x(
     WgridHelper<Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
     mav<T,2> tdirty({nx_dirty,ny_dirty});
-    auto vtdirty = tdirty.vdata();
     for (size_t i=0; i<nx_dirty; ++i)
       for (size_t j=0; j<ny_dirty; ++j)
-        vtdirty[tdirty.idx(i,j)] = dirty(i,j);
+        tdirty.v(i,j) = dirty(i,j);
     // correct for w gridding etc.
     apply_global_corrections(gconf, tdirty, ES_Kernel(gconf.Supp(), gconf.Ofactor(), nthreads), dw, true);
     mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
