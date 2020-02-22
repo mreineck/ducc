@@ -25,6 +25,8 @@
 #include <sstream>
 #include <exception>
 
+#include "mr_util/useful_macros.h"
+
 namespace mr {
 
 namespace detail_error_handling {
@@ -34,19 +36,6 @@ namespace detail_error_handling {
 #else
 #define MRUTIL_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
-
-#define MR_fail(...) \
-  do { \
-    ::std::ostringstream msg; \
-    ::mr::detail_error_handling::streamDump__(msg, MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
-    throw ::std::runtime_error(msg.str()); \
-    } while(0)
-
-#define MR_assert(cond,...) \
-  do { \
-    if (cond); \
-    else { MR_fail("Assertion failure\n", ##__VA_ARGS__); } \
-    } while(0)
 
 // to be replaced with std::source_location once generally available
 class CodeLocation
@@ -73,21 +62,39 @@ inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
 
 #if (__cplusplus>=201703L) // hyper-elegant C++2017 version
 template<typename ...Args>
-inline void streamDump__(::std::ostream &os, Args&&... args)
+void streamDump__(::std::ostream &os, Args&&... args)
   { (os << ... << args); }
 #else
 template<typename T>
-inline void streamDump__(::std::ostream &os, const T& value)
+void streamDump__(::std::ostream &os, const T& value)
   { os << value; }
 
 template<typename T, typename ... Args>
-inline void streamDump__(::std::ostream &os, const T& value,
+void streamDump__(::std::ostream &os, const T& value,
   const Args& ... args)
   {
   os << value;
   streamDump__(os, args...);
   }
 #endif
+template<typename ...Args>
+[[noreturn]] void MRUTIL_NOINLINE fail__(Args&&... args)
+  {
+  ::std::ostringstream msg; \
+  ::mr::detail_error_handling::streamDump__(msg, args...); \
+    throw ::std::runtime_error(msg.str()); \
+  }
+
+#define MR_fail(...) \
+  do { \
+    ::mr::detail_error_handling::fail__(MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    } while(0)
+
+#define MR_assert(cond,...) \
+  do { \
+    if (cond); \
+    else { MR_fail("Assertion failure\n", ##__VA_ARGS__); } \
+    } while(0)
 
 }}
 
