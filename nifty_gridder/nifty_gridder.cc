@@ -21,7 +21,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include "mr_util/pybind_utils.h"
+#include "mr_util/bindings/pybind_utils.h"
 #include "gridder_cxx.h"
 
 using namespace std;

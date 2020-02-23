@@ -16,8 +16,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
-#include "mr_util/fft.h"
-#include "mr_util/pybind_utils.h"
+#include "mr_util/math/fft.h"
+#include "mr_util/bindings/pybind_utils.h"
 
 namespace {
 

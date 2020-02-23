@@ -19,7 +19,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019 Max-Planck-Society
+/* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <iostream>
@@ -29,12 +29,12 @@
 #include <vector>
 #include <array>
 
-#include "mr_util/error_handling.h"
-#include "mr_util/fft.h"
-#include "mr_util/threading.h"
-#include "mr_util/useful_macros.h"
-#include "mr_util/mav.h"
-#include "mr_util/gl_integrator.h"
+#include "mr_util/infra/error_handling.h"
+#include "mr_util/math/fft.h"
+#include "mr_util/infra/threading.h"
+#include "mr_util/infra/useful_macros.h"
+#include "mr_util/infra/mav.h"
+#include "mr_util/math/gl_integrator.h"
 
 #if defined(__GNUC__)
 #define ALIGNED(align) __attribute__ ((aligned(align)))

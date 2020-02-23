@@ -32,15 +32,15 @@
 #include <vector>
 #include <complex>
 
-#include "libsharp2/sharp.h"
-#include "libsharp2/sharp_geomhelpers.h"
-#include "libsharp2/sharp_almhelpers.h"
-#include "mr_util/string_utils.h"
-#include "mr_util/error_handling.h"
-#include "mr_util/mav.h"
-#include "mr_util/fft.h"
-#include "mr_util/constants.h"
-#include "mr_util/pybind_utils.h"
+#include "mr_util/sharp/sharp.h"
+#include "mr_util/sharp/sharp_geomhelpers.h"
+#include "mr_util/sharp/sharp_almhelpers.h"
+#include "mr_util/infra/string_utils.h"
+#include "mr_util/infra/error_handling.h"
+#include "mr_util/infra/mav.h"
+#include "mr_util/math/fft.h"
+#include "mr_util/math/constants.h"
+#include "mr_util/bindings/pybind_utils.h"
 
 using namespace std;
 using namespace mr;
