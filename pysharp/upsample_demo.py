@@ -1,6 +1,5 @@
 import pysharp
 import numpy as np
-from numpy.testing import assert_allclose
 from time import time
 
 def _l2error(a, b):

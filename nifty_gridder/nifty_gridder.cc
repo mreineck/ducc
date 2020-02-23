@@ -40,13 +40,13 @@ template<typename T> py::array ms2dirty_general2(const py::array &uvw_,
   size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
   size_t verbosity)
   {
-  auto uvw = to_cmav<double,2>(uvw_);
-  auto freq = to_cmav<double,1>(freq_);
-  auto ms = to_cmav<complex<T>,2>(ms_);
+  auto uvw = to_mav<double,2>(uvw_, false);
+  auto freq = to_mav<double,1>(freq_, false);
+  auto ms = to_mav<complex<T>,2>(ms_, false);
   auto wgt = get_optional_const_Pyarr<T>(wgt_, {ms.shape(0),ms.shape(1)});
-  auto wgt2 = to_cmav<T,2>(wgt);
+  auto wgt2 = to_mav<T,2>(wgt, false);
   auto dirty = make_Pyarr<T>({npix_x,npix_y});
-  auto dirty2 = to_mav<T,2>(dirty);
+  auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
   ms2dirty_general(uvw,freq,ms,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
@@ -120,13 +120,13 @@ template<typename T> py::array dirty2ms_general2(const py::array &uvw_,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
-  auto uvw = to_cmav<double,2>(uvw_);
-  auto freq = to_cmav<double,1>(freq_);
-  auto dirty = to_cmav<T,2>(dirty_);
+  auto uvw = to_mav<double,2>(uvw_, false);
+  auto freq = to_mav<double,1>(freq_, false);
+  auto dirty = to_mav<T,2>(dirty_, false);
   auto wgt = get_optional_const_Pyarr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
-  auto wgt2 = to_cmav<T,2>(wgt);
+  auto wgt2 = to_mav<T,2>(wgt, false);
   auto ms = make_Pyarr<complex<T>>({uvw.shape(0),freq.shape(0)});
-  auto ms2 = to_mav<complex<T>,2>(ms);
+  auto ms2 = to_mav<complex<T>,2>(ms, true);
   {
   py::gil_scoped_release release;
   dirty2ms_general(uvw,freq,dirty,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
