@@ -36,8 +36,8 @@
 #include <vector>
 #include <utility>
 #include <iostream>
-#include "mr_util/error_handling.h"
-#include "mr_util/math_utils.h"
+#include "mr_util/infra/error_handling.h"
+#include "mr_util/math/math_utils.h"
 
 namespace mr {
 

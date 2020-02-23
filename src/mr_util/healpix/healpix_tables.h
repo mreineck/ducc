@@ -37,7 +37,7 @@
 
 namespace mr {
 
-namespace healpix {
+namespace detail_healpix {
 
 /*! The two possible ordering schemes of a HEALPix map. */
 enum Ordering_Scheme { RING, /*!< RING scheme */
@@ -63,6 +63,12 @@ class Healpix_Tables
     static const size_t swap_clen[], swap_cycle[];
   };
 
-}}
+}
+
+using detail_healpix::RING;
+using detail_healpix::NEST;
+using detail_healpix::SET_NSIDE;
+
+}
 
 #endif

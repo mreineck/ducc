@@ -29,15 +29,15 @@
  *  Author: Martin Reinecke
  */
 
-#include "Healpix_cxx/healpix_tables.h"
-#include "mr_util/string_utils.h"
-#include "mr_util/error_handling.h"
+#include "mr_util/healpix/healpix_tables.h"
+#include "mr_util/infra/string_utils.h"
+#include "mr_util/infra/error_handling.h"
 
 using namespace std;
 
 namespace mr {
 
-namespace healpix {
+namespace detail_healpix {
 
 const nside_dummy SET_NSIDE=nside_dummy();
 

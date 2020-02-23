@@ -29,17 +29,17 @@
  *  Author: Martin Reinecke
  */
 
-#include "Healpix_cxx/healpix_base.h"
-#include "mr_util/geom_utils.h"
-#include "mr_util/constants.h"
-#include "mr_util/mav.h"
-#include "mr_util/space_filling.h"
+#include "mr_util/healpix/healpix_base.h"
+#include "mr_util/math/geom_utils.h"
+#include "mr_util/math/constants.h"
+#include "mr_util/infra/mav.h"
+#include "mr_util/math/space_filling.h"
 
 using namespace std;
 
 namespace mr {
 
-namespace healpix {
+namespace detail_healpix {
 
 namespace {
 

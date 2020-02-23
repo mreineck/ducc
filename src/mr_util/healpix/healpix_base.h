@@ -33,13 +33,13 @@
 #define HEALPIX_BASE_H
 
 #include <vector>
-#include "Healpix_cxx/healpix_tables.h"
-#include "mr_util/pointing.h"
-#include "mr_util/rangeset.h"
+#include "mr_util/healpix/healpix_tables.h"
+#include "mr_util/math/pointing.h"
+#include "mr_util/math/rangeset.h"
 
 namespace mr {
 
-namespace healpix {
+namespace detail_healpix {
 
 template<typename I> struct Orderhelper__ {};
 template<> struct Orderhelper__<int> {enum{omax=13};};
@@ -463,6 +463,11 @@ typedef T_Healpix_Base<int> Healpix_Base;
 /*! T_Healpix_Base for Nside up to 2^29. */
 typedef T_Healpix_Base<int64_t> Healpix_Base2;
 
-}}
+}
+
+using detail_healpix::Healpix_Base;
+using detail_healpix::Healpix_Base2;
+
+}
 
 #endif

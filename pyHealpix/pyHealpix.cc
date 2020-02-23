@@ -33,15 +33,14 @@
 #include <vector>
 #include <string>
 
-#include "Healpix_cxx/healpix_base.h"
-#include "mr_util/constants.h"
-#include "mr_util/string_utils.h"
-#include "mr_util/geom_utils.h"
-#include "mr_util/pybind_utils.h"
+#include "mr_util/healpix/healpix_base.h"
+#include "mr_util/math/constants.h"
+#include "mr_util/infra/string_utils.h"
+#include "mr_util/math/geom_utils.h"
+#include "mr_util/bindings/pybind_utils.h"
 
 using namespace std;
 using namespace mr;
-using namespace healpix;
 
 namespace py = pybind11;
 
@@ -49,7 +48,6 @@ namespace {
 
 using a_d = py::array_t<double>;
 using a_i = py::array_t<int64_t>;
-using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
 vector<size_t> add_dim(const vector<size_t> &a, size_t dim)
   {
