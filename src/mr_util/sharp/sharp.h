@@ -150,6 +150,16 @@ using detail_sharp::sharp_geom_info;
 using detail_sharp::sharp_alm_info;
 using detail_sharp::SHARP_ADD;
 using detail_sharp::SHARP_USE_WEIGHTS;
+using detail_sharp::SHARP_YtW;
+using detail_sharp::SHARP_MAP2ALM;
+using detail_sharp::SHARP_Y;
+using detail_sharp::SHARP_ALM2MAP;
+using detail_sharp::SHARP_Yt;
+using detail_sharp::SHARP_WY;
+using detail_sharp::SHARP_ALM2MAP_DERIV1;
+using detail_sharp::sharp_architecture;
+using detail_sharp::sharp_veclen;
+using detail_sharp::sharp_get_mlim;
 
 }
 

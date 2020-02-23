@@ -26,16 +26,16 @@
 
 #include <iostream>
 #include <complex>
-#include "libsharp2/sharp.h"
-#include "libsharp2/sharp_geomhelpers.h"
-#include "libsharp2/sharp_almhelpers.h"
-#include "mr_util/system.h"
-#include "mr_util/error_handling.h"
-#include "mr_util/threading.h"
-#include "mr_util/math_utils.h"
-#include "mr_util/string_utils.h"
-#include "mr_util/gl_integrator.h"
-#include "mr_util/constants.h"
+#include "mr_util/sharp/sharp.h"
+#include "mr_util/sharp/sharp_geomhelpers.h"
+#include "mr_util/sharp/sharp_almhelpers.h"
+#include "mr_util/infra/system.h"
+#include "mr_util/infra/error_handling.h"
+#include "mr_util/infra/threading.h"
+#include "mr_util/math/math_utils.h"
+#include "mr_util/infra/string_utils.h"
+#include "mr_util/math/gl_integrator.h"
+#include "mr_util/math/constants.h"
 
 using namespace std;
 using namespace mr;

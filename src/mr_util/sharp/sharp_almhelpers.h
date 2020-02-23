@@ -103,6 +103,7 @@ std::unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (size_t
 
 }
 
+using detail_sharp::sharp_standard_alm_info;
 using detail_sharp::sharp_make_triangular_alm_info;
 
 }

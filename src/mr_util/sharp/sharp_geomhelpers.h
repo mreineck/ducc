@@ -195,6 +195,7 @@ std::unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t 
 
 }
 
+using detail_sharp::sharp_standard_geom_info;
 using detail_sharp::sharp_make_subset_healpix_geom_info;
 using detail_sharp::sharp_make_weighted_healpix_geom_info;
 using detail_sharp::sharp_make_healpix_geom_info;

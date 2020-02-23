@@ -39,9 +39,7 @@ libmrutil_la_SOURCES = \
   mr_util/healpix/healpix_tables.h \
   mr_util/healpix/healpix_tables.cc \
   mr_util/healpix/healpix_base.h \
-  mr_util/healpix/healpix_base.cc \
-  mr_util/healpix/healpix_map.h \
-  mr_util/healpix/healpix_map.cc
+  mr_util/healpix/healpix_base.cc
 
 # format is "current:revision:age"
 # any change: increase revision

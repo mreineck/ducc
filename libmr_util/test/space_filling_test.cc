@@ -1,6 +1,6 @@
 #include <functional>
-#include "mr_util/space_filling.h"
-#include "mr_util/error_handling.h"
+#include "mr_util/math/space_filling.h"
+#include "mr_util/infra/error_handling.h"
 
 using namespace std;
 using namespace mr;
@@ -167,7 +167,7 @@ int64_t t34()
 } // unnamed namespace
 
 #include <cstdio>
-#include "mr_util/timers.h"
+#include "mr_util/infra/timers.h"
 
 using namespace std;
 
