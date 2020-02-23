@@ -853,9 +853,7 @@ template<typename T, typename Serv> void grid2x_c
         }
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
-cerr <<"in" << endl;
       srv.addVis(ipart, r);
-cerr <<"done" << endl;
       }
     });
   }
