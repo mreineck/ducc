@@ -21,4 +21,7 @@ test_suite:
   script:
     - cd pypocketfft
     - pip3 install --user .
-    - pytest-3 -q test.py
+    - pytest-3 -q test
+    - cd pysharp
+    - pip3 install --user .
+    - pytest-3 -q test
