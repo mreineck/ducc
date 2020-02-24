@@ -1,0 +1,45 @@
+image: $CONTAINER_TEST_IMAGE
+
+variables:
+  CONTAINER_TEST_IMAGE: gitlab-registry.mpcdf.mpg.de/$CI_PROJECT_PATH:$CI_BUILD_REF_NAME
+  OMP_NUM_THREADS: 2
+
+stages:
+  - build_docker
+  - testing
+
+build_docker:
+  image: docker:stable
+  stage: build_docker
+  script:
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN gitlab-registry.mpcdf.mpg.de
+    - docker build -t $CONTAINER_TEST_IMAGE .
+    - docker push $CONTAINER_TEST_IMAGE
+
+test_pypocketfft_gcc:
+  stage: testing
+  script:
+    - cd pypocketfft
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_pysharp_gcc:
+  stage: testing
+  script:
+    - cd pysharp
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_nifty_gridder_gcc:
+  stage: testing
+  script:
+    - cd nifty_gridder
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_pyHealpix_gcc:
+  stage: testing
+  script:
+    - cd pyHealpix
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
