@@ -22,3 +22,24 @@ test_pypocketfft_gcc:
     - cd pypocketfft
     - python3 setup.py install --user -f
     - pytest-3 -q test
+
+test_pysharp_gcc:
+  stage: testing
+  script:
+    - cd pysharp
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_nifty_gridder_gcc:
+  stage: testing
+  script:
+    - cd nifty_gridder
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_pyHealpix_gcc:
+  stage: testing
+  script:
+    - cd pyHealpix
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
