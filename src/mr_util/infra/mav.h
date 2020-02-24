@@ -99,6 +99,9 @@ template<typename T> class membuf
     const T *d;
     bool rw;
 
+    membuf(T *d_, const Tsp &p, bool rw_)
+      : ptr(p), d(d_), rw(rw_) {}
+
   public:
     membuf(T *d_, bool rw_=false)
       : d(d_), rw(rw_) {}
@@ -110,9 +113,6 @@ template<typename T> class membuf
       : ptr(other.ptr), d(other.d), rw(false) {}
     membuf(membuf &other) = default;
     membuf(membuf &&other) = default;
-// Not for public use!
-    membuf(T *d_, const Tsp &p, bool rw_)
-      : ptr(p), d(d_), rw(rw_) {}
 
     template<typename I> T &vraw(I i)
       {
@@ -134,9 +134,6 @@ template<typename T> class membuf
 // "mav" stands for "multidimensional array view"
 template<typename T> class fmav: public fmav_info, public membuf<T>
   {
-  protected:
-    using typename membuf<T>::Tsp;
-
   public:
     fmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : fmav_info(shp_, str_), membuf<T>(d_) {}
@@ -155,8 +152,9 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     fmav(const fmav &other) = default;
     fmav(fmav &other) = default;
     fmav(fmav &&other) = default;
-// Not for public use!
     fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
+      : fmav_info(shp_, str_), membuf<T>(buf) {}
+    fmav(const membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
       : fmav_info(shp_, str_), membuf<T>(buf) {}
   };
 
@@ -262,7 +260,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     mav(mav &&other) = default;
     operator fmav<T>() const
       {
-      return fmav<T>(data(), {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     operator fmav<T>()
       {
@@ -280,23 +278,25 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       { return vraw(idx(i,j)); }
     T &v(size_t i, size_t j, size_t k)
       { return vraw(idx(i,j,k)); }
-    void fill(const T &val)
-      {
+    template<typename Func> void apply(Func func)
+      { 
       T *d2 = vdata();
       // FIXME: special cases for contiguous arrays and/or zeroing?
       if (ndim==1)
         for (size_t i=0; i<shp[0]; ++i)
-          d2[str[0]*i]=val;
+          func(d2[str[0]*i]);
       else if (ndim==2)
         for (size_t i=0; i<shp[0]; ++i)
           for (size_t j=0; j<shp[1]; ++j)
-            d2[str[0]*i + str[1]*j] = val;
+            func(d2[str[0]*i + str[1]*j]);
       else if (ndim==3)
         for (size_t i=0; i<shp[0]; ++i)
           for (size_t j=0; j<shp[1]; ++j)
             for (size_t k=0; k<shp[2]; ++k)
-              d2[str[0]*i + str[1]*j + str[2]*k] = val;
+              func(d2[str[0]*i + str[1]*j + str[2]*k]);
       }
+    void fill(const T &val)
+      { apply([val](T &v){v=val;}); }
   };
 
 template<typename T, size_t ndim> class MavIter
