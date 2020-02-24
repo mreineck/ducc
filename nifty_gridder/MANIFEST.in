@@ -11,6 +11,7 @@ include mr_util/infra/aligned_array.h
 include mr_util/infra/simd.h
 include mr_util/math/cmplx.h
 include mr_util/math/unity_roots.h
+include mr_util/math/es_kernel.h
 include mr_util/infra/error_handling.h
 include mr_util/bindings/pybind_utils.h
 include mr_util/infra/threading.cc

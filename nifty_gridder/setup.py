@@ -46,6 +46,7 @@ def get_extension_modules():
                                'mr_util/infra/mav.h',
                                'mr_util/math/cmplx.h',
                                'mr_util/math/unity_roots.h',
+                               'mr_util/math/es_kernel.h',
                                'mr_util/bindings/pybind_utils.h',
                                'gridder_cxx.h',
                                'setup.py'],
