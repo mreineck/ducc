@@ -165,7 +165,7 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
     else
       {
       double fact1 = (8.*nside)/npix;
-      double costheta = 2*nside-northring*fact1;
+      double costheta = (2*nside-northring)*fact1;
       theta[m] = acos(costheta);
       nph[m] = 4*nside;
       if ((northring-nside) & 1)
@@ -182,9 +182,8 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
       ofs[m] = curofs;
       }
     weight_[m]=4.*pi/npix*((weight==nullptr) ? 1. : weight[northring-1]);
-    if (rings==nullptr) {
+    if (rings==nullptr)
       MR_assert(curofs==checkofs, "Bug in computing ofs[m]");
-    }
     ofs[m] = curofs;
     curofs+=ptrdiff_t(nph[m]);
     }
