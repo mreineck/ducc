@@ -52,17 +52,17 @@ namespace mr {
 
 namespace detail_simd {
 
-template<typename T> constexpr bool vectorizable = false;
-template<> constexpr bool vectorizable<float> = true;
-template<> constexpr bool vectorizable<double> = true;
-template<> constexpr bool vectorizable<int8_t> = true;
-template<> constexpr bool vectorizable<uint8_t> = true;
-template<> constexpr bool vectorizable<int16_t> = true;
-template<> constexpr bool vectorizable<uint16_t> = true;
-template<> constexpr bool vectorizable<int32_t> = true;
-template<> constexpr bool vectorizable<uint32_t> = true;
-template<> constexpr bool vectorizable<int64_t> = true;
-template<> constexpr bool vectorizable<uint64_t> = true;
+template<typename T> constexpr static const bool vectorizable = false;
+template<> constexpr static const bool vectorizable<float> = true;
+template<> constexpr static const bool vectorizable<double> = true;
+template<> constexpr static const bool vectorizable<int8_t> = true;
+template<> constexpr static const bool vectorizable<uint8_t> = true;
+template<> constexpr static const bool vectorizable<int16_t> = true;
+template<> constexpr static const bool vectorizable<uint16_t> = true;
+template<> constexpr static const bool vectorizable<int32_t> = true;
+template<> constexpr static const bool vectorizable<uint32_t> = true;
+template<> constexpr static const bool vectorizable<int64_t> = true;
+template<> constexpr static const bool vectorizable<uint64_t> = true;
 
 template<typename T, size_t reglen> constexpr size_t vlen
   = vectorizable<T> ? reglen/sizeof(T) : 1;
