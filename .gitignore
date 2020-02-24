@@ -69,6 +69,8 @@ coverage.xml
 .ipynb_checkpoints
 
 .libs
+compile
+ltmain.sh
 perf.data*
 config.*
 configure
