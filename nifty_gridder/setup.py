@@ -19,12 +19,12 @@ python_module_link_args = []
 
 if sys.platform == 'darwin':
     import distutils.sysconfig
-    extra_compile_args += ['--std=c++14', '--stdlib=libc++', '-mmacosx-version-min=10.9']
+    extra_compile_args += ['--std=c++17', '--stdlib=libc++', '-mmacosx-version-min=10.9']
     vars = distutils.sysconfig.get_config_vars()
     vars['LDSHARED'] = vars['LDSHARED'].replace('-bundle', '')
     python_module_link_args+=['-bundle']
 else:
-    extra_compile_args += ['--std=c++14', '-march=native', '-O3', '-ffast-math']
+    extra_compile_args += ['--std=c++17', '-march=native', '-O3', '-ffast-math']
     python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN', '-ffast-math']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
