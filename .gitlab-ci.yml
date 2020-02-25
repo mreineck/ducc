@@ -23,6 +23,13 @@ test_pypocketfft_gcc:
     - python3 setup.py install --user -f
     - pytest-3 -q test
 
+test_pypocketfft_clang:
+  stage: testing
+  script:
+    - cd pypocketfft
+    - CC=clang python3 setup.py install --user -f
+    - pytest-3 -q test
+
 test_pysharp_gcc:
   stage: testing
   script:

@@ -1,5 +1,5 @@
 import pypocketfft
-import pyfftw
+# import pyfftw
 import numpy as np
 import pytest
 from numpy.testing import assert_
@@ -89,53 +89,65 @@ def test1D(len, inorm, dtype):
 
 @pmp("shp", shapes)
 @pmp("nthreads", (0, 1, 2))
-def test_fftn(shp, nthreads):
+@pmp("inorm", [0, 1, 2])
+def test_fftn(shp, nthreads, inorm):
     a = np.random.rand(*shp)-0.5 + 1j*np.random.rand(*shp)-0.5j
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.fftn(a),
-                     fftn(a, nthreads=nthreads)) < 1e-15)
+    assert_(_l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
+                              nthreads=nthreads, inorm=2-inorm)) < 1e-15)
     a = a.astype(np.complex64)
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.fftn(a),
-                     fftn(a, nthreads=nthreads)) < 5e-7)
+    assert_(_l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
+                              nthreads=nthreads, inorm=2-inorm)) < 5e-7)
 
 
 @pmp("shp", shapes2D)
 @pmp("axes", ((0,), (1,), (0, 1), (1, 0)))
-def test_fftn2D(shp, axes):
+@pmp("inorm", [0, 1, 2])
+def test_fftn2D(shp, axes, inorm):
     a = np.random.rand(*shp)-0.5 + 1j*np.random.rand(*shp)-0.5j
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.fftn(a, axes=axes),
-                     fftn(a, axes=axes)) < 1e-15)
+    assert_(_l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
+                              axes=axes, inorm=2-inorm)) < 1e-15)
     a = a.astype(np.complex64)
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.fftn(a, axes=axes),
-                     fftn(a, axes=axes)) < 5e-7)
+    assert_(_l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
+                              axes=axes, inorm=2-inorm)) < 5e-7)
 
 
 @pmp("shp", shapes)
 def test_rfftn(shp):
     a = np.random.rand(*shp)-0.5
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.rfftn(a), rfftn(a)) < 1e-15)
+    tmp1 = rfftn(a)
+    tmp2 = fftn(a)
+    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.rfftn(a), rfftn(a)) < 5e-7)
+    tmp1 = rfftn(a)
+    tmp2 = fftn(a)
+    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
 
 
-@pmp("shp", shapes)
-def test_rfft_scipy(shp):
-    for i in range(len(shp)):
-        a = np.random.rand(*shp)-0.5
-        assert_(_l2error(pyfftw.interfaces.scipy_fftpack.rfft(a, axis=i),
-                         rfft_scipy(a, axis=i)) < 1e-15)
-        assert_(_l2error(pyfftw.interfaces.scipy_fftpack.irfft(a, axis=i),
-                         irfft_scipy(a, axis=i, inorm=2)) < 1e-15)
+# @pmp("shp", shapes)
+# def test_rfft_scipy(shp):
+#     for i in range(len(shp)):
+#         a = np.random.rand(*shp)-0.5
+#         assert_(_l2error(pyfftw.interfaces.scipy_fftpack.rfft(a, axis=i),
+#                          rfft_scipy(a, axis=i)) < 1e-15)
+#         assert_(_l2error(pyfftw.interfaces.scipy_fftpack.irfft(a, axis=i),
+#                          irfft_scipy(a, axis=i, inorm=2)) < 1e-15)
 
 
 @pmp("shp", shapes2D)
 @pmp("axes", ((0,), (1,), (0, 1), (1, 0)))
 def test_rfftn2D(shp, axes):
     a = np.random.rand(*shp)-0.5
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.rfftn(a, axes=axes),
-                     rfftn(a, axes=axes)) < 1e-15)
+    tmp1 = rfftn(a,axes=axes)
+    tmp2 = fftn(a,axes=axes)
+    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
-    assert_(_l2error(pyfftw.interfaces.numpy_fft.rfftn(a, axes=axes),
-                     rfftn(a, axes=axes)) < 5e-7)
+    tmp1 = rfftn(a,axes=axes)
+    tmp2 = fftn(a,axes=axes)
+    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
 
 
 @pmp("shp", shapes)
