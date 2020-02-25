@@ -37,6 +37,13 @@ test_pysharp_gcc:
     - python3 setup.py install --user -f
     - pytest-3 -q test
 
+test_pysharp_clang:
+  stage: testing
+  script:
+    - cd pysharp
+    - CC=clang python3 setup.py install --user -f
+    - pytest-3 -q test
+
 test_nifty_gridder_gcc:
   stage: testing
   script:
@@ -44,9 +51,23 @@ test_nifty_gridder_gcc:
     - python3 setup.py install --user -f
     - pytest-3 -q test
 
+test_nifty_gridder_clang:
+  stage: testing
+  script:
+    - cd nifty_gridder
+    - CC=clang python3 setup.py install --user -f
+    - pytest-3 -q test
+
 test_pyHealpix_gcc:
   stage: testing
   script:
     - cd pyHealpix
     - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_pyHealpix_clang:
+  stage: testing
+  script:
+    - cd pyHealpix
+    - CC=clang python3 setup.py install --user -f
     - pytest-3 -q test
