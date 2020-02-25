@@ -27,7 +27,7 @@ test_pypocketfft_clang:
   stage: testing
   script:
     - cd pypocketfft
-    - CC=clang python3 setup.py install --user -f
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
 
 test_pysharp_gcc:
@@ -41,7 +41,7 @@ test_pysharp_clang:
   stage: testing
   script:
     - cd pysharp
-    - CC=clang python3 setup.py install --user -f
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
 
 test_nifty_gridder_gcc:
@@ -55,7 +55,7 @@ test_nifty_gridder_clang:
   stage: testing
   script:
     - cd nifty_gridder
-    - CC=clang python3 setup.py install --user -f
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
 
 test_pyHealpix_gcc:
@@ -69,5 +69,5 @@ test_pyHealpix_clang:
   stage: testing
   script:
     - cd pyHealpix
-    - CC=clang python3 setup.py install --user -f
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
