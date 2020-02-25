@@ -13,7 +13,7 @@ class _deferred_pybind11_include(object):
 
 include_dirs = ['.', _deferred_pybind11_include(True),
                 _deferred_pybind11_include()]
-extra_compile_args = ['-I.', '--std=c++14', '-march=native', '-ffast-math', '-O3']
+extra_compile_args = ['-I.', '--std=c++17', '-march=native', '-ffast-math', '-O3']
 python_module_link_args = []
 define_macros = []
 
