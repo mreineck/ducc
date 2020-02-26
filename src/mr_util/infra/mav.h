@@ -229,6 +229,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using membuf<T>::ptr;
     using mav_info<ndim>::shp;
     using mav_info<ndim>::str;
+    using mav_info<ndim>::conformable;
     using membuf<T>::rw;
     using membuf<T>::vraw;
     template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
@@ -241,6 +242,36 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         T *d2 = vdata();
         for (size_t i=0; i<shp[idim]; ++i)
           func(d2[idx+i*str[idim]]);
+        }
+      }
+    template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func) const
+      {
+      if constexpr (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper<idim+1, Func>(idx+i*str[idim], func);
+      else
+        {
+        const T *d2 = data();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d2[idx+i*str[idim]]);
+        }
+      }
+    template<size_t idim, typename T2, typename Func>
+      void applyHelper(ptrdiff_t idx, ptrdiff_t idx2,
+                       const mav<T2,ndim> &other, Func func)
+      {
+      if constexpr (idim==0)
+        MR_assert(conformable(other), "dimension mismatch");
+      if constexpr (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper<idim+1, T2, Func>(idx+i*str[idim],
+                                        idx2+i*other.str[idim], other, func);
+      else
+        {
+        T *d2 = vdata();
+        const T2 *d3 = other.data();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d2[idx+i*str[idim]],d3[idx2+i*other.str[idim]]);
         }
       }
 
@@ -288,6 +319,9 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       applyHelper<0,Func>(0,func);
       }
+    template<typename T2, typename Func> void apply
+      (const mav<T2, ndim> &other,Func func)
+      { applyHelper<0,T2,Func>(0,0,other,func); }
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
   };
