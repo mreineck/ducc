@@ -221,16 +221,28 @@ template<size_t ndim> class mav_info
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
   {
   static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
-  using typename mav_info<ndim>::shape_t;
-  using typename mav_info<ndim>::stride_t;
 
   protected:
+    using typename mav_info<ndim>::shape_t;
+    using typename mav_info<ndim>::stride_t;
     using membuf<T>::d;
     using membuf<T>::ptr;
     using mav_info<ndim>::shp;
     using mav_info<ndim>::str;
     using membuf<T>::rw;
     using membuf<T>::vraw;
+    template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
+      {
+      if constexpr (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper<idim+1, Func>(idx+i*str[idim], func);
+      else
+        {
+        T *d2 = vdata();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d2[idx+i*str[idim]]);
+        }
+      }
 
   public:
     using membuf<T>::operator[];
@@ -266,27 +278,15 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
     template<typename Func> void apply(Func func)
-      { 
-      T *d2 = vdata();
+      {
       if (contiguous())
         {
+        T *d2 = vdata();
         for (auto v=d2; v!=d2+size(); ++v)
           func(*v);
         return;
         }
-      // FIXME: special cases for contiguous arrays and/or zeroing?
-      if (ndim==1)
-        for (size_t i=0; i<shp[0]; ++i)
-          func(d2[str[0]*i]);
-      else if (ndim==2)
-        for (size_t i=0; i<shp[0]; ++i)
-          for (size_t j=0; j<shp[1]; ++j)
-            func(d2[str[0]*i + str[1]*j]);
-      else if (ndim==3)
-        for (size_t i=0; i<shp[0]; ++i)
-          for (size_t j=0; j<shp[1]; ++j)
-            for (size_t k=0; k<shp[2]; ++k)
-              func(d2[str[0]*i + str[1]*j + str[2]*k]);
+      applyHelper<0,Func>(0,func);
       }
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
