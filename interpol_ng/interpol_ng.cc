@@ -17,7 +17,7 @@
 #include "alm.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
-#include <iostream>
+
 using namespace std;
 using namespace mr;
 
@@ -28,8 +28,9 @@ namespace {
 template<typename T> class Interpolator
   {
   protected:
-    size_t supp;
     size_t lmax, kmax, ppring, ntheta, nphi;
+    double ofactor;
+    size_t supp;
     ES_Kernel kernel;
     mav<T,3> cube; // the data cube (theta, phi, 2*mbeam+1[, IQU])
 
@@ -49,12 +50,11 @@ template<typename T> class Interpolator
           }
       // FFT
       r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,0);
-      ES_Kernel kernel(supp,nphi/double(2*lmax+1),0);
       auto fct = kernel.correction_factors(nphi, nphi/2+2, 0);
       for (size_t i=0; i<nphi; ++i)
         for (size_t j=0; j<nphi; ++j)
           tmp.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      r2r_fftpack(ftmp,ftmp,{0,1},false,false,1./(nphi*nphi),0);
+      r2r_fftpack(ftmp,ftmp,{1,0},false,false,1./(nphi*nphi),0);
       for (size_t i=0; i<ntheta; ++i)
         for (size_t j=0; j<nphi; ++j)
           arr.v(i,j) = tmp(i,j);
@@ -63,13 +63,14 @@ template<typename T> class Interpolator
   public:
     Interpolator(const Alm<complex<T>> &slmT, const Alm<complex<T>> &blmT,
       double epsilon)
-      : supp(ES_Kernel::get_supp(epsilon)),
-        lmax(slmT.Lmax()),
+      : lmax(slmT.Lmax()),
         kmax(blmT.Mmax()),
         ppring(2*good_size_real(2*lmax+1)),
         ntheta(ppring/2+1),
         nphi(ppring),
-        kernel(supp, 2, 1),
+        ofactor(double(ppring)/(2*lmax+1)),
+        supp(ES_Kernel::get_supp(epsilon, ofactor)),
+        kernel(supp, ofactor, 1),
         cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
       {
       MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
@@ -155,11 +156,14 @@ template<typename T> class Interpolator
         double f0=supp+theta*((ntheta-1)/pi)-0.5*supp;
         size_t i0 = size_t(f0+1.);
         for (size_t t=0; t<supp; ++t)
-          wt[t] = kernel(((t+i0)-f0-0.5*supp)/supp);
+          wt[t] = kernel(((t+i0)-f0-0.5*supp)/supp*2);
         double f1=supp+phi*(nphi/(2*pi))-0.5*supp;
         size_t i1 = size_t(f1+1.);
         for (size_t t=0; t<supp; ++t)
-          wp[t] = kernel(((t+i1)-f1-0.5*supp)/supp);
+          wp[t] = kernel(((t+i1)-f1-0.5*supp)/supp*2);
+        double sumt=0, sump=0;
+        for (size_t t=0; t<supp; ++t)
+          {sumt+=wt[t]; sump+=wp[t];}
         double val=0;
         psiarr[0]=1.;
         double cpsi=cos(psi), spsi=sin(psi);
@@ -175,7 +179,7 @@ template<typename T> class Interpolator
         for (size_t j=0; j<supp; ++j)
           for (size_t k=0; k<supp; ++k)
             for (size_t l=0; l<2*kmax+1; ++l)
-              val += cube(i0+j,i1+k,0)*wt[j]*wp[k]*psiarr[l];
+              val += cube(i0+j,i1+k,l)*wt[j]*wp[k]*psiarr[l];
         res.v(i) = val;
         }
       }
