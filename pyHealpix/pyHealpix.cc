@@ -46,29 +46,35 @@ namespace py = pybind11;
 
 namespace {
 
-using a_d = py::array_t<double>;
-using a_i = py::array_t<int64_t>;
+template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
+  const array<size_t,nd1> &si, const array<size_t,nd2> &so)
+  {
+  MR_assert(s.size()+nd1,"too few input array dimensions");
+  for (size_t i=0; i<nd1; ++i)
+    MR_assert(si[i]==s[s.size()-nd1+i], "input dimension mismatch");
+  shape_t snew(s.size()-nd1+nd2);
+  for (size_t i=0; i<s.size()-nd1; ++i)
+    snew[i]=s[i];
+  for (size_t i=0; i<nd2; ++i)
+    snew[i+s.size()-nd1] = so[i];
+  return snew;
+  }
 
-vector<size_t> add_dim(const vector<size_t> &a, size_t dim)
+template<typename T1, typename T2, size_t nd1, size_t nd2, typename Func>
+  py::array doStuff(const py::array &ain, const array<size_t,nd1> &a1, const array<size_t,nd2> &a2, Func func)
   {
-  vector<size_t> res(a.size()+1);
-  for (size_t i=0; i<a.size(); ++i) res[i]=a[i];
-  res.back()=dim;
-  return res;
-  }
-vector<size_t> subst_dim(const vector<size_t> &a, size_t d1, size_t d2)
-  {
-  MR_assert(a.size()>0,"too few array dimensions");
-  MR_assert(a.back()==d1, "incorrect last dimension");
-  vector<size_t> res(a);
-  res.back()=d2;
-  return res;
-  }
-vector<size_t> rem_dim(const vector<size_t> &a, size_t dim)
-  {
-  MR_assert(a.size()>0,"too few array dimensions");
-  MR_assert(a.back()==dim, "incorrect last dimension");
-  return vector<size_t> {a.begin(), a.end()-1};
+  auto in = to_fmav<T1>(ain);
+  auto oshp = repl_dim(in.shape(), a1, a2);
+  auto aout = make_Pyarr<T2>(oshp);
+  auto out = to_fmav<T2>(aout,true);
+  MavIter<T1,nd1+1> iin(in);
+  MavIter<T2,nd2+1> iout(out);
+  while (!iin.done())
+    {
+    func(iin, iout);
+    iin.inc();iout.inc();
+    }
+  return aout;
   }
 
 class Pyhpbase
@@ -90,80 +96,47 @@ class Pyhpbase
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 
-    a_d pix2ang (const a_i &pix) const
+    py::array pix2ang (const py::array &pix) const
       {
-      auto pix2 = to_fmav<int64_t>(pix);
-      a_d ang(add_dim(pix2.shape(), 2));
-      auto ang2 = to_fmav<double>(ang,true);
-      MavIter<int64_t,1> iin(pix2);
-      MavIter<double,2> iout(ang2);
-      while (!iin.done())
+      return doStuff<int64_t, double, 0, 1>(pix, {}, {2}, [this](const MavIter<int64_t,1> &iin, MavIter<double,2> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
           pointing ptg=base.pix2ang(iin(i));
           iout.v(i,0) = ptg.theta; iout.v(i,1) = ptg.phi;
           }
-        iin.inc();iout.inc();
-        }
-      return ang;
+        });
       }
-    a_i ang2pix (const a_d &ang) const
+    py::array ang2pix (const py::array &ang) const
       {
-      auto ang2 = to_fmav<double>(ang);
-      a_i pix(rem_dim(ang2.shape(), 2));
-      auto pix2 = to_fmav<int64_t>(pix,true);
-      MavIter<double,2> iin(ang2);
-      MavIter<int64_t,1> iout(pix2);
-      while (!iin.done())
+      return doStuff<double, int64_t, 1, 0>(ang, {2}, {}, [this](const MavIter<double,2> &iin, MavIter<int64_t,1> &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.ang2pix(pointing(iin(i,0),iin(i,1)));
-        iin.inc();iout.inc();
-        }
-      return pix;
+        });
       }
-    a_d pix2vec (const a_i &pix) const
+    py::array pix2vec (const py::array &pix) const
       {
-      auto pix2 = to_fmav<int64_t>(pix);
-      a_d vec(add_dim(pix2.shape(), 3));
-      auto vec2 = to_fmav<double>(vec,true);
-      MavIter<int64_t,1> iin(pix2);
-      MavIter<double,2> iout(vec2);
-      while (!iin.done())
+      return doStuff<int64_t, double, 0, 1>(pix, {}, {3}, [this](const MavIter<int64_t,1> &iin, MavIter<double,2> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
           vec3 v=base.pix2vec(iin(i));
           iout.v(i,0)=v.x; iout.v(i,1)=v.y; iout.v(i,2)=v.z;
           }
-        iin.inc();iout.inc();
-        }
-      return vec;
+        });
       }
-    a_i vec2pix (const a_d &vec) const
+    py::array vec2pix (const py::array &vec) const
       {
-      auto vec2 = to_fmav<double>(vec);
-      a_i pix(rem_dim(vec2.shape(), 3));
-      auto pix2 = to_fmav<int64_t>(pix,true);
-      MavIter<double,2> iin(vec2);
-      MavIter<int64_t,1> iout(pix2);
-      while (!iin.done())
+      return doStuff<double, int64_t, 1, 0>(vec, {3}, {}, [this](const MavIter<double,2> &iin, MavIter<int64_t,1> &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.vec2pix(vec3(iin(i,0),iin(i,1),iin(i,2)));
-        iin.inc();iout.inc();
-        }
-      return pix;
+        });
       }
-    a_i pix2xyf (const a_i &pix) const
+    py::array pix2xyf (const py::array &pix) const
       {
-      auto pix2 = to_fmav<int64_t>(pix);
-      a_i xyf(add_dim(pix2.shape(),3));
-      auto xyf2 = to_fmav<int64_t>(xyf,true);
-      MavIter<int64_t,1> iin(pix2);
-      MavIter<int64_t,2> iout(xyf2);
-      while (!iin.done())
+      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {3}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,2> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -171,33 +144,19 @@ class Pyhpbase
           base.pix2xyf(iin(i),x,y,f);
           iout.v(i,0)=x; iout.v(i,1)=y; iout.v(i,2)=f;
           }
-        iin.inc();iout.inc();
-        }
-      return xyf;
+        });
       }
-    a_i xyf2pix (const a_i &xyf) const
+    py::array xyf2pix (const py::array &xyf) const
       {
-      auto xyf2 = to_fmav<int64_t>(xyf);
-      a_i pix(rem_dim(xyf2.shape(),3));
-      auto pix2 = to_fmav<int64_t>(pix,true);
-      MavIter<int64_t,2> iin(xyf2);
-      MavIter<int64_t,1> iout(pix2);
-      while (!iin.done())
+      return doStuff<int64_t, int64_t, 1, 0>(xyf, {3}, {}, [this](const MavIter<int64_t,2> &iin, MavIter<int64_t,1> &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.xyf2pix(iin(i,0),iin(i,1),iin(i,2));
-        iin.inc();iout.inc();
-        }
-      return pix;
+        });
       }
-    a_i neighbors (const a_i &pix) const
+    py::array neighbors (const py::array &pix) const
       {
-      auto pix2 = to_fmav<int64_t>(pix);
-      a_i nb(add_dim(pix2.shape(),8));
-      auto nb2 = to_fmav<int64_t>(nb,true);
-      MavIter<int64_t,1> iin(pix2);
-      MavIter<int64_t,2> iout(nb2);
-      while (!iin.done())
+      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {8}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,2> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -205,48 +164,32 @@ class Pyhpbase
           base.neighbors(iin(i),res);
           for (size_t j=0; j<8; ++j) iout.v(i,j)=res[j];
           }
-        iin.inc();iout.inc();
-        }
-      return nb;
+        });
       }
-    a_i ring2nest (const a_i &ring) const
+    py::array ring2nest (const py::array &ring) const
       {
-      auto ring2 = to_fmav<int64_t>(ring);
-      a_i nest(ring2.shape());
-      auto nest2 = to_fmav<int64_t>(nest,true);
-      MavIter<int64_t,1> iin(ring2);
-      MavIter<int64_t,1> iout(nest2);
-      while (!iin.done())
+      return doStuff<int64_t, int64_t, 0, 0>(ring, {}, {}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,1> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           iout.v(i)=base.ring2nest(iin(i));
-        iin.inc();iout.inc();
-        }
-      return nest;
+        });
       }
-    a_i nest2ring (const a_i &nest) const
+    py::array nest2ring (const py::array &nest) const
       {
-      auto nest2 = to_fmav<int64_t>(nest);
-      a_i ring(nest2.shape());
-      auto ring2 = to_fmav<int64_t>(ring,true);
-      MavIter<int64_t,1> iin(nest2);
-      MavIter<int64_t,1> iout(ring2);
-      while (!iin.done())
+      return doStuff<int64_t, int64_t, 0, 0>(nest, {}, {}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,1> &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           iout.v(i)=base.nest2ring(iin(i));
-        iin.inc();iout.inc();
-        }
-      return ring;
+        });
       }
-    a_i query_disc(const a_d &ptg, double radius) const
+    py::array query_disc(const py::array &ptg, double radius) const
       {
       MR_assert((ptg.ndim()==1)&&(ptg.shape(0)==2),
         "ptg must be a 1D array with 2 values");
       rangeset<int64_t> pixset;
-      auto ir=ptg.unchecked<1>();
-      base.query_disc(pointing(ir[0],ir[1]), radius, pixset);
-      a_i res(vector<size_t>({pixset.nranges(),2}));
+      auto ptg2 = to_mav<double,1>(ptg);
+      base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
+      auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
       auto oref=res.mutable_unchecked<2>();
       for (size_t i=0; i<pixset.nranges(); ++i)
         {
@@ -257,48 +200,34 @@ class Pyhpbase
       }
   };
 
-a_d ang2vec (const a_d &ang)
+py::array ang2vec (const py::array &ang)
   {
-  auto ang2 = to_fmav<double>(ang);
-  a_d vec(subst_dim(ang2.shape(),2,3));
-  auto vec2 = to_fmav<double>(vec,true);
-  MavIter<double,2> iin(ang2);
-  MavIter<double,2> iout(vec2);
-  while (!iin.done())
+  return doStuff<double, double, 1, 1>(ang, {2}, {3}, [](const MavIter<double,2> &iin, MavIter<double,2> &iout)
     {
     for (size_t i=0; i<iin.shape(0); ++i)
       {
       vec3 v (pointing(iin(i,0),iin(i,1)));
       iout.v(i,0)=v.x; iout.v(i,1)=v.y; iout.v(i,2)=v.z;
       }
-    iin.inc();iout.inc();
-    }
-  return vec;
+    });
   }
-a_d vec2ang (const a_d &vec)
+py::array vec2ang (const py::array &vec)
   {
-  auto vec2 = to_fmav<double>(vec);
-  a_d ang(subst_dim(vec2.shape(),3,2));
-  auto ang2 = to_fmav<double>(ang,true);
-  MavIter<double,2> iin(vec2);
-  MavIter<double,2> iout(ang2);
-  while (!iin.done())
+  return doStuff<double, double, 1, 1>(vec, {3}, {2}, [](const MavIter<double,2> &iin, MavIter<double,2> &iout)
     {
     for (size_t i=0; i<iin.shape(0); ++i)
       {
       pointing ptg (vec3(iin(i,0),iin(i,1),iin(i,2)));
       iout.v(i,0)=ptg.theta; iout.v(i,1)=ptg.phi;
       }
-    iin.inc();iout.inc();
-    }
-  return ang;
+    });
   }
-a_d local_v_angle (const a_d &v1, const a_d &v2)
+py::array local_v_angle (const py::array &v1, const py::array &v2)
   {
   auto v12 = to_fmav<double>(v1);
   auto v22 = to_fmav<double>(v2);
   MR_assert(v12.shape()==v22.shape());
-  a_d angle(rem_dim(v12.shape(),3));
+  auto angle = make_Pyarr<double>(repl_dim<1,0>(v12.shape(),{3},{}));
   auto angle2 = to_fmav<double>(angle,true);
   MavIter<double,2> ii1(v12), ii2(v22);
   MavIter<double,1> iout(angle2);

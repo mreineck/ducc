@@ -167,7 +167,7 @@ template<typename T> class Interpolator
         for (size_t l=1; l<=kmax; ++l)
           {
           psiarr[2*l-1]=cnpsi;
-          psiarr[2*l]=snpsi;
+          psiarr[2*l]=-snpsi;
           const double tmp = snpsi*cpsi + cnpsi*spsi;
           cnpsi=cnpsi*cpsi - snpsi*spsi;
           snpsi=tmp;

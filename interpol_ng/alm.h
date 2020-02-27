@@ -59,6 +59,13 @@ template<typename T> class Alm: public Alm_Base
   private:
     mav<T,1> alm;
 
+    template<typename Func> void applyLM(Func func)
+      {
+      for (size_t m=0; m<=mmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          func(l,m,alm.v(l,m));
+      }
+
   public:
     /*! Constructs an Alm object with given \a lmax and \a mmax. */
     Alm (mav<T,1> &data, size_t lmax_, size_t mmax_)
@@ -82,18 +89,14 @@ template<typename T> class Alm: public Alm_Base
       {
       MR_assert(factor.size()>size_t(lmax),
         "alm.ScaleL: factor array too short");
-      for (size_t m=0; m<=mmax; ++m)
-        for (size_t l=m; l<=lmax; ++l)
-          operator()(l,m)*=factor(l);
+      applyLM([&factor](size_t l, size_t /*m*/, T &v){v*=factor(l);}); 
       }
     /*! \a a(l,m) *= \a factor[m] for all \a l,m. */
     template<typename T2> void ScaleM (const mav<T2,1> &factor)
       {
       MR_assert(factor.size()>size_t(mmax),
         "alm.ScaleM: factor array too short");
-      for (size_t m=0; m<=mmax; ++m)
-        for (size_t l=m; l<=lmax; ++l)
-          operator()(l,m)*=factor(m);
+      applyLM([&factor](size_t /*l*/, size_t m, T &v){v*=factor(m);}); 
       }
     /*! Adds \a num to a_00. */
     template<typename T2> void Add (const T2 &num)
