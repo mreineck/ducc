@@ -28,7 +28,7 @@ namespace {
 template<typename T> class Interpolator
   {
   protected:
-    size_t lmax, kmax, ppring, ntheta, nphi;
+    size_t lmax, kmax, nphi0, ntheta0, nphi, ntheta;
     double ofactor;
     size_t supp;
     ES_Kernel kernel;
@@ -37,24 +37,26 @@ template<typename T> class Interpolator
     void correct(mav<T,2> &arr)
       {
       mav<T,2> tmp({nphi,nphi});
-      fmav<T> ftmp(tmp);
-      for (size_t i=0; i<ntheta; ++i)
-        for (size_t j=0; j<nphi; ++j)
-          tmp.v(i,j) = arr(i,j);
+      mav<T,2> tmp0(tmp.vdata(),{nphi0, nphi0}, tmp.stride(), true);
+      fmav<T> ftmp0(tmp0);
+      for (size_t i=0; i<ntheta0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          tmp0.v(i,j) = arr(i,j);
       // extend to second half
-      for (size_t i=1, i2=2*ntheta-3; i+1<ntheta; ++i,--i2)
-        for (size_t j=0,j2=nphi/2; j<nphi; ++j,++j2)
+      for (size_t i=1, i2=2*ntheta0-3; i+1<ntheta0; ++i,--i2)
+        for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
-          if (j2>=nphi) j2-=nphi;
-          tmp.v(i2,j) = arr(i,j2);
+          if (j2>=nphi0) j2-=nphi0;
+          tmp0.v(i2,j) = arr(i,j2);
           }
       // FFT
-      r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,0);
-      auto fct = kernel.correction_factors(nphi, nphi/2+2, 0);
-      for (size_t i=0; i<nphi; ++i)
-        for (size_t j=0; j<nphi; ++j)
-          tmp.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      r2r_fftpack(ftmp,ftmp,{1,0},false,false,1./(nphi*nphi),0);
+      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),0);
+      auto fct = kernel.correction_factors(nphi, nphi0, 0);
+      for (size_t i=0; i<nphi0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
+      fmav<T> ftmp(tmp);
+      r2r_fftpack(ftmp,ftmp,{1,0},false,false,1.,0);
       for (size_t i=0; i<ntheta; ++i)
         for (size_t j=0; j<nphi; ++j)
           arr.v(i,j) = tmp(i,j);
@@ -65,10 +67,11 @@ template<typename T> class Interpolator
       double epsilon)
       : lmax(slmT.Lmax()),
         kmax(blmT.Mmax()),
-        ppring(2*good_size_real(2*lmax+1)),
-        ntheta(ppring/2+1),
-        nphi(ppring),
-        ofactor(double(ppring)/(2*lmax+1)),
+        nphi0(2*good_size_real(lmax+1)),
+        ntheta0(nphi0/2+1),
+        nphi(2*good_size_real(2*lmax+1)),
+        ntheta(nphi/2+1),
+        ofactor(double(nphi)/(2*lmax+1)),
         supp(ES_Kernel::get_supp(epsilon, ofactor)),
         kernel(supp, ofactor, 1),
         cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
@@ -77,7 +80,7 @@ template<typename T> class Interpolator
       MR_assert(slmT.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
       MR_assert(blmT.Lmax()==lmax, "Sky and beam lmax must be equal");
       Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-      auto ginfo = sharp_make_cc_geom_info(ntheta,nphi,0,cube.stride(1),cube.stride(0));
+      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0,cube.stride(1),cube.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       vector<double>lnorm(lmax+1);
