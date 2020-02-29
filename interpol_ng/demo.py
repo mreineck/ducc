@@ -10,25 +10,27 @@ import pysharp
 import time
 np.random.seed(42)
 
-lmax=999
+lmax=2047
 mmax=lmax
-kmax=18
+kmax=2
+
+def nalm(lmax, mmax):
+    return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
+
 
 def idx(l,m):
     return (m*((2*lmax+1)-m))//2 + l
 
+
 def deltabeam(lmax,kmax):
-    nalm_beam = ((kmax+1)*(kmax+2))//2 + (kmax+1)*(lmax-kmax)
-    beam=np.zeros(nalm_beam)+0j
+    beam=np.zeros(nalm(lmax, kmax))+0j
     for l in range(lmax+1):
         beam[l] = np.sqrt((2*l+1.)/(4*np.pi))
     return beam
 
 
-# number of required a_lm coefficients
-nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 # get random a_lm
-slmT = np.random.uniform(-1., 1., nalm) + 1j*np.random.uniform(-1., 1., nalm)
+slmT = np.random.uniform(-1., 1., nalm(lmax, mmax)) + 1j*np.random.uniform(-1., 1., nalm(lmax,mmax))
 # make a_lm with m==0 real-valued
 slmT[0:lmax+1].imag = 0.
 
@@ -39,9 +41,9 @@ t0=time.time()
 foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, 1e-5)
 print("setup: ",time.time()-t0)
 
-# evaluate total convolution on a sufficiently resolved Clenshaw-Curtis grid
-nth = 1000
-nph = 2000
+# evaluate total convolution on a sufficiently resolved Gauss-Legendre grid
+nth = lmax+1
+nph = 2*mmax+1
 ptg = np.zeros((nth,nph,3))
 th, wgt = np.polynomial.legendre.leggauss(nth)
 th = np.arccos(th)
