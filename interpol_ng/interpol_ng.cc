@@ -55,11 +55,13 @@ template<typename T> class Interpolator
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      fmav<T> ftmp(tmp);
-      r2r_fftpack(ftmp,ftmp,{1,0},false,false,1.,0);
-      for (size_t i=0; i<ntheta; ++i)
-        for (size_t j=0; j<nphi; ++j)
-          arr.v(i,j) = tmp(i,j);
+      mav<T,2> tmp1(tmp.vdata(),{nphi, nphi0}, tmp.stride(), true);
+      fmav<T> ftmp1(tmp1);
+      r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,0);
+      mav<T,2> tmp2(tmp.vdata(),{ntheta, nphi}, tmp.stride(), true);
+      fmav<T> ftmp2(tmp2);
+      fmav<T> farr(arr);
+      r2r_fftpack(ftmp2,farr,{1},false,false,1.,0);
       }
 
   public:
