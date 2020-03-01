@@ -37,7 +37,7 @@ template<typename T> class Interpolator
     void correct(mav<T,2> &arr)
       {
       mav<T,2> tmp({nphi,nphi});
-      mav<T,2> tmp0(tmp.vdata(),{nphi0, nphi0}, tmp.stride(), true);
+      auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
@@ -49,18 +49,20 @@ template<typename T> class Interpolator
           if (j2>=nphi0) j2-=nphi0;
           tmp0.v(i2,j) = arr(i,j2);
           }
-      // FFT
+      // FFT to frequency domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),0);
       auto fct = kernel.correction_factors(nphi, nphi0, 0);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      mav<T,2> tmp1(tmp.vdata(),{nphi, nphi0}, tmp.stride(), true);
+      auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
       fmav<T> ftmp1(tmp1);
+      // zero-padded FFT in theta direction
       r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,0);
-      mav<T,2> tmp2(tmp.vdata(),{ntheta, nphi}, tmp.stride(), true);
+      auto tmp2=tmp.template subarray<2>({0,0},{ntheta, nphi});
       fmav<T> ftmp2(tmp2);
       fmav<T> farr(arr);
+      // zero-padded FFT in phi direction
       r2r_fftpack(ftmp2,farr,{1},false,false,1.,0);
       }
 
@@ -117,8 +119,8 @@ template<typename T> class Interpolator
         auto quadrant=k%4;
         if (quadrant&1)
           swap(kidx1, kidx2);
-        mav<T,2> m1(&cube.v(supp,supp,kidx1),{ntheta,nphi},{cube.stride(0),cube.stride(1)},true);
-        mav<T,2> m2(&cube.v(supp,supp,kidx2),{ntheta,nphi},{cube.stride(0),cube.stride(1)},true);
+        auto m1 = cube.template subarray<2>({supp,supp,kidx1},{ntheta,nphi,0});
+        auto m2 = cube.template subarray<2>({supp,supp,kidx2},{ntheta,nphi,0});
         if (k==0)
           sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
         else
@@ -153,25 +155,22 @@ template<typename T> class Interpolator
       MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
       vector<T> wt(supp), wp(supp);
       vector<T> psiarr(2*kmax+1);
+      double delta = 2./supp;
+      double xdtheta = (ntheta-1)/pi,
+             xdphi = nphi/(2*pi);
       for (size_t i=0; i<ptg.shape(0); ++i)
         {
-        double theta=ptg(i,0);
-        double phi=ptg(i,1);
-        double psi=ptg(i,2);
-        double f0=supp+theta*((ntheta-1)/pi)-0.5*supp;
+        double f0=0.5*supp+ptg(i,0)*xdtheta;
         size_t i0 = size_t(f0+1.);
         for (size_t t=0; t<supp; ++t)
-          wt[t] = kernel(((t+i0)-f0-0.5*supp)/supp*2);
-        double f1=supp+phi*(nphi/(2*pi))-0.5*supp;
+          wt[t] = kernel((t+i0-f0)*delta - 1);
+        double f1=0.5*supp+ptg(i,1)*xdphi;
         size_t i1 = size_t(f1+1.);
         for (size_t t=0; t<supp; ++t)
-          wp[t] = kernel(((t+i1)-f1-0.5*supp)/supp*2);
-        double sumt=0, sump=0;
-        for (size_t t=0; t<supp; ++t)
-          {sumt+=wt[t]; sump+=wp[t];}
+          wp[t] = kernel((t+i1-f1)*delta - 1);
         double val=0;
         psiarr[0]=1.;
-        double cpsi=cos(psi), spsi=sin(psi);
+        double cpsi=cos(ptg(i,2)), spsi=sin(ptg(i,2));
         double cnpsi=cpsi, snpsi=spsi;
         for (size_t l=1; l<=kmax; ++l)
           {

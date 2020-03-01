@@ -99,8 +99,10 @@ template<typename T> class membuf
     const T *d;
     bool rw;
 
-    membuf(T *d_, const Tsp &p, bool rw_)
-      : ptr(p), d(d_), rw(rw_) {}
+    membuf(const T *d_, membuf &other)
+      : ptr(other.ptr), d(d_), rw(other.rw) {}
+    membuf(const T *d_, const membuf &other)
+      : ptr(other.ptr), d(d_), rw(false) {}
 
   public:
     membuf(T *d_, bool rw_=false)
@@ -232,6 +234,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using mav_info<ndim>::conformable;
     using membuf<T>::rw;
     using membuf<T>::vraw;
+
     template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
       {
       if constexpr (idim+1<ndim)
@@ -275,6 +278,26 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       }
 
+    template<size_t nd2> void subdata(const shape_t &i0, const shape_t &extent,
+      array<size_t, nd2> &nshp, array<ptrdiff_t, nd2> &nstr, ptrdiff_t &nofs) const
+      {
+      size_t n0=0;
+      for (auto x:extent) if (x==0)++n0;
+      MR_assert(n0+nd2==ndim, "bad extent");
+      nofs=0;
+      for (size_t i=0, i2=0; i<ndim; ++i)
+        {
+        MR_assert(i0[i]<shp[i], "bad subset");
+        nofs+=i0[i]*str[i];
+        if (extent[i]!=0)
+          {
+          MR_assert(i0[i]+extent[i2]<=shp[i], "bad subset");
+          nshp[i2] = extent[i]; nstr[i2]=str[i];
+          ++i2;
+          }
+        }
+      }
+
   public:
     using membuf<T>::operator[];
     using membuf<T>::vdata;
@@ -296,6 +319,10 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     mav(const mav &other) = default;
     mav(mav &other) = default;
     mav(mav &&other) = default;
+    mav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &mb)
+      : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
+    mav(const shape_t &shp_, const stride_t &str_, const T *d_, const membuf<T> &mb)
+      : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
     operator fmav<T>() const
       {
       return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
@@ -324,6 +351,22 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       { applyHelper<0,T2,Func>(0,0,other,func); }
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
+    template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent)
+      {
+      array<size_t,nd2> nshp;
+      array<ptrdiff_t,nd2> nstr;
+      ptrdiff_t nofs;
+      subdata<nd2> (i0, extent, nshp, nstr, nofs);
+      return mav<T,nd2> (nshp, nstr, d+nofs, *this);
+      }
+    template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent) const
+      {
+      array<size_t,nd2> nshp;
+      array<ptrdiff_t,nd2> nstr;
+      ptrdiff_t nofs;
+      subdata<nd2> (i0, extent, nshp, nstr, nofs);
+      return mav<T,nd2> (nshp, nstr, d+nofs, *this);
+      }
   };
 
 template<typename T, size_t ndim> class MavIter
