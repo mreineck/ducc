@@ -25,6 +25,8 @@ namespace py = pybind11;
 
 namespace {
 
+constexpr double ofmin=1.5;
+
 template<typename T> class Interpolator
   {
   protected:
@@ -51,7 +53,7 @@ template<typename T> class Interpolator
           }
       // FFT to frequency domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),0);
-      auto fct = kernel.correction_factors(nphi, nphi0, 0);
+      auto fct = kernel.correction_factors(nphi, nphi0/2+1, 0);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
@@ -73,7 +75,7 @@ template<typename T> class Interpolator
         kmax(blmT.Mmax()),
         nphi0(2*good_size_real(lmax+1)),
         ntheta0(nphi0/2+1),
-        nphi(2*good_size_real(2*lmax+1)),
+        nphi(2*good_size_real(size_t((2*lmax+1)*ofmin/2.))),
         ntheta(nphi/2+1),
         ofactor(double(nphi)/(2*lmax+1)),
         supp(ES_Kernel::get_supp(epsilon, ofactor)),
@@ -158,7 +160,22 @@ template<typename T> class Interpolator
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
+#if 1
+      constexpr size_t cellsize=16;
+      size_t nct = ntheta/cellsize+1,
+             ncp = nphi/cellsize+1;
+      vector<vector<size_t>> mapper(nct*ncp);
       for (size_t i=0; i<ptg.shape(0); ++i)
+        {
+        size_t itheta=size_t(ptg(i,0)/pi*nct),
+               iphi=size_t(ptg(i,1)/(2*pi)*ncp);
+        mapper[itheta*ncp+iphi].push_back(i);
+        }
+      for (const auto &vec: mapper)
+      for (auto i:vec)
+#else
+      for (size_t i=0; i<ptg.shape(0); ++i)
+#endif
         {
         double f0=0.5*supp+ptg(i,0)*xdtheta;
         size_t i0 = size_t(f0+1.);
