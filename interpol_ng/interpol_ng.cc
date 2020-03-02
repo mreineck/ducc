@@ -31,6 +31,7 @@ template<typename T> class Interpolator
   {
   protected:
     size_t lmax, kmax, nphi0, ntheta0, nphi, ntheta;
+    int nthreads;
     double ofactor;
     size_t supp;
     ES_Kernel kernel;
@@ -52,34 +53,35 @@ template<typename T> class Interpolator
           tmp0.v(i2,j) = arr(i,j2);
           }
       // FFT to frequency domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),0);
-      auto fct = kernel.correction_factors(nphi, nphi0/2+1, 0);
+      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),nthreads);
+      auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
       fmav<T> ftmp1(tmp1);
       // zero-padded FFT in theta direction
-      r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,0);
+      r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,nthreads);
       auto tmp2=tmp.template subarray<2>({0,0},{ntheta, nphi});
       fmav<T> ftmp2(tmp2);
       fmav<T> farr(arr);
       // zero-padded FFT in phi direction
-      r2r_fftpack(ftmp2,farr,{1},false,false,1.,0);
+      r2r_fftpack(ftmp2,farr,{1},false,false,1.,nthreads);
       }
 
   public:
     Interpolator(const Alm<complex<T>> &slmT, const Alm<complex<T>> &blmT,
-      double epsilon)
+      double epsilon, int nthreads_)
       : lmax(slmT.Lmax()),
         kmax(blmT.Mmax()),
         nphi0(2*good_size_real(lmax+1)),
         ntheta0(nphi0/2+1),
         nphi(2*good_size_real(size_t((2*lmax+1)*ofmin/2.))),
         ntheta(nphi/2+1),
+        nthreads(nthreads_),
         ofactor(double(nphi)/(2*lmax+1)),
         supp(ES_Kernel::get_supp(epsilon, ofactor)),
-        kernel(supp, ofactor, 1),
+        kernel(supp, ofactor, nthreads),
         cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
       {
       MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
@@ -124,9 +126,9 @@ template<typename T> class Interpolator
         auto m1 = cube.template subarray<2>({supp,supp,kidx1},{ntheta,nphi,0});
         auto m2 = cube.template subarray<2>({supp,supp,kidx2},{ntheta,nphi,0});
         if (k==0)
-          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
+          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, nthreads, nullptr, nullptr);
         else
-          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
+          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, nthreads, nullptr, nullptr);
         correct(m1);
         if (k!=0) correct(m2);
 
@@ -155,12 +157,12 @@ template<typename T> class Interpolator
       {
       MR_assert(ptg.shape(0)==res.shape(0), "dimension mismatch");
       MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
-      vector<T> wt(supp), wp(supp);
-      vector<T> psiarr(2*kmax+1);
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
+      vector<size_t> idx(ptg.shape(0));
 #if 1
+      {
       constexpr size_t cellsize=16;
       size_t nct = ntheta/cellsize+1,
              ncp = nphi/cellsize+1;
@@ -171,48 +173,60 @@ template<typename T> class Interpolator
                iphi=size_t(ptg(i,1)/(2*pi)*ncp);
         mapper[itheta*ncp+iphi].push_back(i);
         }
+      size_t cnt=0;
       for (const auto &vec: mapper)
-      for (auto i:vec)
+        for (auto i:vec)
+          idx[cnt++] = i;
+      }
 #else
-      for (size_t i=0; i<ptg.shape(0); ++i)
+      for (size_t i=0; i<idx.size(); ++i)
+        idx[i]=i;
 #endif
+
+      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
-        double f0=0.5*supp+ptg(i,0)*xdtheta;
-        size_t i0 = size_t(f0+1.);
-        for (size_t t=0; t<supp; ++t)
-          wt[t] = kernel((t+i0-f0)*delta - 1);
-        double f1=0.5*supp+ptg(i,1)*xdphi;
-        size_t i1 = size_t(f1+1.);
-        for (size_t t=0; t<supp; ++t)
-          wp[t] = kernel((t+i1-f1)*delta - 1);
-        double val=0;
-        psiarr[0]=1.;
-        double cpsi=cos(ptg(i,2)), spsi=sin(ptg(i,2));
-        double cnpsi=cpsi, snpsi=spsi;
-        for (size_t l=1; l<=kmax; ++l)
+        vector<T> wt(supp), wp(supp);
+        vector<T> psiarr(2*kmax+1);
+        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
-          psiarr[2*l-1]=cnpsi;
-          psiarr[2*l]=-snpsi;
-          const double tmp = snpsi*cpsi + cnpsi*spsi;
-          cnpsi=cnpsi*cpsi - snpsi*spsi;
-          snpsi=tmp;
+          size_t i=idx[ind];
+          double f0=0.5*supp+ptg(i,0)*xdtheta;
+          size_t i0 = size_t(f0+1.);
+          for (size_t t=0; t<supp; ++t)
+            wt[t] = kernel((t+i0-f0)*delta - 1);
+          double f1=0.5*supp+ptg(i,1)*xdphi;
+          size_t i1 = size_t(f1+1.);
+          for (size_t t=0; t<supp; ++t)
+            wp[t] = kernel((t+i1-f1)*delta - 1);
+          double val=0;
+          psiarr[0]=1.;
+          double cpsi=cos(ptg(i,2)), spsi=sin(ptg(i,2));
+          double cnpsi=cpsi, snpsi=spsi;
+          for (size_t l=1; l<=kmax; ++l)
+            {
+            psiarr[2*l-1]=cnpsi;
+            psiarr[2*l]=-snpsi;
+            const double tmp = snpsi*cpsi + cnpsi*spsi;
+            cnpsi=cnpsi*cpsi - snpsi*spsi;
+            snpsi=tmp;
+            }
+          for (size_t j=0; j<supp; ++j)
+            for (size_t k=0; k<supp; ++k)
+              for (size_t l=0; l<2*kmax+1; ++l)
+                val += cube(i0+j,i1+k,l)*wt[j]*wp[k]*psiarr[l];
+          res.v(i) = val;
           }
-        for (size_t j=0; j<supp; ++j)
-          for (size_t k=0; k<supp; ++k)
-            for (size_t l=0; l<2*kmax+1; ++l)
-              val += cube(i0+j,i1+k,l)*wt[j]*wp[k]*psiarr[l];
-        res.v(i) = val;
-        }
+        });
       }
   };
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
   public:
-    PyInterpolator(const py::array &slmT, const py::array &blmT, int64_t lmax, int64_t kmax, double epsilon)
+    PyInterpolator(const py::array &slmT, const py::array &blmT, int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
       : Interpolator<T>(Alm<complex<T>>(to_mav<complex<T>,1>(slmT), lmax, lmax),
                         Alm<complex<T>>(to_mav<complex<T>,1>(blmT), lmax, kmax),
-                        epsilon) {}
+                        epsilon, nthreads) {}
     using Interpolator<T>::interpolx;
     py::array interpol(const py::array &ptg)
       {
@@ -224,6 +238,16 @@ template<typename T> class PyInterpolator: public Interpolator<T>
       }
   };
 
+#if 0
+template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
+  double psi, double theta, double phi)
+  {
+  Alm<complex<T>> alm(to_mav<complex<T>,1>(alm_), lmax, lmax);
+  rotate_alm(alm, psi, theta, phi);
+return alm_;
+  }
+#endif
+
 } // unnamed namespace
 
 PYBIND11_MODULE(interpol_ng, m)
@@ -231,7 +255,11 @@ PYBIND11_MODULE(interpol_ng, m)
   using namespace pybind11::literals;
 
   py::class_<PyInterpolator<double>> (m, "PyInterpolator")
-    .def(py::init<const py::array &, const py::array &, int64_t, int64_t, double>(),
-      "sky"_a, "beam"_a, "lmax"_a, "kmax"_a, "epsilon"_a)
+    .def(py::init<const py::array &, const py::array &, int64_t, int64_t, double, int>(),
+      "sky"_a, "beam"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a);
+#if 0
+  m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
+    "phi"_a);
+#endif
   }
