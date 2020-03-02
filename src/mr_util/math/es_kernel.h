@@ -36,6 +36,8 @@ namespace detail_es_kernel {
 
 using namespace std;
 
+/* This class implements the "exponential of semicircle" gridding kernel
+   described in https://arxiv.org/abs/1808.06736 */
 class ES_Kernel
   {
   private:

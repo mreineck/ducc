@@ -2,6 +2,7 @@ import interpol_ng
 import numpy as np
 import pysharp
 import time
+import matplotlib.pyplot as plt
 
 np.random.seed(42)
 
@@ -32,10 +33,14 @@ slmT[0:lmax+1].imag = 0.
 blmT = deltabeam(lmax,kmax)
 
 t0=time.time()
+# build interpolator object for slmT and blmT
 foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
 print("setup time: ",time.time()-t0)
 
-# evaluate total convolution on a sufficiently resolved Gauss-Legendre grid
+# assemble a set of (theta, phi, psi) pointings, at which we want to evaluate
+# the interpolated signal.
+# For testig purposes, we choose theta and phi such that they form a
+# Gauss-Legendre grid of sufficient resolution to recover the input a_lm
 nth = lmax+1
 nph = 2*mmax+1
 ptg = np.zeros((nth,nph,3))
@@ -45,17 +50,17 @@ ptg[:,:,0] = th.reshape((-1,1))
 ptg[:,:,1] = (2*np.pi*np.arange(nph)/nph).reshape((1,-1))
 ptg[:,:,2] = 0
 t0=time.time()
+# do the actual interpolation
 bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph))
 print("interpolation time: ", time.time()-t0)
 
-# get a_lm back from interpolated array
+# get a_lm back from interpolation results
 job = pysharp.sharpjob_d()
 job.set_triangular_alm_info(lmax, mmax)
 job.set_gauss_geometry(nth, nph)
 alm2 = job.map2alm(bar.reshape((-1,)))
 
 #compare with original a_lm
-import matplotlib.pyplot as plt
 plt.plot(np.abs(alm2-slmT))
 plt.suptitle("Deviations between original and reconstructed a_lm")
 plt.show()

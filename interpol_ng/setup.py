@@ -73,7 +73,7 @@ def get_extension_modules():
 
 setup(name='interpol_ng',
       version='0.0.1',
-      description='Python bindings for some libsharp functionality',
+      description='Python bindings for total convolution and interpolation library',
       include_package_data=True,
       author='Martin Reinecke',
       author_email='martin@mpa-garching.mpg.de',
