@@ -99,25 +99,20 @@ template<typename T> class Interpolator
         {
         double spinsign = (k==0) ? 1. : -1.;
         for (size_t m=0; m<=lmax; ++m)
-          {
-          T mfac=T((m&1) ? -1.:1.);
           for (size_t l=m; l<=lmax; ++l)
             {
             if (l<k)
               a1(l,m)=a2(l,m)=0.;
             else
               {
-              complex<T> v1=slmT(l,m)*blmT(l,k),
-                         v2=conj(slmT(l,m))*blmT(l,k)*mfac;
-              a1(l,m) = (v1+conj(v2)*mfac)*T(0.5*spinsign*lnorm[l]);
+              a1(l,m) = slmT(l,m)*blmT(l,k).real()*T(spinsign*lnorm[l]);
               if (k>0)
                 {
-                complex<T> tmp = (v1-conj(v2)*mfac)*T(-spinsign*0.5*lnorm[l]);
+                complex<T> tmp = slmT(l,m)*blmT(l,k).imag()*T(-spinsign*lnorm[l]);
                 a2(l,m) = complex<T>(-tmp.imag(), tmp.real());
                 }
               }
             }
-          }
         size_t kidx1 = (k==0) ? 0 : 2*k-1,
                kidx2 = (k==0) ? 0 : 2*k;
         auto quadrant=k%4;

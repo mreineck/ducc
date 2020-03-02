@@ -10,6 +10,14 @@ def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
+def random_alm(lmax, mmax):
+    res = np.random.uniform(-1., 1., nalm(lmax, mmax)) \
+     + 1j*np.random.uniform(-1., 1., nalm(lmax, mmax))
+    # make a_lm with m==0 real-valued
+    res[0:lmax+1].imag = 0.
+    return res
+
+
 def deltabeam(lmax,kmax):
     beam=np.zeros(nalm(lmax, kmax))+0j
     for l in range(lmax+1):
@@ -24,10 +32,7 @@ kmax=2  # doesn't make any sense for the beam we are using, but just for demonst
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
-slmT =      np.random.uniform(-1., 1., nalm(lmax, mmax)) \
-       + 1j*np.random.uniform(-1., 1., nalm(lmax, mmax))
-# make a_lm with m==0 real-valued
-slmT[0:lmax+1].imag = 0.
+slmT = random_alm(lmax, mmax)
 
 # build beam a_lm (pencil beam for now)
 blmT = deltabeam(lmax,kmax)
