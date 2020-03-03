@@ -77,7 +77,7 @@ test_interpol_ng_gcc:
   script:
     - cd pysharp
     - python3 setup.py install --user -f
-    - cd interpol_ng
+    - cd ../interpol_ng
     - python3 setup.py install --user -f
     - pytest-3 -q test
 
@@ -86,6 +86,6 @@ test_interpol_ng_clang:
   script:
     - cd pysharp
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - cd interpol_ng
+    - cd ../interpol_ng
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
