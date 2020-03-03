@@ -71,3 +71,21 @@ test_pyHealpix_clang:
     - cd pyHealpix
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
+
+test_interpol_ng_gcc:
+  stage: testing
+  script:
+    - cd pysharp
+    - python3 setup.py install --user -f
+    - cd interpol_ng
+    - python3 setup.py install --user -f
+    - pytest-3 -q test
+
+test_interpol_ng_clang:
+  stage: testing
+  script:
+    - cd pysharp
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
+    - cd interpol_ng
+    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
+    - pytest-3 -q test
