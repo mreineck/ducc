@@ -293,7 +293,7 @@ MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim
   {
   if (type != SHARP_MAP2ALM) return;
   size_t pstride = s_m;
-  mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
+  mr::execDynamic(ulim-llim, nthreads, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
@@ -321,7 +321,7 @@ MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim
   {
   if (type == SHARP_MAP2ALM) return;
   size_t pstride = s_m;
-  mr::execDynamic(ulim-llim, 0, 1, [&](mr::Scheduler &sched)
+  mr::execDynamic(ulim-llim, nthreads, 1, [&](mr::Scheduler &sched)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
@@ -365,7 +365,7 @@ MRUTIL_NOINLINE void sharp_job::execute()
   vector<dcmplx> phasebuffer;
 //FIXME: needs to be changed to "nm"
   alloc_phase(mmax+1,chunksize, phasebuffer);
-  std::atomic<unsigned long long> a_opcnt(0);
+  std::atomic<uint64_t> a_opcnt(0);
 
 /* chunk loop */
   for (size_t chunk=0; chunk<nchunks; ++chunk)
@@ -385,7 +385,7 @@ MRUTIL_NOINLINE void sharp_job::execute()
 /* map->phase where necessary */
     map2phase(mmax, llim, ulim);
 
-    mr::execDynamic(ainfo.nm(), 0, 1, [&](mr::Scheduler &sched)
+    mr::execDynamic(ainfo.nm(), nthreads, 1, [&](mr::Scheduler &sched)
       {
       sharp_job ljob = *this;
       ljob.opcnt=0;
@@ -417,9 +417,9 @@ MRUTIL_NOINLINE void sharp_job::execute()
 
 sharp_job::sharp_job (sharp_jobtype type_,
   size_t spin_, const vector<any> &alm_, const vector<any> &map_,
-  const sharp_geom_info &geom_info, const sharp_alm_info &alm_info, size_t flags_)
+  const sharp_geom_info &geom_info, const sharp_alm_info &alm_info, size_t flags_, int nthreads_)
   : alm(alm_), map(map_), type(type_), spin(spin_), flags(flags_), ginfo(geom_info), ainfo(alm_info),
-    time(0.), opcnt(0)
+    nthreads(nthreads_), time(0.), opcnt(0)
   {
   if (type==SHARP_ALM2MAP_DERIV1) spin_=1;
   if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
@@ -434,9 +434,9 @@ sharp_job::sharp_job (sharp_jobtype type_,
 void sharp_execute (sharp_jobtype type, size_t spin, const vector<any> &alm,
   const vector<any> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, double *time, unsigned long long *opcnt)
+  size_t flags, int nthreads, double *time, uint64_t *opcnt)
   {
-  sharp_job job(type, spin, alm, map, geom_info, alm_info, flags);
+  sharp_job job(type, spin, alm, map, geom_info, alm_info, flags, nthreads);
 
   job.execute();
   if (time!=nullptr) *time = job.time;

@@ -118,9 +118,9 @@ template<typename T> class Interpolator
         auto m1 = cube.template subarray<2>({supp,supp,kidx1},{ntheta,nphi,0});
         auto m2 = cube.template subarray<2>({supp,supp,kidx2},{ntheta,nphi,0});
         if (k==0)
-          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
+          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
         else
-          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
+          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,k);
         if (k!=0) correct(m2,k);
         if (k!=0)

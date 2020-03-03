@@ -115,13 +115,14 @@ class sharp_job
     complex<double> *almtmp;
     const sharp_geom_info &ginfo;
     const sharp_alm_info &ainfo;
+    int nthreads;
     double time;
-    unsigned long long opcnt;
+    uint64_t opcnt;
 
     sharp_job(sharp_jobtype type,
       size_t spin, const std::vector<std::any> &alm_,
       const std::vector<std::any> &map, const sharp_geom_info &geom_info,
-      const sharp_alm_info &alm_info, size_t flags);
+      const sharp_alm_info &alm_info, size_t flags, int nthreads_);
 
     void alloc_phase (size_t nm, size_t ntheta, std::vector<complex<double>> &data);
     void alloc_almtmp (size_t lmax, std::vector<complex<double>> &data);

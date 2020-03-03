@@ -60,9 +60,10 @@ template<typename T> class py_sharpjob
     unique_ptr<sharp_geom_info> ginfo;
     unique_ptr<sharp_alm_info> ainfo;
     int64_t lmax_, mmax_, npix_;
+    int nthreads;
 
   public:
-    py_sharpjob () : lmax_(0), mmax_(0), npix_(0) {}
+    py_sharpjob () : lmax_(0), mmax_(0), npix_(0), nthreads(1) {}
 
     string repr() const
       {
@@ -70,6 +71,8 @@ template<typename T> class py_sharpjob
         ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
       }
 
+    void set_nthreads(int64_t nthreads_)
+      { nthreads = int(nthreads_); }
     void set_gauss_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert((nrings>0)&&(nphi>0),"bad grid dimensions");
@@ -136,7 +139,7 @@ template<typename T> class py_sharpjob
       a_d_c map(npix_);
       auto mr=map.mutable_unchecked<1>();
       auto ar=alm.unchecked<1>();
-      sharp_alm2map(&ar[0], &mr[0], *ginfo, *ainfo, 0, nullptr, nullptr);
+      sharp_alm2map(&ar[0], &mr[0], *ginfo, *ainfo, 0, nthreads);
       return map;
       }
     a_c_c alm2map_adjoint (const a_d_c &map) const
@@ -146,7 +149,7 @@ template<typename T> class py_sharpjob
       a_c_c alm(n_alm());
       auto mr=map.unchecked<1>();
       auto ar=alm.mutable_unchecked<1>();
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, 0, nullptr, nullptr);
+      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, 0, nthreads);
       return alm;
       }
     a_c_c map2alm (const a_d_c &map) const
@@ -156,7 +159,7 @@ template<typename T> class py_sharpjob
       a_c_c alm(n_alm());
       auto mr=map.unchecked<1>();
       auto ar=alm.mutable_unchecked<1>();
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, SHARP_USE_WEIGHTS, nullptr, nullptr);
+      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
       return alm;
       }
     a_d_c alm2map_spin (const a_c_c &alm, int64_t spin) const
@@ -167,7 +170,7 @@ template<typename T> class py_sharpjob
         "incorrect size of a_lm array");
       a_d_c map(vector<size_t>{2,size_t(npix_)});
       auto mr=map.mutable_unchecked<2>();
-      sharp_alm2map_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, 0, nullptr, nullptr);
+      sharp_alm2map_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, 0, nthreads);
       return map;
       }
     a_c_c map2alm_spin (const a_d_c &map, int64_t spin) const
@@ -178,7 +181,7 @@ template<typename T> class py_sharpjob
         "incorrect size of map array");
       a_c_c alm(vector<size_t>{2,size_t(n_alm())});
       auto ar=alm.mutable_unchecked<2>();
-      sharp_map2alm_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, SHARP_USE_WEIGHTS, nullptr, nullptr);
+      sharp_map2alm_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
       return alm;
       }
   };
@@ -273,6 +276,7 @@ PYBIND11_MODULE(pysharp, m)
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d")
     .def(py::init<>())
+    .def("set_nthreads", &py_sharpjob<double>::set_nthreads, "nthreads"_a)
     .def("set_gauss_geometry", &py_sharpjob<double>::set_gauss_geometry,
       "nrings"_a,"nphi"_a)
     .def("set_healpix_geometry", &py_sharpjob<double>::set_healpix_geometry,
