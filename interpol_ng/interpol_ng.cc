@@ -41,6 +41,7 @@ template<typename T> class Interpolator
       {
       double sfct = (spin&1) ? -1 : 1;
       mav<T,2> tmp({nphi,nphi});
+      tmp.apply([](T &v){v=0.;});
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
       for (size_t i=0; i<ntheta0; ++i)
@@ -51,7 +52,7 @@ template<typename T> class Interpolator
         for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
           if (j2>=nphi0) j2-=nphi0;
-          tmp0.v(i2,j) = sfct*arr(i,j2);
+          tmp0.v(i2,j) = sfct*tmp0(i,j2);
           }
       // FFT to frequency domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{1,0},true,true,1./(nphi0*nphi0),nthreads);
@@ -89,7 +90,7 @@ template<typename T> class Interpolator
       MR_assert(slmT.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
       MR_assert(blmT.Lmax()==lmax, "Sky and beam lmax must be equal");
       Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0,cube.stride(1),cube.stride(0));
+      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       vector<double>lnorm(lmax+1);
@@ -109,7 +110,7 @@ template<typename T> class Interpolator
               a1(l,m) = slmT(l,m)*blmT(l,k).real()*T(spinsign*lnorm[l]);
               if (k>0)
                 {
-                complex<T> tmp = slmT(l,m)*blmT(l,k).imag()*T(-spinsign*lnorm[l]);
+                complex<T> tmp = slmT(l,m)*complex<T>(0,blmT(l,k).imag())*T(-spinsign*lnorm[l]);
                 a2(l,m) = complex<T>(-tmp.imag(), tmp.real());
                 }
               }

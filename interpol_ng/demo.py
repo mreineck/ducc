@@ -44,9 +44,6 @@ slmT = random_alm(lmax, mmax)
 # build beam a_lm (pencil beam for now)
 blmT = deltabeam(lmax,kmax)
 blmT = random_alm(lmax, mmax)
-#blmT[:]=0
-#blmT[lmax+1]=1j
-blmT[:].imag=0
 
 t0=time.time()
 # build interpolator object for slmT and blmT
@@ -58,7 +55,7 @@ nph = 2*mmax+1
 ptg = np.zeros((nth,nph,3))
 ptg[:,:,0] = (np.pi*np.arange(nth)/(nth-1)).reshape((-1,1))
 ptg[:,:,1] = (2*np.pi*np.arange(nph)/nph).reshape((1,-1))
-ptg[:,:,2] = 1.
+ptg[:,:,2] = np.pi*0.2
 t0=time.time()
 # do the actual interpolation
 bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph))
