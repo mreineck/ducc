@@ -29,3 +29,4 @@ include mr_util/sharp/sharp_core_inc.cc
 include mr_util/sharp/sharp_geomhelpers.cc
 include mr_util/sharp/sharp_almhelpers.cc
 include mr_util/sharp/sharp_ylmgen.cc
+include demo.py
