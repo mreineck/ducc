@@ -18,7 +18,7 @@
 
 /* libsharp2 is being developed at the Max-Planck-Institut fuer Astrophysik */
 
-/*! \file sharp_core_inc.c
+/*! \file sharp_core_inc.cc
  *  Computational core
  *
  *  Copyright (C) 2012-2020 Max-Planck-Society

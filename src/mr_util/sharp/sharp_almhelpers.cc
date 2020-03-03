@@ -18,7 +18,7 @@
 
 /* libsharp2 is being developed at the Max-Planck-Institut fuer Astrophysik */
 
-/*! \file sharp_almhelpers.c
+/*! \file sharp_almhelpers.cc
  *  Spherical transform library
  *
  *  Copyright (C) 2008-2020 Max-Planck-Society
