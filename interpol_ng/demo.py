@@ -4,7 +4,7 @@ import pysharp
 import time
 import matplotlib.pyplot as plt
 
-np.random.seed(42)
+np.random.seed(48)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
@@ -24,10 +24,17 @@ def deltabeam(lmax,kmax):
         beam[l] = np.sqrt((2*l+1.)/(4*np.pi))
     return beam
 
+def convolve(alm1, alm2, lmax):
+    job = pysharp.sharpjob_d()
+    job.set_triangular_alm_info(lmax, lmax)
+    job.set_gauss_geometry(lmax+1, 2*lmax+1)
+    map = job.alm2map(alm1)*job.alm2map(alm2)
+    job.set_triangular_alm_info(0,0)
+    return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
-lmax=2047
+lmax=10
 mmax=lmax
-kmax=2  # doesn't make any sense for the beam we are using, but just for demonstration purposes ...
+kmax=lmax
 
 
 # get random sky a_lm
@@ -36,36 +43,35 @@ slmT = random_alm(lmax, mmax)
 
 # build beam a_lm (pencil beam for now)
 blmT = deltabeam(lmax,kmax)
+blmT = random_alm(lmax, mmax)
+#blmT[:]=0
+#blmT[lmax+1]=1j
+blmT[:].imag=0
 
 t0=time.time()
 # build interpolator object for slmT and blmT
 foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
 print("setup time: ",time.time()-t0)
-
-# assemble a set of (theta, phi, psi) pointings, at which we want to evaluate
-# the interpolated signal.
-# For testig purposes, we choose theta and phi such that they form a
-# Gauss-Legendre grid of sufficient resolution to recover the input a_lm
-nth = lmax+1
+nth = 2*lmax+1
 nph = 2*mmax+1
+
 ptg = np.zeros((nth,nph,3))
-th, _ = np.polynomial.legendre.leggauss(nth)
-th = np.arccos(-th)
-ptg[:,:,0] = th.reshape((-1,1))
+ptg[:,:,0] = (np.pi*np.arange(nth)/(nth-1)).reshape((-1,1))
 ptg[:,:,1] = (2*np.pi*np.arange(nph)/nph).reshape((1,-1))
-ptg[:,:,2] = 0
+ptg[:,:,2] = 1.
 t0=time.time()
 # do the actual interpolation
 bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph))
 print("interpolation time: ", time.time()-t0)
-
-# get a_lm back from interpolation results
-job = pysharp.sharpjob_d()
-job.set_triangular_alm_info(lmax, mmax)
-job.set_gauss_geometry(nth, nph)
-alm2 = job.map2alm(bar.reshape((-1,)))
-
-#compare with original a_lm
-plt.plot(np.abs(alm2-slmT))
-plt.suptitle("Deviations between original and reconstructed a_lm")
+plt.subplot(2,2,1)
+plt.imshow(bar.reshape((nth,nph)))
+bar2 = np.zeros((nth,nph))
+for ith in range(nth):
+    for iph in range(nph):
+        rbeam=interpol_ng.rotate_alm(blmT, lmax, ptg[ith,iph,2],ptg[ith,iph,0],ptg[ith,iph,1])
+        bar2[ith,iph] = convolve(slmT, rbeam, lmax)
+plt.subplot(2,2,2)
+plt.imshow(bar2)
+plt.subplot(2,2,3)
+plt.imshow((bar2-bar.reshape((nth,nph))))
 plt.show()

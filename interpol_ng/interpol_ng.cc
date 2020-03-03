@@ -17,7 +17,7 @@
 #include "alm.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
-
+#include <iostream>
 using namespace std;
 using namespace mr;
 
@@ -37,8 +37,9 @@ template<typename T> class Interpolator
     ES_Kernel kernel;
     mav<T,3> cube; // the data cube (theta, phi, 2*mbeam+1[, IQU])
 
-    void correct(mav<T,2> &arr)
+    void correct(mav<T,2> &arr, int spin)
       {
+      double sfct = (spin&1) ? -1 : 1;
       mav<T,2> tmp({nphi,nphi});
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
@@ -50,10 +51,10 @@ template<typename T> class Interpolator
         for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
           if (j2>=nphi0) j2-=nphi0;
-          tmp0.v(i2,j) = arr(i,j2);
+          tmp0.v(i2,j) = sfct*arr(i,j2);
           }
       // FFT to frequency domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),nthreads);
+      r2r_fftpack(ftmp0,ftmp0,{1,0},true,true,1./(nphi0*nphi0),nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
@@ -76,7 +77,7 @@ template<typename T> class Interpolator
         kmax(blmT.Mmax()),
         nphi0(2*good_size_real(lmax+1)),
         ntheta0(nphi0/2+1),
-        nphi(2*good_size_real(size_t((2*lmax+1)*ofmin/2.))),
+        nphi(max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ofmin/2.)))),
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(double(nphi)/(2*lmax+1)),
@@ -115,29 +116,26 @@ template<typename T> class Interpolator
             }
         size_t kidx1 = (k==0) ? 0 : 2*k-1,
                kidx2 = (k==0) ? 0 : 2*k;
-        auto quadrant=k%4;
-        if (quadrant&1)
-          swap(kidx1, kidx2);
         auto m1 = cube.template subarray<2>({supp,supp,kidx1},{ntheta,nphi,0});
         auto m2 = cube.template subarray<2>({supp,supp,kidx2},{ntheta,nphi,0});
         if (k==0)
-          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, nthreads, nullptr, nullptr);
+          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
         else
-          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, nthreads, nullptr, nullptr);
-        correct(m1);
-        if (k!=0) correct(m2);
-
-        if ((quadrant==1)||(quadrant==2)) m1.apply([](T &v){v=-v;});
-        if ((k>0) &&((quadrant==0)||(quadrant==1))) m2.apply([](T &v){v=-v;});
+          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nullptr, nullptr);
+        correct(m1,k);
+        if (k!=0) correct(m2,k);
+        if (k!=0)
+          { m1.apply([](T &v){v*=2;}); m2.apply([](T &v){v*=2;}); }
         }
       // fill border regions
       for (size_t i=0; i<supp; ++i)
         for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
           for (size_t k=0; k<cube.shape(2); ++k)
             {
+            double fct = (((k+1)/2)&1) ? -1 : 1;
             if (j2>=nphi) j2-=nphi;
-            cube.v(supp-1-i,j2+supp,k) = cube(supp+1+i,j+supp,k);
-            cube.v(supp+ntheta+i,j2+supp,k) = cube(supp+ntheta-2-i, j+supp,k);
+            cube.v(supp-1-i,j2+supp,k) = fct*cube(supp+1+i,j+supp,k);
+            cube.v(supp+ntheta+i,j2+supp,k) = fct*cube(supp+ntheta-2-i, j+supp,k);
             }
       for (size_t i=0; i<ntheta+2*supp; ++i)
         for (size_t j=0; j<supp; ++j)
@@ -164,8 +162,8 @@ template<typename T> class Interpolator
       vector<vector<size_t>> mapper(nct*ncp);
       for (size_t i=0; i<ptg.shape(0); ++i)
         {
-        size_t itheta=size_t(ptg(i,0)/pi*nct),
-               iphi=size_t(ptg(i,1)/(2*pi)*ncp);
+        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
+               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
         mapper[itheta*ncp+iphi].push_back(i);
         }
       size_t cnt=0;
@@ -177,7 +175,6 @@ template<typename T> class Interpolator
       for (size_t i=0; i<idx.size(); ++i)
         idx[i]=i;
 #endif
-
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         vector<T> wt(supp), wp(supp);
@@ -195,12 +192,13 @@ template<typename T> class Interpolator
             wp[t] = kernel((t+i1-f1)*delta - 1);
           double val=0;
           psiarr[0]=1.;
-          double cpsi=cos(ptg(i,2)), spsi=sin(ptg(i,2));
+          double psi=ptg(i,2);
+          double cpsi=cos(psi), spsi=sin(psi);
           double cnpsi=cpsi, snpsi=spsi;
           for (size_t l=1; l<=kmax; ++l)
             {
             psiarr[2*l-1]=cnpsi;
-            psiarr[2*l]=-snpsi;
+            psiarr[2*l]=snpsi;
             const double tmp = snpsi*cpsi + cnpsi*spsi;
             cnpsi=cnpsi*cpsi - snpsi*spsi;
             snpsi=tmp;
@@ -233,13 +231,17 @@ template<typename T> class PyInterpolator: public Interpolator<T>
       }
   };
 
-#if 0
+#if 1
 template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
   double psi, double theta, double phi)
   {
-  Alm<complex<T>> alm(to_mav<complex<T>,1>(alm_), lmax, lmax);
-  rotate_alm(alm, psi, theta, phi);
-return alm_;
+  auto a1 = to_mav<complex<T>,1>(alm_);
+  auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
+  auto a2 = to_mav<complex<T>,1>(alm,true);
+  for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
+  auto blah = Alm<complex<T>>(a2,lmax,lmax);
+  rotate_alm(blah, psi, theta, phi);
+  return alm;
   }
 #endif
 
@@ -253,7 +255,7 @@ PYBIND11_MODULE(interpol_ng, m)
     .def(py::init<const py::array &, const py::array &, int64_t, int64_t, double, int>(),
       "sky"_a, "beam"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a);
-#if 0
+#if 1
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
 #endif

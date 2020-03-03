@@ -8,7 +8,7 @@
 #ifndef MRUTIL_ALM_H
 #define MRUTIL_ALM_H
 
-#if 0
+#if 1
 #include <complex>
 #include <cmath>
 #include "mr_util/infra/threading.h"
@@ -143,7 +143,7 @@ template<typename T> class Alm: public Alm_Base
       }
   };
 
-#if 0
+#if 1
 /*! Class for calculation of the Wigner matrix at arbitrary angles, using Risbo
     recursion in a way that can be OpenMP-parallelised. This approach uses more
     memory and is slightly slower than wigner_d_risbo_scalar. */
@@ -262,7 +262,7 @@ size_t nthreads=1;
 
 using detail_alm::Alm_Base;
 using detail_alm::Alm;
-#if 0
+#if 1
 using detail_alm::rotate_alm;
 #endif
 }
