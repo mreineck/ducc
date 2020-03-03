@@ -41,8 +41,7 @@ kmax=lmax
 # the a_lm arrays follow the same conventions as those in healpy
 slmT = random_alm(lmax, mmax)
 
-# build beam a_lm (pencil beam for now)
-blmT = deltabeam(lmax,kmax)
+# build beam a_lm
 blmT = random_alm(lmax, mmax)
 
 t0=time.time()
@@ -66,7 +65,7 @@ bar2 = np.zeros((nth,nph))
 for ith in range(nth):
     for iph in range(nph):
         rbeam=interpol_ng.rotate_alm(blmT, lmax, ptg[ith,iph,2],ptg[ith,iph,0],ptg[ith,iph,1])
-        bar2[ith,iph] = convolve(slmT, rbeam, lmax)
+        bar2[ith,iph] = convolve(slmT, rbeam, lmax).real
 plt.subplot(2,2,2)
 plt.imshow(bar2)
 plt.subplot(2,2,3)

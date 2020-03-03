@@ -17,7 +17,7 @@
 #include "alm.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
-#include <iostream>
+
 using namespace std;
 using namespace mr;
 
@@ -107,12 +107,10 @@ template<typename T> class Interpolator
               a1(l,m)=a2(l,m)=0.;
             else
               {
-              a1(l,m) = slmT(l,m)*blmT(l,k).real()*T(spinsign*lnorm[l]);
+              auto tmp = blmT(l,k)*T(spinsign*lnorm[l]);
+              a1(l,m) = slmT(l,m)*tmp.real();
               if (k>0)
-                {
-                complex<T> tmp = slmT(l,m)*complex<T>(0,blmT(l,k).imag())*T(-spinsign*lnorm[l]);
-                a2(l,m) = complex<T>(-tmp.imag(), tmp.real());
-                }
+                a2(l,m) = slmT(l,m)*tmp.imag();
               }
             }
         size_t kidx1 = (k==0) ? 0 : 2*k-1,
