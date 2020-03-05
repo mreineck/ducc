@@ -131,6 +131,9 @@ template<typename T> class Alm: public Alm_Base
     /*! Returns a constant reference to the a_lm data. */
     const mav<T,1> &Alms() const { return alm; }
 
+    /*! Returns a reference to the a_lm data. */
+    mav<T,1> &Alms() { return alm; }
+
     ptrdiff_t stride() const
       { return alm.stride(0); }
 

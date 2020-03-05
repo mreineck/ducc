@@ -30,6 +30,7 @@ constexpr double ofmin=1.5;
 template<typename T> class Interpolator
   {
   protected:
+    bool adjoint;
     size_t lmax, kmax, nphi0, ntheta0, nphi, ntheta;
     int nthreads;
     double ofactor;
@@ -70,11 +71,41 @@ template<typename T> class Interpolator
       // zero-padded FFT in phi direction
       r2r_fftpack(ftmp2,farr,{1},false,false,1.,nthreads);
       }
+    void decorrect(mav<T,2> &arr, int spin)
+      {
+      double sfct = (spin&1) ? -1 : 1;
+      mav<T,2> tmp({nphi,nphi});
+      fmav<T> ftmp(tmp);
+
+      for (size_t i=0; i<ntheta; ++i)
+        for (size_t j=0; j<nphi; ++j)
+          tmp.v(i,j) = arr(i,j);
+      // extend to second half
+      for (size_t i=1, i2=2*ntheta-3; i+1<ntheta; ++i,--i2)
+        for (size_t j=0,j2=nphi/2; j<nphi; ++j,++j2)
+          {
+          if (j2>=nphi) j2-=nphi;
+          tmp.v(i2,j) = sfct*tmp(i,j2);
+          }
+      r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
+      auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
+      auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
+      fmav<T> ftmp0(tmp0);
+      for (size_t i=0; i<nphi0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
+      // FFT to (theta, phi) domain on minimal grid
+      r2r_fftpack(ftmp0,ftmp0,{0,1},false, false,1./(nphi0*nphi0),nthreads);
+      for (size_t i=0; i<ntheta0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          arr.v(i,j) = tmp0(i,j);
+      }
 
   public:
     Interpolator(const Alm<complex<T>> &slmT, const Alm<complex<T>> &blmT,
       double epsilon, int nthreads_)
-      : lmax(slmT.Lmax()),
+      : adjoint(false),
+        lmax(slmT.Lmax()),
         kmax(blmT.Mmax()),
         nphi0(2*good_size_real(lmax+1)),
         ntheta0(nphi0/2+1),
@@ -97,9 +128,16 @@ template<typename T> class Interpolator
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=sqrt(4*pi/(2*i+1.));
 
-      for (size_t k=0; k<=kmax; ++k)
+      {
+      for (size_t m=0; m<=lmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          a1(l,m) = slmT(l,m)*blmT(l,0).real()*T(lnorm[l]);
+      auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
+      sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
+      correct(m1,0);
+      }
+      for (size_t k=1; k<=kmax; ++k)
         {
-        double spinsign = (k==0) ? 1. : -1.;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
@@ -107,24 +145,17 @@ template<typename T> class Interpolator
               a1(l,m)=a2(l,m)=0.;
             else
               {
-              auto tmp = blmT(l,k)*T(spinsign*lnorm[l]);
+              auto tmp = -2.*blmT(l,k)*T(lnorm[l]);
               a1(l,m) = slmT(l,m)*tmp.real();
-              if (k>0)
-                a2(l,m) = slmT(l,m)*tmp.imag();
+              a2(l,m) = slmT(l,m)*tmp.imag();
               }
             }
-        size_t kidx1 = (k==0) ? 0 : 2*k-1,
-               kidx2 = (k==0) ? 0 : 2*k;
-        auto m1 = cube.template subarray<2>({supp,supp,kidx1},{ntheta,nphi,0});
-        auto m2 = cube.template subarray<2>({supp,supp,kidx2},{ntheta,nphi,0});
-        if (k==0)
-          sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
-        else
-          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
+        auto m1 = cube.template subarray<2>({supp,supp,2*k-1},{ntheta,nphi,0});
+        auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
+        sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
+          m2.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,k);
-        if (k!=0) correct(m2,k);
-        if (k!=0)
-          { m1.apply([](T &v){v*=2;}); m2.apply([](T &v){v*=2;}); }
+        correct(m2,k);
         }
       // fill border regions
       for (size_t i=0; i<supp; ++i)
@@ -145,16 +176,35 @@ template<typename T> class Interpolator
             }
       }
 
+    Interpolator(size_t lmax_, size_t kmax_, double epsilon, int nthreads_)
+      : adjoint(true),
+        lmax(lmax_),
+        kmax(kmax_),
+        nphi0(2*good_size_real(lmax+1)),
+        ntheta0(nphi0/2+1),
+        nphi(max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ofmin/2.)))),
+        ntheta(nphi/2+1),
+        nthreads(nthreads_),
+        ofactor(double(nphi)/(2*lmax+1)),
+        supp(ES_Kernel::get_supp(epsilon, ofactor)),
+        kernel(supp, ofactor, nthreads),
+        cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
+      {
+      MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
+      cube.apply([](T &v){v=0.;});
+      }
+
     void interpolx (const mav<T,2> &ptg, mav<T,1> &res) const
       {
+      MR_assert(!adjoint, "cannot be called in adjoint mode");
       MR_assert(ptg.shape(0)==res.shape(0), "dimension mismatch");
       MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
       vector<size_t> idx(ptg.shape(0));
-#if 1
       {
+      // do some pre-sorting to improve cache use
       constexpr size_t cellsize=16;
       size_t nct = ntheta/cellsize+1,
              ncp = nphi/cellsize+1;
@@ -170,10 +220,6 @@ template<typename T> class Interpolator
         for (auto i:vec)
           idx[cnt++] = i;
       }
-#else
-      for (size_t i=0; i<idx.size(); ++i)
-        idx[i]=i;
-#endif
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         vector<T> wt(supp), wp(supp);
@@ -210,22 +256,167 @@ template<typename T> class Interpolator
           }
         });
       }
+
+    void deinterpolx (const mav<T,2> &ptg, const mav<T,1> &data)
+      {
+      MR_assert(adjoint, "can only be called in adjoint mode");
+      MR_assert(ptg.shape(0)==data.shape(0), "dimension mismatch");
+      MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
+      double delta = 2./supp;
+      double xdtheta = (ntheta-1)/pi,
+             xdphi = nphi/(2*pi);
+      vector<size_t> idx(ptg.shape(0));
+      {
+      // do some pre-sorting to improve cache use
+      constexpr size_t cellsize=16;
+      size_t nct = ntheta/cellsize+1,
+             ncp = nphi/cellsize+1;
+      vector<vector<size_t>> mapper(nct*ncp);
+      for (size_t i=0; i<ptg.shape(0); ++i)
+        {
+        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
+               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
+        mapper[itheta*ncp+iphi].push_back(i);
+        }
+      size_t cnt=0;
+      for (const auto &vec: mapper)
+        for (auto i:vec)
+          idx[cnt++] = i;
+      }
+      execStatic(idx.size(), 1, 0, [&](Scheduler &sched) // not parallel yet
+        {
+        vector<T> wt(supp), wp(supp);
+        vector<T> psiarr(2*kmax+1);
+        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
+          {
+          size_t i=idx[ind];
+          double f0=0.5*supp+ptg(i,0)*xdtheta;
+          size_t i0 = size_t(f0+1.);
+          for (size_t t=0; t<supp; ++t)
+            wt[t] = kernel((t+i0-f0)*delta - 1);
+          double f1=0.5*supp+ptg(i,1)*xdphi;
+          size_t i1 = size_t(f1+1.);
+          for (size_t t=0; t<supp; ++t)
+            wp[t] = kernel((t+i1-f1)*delta - 1);
+          double val=data(i);
+          psiarr[0]=1.;
+          double psi=ptg(i,2);
+          double cpsi=cos(psi), spsi=sin(psi);
+          double cnpsi=cpsi, snpsi=spsi;
+          for (size_t l=1; l<=kmax; ++l)
+            {
+            psiarr[2*l-1]=cnpsi;
+            psiarr[2*l]=snpsi;
+            const double tmp = snpsi*cpsi + cnpsi*spsi;
+            cnpsi=cnpsi*cpsi - snpsi*spsi;
+            snpsi=tmp;
+            }
+          for (size_t j=0; j<supp; ++j)
+            for (size_t k=0; k<supp; ++k)
+              for (size_t l=0; l<2*kmax+1; ++l)
+                cube.v(i0+j,i1+k,l) += val*wt[j]*wp[k]*psiarr[l];
+          }
+        });
+      }
+    void getSlmx (const Alm<complex<T>> &blmT, Alm<complex<T>> &slmT)
+      {
+      MR_assert(adjoint, "can only be called in adjoint mode");
+      Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
+      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
+
+      // move stuff from border regions onto the main grid
+      for (size_t i=0; i<ntheta+2*supp; ++i)
+        for (size_t j=0; j<supp; ++j)
+          for (size_t k=0; k<cube.shape(2); ++k)
+            {
+            cube.v(i,j+nphi,k) += cube(i,j,k);
+            cube.v(i,j+supp,k) += cube(i,j+nphi+supp,k);
+            }
+      for (size_t i=0; i<supp; ++i)
+        for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
+          for (size_t k=0; k<cube.shape(2); ++k)
+            {
+            double fct = (((k+1)/2)&1) ? -1 : 1;
+            if (j2>=nphi) j2-=nphi;
+            cube.v(supp+1+i,j+supp,k) += fct*cube(supp-1-i,j2+supp,k);
+            cube.v(supp+ntheta-2-i, j+supp,k) += fct*cube(supp+ntheta+i,j2+supp,k);
+            }
+
+      vector<double>lnorm(lmax+1);
+      for (size_t i=0; i<=lmax; ++i)
+        lnorm[i]=sqrt(4*pi/(2*i+1.));
+
+      {
+      auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
+      decorrect(m1,0);
+      sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
+      for (size_t m=0; m<=lmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          slmT(l,m)=conj(a1(l,m))*blmT(l,0).real()*T(lnorm[l]);
+      }
+
+      for (size_t k=1; k<=kmax; ++k)
+        {
+        auto m1 = cube.template subarray<2>({supp,supp,2*k-1},{ntheta,nphi,0});
+        auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
+        decorrect(m1,k);
+        decorrect(m2,k);
+
+        sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
+          m2.data(), *ginfo, *ainfo, 0, nthreads);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+            {
+            if (l>=k)
+              {
+              auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
+              slmT(l,m) += conj(a1(l,m))*tmp.real();
+              slmT(l,m) += conj(a2(l,m))*tmp.imag();
+              }
+            }
+        }
+      }
   };
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
   public:
-    PyInterpolator(const py::array &slmT, const py::array &blmT, int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
+    PyInterpolator(const py::array &slmT, const py::array &blmT,
+      int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
       : Interpolator<T>(Alm<complex<T>>(to_mav<complex<T>,1>(slmT), lmax, lmax),
                         Alm<complex<T>>(to_mav<complex<T>,1>(blmT), lmax, kmax),
                         epsilon, nthreads) {}
+    PyInterpolator(int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
+      : Interpolator<T>(lmax, kmax, epsilon, nthreads) {}
     using Interpolator<T>::interpolx;
-    py::array interpol(const py::array &ptg)
+    using Interpolator<T>::deinterpolx;
+    using Interpolator<T>::getSlmx;
+    using Interpolator<T>::lmax;
+    using Interpolator<T>::kmax;
+    py::array interpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
       auto res = make_Pyarr<double>({ptg2.shape(0)});
       auto res2 = to_mav<double,1>(res,true);
       interpolx(ptg2, res2);
+      return res;
+      }
+
+    void deinterpol(const py::array &ptg, const py::array &data)
+      {
+      auto ptg2 = to_mav<T,2>(ptg);
+      auto data2 = to_mav<T,1>(data);
+      deinterpolx(ptg2, data2);
+      }
+    py::array getSlm(const py::array &blmT_)
+      {
+      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax)});
+      Alm<complex<T>> blmT(to_mav<complex<T>,1>(blmT_, false), lmax, kmax);
+      auto slmT_=to_mav<complex<T>,1>(res, true);
+slmT_.apply([](complex<T> &v){v=0;});
+      Alm<complex<T>> slmT(slmT_, lmax, lmax);
+      getSlmx(blmT, slmT);
       return res;
       }
   };
@@ -253,7 +444,11 @@ PYBIND11_MODULE(interpol_ng, m)
   py::class_<PyInterpolator<double>> (m, "PyInterpolator")
     .def(py::init<const py::array &, const py::array &, int64_t, int64_t, double, int>(),
       "sky"_a, "beam"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
-    .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a);
+    .def(py::init<int64_t, int64_t, double, int>(),
+      "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
+    .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a)
+    .def ("deinterpol", &PyInterpolator<double>::deinterpol, "ptg"_a, "data"_a)
+    .def ("getSlm", &PyInterpolator<double>::getSlm, "blmT"_a);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
