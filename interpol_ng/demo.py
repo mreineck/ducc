@@ -4,7 +4,7 @@ import pysharp
 import time
 import matplotlib.pyplot as plt
 
-np.random.seed(48)
+np.random.seed(20)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
@@ -32,9 +32,9 @@ def convolve(alm1, alm2, lmax):
     job.set_triangular_alm_info(0,0)
     return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
-lmax=10
+lmax=40
 mmax=lmax
-kmax=lmax
+kmax=10
 
 
 # get random sky a_lm
@@ -42,15 +42,15 @@ kmax=lmax
 slmT = random_alm(lmax, mmax)
 
 # build beam a_lm
-blmT = random_alm(lmax, mmax)
+blmT = random_alm(lmax, kmax)
 
 t0=time.time()
 # build interpolator object for slmT and blmT
-foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=1)
 print("setup time: ",time.time()-t0)
 nth = 2*lmax+1
 nph = 2*mmax+1
-
+#exit()
 ptg = np.zeros((nth,nph,3))
 ptg[:,:,0] = (np.pi*np.arange(nth)/(nth-1)).reshape((-1,1))
 ptg[:,:,1] = (2*np.pi*np.arange(nph)/nph).reshape((1,-1))
@@ -62,12 +62,24 @@ print("interpolation time: ", time.time()-t0)
 plt.subplot(2,2,1)
 plt.imshow(bar.reshape((nth,nph)))
 bar2 = np.zeros((nth,nph))
+blmTfull = np.zeros(slmT.size)+0j
+blmTfull[0:blmT.size] = blmT
 for ith in range(nth):
     for iph in range(nph):
-        rbeam=interpol_ng.rotate_alm(blmT, lmax, ptg[ith,iph,2],ptg[ith,iph,0],ptg[ith,iph,1])
+        rbeam=interpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,iph,2],ptg[ith,iph,0],ptg[ith,iph,1])
         bar2[ith,iph] = convolve(slmT, rbeam, lmax).real
 plt.subplot(2,2,2)
 plt.imshow(bar2)
 plt.subplot(2,2,3)
 plt.imshow((bar2-bar.reshape((nth,nph))))
 plt.show()
+
+fake = np.random.uniform(-1.,1., bar.size)
+foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
+foo2.deinterpol(ptg.reshape((-1,3)), fake)
+bla=foo2.getSlm(blmT)
+print(np.vdot(slmT,bla))
+slmT[lmax+1:]*=np.sqrt(2)
+bla[lmax+1:]*=np.sqrt(2)
+print(np.vdot(slmT,bla))
+print(np.vdot(fake,bar))

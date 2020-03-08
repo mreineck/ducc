@@ -17,7 +17,7 @@
 #include "alm.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
-
+#include <iostream>
 using namespace std;
 using namespace mr;
 
@@ -42,6 +42,7 @@ template<typename T> class Interpolator
       {
       double sfct = (spin&1) ? -1 : 1;
       mav<T,2> tmp({nphi,nphi});
+      fmav<T> ftmp(tmp);
       tmp.apply([](T &v){v=0.;});
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
@@ -49,7 +50,7 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) = arr(i,j);
       // extend to second half
-      for (size_t i=1, i2=2*ntheta0-3; i+1<ntheta0; ++i,--i2)
+      for (size_t i=1, i2=nphi0-1; i+1<ntheta0; ++i,--i2)
         for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
           if (j2>=nphi0) j2-=nphi0;
@@ -57,19 +58,19 @@ template<typename T> class Interpolator
           }
       // FFT to frequency domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{1,0},true,true,1./(nphi0*nphi0),nthreads);
+      for (size_t i=0; i<nphi0; ++i)
+        {
+        tmp0.v(i,nphi0-1)*=0.5;
+        tmp0.v(nphi0-1,i)*=0.5;
+        }
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
-      fmav<T> ftmp1(tmp1);
-      // zero-padded FFT in theta direction
-      r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,nthreads);
-      auto tmp2=tmp.template subarray<2>({0,0},{ntheta, nphi});
-      fmav<T> ftmp2(tmp2);
-      fmav<T> farr(arr);
-      // zero-padded FFT in phi direction
-      r2r_fftpack(ftmp2,farr,{1},false,false,1.,nthreads);
+      r2r_fftpack(ftmp,ftmp,{0,1},false,false,1.,nthreads);
+      for (size_t i=0; i<ntheta; ++i)
+        for (size_t j=0; j<nphi; ++j)
+          arr.v(i,j) = tmp(i,j);
       }
     void decorrect(mav<T,2> &arr, int spin)
       {
@@ -81,7 +82,7 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi; ++j)
           tmp.v(i,j) = arr(i,j);
       // extend to second half
-      for (size_t i=1, i2=2*ntheta-3; i+1<ntheta; ++i,--i2)
+      for (size_t i=1, i2=nphi-1; i+1<ntheta; ++i,--i2)
         for (size_t j=0,j2=nphi/2; j<nphi; ++j,++j2)
           {
           if (j2>=nphi) j2-=nphi;
@@ -95,7 +96,8 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       // FFT to (theta, phi) domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{0,1},false, false,1./(nphi0*nphi0),nthreads);
+      r2r_fftpack(ftmp0,ftmp0,{1,0},false, false,1./(nphi0*nphi0),nthreads);
+arr.apply([](T &v){v=0.;});
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
@@ -394,6 +396,12 @@ template<typename T> class PyInterpolator: public Interpolator<T>
     using Interpolator<T>::getSlmx;
     using Interpolator<T>::lmax;
     using Interpolator<T>::kmax;
+    using Interpolator<T>::nphi;
+    using Interpolator<T>::ntheta;
+    using Interpolator<T>::nphi0;
+    using Interpolator<T>::ntheta0;
+    using Interpolator<T>::correct;
+    using Interpolator<T>::decorrect;
     py::array interpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
@@ -419,6 +427,39 @@ slmT_.apply([](complex<T> &v){v=0;});
       getSlmx(blmT, slmT);
       return res;
       }
+    py::array test_correct(const py::array &in, int spin)
+      {
+      auto in2 = to_mav<T,2>(in);
+      MR_assert(in2.conformable({ntheta0, nphi0}), "bad input shape");
+      auto res = make_Pyarr<T>({ntheta, nphi});
+      auto res2 = to_mav<T,2>(res,true);
+res2.apply([](T &v){v=0;});
+      for (size_t i=0; i<ntheta0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          res2.v(i,j) = in2(i,j);
+      correct (res2, spin);
+      return res;
+      }
+    py::array test_decorrect(const py::array &in, int spin)
+      {
+      auto in2 = to_mav<T,2>(in);
+      MR_assert(in2.conformable({ntheta, nphi}), "bad input shape");
+      auto tmp = mav<T,2>({ntheta, nphi});
+      for (size_t i=0; i<ntheta; ++i)
+        for (size_t j=0; j<nphi; ++j)
+          tmp.v(i,j) = in2(i,j);
+      decorrect (tmp, spin);
+      auto res = make_Pyarr<T>({ntheta0, nphi0});
+      auto res2 = to_mav<T,2>(res,true);
+      for (size_t i=0; i<ntheta0; ++i)
+        for (size_t j=0; j<nphi0; ++j)
+          res2.v(i,j) = tmp(i,j);
+      return res;
+      }
+    int Nphi0() const { return nphi0; }
+    int Ntheta0() const { return ntheta0; }
+    int Nphi() const { return nphi; }
+    int Ntheta() const { return ntheta; }
   };
 
 #if 1
@@ -448,7 +489,13 @@ PYBIND11_MODULE(interpol_ng, m)
       "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a)
     .def ("deinterpol", &PyInterpolator<double>::deinterpol, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<double>::getSlm, "blmT"_a);
+    .def ("getSlm", &PyInterpolator<double>::getSlm, "blmT"_a)
+    .def ("test_correct", &PyInterpolator<double>::test_correct, "in"_a, "spin"_a)
+    .def ("test_decorrect", &PyInterpolator<double>::test_decorrect, "in"_a, "spin"_a)
+    .def ("Nphi", &PyInterpolator<double>::Nphi)
+    .def ("Ntheta", &PyInterpolator<double>::Ntheta)
+    .def ("Nphi0", &PyInterpolator<double>::Nphi0)
+    .def ("Ntheta0", &PyInterpolator<double>::Ntheta0);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
