@@ -142,6 +142,9 @@ arr.apply([](T &v){v=0.;});
       auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
       sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
       correct(m1,0);
+//  for (size_t i=1; i+1<ntheta; ++i)
+//    for (size_t j=0; j<nphi; ++j)
+//      m1.v(i,j)*=2;
       }
       for (size_t k=1; k<=kmax; ++k)
         {
@@ -357,6 +360,11 @@ arr.apply([](T &v){v=0.;});
       {
       auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
       decorrect(m1,0);
+   for (size_t j=0; j<nphi0; ++j)
+     {
+     m1.v(0,j)*=0.5;;
+     m1.v(ntheta0-1,j)*=0.5;;
+     }
       sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
@@ -369,6 +377,16 @@ arr.apply([](T &v){v=0.;});
         auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
         decorrect(m1,k);
         decorrect(m2,k);
+   for (size_t j=0; j<nphi0; ++j)
+     {
+     m1.v(0,j)*=0.5;;
+     m1.v(ntheta0-1,j)*=0.5;;
+     }
+   for (size_t j=0; j<nphi0; ++j)
+     {
+     m2.v(0,j)*=0.5;;
+     m2.v(ntheta0-1,j)*=0.5;;
+     }
 
         sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
           m2.data(), *ginfo, *ainfo, 0, nthreads);
@@ -379,7 +397,7 @@ arr.apply([](T &v){v=0.;});
               {
               auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
               slmT(l,m) += conj(a1(l,m))*tmp.real();
-              slmT(l,m) += conj(a2(l,m))*tmp.imag();
+              slmT(l,m) -= conj(a2(l,m))*tmp.imag();
               }
             }
         }
