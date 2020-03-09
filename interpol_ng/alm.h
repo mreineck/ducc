@@ -212,52 +212,63 @@ class wigner_d_risbo_openmp
 template<typename T> void rotate_alm (Alm<complex<T>> &alm,
   double psi, double theta, double phi)
   {
-  MR_assert (alm.Lmax()==alm.Mmax(),
-    "rotate_alm: lmax must be equal to mmax");
   auto lmax=alm.Lmax();
-  vector<complex<double> > exppsi(lmax+1), expphi(lmax+1);
-  for (size_t m=0; m<=lmax; ++m)
+  MR_assert (lmax==alm.Mmax(),
+    "rotate_alm: lmax must be equal to mmax");
+
+  if (theta!=0)
     {
-    exppsi[m] = polar(1.,-psi*m);
-    expphi[m] = polar(1.,-phi*m);
-    }
-
-  wigner_d_risbo_openmp rec(lmax,theta);
-
-  vector<complex<double> > almtmp(lmax+1);
-size_t nthreads=1;
-  for (size_t l=0; l<=lmax; ++l)
-    {
-    const auto &d(rec.recurse());
-
-    for (size_t m=0; m<=l; ++m)
-      almtmp[m] = complex<double>(alm(l,0))*d(l,l+m);
-
-    execStatic(l+1, nthreads, 0, [&](Scheduler &sched)
+    vector<complex<double> > exppsi(lmax+1), expphi(lmax+1);
+    for (size_t m=0; m<=lmax; ++m)
       {
-      auto rng=sched.getNext();
-      auto lo=rng.lo;
-      auto hi=rng.hi;
+      exppsi[m] = polar(1.,-psi*m);
+      expphi[m] = polar(1.,-phi*m);
+      }
+    vector<complex<double> > almtmp(lmax+1);
+size_t nthreads=1;
+    wigner_d_risbo_openmp rec(lmax,theta);
+    for (size_t l=0; l<=lmax; ++l)
+      {
+      const auto &d(rec.recurse());
 
-      bool flip = true;
-      for (size_t mm=1; mm<=l; ++mm)
+      for (size_t m=0; m<=l; ++m)
+        almtmp[m] = complex<double>(alm(l,0))*d(l,l+m);
+
+      execStatic(l+1, nthreads, 0, [&](Scheduler &sched)
         {
-        auto t1 = complex<double>(alm(l,mm))*exppsi[mm];
-        bool flip2 = ((mm+lo)&1);
-        for (auto m=lo; m<hi; ++m)
-          {
-          double d1 = flip2 ? -d(l-mm,l-m) : d(l-mm,l-m);
-          double d2 = flip  ? -d(l-mm,l+m) : d(l-mm,l+m);
-          double f1 = d1+d2, f2 = d1-d2;
-          almtmp[m]+=complex<double>(t1.real()*f1,t1.imag()*f2);
-          flip2 = !flip2;
-          }
-        flip = !flip;
-        }
-      });
+        auto rng=sched.getNext();
+        auto lo=rng.lo;
+        auto hi=rng.hi;
 
-    for (size_t m=0; m<=l; ++m)
-      alm(l,m) = complex<T>(almtmp[m]*expphi[m]);
+        bool flip = true;
+        for (size_t mm=1; mm<=l; ++mm)
+          {
+          auto t1 = complex<double>(alm(l,mm))*exppsi[mm];
+          bool flip2 = ((mm+lo)&1);
+          for (auto m=lo; m<hi; ++m)
+            {
+            double d1 = flip2 ? -d(l-mm,l-m) : d(l-mm,l-m);
+            double d2 = flip  ? -d(l-mm,l+m) : d(l-mm,l+m);
+            double f1 = d1+d2, f2 = d1-d2;
+            almtmp[m]+=complex<double>(t1.real()*f1,t1.imag()*f2);
+            flip2 = !flip2;
+            }
+          flip = !flip;
+          }
+        });
+
+      for (size_t m=0; m<=l; ++m)
+        alm(l,m) = complex<T>(almtmp[m]*expphi[m]);
+      }
+    }
+  else
+    {
+    for (size_t m=0; m<=lmax; ++m)
+      {
+      auto ang = polar(1.,-(psi+phi)*m);
+      for (size_t l=m; l<=lmax; ++l)
+        alm(l,m) *= ang;
+      }
     }
   }
 #endif

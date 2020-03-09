@@ -86,8 +86,9 @@ bar2 = np.zeros((nth,nph))
 blmTfull = np.zeros(slmT.size)+0j
 blmTfull[0:blmT.size] = blmT
 for ith in range(nth):
+    rbeamth=interpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,0,2],ptg[ith,0,0],0)
     for iph in range(nph):
-        rbeam=interpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,iph,2],ptg[ith,iph,0],ptg[ith,iph,1])
+        rbeam=interpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
         bar2[ith,iph] = convolve(slmT, rbeam, lmax).real
 plt.subplot(2,2,2)
 plt.imshow(bar2)
