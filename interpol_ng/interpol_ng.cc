@@ -17,7 +17,7 @@
 #include "alm.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
-#include <iostream>
+
 using namespace std;
 using namespace mr;
 
@@ -87,7 +87,6 @@ template<typename T> class Interpolator
           {
           if (j2>=nphi) j2-=nphi;
           tmp.v(i2,j) = sfct*tmp(i,j2);
-//tmp.v(i2,j)=0.;
           }
       r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
@@ -98,14 +97,9 @@ template<typename T> class Interpolator
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       // FFT to (theta, phi) domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{1,0},false, false,1./(nphi0*nphi0),nthreads);
-arr.apply([](T &v){v=0.;});
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
-// adjoint of the extension to 2pi in theta
-//       for (size_t i=1; i+1<ntheta0; ++i)
-//         for (size_t j=0; j<nphi0; ++j)
-//           arr.v(i,j)*=2;
       }
 
   public:
@@ -142,9 +136,6 @@ arr.apply([](T &v){v=0.;});
       auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
       sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
       correct(m1,0);
-//  for (size_t i=1; i+1<ntheta; ++i)
-//    for (size_t j=0; j<nphi; ++j)
-//      m1.v(i,j)*=2;
       }
       for (size_t k=1; k<=kmax; ++k)
         {
