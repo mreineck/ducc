@@ -381,7 +381,7 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
       sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
-          slmT(l,m)=conj(a1(l,m))*blmT(l,0).real()*T(lnorm[l]);
+          slmT(l,m)=a1(l,m)*blmT(l,0).real()*T(lnorm[l]);
       }
 
       for (size_t k=1; k<=kmax; ++k)
@@ -409,8 +409,8 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
             if (l>=k)
               {
               auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
-              slmT(l,m) += conj(a1(l,m))*tmp.real();
-              slmT(l,m) -= conj(a2(l,m))*tmp.imag();
+              slmT(l,m) += a1(l,m)*tmp.real();
+              slmT(l,m) -= a2(l,m)*tmp.imag();
               }
             }
         }

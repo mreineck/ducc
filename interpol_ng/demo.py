@@ -43,7 +43,6 @@ ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
-#ptg = np.array([[0.129,0.01,1.],[3.1,0.7,2.]])
 foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=1)
 bar=foo.interpol(ptg)
 print(foo.Nphi(),foo.Nphi0())
@@ -51,6 +50,6 @@ fake = np.random.uniform(0.,1., ptg.shape[0])
 foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
 foo2.deinterpol(ptg.reshape((-1,3)), fake)
 bla=foo2.getSlm(blmT)
-print(myalmdot(slmT, np.conj(bla), lmax, lmax, 0))
+print(myalmdot(slmT, bla, lmax, lmax, 0))
 print(np.vdot(fake,bar))
-print(myalmdot(slmT, np.conj(bla), lmax, lmax, 0)/np.vdot(fake,bar))
+print(myalmdot(slmT, bla, lmax, lmax, 0)/np.vdot(fake,bar))
