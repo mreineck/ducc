@@ -42,7 +42,6 @@ template<typename T> class Interpolator
       {
       double sfct = (spin&1) ? -1 : 1;
       mav<T,2> tmp({nphi,nphi});
-      fmav<T> ftmp(tmp);
       tmp.apply([](T &v){v=0.;});
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
@@ -57,7 +56,8 @@ template<typename T> class Interpolator
           tmp0.v(i2,j) = sfct*tmp0(i,j2);
           }
       // FFT to frequency domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{1,0},true,true,1./(nphi0*nphi0),nthreads);
+      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),nthreads);
+      // correct amplitude at Nyquist frequency
       for (size_t i=0; i<nphi0; ++i)
         {
         tmp0.v(i,nphi0-1)*=0.5;
@@ -67,10 +67,15 @@ template<typename T> class Interpolator
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
-      r2r_fftpack(ftmp,ftmp,{0,1},false,false,1.,nthreads);
-      for (size_t i=0; i<ntheta; ++i)
-        for (size_t j=0; j<nphi; ++j)
-          arr.v(i,j) = tmp(i,j);
+      auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
+      fmav<T> ftmp1(tmp1);
+      // zero-padded FFT in theta direction
+      r2r_fftpack(ftmp1,ftmp1,{0},false,false,1.,nthreads);
+      auto tmp2=tmp.template subarray<2>({0,0},{ntheta, nphi});
+      fmav<T> ftmp2(tmp2);
+      fmav<T> farr(arr);
+      // zero-padded FFT in phi direction
+      r2r_fftpack(ftmp2,farr,{1},false,false,1.,nthreads);
       }
     void decorrect(mav<T,2> &arr, int spin)
       {
@@ -96,7 +101,7 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       // FFT to (theta, phi) domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{1,0},false, false,1./(nphi0*nphi0),nthreads);
+      r2r_fftpack(ftmp0,ftmp0,{0,1},false, false,1./(nphi0*nphi0),nthreads);
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
