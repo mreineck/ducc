@@ -336,7 +336,7 @@ arr.apply([](T &v){v=0.;});
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<ntheta+2*supp; ++i)
+      for (size_t i=0; i<cube.shape(0); ++i)
         for (size_t j=0; j<supp; ++j)
           for (size_t k=0; k<cube.shape(2); ++k)
             {
@@ -352,7 +352,20 @@ arr.apply([](T &v){v=0.;});
             cube.v(supp+1+i,j+supp,k) += fct*cube(supp-1-i,j2+supp,k);
             cube.v(supp+ntheta-2-i, j+supp,k) += fct*cube(supp+ntheta+i,j2+supp,k);
             }
-
+for (size_t k=0; k<cube.shape(2); ++k)
+{
+double fct = (((k+1)/2)&1) ? -1 : 1;
+for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
+  {
+  if (j2>=nphi) j2-=nphi;
+  double tval = (cube(supp,j+supp,k) + fct*cube(supp,j2+supp,k));
+  cube.v(supp,j+supp,k) = tval;
+  cube.v(supp,j2+supp,k) = fct*tval;
+  tval = (cube(supp+ntheta-1,j+supp,k) + fct*cube(supp+ntheta-1,j2+supp,k));
+  cube.v(supp+ntheta-1,j+supp,k) = tval;
+  cube.v(supp+ntheta-1,j2+supp,k) = fct*tval;
+  }
+}
       vector<double>lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=sqrt(4*pi/(2*i+1.));
@@ -362,8 +375,8 @@ arr.apply([](T &v){v=0.;});
       decorrect(m1,0);
    for (size_t j=0; j<nphi0; ++j)
      {
-     m1.v(0,j)*=0.5;;
-     m1.v(ntheta0-1,j)*=0.5;;
+     m1.v(0,j)*=0.5;
+     m1.v(ntheta0-1,j)*=0.5;
      }
       sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
       for (size_t m=0; m<=lmax; ++m)
@@ -379,13 +392,13 @@ arr.apply([](T &v){v=0.;});
         decorrect(m2,k);
    for (size_t j=0; j<nphi0; ++j)
      {
-     m1.v(0,j)*=0.5;;
-     m1.v(ntheta0-1,j)*=0.5;;
+     m1.v(0,j)*=0.5;
+     m1.v(ntheta0-1,j)*=0.5;
      }
    for (size_t j=0; j<nphi0; ++j)
      {
-     m2.v(0,j)*=0.5;;
-     m2.v(ntheta0-1,j)*=0.5;;
+     m2.v(0,j)*=0.5;
+     m2.v(ntheta0-1,j)*=0.5;
      }
 
         sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
