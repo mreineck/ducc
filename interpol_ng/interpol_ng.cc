@@ -87,6 +87,7 @@ template<typename T> class Interpolator
           {
           if (j2>=nphi) j2-=nphi;
           tmp.v(i2,j) = sfct*tmp(i,j2);
+//tmp.v(i2,j)=0.;
           }
       r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
@@ -101,6 +102,10 @@ arr.apply([](T &v){v=0.;});
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
+// adjoint of the extension to 2pi in theta
+//       for (size_t i=1; i+1<ntheta0; ++i)
+//         for (size_t j=0; j<nphi0; ++j)
+//           arr.v(i,j)*=2;
       }
 
   public:

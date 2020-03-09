@@ -17,6 +17,27 @@ def random_alm(lmax, mmax):
     res[0:lmax+1].imag = 0.
     return res
 
+def compress_alm(alm,lmax):
+    res = np.empty(2*len(alm)-lmax-1, dtype=np.float64)
+    res[0:lmax+1] = alm[0:lmax+1].real
+    res[lmax+1::2] = np.sqrt(2)*alm[lmax+1:].real
+    res[lmax+2::2] = np.sqrt(2)*alm[lmax+1:].imag
+    return res
+
+
+def myalmdot(a1,a2,lmax,mmax,spin):
+    return np.vdot(compress_alm(a1,lmax),compress_alm(a2,lmax))
+def theta_extend(arr, spin):
+    nth, nph = arr.shape
+    arr2 = np.zeros(((nth-1)*2,nph))
+    arr2[0:nth,:] = arr
+    arr2[nth:,:] = np.roll(arr[nth-2:0:-1,:],nph//2,axis=1)
+    if spin&1:
+        arr2 = -arr2
+    return arr2
+
+def mydot(a1,a2,spin):
+    return np.vdot(theta_extend(a1,spin),theta_extend(a2,spin))
 
 def deltabeam(lmax,kmax):
     beam=np.zeros(nalm(lmax, kmax))+0j
@@ -78,8 +99,5 @@ fake = np.random.uniform(-1.,1., bar.size)
 foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
 foo2.deinterpol(ptg.reshape((-1,3)), fake)
 bla=foo2.getSlm(blmT)
-print(np.vdot(slmT,bla))
-slmT[lmax+1:]*=np.sqrt(2)
-bla[lmax+1:]*=np.sqrt(2)
-print(np.vdot(slmT,bla))
+print(myalmdot(slmT, bla, lmax, lmax, 0))
 print(np.vdot(fake,bar))
