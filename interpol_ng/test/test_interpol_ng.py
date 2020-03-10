@@ -48,7 +48,7 @@ def compress_alm(alm,lmax):
 
 
 def myalmdot(a1,a2,lmax,mmax,spin):
-    return np.vdot(compress_alm(a1,lmax),compress_alm(a2,lmax))
+    return np.vdot(compress_alm(a1,lmax),compress_alm(np.conj(a2),lmax))
 
 
 @pmp("lkmax", [(43,43),(2,1),(30,15),(125,2)])

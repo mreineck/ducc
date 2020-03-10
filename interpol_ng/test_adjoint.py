@@ -69,8 +69,5 @@ out1x=np.copy(out1)
 out1x[1:-1,:]*=2
 aout1=job.alm2map_adjoint(out1x.reshape((-1,)))
 
-print(mydot(in0,out1,spin)/mydot(in1,out0,spin))
-print(myalmdot(alm0,aout1,lmax,lmax,spin)/mydot(in1,out0,spin))
-print(mydot(in0,out1,spin)/myalmdot(alm1,aout0,lmax,lmax,spin))
 print(myalmdot(alm0,aout1,lmax,lmax,spin)/myalmdot(alm1,aout0,lmax,lmax,spin))
 print(nphi0, ntheta0, nphi, ntheta)

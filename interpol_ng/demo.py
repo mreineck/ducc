@@ -25,9 +25,7 @@ def compress_alm(alm,lmax):
     return res
 
 def myalmdot(a1,a2,lmax,mmax,spin):
-    return np.vdot(compress_alm(a1,lmax),compress_alm(a2,lmax))
-def mydot(a1,a2,spin):
-    return np.vdot(theta_extend(a1,spin),theta_extend(a2,spin))
+    return np.vdot(compress_alm(a1,lmax),compress_alm(np.conj(a2),lmax))
 
 lmax=30
 kmax=13
@@ -45,7 +43,6 @@ ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
 foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=1)
 bar=foo.interpol(ptg)
-print(foo.Nphi(),foo.Nphi0())
 fake = np.random.uniform(0.,1., ptg.shape[0])
 foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
 foo2.deinterpol(ptg.reshape((-1,3)), fake)

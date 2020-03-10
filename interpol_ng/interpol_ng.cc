@@ -93,6 +93,7 @@ template<typename T> class Interpolator
           if (j2>=nphi) j2-=nphi;
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
+// FIXME: faster FFT
       r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
@@ -102,9 +103,34 @@ template<typename T> class Interpolator
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       // FFT to (theta, phi) domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{0,1},false, false,1./(nphi0*nphi0),nthreads);
+      for (size_t j=0; j<nphi0; ++j)
+        {
+        tmp0.v(0,j)*=0.5;
+        tmp0.v(ntheta0-1,j)*=0.5;
+        }
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
+      }
+
+    vector<size_t> getIdx(const mav<T,2> &ptg) const
+      {
+      vector<size_t> idx(ptg.shape(0));
+      constexpr size_t cellsize=16;
+      size_t nct = ntheta/cellsize+1,
+             ncp = nphi/cellsize+1;
+      vector<vector<size_t>> mapper(nct*ncp);
+      for (size_t i=0; i<ptg.shape(0); ++i)
+        {
+        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
+               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
+        mapper[itheta*ncp+iphi].push_back(i);
+        }
+      size_t cnt=0;
+      for (const auto &vec: mapper)
+        for (auto i:vec)
+          idx[cnt++] = i;
+      return idx;
       }
 
   public:
@@ -208,24 +234,7 @@ template<typename T> class Interpolator
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
-      vector<size_t> idx(ptg.shape(0));
-      {
-      // do some pre-sorting to improve cache use
-      constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+1,
-             ncp = nphi/cellsize+1;
-      vector<vector<size_t>> mapper(nct*ncp);
-      for (size_t i=0; i<ptg.shape(0); ++i)
-        {
-        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
-               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
-        mapper[itheta*ncp+iphi].push_back(i);
-        }
-      size_t cnt=0;
-      for (const auto &vec: mapper)
-        for (auto i:vec)
-          idx[cnt++] = i;
-      }
+      auto idx = getIdx(ptg);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         vector<T> wt(supp), wp(supp);
@@ -271,24 +280,7 @@ template<typename T> class Interpolator
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
-      vector<size_t> idx(ptg.shape(0));
-      {
-      // do some pre-sorting to improve cache use
-      constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+1,
-             ncp = nphi/cellsize+1;
-      vector<vector<size_t>> mapper(nct*ncp);
-      for (size_t i=0; i<ptg.shape(0); ++i)
-        {
-        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
-               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
-        mapper[itheta*ncp+iphi].push_back(i);
-        }
-      size_t cnt=0;
-      for (const auto &vec: mapper)
-        for (auto i:vec)
-          idx[cnt++] = i;
-      }
+      auto idx = getIdx(ptg);
       execStatic(idx.size(), 1, 0, [&](Scheduler &sched) // not parallel yet
         {
         vector<T> wt(supp), wp(supp);
@@ -369,15 +361,10 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
       {
       auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
       decorrect(m1,0);
-   for (size_t j=0; j<nphi0; ++j)
-     {
-     m1.v(0,j)*=0.5;
-     m1.v(ntheta0-1,j)*=0.5;
-     }
       sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
-          slmT(l,m)=a1(l,m)*blmT(l,0).real()*T(lnorm[l]);
+          slmT(l,m)=conj(a1(l,m))*blmT(l,0).real()*T(lnorm[l]);
       }
 
       for (size_t k=1; k<=kmax; ++k)
@@ -386,16 +373,6 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
         auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
         decorrect(m1,k);
         decorrect(m2,k);
-   for (size_t j=0; j<nphi0; ++j)
-     {
-     m1.v(0,j)*=0.5;
-     m1.v(ntheta0-1,j)*=0.5;
-     }
-   for (size_t j=0; j<nphi0; ++j)
-     {
-     m2.v(0,j)*=0.5;
-     m2.v(ntheta0-1,j)*=0.5;
-     }
 
         sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
           m2.data(), *ginfo, *ainfo, 0, nthreads);
@@ -405,8 +382,8 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
             if (l>=k)
               {
               auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
-              slmT(l,m) += a1(l,m)*tmp.real();
-              slmT(l,m) -= a2(l,m)*tmp.imag();
+              slmT(l,m) += conj(a1(l,m))*tmp.real();
+              slmT(l,m) -= conj(a2(l,m))*tmp.imag();
               }
             }
         }
@@ -415,6 +392,13 @@ for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
+  protected:
+    using Interpolator<T>::lmax;
+    using Interpolator<T>::kmax;
+    using Interpolator<T>::interpolx;
+    using Interpolator<T>::deinterpolx;
+    using Interpolator<T>::getSlmx;
+
   public:
     PyInterpolator(const py::array &slmT, const py::array &blmT,
       int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
@@ -423,17 +407,6 @@ template<typename T> class PyInterpolator: public Interpolator<T>
                         epsilon, nthreads) {}
     PyInterpolator(int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
       : Interpolator<T>(lmax, kmax, epsilon, nthreads) {}
-    using Interpolator<T>::interpolx;
-    using Interpolator<T>::deinterpolx;
-    using Interpolator<T>::getSlmx;
-    using Interpolator<T>::lmax;
-    using Interpolator<T>::kmax;
-    using Interpolator<T>::nphi;
-    using Interpolator<T>::ntheta;
-    using Interpolator<T>::nphi0;
-    using Interpolator<T>::ntheta0;
-    using Interpolator<T>::correct;
-    using Interpolator<T>::decorrect;
     py::array interpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
@@ -459,39 +432,6 @@ slmT_.apply([](complex<T> &v){v=0;});
       getSlmx(blmT, slmT);
       return res;
       }
-    py::array test_correct(const py::array &in, int spin)
-      {
-      auto in2 = to_mav<T,2>(in);
-      MR_assert(in2.conformable({ntheta0, nphi0}), "bad input shape");
-      auto res = make_Pyarr<T>({ntheta, nphi});
-      auto res2 = to_mav<T,2>(res,true);
-res2.apply([](T &v){v=0;});
-      for (size_t i=0; i<ntheta0; ++i)
-        for (size_t j=0; j<nphi0; ++j)
-          res2.v(i,j) = in2(i,j);
-      correct (res2, spin);
-      return res;
-      }
-    py::array test_decorrect(const py::array &in, int spin)
-      {
-      auto in2 = to_mav<T,2>(in);
-      MR_assert(in2.conformable({ntheta, nphi}), "bad input shape");
-      auto tmp = mav<T,2>({ntheta, nphi});
-      for (size_t i=0; i<ntheta; ++i)
-        for (size_t j=0; j<nphi; ++j)
-          tmp.v(i,j) = in2(i,j);
-      decorrect (tmp, spin);
-      auto res = make_Pyarr<T>({ntheta0, nphi0});
-      auto res2 = to_mav<T,2>(res,true);
-      for (size_t i=0; i<ntheta0; ++i)
-        for (size_t j=0; j<nphi0; ++j)
-          res2.v(i,j) = tmp(i,j);
-      return res;
-      }
-    int Nphi0() const { return nphi0; }
-    int Ntheta0() const { return ntheta0; }
-    int Nphi() const { return nphi; }
-    int Ntheta() const { return ntheta; }
   };
 
 #if 1
@@ -521,13 +461,7 @@ PYBIND11_MODULE(interpol_ng, m)
       "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::interpol, "ptg"_a)
     .def ("deinterpol", &PyInterpolator<double>::deinterpol, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<double>::getSlm, "blmT"_a)
-    .def ("test_correct", &PyInterpolator<double>::test_correct, "in"_a, "spin"_a)
-    .def ("test_decorrect", &PyInterpolator<double>::test_decorrect, "in"_a, "spin"_a)
-    .def ("Nphi", &PyInterpolator<double>::Nphi)
-    .def ("Ntheta", &PyInterpolator<double>::Ntheta)
-    .def ("Nphi0", &PyInterpolator<double>::Nphi0)
-    .def ("Ntheta0", &PyInterpolator<double>::Ntheta0);
+    .def ("getSlm", &PyInterpolator<double>::getSlm, "blmT"_a);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
