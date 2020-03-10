@@ -213,6 +213,8 @@ template<size_t ndim> class mav_info
       }
     bool conformable(const mav_info &other) const
       { return shp==other.shp; }
+    bool conformable(const shape_t &other) const
+      { return shp==other; }
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
       {
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
@@ -231,7 +233,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using membuf<T>::ptr;
     using mav_info<ndim>::shp;
     using mav_info<ndim>::str;
-    using mav_info<ndim>::conformable;
     using membuf<T>::rw;
     using membuf<T>::vraw;
 
@@ -305,6 +306,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using mav_info<ndim>::contiguous;
     using mav_info<ndim>::size;
     using mav_info<ndim>::idx;
+    using mav_info<ndim>::conformable;
 
     mav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_) {}

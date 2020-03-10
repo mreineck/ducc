@@ -39,7 +39,19 @@ def convolve(alm1, alm2, lmax):
     return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
 
-@pmp("lkmax", [(43,43),(2,1),(30,15),(512,2)])
+def compress_alm(alm,lmax):
+    res = np.empty(2*len(alm)-lmax-1, dtype=np.float64)
+    res[0:lmax+1] = alm[0:lmax+1].real
+    res[lmax+1::2] = np.sqrt(2)*alm[lmax+1:].real
+    res[lmax+2::2] = np.sqrt(2)*alm[lmax+1:].imag
+    return res
+
+
+def myalmdot(a1,a2,lmax,mmax,spin):
+    return np.vdot(compress_alm(a1,lmax),compress_alm(np.conj(a2),lmax))
+
+
+@pmp("lkmax", [(43,43),(2,1),(30,15),(125,2)])
 def test_against_convolution(lkmax):
     lmax, kmax = lkmax
     slmT = random_alm(lmax, lmax)
@@ -62,3 +74,21 @@ def test_against_convolution(lkmax):
         rbeam=interpol_ng.rotate_alm(blmT2, lmax, ptg[i,2],ptg[i,0],ptg[i,1])
         res2[i] = convolve(slmT, rbeam, lmax).real
     _assert_close(res1, res2, 1e-7)
+
+@pmp("lkmax", [(43,43),(2,1),(30,15),(125,2)])
+def test_adjointness(lkmax):
+    lmax, kmax = lkmax
+    slmT = random_alm(lmax, lmax)
+    blmT = random_alm(lmax, kmax)
+    nptg=100000
+    ptg=np.random.uniform(0.,1.,nptg*3).reshape(nptg,3)
+    ptg[:,0]*=np.pi
+    ptg[:,1]*=2*np.pi
+    ptg[:,2]*=2*np.pi
+    foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+    inter1=foo.interpol(ptg)
+    fake = np.random.uniform(0.,1., ptg.shape[0])
+    foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
+    foo2.deinterpol(ptg.reshape((-1,3)), fake)
+    bla=foo2.getSlm(blmT)
+    _assert_close(myalmdot(slmT, bla, lmax, lmax, 0), np.vdot(fake,inter1), 1e-12)

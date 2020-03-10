@@ -49,14 +49,20 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) = arr(i,j);
       // extend to second half
-      for (size_t i=1, i2=2*ntheta0-3; i+1<ntheta0; ++i,--i2)
+      for (size_t i=1, i2=nphi0-1; i+1<ntheta0; ++i,--i2)
         for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
           if (j2>=nphi0) j2-=nphi0;
           tmp0.v(i2,j) = sfct*tmp0(i,j2);
           }
       // FFT to frequency domain on minimal grid
-      r2r_fftpack(ftmp0,ftmp0,{1,0},true,true,1./(nphi0*nphi0),nthreads);
+      r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,1./(nphi0*nphi0),nthreads);
+      // correct amplitude at Nyquist frequency
+      for (size_t i=0; i<nphi0; ++i)
+        {
+        tmp0.v(i,nphi0-1)*=0.5;
+        tmp0.v(nphi0-1,i)*=0.5;
+        }
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       for (size_t i=0; i<nphi0; ++i)
         for (size_t j=0; j<nphi0; ++j)
@@ -81,12 +87,13 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi; ++j)
           tmp.v(i,j) = arr(i,j);
       // extend to second half
-      for (size_t i=1, i2=2*ntheta-3; i+1<ntheta; ++i,--i2)
+      for (size_t i=1, i2=nphi-1; i+1<ntheta; ++i,--i2)
         for (size_t j=0,j2=nphi/2; j<nphi; ++j,++j2)
           {
           if (j2>=nphi) j2-=nphi;
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
+// FIXME: faster FFT
       r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
@@ -96,9 +103,34 @@ template<typename T> class Interpolator
           tmp0.v(i,j) *= fct[(i+1)/2] * fct[(j+1)/2];
       // FFT to (theta, phi) domain on minimal grid
       r2r_fftpack(ftmp0,ftmp0,{0,1},false, false,1./(nphi0*nphi0),nthreads);
+      for (size_t j=0; j<nphi0; ++j)
+        {
+        tmp0.v(0,j)*=0.5;
+        tmp0.v(ntheta0-1,j)*=0.5;
+        }
       for (size_t i=0; i<ntheta0; ++i)
         for (size_t j=0; j<nphi0; ++j)
           arr.v(i,j) = tmp0(i,j);
+      }
+
+    vector<size_t> getIdx(const mav<T,2> &ptg) const
+      {
+      vector<size_t> idx(ptg.shape(0));
+      constexpr size_t cellsize=16;
+      size_t nct = ntheta/cellsize+1,
+             ncp = nphi/cellsize+1;
+      vector<vector<size_t>> mapper(nct*ncp);
+      for (size_t i=0; i<ptg.shape(0); ++i)
+        {
+        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
+               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
+        mapper[itheta*ncp+iphi].push_back(i);
+        }
+      size_t cnt=0;
+      for (const auto &vec: mapper)
+        for (auto i:vec)
+          idx[cnt++] = i;
+      return idx;
       }
 
   public:
@@ -202,24 +234,7 @@ template<typename T> class Interpolator
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
-      vector<size_t> idx(ptg.shape(0));
-      {
-      // do some pre-sorting to improve cache use
-      constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+1,
-             ncp = nphi/cellsize+1;
-      vector<vector<size_t>> mapper(nct*ncp);
-      for (size_t i=0; i<ptg.shape(0); ++i)
-        {
-        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
-               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
-        mapper[itheta*ncp+iphi].push_back(i);
-        }
-      size_t cnt=0;
-      for (const auto &vec: mapper)
-        for (auto i:vec)
-          idx[cnt++] = i;
-      }
+      auto idx = getIdx(ptg);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         vector<T> wt(supp), wp(supp);
@@ -265,24 +280,7 @@ template<typename T> class Interpolator
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
-      vector<size_t> idx(ptg.shape(0));
-      {
-      // do some pre-sorting to improve cache use
-      constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+1,
-             ncp = nphi/cellsize+1;
-      vector<vector<size_t>> mapper(nct*ncp);
-      for (size_t i=0; i<ptg.shape(0); ++i)
-        {
-        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
-               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
-        mapper[itheta*ncp+iphi].push_back(i);
-        }
-      size_t cnt=0;
-      for (const auto &vec: mapper)
-        for (auto i:vec)
-          idx[cnt++] = i;
-      }
+      auto idx = getIdx(ptg);
       execStatic(idx.size(), 1, 0, [&](Scheduler &sched) // not parallel yet
         {
         vector<T> wt(supp), wp(supp);
@@ -326,7 +324,7 @@ template<typename T> class Interpolator
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<ntheta+2*supp; ++i)
+      for (size_t i=0; i<cube.shape(0); ++i)
         for (size_t j=0; j<supp; ++j)
           for (size_t k=0; k<cube.shape(2); ++k)
             {
@@ -342,7 +340,20 @@ template<typename T> class Interpolator
             cube.v(supp+1+i,j+supp,k) += fct*cube(supp-1-i,j2+supp,k);
             cube.v(supp+ntheta-2-i, j+supp,k) += fct*cube(supp+ntheta+i,j2+supp,k);
             }
-
+for (size_t k=0; k<cube.shape(2); ++k)
+{
+double fct = (((k+1)/2)&1) ? -1 : 1;
+for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
+  {
+  if (j2>=nphi) j2-=nphi;
+  double tval = (cube(supp,j+supp,k) + fct*cube(supp,j2+supp,k));
+  cube.v(supp,j+supp,k) = tval;
+  cube.v(supp,j2+supp,k) = fct*tval;
+  tval = (cube(supp+ntheta-1,j+supp,k) + fct*cube(supp+ntheta-1,j2+supp,k));
+  cube.v(supp+ntheta-1,j+supp,k) = tval;
+  cube.v(supp+ntheta-1,j2+supp,k) = fct*tval;
+  }
+}
       vector<double>lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=sqrt(4*pi/(2*i+1.));
@@ -372,7 +383,7 @@ template<typename T> class Interpolator
               {
               auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
               slmT(l,m) += conj(a1(l,m))*tmp.real();
-              slmT(l,m) += conj(a2(l,m))*tmp.imag();
+              slmT(l,m) -= conj(a2(l,m))*tmp.imag();
               }
             }
         }
@@ -381,6 +392,13 @@ template<typename T> class Interpolator
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
+  protected:
+    using Interpolator<T>::lmax;
+    using Interpolator<T>::kmax;
+    using Interpolator<T>::interpolx;
+    using Interpolator<T>::deinterpolx;
+    using Interpolator<T>::getSlmx;
+
   public:
     PyInterpolator(const py::array &slmT, const py::array &blmT,
       int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
@@ -389,11 +407,6 @@ template<typename T> class PyInterpolator: public Interpolator<T>
                         epsilon, nthreads) {}
     PyInterpolator(int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
       : Interpolator<T>(lmax, kmax, epsilon, nthreads) {}
-    using Interpolator<T>::interpolx;
-    using Interpolator<T>::deinterpolx;
-    using Interpolator<T>::getSlmx;
-    using Interpolator<T>::lmax;
-    using Interpolator<T>::kmax;
     py::array interpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
