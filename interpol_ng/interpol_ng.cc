@@ -93,8 +93,10 @@ template<typename T> class Interpolator
           if (j2>=nphi) j2-=nphi;
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
-// FIXME: faster FFT
-      r2r_fftpack(ftmp,ftmp,{0,1},true,true,1.,nthreads);
+      r2r_fftpack(ftmp,ftmp,{1},true,true,1.,nthreads);
+      auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
+      fmav<T> ftmp1(tmp1);
+      r2r_fftpack(ftmp1,ftmp1,{0},true,true,1.,nthreads);
       auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
       auto tmp0=tmp.template subarray<2>({0,0},{nphi0, nphi0});
       fmav<T> ftmp0(tmp0);
@@ -340,20 +342,21 @@ template<typename T> class Interpolator
             cube.v(supp+1+i,j+supp,k) += fct*cube(supp-1-i,j2+supp,k);
             cube.v(supp+ntheta-2-i, j+supp,k) += fct*cube(supp+ntheta+i,j2+supp,k);
             }
-for (size_t k=0; k<cube.shape(2); ++k)
-{
-double fct = (((k+1)/2)&1) ? -1 : 1;
-for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
-  {
-  if (j2>=nphi) j2-=nphi;
-  double tval = (cube(supp,j+supp,k) + fct*cube(supp,j2+supp,k));
-  cube.v(supp,j+supp,k) = tval;
-  cube.v(supp,j2+supp,k) = fct*tval;
-  tval = (cube(supp+ntheta-1,j+supp,k) + fct*cube(supp+ntheta-1,j2+supp,k));
-  cube.v(supp+ntheta-1,j+supp,k) = tval;
-  cube.v(supp+ntheta-1,j2+supp,k) = fct*tval;
-  }
-}
+
+      // special treatment for poles
+      for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
+        for (size_t k=0; k<cube.shape(2); ++k)
+          {
+          double fct = (((k+1)/2)&1) ? -1 : 1;
+          if (j2>=nphi) j2-=nphi;
+          double tval = (cube(supp,j+supp,k) + fct*cube(supp,j2+supp,k));
+          cube.v(supp,j+supp,k) = tval;
+          cube.v(supp,j2+supp,k) = fct*tval;
+          tval = (cube(supp+ntheta-1,j+supp,k) + fct*cube(supp+ntheta-1,j2+supp,k));
+          cube.v(supp+ntheta-1,j+supp,k) = tval;
+          cube.v(supp+ntheta-1,j2+supp,k) = fct*tval;
+          }
+
       vector<double>lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=sqrt(4*pi/(2*i+1.));
@@ -427,7 +430,6 @@ template<typename T> class PyInterpolator: public Interpolator<T>
       auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax)});
       Alm<complex<T>> blmT(to_mav<complex<T>,1>(blmT_, false), lmax, kmax);
       auto slmT_=to_mav<complex<T>,1>(res, true);
-slmT_.apply([](complex<T> &v){v=0;});
       Alm<complex<T>> slmT(slmT_, lmax, lmax);
       getSlmx(blmT, slmT);
       return res;
