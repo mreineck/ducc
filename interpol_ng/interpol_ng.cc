@@ -283,8 +283,15 @@ template<typename T> class Interpolator
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
       auto idx = getIdx(ptg);
-      execStatic(idx.size(), 1, 0, [&](Scheduler &sched) // not parallel yet
+
+      constexpr size_t cellsize=16;
+      size_t nct = ntheta/cellsize+5,
+             ncp = nphi/cellsize+5;
+      mav<std::mutex,2> locks({nct,ncp});
+
+      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
+        size_t b_theta=99999999999999, b_phi=9999999999999999;
         vector<T> wt(supp), wp(supp);
         vector<T> psiarr(2*kmax+1);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
@@ -311,10 +318,35 @@ template<typename T> class Interpolator
             cnpsi=cnpsi*cpsi - snpsi*spsi;
             snpsi=tmp;
             }
+          size_t b_theta_new = i0/cellsize,
+                 b_phi_new = i1/cellsize;
+          if ((b_theta_new!=b_theta) || (b_phi_new!=b_phi))
+            {
+            if (b_theta<locks.shape(0))  // unlock
+              {
+              locks.v(b_theta,b_phi).unlock();
+              locks.v(b_theta,b_phi+1).unlock();
+              locks.v(b_theta+1,b_phi).unlock();
+              locks.v(b_theta+1,b_phi+1).unlock();
+              }
+            b_theta = b_theta_new;
+            b_phi = b_phi_new;
+            locks.v(b_theta,b_phi).lock();
+            locks.v(b_theta,b_phi+1).lock();
+            locks.v(b_theta+1,b_phi).lock();
+            locks.v(b_theta+1,b_phi+1).lock();
+            }
           for (size_t j=0; j<supp; ++j)
             for (size_t k=0; k<supp; ++k)
               for (size_t l=0; l<2*kmax+1; ++l)
                 cube.v(i0+j,i1+k,l) += val*wt[j]*wp[k]*psiarr[l];
+          }
+        if (b_theta<locks.shape(0))  // unlock
+          {
+          locks.v(b_theta,b_phi).unlock();
+          locks.v(b_theta,b_phi+1).unlock();
+          locks.v(b_theta+1,b_phi).unlock();
+          locks.v(b_theta+1,b_phi+1).unlock();
           }
         });
       }

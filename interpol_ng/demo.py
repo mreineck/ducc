@@ -91,7 +91,7 @@ ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
-foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=1)
+foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
 bar=foo.interpol(ptg)
 fake = np.random.uniform(0.,1., ptg.shape[0])
 foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
