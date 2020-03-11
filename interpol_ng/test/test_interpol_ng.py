@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import interpol_ng
+import pyinterpol_ng
 import pysharp
 
 pmp = pytest.mark.parametrize
@@ -57,7 +57,7 @@ def test_against_convolution(lkmax):
     slmT = random_alm(lmax, lmax)
     blmT = random_alm(lmax, kmax)
 
-    inter = interpol_ng.PyInterpolator(slmT, blmT, lmax, kmax, epsilon=1e-8,
+    inter = pyinterpol_ng.PyInterpolator(slmT, blmT, lmax, kmax, epsilon=1e-8,
                                        nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg,3))
@@ -71,7 +71,7 @@ def test_against_convolution(lkmax):
     blmT2 = np.zeros(nalm(lmax,lmax))+0j
     blmT2[0:blmT.shape[0]] = blmT
     for i in range(nptg):
-        rbeam=interpol_ng.rotate_alm(blmT2, lmax, ptg[i,2],ptg[i,0],ptg[i,1])
+        rbeam=pyinterpol_ng.rotate_alm(blmT2, lmax, ptg[i,2],ptg[i,0],ptg[i,1])
         res2[i] = convolve(slmT, rbeam, lmax).real
     _assert_close(res1, res2, 1e-7)
 
@@ -85,10 +85,10 @@ def test_adjointness(lkmax):
     ptg[:,0]*=np.pi
     ptg[:,1]*=2*np.pi
     ptg[:,2]*=2*np.pi
-    foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+    foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
     inter1=foo.interpol(ptg)
     fake = np.random.uniform(0.,1., ptg.shape[0])
-    foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
+    foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
     foo2.deinterpol(ptg.reshape((-1,3)), fake)
     bla=foo2.getSlm(blmT)
     _assert_close(myalmdot(slmT, bla, lmax, lmax, 0), np.vdot(fake,inter1), 1e-12)

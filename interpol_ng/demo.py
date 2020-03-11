@@ -1,4 +1,4 @@
-import interpol_ng
+import pyinterpol_ng
 import numpy as np
 import pysharp
 import time
@@ -53,7 +53,7 @@ blmT = random_alm(lmax, kmax)
 
 t0=time.time()
 # build interpolator object for slmT and blmT
-foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
 print("setup time: ",time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1
@@ -76,9 +76,9 @@ bar2 = np.zeros((nth,nph))
 blmTfull = np.zeros(slmT.size)+0j
 blmTfull[0:blmT.size] = blmT
 for ith in range(nth):
-    rbeamth=interpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,0,2],ptg[ith,0,0],0)
+    rbeamth=pyinterpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,0,2],ptg[ith,0,0],0)
     for iph in range(nph):
-        rbeam=interpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
+        rbeam=pyinterpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
         bar2[ith,iph] = convolve(slmT, rbeam, lmax).real
 plt.subplot(2,2,2)
 plt.imshow(bar2)
@@ -91,10 +91,10 @@ ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
-foo = interpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
 bar=foo.interpol(ptg)
 fake = np.random.uniform(0.,1., ptg.shape[0])
-foo2 = interpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
+foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
 foo2.deinterpol(ptg.reshape((-1,3)), fake)
 bla=foo2.getSlm(blmT)
 print(myalmdot(slmT, bla, lmax, lmax, 0))

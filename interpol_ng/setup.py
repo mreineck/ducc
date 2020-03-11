@@ -32,9 +32,9 @@ else:
 # if you don't want debugging info, add "-s" to python_module_link_args
 
 def get_extension_modules():
-    return [Extension('interpol_ng',
+    return [Extension('pyinterpol_ng',
                       language='c++',
-                      sources=['interpol_ng.cc',
+                      sources=['pyinterpol_ng.cc',
                                'mr_util/infra/threading.cc',
                                'mr_util/sharp/sharp.cc',
                                'mr_util/sharp/sharp_core.cc',
@@ -64,6 +64,7 @@ def get_extension_modules():
                                'mr_util/sharp/sharp_geomhelpers.h',
                                'mr_util/sharp/sharp_almhelpers.h',
                                'setup.py',
+                               'interpol_ng.h',
                                'alm.h'],
                       include_dirs=include_dirs,
                       define_macros=define_macros,
@@ -71,7 +72,7 @@ def get_extension_modules():
                       extra_link_args=python_module_link_args)]
 
 
-setup(name='interpol_ng',
+setup(name='pyinterpol_ng',
       version='0.0.1',
       description='Python bindings for total convolution and interpolation library',
       include_package_data=True,

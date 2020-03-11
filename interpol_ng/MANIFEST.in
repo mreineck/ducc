@@ -1,5 +1,6 @@
 prune mr_util
 include alm.h
+include interpol_ng.h
 include mr_util/math/fft1d.h
 include mr_util/math/fft.h
 include mr_util/infra/threading.h

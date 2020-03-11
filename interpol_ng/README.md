@@ -1,5 +1,5 @@
-interpol_ng
-===========
+pyinterpol_ng
+=============
 
 Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
