@@ -229,7 +229,7 @@ template<typename T> class Interpolator
       cube.apply([](T &v){v=0.;});
       }
 
-    void interpolx (const mav<T,2> &ptg, mav<T,1> &res) const
+    void interpol (const mav<T,2> &ptg, mav<T,1> &res) const
       {
       MR_assert(!adjoint, "cannot be called in adjoint mode");
       MR_assert(ptg.shape(0)==res.shape(0), "dimension mismatch");
@@ -275,7 +275,7 @@ template<typename T> class Interpolator
         });
       }
 
-    void deinterpolx (const mav<T,2> &ptg, const mav<T,1> &data)
+    void deinterpol (const mav<T,2> &ptg, const mav<T,1> &data)
       {
       MR_assert(adjoint, "can only be called in adjoint mode");
       MR_assert(ptg.shape(0)==data.shape(0), "dimension mismatch");
@@ -351,7 +351,7 @@ template<typename T> class Interpolator
           }
         });
       }
-    void getSlmx (const Alm<complex<T>> &blmT, Alm<complex<T>> &slmT)
+    void getSlm (const Alm<complex<T>> &blmT, Alm<complex<T>> &slmT)
       {
       MR_assert(adjoint, "can only be called in adjoint mode");
       Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
