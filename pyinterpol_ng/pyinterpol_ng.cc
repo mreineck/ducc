@@ -19,30 +19,40 @@ template<typename T> class PyInterpolator: public Interpolator<T>
   protected:
     using Interpolator<T>::lmax;
     using Interpolator<T>::kmax;
+    using Interpolator<T>::ncomp;
     using Interpolator<T>::interpol;
     using Interpolator<T>::deinterpol;
     using Interpolator<T>::getSlm;
 
-vector<Alm<complex<T>>> makevec(const py::array &inp, int64_t lmax, int64_t kmax, bool rw=false)
+vector<Alm<complex<T>>> makevec(const py::array &inp, int64_t lmax, int64_t kmax)
   {
-  auto inp2 = to_mav<complex<T>,2>(inp, rw);
+  auto inp2 = to_mav<complex<T>,2>(inp);
   vector<Alm<complex<T>>> res;
   for (size_t i=0; i<inp2.shape(1); ++i)
     res.push_back(Alm<complex<T>>(inp2.template subarray<1>({0,i},{inp2.shape(0),0}),lmax, kmax));
   return res;
   }
+void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>>> &res)
+  {
+  auto inp2 = to_mav<complex<T>,2>(inp, true);
+  for (size_t i=0; i<inp2.shape(1); ++i)
+    {
+    auto xtmp = inp2.template subarray<1>({0,i},{inp2.shape(0),0});
+    res.emplace_back(xtmp, lmax, kmax);
+    }
+  }
   public:
     PyInterpolator(const py::array &slm, const py::array &blm,
-      int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
+      bool separate, int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
       : Interpolator<T>(makevec(slm, lmax, lmax),
                         makevec(blm, lmax, kmax),
-                        false, epsilon, nthreads) {}
-    PyInterpolator(int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
-      : Interpolator<T>(lmax, kmax, 1, epsilon, nthreads) {}
+                        separate, epsilon, nthreads) {}
+    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, double epsilon, int nthreads=0)
+      : Interpolator<T>(lmax, kmax, ncomp_, epsilon, nthreads) {}
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto res = make_Pyarr<double>({ptg2.shape(0),1});
+      auto res = make_Pyarr<double>({ptg2.shape(0),ncomp});
       auto res2 = to_mav<double,2>(res,true);
       interpol(ptg2, res2);
       return res;
@@ -58,7 +68,8 @@ vector<Alm<complex<T>>> makevec(const py::array &inp, int64_t lmax, int64_t kmax
       {
       auto blm = makevec(blm_, lmax, kmax);
       auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),blm.size()});
-      auto slm = makevec(res, lmax, lmax, true);
+      vector<Alm<complex<double>>> slm;
+      makevec_v(res, lmax, lmax, slm);
       getSlm(blm, slm);
       return res;
       }
@@ -212,11 +223,11 @@ PYBIND11_MODULE(pyinterpol_ng, m)
   m.doc() = pyinterpol_ng_DS;
 
   py::class_<PyInterpolator<double>> (m, "PyInterpolator", pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, int64_t, int64_t, double, int>(),
-      initnormal_DS, "sky"_a, "beam"_a, "lmax"_a, "kmax"_a, "epsilon"_a,
+    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, double, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a,
       "nthreads"_a)
-    .def(py::init<int64_t, int64_t, double, int>(), initadjoint_DS,
-      "lmax"_a, "kmax"_a, "epsilon"_a, "nthreads"_a)
+    .def(py::init<int64_t, int64_t, int64_t, double, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &PyInterpolator<double>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &PyInterpolator<double>::pygetSlm, getSlm_DS, "blmT"_a);

@@ -450,23 +450,28 @@ template<typename T> class Interpolator
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=std::sqrt(4*pi/(2*i+1.));
 
+      for (size_t j=0; j<blm.size(); ++j)
+        slm[j].SetToZero();
+
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
-        bool separate = ncomp==blm.size();
+        bool separate = ncomp>1;
         {
-        auto m1 = cube.template subarray<2>({supp,supp,0,separate?icomp:0},{ntheta,nphi,0,0});
+        auto m1 = cube.template subarray<2>({supp,supp,0,icomp},{ntheta,nphi,0,0});
         decorrect(m1,0);
         sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
-            for (size_t j=0; j<ncomp; ++j)
-              slm[j](l,m)=conj(a1(l,m))*blm[j](l,0).real()*T(lnorm[l]);
+            if (separate)
+              slm[icomp](l,m) += conj(a1(l,m))*blm[icomp](l,0).real()*T(lnorm[l]);
+            else
+              for (size_t j=0; j<blm.size(); ++j)
+                slm[j](l,m) += conj(a1(l,m))*blm[j](l,0).real()*T(lnorm[l]);
         }
-
         for (size_t k=1; k<=kmax; ++k)
           {
-          auto m1 = cube.template subarray<2>({supp,supp,2*k-1,separate?icomp:0},{ntheta,nphi,0,0});
-          auto m2 = cube.template subarray<2>({supp,supp,2*k  ,separate?icomp:0},{ntheta,nphi,0,0});
+          auto m1 = cube.template subarray<2>({supp,supp,2*k-1,icomp},{ntheta,nphi,0,0});
+          auto m2 = cube.template subarray<2>({supp,supp,2*k  ,icomp},{ntheta,nphi,0,0});
           decorrect(m1,k);
           decorrect(m2,k);
 
@@ -475,12 +480,21 @@ template<typename T> class Interpolator
           for (size_t m=0; m<=lmax; ++m)
             for (size_t l=m; l<=lmax; ++l)
               if (l>=k)
-                for (size_t j=0; j<ncomp; ++j)
+                {
+                if (separate)
                   {
-                  auto tmp = -2.*conj(blm[j](l,k))*T(lnorm[l]);
-                  slm[j](l,m) += conj(a1(l,m))*tmp.real();
-                  slm[j](l,m) -= conj(a2(l,m))*tmp.imag();
+                  auto tmp = -2.*conj(blm[icomp](l,k))*T(lnorm[l]);
+                  slm[icomp](l,m) += conj(a1(l,m))*tmp.real();
+                  slm[icomp](l,m) -= conj(a2(l,m))*tmp.imag();
                   }
+                else
+                  for (size_t j=0; j<blm.size(); ++j)
+                    {
+                    auto tmp = -2.*conj(blm[j](l,k))*T(lnorm[l]);
+                    slm[j](l,m) += conj(a1(l,m))*tmp.real();
+                    slm[j](l,m) -= conj(a2(l,m))*tmp.imag();
+                    }
+                }
           }
         }
       }

@@ -130,7 +130,7 @@ template<typename T> class membuf
       MR_assert(rw, "array is not writable");
       return const_cast<T *>(d);
       }
-    bool writable() { return rw; }
+    bool writable() const { return rw; }
   };
 
 // "mav" stands for "multidimensional array view"
