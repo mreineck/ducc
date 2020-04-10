@@ -23,19 +23,27 @@ template<typename T> class PyInterpolator: public Interpolator<T>
     using Interpolator<T>::deinterpol;
     using Interpolator<T>::getSlm;
 
+vector<Alm<complex<T>>> makevec(const py::array &inp, int64_t lmax, int64_t kmax, bool rw=false)
+  {
+  auto inp2 = to_mav<complex<T>,2>(inp, rw);
+  vector<Alm<complex<T>>> res;
+  for (size_t i=0; i<inp2.shape(1); ++i)
+    res.push_back(Alm<complex<T>>(inp2.template subarray<1>({0,i},{inp2.shape(0),0}),lmax, kmax));
+  return res;
+  }
   public:
-    PyInterpolator(const py::array &slmT, const py::array &blmT,
+    PyInterpolator(const py::array &slm, const py::array &blm,
       int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
-      : Interpolator<T>(Alm<complex<T>>(to_mav<complex<T>,1>(slmT), lmax, lmax),
-                        Alm<complex<T>>(to_mav<complex<T>,1>(blmT), lmax, kmax),
-                        epsilon, nthreads) {}
+      : Interpolator<T>(makevec(slm, lmax, lmax),
+                        makevec(blm, lmax, kmax),
+                        false, epsilon, nthreads) {}
     PyInterpolator(int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
-      : Interpolator<T>(lmax, kmax, epsilon, nthreads) {}
+      : Interpolator<T>(lmax, kmax, 1, epsilon, nthreads) {}
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto res = make_Pyarr<double>({ptg2.shape(0)});
-      auto res2 = to_mav<double,1>(res,true);
+      auto res = make_Pyarr<double>({ptg2.shape(0),1});
+      auto res2 = to_mav<double,2>(res,true);
       interpol(ptg2, res2);
       return res;
       }
@@ -43,16 +51,15 @@ template<typename T> class PyInterpolator: public Interpolator<T>
     void pydeinterpol(const py::array &ptg, const py::array &data)
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto data2 = to_mav<T,1>(data);
+      auto data2 = to_mav<T,2>(data);
       deinterpol(ptg2, data2);
       }
-    py::array pygetSlm(const py::array &blmT_)
+    py::array pygetSlm(const py::array &blm_)
       {
-      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax)});
-      Alm<complex<T>> blmT(to_mav<complex<T>,1>(blmT_, false), lmax, kmax);
-      auto slmT_=to_mav<complex<T>,1>(res, true);
-      Alm<complex<T>> slmT(slmT_, lmax, lmax);
-      getSlm(blmT, slmT);
+      auto blm = makevec(blm_, lmax, kmax);
+      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),blm.size()});
+      auto slm = makevec(res, lmax, lmax, true);
+      getSlm(blm, slm);
       return res;
       }
   };

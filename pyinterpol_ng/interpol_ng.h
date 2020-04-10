@@ -37,7 +37,8 @@ template<typename T> class Interpolator
     double ofactor;
     size_t supp;
     ES_Kernel kernel;
-    mav<T,3> cube; // the data cube (theta, phi, 2*mbeam+1[, IQU])
+    size_t ncomp;
+    mav<T,4> cube; // the data cube (theta, phi, 2*mbeam+1, TGC)
 
     void correct(mav<T,2> &arr, int spin)
       {
@@ -137,11 +138,12 @@ template<typename T> class Interpolator
       }
 
   public:
-    Interpolator(const Alm<complex<T>> &slmT, const Alm<complex<T>> &blmT,
-      double epsilon, int nthreads_)
+    Interpolator(const vector<Alm<complex<T>>> &slm,
+                 const vector<Alm<complex<T>>> &blm,
+                 bool separate, double epsilon, int nthreads_)
       : adjoint(false),
-        lmax(slmT.Lmax()),
-        kmax(blmT.Mmax()),
+        lmax(slm.at(0).Lmax()),
+        kmax(blm.at(0).Mmax()),
         nphi0(2*good_size_real(lmax+1)),
         ntheta0(nphi0/2+1),
         nphi(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ofmin/2.)))),
@@ -150,11 +152,19 @@ template<typename T> class Interpolator
         ofactor(double(nphi)/(2*lmax+1)),
         supp(ES_Kernel::get_supp(epsilon, ofactor)),
         kernel(supp, ofactor, nthreads),
-        cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
+        ncomp(separate ? slm.size() : 1),
+        cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1, ncomp})
       {
+      MR_assert(slm.size()==blm.size(), "inconsistent slm and blm vectors");
+      for (size_t i=0; i<slm.size(); ++i)
+        {
+        MR_assert(slm[i].Lmax()==lmax, "inconsistent Sky lmax");
+        MR_assert(slm[i].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
+        MR_assert(blm[i].Lmax()==lmax, "Sky and beam lmax must be equal");
+        MR_assert(blm[i].Mmax()==kmax, "Inconcistent beam mmax");
+        }
+
       MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
-      MR_assert(slmT.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-      MR_assert(blmT.Lmax()==lmax, "Sky and beam lmax must be equal");
       Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
       auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -163,35 +173,60 @@ template<typename T> class Interpolator
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=std::sqrt(4*pi/(2*i+1.));
 
-      {
-      for (size_t m=0; m<=lmax; ++m)
-        for (size_t l=m; l<=lmax; ++l)
-          a1(l,m) = slmT(l,m)*blmT(l,0).real()*T(lnorm[l]);
-      auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
-      sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
-      correct(m1,0);
-      }
-      for (size_t k=1; k<=kmax; ++k)
+      for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
-            if (l<k)
-              a1(l,m)=a2(l,m)=0.;
+            if (separate)
+              a1(l,m) = slm[icomp](l,m)*blm[icomp](l,0).real()*T(lnorm[l]);
             else
               {
-              auto tmp = -2.*blmT(l,k)*T(lnorm[l]);
-              a1(l,m) = slmT(l,m)*tmp.real();
-              a2(l,m) = slmT(l,m)*tmp.imag();
+              a1(l,m) = 0;
+              for (size_t j=0; j<slm.size(); ++j)
+                a1(l,m) += slm[j](l,m)*blm[j](l,0).real()*T(lnorm[l]);
               }
             }
-        auto m1 = cube.template subarray<2>({supp,supp,2*k-1},{ntheta,nphi,0});
-        auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
-        sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
-          m2.vdata(), *ginfo, *ainfo, 0, nthreads);
-        correct(m1,k);
-        correct(m2,k);
+        auto m1 = cube.template subarray<2>({supp,supp,0,icomp},{ntheta,nphi,0,0});
+        sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
+        correct(m1,0);
+
+        for (size_t k=1; k<=kmax; ++k)
+          {
+          for (size_t m=0; m<=lmax; ++m)
+            for (size_t l=m; l<=lmax; ++l)
+              {
+              if (l<k)
+                a1(l,m)=a2(l,m)=0.;
+              else
+                {
+                if (separate)
+                  {
+                  auto tmp = -2.*blm[icomp](l,k)*T(lnorm[l]);
+                  a1(l,m) = slm[icomp](l,m)*tmp.real();
+                  a2(l,m) = slm[icomp](l,m)*tmp.imag();
+                  }
+                else
+                  {
+                  a1(l,m) = a2(l,m) = 0;
+                  for (size_t j=0; j<slm.size(); ++j)
+                    {
+                    auto tmp = -2.*blm[j](l,k)*T(lnorm[l]);
+                    a1(l,m) += slm[j](l,m)*tmp.real();
+                    a2(l,m) += slm[j](l,m)*tmp.imag();
+                    }
+                  }
+              }
+            auto m1 = cube.template subarray<2>({supp,supp,2*k-1,icomp},{ntheta,nphi,0,0});
+            auto m2 = cube.template subarray<2>({supp,supp,2*k  ,icomp},{ntheta,nphi,0,0});
+            sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
+              m2.vdata(), *ginfo, *ainfo, 0, nthreads);
+            correct(m1,k);
+            correct(m2,k);
+            }
+          }
         }
+
       // fill border regions
       for (size_t i=0; i<supp; ++i)
         for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
@@ -199,19 +234,23 @@ template<typename T> class Interpolator
             {
             double fct = (((k+1)/2)&1) ? -1 : 1;
             if (j2>=nphi) j2-=nphi;
-            cube.v(supp-1-i,j2+supp,k) = fct*cube(supp+1+i,j+supp,k);
-            cube.v(supp+ntheta+i,j2+supp,k) = fct*cube(supp+ntheta-2-i, j+supp,k);
+            for (size_t l=0; l<cube.shape(3); ++l)
+              {
+              cube.v(supp-1-i,j2+supp,k,l) = fct*cube(supp+1+i,j+supp,k,l);
+              cube.v(supp+ntheta+i,j2+supp,k,l) = fct*cube(supp+ntheta-2-i,j+supp,k,l);
+              }
             }
       for (size_t i=0; i<ntheta+2*supp; ++i)
         for (size_t j=0; j<supp; ++j)
           for (size_t k=0; k<cube.shape(2); ++k)
+            for (size_t l=0; l<cube.shape(3); ++l)
             {
-            cube.v(i,j,k) = cube(i,j+nphi,k);
-            cube.v(i,j+nphi+supp,k) = cube(i,j+supp,k);
+            cube.v(i,j,k,l) = cube(i,j+nphi,k,l);
+            cube.v(i,j+nphi+supp,k,l) = cube(i,j+supp,k,l);
             }
       }
 
-    Interpolator(size_t lmax_, size_t kmax_, double epsilon, int nthreads_)
+    Interpolator(size_t lmax_, size_t kmax_, size_t ncomp_, double epsilon, int nthreads_)
       : adjoint(true),
         lmax(lmax_),
         kmax(kmax_),
@@ -223,17 +262,19 @@ template<typename T> class Interpolator
         ofactor(double(nphi)/(2*lmax+1)),
         supp(ES_Kernel::get_supp(epsilon, ofactor)),
         kernel(supp, ofactor, nthreads),
-        cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1})
+        ncomp(ncomp_),
+        cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1, ncomp_})
       {
       MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
       cube.apply([](T &v){v=0.;});
       }
 
-    void interpol (const mav<T,2> &ptg, mav<T,1> &res) const
+    void interpol (const mav<T,2> &ptg, mav<T,2> &res) const
       {
       MR_assert(!adjoint, "cannot be called in adjoint mode");
       MR_assert(ptg.shape(0)==res.shape(0), "dimension mismatch");
       MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
+      MR_assert(res.shape(1)==ncomp, "# of components mismatch");
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
@@ -242,6 +283,7 @@ template<typename T> class Interpolator
         {
         vector<T> wt(supp), wp(supp);
         vector<T> psiarr(2*kmax+1);
+        vector<T> val(ncomp);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
@@ -253,7 +295,6 @@ template<typename T> class Interpolator
           size_t i1 = size_t(f1+1.);
           for (size_t t=0; t<supp; ++t)
             wp[t] = kernel((t+i1-f1)*delta - 1);
-          double val=0;
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -266,20 +307,25 @@ template<typename T> class Interpolator
             cnpsi=cnpsi*cpsi - snpsi*spsi;
             snpsi=tmp;
             }
+          for (size_t m=0; m<ncomp; ++m)
+            val[m]=0;
           for (size_t j=0; j<supp; ++j)
             for (size_t k=0; k<supp; ++k)
               for (size_t l=0; l<2*kmax+1; ++l)
-                val += cube(i0+j,i1+k,l)*wt[j]*wp[k]*psiarr[l];
-          res.v(i) = val;
+                for (size_t m=0; m<ncomp; ++m)
+                  val[m] += cube(i0+j,i1+k,l,m)*wt[j]*wp[k]*psiarr[l];
+          for (size_t m=0; m<ncomp; ++m)
+            res.v(i,m) = val[m];
           }
         });
       }
 
-    void deinterpol (const mav<T,2> &ptg, const mav<T,1> &data)
+    void deinterpol (const mav<T,2> &ptg, const mav<T,2> &data)
       {
       MR_assert(adjoint, "can only be called in adjoint mode");
       MR_assert(ptg.shape(0)==data.shape(0), "dimension mismatch");
       MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
+      MR_assert(data.shape(1)==ncomp, "# of components mismatch");
       double delta = 2./supp;
       double xdtheta = (ntheta-1)/pi,
              xdphi = nphi/(2*pi);
@@ -295,6 +341,7 @@ template<typename T> class Interpolator
         size_t b_theta=99999999999999, b_phi=9999999999999999;
         vector<T> wt(supp), wp(supp);
         vector<T> psiarr(2*kmax+1);
+        vector<T> val(ncomp);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
@@ -306,7 +353,8 @@ template<typename T> class Interpolator
           size_t i1 = size_t(f1+1.);
           for (size_t t=0; t<supp; ++t)
             wp[t] = kernel((t+i1-f1)*delta - 1);
-          double val=data(i);
+          for (size_t m=0; m<ncomp; ++m)
+            val[m] = data(i,m);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -340,7 +388,8 @@ template<typename T> class Interpolator
           for (size_t j=0; j<supp; ++j)
             for (size_t k=0; k<supp; ++k)
               for (size_t l=0; l<2*kmax+1; ++l)
-                cube.v(i0+j,i1+k,l) += val*wt[j]*wp[k]*psiarr[l];
+                for (size_t m=0; m<ncomp; ++m)
+                  cube.v(i0+j,i1+k,l,m) += val[m]*wt[j]*wp[k]*psiarr[l];
           }
         if (b_theta<locks.shape(0))  // unlock
           {
@@ -351,9 +400,11 @@ template<typename T> class Interpolator
           }
         });
       }
-    void getSlm (const Alm<complex<T>> &blmT, Alm<complex<T>> &slmT)
+    void getSlm (const vector<Alm<complex<T>>> &blm, vector<Alm<complex<T>>> &slm)
       {
       MR_assert(adjoint, "can only be called in adjoint mode");
+      MR_assert((blm.size()==ncomp) || (ncomp==1), "incorrect number of beam a_lm sets");
+      MR_assert((slm.size()==ncomp) || (ncomp==1), "incorrect number of sky a_lm sets");
       Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
       auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -362,66 +413,75 @@ template<typename T> class Interpolator
       for (size_t i=0; i<cube.shape(0); ++i)
         for (size_t j=0; j<supp; ++j)
           for (size_t k=0; k<cube.shape(2); ++k)
-            {
-            cube.v(i,j+nphi,k) += cube(i,j,k);
-            cube.v(i,j+supp,k) += cube(i,j+nphi+supp,k);
-            }
+            for (size_t l=0; l<cube.shape(3); ++l)
+              {
+              cube.v(i,j+nphi,k,l) += cube(i,j,k,l);
+              cube.v(i,j+supp,k,l) += cube(i,j+nphi+supp,k,l);
+              }
       for (size_t i=0; i<supp; ++i)
         for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
           for (size_t k=0; k<cube.shape(2); ++k)
             {
             double fct = (((k+1)/2)&1) ? -1 : 1;
             if (j2>=nphi) j2-=nphi;
-            cube.v(supp+1+i,j+supp,k) += fct*cube(supp-1-i,j2+supp,k);
-            cube.v(supp+ntheta-2-i, j+supp,k) += fct*cube(supp+ntheta+i,j2+supp,k);
+            for (size_t l=0; l<cube.shape(3); ++l)
+              {
+              cube.v(supp+1+i,j+supp,k,l) += fct*cube(supp-1-i,j2+supp,k,l);
+              cube.v(supp+ntheta-2-i, j+supp,k,l) += fct*cube(supp+ntheta+i,j2+supp,k,l);
+              }
             }
 
       // special treatment for poles
       for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
         for (size_t k=0; k<cube.shape(2); ++k)
-          {
-          double fct = (((k+1)/2)&1) ? -1 : 1;
-          if (j2>=nphi) j2-=nphi;
-          double tval = (cube(supp,j+supp,k) + fct*cube(supp,j2+supp,k));
-          cube.v(supp,j+supp,k) = tval;
-          cube.v(supp,j2+supp,k) = fct*tval;
-          tval = (cube(supp+ntheta-1,j+supp,k) + fct*cube(supp+ntheta-1,j2+supp,k));
-          cube.v(supp+ntheta-1,j+supp,k) = tval;
-          cube.v(supp+ntheta-1,j2+supp,k) = fct*tval;
-          }
+          for (size_t l=0; l<cube.shape(3); ++l)
+            {
+            double fct = (((k+1)/2)&1) ? -1 : 1;
+            if (j2>=nphi) j2-=nphi;
+            double tval = (cube(supp,j+supp,k,l) + fct*cube(supp,j2+supp,k,l));
+            cube.v(supp,j+supp,k,l) = tval;
+            cube.v(supp,j2+supp,k,l) = fct*tval;
+            tval = (cube(supp+ntheta-1,j+supp,k,l) + fct*cube(supp+ntheta-1,j2+supp,k,l));
+            cube.v(supp+ntheta-1,j+supp,k,l) = tval;
+            cube.v(supp+ntheta-1,j2+supp,k,l) = fct*tval;
+            }
 
       vector<double>lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=std::sqrt(4*pi/(2*i+1.));
 
-      {
-      auto m1 = cube.template subarray<2>({supp,supp,0},{ntheta,nphi,0});
-      decorrect(m1,0);
-      sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
-      for (size_t m=0; m<=lmax; ++m)
-        for (size_t l=m; l<=lmax; ++l)
-          slmT(l,m)=conj(a1(l,m))*blmT(l,0).real()*T(lnorm[l]);
-      }
-
-      for (size_t k=1; k<=kmax; ++k)
+      for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
-        auto m1 = cube.template subarray<2>({supp,supp,2*k-1},{ntheta,nphi,0});
-        auto m2 = cube.template subarray<2>({supp,supp,2*k  },{ntheta,nphi,0});
-        decorrect(m1,k);
-        decorrect(m2,k);
-
-        sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
-          m2.data(), *ginfo, *ainfo, 0, nthreads);
+        bool separate = ncomp==blm.size();
+        {
+        auto m1 = cube.template subarray<2>({supp,supp,0,separate?icomp:0},{ntheta,nphi,0,0});
+        decorrect(m1,0);
+        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
-            {
-            if (l>=k)
-              {
-              auto tmp = -2.*conj(blmT(l,k))*T(lnorm[l]);
-              slmT(l,m) += conj(a1(l,m))*tmp.real();
-              slmT(l,m) -= conj(a2(l,m))*tmp.imag();
-              }
-            }
+            for (size_t j=0; j<ncomp; ++j)
+              slm[j](l,m)=conj(a1(l,m))*blm[j](l,0).real()*T(lnorm[l]);
+        }
+
+        for (size_t k=1; k<=kmax; ++k)
+          {
+          auto m1 = cube.template subarray<2>({supp,supp,2*k-1,separate?icomp:0},{ntheta,nphi,0,0});
+          auto m2 = cube.template subarray<2>({supp,supp,2*k  ,separate?icomp:0},{ntheta,nphi,0,0});
+          decorrect(m1,k);
+          decorrect(m2,k);
+
+          sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
+            m2.data(), *ginfo, *ainfo, 0, nthreads);
+          for (size_t m=0; m<=lmax; ++m)
+            for (size_t l=m; l<=lmax; ++l)
+              if (l>=k)
+                for (size_t j=0; j<ncomp; ++j)
+                  {
+                  auto tmp = -2.*conj(blm[j](l,k))*T(lnorm[l]);
+                  slm[j](l,m) += conj(a1(l,m))*tmp.real();
+                  slm[j](l,m) -= conj(a2(l,m))*tmp.imag();
+                  }
+          }
         }
       }
   };
