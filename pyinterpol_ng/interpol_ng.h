@@ -216,14 +216,14 @@ template<typename T> class Interpolator
                     a2(l,m) += slm[j](l,m)*tmp.imag();
                     }
                   }
+                }
               }
-            auto m1 = cube.template subarray<2>({supp,supp,2*k-1,icomp},{ntheta,nphi,0,0});
-            auto m2 = cube.template subarray<2>({supp,supp,2*k  ,icomp},{ntheta,nphi,0,0});
-            sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
-              m2.vdata(), *ginfo, *ainfo, 0, nthreads);
-            correct(m1,k);
-            correct(m2,k);
-            }
+          auto m1 = cube.template subarray<2>({supp,supp,2*k-1,icomp},{ntheta,nphi,0,0});
+          auto m2 = cube.template subarray<2>({supp,supp,2*k  ,icomp},{ntheta,nphi,0,0});
+          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
+            m2.vdata(), *ginfo, *ainfo, 0, nthreads);
+          correct(m1,k);
+          correct(m2,k);
           }
         }
 
