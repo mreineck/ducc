@@ -155,6 +155,7 @@ template<typename T> class Interpolator
         ncomp(separate ? slm.size() : 1),
         cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1, ncomp})
       {
+      MR_assert((ncomp==1)||(ncomp==3), "currently only 1 or 3 components allowed");
       MR_assert(slm.size()==blm.size(), "inconsistent slm and blm vectors");
       for (size_t i=0; i<slm.size(); ++i)
         {
@@ -265,6 +266,7 @@ template<typename T> class Interpolator
         ncomp(ncomp_),
         cube({ntheta+2*supp, nphi+2*supp, 2*kmax+1, ncomp_})
       {
+      MR_assert((ncomp==1)||(ncomp==3), "currently only 1 or 3 components allowed");
       MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
       cube.apply([](T &v){v=0.;});
       }
@@ -283,7 +285,6 @@ template<typename T> class Interpolator
         {
         vector<T> wt(supp), wp(supp);
         vector<T> psiarr(2*kmax+1);
-        vector<T> val(ncomp);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
@@ -307,15 +308,37 @@ template<typename T> class Interpolator
             cnpsi=cnpsi*cpsi - snpsi*spsi;
             snpsi=tmp;
             }
-          for (size_t m=0; m<ncomp; ++m)
-            val[m]=0;
-          for (size_t j=0; j<supp; ++j)
-            for (size_t k=0; k<supp; ++k)
-              for (size_t l=0; l<2*kmax+1; ++l)
-                for (size_t m=0; m<ncomp; ++m)
-                  val[m] += cube(i0+j,i1+k,l,m)*wt[j]*wp[k]*psiarr[l];
-          for (size_t m=0; m<ncomp; ++m)
-            res.v(i,m) = val[m];
+          if (ncomp==1)
+            {
+            double vv=0.;
+            for (size_t j=0; j<supp; ++j)
+              for (size_t k=0; k<supp; ++k)
+                {
+                double t0=wt[j]*wp[k];
+                for (size_t l=0; l<2*kmax+1; ++l)
+                  vv += cube(i0+j,i1+k,l,0)*t0*psiarr[l];
+                }
+            res.v(i,0) = vv;
+            }
+          else // ncomp==3
+            {
+            double v0=0., v1=0., v2=0.;
+            for (size_t j=0; j<supp; ++j)
+              for (size_t k=0; k<supp; ++k)
+                {
+                double t0 = wt[j]*wp[k];
+                for (size_t l=0; l<2*kmax+1; ++l)
+                  {
+                  auto tmp = t0*psiarr[l];
+                  v0 += cube(i0+j,i1+k,l,0)*tmp;
+                  v1 += cube(i0+j,i1+k,l,1)*tmp;
+                  v2 += cube(i0+j,i1+k,l,2)*tmp;
+                  }
+                }
+            res.v(i,0) = v0;
+            res.v(i,1) = v1;
+            res.v(i,2) = v2;
+            }
           }
         });
       }
@@ -341,7 +364,6 @@ template<typename T> class Interpolator
         size_t b_theta=99999999999999, b_phi=9999999999999999;
         vector<T> wt(supp), wp(supp);
         vector<T> psiarr(2*kmax+1);
-        vector<T> val(ncomp);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
@@ -353,8 +375,6 @@ template<typename T> class Interpolator
           size_t i1 = size_t(f1+1.);
           for (size_t t=0; t<supp; ++t)
             wp[t] = kernel((t+i1-f1)*delta - 1);
-          for (size_t m=0; m<ncomp; ++m)
-            val[m] = data(i,m);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -385,11 +405,30 @@ template<typename T> class Interpolator
             locks.v(b_theta+1,b_phi).lock();
             locks.v(b_theta+1,b_phi+1).lock();
             }
-          for (size_t j=0; j<supp; ++j)
-            for (size_t k=0; k<supp; ++k)
-              for (size_t l=0; l<2*kmax+1; ++l)
-                for (size_t m=0; m<ncomp; ++m)
-                  cube.v(i0+j,i1+k,l,m) += val[m]*wt[j]*wp[k]*psiarr[l];
+          if (ncomp==1)
+            {
+            double val = data(i,0);
+            for (size_t j=0; j<supp; ++j)
+              for (size_t k=0; k<supp; ++k)
+                for (size_t l=0; l<2*kmax+1; ++l)
+                  cube.v(i0+j,i1+k,l,0) += val*wt[j]*wp[k]*psiarr[l];
+            }
+          else // ncomp==3
+            {
+            double v0=data(i,0), v1=data(i,1), v2=data(i,2);
+            for (size_t j=0; j<supp; ++j)
+              for (size_t k=0; k<supp; ++k)
+                {
+                double t0 = wt[j]*wp[k];
+                for (size_t l=0; l<2*kmax+1; ++l)
+                  {
+                  double tmp = t0*psiarr[l];
+                  cube.v(i0+j,i1+k,l,0) += v0*tmp;
+                  cube.v(i0+j,i1+k,l,1) += v1*tmp;
+                  cube.v(i0+j,i1+k,l,2) += v2*tmp;
+                  }
+                }
+            }
           }
         if (b_theta<locks.shape(0))  // unlock
           {

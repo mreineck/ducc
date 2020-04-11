@@ -117,14 +117,14 @@ Constructor for interpolation mode
 
 Parameters
 ----------
-sky : numpy.ndarray(numpy.complex)
-    spherical harmonic coefficients of the sky
-beam : numpy.ndarray(numpy.complex)
-    spherical harmonic coefficients of the sky
+sky : numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex)
+    spherical harmonic coefficients of the sky. ncomp can be 1 or 3.
+beam : numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex)
+    spherical harmonic coefficients of the beam. ncomp can be 1 or 3
+separate : bool
+    whether contributions of individual components should be added together.
 lmax : int
     maximum l in the coefficient arays
-mmax : int
-    maximum m in the sky coefficients
 kmax : int
     maximum azimuthal moment in the beam coefficients
 epsilon : float
@@ -139,10 +139,11 @@ Parameters
 ----------
 lmax : int
     maximum l in the coefficient arays
-mmax : int
-    maximum m in the sky coefficients
 kmax : int
     maximum azimuthal moment in the beam coefficients
+ncomp : int
+    the number of components which are going to input to `deinterpol`.
+    Can be 1 or 3.
 epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
 nthreads : the number of threads to use for computation
@@ -153,7 +154,7 @@ Computes the interpolated values for a given set of angle triplets
 
 Parameters
 ----------
-ptg : numpy.ndarray(numpy.float64) of shape(N,3)
+ptg : numpy.ndarray((N, 3), dtype=numpy.float64)
     theta, phi and psi angles (in radian) for N pointings
     theta must be in the range [0; pi]
     phi must be in the range [0; 2pi]
@@ -161,8 +162,10 @@ ptg : numpy.ndarray(numpy.float64) of shape(N,3)
 
 Returns
 -------
-numpy.array(numpy.float64) of shape (N,)
+numpy.array((N, n2), dtype=numpy.float64)
     the interpolated values
+    n2 is either 1 (if separate=True was used in the constructor) or the
+    second dimension of the input slm and blm arrays (otherwise)
 
 Notes
 -----
@@ -177,13 +180,14 @@ data cube.
 
 Parameters
 ----------
-ptg : numpy.ndarray(numpy.float64) of shape(N,3)
+ptg : numpy.ndarray((N,3), dtype=numpy.float64)
     theta, phi and psi angles (in radian) for N pointings
     theta must be in the range [0; pi]
     phi must be in the range [0; 2pi]
     psi should be in the range [-2pi; 2pi]
-data : numpy.ndarray(numpy.float64) of shape (N,)
+data : numpy.ndarray((N, n2), dtype=numpy.float64)
     the interpolated values
+    n2 must match the `ncomp` value specified in the constructor.
 
 Notes
 -----
@@ -194,18 +198,19 @@ Notes
 
 constexpr const char *getSlm_DS = R"""(
 Returns a set of sky spherical hamonic coefficients resulting from adjoint
-interplation
+interpolation
 
 Parameters
 ----------
-blmT : numpy.array(numpy.complex)
+beam : numpy.array(nalm_beam, nbeam), dtype=numpy.complex)
     spherical harmonic coefficients of the beam with lmax and kmax defined
     in the constructor call
+    nbeam must match the ncomp specified in the constructor, unless ncomp was 1.
 
 Returns
 -------
-numpy.array(numpy.complex):
-    spherical harmonic coefficients of the sky with lmax and mmax defined
+numpy.array(nalm_sky, nbeam), dtype=numpy.complex):
+    spherical harmonic coefficients of the sky with lmax defined
     in the constructor call
 
 Notes
@@ -230,7 +235,7 @@ PYBIND11_MODULE(pyinterpol_ng, m)
       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "nthreads"_a)
     .def ("interpol", &PyInterpolator<double>::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &PyInterpolator<double>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<double>::pygetSlm, getSlm_DS, "blmT"_a);
+    .def ("getSlm", &PyInterpolator<double>::pygetSlm, getSlm_DS, "beam"_a);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
