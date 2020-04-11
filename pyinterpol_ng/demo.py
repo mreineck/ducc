@@ -53,7 +53,7 @@ blmT = random_alm(lmax, kmax)
 
 t0=time.time()
 # build interpolator object for slmT and blmT
-foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+foo = pyinterpol_ng.PyInterpolator(slmT.reshape((-1,1)),blmT.reshape((-1,1)),True,lmax, kmax, epsilon=1e-6, nthreads=2)
 print("setup time: ",time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1
@@ -91,12 +91,12 @@ ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
-foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+foo = pyinterpol_ng.PyInterpolator(slmT.reshape((-1,1)),blmT.reshape((-1,1)),True,lmax, kmax, epsilon=1e-6, nthreads=2)
 bar=foo.interpol(ptg)
 fake = np.random.uniform(0.,1., ptg.shape[0])
-foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
-foo2.deinterpol(ptg.reshape((-1,3)), fake)
-bla=foo2.getSlm(blmT)
+foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, 1, epsilon=1e-6, nthreads=2)
+foo2.deinterpol(ptg.reshape((-1,3)), fake.reshape((-1,1)))
+bla=foo2.getSlm(blmT.reshape((-1,1))).reshape(-1)
 print(myalmdot(slmT, bla, lmax, lmax, 0))
 print(np.vdot(fake,bar))
 print(myalmdot(slmT, bla, lmax, lmax, 0)/np.vdot(fake,bar))
