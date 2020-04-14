@@ -130,7 +130,7 @@ template<typename T> class membuf
       MR_assert(rw, "array is not writable");
       return const_cast<T *>(d);
       }
-    bool writable() { return rw; }
+    bool writable() const { return rw; }
   };
 
 // "mav" stands for "multidimensional array view"
@@ -224,7 +224,7 @@ template<size_t ndim> class mav_info
 
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
   {
-  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
+//  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
 
   protected:
     using typename mav_info<ndim>::shape_t;

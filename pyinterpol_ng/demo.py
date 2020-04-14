@@ -10,11 +10,11 @@ def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
-def random_alm(lmax, mmax):
-    res = np.random.uniform(-1., 1., nalm(lmax, mmax)) \
-     + 1j*np.random.uniform(-1., 1., nalm(lmax, mmax))
+def random_alm(lmax, mmax, ncomp):
+    res = np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
+     + 1j*np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1].imag = 0.
+    res[0:lmax+1,:].imag = 0.
     return res
 
 
@@ -41,19 +41,21 @@ def convolve(alm1, alm2, lmax):
 
 lmax=60
 kmax=13
-
+ncomp=1
+separate=True
+ncomp2 = ncomp if separate else 1
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
-slmT = random_alm(lmax, lmax)
+slm = random_alm(lmax, lmax, ncomp)
 
 # build beam a_lm
-blmT = random_alm(lmax, kmax)
+blm = random_alm(lmax, kmax, ncomp)
 
 
 t0=time.time()
-# build interpolator object for slmT and blmT
-foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+# build interpolator object for slm and blm
+foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-4, nthreads=2)
 print("setup time: ",time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1
@@ -68,22 +70,22 @@ ptg[:,:,1] = (2*np.pi*(0.5+np.arange(nph))/nph).reshape((1,-1))
 ptg[:,:,2] = np.pi*0.2
 t0=time.time()
 # do the actual interpolation
-bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph))
+bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph,ncomp2))
 print("interpolation time: ", time.time()-t0)
 plt.subplot(2,2,1)
-plt.imshow(bar.reshape((nth,nph)))
+plt.imshow(bar[:,:,0])
 bar2 = np.zeros((nth,nph))
-blmTfull = np.zeros(slmT.size)+0j
-blmTfull[0:blmT.size] = blmT
+blmfull = np.zeros(slm.shape)+0j
+blmfull[0:blm.shape[0],:] = blm
 for ith in range(nth):
-    rbeamth=pyinterpol_ng.rotate_alm(blmTfull, lmax, ptg[ith,0,2],ptg[ith,0,0],0)
+    rbeamth=pyinterpol_ng.rotate_alm(blmfull[:,0], lmax, ptg[ith,0,2],ptg[ith,0,0],0)
     for iph in range(nph):
         rbeam=pyinterpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
-        bar2[ith,iph] = convolve(slmT, rbeam, lmax).real
+        bar2[ith,iph] = convolve(slm[:,0], rbeam, lmax).real
 plt.subplot(2,2,2)
 plt.imshow(bar2)
 plt.subplot(2,2,3)
-plt.imshow((bar2-bar.reshape((nth,nph))))
+plt.imshow(bar2-bar[:,:,0])
 plt.show()
 
 
@@ -91,12 +93,18 @@ ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
-foo = pyinterpol_ng.PyInterpolator(slmT,blmT,lmax, kmax, epsilon=1e-6, nthreads=2)
+#foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-6, nthreads=2)
+t0=time.time()
 bar=foo.interpol(ptg)
-fake = np.random.uniform(0.,1., ptg.shape[0])
-foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, epsilon=1e-6, nthreads=2)
+print("interpolation time: ", time.time()-t0)
+fake = np.random.uniform(0.,1., (ptg.shape[0],ncomp2))
+foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, ncomp2, epsilon=1e-4, nthreads=2)
+t0=time.time()
 foo2.deinterpol(ptg.reshape((-1,3)), fake)
-bla=foo2.getSlm(blmT)
-print(myalmdot(slmT, bla, lmax, lmax, 0))
-print(np.vdot(fake,bar))
-print(myalmdot(slmT, bla, lmax, lmax, 0)/np.vdot(fake,bar))
+print("deinterpolation time: ", time.time()-t0)
+t0=time.time()
+bla=foo2.getSlm(blm)
+print("getSlm time: ", time.time()-t0)
+v1 = np.sum([myalmdot(slm[:,i], bla[:,i] , lmax, lmax, 0) for i in range(ncomp)])
+v2 = np.sum([np.vdot(fake[:,i],bar[:,i]) for i in range(ncomp2)])
+print(v1/v2-1.)
