@@ -54,8 +54,8 @@ blm = random_alm(lmax, kmax, ncomp)
 
 
 t0=time.time()
-# build interpolator object for slmT and blmT
-foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-6, nthreads=2)
+# build interpolator object for slm and blm
+foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-4, nthreads=2)
 print("setup time: ",time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1
@@ -98,7 +98,7 @@ t0=time.time()
 bar=foo.interpol(ptg)
 print("interpolation time: ", time.time()-t0)
 fake = np.random.uniform(0.,1., (ptg.shape[0],ncomp2))
-foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, ncomp2, epsilon=1e-6, nthreads=2)
+foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, ncomp2, epsilon=1e-4, nthreads=2)
 t0=time.time()
 foo2.deinterpol(ptg.reshape((-1,3)), fake)
 print("deinterpolation time: ", time.time()-t0)

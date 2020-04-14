@@ -14,6 +14,8 @@ namespace py = pybind11;
 
 namespace {
 
+using fptype = float;
+
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
   protected:
@@ -43,19 +45,19 @@ void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>
   }
   public:
     PyInterpolator(const py::array &slm, const py::array &blm,
-      bool separate, int64_t lmax, int64_t kmax, double epsilon, int nthreads=0)
+      bool separate, int64_t lmax, int64_t kmax, T epsilon, int nthreads=0)
       : Interpolator<T>(makevec(slm, lmax, lmax),
                         makevec(blm, lmax, kmax),
                         separate, epsilon, nthreads) {}
-    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, double epsilon, int nthreads=0)
+    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, T epsilon, int nthreads=0)
       : Interpolator<T>(lmax, kmax, ncomp_, epsilon, nthreads) {}
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto res = make_Pyarr<double>({ptg2.shape(0),ncomp});
-      auto res2 = to_mav<double,2>(res,true);
+      auto res = make_Pyarr<T>({ptg2.shape(0),ncomp});
+      auto res2 = to_mav<T,2>(res,true);
       interpol(ptg2, res2);
-      return res;
+      return move(res);
       }
 
     void pydeinterpol(const py::array &ptg, const py::array &data)
@@ -68,10 +70,10 @@ void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>
       {
       auto blm = makevec(blm_, lmax, kmax);
       auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),blm.size()});
-      vector<Alm<complex<double>>> slm;
+      vector<Alm<complex<T>>> slm;
       makevec_v(res, lmax, lmax, slm);
       getSlm(blm, slm);
-      return res;
+      return move(res);
       }
   };
 
@@ -85,7 +87,7 @@ template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
   for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
   auto tmp = Alm<complex<T>>(a2,lmax,lmax);
   rotate_alm(tmp, psi, theta, phi);
-  return alm;
+  return move(alm);
   }
 #endif
 
@@ -227,17 +229,17 @@ PYBIND11_MODULE(pyinterpol_ng, m)
 
   m.doc() = pyinterpol_ng_DS;
 
-  py::class_<PyInterpolator<double>> (m, "PyInterpolator", pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, double, int>(),
+  py::class_<PyInterpolator<fptype>> (m, "PyInterpolator", pyinterpolator_DS)
+    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a,
       "nthreads"_a)
-    .def(py::init<int64_t, int64_t, int64_t, double, int>(), initadjoint_DS,
+    .def(py::init<int64_t, int64_t, int64_t, fptype, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "nthreads"_a)
-    .def ("interpol", &PyInterpolator<double>::pyinterpol, interpol_DS, "ptg"_a)
-    .def ("deinterpol", &PyInterpolator<double>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<double>::pygetSlm, getSlm_DS, "beam"_a);
+    .def ("interpol", &PyInterpolator<fptype>::pyinterpol, interpol_DS, "ptg"_a)
+    .def ("deinterpol", &PyInterpolator<fptype>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
+    .def ("getSlm", &PyInterpolator<fptype>::pygetSlm, getSlm_DS, "beam"_a);
 #if 1
-  m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
+  m.def("rotate_alm", &pyrotate_alm<fptype>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
 #endif
   }
