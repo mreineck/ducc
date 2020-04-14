@@ -14,7 +14,7 @@ namespace py = pybind11;
 
 namespace {
 
-using fptype = float;
+using fptype = double;
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
