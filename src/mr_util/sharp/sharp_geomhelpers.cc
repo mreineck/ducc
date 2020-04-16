@@ -25,6 +25,7 @@
  *  \author Martin Reinecke
  */
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include "mr_util/sharp/sharp_geomhelpers.h"

@@ -27,7 +27,7 @@
 #include <vector>
 #include <memory>
 #include "mr_util/infra/error_handling.h"
-
+#define _MSC_VER
 namespace mr {
 
 namespace detail_mav {
@@ -113,8 +113,15 @@ template<typename T> class membuf
       : ptr(make_unique<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     membuf(const membuf &other)
       : ptr(other.ptr), d(other.d), rw(false) {}
+#if defined(_MSC_VER)
+//    membuf(membuf &other)
+//      : ptr(other.ptr), d(other.d), rw(other.rw) {}
+//    membuf(membuf &&other)
+//      : ptr(other.ptr), d(other.d), rw(other.rw) {}
+#else
     membuf(membuf &other) = default;
     membuf(membuf &&other) = default;
+#endif
 
     template<typename I> T &vraw(I i)
       {
@@ -151,9 +158,12 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : fmav_info(info), membuf<T>(d_, rw_) {}
     fmav(const T* d_, const fmav_info &info)
       : fmav_info(info), membuf<T>(d_) {}
+#if defined(_MSC_VER)
+#else
     fmav(const fmav &other) = default;
     fmav(fmav &other) = default;
     fmav(fmav &&other) = default;
+#endif
     fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
       : fmav_info(shp_, str_), membuf<T>(buf) {}
     fmav(const membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
@@ -318,9 +328,12 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : mav_info<ndim>(shp_), membuf<T>(d_, rw_) {}
     mav(const array<size_t,ndim> &shp_)
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
+#if defined(_MSC_VER)
+#else
     mav(const mav &other) = default;
     mav(mav &other) = default;
     mav(mav &&other) = default;
+#endif
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &mb)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, const membuf<T> &mb)

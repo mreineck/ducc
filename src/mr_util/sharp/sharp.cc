@@ -26,6 +26,7 @@
  */
 
 #include <cmath>
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include "mr_util/math/math_utils.h"
