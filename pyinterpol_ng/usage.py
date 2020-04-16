@@ -1,3 +1,5 @@
+# Short usage demo for the interpol_ng module
+
 import pyinterpol_ng
 import numpy as np
 
