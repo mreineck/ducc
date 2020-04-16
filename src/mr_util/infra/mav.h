@@ -160,12 +160,12 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : fmav_info(info), membuf<T>(d_) {}
     fmav(const fmav &other) = default;
 #if defined(_MSC_VER)
-    fmav(fmav &other)
-      : fmav_info(other), membuf(other) {}
+    fmav(fmav &other) : fmav_info(other), membuf<T>(other) {}
+    fmav(fmav &&other) : fmav_info(other), membuf<T>(other) {}
 #else
     fmav(fmav &other) = default;
-#endif
     fmav(fmav &&other) = default;
+#endif
     fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
       : fmav_info(shp_, str_), membuf<T>(buf) {}
     fmav(const membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
@@ -332,11 +332,12 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
     mav(const mav &other) = default;
 #if defined(_MSC_VER)
-    mav(mav &other): mav_info(other), membuf(other) {}
+    mav(mav &other): mav_info<ndim>(other), membuf<T>(other) {}
+    mav(mav &&other): mav_info<ndim>(other), membuf<T>(other) {}
 #else
     mav(mav &other) = default;
-#endif
     mav(mav &&other) = default;
+#endif
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &mb)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, const membuf<T> &mb)
