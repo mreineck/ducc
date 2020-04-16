@@ -27,7 +27,7 @@
 #include <vector>
 #include <memory>
 #include "mr_util/infra/error_handling.h"
-#define _MSC_VER
+
 namespace mr {
 
 namespace detail_mav {
@@ -114,6 +114,7 @@ template<typename T> class membuf
     membuf(const membuf &other)
       : ptr(other.ptr), d(other.d), rw(false) {}
 #if defined(_MSC_VER)
+    // MSVC is broken
     membuf(membuf &other)
       : ptr(other.ptr), d(other.d), rw(other.rw) {}
     membuf(membuf &&other)
@@ -160,6 +161,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : fmav_info(info), membuf<T>(d_) {}
     fmav(const fmav &other) = default;
 #if defined(_MSC_VER)
+    // MSVC is broken
     fmav(fmav &other) : fmav_info(other), membuf<T>(other) {}
     fmav(fmav &&other) : fmav_info(other), membuf<T>(other) {}
 #else
@@ -332,6 +334,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
     mav(const mav &other) = default;
 #if defined(_MSC_VER)
+    // MSVC is broken
     mav(mav &other): mav_info<ndim>(other), membuf<T>(other) {}
     mav(mav &&other): mav_info<ndim>(other), membuf<T>(other) {}
 #else
