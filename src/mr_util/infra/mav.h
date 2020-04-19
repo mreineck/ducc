@@ -159,12 +159,13 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : fmav_info(info), membuf<T>(d_, rw_) {}
     fmav(const T* d_, const fmav_info &info)
       : fmav_info(info), membuf<T>(d_) {}
-    fmav(const fmav &other) = default;
 #if defined(_MSC_VER)
     // MSVC is broken
+    fmav(const fmav &other) : fmav_info(other), membuf<T>(other) {};
     fmav(fmav &other) : fmav_info(other), membuf<T>(other) {}
     fmav(fmav &&other) : fmav_info(other), membuf<T>(other) {}
 #else
+    fmav(const fmav &other) = default;
     fmav(fmav &other) = default;
     fmav(fmav &&other) = default;
 #endif
@@ -332,12 +333,13 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : mav_info<ndim>(shp_), membuf<T>(d_, rw_) {}
     mav(const array<size_t,ndim> &shp_)
       : mav_info<ndim>(shp_), membuf<T>(size()) {}
-    mav(const mav &other) = default;
 #if defined(_MSC_VER)
     // MSVC is broken
+    mav(const mav &other) : mav_info<ndim>(other), membuf<T>(other) {}
     mav(mav &other): mav_info<ndim>(other), membuf<T>(other) {}
     mav(mav &&other): mav_info<ndim>(other), membuf<T>(other) {}
 #else
+    mav(const mav &other) = default;
     mav(mav &other) = default;
     mav(mav &&other) = default;
 #endif
