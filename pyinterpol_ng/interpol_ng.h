@@ -26,8 +26,6 @@ namespace detail_interpol_ng {
 
 using namespace std;
 
-constexpr double ofmin=1.5;
-
 template<typename T> class Interpolator
   {
   protected:
@@ -141,7 +139,7 @@ template<typename T> class Interpolator
   public:
     Interpolator(const vector<Alm<complex<T>>> &slm,
                  const vector<Alm<complex<T>>> &blm,
-                 bool separate, T epsilon, int nthreads_)
+                 bool separate, T epsilon, T ofmin, int nthreads_)
       : adjoint(false),
         lmax(slm.at(0).Lmax()),
         kmax(blm.at(0).Mmax()),
@@ -252,7 +250,7 @@ template<typename T> class Interpolator
             }
       }
 
-    Interpolator(size_t lmax_, size_t kmax_, size_t ncomp_, T epsilon, int nthreads_)
+    Interpolator(size_t lmax_, size_t kmax_, size_t ncomp_, T epsilon, T ofmin, int nthreads_)
       : adjoint(true),
         lmax(lmax_),
         kmax(kmax_),
@@ -337,6 +335,9 @@ template<typename T> class Interpolator
           }
         });
       }
+
+    size_t support() const
+      { return supp; }
 
     void deinterpol (const mav<T,2> &ptg, const mav<T,2> &data)
       {
