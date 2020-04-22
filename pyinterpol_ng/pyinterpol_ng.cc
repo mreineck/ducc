@@ -45,12 +45,15 @@ void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>
   }
   public:
     PyInterpolator(const py::array &slm, const py::array &blm,
-      bool separate, int64_t lmax, int64_t kmax, T epsilon, int nthreads=0)
+      bool separate, int64_t lmax, int64_t kmax, T epsilon, T ofactor, int nthreads)
       : Interpolator<T>(makevec(slm, lmax, lmax),
                         makevec(blm, lmax, kmax),
-                        separate, epsilon, nthreads) {}
-    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, T epsilon, int nthreads=0)
-      : Interpolator<T>(lmax, kmax, ncomp_, epsilon, nthreads) {}
+                        separate, epsilon, ofactor, nthreads) {}
+    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, T epsilon, T ofactor, int nthreads)
+      : Interpolator<T>(lmax, kmax, ncomp_, epsilon, ofactor, nthreads) {}
+
+    using Interpolator<T>::support;
+
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
@@ -131,6 +134,11 @@ kmax : int
     maximum azimuthal moment in the beam coefficients
 epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
+ofactor : float
+    oversampling factor to be used for the interpolation grids.
+    Should be in the range [1.2; 2], a typical value is 1.5
+    Increasing this factor makes (adjoint) convolution slower and
+    increases memory consumption, but speeds up interpolation/deinterpolation.
 nthreads : the number of threads to use for computation
 )""";
 
@@ -148,6 +156,11 @@ ncomp : int
     Can be 1 or 3.
 epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
+ofactor : float
+    oversampling factor to be used for the interpolation grids.
+    Should be in the range [1.2; 2], a typical value is 1.5
+    Increasing this factor makes (adjoint) convolution slower and
+    increases memory consumption, but speeds up interpolation/deinterpolation.
 nthreads : the number of threads to use for computation
 )""";
 
@@ -230,14 +243,15 @@ PYBIND11_MODULE(pyinterpol_ng, m)
   m.doc() = pyinterpol_ng_DS;
 
   py::class_<PyInterpolator<fptype>> (m, "PyInterpolator", pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, int>(),
-      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a,
-      "nthreads"_a)
-    .def(py::init<int64_t, int64_t, int64_t, fptype, int>(), initadjoint_DS,
-      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "nthreads"_a)
+    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, fptype, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=fptype(1.5),
+      "nthreads"_a=0)
+    .def(py::init<int64_t, int64_t, int64_t, fptype, fptype, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=fptype(1.5), "nthreads"_a=0)
     .def ("interpol", &PyInterpolator<fptype>::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &PyInterpolator<fptype>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<fptype>::pygetSlm, getSlm_DS, "beam"_a);
+    .def ("getSlm", &PyInterpolator<fptype>::pygetSlm, getSlm_DS, "beam"_a)
+    .def ("support", &PyInterpolator<fptype>::support);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<fptype>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
