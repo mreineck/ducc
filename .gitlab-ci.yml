@@ -7,6 +7,7 @@ variables:
 stages:
   - build_docker
   - testing
+  - build_tarballs
 
 build_docker:
   image: docker:stable
@@ -89,3 +90,13 @@ test_pyinterpol_ng_clang:
     - cd ../pyinterpol_ng
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
+
+pysharp_tarball:
+  stage: build_tarballs
+  script:
+    - cd pysharp
+    - python3 setup.py sdist
+  artifacts:
+    paths:
+      - 'pysharp/dist/*.tar.gz'
+
