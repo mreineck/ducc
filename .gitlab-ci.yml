@@ -91,50 +91,22 @@ test_pyinterpol_ng_clang:
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
 
-pypocketfft_tarball:
+release:
   stage: build_tarballs
   script:
     - cd pypocketfft
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz ..'
-  artifacts:
-    paths:
-      - '*.tar.gz'
-
-pysharp_tarball:
-  stage: build_tarballs
-  script:
-    - cd pysharp
+    - cd ../pysharp
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz ..'
-  artifacts:
-    paths:
-      - '*.tar.gz'
-
-nifty_gridder_tarball:
-  stage: build_tarballs
-  script:
-    - cd nifty_gridder
+    - cd ../nifty_gridder
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz ..'
-  artifacts:
-    paths:
-      - '*.tar.gz'
-
-pyHealpix_tarball:
-  stage: build_tarballs
-  script:
-    - cd pyHealpix
+    - cd ../pyHealpix
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz ..'
-  artifacts:
-    paths:
-      - '*.tar.gz'
-
-pyinterpol_ng_tarball:
-  stage: build_tarballs
-  script:
-    - cd pyinterpol_ng
+    - cd ../pyinterpol_ng
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz ..'
   artifacts:
