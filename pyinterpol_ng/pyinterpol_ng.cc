@@ -256,4 +256,5 @@ PYBIND11_MODULE(pyinterpol_ng, m)
   m.def("rotate_alm", &pyrotate_alm<fptype>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
 #endif
+  m.def("epsilon_guess", &epsilon_guess, "support"_a, "ofactor"_a);
   }

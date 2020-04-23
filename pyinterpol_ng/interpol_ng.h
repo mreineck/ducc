@@ -535,9 +535,13 @@ template<typename T> class Interpolator
       }
   };
 
+double epsilon_guess(size_t support, double ofactor)
+  { return std::sqrt(12.)*std::exp(-(support*ofactor)); }
+
 }
 
 using detail_interpol_ng::Interpolator;
+using detail_interpol_ng::epsilon_guess;
 
 }
 
