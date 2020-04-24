@@ -39,12 +39,11 @@ def convolve(alm1, alm2, lmax):
     return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
 
-lmax=2048
-kmax=8
+lmax=60
+kmax=13
 ncomp=1
 separate=False
-nptg = 10000000
-ncomp2 = ncomp if separate else 1
+nptg = 1000000
 epsilon = 1e-4
 ofactor = 1.5
 nthreads = 0  # use as many threads as available
@@ -71,29 +70,29 @@ nph = 2*lmax+1
 # compute a convolved map at a fixed psi and compare it to a map convolved
 # "by hand"
 
-# ptg = np.zeros((nth,nph,3))
-# ptg[:,:,0] = (np.pi*(0.5+np.arange(nth))/nth).reshape((-1,1))
-# ptg[:,:,1] = (2*np.pi*(0.5+np.arange(nph))/nph).reshape((1,-1))
-# ptg[:,:,2] = np.pi*0.2
-# t0=time.time()
-# # do the actual interpolation
-# bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph,ncomp2))
-# print("interpolation time: ", time.time()-t0)
-# plt.subplot(2,2,1)
-# plt.imshow(bar[:,:,0])
-# bar2 = np.zeros((nth,nph))
-# blmfull = np.zeros(slm.shape)+0j
-# blmfull[0:blm.shape[0],:] = blm
-# for ith in range(nth):
-#     rbeamth=pyinterpol_ng.rotate_alm(blmfull[:,0], lmax, ptg[ith,0,2],ptg[ith,0,0],0)
-#     for iph in range(nph):
-#         rbeam=pyinterpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
-#         bar2[ith,iph] = convolve(slm[:,0], rbeam, lmax).real
-# plt.subplot(2,2,2)
-# plt.imshow(bar2)
-# plt.subplot(2,2,3)
-# plt.imshow(bar2-bar[:,:,0])
-# plt.show()
+ptg = np.zeros((nth,nph,3))
+ptg[:,:,0] = (np.pi*(0.5+np.arange(nth))/nth).reshape((-1,1))
+ptg[:,:,1] = (2*np.pi*(0.5+np.arange(nph))/nph).reshape((1,-1))
+ptg[:,:,2] = np.pi*0.2
+t0=time.time()
+# do the actual interpolation
+bar=foo.interpol(ptg.reshape((-1,3))).reshape((nth,nph,ncomp2))
+print("interpolation time: ", time.time()-t0)
+plt.subplot(2,2,1)
+plt.imshow(bar[:,:,0])
+bar2 = np.zeros((nth,nph))
+blmfull = np.zeros(slm.shape)+0j
+blmfull[0:blm.shape[0],:] = blm
+for ith in range(nth):
+    rbeamth=pyinterpol_ng.rotate_alm(blmfull[:,0], lmax, ptg[ith,0,2],ptg[ith,0,0],0)
+    for iph in range(nph):
+        rbeam=pyinterpol_ng.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith,iph,1])
+        bar2[ith,iph] = convolve(slm[:,0], rbeam, lmax).real
+plt.subplot(2,2,2)
+plt.imshow(bar2)
+plt.subplot(2,2,3)
+plt.imshow(bar2-bar[:,:,0])
+plt.show()
 
 
 ptg=np.random.uniform(0.,1.,3*nptg).reshape(nptg,3)
