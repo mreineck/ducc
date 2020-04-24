@@ -57,6 +57,8 @@ print("...done")
 # If we had specified `separate=True`, it would be of shape(nptg, 3).
 print(res.shape)
 
+# Since the interpolator object holds large data structures, it should be
+# deleted once it is no longer needed
 del inter_classic
 
 # Now the same thing for an experiment with HWP. In this case we need the

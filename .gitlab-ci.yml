@@ -7,6 +7,7 @@ variables:
 stages:
   - build_docker
   - testing
+  - build_tarballs
 
 build_docker:
   image: docker:stable
@@ -89,3 +90,25 @@ test_pyinterpol_ng_clang:
     - cd ../pyinterpol_ng
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
+
+release:
+  stage: build_tarballs
+  script:
+    - cd pypocketfft
+    - python3 setup.py sdist
+    - 'mv dist/*.tar.gz ..'
+    - cd ../pysharp
+    - python3 setup.py sdist
+    - 'mv dist/*.tar.gz ..'
+    - cd ../nifty_gridder
+    - python3 setup.py sdist
+    - 'mv dist/*.tar.gz ..'
+    - cd ../pyHealpix
+    - python3 setup.py sdist
+    - 'mv dist/*.tar.gz ..'
+    - cd ../pyinterpol_ng
+    - python3 setup.py sdist
+    - 'mv dist/*.tar.gz ..'
+  artifacts:
+    paths:
+      - '*.tar.gz'
