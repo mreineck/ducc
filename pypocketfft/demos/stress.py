@@ -2,8 +2,15 @@ import numpy as np
 import pypocketfft
 
 
+#def _l2error(a, b, axes):
+#    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
 def _l2error(a, b, axes):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
+    x1 = np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
+    a = a*np.array([1.])
+    b = b*np.array([1.])
+    x2 = np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
+    print(x1, x2, x1-x2)
+    return x2
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):

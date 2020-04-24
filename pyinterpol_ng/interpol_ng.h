@@ -22,6 +22,97 @@
 
 namespace mr {
 
+#if 0
+namespace detail_fft {
+
+using std::vector;
+
+template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
+  (const fmav_info &info, size_t axis, size_t len)
+  {
+  auto othersize = info.size()/info.shape(axis);
+  constexpr auto vlen = native_simd<T0>::size();
+  auto tmpsize = len*((othersize>=vlen) ? vlen : 1);
+  return aligned_array<T>(tmpsize);
+  }
+
+template<typename Tplan, typename T, typename T0, typename Exec>
+MRUTIL_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
+  const size_t axis, const vector<T0> &kernel, size_t nthreads,
+  const Exec &exec, const bool allow_inplace=true)
+  {
+  std::shared_ptr<Tplan> plan1, plan2;
+
+  size_t l_in=in.shape(axis), l_out=out.shape(axis);
+  size_t l_min=std::min(l_in, l_out), l_max=std::max(l_in, l_out);
+  MR_assert(kernel.size()==l_min/2+1, "bad kernel size");
+  plan1 = get_plan<Tplan>(l_in);
+  plan2 = get_plan<Tplan>(l_out);
+
+  execParallel(
+    util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
+    [&](Scheduler &sched) {
+      constexpr auto vlen = native_simd<T0>::size();
+      auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max); //FIXME!
+      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
+#ifndef MRUTIL_NO_SIMD
+      if (vlen>1)
+        while (it.remaining()>=vlen)
+          {
+          it.advance(vlen);
+          auto tdatav = reinterpret_cast<add_vec_t<T> *>(storage.data());
+          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+          }
+#endif
+      while (it.remaining()>0)
+        {
+        it.advance(1);
+        auto buf = allow_inplace && it.stride_out() == 1 ?
+          &out.vraw(it.oofs(0)) : reinterpret_cast<T *>(storage.data());
+        exec(it, in, out, buf, *plan1, *plan2, kernel);
+        }
+    });  // end of parallel region
+  }
+
+struct ExecConvR1
+  {
+  template <typename T0, typename T, size_t vlen> void operator() (
+    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
+    T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
+    const vector<T0> &kernel) const
+    {
+    size_t l_in = plan1.length(),
+           l_out = plan2.length(),
+           l_min = std::min(l_in, l_out);
+    copy_input(it, in, buf);
+    plan1.exec(buf, T0(1), true);
+    buf[0] *= kernel[0];
+    for (size_t i=1; i<l_min; ++i)
+      { buf[2*i-1]*=kernel[i]; buf[2*i] *=kernel[i]; }
+    for (size_t i=l_in; i<l_out; ++i) buf[i] = T(0);
+    plan2.exec(buf, T0(1), false);
+    copy_output(it, buf, out);
+    }
+  };
+
+template<typename T> void convolve_1d(const fmav<T> &in,
+  fmav<T> &out, size_t axis, const vector<T> &kernel, size_t nthreads=1)
+  {
+//  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  MR_assert(axis<in.ndim(), "bad axis number");
+  MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
+  if (in.data()==out.data())
+    MR_assert(in.strides()==out.strides(), "strides mismatch");
+  for (size_t i=0; i<in.ndim(); ++i)
+    if (i!=axis)
+      MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
+  if (in.size()==0) return;
+  general_convolve<pocketfft_r<T>>(in, out, axis, kernel, nthreads,
+    ExecConvR1());
+  }
+
+}
+#endif
 namespace detail_interpol_ng {
 
 using namespace std;
@@ -49,6 +140,7 @@ template<typename T> class Interpolator
         for (size_t j=0; j<nphi0; ++j)
           tmp0.v(i,j) = arr(i,j);
       // extend to second half
+// FIXME: merge with loop above to avoid edundant memory reads.
       for (size_t i=1, i2=nphi0-1; i+1<ntheta0; ++i,--i2)
         for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
           {
@@ -56,7 +148,9 @@ template<typename T> class Interpolator
           tmp0.v(i2,j) = sfct*tmp0(i,j2);
           }
       // FFT to frequency domain on minimal grid
+// one bad FFT axis
       r2r_fftpack(ftmp0,ftmp0,{0,1},true,true,T(1./(nphi0*nphi0)),nthreads);
+
       // correct amplitude at Nyquist frequency
       for (size_t i=0; i<nphi0; ++i)
         {
@@ -70,7 +164,9 @@ template<typename T> class Interpolator
       auto tmp1=tmp.template subarray<2>({0,0},{nphi, nphi0});
       fmav<T> ftmp1(tmp1);
       // zero-padded FFT in theta direction
+// one bad FFT axis
       r2r_fftpack(ftmp1,ftmp1,{0},false,false,T(1),nthreads);
+
       auto tmp2=tmp.template subarray<2>({0,0},{ntheta, nphi});
       fmav<T> ftmp2(tmp2);
       fmav<T> farr(arr);
