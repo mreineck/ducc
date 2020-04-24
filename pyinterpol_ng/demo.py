@@ -42,11 +42,13 @@ def convolve(alm1, alm2, lmax):
 lmax=60
 kmax=13
 ncomp=1
-separate=True
-ncomp2 = ncomp if separate else 1
+separate=False
+nptg = 1000000
 epsilon = 1e-4
-ofactor = 2
-nthreads = 0
+ofactor = 1.5
+nthreads = 0  # use as many threads as available
+
+ncomp2 = ncomp if separate else 1
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
@@ -93,13 +95,14 @@ plt.imshow(bar2-bar[:,:,0])
 plt.show()
 
 
-ptg=np.random.uniform(0.,1.,3*1000000).reshape(1000000,3)
+ptg=np.random.uniform(0.,1.,3*nptg).reshape(nptg,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
 #foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-6, nthreads=2)
 t0=time.time()
 bar=foo.interpol(ptg)
+del foo
 print("interpolation time: ", time.time()-t0)
 fake = np.random.uniform(0.,1., (ptg.shape[0],ncomp2))
 foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)

@@ -604,21 +604,6 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
   auto tmpsize = axsize*((othersize>=vlen) ? vlen : 1);
   return aligned_array<T>(tmpsize);
   }
-template<typename T, typename T0> aligned_array<T> alloc_tmp
-  (const fmav_info &info, const shape_t &axes)
-  {
-  size_t fullsize=info.size();
-  size_t tmpsize=0;
-  for (size_t i=0; i<axes.size(); ++i)
-    {
-    auto axsize = info.shape(axes[i]);
-    auto othersize = fullsize/axsize;
-    constexpr auto vlen = native_simd<T0>::size();
-    auto sz = axsize*((othersize>=vlen) ? vlen : 1);
-    if (sz>tmpsize) tmpsize=sz;
-    }
-  return aligned_array<T>(tmpsize);
-  }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)

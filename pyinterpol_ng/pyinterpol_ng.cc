@@ -242,16 +242,28 @@ PYBIND11_MODULE(pyinterpol_ng, m)
 
   m.doc() = pyinterpol_ng_DS;
 
-  py::class_<PyInterpolator<fptype>> (m, "PyInterpolator", pyinterpolator_DS)
+  using inter_d = PyInterpolator<double>;
+  py::class_<inter_d> (m, "PyInterpolator", pyinterpolator_DS)
     .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, fptype, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=fptype(1.5),
       "nthreads"_a=0)
     .def(py::init<int64_t, int64_t, int64_t, fptype, fptype, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=fptype(1.5), "nthreads"_a=0)
-    .def ("interpol", &PyInterpolator<fptype>::pyinterpol, interpol_DS, "ptg"_a)
-    .def ("deinterpol", &PyInterpolator<fptype>::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &PyInterpolator<fptype>::pygetSlm, getSlm_DS, "beam"_a)
-    .def ("support", &PyInterpolator<fptype>::support);
+    .def ("interpol", &inter_d::pyinterpol, interpol_DS, "ptg"_a)
+    .def ("deinterpol", &inter_d::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
+    .def ("getSlm", &inter_d::pygetSlm, getSlm_DS, "beam"_a)
+    .def ("support", &inter_d::support);
+//   using inter_f = PyInterpolator<float>;
+//   py::class_<inter_f> (m, "PyInterpolator_f", pyinterpolator_DS)
+//     .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, fptype, int>(),
+//       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=fptype(1.5),
+//       "nthreads"_a=0)
+//     .def(py::init<int64_t, int64_t, int64_t, fptype, fptype, int>(), initadjoint_DS,
+//       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=fptype(1.5), "nthreads"_a=0)
+//     .def ("interpol", &inter_f::pyinterpol, interpol_DS, "ptg"_a)
+//     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
+//     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
+//     .def ("support", &inter_f::support);
 #if 1
   m.def("rotate_alm", &pyrotate_alm<fptype>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
