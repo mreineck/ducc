@@ -14,8 +14,6 @@ namespace py = pybind11;
 
 namespace {
 
-using fptype = double;
-
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
   protected:
@@ -244,28 +242,28 @@ PYBIND11_MODULE(pyinterpol_ng, m)
 
   using inter_d = PyInterpolator<double>;
   py::class_<inter_d> (m, "PyInterpolator", pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, fptype, int>(),
-      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=fptype(1.5),
+    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, double, double, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
       "nthreads"_a=0)
-    .def(py::init<int64_t, int64_t, int64_t, fptype, fptype, int>(), initadjoint_DS,
-      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=fptype(1.5), "nthreads"_a=0)
+    .def(py::init<int64_t, int64_t, int64_t, double, double, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5, "nthreads"_a=0)
     .def ("interpol", &inter_d::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_d::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_d::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_d::support);
-//   using inter_f = PyInterpolator<float>;
-//   py::class_<inter_f> (m, "PyInterpolator_f", pyinterpolator_DS)
-//     .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, fptype, fptype, int>(),
-//       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=fptype(1.5),
-//       "nthreads"_a=0)
-//     .def(py::init<int64_t, int64_t, int64_t, fptype, fptype, int>(), initadjoint_DS,
-//       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=fptype(1.5), "nthreads"_a=0)
-//     .def ("interpol", &inter_f::pyinterpol, interpol_DS, "ptg"_a)
-//     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-//     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
-//     .def ("support", &inter_f::support);
+  using inter_f = PyInterpolator<float>;
+  py::class_<inter_f> (m, "PyInterpolator_f", pyinterpolator_DS)
+    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, float, float, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5f,
+      "nthreads"_a=0)
+    .def(py::init<int64_t, int64_t, int64_t, float, float, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5f, "nthreads"_a=0)
+    .def ("interpol", &inter_f::pyinterpol, interpol_DS, "ptg"_a)
+    .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
+    .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
+    .def ("support", &inter_f::support);
 #if 1
-  m.def("rotate_alm", &pyrotate_alm<fptype>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
+  m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a);
 #endif
   m.def("epsilon_guess", &epsilon_guess, "support"_a, "ofactor"_a);
