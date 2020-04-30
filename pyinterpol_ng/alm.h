@@ -162,7 +162,7 @@ class wigner_d_risbo_openmp
     wigner_d_risbo_openmp(size_t lmax, double ang)
       : p(sin(ang/2)), q(cos(ang/2)), sqt(2*lmax+1),
         d({lmax+1,2*lmax+1}), dd({lmax+1,2*lmax+1}), n(-1)
-      { for (size_t m=0; m<sqt.size(); ++m) sqt[m] = sqrt(double(m)); }
+      { for (size_t m=0; m<sqt.size(); ++m) sqt[m] = std::sqrt(double(m)); }
 
     const mav<double,2> &recurse()
       {

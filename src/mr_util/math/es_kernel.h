@@ -42,13 +42,15 @@ class ES_Kernel
   {
   private:
     double beta;
+    float fbeta;
     int p;
     vector<double> x, wgt, psi;
     size_t supp;
 
   public:
     ES_Kernel(size_t supp_, double ofactor, size_t nthreads)
-      : beta(get_beta(supp_,ofactor)*supp_), p(int(1.5*supp_+2)), supp(supp_)
+      : beta(get_beta(supp_,ofactor)*supp_), fbeta(float(beta)),
+        p(int(1.5*supp_+2)), supp(supp_)
       {
       GL_Integrator integ(2*p,nthreads);
       x = integ.coordsSymmetric();
@@ -60,7 +62,10 @@ class ES_Kernel
     ES_Kernel(size_t supp_, size_t nthreads)
       : ES_Kernel(supp_, 2., nthreads){}
 
-    double operator()(double v) const { return (v*v>1.) ? 0. : exp(beta*(std::sqrt(1.-v*v)-1.)); }
+    double operator()(double v) const
+      { return (v*v>1.) ? 0. : exp(beta*(std::sqrt(1.-v*v)-1.)); }
+    float operator()(float v) const
+      { return (v*v>1.f) ? 0.f : exp(fbeta*(std::sqrt(1.f-v*v)-1.f)); }
     /* Compute correction factors for the ES gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
     double corfac(double v) const
