@@ -123,9 +123,9 @@ class fmav_info
       return res;
       }
     template<typename... Ns> ptrdiff_t getIdx(size_t dim, size_t n, Ns... ns) const
-      { return str[dim]*n + getIdx(dim+1, ns...); }
+      { return str[dim]*ptrdiff_t(n) + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
-      { return str[dim]*n; }
+      { return str[dim]*ptrdiff_t(n); }
 
   public:
     fmav_info(const shape_t &shape_, const stride_t &stride_)
@@ -234,7 +234,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
   {
   protected:
     using membuf<T>::d;
-    using membuf<T>::vraw;
 
     void subdata(const shape_t &i0, const shape_t &extent,
       shape_t &nshp, stride_t &nstr, ptrdiff_t &nofs) const
@@ -262,6 +261,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
 
   public:
     using membuf<T>::operator[], membuf<T>::vdata, membuf<T>::data;
+    using membuf<T>::vraw;
     fmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : fmav_info(shp_, str_), membuf<T>(d_) {}
     fmav(const T *d_, const shape_t &shp_)
