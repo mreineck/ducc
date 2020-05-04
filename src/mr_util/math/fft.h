@@ -66,6 +66,8 @@ namespace mr {
 
 namespace detail_fft {
 
+using shape_t=fmav_info::shape_t;
+
 constexpr bool FORWARD  = true,
                BACKWARD = false;
 

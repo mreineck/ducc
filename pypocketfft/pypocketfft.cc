@@ -21,8 +21,7 @@
 
 namespace {
 
-using mr::shape_t;
-using mr::stride_t;
+using shape_t = mr::fmav_info::shape_t;
 using mr::fmav;
 using mr::to_fmav;
 using mr::get_optional_Pyarr;

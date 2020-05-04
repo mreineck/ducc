@@ -46,6 +46,8 @@ namespace py = pybind11;
 
 namespace {
 
+using shape_t = fmav_info::shape_t;
+
 template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
