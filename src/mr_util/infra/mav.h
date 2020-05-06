@@ -47,7 +47,6 @@ template<typename T> class membuf
     membuf(const T *d_, const membuf &other)
       : ptr(other.ptr), d(d_), rw(false) {}
 
-  protected:
     // externally owned data pointer
     membuf(T *d_, bool rw_=false)
       : d(d_), rw(rw_) {}
@@ -233,12 +232,15 @@ template<size_t ndim> class mav_info
 template<typename T> class fmav: public fmav_info, public membuf<T>
   {
   protected:
-    using membuf<T>::d;
+    using tbuf = membuf<T>;
+    using tinfo = fmav_info;
 
-    void subdata(const shape_t &i0, const shape_t &extent,
-      shape_t &nshp, stride_t &nstr, ptrdiff_t &nofs) const
+    auto subdata(const shape_t &i0, const shape_t &extent) const
       {
-      auto ndim = fmav_info::ndim();
+      auto ndim = tinfo::ndim();
+      shape_t nshp(ndim);
+      stride_t nstr(ndim);
+      ptrdiff_t nofs;
       MR_assert(i0.size()==ndim, "bad domensionality");
       MR_assert(extent.size()==ndim, "bad domensionality");
       size_t n0=0;
@@ -257,43 +259,44 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           ++i2;
           }
         }
+      return make_tuple(nshp, nstr, ndim);
       }
 
   public:
-    using membuf<T>::operator[], membuf<T>::vdata, membuf<T>::data;
-    using membuf<T>::vraw;
+    using tbuf::vraw, tbuf::operator[], tbuf::vdata, tbuf::data;
+
     fmav(const T *d_, const shape_t &shp_, const stride_t &str_)
-      : fmav_info(shp_, str_), membuf<T>(d_) {}
+      : tinfo(shp_, str_), tbuf(d_) {}
     fmav(const T *d_, const shape_t &shp_)
-      : fmav_info(shp_), membuf<T>(d_) {}
+      : tinfo(shp_), tbuf(d_) {}
     fmav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_)
-      : fmav_info(shp_, str_), membuf<T>(d_,rw_) {}
+      : tinfo(shp_, str_), tbuf(d_,rw_) {}
     fmav(T *d_, const shape_t &shp_, bool rw_)
-      : fmav_info(shp_), membuf<T>(d_,rw_) {}
+      : tinfo(shp_), tbuf(d_,rw_) {}
     fmav(const shape_t &shp_)
-      : fmav_info(shp_), membuf<T>(size()) {}
-    fmav(T* d_, const fmav_info &info, bool rw_=false)
-      : fmav_info(info), membuf<T>(d_, rw_) {}
-    fmav(const T* d_, const fmav_info &info)
-      : fmav_info(info), membuf<T>(d_) {}
+      : tinfo(shp_), tbuf(size()) {}
+    fmav(const T* d_, const tinfo &info)
+      : tinfo(info), tbuf(d_) {}
+    fmav(T* d_, const tinfo &info, bool rw_=false)
+      : tinfo(info), tbuf(d_, rw_) {}
 #if defined(_MSC_VER)
     // MSVC is broken
-    fmav(const fmav &other) : fmav_info(other), membuf<T>(other) {};
-    fmav(fmav &other) : fmav_info(other), membuf<T>(other) {}
-    fmav(fmav &&other) : fmav_info(other), membuf<T>(other) {}
+    fmav(const fmav &other) : tinfo(other), tbuf(other) {};
+    fmav(fmav &other) : tinfo(other), tbuf(other) {}
+    fmav(fmav &&other) : tinfo(other), tbuf(other) {}
 #else
     fmav(const fmav &other) = default;
     fmav(fmav &other) = default;
     fmav(fmav &&other) = default;
 #endif
-    fmav(membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
-      : fmav_info(shp_, str_), membuf<T>(buf) {}
-    fmav(const membuf<T> &buf, const shape_t &shp_, const stride_t &str_)
-      : fmav_info(shp_, str_), membuf<T>(buf) {}
-    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &buf)
-      : fmav_info(shp_, str_), membuf<T>(d_, buf) {}
-    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const membuf<T> &buf)
-      : fmav_info(shp_, str_), membuf<T>(d_, buf) {}
+    fmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
+    fmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
+    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
+    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
 
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return operator[](idx(ns...)); }
@@ -302,19 +305,13 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
 
     fmav subarray(const shape_t &i0, const shape_t &extent)
       {
-      shape_t nshp;
-      stride_t nstr;
-      ptrdiff_t nofs;
-      subdata(i0, extent, nshp, nstr, nofs);
-      return fmav(nshp, nstr, d+nofs, *this);
+      auto [nshp, nstr, nofs] = subdata(i0, extent);
+      return fmav(tbuf(*this,nofs), nshp, nstr);
       }
     fmav subarray(const shape_t &i0, const shape_t &extent) const
       {
-      shape_t nshp;
-      stride_t nstr;
-      ptrdiff_t nofs;
-      subdata(i0, extent, nshp, nstr, nofs);
-      return fmav(nshp, nstr, d+nofs, *this);
+      auto [nshp, nstr, nofs] = subdata(i0, extent);
+      return fmav(tbuf(*this,nofs),nshp, nstr);
       }
   };
 
@@ -323,14 +320,11 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
 //  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
 
   protected:
-    using typename mav_info<ndim>::shape_t;
-    using typename mav_info<ndim>::stride_t;
-    using membuf<T>::d;
-    using membuf<T>::ptr;
-    using mav_info<ndim>::shp;
-    using mav_info<ndim>::str;
-    using membuf<T>::rw;
-    using membuf<T>::vraw;
+    using tinfo = mav_info<ndim>;
+    using tbuf = membuf<T>;
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+    using tinfo::shp, tinfo::str;
 
     template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
       {
@@ -375,9 +369,11 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       }
 
-    template<size_t nd2> void subdata(const shape_t &i0, const shape_t &extent,
-      array<size_t, nd2> &nshp, array<ptrdiff_t, nd2> &nstr, ptrdiff_t &nofs) const
+    template<size_t nd2> auto subdata(const shape_t &i0, const shape_t &extent) const
       {
+      array<size_t, nd2> nshp;
+      array<ptrdiff_t, nd2> nstr;
+      ptrdiff_t nofs;
       size_t n0=0;
       for (auto x:extent) if (x==0)++n0;
       MR_assert(n0+nd2==ndim, "bad extent");
@@ -393,28 +389,28 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
           ++i2;
           }
         }
+      return make_tuple(nshp, nstr, nofs);
       }
 
   public:
-    using membuf<T>::operator[], membuf<T>::vdata, membuf<T>::data;
-    using mav_info<ndim>::contiguous, mav_info<ndim>::size, mav_info<ndim>::idx;
-    using mav_info<ndim>::conformable;
+    using tbuf::vraw, tbuf::operator[], tbuf::vdata, tbuf::data;
+    using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
     mav(const T *d_, const shape_t &shp_, const stride_t &str_)
-      : mav_info<ndim>(shp_, str_), membuf<T>(d_) {}
+      : tinfo(shp_, str_), tbuf(d_) {}
     mav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_=false)
-      : mav_info<ndim>(shp_, str_), membuf<T>(d_, rw_) {}
+      : tinfo(shp_, str_), tbuf(d_, rw_) {}
     mav(const T *d_, const shape_t &shp_)
-      : mav_info<ndim>(shp_), membuf<T>(d_) {}
+      : tinfo(shp_), tbuf(d_) {}
     mav(T *d_, const shape_t &shp_, bool rw_=false)
-      : mav_info<ndim>(shp_), membuf<T>(d_, rw_) {}
+      : tinfo(shp_), tbuf(d_, rw_) {}
     mav(const array<size_t,ndim> &shp_)
-      : mav_info<ndim>(shp_), membuf<T>(size()) {}
+      : tinfo(shp_), tbuf(size()) {}
 #if defined(_MSC_VER)
     // MSVC is broken
-    mav(const mav &other) : mav_info<ndim>(other), membuf<T>(other) {}
-    mav(mav &other): mav_info<ndim>(other), membuf<T>(other) {}
-    mav(mav &&other): mav_info<ndim>(other), membuf<T>(other) {}
+    mav(const mav &other) : tinfo(other), tbuf(other) {}
+    mav(mav &other): tinfo(other), tbuf(other) {}
+    mav(mav &&other): tinfo(other), tbuf(other) {}
 #else
     mav(const mav &other) = default;
     mav(mav &other) = default;
@@ -454,19 +450,13 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       { apply([val](T &v){v=val;}); }
     template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent)
       {
-      array<size_t,nd2> nshp;
-      array<ptrdiff_t,nd2> nstr;
-      ptrdiff_t nofs;
-      subdata<nd2> (i0, extent, nshp, nstr, nofs);
-      return mav<T,nd2> (nshp, nstr, d+nofs, *this);
+      auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
+      return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
       }
     template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent) const
       {
-      array<size_t,nd2> nshp;
-      array<ptrdiff_t,nd2> nstr;
-      ptrdiff_t nofs;
-      subdata<nd2> (i0, extent, nshp, nstr, nofs);
-      return mav<T,nd2> (nshp, nstr, d+nofs, *this);
+      auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
+      return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
       }
   };
 
