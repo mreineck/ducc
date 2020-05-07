@@ -105,13 +105,6 @@ class fmav_info
     stride_t str;
     size_t sz;
 
-    static size_t prod(const shape_t &shape)
-      {
-      size_t res=1;
-      for (auto sz: shape)
-        res*=sz;
-      return res;
-      }
     static stride_t shape2stride(const shape_t &shp)
       {
       auto ndim = shp.size();
@@ -128,7 +121,7 @@ class fmav_info
 
   public:
     fmav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(prod(shp))
+      : shp(shape_), str(stride_), sz(reduce(shp.begin(),shp.end(),size_t(1),multiplies<>()))
       {
       MR_assert(shp.size()>0, "at least 1D required");
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
@@ -175,13 +168,6 @@ template<size_t ndim> class mav_info
     stride_t str;
     size_t sz;
 
-    static size_t prod(const shape_t &shape)
-      {
-      size_t res=1;
-      for (auto sz: shape)
-        res*=sz;
-      return res;
-      }
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res;
@@ -197,7 +183,7 @@ template<size_t ndim> class mav_info
 
   public:
     mav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(prod(shp)) {}
+      : shp(shape_), str(stride_), sz(reduce(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
     mav_info(const shape_t &shape_)
       : mav_info(shape_, shape2stride(shape_)) {}
     size_t size() const { return sz; }
