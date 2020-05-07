@@ -26,6 +26,7 @@
 #include <array>
 #include <vector>
 #include <memory>
+#include <numeric>
 #include "mr_util/infra/error_handling.h"
 
 namespace mr {
