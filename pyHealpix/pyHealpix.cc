@@ -46,6 +46,8 @@ namespace py = pybind11;
 
 namespace {
 
+using shape_t = fmav_info::shape_t;
+
 template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
@@ -74,7 +76,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2, typename Func>
     func(iin, iout);
     iin.inc();iout.inc();
     }
-  return aout;
+  return move(aout);
   }
 
 class Pyhpbase
@@ -196,7 +198,7 @@ class Pyhpbase
         oref(i,0)=pixset.ivbegin(i);
         oref(i,1)=pixset.ivend(i);
         }
-      return res;
+      return move(res);
       }
   };
 
@@ -238,7 +240,7 @@ py::array local_v_angle (const py::array &v1, const py::array &v2)
                         vec3(ii2(i,0),ii2(i,1),ii2(i,2)));
     ii1.inc();ii2.inc();iout.inc();
     }
-  return angle;
+  return move(angle);
   }
 
 const char *pyHealpix_DS = R"""(

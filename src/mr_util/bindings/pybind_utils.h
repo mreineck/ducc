@@ -10,6 +10,9 @@ namespace mr {
 
 namespace detail_pybind {
 
+using shape_t=fmav_info::shape_t;
+using stride_t=fmav_info::stride_t;
+
 namespace py = pybind11;
 
 template<typename T> bool isPyarr(const py::object &obj)

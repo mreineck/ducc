@@ -263,7 +263,7 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   auto out2 = to_mav<double,2>(out,true);
     MR_assert(out2.writable(),"x1");
   upsample_to_cc(in2, has_np, has_sp, out2);
-  return out;
+  return move(out);
   }
 
 } // unnamed namespace

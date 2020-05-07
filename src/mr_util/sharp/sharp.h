@@ -67,7 +67,7 @@ class sharp_geom_info
 class sharp_alm_info
   {
   public:
-    ~sharp_alm_info() {}
+    virtual ~sharp_alm_info() {}
     virtual size_t lmax() const = 0;
     virtual size_t mmax() const = 0;
     virtual size_t nm() const = 0;
