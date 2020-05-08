@@ -507,34 +507,6 @@ template<size_t N> class multi_iter
     size_t remaining() const { return rem; }
   };
 
-class simple_iter
-  {
-  private:
-    shape_t pos;
-    fmav_info arr;
-    ptrdiff_t p;
-    size_t rem;
-
-  public:
-    simple_iter(const fmav_info &arr_)
-      : pos(arr_.ndim(), 0), arr(arr_), p(0), rem(arr_.size()) {}
-    void advance()
-      {
-      --rem;
-      for (int i_=int(pos.size())-1; i_>=0; --i_)
-        {
-        auto i = size_t(i_);
-        p += arr.stride(i);
-        if (++pos[i] < arr.shape(i))
-          return;
-        pos[i] = 0;
-        p -= ptrdiff_t(arr.shape(i))*arr.stride(i);
-        }
-      }
-    ptrdiff_t ofs() const { return p; }
-    size_t remaining() const { return rem; }
-  };
-
 class rev_iter
   {
   private:
@@ -1047,7 +1019,7 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   tshp[axes.back()] = tshp[axes.back()]/2+1;
   fmav<std::complex<T>> atmp(tshp);
   r2c(in, atmp, axes, true, fct, nthreads);
-  simple_iter iin(atmp);
+  FmavIter iin(atmp);
   rev_iter iout(out, axes);
   auto vout = out.vdata();
   while(iin.remaining()>0)
