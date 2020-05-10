@@ -3,6 +3,8 @@ import pypocketfft
 from time import time
 import matplotlib.pyplot as plt
 
+np.random.seed(42)
+
 
 def _l2error(a, b):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
