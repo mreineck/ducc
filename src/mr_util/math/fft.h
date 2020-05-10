@@ -579,21 +579,44 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
   return aligned_array<T>(tmpsize);
   }
 
+//#define MRFFT_PREFETCH
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
   {
-  for (size_t i=0; i<it.length_in(); ++i)
+  size_t i=0;
+#ifdef MRFFT_PREFETCH
+constexpr size_t dist=16;
+  for (; i+dist<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
       {
+      __builtin_prefetch(&src[it.iofs(j,i+dist)]);
       dst[i].r[j] = src[it.iofs(j,i)].r;
       dst[i].i[j] = src[it.iofs(j,i)].i;
+      }
+#endif
+  for (; i<it.length_in(); ++i)
+    for (size_t j=0; j<vlen; ++j)
+      {
+      auto tmp = src[it.iofs(j,i)];
+      dst[i].r[j] = tmp.r;
+      dst[i].i[j] = tmp.i;
       }
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
   {
-  for (size_t i=0; i<it.length_in(); ++i)
+  size_t i=0;
+#ifdef MRFFT_PREFETCH
+constexpr size_t dist=16;
+  for (; i+dist<it.length_in(); ++i)
+    for (size_t j=0; j<vlen; ++j)
+      {
+      __builtin_prefetch(&src[it.oofs(j,i+dist)]);
+      dst[i][j] = src[it.iofs(j,i)];
+      }
+#endif
+  for (; i<it.length_in(); ++i)
     for (size_t j=0; j<vlen; ++j)
       dst[i][j] = src[it.iofs(j,i)];
   }
@@ -610,7 +633,17 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
   auto ptr=dst.vdata();
-  for (size_t i=0; i<it.length_out(); ++i)
+  size_t i=0;
+#ifdef MRFFT_PREFETCH
+constexpr size_t dist=16;
+  for (; i+dist<it.length_out(); ++i)
+    for (size_t j=0; j<vlen; ++j)
+      {
+      __builtin_prefetch(&ptr[it.oofs(j,i+dist)],1,3);
+      ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
+      }
+#endif
+  for (; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
       ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
   }
@@ -619,7 +652,17 @@ template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   auto ptr=dst.vdata();
-  for (size_t i=0; i<it.length_out(); ++i)
+  size_t i=0;
+#ifdef MRFFT_PREFETCH
+constexpr size_t dist=16;
+  for (; i+dist<it.length_out(); ++i)
+    for (size_t j=0; j<vlen; ++j)
+      {
+      __builtin_prefetch(&ptr[it.oofs(j,i+dist)],1,3);
+      ptr[it.oofs(j,i)] = src[i][j];
+      }
+#endif
+  for (; i<it.length_out(); ++i)
     for (size_t j=0; j<vlen; ++j)
       ptr[it.oofs(j,i)] = src[i][j];
   }
