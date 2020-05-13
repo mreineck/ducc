@@ -24,6 +24,8 @@
 #ifndef MRUTIL_COMMUNICATION_H
 #define MRUTIL_COMMUNICATION_H
 
+#define MRUTIL_USE_MPI
+
 #include <vector>
 #ifdef MRUTIL_USE_MPI
 #include <mpi.h>
@@ -95,8 +97,7 @@ class Communicator
     template<typename T> void sendrecvRaw (const T *sendbuf, size_t sendcnt,
       size_t dest, T *recvbuf, size_t recvcnt, size_t src) const
       {
-      sendrecvRawVoid(sendbuf, sendcnt, dest, recvbuf, recvcnt, src,
-                      tidx<T>());
+      sendrecvRawVoid(sendbuf, sendcnt, dest, recvbuf, recvcnt, src, tidx<T>());
       }
     template<typename T> void sendrecv_replaceRaw (T *data, size_t num,
       size_t dest, size_t src) const
@@ -110,6 +111,12 @@ class Communicator
     template<typename T> void allgathervRaw (const T *in, int numin, T *out,
       const int *numout, const int *disout) const
       { allgathervRawVoid (in, numin, out, numout, disout, tidx<T>()); }
+    template<typename T> vector<T> allgatherVec (const T &in) const
+      {
+      vector<T> res(num_ranks_);
+      allgatherRaw(&in, res.data(), 1);
+      return res;
+      }
 
     template<typename T> T allreduce(const T &in, redOp op) const
       {
@@ -117,12 +124,17 @@ class Communicator
       allreduceRaw (&in, &out, 1, op);
       return out;
       }
-    template<typename T> std::vector<T> allreduce
+    template<typename T> std::vector<T> allreduceVec
       (const std::vector<T> &in, redOp op) const
       {
       std::vector<T> out(in.size());
       allreduceRaw (in.data(), out.data(), in.size(), op);
       return out;
+      }
+    template<typename T> void sendrecvVec(const vector<T> &sendbuf, size_t dest,
+      vector<T> &recvbuf, size_t src) const
+      {
+      sendrecvRaw(sendbuf.data(), sendbuf.size(), dest, recvbuf.data(), recvbuf.size(), src);
       }
     /*! NB: \a num refers to the <i>total</i> number of items in the arrays;
         the individual message size is \a num/num_ranks(). */

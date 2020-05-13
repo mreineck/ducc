@@ -118,25 +118,26 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
             tmp = func(a, nrepeat, nthr)
             res.append(tmp[0])
             output.append(tmp[1])
-        print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n],results[1][n],results[0][n]/results[1][n],_l2error(output[0],output[1])))
-    results = np.array(results)
-    plt.title("{}: {}D, {}, max_extent={}".format(
-        ttl, ndim, str(tp), nmax))
-    plt.xlabel("time ratio")
-    plt.ylabel("counts")
-    plt.hist(results[0, :]/results[1, :], bins="auto")
-    if filename != "":
-        plt.savefig(filename)
-    plt.show()
+#         print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n],results[1][n],results[0][n]/results[1][n],_l2error(output[0],output[1])))
+#     results = np.array(results)
+#     plt.title("{}: {}D, {}, max_extent={}".format(
+#         ttl, ndim, str(tp), nmax))
+#     plt.xlabel("time ratio")
+#     plt.ylabel("counts")
+#     plt.hist(results[0, :]/results[1, :], bins="auto")
+#     if filename != "":
+#         plt.savefig(filename)
+#     plt.show()
 
 
-funcs = (measure_pypocketfft, measure_fftw)
+funcs = (measure_pypocketfft,)
 ttl = "pypocketfft/FFTW()"
+ntry=100
 nthr = 1
 nice_sizes = True
-bench_nd(1, 8192, nthr, 100, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
-bench_nd(2, 2048, nthr, 100, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
-bench_nd(3, 256, nthr, 100, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
-bench_nd(1, 8192, nthr, 100, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
-bench_nd(2, 2048, nthr, 100, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
-bench_nd(3, 256, nthr, 100, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
+#bench_nd(1, 8192, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+bench_nd(2, 2048, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
+# bench_nd(3, 256, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
+# bench_nd(1, 8192, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
+# bench_nd(2, 2048, nthr, ntry, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
+# bench_nd(3, 256, nthr, ntry, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
