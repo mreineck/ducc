@@ -639,6 +639,61 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
   return aligned_array<T>(tmpsize);
   }
 
+template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input_j1(const multi_iter<vlen> &it,
+  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
+  {
+  auto ptr = &src[it.iofs_uni(0,0)];
+  auto istr = it.stride_in();
+  size_t i=0;
+  for (; i<it.length_in(); ++i)
+    {
+    Cmplx<native_simd<T>> stmp;
+    for (size_t j=0; j<vlen; ++j)
+      {
+      auto tmp = ptr[j+i*istr];
+      stmp.r[j] = tmp.r;
+      stmp.i[j] = tmp.i;
+      }
+    dst[i] = stmp;
+    }
+  }
+template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input_j1_a16(const multi_iter<vlen> &it,
+  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
+  {
+  auto ptr = &src[it.iofs_uni(0,0)];
+  ptr=reinterpret_cast<Cmplx<T> *>(__builtin_assume_aligned(ptr,16));
+  auto istr = it.stride_in();
+  size_t i=0;
+  for (; i<it.length_in(); ++i)
+    {
+    Cmplx<native_simd<T>> stmp;
+    for (size_t j=0; j<vlen; ++j)
+      {
+      auto tmp = ptr[j+i*istr];
+      stmp.r[j] = tmp.r;
+      stmp.i[j] = tmp.i;
+      }
+    dst[i] = stmp;
+    }
+  }
+template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input_i1(const multi_iter<vlen> &it,
+  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
+  {
+  auto ptr = &src[it.iofs_uni(0,0)];
+  auto jstr = it.unistride_i();
+  auto istr = it.stride_in();
+      for (size_t i=0; i<it.length_in(); ++i)
+        {
+        Cmplx<native_simd<T>> stmp;
+        for (size_t j=0; j<vlen; ++j)
+          {
+          auto tmp = ptr[j*jstr+i];
+          stmp.r[j] = tmp.r;
+          stmp.i[j] = tmp.i;
+          }
+        dst[i] = stmp;
+        }
+  }
 #define MRFFT_PREFETCH
 #define MRUTIL_PREFETCH_R(addr) __builtin_prefetch(addr);
 #define MRUTIL_PREFETCH_W(addr) __builtin_prefetch(addr,1);
@@ -651,29 +706,36 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
     auto jstr = it.unistride_i();
     auto istr = it.stride_in();
     if (istr==1)
-      for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<native_simd<T>> stmp;
-        for (size_t j=0; j<vlen; ++j)
-          {
-          auto tmp = ptr[j*jstr+i];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
-          }
-        dst[i] = stmp;
-        }
+      copy_input_i1(it, src, dst);
+//       for (size_t i=0; i<it.length_in(); ++i)
+//         {
+//         Cmplx<native_simd<T>> stmp;
+//         for (size_t j=0; j<vlen; ++j)
+//           {
+//           auto tmp = ptr[j*jstr+i];
+//           stmp.r[j] = tmp.r;
+//           stmp.i[j] = tmp.i;
+//           }
+//         dst[i] = stmp;
+//         }
     else if (jstr==1)
-      for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<native_simd<T>> stmp;
-        for (size_t j=0; j<vlen; ++j)
-          {
-          auto tmp = ptr[j+i*istr];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
-          }
-        dst[i] = stmp;
-        }
+      {
+      if ((reinterpret_cast<uintptr_t>(src.data())&15)==0)
+        copy_input_j1_a16(it, src, dst);
+      else
+        copy_input_j1(it, src, dst);
+      }
+//       for (size_t i=0; i<it.length_in(); ++i)
+//         {
+//         Cmplx<native_simd<T>> stmp;
+//         for (size_t j=0; j<vlen; ++j)
+//           {
+//           auto tmp = ptr[j+i*istr];
+//           stmp.r[j] = tmp.r;
+//           stmp.i[j] = tmp.i;
+//           }
+//         dst[i] = stmp;
+//         }
     else
       for (size_t i=0; i<it.length_in(); ++i)
         {
