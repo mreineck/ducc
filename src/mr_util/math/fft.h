@@ -636,43 +636,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
   return aligned_array<T>(tmpsize);
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input_j1(const multi_iter<vlen> &it,
-  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
-  {
-  auto ptr = &src[it.iofs_uni(0,0)];
-  auto istr = it.stride_in();
-  size_t i=0;
-  for (; i<it.length_in(); ++i)
-    {
-    Cmplx<native_simd<T>> stmp;
-    for (size_t j=0; j<vlen; ++j)
-      {
-      auto tmp = ptr[j+i*istr];
-      stmp.r[j] = tmp.r;
-      stmp.i[j] = tmp.i;
-      }
-    dst[i] = stmp;
-    }
-  }
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input_i1(const multi_iter<vlen> &it,
-  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
-  {
-  auto ptr = &src[it.iofs_uni(0,0)];
-  auto jstr = it.unistride_i();
-  auto istr = it.stride_in();
-      for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<native_simd<T>> stmp;
-        for (size_t j=0; j<vlen; ++j)
-          {
-          auto tmp = ptr[j*jstr+i];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
-          }
-        dst[i] = stmp;
-        }
-  }
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
+template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
   {
   if (it.uniform_i())
@@ -681,24 +645,24 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
     auto jstr = it.unistride_i();
     auto istr = it.stride_in();
     if (istr==1)
-      for (ptrdiff_t i=0; i<it.length_in(); ++i)
+      for (size_t i=0; i<it.length_in(); ++i)
         {
         Cmplx<native_simd<T>> stmp;
-        for (ptrdiff_t j=0; j<vlen; ++j)
+        for (size_t j=0; j<vlen; ++j)
           {
-          auto tmp = ptr[j*jstr+i];
+          auto tmp = ptr[ptrdiff_t(j)*jstr+ptrdiff_t(i)];
           stmp.r[j] = tmp.r;
           stmp.i[j] = tmp.i;
           }
         dst[i] = stmp;
         }
     else if (jstr==1)
-      for (ptrdiff_t i=0; i<it.length_in(); ++i)
+      for (size_t i=0; i<it.length_in(); ++i)
         {
         Cmplx<native_simd<T>> stmp;
-        for (ptrdiff_t j=0; j<vlen; ++j)
+        for (size_t j=0; j<vlen; ++j)
           {
-          auto tmp = ptr[j+i*istr];
+          auto tmp = ptr[ptrdiff_t(j)+ptrdiff_t(i)*istr];
           stmp.r[j] = tmp.r;
           stmp.i[j] = tmp.i;
           }
@@ -731,20 +695,34 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
       }
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
+template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
   {
   if (it.uniform_i())
-    for (size_t i=0; i<it.length_in(); ++i)
-      for (size_t j=0; j<vlen; ++j)
-        dst[i][j] = src[it.iofs_uni(j,i)];
+    {
+    auto ptr = &src[it.iofs_uni(0,0)];
+    auto jstr = it.unistride_i();
+    auto istr = it.stride_in();
+    if (istr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)];
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr];
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = src[it.iofs_uni(j,i)];
+    }
   else
     for (size_t i=0; i<it.length_in(); ++i)
       for (size_t j=0; j<vlen; ++j)
         dst[i][j] = src[it.iofs(j,i)];
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
+template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<T> &src, T *MRUTIL_RESTRICT dst)
   {
   if (dst == &src[it.iofs(0)]) return;  // in-place
@@ -752,35 +730,67 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
     dst[i] = src[it.iofs(i)];
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
+template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
-  auto ptr=dst.vdata();
   if (it.uniform_o())
-    for (size_t i=0; i<it.length_out(); ++i)
-      for (size_t j=0; j<vlen; ++j)
-        ptr[it.oofs_uni(j,i)].Set(src[i].r[j],src[i].i[j]);
+    {
+    auto ptr = &dst.vraw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (istr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)].Set(src[i].r[j],src[i].i[j]);
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr].Set(src[i].r[j],src[i].i[j]);
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst.vraw(it.oofs_uni(j,i)).Set(src[i].r[j],src[i].i[j]);
+    }
   else
+    {
+    auto ptr = dst.vdata();
     for (size_t i=0; i<it.length_out(); ++i)
       for (size_t j=0; j<vlen; ++j)
         ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
+    }
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
+template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
-  auto ptr=dst.vdata();
   if (it.uniform_o())
-    for (size_t i=0; i<it.length_out(); ++i)
-      for (size_t j=0; j<vlen; ++j)
-        ptr[it.oofs_uni(j,i)] = src[i][j];
+    {
+    auto ptr = &dst.vraw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (istr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)] = src[i][j];
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr] = src[i][j];
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst.vraw(it.oofs_uni(j,i)) = src[i][j];
+    }
   else
+    {
+    auto ptr=dst.vdata();
     for (size_t i=0; i<it.length_out(); ++i)
       for (size_t j=0; j<vlen; ++j)
         ptr[it.oofs(j,i)] = src[i][j];
+    }
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
+template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const T *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
   auto ptr=dst.vdata();
