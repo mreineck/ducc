@@ -52,10 +52,6 @@ namespace mr {
 
 namespace detail_simd {
 
-template<typename T> T myexp(T);// {return -42;}
-template<> inline double myexp(double v) {return std::exp(v);}
-template<> inline float myexp(float v) {return std::exp(v);}
-
 template<typename T> constexpr inline bool vectorizable = false;
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
@@ -199,8 +195,6 @@ template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op 
     res = op(res, v[i]);
   return res;
   }
-template<typename T, size_t len> vtp<T, len> exp(const vtp<T, len> &v)
-  { return v.apply(myexp<T>); }
 template<typename T> class pseudoscalar
   {
   private:
@@ -420,7 +414,6 @@ using detail_simd::native_simd;
 using detail_simd::reduce;
 using detail_simd::max;
 using detail_simd::abs;
-using detail_simd::exp;
 using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
