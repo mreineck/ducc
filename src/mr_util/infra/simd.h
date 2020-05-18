@@ -114,6 +114,13 @@ template<typename T, size_t len> class vtp
     vtp &operator*=(vtp other) { v*=other.v; return *this; }
     vtp &operator/=(vtp other) { v/=other.v; return *this; }
     vtp abs() const { return hlp::abs(v); }
+    template<typename Func> vtp apply(Func func) const
+      {
+      vtp res;
+      for (size_t i=0; i<len; ++i)
+        res[i] = func(v[i]);
+      return res;
+      }
     inline vtp sqrt() const
       { return hlp::sqrt(v); }
     vtp max(const vtp &other) const

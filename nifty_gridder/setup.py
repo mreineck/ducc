@@ -25,7 +25,7 @@ if sys.platform == 'darwin':
     python_module_link_args+=['-bundle']
 else:
     extra_compile_args += ['--std=c++17', '-march=native', '-O3', '-ffast-math']
-    python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN', '-ffast-math']
+    python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
 

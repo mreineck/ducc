@@ -67,6 +67,7 @@ namespace mr {
 namespace detail_fft {
 
 using shape_t=fmav_info::shape_t;
+using stride_t=fmav_info::stride_t;
 
 constexpr bool FORWARD  = true,
                BACKWARD = false;
@@ -435,34 +436,78 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length)
 template<size_t N> class multi_iter
   {
   private:
-    shape_t pos;
-    fmav_info iarr, oarr;
-    ptrdiff_t p_ii, p_i[N], str_i, p_oi, p_o[N], str_o;
-    size_t idim, rem;
+    shape_t shp, pos;
+    stride_t str_i, str_o;
+    size_t cshp_i, cshp_o, rem;
+    ptrdiff_t cstr_i, cstr_o, sstr_i, sstr_o, p_ii, p_i[N], p_oi, p_o[N];
+    bool uni_i, uni_o;
 
     void advance_i()
       {
-      for (int i_=int(pos.size())-1; i_>=0; --i_)
+      for (size_t i=0; i<pos.size(); ++i)
         {
-        auto i = size_t(i_);
-        if (i==idim) continue;
-        p_ii += iarr.stride(i);
-        p_oi += oarr.stride(i);
-        if (++pos[i] < iarr.shape(i))
+        p_ii += str_i[i];
+        p_oi += str_o[i];
+        if (++pos[i] < shp[i])
           return;
         pos[i] = 0;
-        p_ii -= ptrdiff_t(iarr.shape(i))*iarr.stride(i);
-        p_oi -= ptrdiff_t(oarr.shape(i))*oarr.stride(i);
+        p_ii -= ptrdiff_t(shp[i])*str_i[i];
+        p_oi -= ptrdiff_t(shp[i])*str_o[i];
         }
       }
 
   public:
-    multi_iter(const fmav_info &iarr_, const fmav_info &oarr_, size_t idim_,
-        size_t nshares, size_t myshare)
-      : pos(iarr_.ndim(), 0), iarr(iarr_), oarr(oarr_), p_ii(0),
-        str_i(iarr.stride(idim_)), p_oi(0), str_o(oarr.stride(idim_)),
-        idim(idim_), rem(iarr.size()/iarr.shape(idim))
+    multi_iter(const fmav_info &iarr, const fmav_info &oarr, size_t idim,
+      size_t nshares, size_t myshare)
+      : rem(iarr.size()/iarr.shape(idim)), sstr_i(0), sstr_o(0), p_ii(0), p_oi(0)
       {
+      MR_assert(oarr.ndim()==iarr.ndim(), "dimension mismatch");
+      MR_assert(iarr.ndim()>=1, "not enough dimensions");
+      // Sort the extraneous dimensions in order of ascending output stride;
+      // this should improve overall cache re-use and avoid clashes between
+      // threads as much as possible.
+      shape_t idx(iarr.ndim());
+      std::iota(idx.begin(), idx.end(), 0);
+      sort(idx.begin(), idx.end(),
+        [&oarr](size_t i1, size_t i2) {return oarr.stride(i1) < oarr.stride(i2);});
+      for (auto i: idx)
+        if (i!=idim)
+          {
+          pos.push_back(0);
+          MR_assert(iarr.shape(i)==oarr.shape(i), "shape mismatch");
+          shp.push_back(iarr.shape(i));
+          str_i.push_back(iarr.stride(i));
+          str_o.push_back(oarr.stride(i));
+          }
+      MR_assert(idim<iarr.ndim(), "bad active dimension");
+      cstr_i = iarr.stride(idim);
+      cstr_o = oarr.stride(idim);
+      cshp_i = iarr.shape(idim);
+      cshp_o = oarr.shape(idim);
+
+// collapse unneeded dimensions
+      bool done = false;
+      while(!done)
+        {
+        done=true;
+        for (size_t i=1; i<shp.size(); ++i)
+          if ((str_i[i] == str_i[i-1]*ptrdiff_t(shp[i-1]))
+           && (str_o[i] == str_o[i-1]*ptrdiff_t(shp[i-1])))
+            {
+            shp[i-1] *= shp[i];
+            str_i.erase(str_i.begin()+ptrdiff_t(i));
+            str_o.erase(str_o.begin()+ptrdiff_t(i));
+            shp.erase(shp.begin()+ptrdiff_t(i));
+            pos.pop_back();
+            done=false;
+            }
+        }
+      if (pos.size()>0)
+        {
+        sstr_i = str_i[0];
+        sstr_o = str_o[0];
+        }
+
       if (nshares==1) return;
       if (nshares==0) throw std::runtime_error("can't run with zero threads");
       if (myshare>=nshares) throw std::runtime_error("impossible share requested");
@@ -473,16 +518,16 @@ template<size_t N> class multi_iter
       size_t todo = hi-lo;
 
       size_t chunk = rem;
-      for (size_t i=0; i<pos.size(); ++i)
+      for (size_t i2=0, i=pos.size()-1; i2<pos.size(); ++i2,--i)
         {
-        if (i==idim) continue;
-        chunk /= iarr.shape(i);
+        chunk /= shp[i];
         size_t n_advance = lo/chunk;
         pos[i] += n_advance;
-        p_ii += ptrdiff_t(n_advance)*iarr.stride(i);
-        p_oi += ptrdiff_t(n_advance)*oarr.stride(i);
+        p_ii += ptrdiff_t(n_advance)*str_i[i];
+        p_oi += ptrdiff_t(n_advance)*str_o[i];
         lo -= n_advance*chunk;
         }
+      MR_assert(lo==0, "must not happen");
       rem = todo;
       }
     void advance(size_t n)
@@ -494,44 +539,28 @@ template<size_t N> class multi_iter
         p_o[i] = p_oi;
         advance_i();
         }
+      uni_i = uni_o = true;
+      for (size_t i=1; i<n; ++i)
+        {
+        uni_i = uni_i && (p_i[i]-p_i[i-1] == sstr_i);
+        uni_o = uni_o && (p_o[i]-p_o[i-1] == sstr_o);
+        }
       rem -= n;
       }
-    ptrdiff_t iofs(size_t i) const { return p_i[0] + ptrdiff_t(i)*str_i; }
-    ptrdiff_t iofs(size_t j, size_t i) const { return p_i[j] + ptrdiff_t(i)*str_i; }
-    ptrdiff_t oofs(size_t i) const { return p_o[0] + ptrdiff_t(i)*str_o; }
-    ptrdiff_t oofs(size_t j, size_t i) const { return p_o[j] + ptrdiff_t(i)*str_o; }
-    size_t length_in() const { return iarr.shape(idim); }
-    size_t length_out() const { return oarr.shape(idim); }
-    ptrdiff_t stride_in() const { return str_i; }
-    ptrdiff_t stride_out() const { return str_o; }
-    size_t remaining() const { return rem; }
-  };
-
-class simple_iter
-  {
-  private:
-    shape_t pos;
-    fmav_info arr;
-    ptrdiff_t p;
-    size_t rem;
-
-  public:
-    simple_iter(const fmav_info &arr_)
-      : pos(arr_.ndim(), 0), arr(arr_), p(0), rem(arr_.size()) {}
-    void advance()
-      {
-      --rem;
-      for (int i_=int(pos.size())-1; i_>=0; --i_)
-        {
-        auto i = size_t(i_);
-        p += arr.stride(i);
-        if (++pos[i] < arr.shape(i))
-          return;
-        pos[i] = 0;
-        p -= ptrdiff_t(arr.shape(i))*arr.stride(i);
-        }
-      }
-    ptrdiff_t ofs() const { return p; }
+    ptrdiff_t iofs(size_t i) const { return p_i[0] + ptrdiff_t(i)*cstr_i; }
+    ptrdiff_t iofs(size_t j, size_t i) const { return p_i[j] + ptrdiff_t(i)*cstr_i; }
+    ptrdiff_t iofs_uni(size_t j, size_t i) const { return p_i[0] + ptrdiff_t(j)*sstr_i + ptrdiff_t(i)*cstr_i; }
+    ptrdiff_t oofs(size_t i) const { return p_o[0] + ptrdiff_t(i)*cstr_o; }
+    ptrdiff_t oofs(size_t j, size_t i) const { return p_o[j] + ptrdiff_t(i)*cstr_o; }
+    ptrdiff_t oofs_uni(size_t j, size_t i) const { return p_o[0] + ptrdiff_t(j)*sstr_o + ptrdiff_t(i)*cstr_o; }
+    bool uniform_i() const { return uni_i; } 
+    ptrdiff_t unistride_i() const { return sstr_i; } 
+    bool uniform_o() const { return uni_o; } 
+    ptrdiff_t unistride_o() const { return sstr_o; } 
+    size_t length_in() const { return cshp_i; }
+    size_t length_out() const { return cshp_o; }
+    ptrdiff_t stride_in() const { return cstr_i; }
+    ptrdiff_t stride_out() const { return cstr_o; }
     size_t remaining() const { return rem; }
   };
 
@@ -610,20 +639,87 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
   {
-  for (size_t i=0; i<it.length_in(); ++i)
-    for (size_t j=0; j<vlen; ++j)
+  if (it.uniform_i())
+    {
+    auto ptr = &src[it.iofs_uni(0,0)];
+    auto jstr = it.unistride_i();
+    auto istr = it.stride_in();
+    if (istr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        {
+        Cmplx<native_simd<T>> stmp;
+        for (size_t j=0; j<vlen; ++j)
+          {
+          auto tmp = ptr[ptrdiff_t(j)*jstr+ptrdiff_t(i)];
+          stmp.r[j] = tmp.r;
+          stmp.i[j] = tmp.i;
+          }
+        dst[i] = stmp;
+        }
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        {
+        Cmplx<native_simd<T>> stmp;
+        for (size_t j=0; j<vlen; ++j)
+          {
+          auto tmp = ptr[ptrdiff_t(j)+ptrdiff_t(i)*istr];
+          stmp.r[j] = tmp.r;
+          stmp.i[j] = tmp.i;
+          }
+        dst[i] = stmp;
+        }
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        {
+        Cmplx<native_simd<T>> stmp;
+        for (size_t j=0; j<vlen; ++j)
+          {
+          auto tmp = src[it.iofs_uni(j,i)];
+          stmp.r[j] = tmp.r;
+          stmp.i[j] = tmp.i;
+          }
+        dst[i] = stmp;
+        }
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
       {
-      dst[i].r[j] = src[it.iofs(j,i)].r;
-      dst[i].i[j] = src[it.iofs(j,i)].i;
+      Cmplx<native_simd<T>> stmp;
+      for (size_t j=0; j<vlen; ++j)
+        {
+        auto tmp = src[it.iofs(j,i)];
+        stmp.r[j] = tmp.r;
+        stmp.i[j] = tmp.i;
+        }
+      dst[i] = stmp;
       }
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
   const fmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
   {
-  for (size_t i=0; i<it.length_in(); ++i)
-    for (size_t j=0; j<vlen; ++j)
-      dst[i][j] = src[it.iofs(j,i)];
+  if (it.uniform_i())
+    {
+    auto ptr = &src[it.iofs_uni(0,0)];
+    auto jstr = it.unistride_i();
+    auto istr = it.stride_in();
+    if (istr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)];
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr];
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst[i][j] = src[it.iofs_uni(j,i)];
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
+      for (size_t j=0; j<vlen; ++j)
+        dst[i][j] = src[it.iofs(j,i)];
   }
 
 template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
@@ -637,19 +733,61 @@ template <typename T, size_t vlen> void copy_input(const multi_iter<vlen> &it,
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
-  auto ptr=dst.vdata();
-  for (size_t i=0; i<it.length_out(); ++i)
-    for (size_t j=0; j<vlen; ++j)
-      ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
+  if (it.uniform_o())
+    {
+    auto ptr = &dst.vraw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (istr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)].Set(src[i].r[j],src[i].i[j]);
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr].Set(src[i].r[j],src[i].i[j]);
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst.vraw(it.oofs_uni(j,i)).Set(src[i].r[j],src[i].i[j]);
+    }
+  else
+    {
+    auto ptr = dst.vdata();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j=0; j<vlen; ++j)
+        ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
+    }
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
-  auto ptr=dst.vdata();
-  for (size_t i=0; i<it.length_out(); ++i)
-    for (size_t j=0; j<vlen; ++j)
-      ptr[it.oofs(j,i)] = src[i][j];
+  if (it.uniform_o())
+    {
+    auto ptr = &dst.vraw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (istr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i)] = src[i][j];
+    else if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j) + ptrdiff_t(i)*istr] = src[i][j];
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j=0; j<vlen; ++j)
+          dst.vraw(it.oofs_uni(j,i)) = src[i][j];
+    }
+  else
+    {
+    auto ptr=dst.vdata();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j=0; j<vlen; ++j)
+        ptr[it.oofs(j,i)] = src[i][j];
+    }
   }
 
 template<typename T, size_t vlen> void copy_output(const multi_iter<vlen> &it,
@@ -1047,7 +1185,7 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   tshp[axes.back()] = tshp[axes.back()]/2+1;
   fmav<std::complex<T>> atmp(tshp);
   r2c(in, atmp, axes, true, fct, nthreads);
-  simple_iter iin(atmp);
+  FmavIter iin(atmp);
   rev_iter iout(out, axes);
   auto vout = out.vdata();
   while(iin.remaining()>0)

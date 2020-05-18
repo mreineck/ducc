@@ -28,7 +28,7 @@ elif sys.platform == 'win32':
     extra_compile_args = ['/Ox', '/EHsc', '/std:c++17']
 else:
     extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-Wsign-conversion', '-Wconversion' ,'-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
-    python_module_link_args += ['-march=native', '-ffast-math', '-Wl,-rpath,$ORIGIN']
+    python_module_link_args += ['-Wl,-rpath,$ORIGIN']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
 

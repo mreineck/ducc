@@ -3,6 +3,8 @@ import pypocketfft
 from time import time
 import matplotlib.pyplot as plt
 
+np.random.seed(42)
+
 
 def _l2error(a, b):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
@@ -130,11 +132,12 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
 
 funcs = (measure_pypocketfft, measure_fftw)
 ttl = "pypocketfft/FFTW()"
+ntry=100
 nthr = 1
 nice_sizes = True
-bench_nd(1, 8192, nthr, 100, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
-bench_nd(2, 2048, nthr, 100, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
-bench_nd(3, 256, nthr, 100, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
-bench_nd(1, 8192, nthr, 100, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
-bench_nd(2, 2048, nthr, 100, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
-bench_nd(3, 256, nthr, 100, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
+bench_nd(1, 8192, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+bench_nd(2, 2048, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
+bench_nd(3, 256, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
+bench_nd(1, 8192, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
+bench_nd(2, 2048, nthr, ntry, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
+bench_nd(3, 256, nthr, ntry, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)

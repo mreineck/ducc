@@ -215,12 +215,69 @@ template<size_t ndim> class mav_info
       }
   };
 
+
+class FmavIter
+  {
+  private:
+    fmav_info::shape_t pos;
+    fmav_info arr;
+    ptrdiff_t p;
+    size_t rem;
+
+  public:
+    FmavIter(const fmav_info &arr_)
+      : pos(arr_.ndim(), 0), arr(arr_), p(0), rem(arr_.size()) {}
+    void advance()
+      {
+      --rem;
+      for (int i_=int(pos.size())-1; i_>=0; --i_)
+        {
+        auto i = size_t(i_);
+        p += arr.stride(i);
+        if (++pos[i] < arr.shape(i))
+          return;
+        pos[i] = 0;
+        p -= ptrdiff_t(arr.shape(i))*arr.stride(i);
+        }
+      }
+    ptrdiff_t ofs() const { return p; }
+    size_t remaining() const { return rem; }
+  };
+
+
 // "mav" stands for "multidimensional array view"
 template<typename T> class fmav: public fmav_info, public membuf<T>
   {
   protected:
     using tbuf = membuf<T>;
     using tinfo = fmav_info;
+
+    template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
+      {
+      auto ndim = tinfo::ndim();
+      if (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper<Func>(idim+1, idx+i*str[idim], func);
+      else
+        {
+        T *d2 = vdata();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d2[idx+i*str[idim]]);
+        }
+      }
+    template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func) const
+      {
+      auto ndim = tinfo::ndim();
+      if (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper<Func>(idim+1, idx+i*str[idim], func);
+      else
+        {
+        const T *d2 = data();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d2[idx+i*str[idim]]);
+        }
+      }
 
     auto subdata(const shape_t &i0, const shape_t &extent) const
       {
@@ -246,7 +303,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           ++i2;
           }
         }
-      return make_tuple(nshp, nstr, ndim);
+      return make_tuple(nshp, nstr, nofs);
       }
 
   public:
@@ -293,12 +350,47 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     fmav subarray(const shape_t &i0, const shape_t &extent)
       {
       auto [nshp, nstr, nofs] = subdata(i0, extent);
-      return fmav(tbuf(*this,nofs), nshp, nstr);
+      return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
     fmav subarray(const shape_t &i0, const shape_t &extent) const
       {
       auto [nshp, nstr, nofs] = subdata(i0, extent);
-      return fmav(tbuf(*this,nofs),nshp, nstr);
+      return fmav(nshp, nstr, tbuf::d+nofs, *this);
+      }
+    template<typename Func> void apply(Func func)
+      {
+      if (contiguous())
+        {
+        T *d2 = vdata();
+        for (auto v=d2; v!=d2+size(); ++v)
+          func(*v);
+        return;
+        }
+      applyHelper<Func>(0, 0,func);
+      }
+    template<typename Func> void apply(Func func) const
+      {
+      if (contiguous())
+        {
+        const T *d2 = data();
+        for (auto v=d2; v!=d2+size(); ++v)
+          func(*v);
+        return;
+        }
+      applyHelper<Func>(0, 0, func);
+      }
+    vector<T> dump() const
+      {
+      vector<T> res(sz);
+      size_t ii=0;
+      apply([&](const T&v){res[ii++]=v;});
+      return res;
+      }
+    void load (const vector<T> &v)
+      {
+      MR_assert(v.size()==sz, "bad input data size");
+      size_t ii=0;
+      apply([&](T &val){val=v[ii++];});
       }
   };
 
@@ -508,6 +600,7 @@ template<typename T, size_t ndim> class MavIter
 using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav;
+using detail_mav::FmavIter;
 using detail_mav::MavIter;
 
 }
