@@ -78,8 +78,8 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * MRUTIL_RESTRICT cc)
   {
-  cc[0] += complex<double>(reduce(a,std::plus<>()),reduce(b,std::plus<>()));
-  cc[1] += complex<double>(reduce(c,std::plus<>()),reduce(d,std::plus<>()));
+  cc[0] += complex<double>(accumulate(a,std::plus<>()),accumulate(b,std::plus<>()));
+  cc[1] += complex<double>(accumulate(c,std::plus<>()),accumulate(d,std::plus<>()));
   }
 #endif
 

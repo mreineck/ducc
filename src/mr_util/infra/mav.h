@@ -122,7 +122,7 @@ class fmav_info
 
   public:
     fmav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(reduce(shp.begin(),shp.end(),size_t(1),multiplies<>()))
+      : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
       {
       MR_assert(shp.size()>0, "at least 1D required");
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
@@ -184,7 +184,7 @@ template<size_t ndim> class mav_info
 
   public:
     mav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(reduce(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
+      : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
     mav_info(const shape_t &shape_)
       : mav_info(shape_, shape2stride(shape_)) {}
     size_t size() const { return sz; }
