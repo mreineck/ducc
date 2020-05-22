@@ -33,6 +33,7 @@ release:
   stage: build_tarballs
   script:
     - python3 setup.py sdist
+    - 'mv dist/*.tar.gz .'
   artifacts:
     paths:
       - '*.tar.gz'
