@@ -17,98 +17,22 @@ build_docker:
     - docker build -t $CONTAINER_TEST_IMAGE .
     - docker push $CONTAINER_TEST_IMAGE
 
-test_pypocketfft_gcc:
+test_cxxbase:
   stage: testing
   script:
-    - cd pypocketfft
     - python3 setup.py install --user -f
     - pytest-3 -q test
 
-test_pypocketfft_clang:
+test_cxxbase_clang:
   stage: testing
   script:
-    - cd pypocketfft
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pysharp_gcc:
-  stage: testing
-  script:
-    - cd pysharp
-    - python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pysharp_clang:
-  stage: testing
-  script:
-    - cd pysharp
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_nifty_gridder_gcc:
-  stage: testing
-  script:
-    - cd nifty_gridder
-    - python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_nifty_gridder_clang:
-  stage: testing
-  script:
-    - cd nifty_gridder
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pyHealpix_gcc:
-  stage: testing
-  script:
-    - cd pyHealpix
-    - python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pyHealpix_clang:
-  stage: testing
-  script:
-    - cd pyHealpix
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pyinterpol_ng_gcc:
-  stage: testing
-  script:
-    - cd pysharp
-    - python3 setup.py install --user -f
-    - cd ../pyinterpol_ng
-    - python3 setup.py install --user -f
-    - pytest-3 -q test
-
-test_pyinterpol_ng_clang:
-  stage: testing
-  script:
-    - cd pysharp
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - cd ../pyinterpol_ng
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
     - pytest-3 -q test
 
 release:
   stage: build_tarballs
   script:
-    - cd pypocketfft
     - python3 setup.py sdist
-    - 'mv dist/*.tar.gz ..'
-    - cd ../pysharp
-    - python3 setup.py sdist
-    - 'mv dist/*.tar.gz ..'
-    - cd ../nifty_gridder
-    - python3 setup.py sdist
-    - 'mv dist/*.tar.gz ..'
-    - cd ../pyHealpix
-    - python3 setup.py sdist
-    - 'mv dist/*.tar.gz ..'
-    - cd ../pyinterpol_ng
-    - python3 setup.py sdist
-    - 'mv dist/*.tar.gz ..'
   artifacts:
     paths:
       - '*.tar.gz'

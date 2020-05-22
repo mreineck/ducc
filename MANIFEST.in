@@ -1,0 +1,6 @@
+prune .
+graft src
+include pyinterpol_ng/*.h
+include nifty_gridder/*.h
+include LICENSE
+include test
