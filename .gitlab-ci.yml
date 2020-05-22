@@ -10,7 +10,7 @@ stages:
   - build_tarballs
 
 build_docker:
-  image: docker:stable
+  image: docker:19.03.8
   stage: build_docker
   script:
     - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN gitlab-registry.mpcdf.mpg.de
