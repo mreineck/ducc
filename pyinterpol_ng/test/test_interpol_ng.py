@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_
 import cxxbase1.pyinterpol_ng as pyinterpol_ng
-import pysharp
+import cxxbase1.pysharp as pysharp
 
 pmp = pytest.mark.parametrize
 
