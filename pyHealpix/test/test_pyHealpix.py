@@ -1,4 +1,4 @@
-import pyHealpix as ph
+import cxxbase1.pyHealpix as ph
 import numpy as np
 import math
 import pytest

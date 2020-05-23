@@ -1,4 +1,4 @@
-import pypocketfft
+import cxxbase1.pypocketfft as pypocketfft
 # import pyfftw
 import numpy as np
 import pytest

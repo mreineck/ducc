@@ -21,13 +21,13 @@ test_cxxbase:
   stage: testing
   script:
     - python3 setup.py install --user -f
-    - pytest-3 -q test
+    - pytest-3 -q pypocketfft/test pysharp/test pyHealpix/test nifty_gridder/test pyinterpol_ng/test
 
 test_cxxbase_clang:
   stage: testing
   script:
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q test
+    - pytest-3 -q pypocketfft/test pysharp/test pyHealpix/test nifty_gridder/test pyinterpol_ng/test
 
 release:
   stage: build_tarballs
