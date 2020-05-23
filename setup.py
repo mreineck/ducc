@@ -1,6 +1,7 @@
 from setuptools import setup, Extension
 import sys
 
+pkgname = 'cxxbase1'
 
 class _deferred_pybind11_include(object):
     def __init__(self, user=False):
@@ -28,12 +29,12 @@ elif sys.platform == 'win32':
     extra_compile_args = ['/Ox', '/EHsc', '/std:c++17']
 else:
     extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
-    python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN']
+    python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN' ,'-s']
 
 # if you don't want debugging info, add "-s" to python_module_link_args
 
 def get_extension_modules():
-    return [Extension('pypocketfft',
+    return [Extension(pkgname+'.pypocketfft',
                       language='c++',
                       sources=['pypocketfft/pypocketfft.cc',
                                'src/mr_util/infra/threading.cc'],
@@ -53,7 +54,7 @@ def get_extension_modules():
                       define_macros=define_macros,
                       extra_compile_args=extra_compile_args,
                       extra_link_args=python_module_link_args),
-            Extension('pysharp',
+            Extension(pkgname+'.pysharp',
                       language='c++',
                       sources=['pysharp/pysharp.cc',
                                'src/mr_util/infra/threading.cc',
@@ -88,7 +89,7 @@ def get_extension_modules():
                       define_macros=define_macros,
                       extra_compile_args=extra_compile_args,
                       extra_link_args=python_module_link_args),
-            Extension('pyHealpix',
+            Extension(pkgname+'.pyHealpix',
                       language='c++',
                       sources=['pyHealpix/pyHealpix.cc',
                                'src/mr_util/math/geom_utils.cc',
@@ -115,7 +116,7 @@ def get_extension_modules():
                       define_macros=define_macros,
                       extra_compile_args=extra_compile_args,
                       extra_link_args=python_module_link_args),
-            Extension('nifty_gridder',
+            Extension(pkgname+'.nifty_gridder',
                       sources=['nifty_gridder/nifty_gridder.cc',
                                'src/mr_util/infra/threading.cc'],
                       depends=['src/mr_util/infra/useful_macros.h',
@@ -137,7 +138,7 @@ def get_extension_modules():
                       include_dirs=include_dirs + ['./nifty_gridder'],
                       extra_compile_args=extra_compile_args,
                       extra_link_args=python_module_link_args),
-           Extension('pyinterpol_ng',
+           Extension(pkgname+'.pyinterpol_ng',
                       language='c++',
                       sources=['pyinterpol_ng/pyinterpol_ng.cc',
                                'src/mr_util/infra/threading.cc',
@@ -178,7 +179,7 @@ def get_extension_modules():
                 ]
 
 
-setup(name='cxxbase',
+setup(name=pkgname,
       version='0.0.1',
       description='Various neat modules',
       include_package_data=True,
