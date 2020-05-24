@@ -34,6 +34,7 @@
 #define XCONCATX2(a,b) XCONCATX(a,b)
 #define XARCH(a) XCONCATX2(a,ARCH)
 
+#include <numeric>
 #include <complex>
 #include <cmath>
 #include <cstring>
