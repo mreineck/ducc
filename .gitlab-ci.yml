@@ -17,13 +17,13 @@ build_docker:
     - docker build -t $CONTAINER_TEST_IMAGE .
     - docker push $CONTAINER_TEST_IMAGE
 
-test_cxxbase:
+test_gcc:
   stage: testing
   script:
     - python3 setup.py install --user -f
     - pytest-3 -q pypocketfft/test pysharp/test pyHealpix/test nifty_gridder/test pyinterpol_ng/test
 
-test_cxxbase_clang:
+test_clang:
   stage: testing
   script:
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
