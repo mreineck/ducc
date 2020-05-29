@@ -1,4 +1,4 @@
-import cxxbase1.pysharp as pysharp
+import ducc_0_1.pysharp as pysharp
 import numpy as np
 import math
 import pytest

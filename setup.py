@@ -1,7 +1,7 @@
 from setuptools import setup, Extension
 import sys
 
-pkgname = 'cxxbase1'
+pkgname = 'ducc_0_1'
 
 class _deferred_pybind11_include(object):
     def __init__(self, user=False):
@@ -36,23 +36,22 @@ else:
 def get_extension_modules():
     return [Extension(pkgname,
                       language='c++',
-                      sources=['cxxbase.cc'],
+                      sources=['module.cc'],
                       depends=[],
                       include_dirs=include_dirs,
                       define_macros=define_macros,
                       extra_compile_args=extra_compile_args,
-                      extra_link_args=python_module_link_args),
-               ]
+                      extra_link_args=python_module_link_args)]
 
 
 setup(name=pkgname,
-      version='0.0.1',
-      description='Various neat modules',
+      version='0.1.0',
+      description='Definitely useful code collection',
       include_package_data=True,
       author='Martin Reinecke',
       author_email='martin@mpa-garching.mpg.de',
       packages=[],
-      setup_requires=['numpy>=1.15.0', 'pybind11>=2.2.4'],
+      setup_requires=['numpy>=1.17.0', 'pybind11>=2.5.0'],
       ext_modules=get_extension_modules(),
-      install_requires=['numpy>=1.15.0', 'pybind11>=2.2.4']
+      install_requires=['numpy>=1.17.0', 'pybind11>=2.5.0']
       )

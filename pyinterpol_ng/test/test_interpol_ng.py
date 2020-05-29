@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import cxxbase1.pyinterpol_ng as pyinterpol_ng
-import cxxbase1.pysharp as pysharp
+import ducc_0_1.pyinterpol_ng as pyinterpol_ng
+import ducc_0_1.pysharp as pysharp
 
 pmp = pytest.mark.parametrize
 

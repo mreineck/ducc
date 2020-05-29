@@ -1,5 +1,5 @@
 import numpy as np
-import pypocketfft
+import ducc_0_1.pypocketfft as pypocketfft
 from time import time
 import matplotlib.pyplot as plt
 

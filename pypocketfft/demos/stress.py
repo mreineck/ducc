@@ -1,5 +1,5 @@
 import numpy as np
-import pypocketfft
+import ducc_0_1.pypocketfft as pypocketfft
 
 
 def _l2error(a, b, axes):
