@@ -274,7 +274,7 @@ void add_pysharp(py::module &msup)
   auto m = msup.def_submodule("pysharp");
   m.doc() = pysharp_DS;
 
-  py::class_<py_sharpjob<double>> (m, "sharpjob_d")
+  py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())
     .def("set_nthreads", &py_sharpjob<double>::set_nthreads, "nthreads"_a)
     .def("set_gauss_geometry", &py_sharpjob<double>::set_gauss_geometry,

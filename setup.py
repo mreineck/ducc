@@ -17,7 +17,7 @@ include_dirs = ['./src/',
                 _deferred_pybind11_include()]
 extra_compile_args = ['--std=c++17', '-march=native', '-ffast-math', '-O3']
 python_module_link_args = []
-define_macros = []
+define_macros = [("PKGNAME", pkgname)]
 
 if sys.platform == 'darwin':
     import distutils.sysconfig

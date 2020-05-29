@@ -242,7 +242,7 @@ void add_pyinterpol_ng(py::module &msup)
   m.doc() = pyinterpol_ng_DS;
 
   using inter_d = PyInterpolator<double>;
-  py::class_<inter_d> (m, "PyInterpolator", pyinterpolator_DS)
+  py::class_<inter_d> (m, "PyInterpolator", py::module_local(), pyinterpolator_DS)
     .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
       "nthreads"_a=0)
@@ -253,7 +253,7 @@ void add_pyinterpol_ng(py::module &msup)
     .def ("getSlm", &inter_d::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_d::support);
   using inter_f = PyInterpolator<float>;
-  py::class_<inter_f> (m, "PyInterpolator_f", pyinterpolator_DS)
+  py::class_<inter_f> (m, "PyInterpolator_f", py::module_local(), pyinterpolator_DS)
     .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, float, float, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5f,
       "nthreads"_a=0)

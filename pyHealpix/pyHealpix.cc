@@ -351,7 +351,7 @@ void add_pyHealpix(py::module &msup)
   auto m = msup.def_submodule("pyHealpix");
   m.doc() = pyHealpix_DS;
 
-  py::class_<Pyhpbase> (m, "Healpix_Base")
+  py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local())
     .def(py::init<int,const string &>(),"nside"_a,"scheme"_a)
     .def("order", [](Pyhpbase &self)
       { return self.base.Order(); }, order_DS)

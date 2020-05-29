@@ -3,6 +3,7 @@
 #include "mr_util/infra/threading.cc"
 #include "mr_util/math/pointing.cc"
 #include "mr_util/math/geom_utils.cc"
+#include "mr_util/math/space_filling.cc"
 #include "mr_util/sharp/sharp.cc"
 #include "mr_util/sharp/sharp_almhelpers.cc"
 #include "mr_util/sharp/sharp_core.cc"
@@ -20,7 +21,7 @@
 
 using namespace mr;
 
-PYBIND11_MODULE(cxxbase1, m)
+PYBIND11_MODULE(PKGNAME, m)
   {
   add_pypocketfft(m);
   add_pysharp(m);
