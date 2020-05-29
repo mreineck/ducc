@@ -32,11 +32,11 @@
 #include "mr_util/infra/error_handling.h"
 #include "mr_util/math/constants.h"
 
-using namespace std;
-
 namespace mr {
 
 namespace detail_sharp {
+
+using namespace std;
 
 #pragma GCC visibility push(hidden)
 

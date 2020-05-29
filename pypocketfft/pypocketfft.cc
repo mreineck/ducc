@@ -19,6 +19,10 @@
 #include "mr_util/math/fft.h"
 #include "mr_util/bindings/pybind_utils.h"
 
+namespace mr {
+
+namespace detail_pypocketfft {
+
 namespace {
 
 using shape_t = mr::fmav_info::shape_t;
@@ -645,10 +649,10 @@ out : int
 
 } // unnamed namespace
 
-PYBIND11_MODULE(pypocketfft, m)
+void add_pypocketfft(py::module &msup)
   {
   using namespace pybind11::literals;
-
+  auto m = msup.def_submodule("pypocketfft");
   m.doc() = pypocketfft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,
     "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
@@ -671,3 +675,9 @@ PYBIND11_MODULE(pypocketfft, m)
     {{"good_size", good_size, METH_VARARGS, good_size_DS}, {0, 0, 0, 0}};
   PyModule_AddFunctions(m.ptr(), good_size_meth);
   }
+
+}
+
+using detail_pypocketfft::add_pypocketfft;
+
+}

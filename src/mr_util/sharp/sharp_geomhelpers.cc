@@ -35,11 +35,11 @@
 #include "mr_util/infra/error_handling.h"
 #include "mr_util/math/math_utils.h"
 
-using namespace std;
-
 namespace mr {
 
 namespace detail_sharp {
+
+using namespace std;
 
 sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
   ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)

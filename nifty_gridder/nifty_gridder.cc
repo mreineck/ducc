@@ -24,13 +24,15 @@
 #include "mr_util/bindings/pybind_utils.h"
 #include "gridder_cxx.h"
 
+namespace mr {
+
+namespace detail_nifty_gridder {
+
 using namespace std;
 using namespace gridder;
 using namespace mr;
 
 namespace py = pybind11;
-
-namespace {
 
 auto None = py::none();
 
@@ -192,11 +194,10 @@ py::array Pydirty2ms(const py::array &uvw,
     verbosity);
   }
 
-} // unnamed namespace
-
-PYBIND11_MODULE(nifty_gridder, m)
+void add_nifty_gridder(py::module &msup)
   {
   using namespace pybind11::literals;
+  auto m = msup.def_submodule("nifty_gridder");
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a,
@@ -211,3 +212,9 @@ PYBIND11_MODULE(nifty_gridder, m)
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a, "epsilon"_a,
     "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0);
   }
+
+}
+
+using detail_nifty_gridder::add_nifty_gridder;
+
+}

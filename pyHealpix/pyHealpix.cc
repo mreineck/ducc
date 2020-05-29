@@ -39,12 +39,14 @@
 #include "mr_util/math/geom_utils.h"
 #include "mr_util/bindings/pybind_utils.h"
 
+namespace mr {
+
+namespace detail_pyHealpix {
+
 using namespace std;
 using namespace mr;
 
 namespace py = pybind11;
-
-namespace {
 
 using shape_t = fmav_info::shape_t;
 
@@ -343,12 +345,10 @@ that their last dimension is removed.
 The employed algorithm is highly accurate, even for angles close to 0 or pi.
 )""";
 
-} // unnamed namespace
-
-PYBIND11_MODULE(pyHealpix, m)
+void add_pyHealpix(py::module &msup)
   {
   using namespace pybind11::literals;
-
+  auto m = msup.def_submodule("pyHealpix");
   m.doc() = pyHealpix_DS;
 
   py::class_<Pyhpbase> (m, "Healpix_Base")
@@ -382,3 +382,9 @@ PYBIND11_MODULE(pyHealpix, m)
   m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a);
   m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a);
   }
+
+}
+
+using detail_pyHealpix::add_pyHealpix;
+
+}

@@ -63,7 +63,6 @@ class ES_Kernel
 
     template<typename T> T operator()(T v) const
       {
-      using std::sqrt;
       auto tmp = (1-v)*(1+v);
       auto tmp2 = tmp>=0;
       return tmp2*exp(T(beta)*(sqrt(tmp*tmp2)-1));

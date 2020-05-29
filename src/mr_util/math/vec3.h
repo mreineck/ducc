@@ -84,7 +84,7 @@ template<typename T>class vec3_t
 
     /*! Returns the length of the vector. */
     T Length () const
-      { return sqrt (x*x + y*y + z*z); }
+      { return std::sqrt (x*x + y*y + z*z); }
 
     /*! Returns the squared length of the vector. */
     T SquaredLength () const

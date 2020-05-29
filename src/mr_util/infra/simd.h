@@ -418,6 +418,16 @@ using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
+
+// since we are explicitly introducing a few names that are also available in
+// std::, we need to import them from std::as well, otherwise name resolution
+// can fail in certain circumstances.
+
+using std::abs;
+using std::sqrt;
+using std::max;
+
+
 }
 
 #endif

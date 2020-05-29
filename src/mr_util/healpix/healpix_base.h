@@ -166,7 +166,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
       double phi = safe_atan2(vec.y,vec.x);
       double nz = vec.z*xl;
       if (std::abs(nz)>0.99)
-        return loc2pix (nz,phi,sqrt(vec.x*vec.x+vec.y*vec.y)*xl,true);
+        return loc2pix (nz,phi,std::sqrt(vec.x*vec.x+vec.y*vec.y)*xl,true);
       else
         return loc2pix (nz,phi,0,false);
       }

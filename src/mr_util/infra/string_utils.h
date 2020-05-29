@@ -27,6 +27,8 @@
 
 namespace mr {
 
+namespace detail_string_utils {
+
 /*! \defgroup stringutilsgroup String handling helper functions */
 /*! \{ */
 
@@ -110,6 +112,21 @@ void parse_words_from_file (const std::string &filename,
   std::vector<std::string> &words);
 
 /*! \} */
+
+}
+
+using detail_string_utils::trim;
+using detail_string_utils::intToString;
+using detail_string_utils::dataToString;
+using detail_string_utils::stringToData;
+using detail_string_utils::parse_file;
+using detail_string_utils::parse_cmdline_classic;
+using detail_string_utils::parse_cmdline_equalsign;
+using detail_string_utils::equal_nocase;
+using detail_string_utils::tolower;
+using detail_string_utils::split;
+using detail_string_utils::tokenize;
+using detail_string_utils::parse_words_from_file;
 
 }
 

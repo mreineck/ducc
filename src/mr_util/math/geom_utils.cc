@@ -30,9 +30,11 @@
 #include "mr_util/math/geom_utils.h"
 #include "mr_util/infra/error_handling.h"
 
-using namespace std;
-
 namespace mr {
+
+namespace detail_geom_utils {
+
+using namespace std;
 
 namespace {
 
@@ -74,4 +76,4 @@ void find_enclosing_circle (const vector<vec3> &point, vec3 &center,
       get_circle(point,i,center,cosrad);
   }
 
-}
+}}

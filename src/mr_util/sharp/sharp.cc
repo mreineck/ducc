@@ -39,11 +39,11 @@
 #include "mr_util/infra/error_handling.h"
 #include "mr_util/infra/timers.h"
 
-using namespace std;
-
 namespace mr {
 
 namespace detail_sharp {
+
+using namespace std;
 
 using dcmplx = complex<double>;
 using fcmplx = complex<float>;

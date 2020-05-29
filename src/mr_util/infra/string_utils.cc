@@ -40,9 +40,11 @@
 #include "mr_util/infra/string_utils.h"
 #include "mr_util/infra/error_handling.h"
 
-using namespace std;
-
 namespace mr {
+
+namespace detail_string_utils {
+
+using namespace std;
 
 string trim (const string &orig)
   {
@@ -330,4 +332,4 @@ void parse_words_from_file (const string &filename, vector<string> &words)
     }
   }
 
-}
+}}

@@ -27,9 +27,17 @@
 
 namespace mr {
 
+namespace detail_system {
+
 std::size_t getProcessInfo(const std::string &quantity);
 std::size_t getMemInfo(const std::string &quantity);
 std::size_t usable_memory();
+
+}
+
+using detail_system::getProcessInfo;
+using detail_system::getMemInfo;
+using detail_system::usable_memory;
 
 }
 

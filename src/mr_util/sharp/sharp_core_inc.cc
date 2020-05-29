@@ -1233,10 +1233,12 @@ size_t XARCH(sharp_veclen)(void)
 size_t XARCH(sharp_max_nvec)(size_t spin)
   { return (spin==0) ? nv0 : nvx; }
 
-#define xstr(a) str(a)
-#define str(a) #a
+#define XSTR(a) STR(a)
+#define STR(a) #a
 const char *XARCH(sharp_architecture)()
-  { return xstr(ARCH); }
+  { return XSTR(ARCH); }
+#undef STR
+#undef XSTR
 
 }}
 

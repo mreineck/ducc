@@ -42,12 +42,14 @@
 #include "mr_util/math/constants.h"
 #include "mr_util/bindings/pybind_utils.h"
 
+namespace mr {
+
+namespace detail_pysharp {
+
 using namespace std;
 using namespace mr;
 
 namespace py = pybind11;
-
-namespace {
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -266,12 +268,10 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   return move(out);
   }
 
-} // unnamed namespace
-
-PYBIND11_MODULE(pysharp, m)
+void add_pysharp(py::module &msup)
   {
   using namespace pybind11::literals;
-
+  auto m = msup.def_submodule("pysharp");
   m.doc() = pysharp_DS;
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d")
@@ -303,3 +303,10 @@ PYBIND11_MODULE(pysharp, m)
   m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "nrings_out"_a,
     "has_np"_a, "has_sp"_a, "out"_a=py::none());
   }
+
+}
+
+using detail_pysharp::add_pysharp;
+
+}
+

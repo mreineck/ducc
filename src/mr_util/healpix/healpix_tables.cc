@@ -33,11 +33,11 @@
 #include "mr_util/infra/string_utils.h"
 #include "mr_util/infra/error_handling.h"
 
-using namespace std;
-
 namespace mr {
 
 namespace detail_healpix {
+
+using namespace std;
 
 const nside_dummy SET_NSIDE=nside_dummy();
 

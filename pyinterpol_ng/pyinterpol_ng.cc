@@ -7,12 +7,14 @@
 #include <pybind11/numpy.h>
 #include "interpol_ng.h"
 
+namespace mr {
+
+namespace detail_pyinterpol_ng {
+
 using namespace std;
 using namespace mr;
 
 namespace py = pybind11;
-
-namespace {
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
@@ -232,11 +234,10 @@ Notes
     - must be the last call to the object
 )""";
 
-} // unnamed namespace
-
-PYBIND11_MODULE(pyinterpol_ng, m)
+void add_pyinterpol_ng(py::module &msup)
   {
   using namespace pybind11::literals;
+  auto m = msup.def_submodule("pyinterpol_ng");
 
   m.doc() = pyinterpol_ng_DS;
 
@@ -268,3 +269,9 @@ PYBIND11_MODULE(pyinterpol_ng, m)
 #endif
   m.def("epsilon_guess", &epsilon_guess, "support"_a, "ofactor"_a);
   }
+
+}
+
+using detail_pyinterpol_ng::add_pyinterpol_ng;
+
+}

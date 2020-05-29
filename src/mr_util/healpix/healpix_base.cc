@@ -35,11 +35,11 @@
 #include "mr_util/infra/mav.h"
 #include "mr_util/math/space_filling.h"
 
-using namespace std;
-
 namespace mr {
 
 namespace detail_healpix {
+
+using namespace std;
 
 namespace {
 

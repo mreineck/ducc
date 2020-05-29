@@ -34,10 +34,13 @@
 #define MRUTIL_GEOM_UTILS_H
 
 #include <vector>
+#include <cmath>
 #include "mr_util/math/math_utils.h"
 #include "mr_util/math/vec3.h"
 
 namespace mr {
+
+namespace detail_geom_utils {
 
 /*! Returns the orientation when looking from point \a loc on the unit
     sphere in the direction \a dir. \a loc must be normalized. The result
@@ -69,7 +72,7 @@ inline double v_angle (const vec3 &v1, const vec3 &v2)
 inline double cosdist_zphi (double z1, double phi1, double z2, double phi2)
   {
   using namespace std;
-  return z1*z2+cos(phi1-phi2)*sqrt((1.-z1*z1)*(1.-z2*z2));
+  return z1*z2+cos(phi1-phi2)*std::sqrt((1.-z1*z1)*(1.-z2*z2));
   }
 
 /*! Finds the smallest enclosing cone for a point set on the sphere according to
@@ -78,6 +81,13 @@ inline double cosdist_zphi (double z1, double phi1, double z2, double phi2)
     The enclosing cone must have an opening angle <pi/2. */
 void find_enclosing_circle (const std::vector<vec3> &point, vec3 &center,
   double &cosrad);
+
+}
+
+using detail_geom_utils::orientation;
+using detail_geom_utils::v_angle;
+using detail_geom_utils::cosdist_zphi;
+using detail_geom_utils::find_enclosing_circle;
 
 }
 

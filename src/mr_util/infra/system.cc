@@ -28,11 +28,11 @@
 #include "mr_util/infra/system.h"
 #include "mr_util/infra/string_utils.h"
 
-using namespace std;
-
 namespace mr {
 
-namespace {
+namespace detail_system {
+
+using namespace std;
 
 string fileToString(const string &fname)
   {
@@ -50,8 +50,6 @@ template<typename T> T find(const string &s, const string &pattern)
   MR_assert (it!=it_end, "did not find pattern '", pattern, "'");
   return stringToData<T>(it->str(1));
   }
-
-} // unnamed namespace
 
 size_t getProcessInfo(const string &quantity)
   {
@@ -73,4 +71,4 @@ size_t usable_memory()
   return MemTotal-Committed;
   }
 
-}
+}}
