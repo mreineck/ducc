@@ -42,7 +42,7 @@ def measure_fftw_np_interface(a, nrepeat, nthr):
 
 
 def measure_pypocketfft(a, nrepeat, nthr):
-    import pypocketfft as ppf
+    import ducc_0_1.pypocketfft as ppf
     tmin = 1e38
     b = a.copy()
     for i in range(nrepeat):

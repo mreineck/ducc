@@ -1,5 +1,8 @@
 from setuptools import setup, Extension
 import sys
+import os.path
+import itertools
+from glob import iglob
 
 pkgname = 'ducc_0_1'
 
@@ -10,6 +13,13 @@ class _deferred_pybind11_include(object):
     def __str__(self):
         import pybind11
         return pybind11.get_include(self.user)
+
+
+def _get_files_by_suffix(directory, suffix):
+    path = directory
+    iterable_sources = (iglob(os.path.join(root, '*.'+suffix))
+                        for root, dirs, files in os.walk(path))
+    return list(itertools.chain.from_iterable(iterable_sources))
 
 
 include_dirs = ['./src/',
@@ -34,10 +44,11 @@ else:
 # if you don't want debugging info, add "-s" to python_module_link_args
 
 def get_extension_modules():
+    depfiles = _get_files_by_suffix('.', 'h') + _get_files_by_suffix('.', 'cc') + ['setup.py']
     return [Extension(pkgname,
                       language='c++',
                       sources=['module.cc'],
-                      depends=[],
+                      depends=depfiles,
                       include_dirs=include_dirs,
                       define_macros=define_macros,
                       extra_compile_args=extra_compile_args,

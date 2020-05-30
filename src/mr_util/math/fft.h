@@ -862,19 +862,73 @@ struct ExecC2C
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
   const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
   {
-  auto ptr = dst.vdata();
-  for (size_t j=0; j<vlen; ++j)
-    ptr[it.oofs(j,0)] = src[0][j];
-  size_t i=1, i1=1, i2=it.length_out()-1;
-  for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-    for (size_t j=0; j<vlen; ++j)
+  if (it.uniform_o())
+    {
+    auto ptr = &dst.vraw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (istr==1)
       {
-      ptr[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
-      ptr[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
+      for (size_t j=0; j<vlen; ++j)
+        ptr[ptrdiff_t(j)*jstr] = src[0][j];
+      size_t i=1, i1=1, i2=it.length_out()-1;
+      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
+        for (size_t j=0; j<vlen; ++j)
+          {
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j]+src[i+1][j];
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)] = src[i][j]-src[i+1][j];
+          }
+      if (i<it.length_out())
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j];
       }
-  if (i<it.length_out())
+    else if (jstr==1)
+      {
+      for (size_t j=0; j<vlen; ++j)
+        ptr[ptrdiff_t(j)] = src[0][j];
+      size_t i=1, i1=1, i2=it.length_out()-1;
+      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
+        for (size_t j=0; j<vlen; ++j)
+          {
+          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
+          ptr[ptrdiff_t(j) + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
+          }
+      if (i<it.length_out())
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j];
+      }
+    else
+      {
+      for (size_t j=0; j<vlen; ++j)
+        ptr[ptrdiff_t(j)*jstr] = src[0][j];
+      size_t i=1, i1=1, i2=it.length_out()-1;
+      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
+        for (size_t j=0; j<vlen; ++j)
+          {
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
+          }
+      if (i<it.length_out())
+        for (size_t j=0; j<vlen; ++j)
+          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j];
+      }
+    }
+  else
+    {
+    auto ptr = dst.vdata();
     for (size_t j=0; j<vlen; ++j)
-      ptr[it.oofs(j,i1)] = src[i][j];
+      ptr[it.oofs(j,0)] = src[0][j];
+    size_t i=1, i1=1, i2=it.length_out()-1;
+    for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
+      for (size_t j=0; j<vlen; ++j)
+        {
+        ptr[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
+        ptr[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
+        }
+    if (i<it.length_out())
+      for (size_t j=0; j<vlen; ++j)
+        ptr[it.oofs(j,i1)] = src[i][j];
+    }
   }
 
 template <typename T, size_t vlen> void copy_hartley(const multi_iter<vlen> &it,
