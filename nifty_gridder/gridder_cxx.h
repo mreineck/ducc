@@ -36,12 +36,6 @@
 #include "mr_util/infra/mav.h"
 #include "mr_util/math/es_kernel.h"
 
-#if defined(__GNUC__)
-#define ALIGNED(align) __attribute__ ((aligned(align)))
-#else
-#define ALIGNED(align)
-#endif
-
 namespace gridder {
 
 namespace detail {
@@ -51,10 +45,7 @@ using namespace mr;
 
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
-  {
-  for (size_t i=0; i<ndim; ++i)
-    MR_assert(shp1[i]==shp2[i], "shape mismatch");
-  }
+  { MR_assert(shp1==shp2, "shape mismatch"); }
 
 template<typename T> inline T fmod1 (T v)
   { return v-floor(v); }
@@ -66,7 +57,7 @@ template<typename T> inline T fmod1 (T v)
 template<typename T> void complex2hartley
   (const mav<complex<T>, 2> &grid, mav<T,2> &grid2, size_t nthreads)
   {
-  checkShape(grid.shape(), grid2.shape());
+  MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
 
   execStatic(nu, nthreads, 0, [&](Scheduler &sched)
@@ -87,7 +78,7 @@ template<typename T> void complex2hartley
 template<typename T> void hartley2complex
   (const mav<T,2> &grid, mav<complex<T>,2> &grid2, size_t nthreads)
   {
-  checkShape(grid.shape(), grid2.shape());
+  MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
 
   execStatic(nu, nthreads, 0, [&](Scheduler &sched)
@@ -109,7 +100,7 @@ template<typename T> void hartley2complex
 template<typename T> void hartley2_2D(const mav<T,2> &in,
   mav<T,2> &out, size_t nthreads)
   {
-  checkShape(in.shape(), out.shape());
+  MR_assert(in.conformable(out), "shape mismatch");
   size_t nu=in.shape(0), nv=in.shape(1);
   fmav<T> fin(in), fout(out);
   r2r_separable_hartley(fin, fout, {0,1}, T(1), nthreads);
@@ -282,7 +273,7 @@ class GridderConfig
     template<typename T> void grid2dirty_post(mav<T,2> &tmav,
       mav<T,2> &dirty) const
       {
-      checkShape(dirty.shape(), {nx_dirty,ny_dirty});
+      checkShape(dirty.shape(), {nx_dirty, ny_dirty});
       auto cfu = correction_factors(nu, ofactor, nx_dirty/2+1, supp, nthreads);
       auto cfv = correction_factors(nv, ofactor, ny_dirty/2+1, supp, nthreads);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
@@ -546,7 +537,7 @@ template<typename T, typename T2=complex<T>> class Helper
   public:
     const T2 *p0r;
     T2 *p0w;
-    T kernel[64] ALIGNED(64);
+    T kernel[64] MRUTIL_ALIGNED(64);
     static constexpr size_t vlen=native_simd<T>::size();
 
     Helper(const GridderConfig &gconf_, const T2 *grid_r_, T2 *grid_w_,
@@ -1095,7 +1086,7 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   return res;
   }
 
-template<typename T> void ms2dirty_general(const mav<double,2> &uvw,
+template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
   const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
@@ -1108,17 +1099,8 @@ template<typename T> void ms2dirty_general(const mav<double,2> &uvw,
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   x2dirty(gconf, serv, dirty, do_wstacking, verbosity);
   }
-template<typename T> void ms2dirty(const mav<double,2> &uvw,
-  const mav<double,1> &freq, const mav<complex<T>,2> &ms,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity)
-  {
-  ms2dirty_general(uvw, freq, ms, wgt, pixsize_x, pixsize_y,
-    2*dirty.shape(0), 2*dirty.shape(1), epsilon, do_wstacking, nthreads,
-    dirty, verbosity);
-  }
 
-template<typename T> void dirty2ms_general(const mav<double,2> &uvw,
+template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
   const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv,double epsilon,
   bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
@@ -1133,21 +1115,10 @@ template<typename T> void dirty2ms_general(const mav<double,2> &uvw,
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
   }
-template<typename T> void dirty2ms(const mav<double,2> &uvw,
-  const mav<double,1> &freq, const mav<T,2> &dirty,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms, size_t verbosity)
-  {
-  dirty2ms_general(uvw, freq, dirty, wgt, pixsize_x, pixsize_y,
-    2*dirty.shape(0), 2*dirty.shape(1), epsilon, do_wstacking, nthreads, ms,
-    verbosity);
-  }
 
 } // namespace detail
 
 // public names
-using detail::ms2dirty_general;
-using detail::dirty2ms_general;
 using detail::ms2dirty;
 using detail::dirty2ms;
 } // namespace gridder
