@@ -1,4 +1,4 @@
-import ducc_0_1.pypocketfft as pypocketfft
+import ducc_0_1.fft as fft
 # import pyfftw
 import numpy as np
 import pytest
@@ -25,33 +25,33 @@ def _assert_close(a, b, epsilon):
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):
-    return pypocketfft.c2c(a, axes=axes, forward=True, inorm=inorm,
+    return fft.c2c(a, axes=axes, forward=True, inorm=inorm,
                            out=out, nthreads=nthreads)
 
 
 def ifftn(a, axes=None, inorm=0, out=None, nthreads=1):
-    return pypocketfft.c2c(a, axes=axes, forward=False, inorm=inorm,
+    return fft.c2c(a, axes=axes, forward=False, inorm=inorm,
                            out=out, nthreads=nthreads)
 
 
 def rfftn(a, axes=None, inorm=0, nthreads=1):
-    return pypocketfft.r2c(a, axes=axes, forward=True, inorm=inorm,
+    return fft.r2c(a, axes=axes, forward=True, inorm=inorm,
                            nthreads=nthreads)
 
 
 def irfftn(a, axes=None, lastsize=0, inorm=0, nthreads=1):
-    return pypocketfft.c2r(a, axes=axes, lastsize=lastsize, forward=False,
+    return fft.c2r(a, axes=axes, lastsize=lastsize, forward=False,
                            inorm=inorm, nthreads=nthreads)
 
 
 def rfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
-    return pypocketfft.r2r_fftpack(a, axes=(axis,), real2hermitian=True,
+    return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=True,
                                    forward=True, inorm=inorm, out=out,
                                    nthreads=nthreads)
 
 
 def irfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
-    return pypocketfft.r2r_fftpack(a, axes=(axis,), real2hermitian=False,
+    return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=False,
                                    forward=False, inorm=inorm, out=out,
                                    nthreads=nthreads)
 
@@ -194,7 +194,7 @@ def test_identity_r2(shp):
 def test_genuine_hartley(shp):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     a = rng.random(shp)-0.5
-    v1 = pypocketfft.genuine_hartley(a)
+    v1 = fft.genuine_hartley(a)
     v2 = fftn(a.astype(np.complex128))
     v2 = v2.real+v2.imag
     assert_(_l2error(v1, v2) < 1e-15)
@@ -204,7 +204,7 @@ def test_genuine_hartley(shp):
 def test_hartley_identity(shp):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     a = rng.random(shp)-0.5
-    v1 = pypocketfft.separable_hartley(pypocketfft.separable_hartley(a))/a.size
+    v1 = fft.separable_hartley(fft.separable_hartley(a))/a.size
     assert_(_l2error(a, v1) < 1e-15)
 
 
@@ -212,11 +212,11 @@ def test_hartley_identity(shp):
 def test_genuine_hartley_identity(shp):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     a = rng.random(shp)-0.5
-    v1 = pypocketfft.genuine_hartley(pypocketfft.genuine_hartley(a))/a.size
+    v1 = fft.genuine_hartley(fft.genuine_hartley(a))/a.size
     assert_(_l2error(a, v1) < 1e-15)
     v1 = a.copy()
-    assert_(pypocketfft.genuine_hartley(
-        pypocketfft.genuine_hartley(v1, out=v1), inorm=2, out=v1) is v1)
+    assert_(fft.genuine_hartley(
+        fft.genuine_hartley(v1, out=v1), inorm=2, out=v1) is v1)
     assert_(_l2error(a, v1) < 1e-15)
 
 
@@ -225,7 +225,7 @@ def test_genuine_hartley_identity(shp):
 def test_genuine_hartley_2D(shp, axes):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     a = rng.random(shp)-0.5
-    assert_(_l2error(pypocketfft.genuine_hartley(pypocketfft.genuine_hartley(
+    assert_(_l2error(fft.genuine_hartley(fft.genuine_hartley(
         a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
 
 
@@ -240,5 +240,5 @@ def testdcst1D(len, inorm, type, dtype):
     itp = (0, 1, 3, 2, 4)
     itype = itp[type]
     if type != 1 or len > 1:  # there are no length-1 type 1 DCTs
-        _assert_close(a, pypocketfft.dct(pypocketfft.dct(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)
-    _assert_close(a, pypocketfft.dst(pypocketfft.dst(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)
+        _assert_close(a, fft.dct(fft.dct(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)
+    _assert_close(a, fft.dst(fft.dst(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)

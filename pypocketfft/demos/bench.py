@@ -1,5 +1,5 @@
 import numpy as np
-import ducc_0_1.pypocketfft as pypocketfft
+import ducc_0_1.fft as duccfft
 from time import time
 import matplotlib.pyplot as plt
 
@@ -41,13 +41,12 @@ def measure_fftw_np_interface(a, nrepeat, nthr):
     return tmin, b
 
 
-def measure_pypocketfft(a, nrepeat, nthr):
-    import ducc_0_1.pypocketfft as ppf
+def measure_duccfft(a, nrepeat, nthr):
     tmin = 1e38
     b = a.copy()
     for i in range(nrepeat):
         t0 = time()
-        b = ppf.c2c(a, out=b, forward=True, nthreads=nthr)
+        b = duccfft.c2c(a, out=b, forward=True, nthreads=nthr)
         t1 = time()
         tmin = min(tmin, t1-t0)
     return tmin, b
@@ -110,7 +109,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     for n in range(ntry):
         shp = np.random.randint(nmax//3, nmax+1, ndim)
         if nice_sizes:
-            shp = np.array([pypocketfft.good_size(sz) for sz in shp])
+            shp = np.array([duccfft.good_size(sz) for sz in shp])
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
         a = (np.random.rand(*shp)-0.5 + 1j*(np.random.rand(*shp)-0.5)).astype(tp)
         output=[]
@@ -130,8 +129,8 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.show()
 
 
-funcs = (measure_pypocketfft, measure_fftw)
-ttl = "pypocketfft/FFTW()"
+funcs = (measure_duccfft, measure_fftw)
+ttl = "duccfft/FFTW()"
 ntry=100
 nthr = 1
 nice_sizes = True

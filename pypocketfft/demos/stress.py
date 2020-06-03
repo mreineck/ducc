@@ -1,5 +1,5 @@
 import numpy as np
-import ducc_0_1.pypocketfft as pypocketfft
+import ducc_0_1.fft as fft
 
 
 def _l2error(a, b, axes):
@@ -7,23 +7,23 @@ def _l2error(a, b, axes):
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):
-    return pypocketfft.c2c(a, axes=axes, forward=True, inorm=inorm,
-                           out=out, nthreads=nthreads)
+    return fft.c2c(a, axes=axes, forward=True, inorm=inorm,
+                   out=out, nthreads=nthreads)
 
 
 def ifftn(a, axes=None, inorm=0, out=None, nthreads=1):
-    return pypocketfft.c2c(a, axes=axes, forward=False, inorm=inorm,
-                           out=out, nthreads=nthreads)
+    return fft.c2c(a, axes=axes, forward=False, inorm=inorm,
+                   out=out, nthreads=nthreads)
 
 
 def rfftn(a, axes=None, inorm=0, nthreads=1):
-    return pypocketfft.r2c(a, axes=axes, forward=True, inorm=inorm,
-                           nthreads=nthreads)
+    return fft.r2c(a, axes=axes, forward=True, inorm=inorm,
+                   nthreads=nthreads)
 
 
 def irfftn(a, axes=None, lastsize=0, inorm=0, nthreads=1):
-    return pypocketfft.c2r(a, axes=axes, lastsize=lastsize, forward=False,
-                           inorm=inorm, nthreads=nthreads)
+    return fft.c2r(a, axes=axes, lastsize=lastsize, forward=False,
+                   inorm=inorm, nthreads=nthreads)
 
 
 nthreads = 0
@@ -69,71 +69,71 @@ def test(err):
     b = irfftn(rfftn(a.real.astype(np.float32), axes=axes, nthreads=nthreads),
                axes=axes, inorm=2, lastsize=lastsize, nthreads=nthreads)
     err = update_err(err, "rmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
-    b = pypocketfft.separable_hartley(
-        pypocketfft.separable_hartley(a.real, axes=axes, nthreads=nthreads),
+    b = fft.separable_hartley(
+        fft.separable_hartley(a.real, axes=axes, nthreads=nthreads),
         axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmax", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.genuine_hartley(
-        pypocketfft.genuine_hartley(a.real, axes=axes, nthreads=nthreads),
+    b = fft.genuine_hartley(
+        fft.genuine_hartley(a.real, axes=axes, nthreads=nthreads),
         axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmax", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.separable_hartley(
-            pypocketfft.separable_hartley(
+    b = fft.separable_hartley(
+            fft.separable_hartley(
                 a.real.astype(np.float32), axes=axes, nthreads=nthreads),
             axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
-    b = pypocketfft.genuine_hartley(
-            pypocketfft.genuine_hartley(a.real.astype(np.float32), axes=axes,
+    b = fft.genuine_hartley(
+            fft.genuine_hartley(a.real.astype(np.float32), axes=axes,
                                         nthreads=nthreads),
             axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
     if all(a.shape[i] > 1 for i in axes):
-        b = pypocketfft.dct(
-            pypocketfft.dct(a.real, axes=axes, nthreads=nthreads, type=1),
+        b = fft.dct(
+            fft.dct(a.real, axes=axes, nthreads=nthreads, type=1),
             axes=axes, type=1, nthreads=nthreads, inorm=2)
         err = update_err(err, "c1max", _l2error(a.real, b, axes), shape)
-        b = pypocketfft.dct(
-            pypocketfft.dct(a_32.real, axes=axes, nthreads=nthreads, type=1),
+        b = fft.dct(
+            fft.dct(a_32.real, axes=axes, nthreads=nthreads, type=1),
             axes=axes, type=1, nthreads=nthreads, inorm=2)
         err = update_err(err, "c1maxf", _l2error(a_32.real, b, axes), shape)
-    b = pypocketfft.dct(
-        pypocketfft.dct(a.real, axes=axes, nthreads=nthreads, type=2),
+    b = fft.dct(
+        fft.dct(a.real, axes=axes, nthreads=nthreads, type=2),
         axes=axes, type=3, nthreads=nthreads, inorm=2)
     err = update_err(err, "c23max", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.dct(
-        pypocketfft.dct(a_32.real, axes=axes, nthreads=nthreads, type=2),
+    b = fft.dct(
+        fft.dct(a_32.real, axes=axes, nthreads=nthreads, type=2),
         axes=axes, type=3, nthreads=nthreads, inorm=2)
     err = update_err(err, "c23maxf", _l2error(a_32.real, b, axes), shape)
-    b = pypocketfft.dct(
-        pypocketfft.dct(a.real, axes=axes, nthreads=nthreads, type=4),
+    b = fft.dct(
+        fft.dct(a.real, axes=axes, nthreads=nthreads, type=4),
         axes=axes, type=4, nthreads=nthreads, inorm=2)
     err = update_err(err, "c4max", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.dct(
-        pypocketfft.dct(a_32.real, axes=axes, nthreads=nthreads, type=4),
+    b = fft.dct(
+        fft.dct(a_32.real, axes=axes, nthreads=nthreads, type=4),
         axes=axes, type=4, nthreads=nthreads, inorm=2)
     err = update_err(err, "c4maxf", _l2error(a_32.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a.real, axes=axes, nthreads=nthreads, type=1),
+    b = fft.dst(
+        fft.dst(a.real, axes=axes, nthreads=nthreads, type=1),
         axes=axes, type=1, nthreads=nthreads, inorm=2)
     err = update_err(err, "s1max", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a_32.real, axes=axes, nthreads=nthreads, type=1),
+    b = fft.dst(
+        fft.dst(a_32.real, axes=axes, nthreads=nthreads, type=1),
         axes=axes, type=1, nthreads=nthreads, inorm=2)
     err = update_err(err, "s1maxf", _l2error(a_32.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a.real, axes=axes, nthreads=nthreads, type=2),
+    b = fft.dst(
+        fft.dst(a.real, axes=axes, nthreads=nthreads, type=2),
         axes=axes, type=3, nthreads=nthreads, inorm=2)
     err = update_err(err, "s23max", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a_32.real, axes=axes, nthreads=nthreads, type=2),
+    b = fft.dst(
+        fft.dst(a_32.real, axes=axes, nthreads=nthreads, type=2),
         axes=axes, type=3, nthreads=nthreads, inorm=2)
     err = update_err(err, "s23maxf", _l2error(a_32.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a.real, axes=axes, nthreads=nthreads, type=4),
+    b = fft.dst(
+        fft.dst(a.real, axes=axes, nthreads=nthreads, type=4),
         axes=axes, type=4, nthreads=nthreads, inorm=2)
     err = update_err(err, "s4max", _l2error(a.real, b, axes), shape)
-    b = pypocketfft.dst(
-        pypocketfft.dst(a_32.real, axes=axes, nthreads=nthreads, type=4),
+    b = fft.dst(
+        fft.dst(a_32.real, axes=axes, nthreads=nthreads, type=4),
         axes=axes, type=4, nthreads=nthreads, inorm=2)
     err = update_err(err, "s4maxf", _l2error(a_32.real, b, axes), shape)
 

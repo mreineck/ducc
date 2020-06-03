@@ -652,7 +652,7 @@ out : int
 void add_pypocketfft(py::module &msup)
   {
   using namespace pybind11::literals;
-  auto m = msup.def_submodule("pypocketfft");
+  auto m = msup.def_submodule("fft");
   m.doc() = pypocketfft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,
     "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
