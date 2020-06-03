@@ -44,13 +44,13 @@ MRUTIL_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
   const size_t axis, const vector<T0> &kernel, size_t nthreads,
   const Exec &exec)
   {
-  std::shared_ptr<Tplan> plan1, plan2;
+  std::unique_ptr<Tplan> plan1, plan2;
 
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
   size_t l_min=std::min(l_in, l_out), l_max=std::max(l_in, l_out);
   MR_assert(kernel.size()==l_min/2+1, "bad kernel size");
-  plan1 = get_plan<Tplan>(l_in);
-  plan2 = get_plan<Tplan>(l_out);
+  plan1 = std::make_unique<Tplan>(l_in);
+  plan2 = std::make_unique<Tplan>(l_out);
 
   execParallel(
     util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
