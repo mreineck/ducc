@@ -47,7 +47,7 @@ def get_extension_modules():
     depfiles = _get_files_by_suffix('.', 'h') + _get_files_by_suffix('.', 'cc') + ['setup.py']
     return [Extension(pkgname,
                       language='c++',
-                      sources=['module.cc'],
+                      sources=['ducc.cc'],
                       depends=depfiles,
                       include_dirs=include_dirs,
                       define_macros=define_macros,
