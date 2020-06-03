@@ -1,4 +1,4 @@
-import pyinterpol_ng
+import ducc_0_1.pyinterpol_ng as pyinterpol_ng
 import numpy as np
 import time
 
@@ -26,15 +26,6 @@ def compress_alm(alm,lmax):
 
 def myalmdot(a1,a2,lmax,mmax,spin):
     return np.vdot(compress_alm(a1,lmax),compress_alm(np.conj(a2),lmax))
-
-
-def convolve(alm1, alm2, lmax):
-    job = pysharp.sharpjob_d()
-    job.set_triangular_alm_info(lmax, lmax)
-    job.set_gauss_geometry(lmax+1, 2*lmax+1)
-    map = job.alm2map(alm1)*job.alm2map(alm2)
-    job.set_triangular_alm_info(0,0)
-    return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
 
 lmax=1024
