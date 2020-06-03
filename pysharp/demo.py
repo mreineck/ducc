@@ -4,7 +4,7 @@
 # and Fejer quadrature rules are very similar (see the documentation in
 # sharp_geomhelpers.h). An exact analogon to DH can be added easily, I expect.
 
-import pysharp
+import ducc_0_1.sht as sht
 import numpy as np
 from time import time
 
@@ -21,7 +21,7 @@ mmax = lmax
 nlon = 4096
 
 # create an object which will do the SHT work
-job = pysharp.sharpjob_d()
+job = sht.sharpjob_d()
 
 # create a set of spherical harmonic coefficients to transform
 # Libsharp works exclusively on real-valued maps. The corresponding harmonic

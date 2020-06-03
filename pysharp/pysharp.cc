@@ -271,7 +271,7 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
 void add_pysharp(py::module &msup)
   {
   using namespace pybind11::literals;
-  auto m = msup.def_submodule("pysharp");
+  auto m = msup.def_submodule("sht");
   m.doc() = pysharp_DS;
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())

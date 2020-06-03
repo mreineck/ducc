@@ -348,7 +348,7 @@ The employed algorithm is highly accurate, even for angles close to 0 or pi.
 void add_pyHealpix(py::module &msup)
   {
   using namespace pybind11::literals;
-  auto m = msup.def_submodule("pyHealpix");
+  auto m = msup.def_submodule("healpix");
   m.doc() = pyHealpix_DS;
 
   py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local())

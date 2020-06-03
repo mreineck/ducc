@@ -1,4 +1,4 @@
-import pysharp
+import ducc_0_1.sht as sht
 import numpy as np
 from time import time
 
@@ -17,7 +17,7 @@ alm = np.random.uniform(-1., 1., nalm) + 1j*np.random.uniform(-1., 1., nalm)
 # make a_lm with m==0 real-valued
 alm[0:lmax+1].imag = 0.
 
-job = pysharp.sharpjob_d()
+job = sht.sharpjob_d()
 # describe the a_lm array to the job
 job.set_triangular_alm_info(lmax, mmax)
 
@@ -33,7 +33,7 @@ map = job.alm2map(alm)
 print("time for map synthesis: {}s".format(time()-t0))
 nlat2 = 2*lmax+3
 t0=time()
-map2 = pysharp.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, False, False)
+map2 = sht.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, False, False)
 print("time for upsampling: {}s".format(time()-t0))
 job.set_cc_geometry(nlat2, nlon)
 t0=time()
@@ -55,7 +55,7 @@ map = job.alm2map(alm)
 print("time for map synthesis: {}s".format(time()-t0))
 nlat2 = 2*lmax+3
 t0=time()
-map2 = pysharp.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, True, True)
+map2 = sht.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, True, True)
 print("time for upsampling: {}s".format(time()-t0))
 job.set_cc_geometry(nlat2, nlon)
 t0=time()
@@ -78,7 +78,7 @@ map = job.alm2map(alm)
 print("time for map synthesis: {}s".format(time()-t0))
 nlat2 = 2*lmax+3
 t0=time()
-map2 = pysharp.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, False, True)
+map2 = sht.upsample_to_cc(map.reshape((nlat,nlon)), nlat2, False, True)
 print("time for upsampling: {}s".format(time()-t0))
 job.set_cc_geometry(nlat2, nlon)
 t0=time()

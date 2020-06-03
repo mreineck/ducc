@@ -1,4 +1,4 @@
-import ducc_0_1.pysharp as pysharp
+import ducc_0_1.sht as sht
 import numpy as np
 import math
 import pytest
@@ -11,7 +11,7 @@ pmp = pytest.mark.parametrize
                 (511, 0, 512, 1)])
 def test_GL(params):
     lmax, mmax, nlat, nlon = params
-    job = pysharp.sharpjob_d()
+    job = sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -30,7 +30,7 @@ def test_GL(params):
                 (511, 0, 1024, 1)])
 def test_fejer1(params):
     lmax, mmax, nlat, nlon = params
-    job = pysharp.sharpjob_d()
+    job = sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -49,7 +49,7 @@ def test_fejer1(params):
                 (511, 0, 1024, 1)])
 def test_dh(params):
     lmax, mmax, nlat, nlon = params
-    job = pysharp.sharpjob_d()
+    job = sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))

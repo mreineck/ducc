@@ -1,7 +1,7 @@
 import time
 import math
 import numpy as np
-import ducc_0_1.pyHealpix as ph
+import ducc_0_1.healpix as ph
 
 def report (name,vlen,ntry,nside,isnest,perf):
   print (name,": ",perf*1e-6,"MOps/s",sep="")
