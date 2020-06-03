@@ -41,7 +41,7 @@ else:
     extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
     python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN', '-s']
 
-# if you don't want debugging info, add "-s" to python_module_link_args
+# if you want debugging info, remove the "-s" from python_module_link_args
 
 def get_extension_modules():
     depfiles = _get_files_by_suffix('.', 'h') + _get_files_by_suffix('.', 'cc') + ['setup.py']
@@ -58,11 +58,13 @@ def get_extension_modules():
 setup(name=pkgname,
       version='0.1.0',
       description='Definitely useful code collection',
+      url='https://gitlab.mpcdf.mpg.de/mtr/cxxbase',
       include_package_data=True,
       author='Martin Reinecke',
       author_email='martin@mpa-garching.mpg.de',
       packages=[],
       setup_requires=['numpy>=1.17.0', 'pybind11>=2.5.0'],
       ext_modules=get_extension_modules(),
-      install_requires=['numpy>=1.17.0', 'pybind11>=2.5.0']
+      install_requires=['numpy>=1.17.0', 'pybind11>=2.5.0'],
+      license="GPLv2",
       )
