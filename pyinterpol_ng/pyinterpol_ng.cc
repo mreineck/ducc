@@ -237,7 +237,7 @@ Notes
 void add_pyinterpol_ng(py::module &msup)
   {
   using namespace pybind11::literals;
-  auto m = msup.def_submodule("pyinterpol_ng");
+  auto m = msup.def_submodule("totalconvolve");
 
   m.doc() = pyinterpol_ng_DS;
 

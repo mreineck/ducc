@@ -1,6 +1,6 @@
 # Short usage demo for the interpol_ng module
 
-import pyinterpol_ng
+import ducc_0_1.totalconvolve as totalconvolve
 import numpy as np
 
 
@@ -44,7 +44,7 @@ ptg[:,2]*=2*np.pi # psi
 # so we set `separate` to `False`
 
 print("classic interpolator setup...")
-inter_classic = pyinterpol_ng.PyInterpolator(
+inter_classic = totalconvolve.PyInterpolator(
     slm,blm,separate=False,lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 
@@ -66,7 +66,7 @@ del inter_classic
 separate = True
 
 print("HWP interpolator setup...")
-inter_hwp = pyinterpol_ng.PyInterpolator(
+inter_hwp = totalconvolve.PyInterpolator(
     slm,blm,separate=True,lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 

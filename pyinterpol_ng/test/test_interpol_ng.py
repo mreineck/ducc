@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import ducc_0_1.pyinterpol_ng as pyinterpol_ng
+import ducc_0_1.totalconvolve as totalconvolve
 import ducc_0_1.sht as sht
 
 pmp = pytest.mark.parametrize
@@ -59,7 +59,7 @@ def test_against_convolution(lkmax, ncomp, separate):
     slm = random_alm(lmax, lmax, ncomp)
     blm = random_alm(lmax, kmax, ncomp)
 
-    inter = pyinterpol_ng.PyInterpolator(slm, blm, separate, lmax, kmax,
+    inter = totalconvolve.PyInterpolator(slm, blm, separate, lmax, kmax,
                                          epsilon=1e-8, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg,3))
@@ -74,7 +74,7 @@ def test_against_convolution(lkmax, ncomp, separate):
     res2 = np.zeros((nptg, ncomp))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam=pyinterpol_ng.rotate_alm(blm2[:,c], lmax, ptg[i,2],ptg[i,0],ptg[i,1])
+            rbeam=totalconvolve.rotate_alm(blm2[:,c], lmax, ptg[i,2],ptg[i,0],ptg[i,1])
             res2[i,c] = convolve(slm[:,c], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-7)
@@ -93,11 +93,11 @@ def test_adjointness(lkmax, ncomp, separate):
     ptg[:,0]*=np.pi
     ptg[:,1]*=2*np.pi
     ptg[:,2]*=2*np.pi
-    foo = pyinterpol_ng.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-6, nthreads=2)
+    foo = totalconvolve.PyInterpolator(slm,blm,separate,lmax, kmax, epsilon=1e-6, nthreads=2)
     inter1=foo.interpol(ptg)
     ncomp2 = inter1.shape[1]
     fake = np.random.uniform(0.,1., (ptg.shape[0],ncomp2))
-    foo2 = pyinterpol_ng.PyInterpolator(lmax, kmax, ncomp2, epsilon=1e-6, nthreads=2)
+    foo2 = totalconvolve.PyInterpolator(lmax, kmax, ncomp2, epsilon=1e-6, nthreads=2)
     foo2.deinterpol(ptg.reshape((-1,3)), fake)
     bla=foo2.getSlm(blm)
     v1 = np.sum([myalmdot(slm[:,c], bla[:,c], lmax, lmax, 0) for c in range(ncomp)])
