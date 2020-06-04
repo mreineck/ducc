@@ -12,7 +12,8 @@ Installation
 
 - [Python 3](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
-- a C++17-capable C++ compiler (e.g. g++ from version 7 on or a recent clang++)
+- a C++17-capable C++ compiler (tested with g++ version 7 or newer and clang++;
+  recent versions of MSVC on Windows also work, but are tested less frequently)
 
 ### Sources
 
