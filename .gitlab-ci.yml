@@ -2,7 +2,6 @@ image: $CONTAINER_TEST_IMAGE
 
 variables:
   CONTAINER_TEST_IMAGE: gitlab-registry.mpcdf.mpg.de/$CI_PROJECT_PATH:$CI_BUILD_REF_NAME
-  OMP_NUM_THREADS: 2
 
 stages:
   - build_docker
@@ -21,13 +20,13 @@ test_gcc:
   stage: testing
   script:
     - python3 setup.py install --user -f
-    - pytest-3 -q pypocketfft/test pysharp/test pyHealpix/test nifty_gridder/test pyinterpol_ng/test
+    - pytest-3 -q fft/test sht/test healpix/test wgridder/test totalconvolve/test
 
 test_clang:
   stage: testing
   script:
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q pypocketfft/test pysharp/test pyHealpix/test nifty_gridder/test pyinterpol_ng/test
+    - pytest-3 -q fft/test sht/test healpix/test wgridder/test totalconvolve/test
 
 release:
   stage: build_tarballs

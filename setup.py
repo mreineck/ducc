@@ -22,7 +22,7 @@ def _get_files_by_suffix(directory, suffix):
     return list(itertools.chain.from_iterable(iterable_sources))
 
 
-include_dirs = ['./src/',
+include_dirs = ['.', './src/',
                 _deferred_pybind11_include(True),
                 _deferred_pybind11_include()]
 extra_compile_args = ['--std=c++17', '-march=native', '-ffast-math', '-O3']
@@ -47,7 +47,7 @@ def get_extension_modules():
     depfiles = _get_files_by_suffix('.', 'h') + _get_files_by_suffix('.', 'cc') + ['setup.py']
     return [Extension(pkgname,
                       language='c++',
-                      sources=['ducc.cc'],
+                      sources=['python/ducc.cc'],
                       depends=depfiles,
                       include_dirs=include_dirs,
                       define_macros=define_macros,

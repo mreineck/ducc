@@ -5,11 +5,11 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include "interpol_ng.h"
+#include "totalconvolve.h"
 
 namespace mr {
 
-namespace detail_pyinterpol_ng {
+namespace detail_pymodule_totalconvolve {
 
 using namespace std;
 using namespace mr;
@@ -94,7 +94,7 @@ template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
   }
 #endif
 
-constexpr const char *pyinterpol_ng_DS = R"""(
+constexpr const char *totalconvolve_DS = R"""(
 Python interface for total convolution/interpolation library
 
 All arrays containing spherical harmonic coefficients are assumed to have the
@@ -234,12 +234,12 @@ Notes
     - must be the last call to the object
 )""";
 
-void add_pyinterpol_ng(py::module &msup)
+void add_totalconvolve(py::module &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("totalconvolve");
 
-  m.doc() = pyinterpol_ng_DS;
+  m.doc() = totalconvolve_DS;
 
   using inter_d = PyInterpolator<double>;
   py::class_<inter_d> (m, "PyInterpolator", py::module_local(), pyinterpolator_DS)
@@ -272,6 +272,6 @@ void add_pyinterpol_ng(py::module &msup)
 
 }
 
-using detail_pyinterpol_ng::add_pyinterpol_ng;
+using detail_pymodule_totalconvolve::add_totalconvolve;
 
 }

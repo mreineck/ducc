@@ -13,19 +13,19 @@
 #include "mr_util/healpix/healpix_base.cc"
 
 #include <pybind11/pybind11.h>
-#include "pysharp/pysharp.cc"
-#include "pypocketfft/pypocketfft.cc"
-#include "pyinterpol_ng/pyinterpol_ng.cc"
-#include "nifty_gridder/nifty_gridder.cc"
-#include "pyHealpix/pyHealpix.cc"
+#include "python/sht.cc"
+#include "python/fft.cc"
+#include "python/totalconvolve.cc"
+#include "python/wgridder.cc"
+#include "python/healpix.cc"
 
 using namespace mr;
 
 PYBIND11_MODULE(PKGNAME, m)
   {
-  add_pypocketfft(m);
-  add_pysharp(m);
-  add_pyinterpol_ng(m);
-  add_nifty_gridder(m);
-  add_pyHealpix(m);
+  add_fft(m);
+  add_sht(m);
+  add_totalconvolve(m);
+  add_wgridder(m);
+  add_healpix(m);
   }

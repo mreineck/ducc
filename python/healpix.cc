@@ -41,7 +41,7 @@
 
 namespace mr {
 
-namespace detail_pyHealpix {
+namespace detail_pymodule_healpix {
 
 using namespace std;
 using namespace mr;
@@ -245,7 +245,7 @@ py::array local_v_angle (const py::array &v1, const py::array &v2)
   return move(angle);
   }
 
-const char *pyHealpix_DS = R"""(
+const char *healpix_DS = R"""(
 Python interface for some of the HEALPix C++ functionality
 
 All angles are interpreted as radians.
@@ -345,11 +345,11 @@ that their last dimension is removed.
 The employed algorithm is highly accurate, even for angles close to 0 or pi.
 )""";
 
-void add_pyHealpix(py::module &msup)
+void add_healpix(py::module &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("healpix");
-  m.doc() = pyHealpix_DS;
+  m.doc() = healpix_DS;
 
   py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local())
     .def(py::init<int,const string &>(),"nside"_a,"scheme"_a)
@@ -385,6 +385,6 @@ void add_pyHealpix(py::module &msup)
 
 }
 
-using detail_pyHealpix::add_pyHealpix;
+using detail_pymodule_healpix::add_healpix;
 
 }

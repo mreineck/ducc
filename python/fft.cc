@@ -21,7 +21,7 @@
 
 namespace mr {
 
-namespace detail_pypocketfft {
+namespace detail_pymodule_fft {
 
 namespace {
 
@@ -346,7 +346,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
 
-const char *pypocketfft_DS = R"""(Fast Fourier and Hartley transforms.
+const char *fft_DS = R"""(Fast Fourier and Hartley transforms.
 
 This module supports
 - single, double, and long double precision
@@ -649,11 +649,11 @@ out : int
 
 } // unnamed namespace
 
-void add_pypocketfft(py::module &msup)
+void add_fft(py::module &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("fft");
-  m.doc() = pypocketfft_DS;
+  m.doc() = fft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,
     "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("r2c", r2c, r2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,
@@ -678,6 +678,6 @@ void add_pypocketfft(py::module &msup)
 
 }
 
-using detail_pypocketfft::add_pypocketfft;
+using detail_pymodule_fft::add_fft;
 
 }

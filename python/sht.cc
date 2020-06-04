@@ -44,7 +44,7 @@
 
 namespace mr {
 
-namespace detail_pysharp {
+namespace detail_pymodule_sht {
 
 using namespace std;
 using namespace mr;
@@ -188,7 +188,7 @@ template<typename T> class py_sharpjob
       }
   };
 
-const char *pysharp_DS = R"""(
+const char *sht_DS = R"""(
 Python interface for some of the libsharp functionality
 
 Error conditions are reported by raising exceptions.
@@ -268,11 +268,11 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   return move(out);
   }
 
-void add_pysharp(py::module &msup)
+void add_sht(py::module &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("sht");
-  m.doc() = pysharp_DS;
+  m.doc() = sht_DS;
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())
@@ -306,7 +306,7 @@ void add_pysharp(py::module &msup)
 
 }
 
-using detail_pysharp::add_pysharp;
+using detail_pymodule_sht::add_sht;
 
 }
 

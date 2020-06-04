@@ -26,7 +26,7 @@
 
 namespace mr {
 
-namespace detail_nifty_gridder {
+namespace detail_pymodule_wgridder {
 
 using namespace std;
 using namespace gridder;
@@ -190,7 +190,7 @@ np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
     the measurement set data.
 )""";
 
-void add_nifty_gridder(py::module &msup)
+void add_wgridder(py::module &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("wgridder");
@@ -205,6 +205,6 @@ void add_nifty_gridder(py::module &msup)
 
 }
 
-using detail_nifty_gridder::add_nifty_gridder;
+using detail_pymodule_wgridder::add_wgridder;
 
 }

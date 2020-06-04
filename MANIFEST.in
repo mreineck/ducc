@@ -1,8 +1,6 @@
 prune .
 
 include src/mr_util/infra/aligned_array.h
-#include src/mr_util/infra/communication.cc
-#include src/mr_util/infra/communication.h
 include src/mr_util/infra/error_handling.h
 include src/mr_util/infra/mav.h
 include src/mr_util/infra/simd.h
@@ -13,8 +11,6 @@ include src/mr_util/infra/system.h
 include src/mr_util/infra/threading.cc
 include src/mr_util/infra/threading.h
 include src/mr_util/infra/timers.h
-#include src/mr_util/infra/types.cc
-#include src/mr_util/infra/types.h
 include src/mr_util/infra/useful_macros.h
 
 include src/mr_util/bindings/pybind_utils.h
@@ -52,15 +48,17 @@ include src/mr_util/healpix/healpix_base.h
 include src/mr_util/healpix/healpix_tables.cc
 include src/mr_util/healpix/healpix_tables.h
 
-include pypocketfft/pypocketfft.cc
+include python/fft.cc
+include python/sht.cc
+include python/healpix.cc
+include python/gridder_cxx.h
+include python/wgridder.cc
+include python/alm.h
+include python/totalconvolve.h
+include python/totalconvolve.cc
 
-include pysharp/pysharp.cc
-
-include pyHealpix/pyHealpix.cc
-
-include nifty_gridder/gridder_cxx.h
-include nifty_gridder/nifty_gridder.cc
-
-include pyinterpol_ng/alm.h
-include pyinterpol_ng/interpol_ng.h
-include pyinterpol_ng/pyinterpol_ng.cc
+include python/test/test_fft.py
+include python/test/test_healpix.py
+include python/test/test_sht.py
+include python/test/test_totalconvolve.py
+include python/test/test_wgridder.py
