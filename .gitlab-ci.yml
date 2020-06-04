@@ -20,13 +20,13 @@ test_gcc:
   stage: testing
   script:
     - python3 setup.py install --user -f
-    - pytest-3 -q fft/test sht/test healpix/test wgridder/test totalconvolve/test
+    - pytest-3 -q python/test
 
 test_clang:
   stage: testing
   script:
     - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q fft/test sht/test healpix/test wgridder/test totalconvolve/test
+    - pytest-3 -q python/test
 
 release:
   stage: build_tarballs
