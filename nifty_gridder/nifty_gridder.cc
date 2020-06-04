@@ -193,7 +193,7 @@ np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
 void add_nifty_gridder(py::module &msup)
   {
   using namespace pybind11::literals;
-  auto m = msup.def_submodule("nifty_gridder");
+  auto m = msup.def_submodule("wgridder");
 
   m.def("ms2dirty", &Pyms2dirty, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a,

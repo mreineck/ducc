@@ -1,4 +1,4 @@
-import ducc_0_1.nifty_gridder as ng
+import ducc_0_1.wgridder as ng
 import numpy as np
 import pytest
 from numpy.testing import assert_, assert_allclose, assert_array_almost_equal
