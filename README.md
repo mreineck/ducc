@@ -16,7 +16,7 @@ Installation
 
 ### Sources
 
-The current version of DUCC can be obtained by cloning the repository via
+The latest version of DUCC can be obtained by cloning the repository via
 
     git clone https://gitlab.mpcdf.mpg.de/mtr/ducc.git
 
@@ -29,6 +29,26 @@ DUCC and its mandatory dependencies can be installed via:
 
     sudo apt-get install git python3 python3-pip python3-dev python3-pybind11 pybind11-dev
     pip3 install --user git+https://gitlab.mpcdf.mpg.de/mtr/ducc.git
+
+
+Installing multiple versions simultaneously
+===========================================
+
+The interfaces of the DUCC components are expected to evolve over time; whenever
+an interface changes in a manner that is not backwards compatible, the DUCC
+version number will increase. As a consequence it might happen that one part of
+a Python code may use an older version of DUCC while at the same time another
+part requires a newer version. Since DUCC's version number is included in the
+module name itself (the module is not called "ducc", but rather "ducc_x_y"),
+this is not a problem, as multiple DUCC versions can be installed
+simultaneously.
+The latest patch levels of a given DUCC version will always be available at the
+HEAD of the git branch with the respective name. In other words, if you need
+the latest incarnation of DUCC 0.1, this will be in branch "ducc_0_1" of the
+git repository, and it will be installed as the package "ducc_0_1".
+Later versions (like ducc_0_2 or ducc_1_0) will be maintained on new branches
+and will be installed as "ducc_0_2" and "ducc_1_0", so that there will be no
+conflict with potentially installed older versions.
 
 
 DUCC components
@@ -80,7 +100,7 @@ total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
 
 Algorithmic details:
-- the code uses `ducc.sht` SHTs to compute the data cube
+- the code uses `ducc.sht` SHTs and `ducc.fft` FFTs to compute the data cube
 - shared-memory parallelization is provided via standard C++ threads.
 - for interpolation, the algorithm and kernel described in
   https://arxiv.org/abs/1808.06736 are used. This allows very efficient
@@ -93,7 +113,7 @@ ducc.wgridder
 Library for high-accuracy gridding/degridding of radio interferometry datasets
 
 Programming aspects
-- written in C++11, fully portable
+- written in C++17, fully portable
 - shared-memory parallelization via and C++ threads.
 - Python interface available
 - kernel computation is performed on the fly, avoiding inaccuracies
