@@ -1,5 +1,7 @@
 prune .
 
+include LICENSE
+
 include src/mr_util/infra/aligned_array.h
 include src/mr_util/infra/error_handling.h
 include src/mr_util/infra/mav.h
