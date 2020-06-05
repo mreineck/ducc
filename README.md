@@ -1,8 +1,12 @@
-DUCC 0.1
-========
+Distinctly Useful Code Collection (DUCC)
+========================================
 
-This is a collection of basic programming tools which can be handy in many
-situations.
+This is a collection of basic programming tools for numerical computation,
+including Fast Fourier Transforms, Spherical Harmonic Transforms, non-equispaced
+Fourier transforms, as well as some concrete applications like 4pi convolution
+on the sphere and gridding/degridding of radio interferometry data.
+The code is written in C++17, but provides a simple and comprehensive Python
+interface.
 
 
 Installation
@@ -30,6 +34,11 @@ DUCC and its mandatory dependencies can be installed via:
 
     sudo apt-get install git python3 python3-pip python3-dev python3-pybind11 pybind11-dev
     pip3 install --user git+https://gitlab.mpcdf.mpg.de/mtr/ducc.git
+
+NOTE: compilation of the code will take a sinificant amount of time
+(several minutes). Binary packages are deliberately not made available, since
+much better performance can be achieved by compiling the code specifically for
+the detected target CPU.
 
 
 Installing multiple versions simultaneously
@@ -59,7 +68,8 @@ ducc.fft
 --------
 
 This package provides Fast Fourier, trigonometric and Hartley transforms with a
-simple Python interface.
+simple Python interface. It is an evolution of `popcketfft` and `pypocketfft`
+which are currently used by `numpy` and `scipy`.
 
 The central algorithms are derived from Paul Swarztrauber's FFTPACK code
 (http://www.netlib.org/fftpack).
@@ -75,20 +85,33 @@ Features
 - supports prime-length transforms without degrading to O(N**2) performance
 - has optional multi-threading support for multidimensional transforms
 
+Design decisions and performance characteristics
+- there is no internal caching of plans and twiddle factors, making the
+  interface as simple as possible
+- 1D transforms are significantly slower than those provided by FFTW (if FFTW's
+  plan generation overhead is ignored)
+- multi-D transforms in double precision perform fairly similar to FFTW with
+  FFTW_MEASURE; in single precision ducc.fft can be significantly faster.
 
 ducc.sht
 --------
 
 This package provides efficient spherical harmonic trasforms (SHTs). Its code
-is derived from `libsharp`.
+is derived from `libsharp` ([https://arxiv.org/abs/1303.4945]), with accelerated
+recurrence algorithms presented in
+[https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf].
 
 
 ducc.healpix
 ------------
 
-This library provides Python bindings for the most important
-functionality in Healpix C++. The design goals are
-- similarity to the C++ interface (while respecting some Python peculiarities)
+This library provides Python bindings for the most important functionality
+related to the HEALPix tesselation ([https://arxiv.org/abs/astro-ph/0409513]),
+except for spherical harmonic transforms, which are covered vy `ducc.sht`.
+
+The design goals are
+- similarity to the interface of the HEALPix C++ library
+  (while respecting some Python peculiarities)
 - simplicity (no optional function parameters)
 - low function calling overhead
 
@@ -99,6 +122,10 @@ ducc.totalconvolve
 Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
+This code has evolved from the original `totalconvolver` algorithm described
+in [https://arxiv.org/abs/astro-ph/0008227] vie the `conviqt` code
+([https://arxiv.org/abs/1002.1050]).
+
 
 Algorithmic details:
 - the code uses `ducc.sht` SHTs and `ducc.fft` FFTs to compute the data cube
@@ -111,12 +138,13 @@ Algorithmic details:
 ducc.wgridder
 -------------
 
-Library for high-accuracy gridding/degridding of radio interferometry datasets
+Library for high-accuracy gridding/degridding of radio interferometry datasets.
+An earlier version of this code has been integrated into `wsclean`
+([https://arxiv.org/abs/1407.1943], [https://sourceforge.net/projects/wsclean/])
+as the `wgridder` component.
 
 Programming aspects
-- written in C++17, fully portable
-- shared-memory parallelization via and C++ threads.
-- Python interface available
+- shared-memory parallelization via standard C++ threads.
 - kernel computation is performed on the fly, avoiding inaccuracies
   due to table lookup and reducing overall memory bandwidth
 
