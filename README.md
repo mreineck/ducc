@@ -5,6 +5,7 @@ This is a collection of basic programming tools for numerical computation,
 including Fast Fourier Transforms, Spherical Harmonic Transforms, non-equispaced
 Fourier transforms, as well as some concrete applications like 4pi convolution
 on the sphere and gridding/degridding of radio interferometry data.
+
 The code is written in C++17, but provides a simple and comprehensive Python
 interface.
 
@@ -68,13 +69,13 @@ ducc.fft
 --------
 
 This package provides Fast Fourier, trigonometric and Hartley transforms with a
-simple Python interface. It is an evolution of `popcketfft` and `pypocketfft`
+simple Python interface. It is an evolution of `pocketfft` and `pypocketfft`
 which are currently used by `numpy` and `scipy`.
 
 The central algorithms are derived from Paul Swarztrauber's FFTPACK code
 (http://www.netlib.org/fftpack).
 
-Features
+### Features
 - supports fully complex and half-complex (i.e. complex-to-real and
   real-to-complex) FFTs, discrete sine/cosine transforms and Hartley transforms
 - achieves very high accuracy for all transforms
@@ -85,28 +86,28 @@ Features
 - supports prime-length transforms without degrading to O(N**2) performance
 - has optional multi-threading support for multidimensional transforms
 
-Design decisions and performance characteristics
+### Design decisions and performance characteristics
 - there is no internal caching of plans and twiddle factors, making the
   interface as simple as possible
 - 1D transforms are significantly slower than those provided by FFTW (if FFTW's
   plan generation overhead is ignored)
 - multi-D transforms in double precision perform fairly similar to FFTW with
-  FFTW_MEASURE; in single precision ducc.fft can be significantly faster.
+  FFTW_MEASURE; in single precision `ducc.fft` can be significantly faster.
 
 ducc.sht
 --------
 
 This package provides efficient spherical harmonic trasforms (SHTs). Its code
-is derived from `libsharp` ([https://arxiv.org/abs/1303.4945]), with accelerated
+is derived from `libsharp` (<https://arxiv.org/abs/1303.4945>), with accelerated
 recurrence algorithms presented in
-[https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf].
+<https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
 
 
 ducc.healpix
 ------------
 
 This library provides Python bindings for the most important functionality
-related to the HEALPix tesselation ([https://arxiv.org/abs/astro-ph/0409513]),
+related to the HEALPix tesselation (<https://arxiv.org/abs/astro-ph/0409513>),
 except for spherical harmonic transforms, which are covered vy `ducc.sht`.
 
 The design goals are
@@ -123,11 +124,11 @@ Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
 This code has evolved from the original `totalconvolver` algorithm described
-in [https://arxiv.org/abs/astro-ph/0008227] vie the `conviqt` code
-([https://arxiv.org/abs/1002.1050]).
+in <https://arxiv.org/abs/astro-ph/0008227> vie the `conviqt` code
+(<https://arxiv.org/abs/1002.1050>).
 
 
-Algorithmic details:
+### Algorithmic details:
 - the code uses `ducc.sht` SHTs and `ducc.fft` FFTs to compute the data cube
 - shared-memory parallelization is provided via standard C++ threads.
 - for interpolation, the algorithm and kernel described in
@@ -140,15 +141,15 @@ ducc.wgridder
 
 Library for high-accuracy gridding/degridding of radio interferometry datasets.
 An earlier version of this code has been integrated into `wsclean`
-([https://arxiv.org/abs/1407.1943], [https://sourceforge.net/projects/wsclean/])
+(<https://arxiv.org/abs/1407.1943>, <https://sourceforge.net/projects/wsclean/>)
 as the `wgridder` component.
 
-Programming aspects
+### Programming aspects
 - shared-memory parallelization via standard C++ threads.
 - kernel computation is performed on the fly, avoiding inaccuracies
   due to table lookup and reducing overall memory bandwidth
 
-Numerical aspects
+### Numerical aspects
 - uses the analytical gridding kernel presented in
   https://arxiv.org/abs/1808.06736
 - uses the "improved W-stacking method" described in
