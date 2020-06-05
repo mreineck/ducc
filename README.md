@@ -157,3 +157,11 @@ as the `wgridder` component.
 - in combination these two aspects allow extremely accurate gridding/degridding
   operations (L2 error compared to explicit DFTs can go below 1e-12) with
   reasonable resource consumption
+
+
+ducc.misc
+---------
+
+Various unsorted functionality which will hopefully be categorized in the
+future.
+

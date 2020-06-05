@@ -5,7 +5,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include "totalconvolve.h"
+#include "python/totalconvolve.h"
 
 namespace mr {
 
@@ -78,20 +78,6 @@ void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>
       return move(res);
       }
   };
-
-#if 1
-template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
-  double psi, double theta, double phi)
-  {
-  auto a1 = to_mav<complex<T>,1>(alm_);
-  auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
-  auto a2 = to_mav<complex<T>,1>(alm,true);
-  for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
-  auto tmp = Alm<complex<T>>(a2,lmax,lmax);
-  rotate_alm(tmp, psi, theta, phi);
-  return move(alm);
-  }
-#endif
 
 constexpr const char *totalconvolve_DS = R"""(
 Python interface for total convolution/interpolation library
@@ -262,10 +248,6 @@ void add_totalconvolve(py::module &msup)
     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_f::support);
-#if 1
-  m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
-    "phi"_a);
-#endif
   m.def("epsilon_guess", &epsilon_guess, "support"_a, "ofactor"_a);
   }
 

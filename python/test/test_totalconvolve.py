@@ -3,6 +3,7 @@ import pytest
 from numpy.testing import assert_
 import ducc_0_1.totalconvolve as totalconvolve
 import ducc_0_1.sht as sht
+import ducc_0_1.misc as misc
 
 pmp = pytest.mark.parametrize
 
@@ -74,7 +75,7 @@ def test_against_convolution(lkmax, ncomp, separate):
     res2 = np.zeros((nptg, ncomp))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam=totalconvolve.rotate_alm(blm2[:,c], lmax, ptg[i,2],ptg[i,0],ptg[i,1])
+            rbeam=misc.rotate_alm(blm2[:,c], lmax, ptg[i,2],ptg[i,0],ptg[i,1])
             res2[i,c] = convolve(slm[:,c], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-7)

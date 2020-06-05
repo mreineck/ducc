@@ -20,9 +20,8 @@
 #include "mr_util/sharp/sharp.h"
 #include "mr_util/sharp/sharp_almhelpers.h"
 #include "mr_util/sharp/sharp_geomhelpers.h"
-#include "alm.h"
+#include "python/alm.h"
 #include "mr_util/math/fft.h"
-#include "mr_util/bindings/pybind_utils.h"
 
 namespace mr {
 
@@ -116,7 +115,7 @@ template<typename T> void convolve_1d(const fmav<T> &in,
 
 using detail_fft::convolve_1d;
 
-namespace detail_interpol_ng {
+namespace detail_totalconvolve {
 
 using namespace std;
 
@@ -904,8 +903,8 @@ double epsilon_guess(size_t support, double ofactor)
 
 }
 
-using detail_interpol_ng::Interpolator;
-using detail_interpol_ng::epsilon_guess;
+using detail_totalconvolve::Interpolator;
+using detail_totalconvolve::epsilon_guess;
 
 }
 

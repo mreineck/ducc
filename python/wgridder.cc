@@ -22,7 +22,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "mr_util/bindings/pybind_utils.h"
-#include "gridder_cxx.h"
+#include "python/gridder_cxx.h"
 
 namespace mr {
 
