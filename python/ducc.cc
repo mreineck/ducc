@@ -18,6 +18,7 @@
 #include "python/totalconvolve.cc"
 #include "python/wgridder.cc"
 #include "python/healpix.cc"
+#include "python/misc.cc"
 
 using namespace mr;
 
@@ -28,4 +29,5 @@ PYBIND11_MODULE(PKGNAME, m)
   add_totalconvolve(m);
   add_wgridder(m);
   add_healpix(m);
+  add_misc(m);
   }

@@ -51,7 +51,6 @@ namespace detail_sharp {
 
 #pragma GCC visibility push(hidden)
 
-using namespace mr;
 using namespace std;
 
 using Tv=native_simd<double>;

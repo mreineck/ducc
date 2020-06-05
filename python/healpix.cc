@@ -44,7 +44,6 @@ namespace mr {
 namespace detail_pymodule_healpix {
 
 using namespace std;
-using namespace mr;
 
 namespace py = pybind11;
 

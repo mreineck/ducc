@@ -12,7 +12,6 @@ namespace mr {
 namespace detail_pymodule_totalconvolve {
 
 using namespace std;
-using namespace mr;
 
 namespace py = pybind11;
 

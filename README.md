@@ -132,7 +132,7 @@ in <https://arxiv.org/abs/astro-ph/0008227> vie the `conviqt` code
 - the code uses `ducc.sht` SHTs and `ducc.fft` FFTs to compute the data cube
 - shared-memory parallelization is provided via standard C++ threads.
 - for interpolation, the algorithm and kernel described in
-  https://arxiv.org/abs/1808.06736 are used. This allows very efficient
+  <https://arxiv.org/abs/1808.06736> are used. This allows very efficient
   interpolation with user-adjustable accuracy.
 
 
@@ -151,9 +151,9 @@ as the `wgridder` component.
 
 ### Numerical aspects
 - uses the analytical gridding kernel presented in
-  https://arxiv.org/abs/1808.06736
+  <https://arxiv.org/abs/1808.06736>
 - uses the "improved W-stacking method" described in
-  https://www.repository.cam.ac.uk/handle/1810/292298 (p. 139ff)
+  <https://www.repository.cam.ac.uk/handle/1810/292298> (p. 139ff)
 - in combination these two aspects allow extremely accurate gridding/degridding
   operations (L2 error compared to explicit DFTs can go below 1e-12) with
   reasonable resource consumption

@@ -47,7 +47,6 @@ namespace mr {
 namespace detail_pymodule_sht {
 
 using namespace std;
-using namespace mr;
 
 namespace py = pybind11;
 

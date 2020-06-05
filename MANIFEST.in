@@ -58,6 +58,7 @@ include python/wgridder.cc
 include python/alm.h
 include python/totalconvolve.h
 include python/totalconvolve.cc
+include python/misc.cc
 
 include python/test/test_fft.py
 include python/test/test_healpix.py

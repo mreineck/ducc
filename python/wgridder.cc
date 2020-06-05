@@ -29,8 +29,6 @@ namespace mr {
 namespace detail_pymodule_wgridder {
 
 using namespace std;
-using namespace gridder;
-using namespace mr;
 
 namespace py = pybind11;
 

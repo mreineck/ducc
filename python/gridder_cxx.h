@@ -36,12 +36,11 @@
 #include "mr_util/infra/mav.h"
 #include "mr_util/math/es_kernel.h"
 
-namespace gridder {
+namespace mr {
 
-namespace detail {
+namespace detail_gridder {
 
 using namespace std;
-using namespace mr;
 
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
@@ -1116,11 +1115,12 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
   }
 
-} // namespace detail
+} // namespace detail_gridder
 
 // public names
-using detail::ms2dirty;
-using detail::dirty2ms;
-} // namespace gridder
+using detail_gridder::ms2dirty;
+using detail_gridder::dirty2ms;
+
+} // namespace mr
 
 #endif
