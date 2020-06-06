@@ -55,7 +55,7 @@ this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need
-the latest incarnation of DUCC 0.1, this will be in branch "ducc_0_1" of the
+the latest incarnation of DUCC 0.1, this will be on branch "ducc_0_1" of the
 git repository, and it will be installed as the package "ducc_0_1".
 Later versions (like ducc_0_2 or ducc_1_0) will be maintained on new branches
 and will be installed as "ducc_0_2" and "ducc_1_0", so that there will be no
@@ -124,7 +124,7 @@ Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
 This code has evolved from the original `totalconvolver` algorithm described
-in <https://arxiv.org/abs/astro-ph/0008227> vie the `conviqt` code
+in <https://arxiv.org/abs/astro-ph/0008227> via the `conviqt` code
 (<https://arxiv.org/abs/1002.1050>).
 
 
