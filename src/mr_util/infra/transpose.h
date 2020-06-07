@@ -40,7 +40,7 @@ using namespace std;
 using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
 
-template<typename T1, typename T2> void rearrange(T1 &v, const T2 &idx)
+template<typename T1, typename T2> inline void rearrange(T1 &v, const T2 &idx)
   {
   T1 tmp(v);
   for (size_t i=0; i<idx.size(); ++i)
@@ -88,33 +88,35 @@ template<typename T, typename Func> void sthelper1(const T *in, T *out,
   for (size_t i=0; i<s0; ++i, in+=sti0, out+=sto0)
     func(*in, *out);
   }
+
 bool critical(ptrdiff_t s)
   {
   s = (s>=0) ? s : -s;
   return (s>4096) && ((s&(s-1))==0);
   }
-template<typename T, typename Func> void sthelper2(const T *in, T *out,
-  size_t s0, size_t s1, ptrdiff_t sti0, ptrdiff_t sti1, ptrdiff_t sto0,
-  ptrdiff_t sto1, Func func)
+
+template<typename T, typename Func> void sthelper2(const T * MRUTIL_RESTRICT in,
+  T * MRUTIL_RESTRICT out, size_t s0, size_t s1, ptrdiff_t sti0, ptrdiff_t sti1,
+  ptrdiff_t sto0, ptrdiff_t sto1, Func func)
   {
   if ((sti0<=sti1) && (sto0<=sto1)) // no need to block
     {
-    for (size_t i=0; i<s1; ++i, in+=sti1, out+=sto1)
+    for (size_t i1=0; i1<s1; ++i1, in+=sti1, out+=sto1)
       {
       auto pi0=in;
       auto po0=out;
-      for (size_t j=0; j<s0; ++j, pi0+=sti0, po0+=sto0)
+      for (size_t i0=0; i0<s0; ++i0, pi0+=sti0, po0+=sto0)
         func(*pi0, *po0);
       }
     return;
     }
   if ((sti0>=sti1) && (sto0>=sto1)) // no need to block
     {
-    for (size_t i=0; i<s0; ++i, in+=sti0, out+=sto0)
+    for (size_t i0=0; i0<s0; ++i0, in+=sti0, out+=sto0)
       {
       auto pi1=in;
       auto po1=out;
-      for (size_t j=0; j<s1; ++j, pi1+=sti1, po1+=sto1)
+      for (size_t i1=0; i1<s1; ++i1, pi1+=sti1, po1+=sto1)
         func(*pi1, *po1);
       }
     return;
