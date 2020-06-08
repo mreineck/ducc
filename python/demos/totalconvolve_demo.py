@@ -2,15 +2,15 @@ import ducc_0_1.totalconvolve as totalconvolve
 import numpy as np
 import time
 
-np.random.seed(48)
+rng = np.random.default_rng(48)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
 def random_alm(lmax, mmax, ncomp):
-    res = np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
+     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
     # make a_lm with m==0 real-valued
     res[0:lmax+1,:].imag = 0.
     return res
@@ -68,7 +68,7 @@ t0=time.time()
 nth = lmax+1
 nph = 2*lmax+1
 
-ptg=np.random.uniform(0.,1.,3*nptg).reshape(nptg,3)
+ptg=rng.uniform(0.,1.,3*nptg).reshape(nptg,3)
 ptg[:,0]*=np.pi
 ptg[:,1]*=2*np.pi
 ptg[:,2]*=2*np.pi
@@ -78,7 +78,7 @@ bar=foo.interpol(ptg)
 del foo
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time() -t0))
 t0=time.time()
-fake = np.random.uniform(0.,1., (ptg.shape[0],ncomp2))
+fake = rng.uniform(0.,1., (ptg.shape[0],ncomp2))
 foo2 = totalconvolve.PyInterpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0=time.time()
 foo2.deinterpol(ptg.reshape((-1,3)), fake)

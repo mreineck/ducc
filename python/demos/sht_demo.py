@@ -35,7 +35,8 @@ job = sht.sharpjob_d()
 # number of required a_lm coefficients
 nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 # get random a_lm
-alm = np.random.uniform(-1., 1., nalm) + 1j*np.random.uniform(-1., 1., nalm)
+rng = np.random.default_rng(42)
+alm = rng.uniform(-1., 1., nalm) + 1j*rng.uniform(-1., 1., nalm)
 # make a_lm with m==0 real-valued
 alm[0:lmax+1].imag = 0.
 

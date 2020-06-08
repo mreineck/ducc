@@ -3,7 +3,8 @@ import ducc_0_1.fft as duccfft
 from time import time
 import matplotlib.pyplot as plt
 
-np.random.seed(42)
+
+rng = np.random.default_rng(42)
 
 
 def _l2error(a, b):
@@ -107,11 +108,11 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     print("{}D, type {}, max extent is {}:".format(ndim, tp, nmax))
     results = [[] for i in range(len(funcs))]
     for n in range(ntry):
-        shp = np.random.randint(nmax//3, nmax+1, ndim)
+        shp = rng.integers(nmax//3, nmax+1, ndim)
         if nice_sizes:
             shp = np.array([duccfft.good_size(sz) for sz in shp])
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
-        a = (np.random.rand(*shp)-0.5 + 1j*(np.random.rand(*shp)-0.5)).astype(tp)
+        a = (rng.random(shp)-0.5 + 1j*(rng.random(shp)-0.5)).astype(tp)
         output=[]
         for func, res in zip(funcs, results):
             tmp = func(a, nrepeat, nthr)

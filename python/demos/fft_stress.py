@@ -2,6 +2,9 @@ import numpy as np
 import ducc_0_1.fft as fft
 
 
+rng = np.random.default_rng(42)
+
+
 def _l2error(a, b, axes):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
 
@@ -41,15 +44,15 @@ def update_err(err, name, value, shape):
 
 
 def test(err):
-    ndim = np.random.randint(1, 5)
+    ndim = rng.integers(1, 5)
     axlen = int((2**20)**(1./ndim))
-    shape = np.random.randint(1, axlen, ndim)
+    shape = rng.integers(1, axlen, ndim)
     axes = np.arange(ndim)
-    np.random.shuffle(axes)
-    nax = np.random.randint(1, ndim+1)
+    rng.shuffle(axes)
+    nax = rng.integers(1, ndim+1)
     axes = axes[:nax]
     lastsize = shape[axes[-1]]
-    a = np.random.rand(*shape)-0.5 + 1j*np.random.rand(*shape)-0.5j
+    a = rng.random(shape)-0.5 + 1j*rng.random(shape)-0.5j
     a_32 = a.astype(np.complex64)
     b = ifftn(fftn(a, axes=axes, nthreads=nthreads), axes=axes, inorm=2,
               nthreads=nthreads)
