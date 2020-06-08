@@ -50,15 +50,15 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
         return
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
     speedoflight, f0 = 299792458., 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (np.random.rand(nrow, 3)-0.5)/(pixsizey*f0/speedoflight)
-    ms = np.random.rand(nrow, nchan)-0.5 + 1j*(np.random.rand(nrow, nchan)-0.5)
-    wgt = np.random.rand(nrow, nchan) if use_wgt else None
-    dirty = np.random.rand(nxdirty, nydirty)-0.5
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/speedoflight)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.random((nrow, nchan)) if use_wgt else None
+    dirty = rng.random((nxdirty, nydirty))-0.5
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
     if nu&1:
         nu+=1
@@ -91,14 +91,14 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, s
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         return
-    np.random.seed(40)
+    rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
     speedoflight, f0 = 299792458., 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (np.random.rand(nrow, 3)-0.5)/(pixsizex*f0/speedoflight)
-    ms = np.random.rand(nrow, nchan)-0.5 + 1j*(np.random.rand(nrow, nchan)-0.5)
-    wgt = np.random.rand(nrow, nchan) if use_wgt else None
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.random((nrow, nchan)) if use_wgt else None
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
     if nu&1:
         nu+=1
