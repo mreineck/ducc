@@ -6,7 +6,7 @@ from glob import iglob
 from setuptools import setup, Extension
 import pybind11
 
-pkgname = 'ducc'
+pkgname = 'ducc_0_1'
 version = '0.1.0'
 
 def _get_files_by_suffix(directory, suffix):
