@@ -1,19 +1,13 @@
-from setuptools import setup, Extension
 import sys
 import os.path
 import itertools
 from glob import iglob
 
+from setuptools import setup, Extension
+import pybind11
+
 pkgname = 'ducc_0_1'
-
-class _deferred_pybind11_include(object):
-    def __init__(self, user=False):
-        self.user = user
-
-    def __str__(self):
-        import pybind11
-        return pybind11.get_include(self.user)
-
+version = '0.1.0'
 
 def _get_files_by_suffix(directory, suffix):
     path = directory
@@ -23,48 +17,66 @@ def _get_files_by_suffix(directory, suffix):
 
 
 include_dirs = ['.', './src/',
-                _deferred_pybind11_include(True),
-                _deferred_pybind11_include()]
+                pybind11.get_include(True),
+                pybind11.get_include(False)]
+
 extra_compile_args = ['--std=c++17', '-march=native', '-ffast-math', '-O3']
+
 python_module_link_args = []
-define_macros = [("PKGNAME", pkgname)]
+
+define_macros = [("PKGNAME", pkgname),
+                 ("PKGVERSION", '"%s"' % version)]
 
 if sys.platform == 'darwin':
     import distutils.sysconfig
     extra_compile_args += ['-mmacosx-version-min=10.9']
     python_module_link_args += ['-mmacosx-version-min=10.9', '-bundle']
-    vars = distutils.sysconfig.get_config_vars()
-    vars['LDSHARED'] = vars['LDSHARED'].replace('-bundle', '')
+    cfg_vars = distutils.sysconfig.get_config_vars()
+    cfg_vars['LDSHARED'] = cfg_vars['LDSHARED'].replace('-bundle', '')
 elif sys.platform == 'win32':
     extra_compile_args = ['/Ox', '/EHsc', '/std:c++17']
 else:
-    extra_compile_args += ['-Wfatal-errors', '-Wfloat-conversion', '-W', '-Wall', '-Wstrict-aliasing=2', '-Wwrite-strings', '-Wredundant-decls', '-Woverloaded-virtual', '-Wcast-qual', '-Wcast-align', '-Wpointer-arith']
-    python_module_link_args += ['-march=native', '-Wl,-rpath,$ORIGIN', '-s']
+    extra_compile_args += ['-Wfatal-errors',
+                           '-Wfloat-conversion',
+                           '-W',
+                           '-Wall',
+                           '-Wstrict-aliasing=2',
+                           '-Wwrite-strings',
+                           '-Wredundant-decls',
+                           '-Woverloaded-virtual',
+                           '-Wcast-qual',
+                           '-Wcast-align',
+                           '-Wpointer-arith']
+
+    python_module_link_args += ['-march=native',
+                                '-Wl,-rpath,$ORIGIN',
+                                '-s']
 
 # if you want debugging info, remove the "-s" from python_module_link_args
+depfiles = (_get_files_by_suffix('.', 'h') +
+            _get_files_by_suffix('.', 'cc') +
+            ['setup.py'])
 
-def get_extension_modules():
-    depfiles = _get_files_by_suffix('.', 'h') + _get_files_by_suffix('.', 'cc') + ['setup.py']
-    return [Extension(pkgname,
-                      language='c++',
-                      sources=['python/ducc.cc'],
-                      depends=depfiles,
-                      include_dirs=include_dirs,
-                      define_macros=define_macros,
-                      extra_compile_args=extra_compile_args,
-                      extra_link_args=python_module_link_args)]
+extensions = [Extension(pkgname,
+                        language='c++',
+                        sources=['python/ducc.cc'],
+                        depends=depfiles,
+                        include_dirs=include_dirs,
+                        define_macros=define_macros,
+                        extra_compile_args=extra_compile_args,
+                        extra_link_args=python_module_link_args)]
 
 
 setup(name=pkgname,
-      version='0.1.0',
+      version=version,
       description='Definitely useful code collection',
-      url='https://gitlab.mpcdf.mpg.de/mtr/cxxbase',
+      url='https://gitlab.mpcdf.mpg.de/mtr/ducc',
       include_package_data=True,
       author='Martin Reinecke',
       author_email='martin@mpa-garching.mpg.de',
       packages=[],
-      setup_requires=['numpy>=1.17.0', 'pybind11>=2.5.0'],
-      ext_modules=get_extension_modules(),
-      install_requires=['numpy>=1.17.0', 'pybind11>=2.5.0'],
+      python_requires=">=3.6",
+      ext_modules=extensions,
+      install_requires=['numpy>=1.17.0'],
       license="GPLv2",
       )
