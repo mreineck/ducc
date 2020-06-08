@@ -3,17 +3,19 @@ import math
 import numpy as np
 import ducc_0_1.healpix as ph
 
+rng = np.random.default_rng(42)
+
 def report (name,vlen,ntry,nside,isnest,perf):
   print (name,": ",perf*1e-6,"MOps/s",sep="")
 
 def random_ptg(vlen):
   res=np.empty((vlen,2),dtype=np.float64)
-  res[:,0]=np.arccos((np.random.random_sample(vlen)-0.5)*2)
-  res[:,1]=np.random.random_sample(vlen)*2*math.pi
+  res[:,0]=np.arccos((rng.random(vlen)-0.5)*2)
+  res[:,1]=rng.random(vlen)*2*math.pi
   return res
 
 def random_pix(nside,vlen):
-  return np.random.randint(low=0,high=12*nside*nside-1,size=vlen,dtype=np.int64)
+  return rng.integers(low=0,high=12*nside*nside-1,size=vlen,dtype=np.int64)
 
 def dummy(vlen):
   inp=np.zeros(vlen,dtype=np.int64)

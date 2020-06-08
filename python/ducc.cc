@@ -24,6 +24,8 @@ using namespace mr;
 
 PYBIND11_MODULE(PKGNAME, m)
   {
+  m.attr("__version__") = PKGVERSION;
+
   add_fft(m);
   add_sht(m);
   add_totalconvolve(m);

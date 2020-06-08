@@ -2,10 +2,12 @@ import ducc_0_1.healpix as ph
 import numpy as np
 import math
 
+rng = np.random.default_rng(42)
+
 def random_ptg(vlen):
   res = np.empty((vlen, 2), dtype=np.float64)
-  res[:,0] = np.arccos((np.random.random_sample(vlen)-0.5)*2)
-  res[:,1] = np.random.random_sample(vlen)*2*math.pi
+  res[:,0] = np.arccos((rng.random(vlen)-0.5)*2)
+  res[:,1] = rng.random(vlen)*2*math.pi
   return res
 
 def check_pixangpix(vlen,ntry,nside,isnest):
@@ -13,7 +15,7 @@ def check_pixangpix(vlen,ntry,nside,isnest):
   cnt = 0
   while cnt < ntry:
     cnt += 1
-    inp = np.random.randint(low=0, high=12*nside*nside-1, size=vlen)
+    inp = rng.integers(low=0, high=12*nside*nside-1, size=vlen)
     out = base.ang2pix(base.pix2ang(inp))
     if not np.array_equal(inp, out):
       raise ValueError("Test failed")
@@ -33,7 +35,7 @@ def check_pixangvecpix(vlen, ntry, nside, isnest):
   cnt = 0
   while cnt < ntry:
     cnt += 1
-    inp = np.random.randint(low=0, high=12*nside*nside-1, size=vlen)
+    inp = rng.integers(low=0, high=12*nside*nside-1, size=vlen)
     out = base.vec2pix(ph.ang2vec(base.pix2ang(inp)))
     if not np.array_equal(inp,out):
       raise ValueError("Test failed")
@@ -43,7 +45,7 @@ def check_pixvecangpix(vlen, ntry, nside, isnest):
   cnt = 0
   while cnt < ntry:
     cnt += 1
-    inp = np.random.randint(low=0, high=12*nside*nside-1, size=vlen)
+    inp = rng.integers(low=0, high=12*nside*nside-1, size=vlen)
     out = base.ang2pix(ph.vec2ang(base.pix2vec(inp)))
     if not np.array_equal(inp,out):
       raise ValueError("Test failed")
@@ -53,7 +55,7 @@ def check_pixvecpix(vlen,ntry,nside,isnest):
   cnt=0
   while (cnt<ntry):
     cnt+=1
-    inp=np.random.randint(low=0,high=12*nside*nside-1,size=vlen)
+    inp=rng.integers(low=0,high=12*nside*nside-1,size=vlen)
     out=base.vec2pix(base.pix2vec(inp))
     if (np.array_equal(inp,out)==False):
       raise ValueError("Test failed")
@@ -63,7 +65,7 @@ def check_ringnestring(vlen,ntry,nside):
   cnt=0
   while (cnt<ntry):
     cnt+=1
-    inp=np.random.randint(low=0,high=12*nside*nside-1,size=vlen)
+    inp=rng.integers(low=0,high=12*nside*nside-1,size=vlen)
     out=base.nest2ring(base.ring2nest(inp))
     if (np.array_equal(inp,out)==False):
       raise ValueError("Test failed")
@@ -73,7 +75,7 @@ def check_pixxyfpix(vlen,ntry,nside,isnest):
   cnt=0
   while (cnt<ntry):
     cnt+=1
-    inp=np.random.randint(low=0,high=12*nside*nside-1,size=vlen)
+    inp=rng.integers(low=0,high=12*nside*nside-1,size=vlen)
     out=base.xyf2pix(base.pix2xyf(inp))
     if (np.array_equal(inp,out)==False):
       raise ValueError("Test failed")

@@ -5,15 +5,15 @@ import ducc_0_1.misc as misc
 import time
 import matplotlib.pyplot as plt
 
-np.random.seed(48)
+rng = np.random.default_rng(42)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
 def random_alm(lmax, mmax, ncomp):
-    res = np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*np.random.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
+     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
     # make a_lm with m==0 real-valued
     res[0:lmax+1,:].imag = 0.
     return res

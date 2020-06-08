@@ -71,7 +71,7 @@ dtypes = [np.float32, np.float64,
 @pmp("inorm", [0, 1, 2])
 @pmp("dtype", dtypes)
 def test1D(len, inorm, dtype):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(len)-0.5 + 1j*rng.random(len)-0.5j
     a = a.astype(ctype[dtype])
     eps = tol[dtype]
@@ -92,7 +92,7 @@ def test1D(len, inorm, dtype):
 @pmp("nthreads", (0, 1, 2))
 @pmp("inorm", [0, 1, 2])
 def test_fftn(shp, nthreads, inorm):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
     assert_(_l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
                               nthreads=nthreads, inorm=2-inorm)) < 1e-15)
@@ -105,7 +105,7 @@ def test_fftn(shp, nthreads, inorm):
 @pmp("axes", ((0,), (1,), (0, 1), (1, 0)))
 @pmp("inorm", [0, 1, 2])
 def test_fftn2D(shp, axes, inorm):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
     assert_(_l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
                               axes=axes, inorm=2-inorm)) < 1e-15)
@@ -116,7 +116,7 @@ def test_fftn2D(shp, axes, inorm):
 
 @pmp("shp", shapes)
 def test_rfftn(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     tmp1 = rfftn(a)
     tmp2 = fftn(a)
@@ -142,7 +142,7 @@ def test_rfftn(shp):
 @pmp("shp", shapes2D)
 @pmp("axes", ((0,), (1,), (0, 1), (1, 0)))
 def test_rfftn2D(shp, axes):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     tmp1 = rfftn(a,axes=axes)
     tmp2 = fftn(a,axes=axes)
@@ -157,7 +157,7 @@ def test_rfftn2D(shp, axes):
 
 @pmp("shp", shapes)
 def test_identity(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
     assert_(_l2error(ifftn(fftn(a), inorm=2), a) < 1.5e-15)
     assert_(_l2error(ifftn(fftn(a.real), inorm=2), a.real) < 1.5e-15)
@@ -171,7 +171,7 @@ def test_identity(shp):
 
 @pmp("shp", shapes)
 def test_identity_r(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     b = a.astype(np.float32)
     for ax in range(a.ndim):
@@ -184,7 +184,7 @@ def test_identity_r(shp):
 
 @pmp("shp", shapes)
 def test_identity_r2(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
     a = rfftn(irfftn(a))
     assert_(_l2error(rfftn(irfftn(a), inorm=2), a) < 1e-15)
@@ -192,7 +192,7 @@ def test_identity_r2(shp):
 
 @pmp("shp", shapes2D+shapes3D)
 def test_genuine_hartley(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     v1 = fft.genuine_hartley(a)
     v2 = fftn(a.astype(np.complex128))
@@ -202,7 +202,7 @@ def test_genuine_hartley(shp):
 
 @pmp("shp", shapes)
 def test_hartley_identity(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     v1 = fft.separable_hartley(fft.separable_hartley(a))/a.size
     assert_(_l2error(a, v1) < 1e-15)
@@ -210,7 +210,7 @@ def test_hartley_identity(shp):
 
 @pmp("shp", shapes)
 def test_genuine_hartley_identity(shp):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     v1 = fft.genuine_hartley(fft.genuine_hartley(a))/a.size
     assert_(_l2error(a, v1) < 1e-15)
@@ -223,7 +223,7 @@ def test_genuine_hartley_identity(shp):
 @pmp("shp", shapes2D+shapes3D)
 @pmp("axes", ((0,), (1,), (0, 1), (1, 0)))
 def test_genuine_hartley_2D(shp, axes):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     assert_(_l2error(fft.genuine_hartley(fft.genuine_hartley(
         a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
@@ -234,7 +234,7 @@ def test_genuine_hartley_2D(shp, axes):
 @pmp("type", [1, 2, 3, 4])
 @pmp("dtype", dtypes)
 def testdcst1D(len, inorm, type, dtype):
-    rng = np.random.default_rng(np.random.SeedSequence(42))
+    rng = np.random.default_rng(42)
     a = (rng.random(len)-0.5).astype(dtype)
     eps = tol[dtype]
     itp = (0, 1, 3, 2, 4)
