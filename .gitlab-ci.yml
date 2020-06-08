@@ -19,13 +19,13 @@ build_docker:
 test_gcc:
   stage: testing
   script:
-    - python3 setup.py install --user -f
+    - pip3 install --user .
     - pytest-3 -q python/test
 
 test_clang:
   stage: testing
   script:
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
+    - CC="clang -fsized-deallocation" pip3 install --user .
     - pytest-3 -q python/test
 
 release:
