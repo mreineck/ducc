@@ -11,11 +11,11 @@
 #if 1
 #include <complex>
 #include <cmath>
-#include "mr_util/infra/threading.h"
+#include "ducc0/infra/threading.h"
 #endif
 
-#include "mr_util/infra/mav.h"
-#include "mr_util/infra/error_handling.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/error_handling.h"
 
 namespace mr {
 

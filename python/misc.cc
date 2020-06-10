@@ -29,12 +29,12 @@
 #include <pybind11/numpy.h>
 #include <vector>
 
-#include "mr_util/infra/mav.h"
-#include "mr_util/infra/transpose.h"
-#include "mr_util/math/fft.h"
-#include "mr_util/math/constants.h"
-#include "mr_util/math/gl_integrator.h"
-#include "mr_util/bindings/pybind_utils.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/transpose.h"
+#include "ducc0/math/fft.h"
+#include "ducc0/math/constants.h"
+#include "ducc0/math/gl_integrator.h"
+#include "ducc0/bindings/pybind_utils.h"
 #include "python/alm.h"
 
 namespace mr {

@@ -33,11 +33,11 @@
 #include <vector>
 #include <string>
 
-#include "mr_util/healpix/healpix_base.h"
-#include "mr_util/math/constants.h"
-#include "mr_util/infra/string_utils.h"
-#include "mr_util/math/geom_utils.h"
-#include "mr_util/bindings/pybind_utils.h"
+#include "ducc0/healpix/healpix_base.h"
+#include "ducc0/math/constants.h"
+#include "ducc0/infra/string_utils.h"
+#include "ducc0/math/geom_utils.h"
+#include "ducc0/bindings/pybind_utils.h"
 
 namespace mr {
 

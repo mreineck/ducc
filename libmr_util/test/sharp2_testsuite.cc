@@ -26,16 +26,16 @@
 
 #include <iostream>
 #include <complex>
-#include "mr_util/sharp/sharp.h"
-#include "mr_util/sharp/sharp_geomhelpers.h"
-#include "mr_util/sharp/sharp_almhelpers.h"
-#include "mr_util/infra/system.h"
-#include "mr_util/infra/error_handling.h"
-#include "mr_util/infra/threading.h"
-#include "mr_util/math/math_utils.h"
-#include "mr_util/infra/string_utils.h"
-#include "mr_util/math/gl_integrator.h"
-#include "mr_util/math/constants.h"
+#include "ducc0/sharp/sharp.h"
+#include "ducc0/sharp/sharp_geomhelpers.h"
+#include "ducc0/sharp/sharp_almhelpers.h"
+#include "ducc0/infra/system.h"
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/threading.h"
+#include "ducc0/math/math_utils.h"
+#include "ducc0/infra/string_utils.h"
+#include "ducc0/math/gl_integrator.h"
+#include "ducc0/math/constants.h"
 
 using namespace std;
 using namespace mr;

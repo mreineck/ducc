@@ -3,43 +3,43 @@ ACLOCAL_AMFLAGS = -I m4
 lib_LTLIBRARIES = libmrutil.la
 
 libmrutil_la_SOURCES = \
-  mr_util/sharp/sharp.cc \
-  mr_util/sharp/sharp_almhelpers.cc \
-  mr_util/sharp/sharp_core.cc \
-  mr_util/sharp/sharp_geomhelpers.cc \
-  mr_util/sharp/sharp_ylmgen.cc \
-  mr_util/sharp/sharp_internal.h \
-  mr_util/math/math_utils.h \
-  mr_util/math/cmplx.h \
-  mr_util/infra/aligned_array.h \
-  mr_util/infra/simd.h \
-  mr_util/math/pointing.cc \
-  mr_util/math/pointing.h \
-  mr_util/math/vec3.h \
-  mr_util/math/constants.h \
-  mr_util/infra/error_handling.h \
-  mr_util/math/space_filling.cc \
-  mr_util/math/space_filling.h \
-  mr_util/math/fft1d.h \
-  mr_util/math/fft.h \
-  mr_util/math/gl_integrator.h \
-  mr_util/infra/mav.h \
-  mr_util/infra/string_utils.cc \
-  mr_util/infra/string_utils.h \
-  mr_util/infra/system.cc \
-  mr_util/infra/system.h \
-  mr_util/infra/threading.cc \
-  mr_util/infra/threading.h \
-  mr_util/infra/timers.h \
-  mr_util/math/unity_roots.h \
-  mr_util/infra/useful_macros.h \
-  mr_util/math/rangeset.h \
-  mr_util/geom_utils.h \
-  mr_util/math/geom_utils.cc \
-  mr_util/healpix/healpix_tables.h \
-  mr_util/healpix/healpix_tables.cc \
-  mr_util/healpix/healpix_base.h \
-  mr_util/healpix/healpix_base.cc
+  ducc0/sharp/sharp.cc \
+  ducc0/sharp/sharp_almhelpers.cc \
+  ducc0/sharp/sharp_core.cc \
+  ducc0/sharp/sharp_geomhelpers.cc \
+  ducc0/sharp/sharp_ylmgen.cc \
+  ducc0/sharp/sharp_internal.h \
+  ducc0/math/math_utils.h \
+  ducc0/math/cmplx.h \
+  ducc0/infra/aligned_array.h \
+  ducc0/infra/simd.h \
+  ducc0/math/pointing.cc \
+  ducc0/math/pointing.h \
+  ducc0/math/vec3.h \
+  ducc0/math/constants.h \
+  ducc0/infra/error_handling.h \
+  ducc0/math/space_filling.cc \
+  ducc0/math/space_filling.h \
+  ducc0/math/fft1d.h \
+  ducc0/math/fft.h \
+  ducc0/math/gl_integrator.h \
+  ducc0/infra/mav.h \
+  ducc0/infra/string_utils.cc \
+  ducc0/infra/string_utils.h \
+  ducc0/infra/system.cc \
+  ducc0/infra/system.h \
+  ducc0/infra/threading.cc \
+  ducc0/infra/threading.h \
+  ducc0/infra/timers.h \
+  ducc0/math/unity_roots.h \
+  ducc0/infra/useful_macros.h \
+  ducc0/math/rangeset.h \
+  ducc0/geom_utils.h \
+  ducc0/math/geom_utils.cc \
+  ducc0/healpix/healpix_tables.h \
+  ducc0/healpix/healpix_tables.cc \
+  ducc0/healpix/healpix_base.h \
+  ducc0/healpix/healpix_base.cc
 
 # format is "current:revision:age"
 # any change: increase revision
@@ -53,11 +53,11 @@ AM_CXXFLAGS = @AM_CXXFLAGS@
 
 if HAVE_MULTIARCH
 
-libavx_la_SOURCES = mr_util/sharp/sharp_core_inc.cc
-libavx2_la_SOURCES = mr_util/sharp/sharp_core_inc.cc
-libfma_la_SOURCES = mr_util/sharp/sharp_core_inc.cc
-libfma4_la_SOURCES = mr_util/sharp/sharp_core_inc.cc
-libavx512f_la_SOURCES = mr_util/sharp/sharp_core_inc.cc
+libavx_la_SOURCES = ducc0/sharp/sharp_core_inc.cc
+libavx2_la_SOURCES = ducc0/sharp/sharp_core_inc.cc
+libfma_la_SOURCES = ducc0/sharp/sharp_core_inc.cc
+libfma4_la_SOURCES = ducc0/sharp/sharp_core_inc.cc
+libavx512f_la_SOURCES = ducc0/sharp/sharp_core_inc.cc
 
 noinst_LTLIBRARIES = libavx.la libavx2.la libfma.la libfma4.la libavx512f.la
 
@@ -72,9 +72,9 @@ libmrutil_la_LIBADD = libavx.la libavx2.la libfma.la libfma4.la libavx512f.la
 endif
 
 nobase_include_HEADERS = \
-  mr_util/sharp/sharp.h \
-  mr_util/sharp/sharp_geomhelpers.h \
-  mr_util/sharp/sharp_almhelpers.h
+  ducc0/sharp/sharp.h \
+  ducc0/sharp/sharp_geomhelpers.h \
+  ducc0/sharp/sharp_almhelpers.h
 
 EXTRA_DIST = test/test_libsharp.sh test/test_space_filling.sh
 

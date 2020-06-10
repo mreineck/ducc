@@ -29,12 +29,12 @@
 #include <vector>
 #include <array>
 
-#include "mr_util/infra/error_handling.h"
-#include "mr_util/math/fft.h"
-#include "mr_util/infra/threading.h"
-#include "mr_util/infra/useful_macros.h"
-#include "mr_util/infra/mav.h"
-#include "mr_util/math/es_kernel.h"
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/math/fft.h"
+#include "ducc0/infra/threading.h"
+#include "ducc0/infra/useful_macros.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/math/es_kernel.h"
 
 namespace mr {
 

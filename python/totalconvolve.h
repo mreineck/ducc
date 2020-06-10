@@ -12,16 +12,16 @@
 #include <vector>
 #include <complex>
 #include <cmath>
-#include "mr_util/math/constants.h"
-#include "mr_util/math/gl_integrator.h"
-#include "mr_util/math/es_kernel.h"
-#include "mr_util/infra/mav.h"
-#include "mr_util/infra/simd.h"
-#include "mr_util/sharp/sharp.h"
-#include "mr_util/sharp/sharp_almhelpers.h"
-#include "mr_util/sharp/sharp_geomhelpers.h"
+#include "ducc0/math/constants.h"
+#include "ducc0/math/gl_integrator.h"
+#include "ducc0/math/es_kernel.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/simd.h"
+#include "ducc0/sharp/sharp.h"
+#include "ducc0/sharp/sharp_almhelpers.h"
+#include "ducc0/sharp/sharp_geomhelpers.h"
 #include "python/alm.h"
-#include "mr_util/math/fft.h"
+#include "ducc0/math/fft.h"
 
 namespace mr {
 
