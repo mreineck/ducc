@@ -1,10 +1,10 @@
-# Elementary demo for the ducc_0_1.sht interface using a Gauss-Legendre grid
+# Elementary demo for the ducc0.sht interface using a Gauss-Legendre grid
 # I'm not sure I have a perfect equivalent for the DH grid(s) at the moment,
 # since they apparently do not include the South Pole. The Clenshaw-Curtis
 # and Fejer quadrature rules are very similar (see the documentation in
 # sharp_geomhelpers.h). An exact analogon to DH can be added easily, I expect.
 
-import ducc_0_1.sht as sht
+import ducc0.sht as sht
 import numpy as np
 from time import time
 

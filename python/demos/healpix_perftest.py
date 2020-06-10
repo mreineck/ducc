@@ -1,7 +1,7 @@
 import time
 import math
 import numpy as np
-import ducc_0_1.healpix as ph
+import ducc0.healpix as ph
 
 rng = np.random.default_rng(42)
 

@@ -1,4 +1,4 @@
-import ducc_0_1.fft as fft
+import ducc0.fft as fft
 # import pyfftw
 import numpy as np
 import pytest

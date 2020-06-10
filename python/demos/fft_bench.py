@@ -1,5 +1,5 @@
 import numpy as np
-import ducc_0_1.fft as duccfft
+import ducc0.fft as duccfft
 from time import time
 import matplotlib.pyplot as plt
 

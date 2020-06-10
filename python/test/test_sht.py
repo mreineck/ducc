@@ -1,4 +1,4 @@
-import ducc_0_1.sht as sht
+import ducc0.sht as sht
 import numpy as np
 import math
 import pytest

@@ -1,5 +1,5 @@
 import numpy as np
-import ducc_0_1.fft as fft
+import ducc0.fft as fft
 
 
 rng = np.random.default_rng(42)

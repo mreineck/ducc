@@ -50,16 +50,16 @@ an interface changes in a manner that is not backwards compatible, the DUCC
 version number will increase. As a consequence it might happen that one part of
 a Python code may use an older version of DUCC while at the same time another
 part requires a newer version. Since DUCC's version number is included in the
-module name itself (the module is not called "ducc", but rather "ducc_x_y"),
+module name itself (the module is not called "ducc", but rather "ducc<X>"),
 this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need
-the latest incarnation of DUCC 0.1, this will be on branch "ducc_0_1" of the
-git repository, and it will be installed as the package "ducc_0_1".
-Later versions (like ducc_0_2 or ducc_1_0) will be maintained on new branches
-and will be installed as "ducc_0_2" and "ducc_1_0", so that there will be no
-conflict with potentially installed older versions.
+the latest incarnation of DUCC 0.1, this will be on branch "ducc0" of the
+git repository, and it will be installed as the package "ducc0".
+Later versions will be maintained on new branches and will be installed as
+"ducc1" and "ducc2", so that there will be no conflict with potentially
+installed older versions.
 
 
 DUCC components

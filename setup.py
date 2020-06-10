@@ -6,7 +6,7 @@ from glob import iglob
 from setuptools import setup, Extension
 import pybind11
 
-pkgname = 'ducc_0_1'
+pkgname = 'ducc0'
 version = '0.1.0'
 
 def _get_files_by_suffix(directory, suffix):
@@ -69,7 +69,7 @@ extensions = [Extension(pkgname,
 
 setup(name=pkgname,
       version=version,
-      description='Definitely useful code collection',
+      description='Distinctly useful code collection',
       url='https://gitlab.mpcdf.mpg.de/mtr/ducc',
       include_package_data=True,
       author='Martin Reinecke',

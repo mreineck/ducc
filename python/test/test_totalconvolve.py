@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import ducc_0_1.totalconvolve as totalconvolve
-import ducc_0_1.sht as sht
-import ducc_0_1.misc as misc
+import ducc0.totalconvolve as totalconvolve
+import ducc0.sht as sht
+import ducc0.misc as misc
 
 pmp = pytest.mark.parametrize
 

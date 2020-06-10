@@ -1,6 +1,6 @@
 # Short usage demo for the interpol_ng module
 
-import ducc_0_1.totalconvolve as totalconvolve
+import ducc0.totalconvolve as totalconvolve
 import numpy as np
 
 

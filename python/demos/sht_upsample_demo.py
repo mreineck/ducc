@@ -1,5 +1,5 @@
-import ducc_0_1.sht as sht
-import ducc_0_1.misc as misc
+import ducc0.sht as sht
+import ducc0.misc as misc
 import numpy as np
 from time import time
 

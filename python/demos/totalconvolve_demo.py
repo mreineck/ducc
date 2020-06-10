@@ -1,4 +1,4 @@
-import ducc_0_1.totalconvolve as totalconvolve
+import ducc0.totalconvolve as totalconvolve
 import numpy as np
 import time
 
