@@ -31,8 +31,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_DATATYPES_H
-#define MRUTIL_DATATYPES_H
+#ifndef DUCC0_DATATYPES_H
+#define DUCC0_DATATYPES_H
 
 #include <string>
 #include <cstddef>

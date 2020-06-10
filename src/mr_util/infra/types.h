@@ -19,8 +19,8 @@
 /* Copyright (C) 2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_TYPES_H
-#define MRUTIL_TYPES_H
+#ifndef DUCC0_TYPES_H
+#define DUCC0_TYPES_H
 
 #include <typeinfo>
 #include <typeindex>

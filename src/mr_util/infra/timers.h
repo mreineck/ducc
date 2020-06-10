@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Authors: Peter Bell, Martin Reinecke */
 
-#ifndef MRUTIL_TIMERS_H
-#define MRUTIL_TIMERS_H
+#ifndef DUCC0_TIMERS_H
+#define DUCC0_TIMERS_H
 
 #include <chrono>
 #include <string>

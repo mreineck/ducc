@@ -95,8 +95,8 @@ bool critical(ptrdiff_t s)
   return (s>4096) && ((s&(s-1))==0);
   }
 
-template<typename T, typename Func> void sthelper2(const T * MRUTIL_RESTRICT in,
-  T * MRUTIL_RESTRICT out, size_t s0, size_t s1, ptrdiff_t sti0, ptrdiff_t sti1,
+template<typename T, typename Func> void sthelper2(const T * DUCC0_RESTRICT in,
+  T * DUCC0_RESTRICT out, size_t s0, size_t s1, ptrdiff_t sti0, ptrdiff_t sti1,
   ptrdiff_t sto0, ptrdiff_t sto1, Func func)
   {
   if ((sti0<=sti1) && (sto0<=sto1)) // no need to block

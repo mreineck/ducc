@@ -1,24 +1,24 @@
-#ifndef MRUTIL_USEFUL_MACROS_H
-#define MRUTIL_USEFUL_MACROS_H
+#ifndef DUCC0_USEFUL_MACROS_H
+#define DUCC0_USEFUL_MACROS_H
 
 #if defined(__GNUC__)
-#define MRUTIL_NOINLINE __attribute__((noinline))
-#define MRUTIL_RESTRICT __restrict__
-#define MRUTIL_ALIGNED(align) __attribute__ ((aligned(align)))
-#define MRUTIL_PREFETCH_R(addr) __builtin_prefetch(addr);
-#define MRUTIL_PREFETCH_W(addr) __builtin_prefetch(addr,1);
+#define DUCC0_NOINLINE __attribute__((noinline))
+#define DUCC0_RESTRICT __restrict__
+#define DUCC0_ALIGNED(align) __attribute__ ((aligned(align)))
+#define DUCC0_PREFETCH_R(addr) __builtin_prefetch(addr);
+#define DUCC0_PREFETCH_W(addr) __builtin_prefetch(addr,1);
 #elif defined(_MSC_VER)
-#define MRUTIL_NOINLINE __declspec(noinline)
-#define MRUTIL_RESTRICT __restrict
-#define MRUTIL_ALIGNED(align)
-#define MRUTIL_PREFETCH_R(addr)
-#define MRUTIL_PREFETCH_W(addr)
+#define DUCC0_NOINLINE __declspec(noinline)
+#define DUCC0_RESTRICT __restrict
+#define DUCC0_ALIGNED(align)
+#define DUCC0_PREFETCH_R(addr)
+#define DUCC0_PREFETCH_W(addr)
 #else
-#define MRUTIL_NOINLINE
-#define MRUTIL_RESTRICT
-#define MRUTIL_ALIGNED(align)
-#define MRUTIL_PREFETCH_R(addr)
-#define MRUTIL_PREFETCH_W(addr)
+#define DUCC0_NOINLINE
+#define DUCC0_RESTRICT
+#define DUCC0_ALIGNED(align)
+#define DUCC0_PREFETCH_R(addr)
+#define DUCC0_PREFETCH_W(addr)
 #endif
 
 #endif

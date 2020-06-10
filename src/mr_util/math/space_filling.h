@@ -30,8 +30,8 @@
  *  Author: Martin Reinecke
  */
 
-#ifndef MRUTIL_SPACE_FILLING_H
-#define MRUTIL_SPACE_FILLING_H
+#ifndef DUCC0_SPACE_FILLING_H
+#define DUCC0_SPACE_FILLING_H
 
 #include <cstdint>
 #include <array>

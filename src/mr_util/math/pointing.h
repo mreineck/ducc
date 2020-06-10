@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_POINTING_H
-#define MRUTIL_POINTING_H
+#ifndef DUCC0_POINTING_H
+#define DUCC0_POINTING_H
 
 #include <cmath>
 #include "mr_util/math/vec3.h"

@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_ALIGNED_ARRAY_H
-#define MRUTIL_ALIGNED_ARRAY_H
+#ifndef DUCC0_ALIGNED_ARRAY_H
+#define DUCC0_ALIGNED_ARRAY_H
 
 #include <cstdlib>
 #include <memory>

@@ -19,24 +19,24 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_SIMD_H
-#define MRUTIL_SIMD_H
+#ifndef DUCC0_SIMD_H
+#define DUCC0_SIMD_H
 
 // only enable SIMD support for gcc>=5.0 and clang>=5.0
-#ifndef MRUTIL_NO_SIMD
-#define MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
+#define DUCC0_NO_SIMD
 #if defined(__clang__)
 // AppleClang has their own version numbering
 #ifdef __apple_build_version__
 #  if (__clang_major__ > 9) || (__clang_major__ == 9 && __clang_minor__ >= 1)
-#     undef MRUTIL_NO_SIMD
+#     undef DUCC0_NO_SIMD
 #  endif
 #elif __clang_major__ >= 5
-#  undef MRUTIL_NO_SIMD
+#  undef DUCC0_NO_SIMD
 #endif
 #elif defined(__GNUC__)
 #if __GNUC__>=5
-#undef MRUTIL_NO_SIMD
+#undef DUCC0_NO_SIMD
 #endif
 #endif
 #endif
@@ -44,7 +44,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
 #include <x86intrin.h>
 #endif
 
@@ -251,7 +251,7 @@ template<typename T> class helper_<T,1>
     static size_t maskbits(Tm v) { return v; }
   };
 
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
 
 #if defined(__AVX512F__)
 template<> class helper_<double,8>

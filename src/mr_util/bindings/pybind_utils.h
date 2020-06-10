@@ -1,5 +1,5 @@
-#ifndef MRUTIL_PYBIND_UTILS_H
-#define MRUTIL_PYBIND_UTILS_H
+#ifndef DUCC0_PYBIND_UTILS_H
+#define DUCC0_PYBIND_UTILS_H
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>

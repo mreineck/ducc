@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_SYSTEM_H
-#define MRUTIL_SYSTEM_H
+#ifndef DUCC0_SYSTEM_H
+#define DUCC0_SYSTEM_H
 
 #include <string>
 #include <cstdlib>

@@ -32,8 +32,8 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef MRUTIL_FFT1D_H
-#define MRUTIL_FFT1D_H
+#ifndef DUCC0_FFT1D_H
+#define DUCC0_FFT1D_H
 
 #include <cstring>
 #include "mr_util/infra/useful_macros.h"
@@ -74,7 +74,7 @@ template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
 
 struct util1d // hack to avoid duplicate symbols
   {
-  static MRUTIL_NOINLINE size_t largest_prime_factor (size_t n)
+  static DUCC0_NOINLINE size_t largest_prime_factor (size_t n)
     {
     size_t res=1;
     while ((n&1)==0)
@@ -86,7 +86,7 @@ struct util1d // hack to avoid duplicate symbols
     return res;
     }
 
-  static MRUTIL_NOINLINE double cost_guess (size_t n)
+  static DUCC0_NOINLINE double cost_guess (size_t n)
     {
     constexpr double lfp=1.1; // penalty for non-hardcoded larger factors
     size_t ni=n;
@@ -104,7 +104,7 @@ struct util1d // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
-  static MRUTIL_NOINLINE size_t good_size_cmplx(size_t n)
+  static DUCC0_NOINLINE size_t good_size_cmplx(size_t n)
     {
     if (n<=12) return n;
 
@@ -133,7 +133,7 @@ struct util1d // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5 which is >= n */
-  static MRUTIL_NOINLINE size_t good_size_real(size_t n)
+  static DUCC0_NOINLINE size_t good_size_real(size_t n)
     {
     if (n<=6) return n;
 
@@ -181,8 +181,8 @@ template<typename T0> class cfftp
       { fact.push_back({factor, nullptr, nullptr}); }
 
 template<bool fwd, typename T> void pass2 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -228,8 +228,8 @@ template<bool fwd, typename T> void pass2 (size_t ido, size_t l1,
         special_mul<fwd>(ca-cb,WA(u2-1,i),CH(i,k,u2)); \
         }
 template<bool fwd, typename T> void pass3 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tw1r=-0.5,
                tw1i= (fwd ? -1: 1) * T0(0.8660254037844386467637231707529362L);
@@ -267,8 +267,8 @@ template<bool fwd, typename T> void pass3 (size_t ido, size_t l1,
 #undef POCKETFFT_PREP3
 
 template<bool fwd, typename T> void pass4 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -341,8 +341,8 @@ template<bool fwd, typename T> void pass4 (size_t ido, size_t l1,
         special_mul<fwd>(ca-cb,WA(u2-1,i),CH(i,k,u2)); \
         }
 template<bool fwd, typename T> void pass5 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.3090169943749474241022934171828191L),
                tw1i= (fwd ? -1: 1) * T0(0.9510565162951535721164393333793821L),
@@ -412,8 +412,8 @@ template<bool fwd, typename T> void pass5 (size_t ido, size_t l1,
         }
 
 template<bool fwd, typename T> void pass7(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.6234898018587335305250048840042398L),
                tw1i= (fwd ? -1 : 1) * T0(0.7818314824680298087084445266740578L),
@@ -479,8 +479,8 @@ template <bool fwd, typename T> void ROTX135(T &a) const
   }
 
 template<bool fwd, typename T> void pass8 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   auto CH = [ch,ido,l1](size_t a, size_t b, size_t c) -> T&
     { return ch[a+ido*(b+l1*c)]; };
@@ -592,8 +592,8 @@ template<bool fwd, typename T> void pass8 (size_t ido, size_t l1,
         }
 
 template<bool fwd, typename T> void pass11 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tw1r= T0(0.8412535328311811688618116489193677L),
                tw1i= (fwd ? -1 : 1) * T0(0.5406408174555975821076359543186917L),
@@ -652,9 +652,9 @@ template<bool fwd, typename T> void pass11 (size_t ido, size_t l1,
 #undef POCKETFFT_PREP11
 
 template<bool fwd, typename T> void passg (size_t ido, size_t ip,
-  size_t l1, T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const Cmplx<T0> * MRUTIL_RESTRICT wa,
-  const Cmplx<T0> * MRUTIL_RESTRICT csarr) const
+  size_t l1, T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const Cmplx<T0> * DUCC0_RESTRICT wa,
+  const Cmplx<T0> * DUCC0_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph = (ip+1)/2;
@@ -813,7 +813,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       { fwd ? pass_all<true>(c, fct) : pass_all<false>(c, fct); }
 
   private:
-    MRUTIL_NOINLINE void factorize()
+    DUCC0_NOINLINE void factorize()
       {
       size_t len=length;
       while ((len&7)==0)
@@ -875,7 +875,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       }
 
   public:
-    MRUTIL_NOINLINE cfftp(size_t length_)
+    DUCC0_NOINLINE cfftp(size_t length_)
       : length(length_)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -912,8 +912,8 @@ template<typename T1, typename T2, typename T3> inline void MULPM
   {  a=c*e+d*f; b=c*f-d*e; }
 
 template<typename T> void radf2 (size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   auto WA = [wa,ido](size_t x, size_t i) { return wa[i+x*(ido-1)]; };
   auto CC = [cc,ido,l1](size_t a, size_t b, size_t c) -> const T&
@@ -949,8 +949,8 @@ template<typename T> void radf2 (size_t ido, size_t l1,
   }
 
 template<typename T> void radf3(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 taur=-0.5, taui=T0(0.8660254037844386467637231707529362L);
 
@@ -988,8 +988,8 @@ template<typename T> void radf3(size_t ido, size_t l1,
   }
 
 template<typename T> void radf4(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 hsqt2=T0(0.707106781186547524400844362104849L);
 
@@ -1035,8 +1035,8 @@ template<typename T> void radf4(size_t ido, size_t l1,
   }
 
 template<typename T> void radf5(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tr11= T0(0.3090169943749474241022934171828191L),
                ti11= T0(0.9510565162951535721164393333793821L),
@@ -1091,8 +1091,8 @@ template<typename T> void radf5(size_t ido, size_t l1,
 #undef POCKETFFT_REARRANGE
 
 template<typename T> void radfg(size_t ido, size_t ip, size_t l1,
-  T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa, const T0 * MRUTIL_RESTRICT csarr) const
+  T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa, const T0 * DUCC0_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph=(ip+1)/2;
@@ -1233,8 +1233,8 @@ template<typename T> void radfg(size_t ido, size_t ip, size_t l1,
   }
 
 template<typename T> void radb2(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   auto WA = [wa,ido](size_t x, size_t i) { return wa[i+x*(ido-1)]; };
   auto CC = [cc,ido](size_t a, size_t b, size_t c) -> const T&
@@ -1263,8 +1263,8 @@ template<typename T> void radb2(size_t ido, size_t l1,
   }
 
 template<typename T> void radb3(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 taur=-0.5, taui=T0(0.8660254037844386467637231707529362L);
 
@@ -1303,8 +1303,8 @@ template<typename T> void radb3(size_t ido, size_t l1,
   }
 
 template<typename T> void radb4(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
 
@@ -1355,8 +1355,8 @@ template<typename T> void radb4(size_t ido, size_t l1,
   }
 
 template<typename T> void radb5(size_t ido, size_t l1,
-  const T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa) const
+  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tr11= T0(0.3090169943749474241022934171828191L),
                ti11= T0(0.9510565162951535721164393333793821L),
@@ -1414,8 +1414,8 @@ template<typename T> void radb5(size_t ido, size_t l1,
   }
 
 template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
-  T * MRUTIL_RESTRICT cc, T * MRUTIL_RESTRICT ch,
-  const T0 * MRUTIL_RESTRICT wa, const T0 * MRUTIL_RESTRICT csarr) const
+  T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T0 * DUCC0_RESTRICT wa, const T0 * DUCC0_RESTRICT csarr) const
   {
   const size_t cdim=ip;
   size_t ipph=(ip+1)/ 2;
@@ -1684,7 +1684,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       }
 
   public:
-    MRUTIL_NOINLINE rfftp(size_t length_)
+    DUCC0_NOINLINE rfftp(size_t length_)
       : length(length_)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -1739,7 +1739,7 @@ template<typename T0> class fftblue
       }
 
   public:
-    MRUTIL_NOINLINE fftblue(size_t length)
+    DUCC0_NOINLINE fftblue(size_t length)
       : n(length), n2(util1d::good_size_cmplx(n*2-1)), plan(n2), mem(n+n2/2+1),
         bk(mem.data()), bkf(mem.data()+n)
       {
@@ -1811,7 +1811,7 @@ template<typename T0> class pocketfft_c
     size_t len;
 
   public:
-    MRUTIL_NOINLINE pocketfft_c(size_t length)
+    DUCC0_NOINLINE pocketfft_c(size_t length)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -1830,7 +1830,7 @@ template<typename T0> class pocketfft_c
         packplan=std::unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
       }
 
-    template<typename T> MRUTIL_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
+    template<typename T> DUCC0_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec(c,fct,fwd); }
 
     size_t length() const { return len; }
@@ -1848,7 +1848,7 @@ template<typename T0> class pocketfft_r
     size_t len;
 
   public:
-    MRUTIL_NOINLINE pocketfft_r(size_t length)
+    DUCC0_NOINLINE pocketfft_r(size_t length)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -1867,7 +1867,7 @@ template<typename T0> class pocketfft_r
         packplan=std::unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
       }
 
-    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool fwd) const
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec_r(c,fct,fwd); }
 
     size_t length() const { return len; }

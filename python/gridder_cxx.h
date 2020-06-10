@@ -536,7 +536,7 @@ template<typename T, typename T2=complex<T>> class Helper
   public:
     const T2 *p0r;
     T2 *p0w;
-    T kernel[64] MRUTIL_ALIGNED(64);
+    T kernel[64] DUCC0_ALIGNED(64);
     static constexpr size_t vlen=native_simd<T>::size();
 
     Helper(const GridderConfig &gconf_, const T2 *grid_r_, T2 *grid_w_,
@@ -681,15 +681,15 @@ template<typename T, typename Serv> void x2grid_c
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * MRUTIL_RESTRICT ku = hlp.kernel;
-    const T * MRUTIL_RESTRICT kv = hlp.kernel+supp;
+    const T * DUCC0_RESTRICT ku = hlp.kernel;
+    const T * DUCC0_RESTRICT kv = hlp.kernel+supp;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      auto * MRUTIL_RESTRICT ptr = hlp.p0w;
+      auto * DUCC0_RESTRICT ptr = hlp.p0w;
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
@@ -729,8 +729,8 @@ template<typename T, typename Serv> void grid2x_c
     {
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * MRUTIL_RESTRICT ku = hlp.kernel;
-    const T * MRUTIL_RESTRICT kv = hlp.kernel+supp;
+    const T * DUCC0_RESTRICT ku = hlp.kernel;
+    const T * DUCC0_RESTRICT kv = hlp.kernel+supp;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -738,7 +738,7 @@ template<typename T, typename Serv> void grid2x_c
       auto flip = coord.FixW();
       hlp.prep(coord);
       complex<T> r = 0;
-      const auto * MRUTIL_RESTRICT ptr = hlp.p0r;
+      const auto * DUCC0_RESTRICT ptr = hlp.p0r;
       for (size_t cu=0; cu<supp; ++cu)
         {
         complex<T> tmp(0);

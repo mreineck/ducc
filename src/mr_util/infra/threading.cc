@@ -21,7 +21,7 @@
 
 #include "mr_util/infra/threading.h"
 
-#ifndef MRUTIL_NO_THREADING
+#ifndef DUCC0_NO_THREADING
 #include <cstdlib>
 #include <mutex>
 #include <condition_variable>
@@ -38,7 +38,7 @@ namespace mr {
 
 namespace detail_threading {
 
-#ifndef MRUTIL_NO_THREADING
+#ifndef DUCC0_NO_THREADING
 
 static const size_t max_threads_ = std::max<size_t>(1, std::thread::hardware_concurrency());
 

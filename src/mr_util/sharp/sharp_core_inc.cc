@@ -56,9 +56,9 @@ using namespace std;
 using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
-#if ((!defined(MRUTIL_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
+#if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
-  complex<double> * MRUTIL_RESTRICT cc)
+  complex<double> * DUCC0_RESTRICT cc)
   {
   auto tmp1=_mm256_hadd_pd(a,b), tmp2=_mm256_hadd_pd(c,d);
   auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
@@ -76,7 +76,7 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   }
 #else
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
-  complex<double> * MRUTIL_RESTRICT cc)
+  complex<double> * DUCC0_RESTRICT cc)
   {
   cc[0] += complex<double>(accumulate(a,std::plus<>()),accumulate(b,std::plus<>()));
   cc[1] += complex<double>(accumulate(c,std::plus<>()),accumulate(d,std::plus<>()));
@@ -128,7 +128,7 @@ union sxdata_u
   sxdata_s s;
   };
 
-static inline void Tvnormalize (Tv * MRUTIL_RESTRICT val, Tv * MRUTIL_RESTRICT scale,
+static inline void Tvnormalize (Tv * DUCC0_RESTRICT val, Tv * DUCC0_RESTRICT scale,
   double maxval)
   {
   const Tv vfmin=sharp_fsmall*maxval, vfmax=maxval;
@@ -150,7 +150,7 @@ static inline void Tvnormalize (Tv * MRUTIL_RESTRICT val, Tv * MRUTIL_RESTRICT s
   }
 
 static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
-  Tv * MRUTIL_RESTRICT resd, Tv * MRUTIL_RESTRICT ress)
+  Tv * DUCC0_RESTRICT resd, Tv * DUCC0_RESTRICT ress)
   {
   Tv vminv=powlimit[npow];
   auto mask = abs(val)<vminv;
@@ -189,7 +189,7 @@ static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
     }
   }
 
-static inline void getCorfac(Tv scale, Tv * MRUTIL_RESTRICT corfac,
+static inline void getCorfac(Tv scale, Tv * DUCC0_RESTRICT corfac,
   const vector<double> &cf)
   {
   union Tvu
@@ -203,7 +203,7 @@ static inline void getCorfac(Tv scale, Tv * MRUTIL_RESTRICT corfac,
   *corfac=corf.v;
   }
 
-static inline bool rescale(Tv * MRUTIL_RESTRICT v1, Tv * MRUTIL_RESTRICT v2, Tv * MRUTIL_RESTRICT s, Tv eps)
+static inline bool rescale(Tv * DUCC0_RESTRICT v1, Tv * DUCC0_RESTRICT v2, Tv * DUCC0_RESTRICT s, Tv eps)
   {
   auto mask = abs(*v2)>eps;
   if (any_of(mask))
@@ -216,8 +216,8 @@ static inline bool rescale(Tv * MRUTIL_RESTRICT v1, Tv * MRUTIL_RESTRICT v2, Tv 
   return false;
   }
 
-MRUTIL_NOINLINE static void iter_to_ieee(const sharp_Ylmgen &gen,
-  s0data_v & MRUTIL_RESTRICT d, size_t & MRUTIL_RESTRICT l_, size_t & MRUTIL_RESTRICT il_, size_t nv2)
+DUCC0_NOINLINE static void iter_to_ieee(const sharp_Ylmgen &gen,
+  s0data_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t & DUCC0_RESTRICT il_, size_t nv2)
   {
   size_t l=gen.m, il=0;
   Tv mfac = (gen.m&1) ? -gen.mfac[gen.m]:gen.mfac[gen.m];
@@ -250,8 +250,8 @@ MRUTIL_NOINLINE static void iter_to_ieee(const sharp_Ylmgen &gen,
   l_=l; il_=il;
   }
 
-MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
-  const vector<sharp_Ylmgen::dbl2> &coef, const dcmplx * MRUTIL_RESTRICT alm,
+DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
+  const vector<sharp_Ylmgen::dbl2> &coef, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t il, size_t lmax, size_t nv2)
   {
   for (; l+6<=lmax; il+=4, l+=8)
@@ -332,8 +332,8 @@ MRUTIL_NOINLINE static void alm2map_kernel(s0data_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
-  const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
+DUCC0_NOINLINE static void calc_alm2map (sharp_job & DUCC0_RESTRICT job,
+  const sharp_Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,il=0,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
@@ -343,7 +343,7 @@ MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
   job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -382,8 +382,8 @@ MRUTIL_NOINLINE static void calc_alm2map (sharp_job & MRUTIL_RESTRICT job,
   alm2map_kernel(d, coef, alm, l, il, lmax, nv2);
   }
 
-MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
-  const vector<sharp_Ylmgen::dbl2> &coef, dcmplx * MRUTIL_RESTRICT alm, size_t l,
+DUCC0_NOINLINE static void map2alm_kernel(s0data_v & DUCC0_RESTRICT d,
+  const vector<sharp_Ylmgen::dbl2> &coef, dcmplx * DUCC0_RESTRICT alm, size_t l,
   size_t il, size_t lmax, size_t nv2)
   {
   for (; l+2<=lmax; il+=2, l+=4)
@@ -426,8 +426,8 @@ MRUTIL_NOINLINE static void map2alm_kernel(s0data_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
-  const sharp_Ylmgen &gen, s0data_v & MRUTIL_RESTRICT d, size_t nth)
+DUCC0_NOINLINE static void calc_map2alm (sharp_job & DUCC0_RESTRICT job,
+  const sharp_Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,il=0,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
@@ -437,7 +437,7 @@ MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
   job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+  dcmplx * DUCC0_RESTRICT alm=job.almtmp;
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -476,8 +476,8 @@ MRUTIL_NOINLINE static void calc_map2alm (sharp_job & MRUTIL_RESTRICT job,
   map2alm_kernel(d, coef, alm, l, il, lmax, nv2);
   }
 
-MRUTIL_NOINLINE static void iter_to_ieee_spin (const sharp_Ylmgen &gen,
-  sxdata_v & MRUTIL_RESTRICT d, size_t & MRUTIL_RESTRICT l_, size_t nv2)
+DUCC0_NOINLINE static void iter_to_ieee_spin (const sharp_Ylmgen &gen,
+  sxdata_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t nv2)
   {
   const auto &fx = gen.coef;
   Tv prefac=gen.prefac[gen.m],
@@ -549,8 +549,8 @@ MRUTIL_NOINLINE static void iter_to_ieee_spin (const sharp_Ylmgen &gen,
   l_=l;
   }
 
-MRUTIL_NOINLINE static void alm2map_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
+DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
+  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave = l;
@@ -605,8 +605,8 @@ MRUTIL_NOINLINE static void alm2map_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job & MRUTIL_RESTRICT job,
-  const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
+DUCC0_NOINLINE static void calc_alm2map_spin (sharp_job & DUCC0_RESTRICT job,
+  const sharp_Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
@@ -616,7 +616,7 @@ MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job & MRUTIL_RESTRICT job,
   job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -685,8 +685,8 @@ MRUTIL_NOINLINE static void calc_alm2map_spin (sharp_job & MRUTIL_RESTRICT job,
     }
   }
 
-MRUTIL_NOINLINE static void map2alm_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_Ylmgen::dbl2> &fx, dcmplx * MRUTIL_RESTRICT alm,
+DUCC0_NOINLINE static void map2alm_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
+  const vector<sharp_Ylmgen::dbl2> &fx, dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
@@ -739,8 +739,8 @@ MRUTIL_NOINLINE static void map2alm_spin_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job & MRUTIL_RESTRICT job,
-  const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
+DUCC0_NOINLINE static void calc_map2alm_spin (sharp_job & DUCC0_RESTRICT job,
+  const sharp_Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
@@ -750,7 +750,7 @@ MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job & MRUTIL_RESTRICT job,
   job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+  dcmplx * DUCC0_RESTRICT alm=job.almtmp;
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -816,8 +816,8 @@ MRUTIL_NOINLINE static void calc_map2alm_spin (sharp_job & MRUTIL_RESTRICT job,
   }
 
 
-MRUTIL_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & MRUTIL_RESTRICT d,
-  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * MRUTIL_RESTRICT alm,
+DUCC0_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & DUCC0_RESTRICT d,
+  const vector<sharp_Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
@@ -860,8 +860,8 @@ MRUTIL_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & MRUTIL_RESTRICT d,
     }
   }
 
-MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job & MRUTIL_RESTRICT job,
-  const sharp_Ylmgen &gen, sxdata_v & MRUTIL_RESTRICT d, size_t nth)
+DUCC0_NOINLINE static void calc_alm2map_deriv1(sharp_job & DUCC0_RESTRICT job,
+  const sharp_Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
@@ -871,7 +871,7 @@ MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job & MRUTIL_RESTRICT job,
   job.opcnt += (lmax+1-l) * 15*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -941,7 +941,7 @@ MRUTIL_NOINLINE static void calc_alm2map_deriv1(sharp_job & MRUTIL_RESTRICT job,
 
 #define VZERO(var) do { memset(&(var),0,sizeof(var)); } while(0)
 
-MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & ispair,
+DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & ispair,
   const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
@@ -956,7 +956,7 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & 
       if (job.spin==0)
         {
         //adjust the a_lm for the new algorithm
-        dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+        dcmplx * DUCC0_RESTRICT alm=job.almtmp;
         for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
           {
           dcmplx al = alm[l];
@@ -1095,7 +1095,7 @@ MRUTIL_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & 
     }
   }
 
-MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &ispair,
+DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &ispair,
   const vector<double> &cth_, const vector<double> &sth_, size_t llim, size_t ulim,
   sharp_Ylmgen &gen, size_t mi, const vector<size_t> &mlim)
   {
@@ -1144,7 +1144,7 @@ MRUTIL_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &i
             }
           }
         //adjust the a_lm for the new algorithm
-        dcmplx * MRUTIL_RESTRICT alm=job.almtmp;
+        dcmplx * DUCC0_RESTRICT alm=job.almtmp;
         dcmplx alm2 = 0.;
         double alold=0;
         for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)

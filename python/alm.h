@@ -5,8 +5,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_ALM_H
-#define MRUTIL_ALM_H
+#ifndef DUCC0_ALM_H
+#define DUCC0_ALM_H
 
 #if 1
 #include <complex>

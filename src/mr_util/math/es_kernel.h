@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_ES_KERNEL_H
-#define MRUTIL_ES_KERNEL_H
+#ifndef DUCC0_ES_KERNEL_H
+#define DUCC0_ES_KERNEL_H
 
 #include <cmath>
 #include <vector>

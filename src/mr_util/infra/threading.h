@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Peter Bell, Max-Planck-Society
    Authors: Peter Bell, Martin Reinecke */
 
-#ifndef MRUTIL_THREADING_H
-#define MRUTIL_THREADING_H
+#ifndef DUCC0_THREADING_H
+#define DUCC0_THREADING_H
 
 #include <functional>
 

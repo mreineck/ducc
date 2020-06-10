@@ -113,7 +113,7 @@ void sharp_standard_geom_info::clear_map (const any &map) const
 
 template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t iring, const double *ringtmp, T *map) const
   {
-  T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
     p1[ptrdiff_t(m)*stride] += T(ringtmp[m]*wgt);
@@ -127,7 +127,7 @@ void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const doubl
   }
 template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, double *ringtmp) const
   {
-  const T *MRUTIL_RESTRICT p1=&map[ring[iring].ofs];
+  const T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
     ringtmp[m] = p1[ptrdiff_t(m)*stride]*wgt;

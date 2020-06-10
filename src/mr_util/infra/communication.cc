@@ -14,7 +14,7 @@ using namespace std;
 void assert_unequal (const void *a, const void *b)
   { MR_assert (a!=b, "input and output buffers must not be identical"); }
 
-#ifdef MRUTIL_USE_MPI
+#ifdef DUCC0_USE_MPI
 
 class Typemap: public TypeMapper<MPI_Datatype>
   {

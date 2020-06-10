@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_COMPRESS_UTILS_H
-#define MRUTIL_COMPRESS_UTILS_H
+#ifndef DUCC0_COMPRESS_UTILS_H
+#define DUCC0_COMPRESS_UTILS_H
 
 #include <limits>
 #include <vector>

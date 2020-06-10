@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_CMPLX_H
-#define MRUTIL_CMPLX_H
+#ifndef DUCC0_CMPLX_H
+#define DUCC0_CMPLX_H
 
 namespace mr {
 

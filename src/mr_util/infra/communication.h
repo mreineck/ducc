@@ -21,13 +21,13 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_COMMUNICATION_H
-#define MRUTIL_COMMUNICATION_H
+#ifndef DUCC0_COMMUNICATION_H
+#define DUCC0_COMMUNICATION_H
 
-#define MRUTIL_USE_MPI
+#define DUCC0_USE_MPI
 
 #include <vector>
-#ifdef MRUTIL_USE_MPI
+#ifdef DUCC0_USE_MPI
 #include <mpi.h>
 #endif
 
@@ -52,7 +52,7 @@ class Communicator
   {
   public:
     enum redOp { Sum, Min, Max, Prod };
-#ifdef MRUTIL_USE_MPI
+#ifdef DUCC0_USE_MPI
     using CommType = MPI_Comm;
 #else
     using CommType = struct{};

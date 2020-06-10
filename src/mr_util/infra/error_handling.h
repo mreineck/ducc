@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_ERROR_HANDLING_H
-#define MRUTIL_ERROR_HANDLING_H
+#ifndef DUCC0_ERROR_HANDLING_H
+#define DUCC0_ERROR_HANDLING_H
 
 #include <sstream>
 #include <exception>
@@ -32,9 +32,9 @@ namespace mr {
 namespace detail_error_handling {
 
 #if defined (__GNUC__)
-#define MRUTIL_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
-#define MRUTIL_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
 
 // to be replaced with std::source_location once generally available
@@ -78,7 +78,7 @@ void streamDump__(::std::ostream &os, const T& value,
   }
 #endif
 template<typename ...Args>
-[[noreturn]] void MRUTIL_NOINLINE fail__(Args&&... args)
+[[noreturn]] void DUCC0_NOINLINE fail__(Args&&... args)
   {
   ::std::ostringstream msg; \
   ::mr::detail_error_handling::streamDump__(msg, args...); \
@@ -87,7 +87,7 @@ template<typename ...Args>
 
 #define MR_fail(...) \
   do { \
-    ::mr::detail_error_handling::fail__(MRUTIL_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    ::mr::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
     } while(0)
 
 #define MR_assert(cond,...) \

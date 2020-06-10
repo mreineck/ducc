@@ -26,8 +26,8 @@
  *  Mathematical, physical and technical constants.
  */
 
-#ifndef MRUTIL_CONSTANTS_H
-#define MRUTIL_CONSTANTS_H
+#ifndef DUCC0_CONSTANTS_H
+#define DUCC0_CONSTANTS_H
 
 namespace mr {
 

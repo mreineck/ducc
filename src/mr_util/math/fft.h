@@ -36,8 +36,8 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef MRUTIL_FFT_H
-#define MRUTIL_FFT_H
+#ifndef DUCC0_FFT_H
+#define DUCC0_FFT_H
 
 #include "mr_util/math/fft1d.h"
 
@@ -51,7 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mr_util/infra/threading.h"
 #include "mr_util/infra/simd.h"
 #include "mr_util/infra/mav.h"
-#ifndef MRUTIL_NO_THREADING
+#ifndef DUCC0_NO_THREADING
 #include <mutex>
 #endif
 
@@ -78,14 +78,14 @@ struct util // hack to avoid duplicate symbols
       }
     }
 
-  static MRUTIL_NOINLINE void sanity_check_onetype(const fmav_info &a1,
+  static DUCC0_NOINLINE void sanity_check_onetype(const fmav_info &a1,
     const fmav_info &a2, bool inplace, const shape_t &axes)
     {
     sanity_check_axes(a1.ndim(), axes);
     MR_assert(a1.conformable(a2), "array sizes are not conformable");
     if (inplace) MR_assert(a1.stride()==a2.stride(), "stride mismatch");
     }
-  static MRUTIL_NOINLINE void sanity_check_cr(const fmav_info &ac,
+  static DUCC0_NOINLINE void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, const shape_t &axes)
     {
     sanity_check_axes(ac.ndim(), axes);
@@ -94,7 +94,7 @@ struct util // hack to avoid duplicate symbols
       MR_assert(ac.shape(i)== (i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i),
         "axis length mismatch");
     }
-  static MRUTIL_NOINLINE void sanity_check_cr(const fmav_info &ac,
+  static DUCC0_NOINLINE void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, const size_t axis)
     {
     if (axis>=ac.ndim()) throw std::invalid_argument("bad axis number");
@@ -104,7 +104,7 @@ struct util // hack to avoid duplicate symbols
         "axis length mismatch");
     }
 
-#ifdef MRUTIL_NO_THREADING
+#ifdef DUCC0_NO_THREADING
   static size_t thread_count (size_t /*nthreads*/, const fmav_info &/*info*/,
     size_t /*axis*/, size_t /*vlen*/)
     { return 1; }
@@ -134,10 +134,10 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    MRUTIL_NOINLINE T_dct1(size_t length)
+    DUCC0_NOINLINE T_dct1(size_t length)
       : fftplan(2*(length-1)) {}
 
-    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -165,10 +165,10 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    MRUTIL_NOINLINE T_dst1(size_t length)
+    DUCC0_NOINLINE T_dst1(size_t length)
       : fftplan(2*(length+1)) {}
 
-    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/) const
       {
       size_t N=fftplan.length(), n=N/2-1;
@@ -191,7 +191,7 @@ template<typename T0> class T_dcst23
     std::vector<T0> twiddle;
 
   public:
-    MRUTIL_NOINLINE T_dcst23(size_t length)
+    DUCC0_NOINLINE T_dcst23(size_t length)
       : fftplan(length), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
@@ -199,7 +199,7 @@ template<typename T0> class T_dcst23
         twiddle[i] = tw[i+1].r;
       }
 
-    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -263,7 +263,7 @@ template<typename T0> class T_dcst4
     aligned_array<Cmplx<T0>> C2;
 
   public:
-    MRUTIL_NOINLINE T_dcst4(size_t length)
+    DUCC0_NOINLINE T_dcst4(size_t length)
       : N(length),
         fft((N&1) ? nullptr : new pocketfft_c<T0>(N/2)),
         rfft((N&1)? new pocketfft_r<T0>(N) : nullptr),
@@ -277,7 +277,7 @@ template<typename T0> class T_dcst4
         }
       }
 
-    template<typename T> MRUTIL_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine) const
       {
       size_t n2 = N/2;
@@ -553,7 +553,7 @@ class rev_iter
     size_t remaining() const { return rem; }
   };
 
-template<typename T, typename T0> MRUTIL_NOINLINE aligned_array<T> alloc_tmp
+template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize)
   {
   auto othersize = info.size()/axsize;
@@ -562,8 +562,8 @@ template<typename T, typename T0> MRUTIL_NOINLINE aligned_array<T> alloc_tmp
   return aligned_array<T>(tmpsize);
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
-  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *MRUTIL_RESTRICT dst)
+template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_iter<vlen> &it,
+  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *DUCC0_RESTRICT dst)
   {
   if (it.uniform_i())
     {
@@ -621,8 +621,8 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
       }
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
-  const fmav<T> &src, native_simd<T> *MRUTIL_RESTRICT dst)
+template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_iter<vlen> &it,
+  const fmav<T> &src, native_simd<T> *DUCC0_RESTRICT dst)
   {
   if (it.uniform_i())
     {
@@ -648,16 +648,16 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_i
         dst[i][j] = src[it.iofs(j,i)];
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_input(const multi_iter<vlen> &it,
-  const fmav<T> &src, T *MRUTIL_RESTRICT dst)
+template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_iter<vlen> &it,
+  const fmav<T> &src, T *DUCC0_RESTRICT dst)
   {
   if (dst == &src[it.iofs(0)]) return;  // in-place
   for (size_t i=0; i<it.length_in(); ++i)
     dst[i] = src[it.iofs(i)];
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
-  const Cmplx<native_simd<T>> *MRUTIL_RESTRICT src, fmav<Cmplx<T>> &dst)
+template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
+  const Cmplx<native_simd<T>> *DUCC0_RESTRICT src, fmav<Cmplx<T>> &dst)
   {
   if (it.uniform_o())
     {
@@ -686,8 +686,8 @@ template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_i
     }
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
-  const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
+template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
+  const native_simd<T> *DUCC0_RESTRICT src, fmav<T> &dst)
   {
   if (it.uniform_o())
     {
@@ -716,8 +716,8 @@ template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_i
     }
   }
 
-template<typename T, size_t vlen> MRUTIL_NOINLINE void copy_output(const multi_iter<vlen> &it,
-  const T *MRUTIL_RESTRICT src, fmav<T> &dst)
+template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
+  const T *DUCC0_RESTRICT src, fmav<T> &dst)
   {
   auto ptr=dst.vdata();
   if (src == &dst[it.oofs(0)]) return;  // in-place
@@ -731,7 +731,7 @@ template <typename T> struct add_vec<Cmplx<T>>
 template <typename T> using add_vec_t = typename add_vec<T>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
-MRUTIL_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
+DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec & exec,
   const bool allow_inplace=true)
   {
@@ -750,7 +750,7 @@ MRUTIL_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
         auto storage = alloc_tmp<T,T0>(in, len);
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
         if (vlen>1)
           while (it.remaining()>=vlen)
             {
@@ -775,7 +775,7 @@ struct ExecC2C
   {
   bool forward;
 
-  template <typename T0, typename T, size_t vlen> MRUTIL_NOINLINE void operator() (
+  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator() (
     const multi_iter<vlen> &it, const fmav<Cmplx<T0>> &in,
     fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct) const
     {
@@ -785,8 +785,8 @@ struct ExecC2C
     }
   };
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
-  const native_simd<T> *MRUTIL_RESTRICT src, fmav<T> &dst)
+template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
+  const native_simd<T> *DUCC0_RESTRICT src, fmav<T> &dst)
   {
   if (it.uniform_o())
     {
@@ -857,8 +857,8 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_hartley(const multi
     }
   }
 
-template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
-  const T *MRUTIL_RESTRICT src, fmav<T> &dst)
+template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
+  const T *DUCC0_RESTRICT src, fmav<T> &dst)
   {
   auto ptr = dst.vdata();
   ptr[it.oofs(0)] = src[0];
@@ -874,7 +874,7 @@ template <typename T, size_t vlen> MRUTIL_NOINLINE void copy_hartley(const multi
 
 struct ExecHartley
   {
-  template <typename T0, typename T, size_t vlen> MRUTIL_NOINLINE void operator () (
+  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator () (
     const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan, T0 fct) const
     {
@@ -891,7 +891,7 @@ struct ExecDcst
   bool cosine;
 
   template <typename T0, typename T, typename Tplan, size_t vlen>
-  MRUTIL_NOINLINE void operator () (const multi_iter<vlen> &it, const fmav<T0> &in,
+  DUCC0_NOINLINE void operator () (const multi_iter<vlen> &it, const fmav<T0> &in,
     fmav <T0> &out, T * buf, const Tplan &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -900,7 +900,7 @@ struct ExecDcst
     }
   };
 
-template<typename T> MRUTIL_NOINLINE void general_r2c(
+template<typename T> DUCC0_NOINLINE void general_r2c(
   const fmav<T> &in, fmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
@@ -912,7 +912,7 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
     constexpr auto vlen = native_simd<T>::size();
     auto storage = alloc_tmp<T,T>(in, len);
     multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
     if (vlen>1)
       while (it.remaining()>=vlen)
         {
@@ -957,7 +957,7 @@ template<typename T> MRUTIL_NOINLINE void general_r2c(
       }
     });  // end of parallel region
   }
-template<typename T> MRUTIL_NOINLINE void general_c2r(
+template<typename T> DUCC0_NOINLINE void general_c2r(
   const fmav<Cmplx<T>> &in, fmav<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
@@ -969,7 +969,7 @@ template<typename T> MRUTIL_NOINLINE void general_c2r(
       constexpr auto vlen = native_simd<T>::size();
       auto storage = alloc_tmp<T,T>(out, len);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
       if (vlen>1)
         while (it.remaining()>=vlen)
           {
@@ -1033,7 +1033,7 @@ struct ExecR2R
   {
   bool r2c, forward;
 
-  template <typename T0, typename T, size_t vlen> MRUTIL_NOINLINE void operator () (
+  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator () (
     const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out, T * buf,
     const pocketfft_r<T0> &plan, T0 fct) const
     {
@@ -1049,7 +1049,7 @@ struct ExecR2R
     }
   };
 
-template<typename T> MRUTIL_NOINLINE void c2c(const fmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in,
   fmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1)
   {
@@ -1060,7 +1060,7 @@ template<typename T> MRUTIL_NOINLINE void c2c(const fmav<std::complex<T>> &in,
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
-template<typename T> MRUTIL_NOINLINE void dct(const fmav<T> &in, fmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dct(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
@@ -1075,7 +1075,7 @@ template<typename T> MRUTIL_NOINLINE void dct(const fmav<T> &in, fmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> MRUTIL_NOINLINE void dst(const fmav<T> &in, fmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dst(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
@@ -1089,7 +1089,7 @@ template<typename T> MRUTIL_NOINLINE void dst(const fmav<T> &in, fmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> MRUTIL_NOINLINE void r2c(const fmav<T> &in,
+template<typename T> DUCC0_NOINLINE void r2c(const fmav<T> &in,
   fmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1)
   {
@@ -1099,7 +1099,7 @@ template<typename T> MRUTIL_NOINLINE void r2c(const fmav<T> &in,
   general_r2c(in, out2, axis, forward, fct, nthreads);
   }
 
-template<typename T> MRUTIL_NOINLINE void r2c(const fmav<T> &in,
+template<typename T> DUCC0_NOINLINE void r2c(const fmav<T> &in,
   fmav<std::complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1)
   {
@@ -1112,7 +1112,7 @@ template<typename T> MRUTIL_NOINLINE void r2c(const fmav<T> &in,
   c2c(out, out, newaxes, forward, T(1), nthreads);
   }
 
-template<typename T> MRUTIL_NOINLINE void c2r(const fmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const fmav<std::complex<T>> &in,
   fmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
   {
   util::sanity_check_cr(in, out, axis);
@@ -1121,7 +1121,7 @@ template<typename T> MRUTIL_NOINLINE void c2r(const fmav<std::complex<T>> &in,
   general_c2r(in2, out, axis, forward, fct, nthreads);
   }
 
-template<typename T> MRUTIL_NOINLINE void c2r(const fmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const fmav<std::complex<T>> &in,
   fmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1)
   {
@@ -1135,7 +1135,7 @@ template<typename T> MRUTIL_NOINLINE void c2r(const fmav<std::complex<T>> &in,
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
-template<typename T> MRUTIL_NOINLINE void r2r_fftpack(const fmav<T> &in,
+template<typename T> DUCC0_NOINLINE void r2r_fftpack(const fmav<T> &in,
   fmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1)
   {
@@ -1145,7 +1145,7 @@ template<typename T> MRUTIL_NOINLINE void r2r_fftpack(const fmav<T> &in,
     ExecR2R{real2hermitian, forward});
   }
 
-template<typename T> MRUTIL_NOINLINE void r2r_separable_hartley(const fmav<T> &in,
+template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in,
   fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);

@@ -3,8 +3,8 @@
  *  Author: Martin Reinecke
  */
 
-#ifndef MRUTIL_INTERPOL_NG_H
-#define MRUTIL_INTERPOL_NG_H
+#ifndef DUCC0_INTERPOL_NG_H
+#define DUCC0_INTERPOL_NG_H
 
 #define SIMD_INTERPOL
 #define SPECIAL_CASING
@@ -39,7 +39,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
   }
 
 template<typename Tplan, typename T, typename T0, typename Exec>
-MRUTIL_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
+DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
   const size_t axis, const vector<T0> &kernel, size_t nthreads,
   const Exec &exec)
   {
@@ -57,7 +57,7 @@ MRUTIL_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
       constexpr auto vlen = native_simd<T0>::size();
       auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef MRUTIL_NO_SIMD
+#ifndef DUCC0_NO_SIMD
       if (vlen>1)
         while (it.remaining()>=vlen)
           {
@@ -355,8 +355,8 @@ template<typename T> class Interpolator
       }
 
 #ifdef SIMD_INTERPOL
-    template<size_t nv, size_t nc> void interpol_help0(const T * MRUTIL_RESTRICT wt,
-      const T * MRUTIL_RESTRICT wp, const native_simd<T> * MRUTIL_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * MRUTIL_RESTRICT psiarr2, mav<T,2> &res, size_t idx) const
+    template<size_t nv, size_t nc> void interpol_help0(const T * DUCC0_RESTRICT wt,
+      const T * DUCC0_RESTRICT wp, const native_simd<T> * DUCC0_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * DUCC0_RESTRICT psiarr2, mav<T,2> &res, size_t idx) const
       {
       array<native_simd<T>,nc> vv;
       for (auto &vvv:vv) vvv=0;
@@ -378,8 +378,8 @@ template<typename T> class Interpolator
       for (size_t c=0; c<nc; ++c)
         res.v(idx,c) = reduce(vv[c], std::plus<>());
       }
-    template<size_t nv, size_t nc> void deinterpol_help0(const T * MRUTIL_RESTRICT wt,
-      const T * MRUTIL_RESTRICT wp, native_simd<T> * MRUTIL_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * MRUTIL_RESTRICT psiarr2, const mav<T,2> &data, size_t idx) const
+    template<size_t nv, size_t nc> void deinterpol_help0(const T * DUCC0_RESTRICT wt,
+      const T * DUCC0_RESTRICT wp, native_simd<T> * DUCC0_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * DUCC0_RESTRICT psiarr2, const mav<T,2> &data, size_t idx) const
       {
       array<native_simd<T>,nc> vv;
       for (size_t i=0; i<nc; ++i) vv[i] = data(idx,i);

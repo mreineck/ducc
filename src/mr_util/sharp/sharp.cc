@@ -65,7 +65,7 @@ static void get_chunk_info (size_t ndata, size_t nmult, size_t &nchunks, size_t 
   nchunks = (ndata+chunksize-1)/chunksize;
   }
 
-MRUTIL_NOINLINE size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth)
+DUCC0_NOINLINE size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth)
   {
   double ofs=lmax*0.01;
   if (ofs<100.) ofs=100.;
@@ -109,7 +109,7 @@ struct ringhelper
       length=nph;
       }
     }
-  MRUTIL_NOINLINE void phase2ring (const sharp_geom_info &info, size_t iring,
+  DUCC0_NOINLINE void phase2ring (const sharp_geom_info &info, size_t iring,
     double *data, size_t mmax, const dcmplx *phase, size_t pstride)
     {
     size_t nph = info.nph(iring);
@@ -161,7 +161,7 @@ struct ringhelper
     data[1]=data[0];
     plan->exec(&(data[1]), 1., false);
     }
-  MRUTIL_NOINLINE void ring2phase (const sharp_geom_info &info, size_t iring,
+  DUCC0_NOINLINE void ring2phase (const sharp_geom_info &info, size_t iring,
     double *data, size_t mmax, dcmplx *phase, size_t pstride)
     {
     size_t nph = info.nph(iring);
@@ -211,7 +211,7 @@ void sharp_job::init_output()
       ginfo.clear_map(map[i]);
   }
 
-MRUTIL_NOINLINE void sharp_job::alloc_phase (size_t nm, size_t ntheta, vector<dcmplx> &data)
+DUCC0_NOINLINE void sharp_job::alloc_phase (size_t nm, size_t ntheta, vector<dcmplx> &data)
   {
   if (type==SHARP_MAP2ALM)
     {
@@ -235,7 +235,7 @@ void sharp_job::alloc_almtmp (size_t lmax, vector<dcmplx> &data)
   almtmp=data.data();
   }
 
-MRUTIL_NOINLINE void sharp_job::alm2almtmp (size_t mi)
+DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi)
   {
   size_t nalm_ = nalm();
   size_t lmax = ainfo.lmax();
@@ -260,7 +260,7 @@ MRUTIL_NOINLINE void sharp_job::alm2almtmp (size_t mi)
       almtmp[i]=0;
   }
 
-MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t mi)
+DUCC0_NOINLINE void sharp_job::almtmp2alm (size_t mi)
   {
   if (type != SHARP_MAP2ALM) return;
   size_t lmax = ainfo.lmax();
@@ -275,14 +275,14 @@ MRUTIL_NOINLINE void sharp_job::almtmp2alm (size_t mi)
     ainfo.add_alm(mi, almtmp+i, alm[i], nalm_);
   }
 
-MRUTIL_NOINLINE void sharp_job::ringtmp2ring (size_t iring,
+DUCC0_NOINLINE void sharp_job::ringtmp2ring (size_t iring,
   const vector<double> &ringtmp, size_t rstride)
   {
   for (size_t i=0; i<nmaps(); ++i)
     ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, &ringtmp[i*rstride+1], map[i]);
   }
 
-MRUTIL_NOINLINE void sharp_job::ring2ringtmp (size_t iring,
+DUCC0_NOINLINE void sharp_job::ring2ringtmp (size_t iring,
   vector<double> &ringtmp, size_t rstride)
   {
   for (size_t i=0; i<nmaps(); ++i)
@@ -290,7 +290,7 @@ MRUTIL_NOINLINE void sharp_job::ring2ringtmp (size_t iring,
   }
 
 //FIXME: set phase to zero if not SHARP_MAP2ALM?
-MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
+DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
   {
   if (type != SHARP_MAP2ALM) return;
   size_t pstride = s_m;
@@ -318,7 +318,7 @@ MRUTIL_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim
     }); /* end of parallel region */
   }
 
-MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
+DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
   {
   if (type == SHARP_MAP2ALM) return;
   size_t pstride = s_m;
@@ -346,7 +346,7 @@ MRUTIL_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim
     }); /* end of parallel region */
   }
 
-MRUTIL_NOINLINE void sharp_job::execute()
+DUCC0_NOINLINE void sharp_job::execute()
   {
   mr::SimpleTimer timer;
   opcnt=0;

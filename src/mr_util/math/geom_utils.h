@@ -30,8 +30,8 @@
  *  \author Reinhard Hell
  */
 
-#ifndef MRUTIL_GEOM_UTILS_H
-#define MRUTIL_GEOM_UTILS_H
+#ifndef DUCC0_GEOM_UTILS_H
+#define DUCC0_GEOM_UTILS_H
 
 #include <vector>
 #include <cmath>

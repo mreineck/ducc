@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_VEC3_H
-#define MRUTIL_VEC3_H
+#ifndef DUCC0_VEC3_H
+#define DUCC0_VEC3_H
 
 #include <cmath>
 #include <iostream>

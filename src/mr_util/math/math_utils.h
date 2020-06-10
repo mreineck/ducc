@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_MATH_UTILS_H
-#define MRUTIL_MATH_UTILS_H
+#ifndef DUCC0_MATH_UTILS_H
+#define DUCC0_MATH_UTILS_H
 
 #include <cmath>
 #include <cstdint>

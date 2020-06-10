@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_UNITY_ROOTS_H
-#define MRUTIL_UNITY_ROOTS_H
+#ifndef DUCC0_UNITY_ROOTS_H
+#define DUCC0_UNITY_ROOTS_H
 
 #include <cmath>
 #include <type_traits>

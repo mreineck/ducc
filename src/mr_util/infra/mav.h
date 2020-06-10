@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_MAV_H
-#define MRUTIL_MAV_H
+#ifndef DUCC0_MAV_H
+#define DUCC0_MAV_H
 
 #include <cstdlib>
 #include <array>

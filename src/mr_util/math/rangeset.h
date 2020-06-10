@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_RANGESET_H
-#define MRUTIL_RANGESET_H
+#ifndef DUCC0_RANGESET_H
+#define DUCC0_RANGESET_H
 
 #include <algorithm>
 #include <vector>

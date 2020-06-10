@@ -29,8 +29,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef MRUTIL_CRANGESET_H
-#define MRUTIL_CRANGESET_H
+#ifndef DUCC0_CRANGESET_H
+#define DUCC0_CRANGESET_H
 
 #include <algorithm>
 #include <vector>

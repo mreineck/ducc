@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_STRING_UTILS_H
-#define MRUTIL_STRING_UTILS_H
+#ifndef DUCC0_STRING_UTILS_H
+#define DUCC0_STRING_UTILS_H
 
 #include <vector>
 #include <map>

@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2020 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef MRUTIL_GL_INTEGRATOR_H
-#define MRUTIL_GL_INTEGRATOR_H
+#ifndef DUCC0_GL_INTEGRATOR_H
+#define DUCC0_GL_INTEGRATOR_H
 
 #include <cmath>
 #include "mr_util/math/constants.h"
