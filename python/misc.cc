@@ -14,8 +14,6 @@
  *  You should have received a copy of the GNU General Public License
  *  along with DUCC; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- *  For more information about HEALPix, see http://healpix.sourceforge.net
  */
 
 /*
@@ -32,6 +30,7 @@
 #include <vector>
 
 #include "mr_util/infra/mav.h"
+#include "mr_util/infra/transpose.h"
 #include "mr_util/math/fft.h"
 #include "mr_util/math/constants.h"
 #include "mr_util/math/gl_integrator.h"
@@ -155,6 +154,57 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   return move(out);
   }
 
+template<typename T> py::array tphelp(const py::array &in)
+  {
+  auto in2 = to_fmav<T>(in, false);
+  auto out = make_Pyarr<T>(in2.shape());
+  auto out2 = to_fmav<T>(out, true);
+  transpose(in2, out2, [](const T &in, T &out){out=in;});
+  return out;
+  }
+
+py::array py_ascontiguousarray(const py::array &in)
+  {
+  if (isPyarr<float>(in))
+    return tphelp<float>(in);
+  if (isPyarr<double>(in))
+    return tphelp<double>(in);
+  if (isPyarr<complex<float>>(in))
+    return tphelp<complex<float>>(in);
+  if (isPyarr<complex<double>>(in))
+    return tphelp<complex<double>>(in);
+  if (isPyarr<int>(in))
+    return tphelp<int>(in);
+  if (isPyarr<long>(in))
+    return tphelp<long>(in);
+  MR_fail("unsupported datatype");
+  }
+
+template<typename T> py::array tphelp2(const py::array &in, py::array &out)
+  {
+  auto in2 = to_fmav<T>(in, false);
+  auto out2 = to_fmav<T>(out, true);
+  transpose(in2, out2, [](const T &in, T &out){out=in;});
+  return out;
+  }
+
+py::array py_transpose(const py::array &in, py::array &out)
+  {
+  if (isPyarr<float>(in))
+    return tphelp2<float>(in, out);
+  if (isPyarr<double>(in))
+    return tphelp2<double>(in, out);
+  if (isPyarr<complex<float>>(in))
+    return tphelp2<complex<float>>(in, out);
+  if (isPyarr<complex<double>>(in))
+    return tphelp2<complex<double>>(in, out);
+  if (isPyarr<int>(in))
+    return tphelp2<int>(in, out);
+  if (isPyarr<long>(in))
+    return tphelp2<long>(in, out);
+  MR_fail("unsupported datatype");
+  }
+
 
 const char *misc_DS = R"""(
 Various unsorted utilities
@@ -174,6 +224,9 @@ void add_misc(py::module &msup)
 
   m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "nrings_out"_a,
     "has_np"_a, "has_sp"_a, "out"_a=py::none());
+
+  m.def("ascontiguousarray",&py_ascontiguousarray, "in"_a);
+  m.def("transpose",&py_transpose, "in"_a, "out"_a);
   }
 
 }
