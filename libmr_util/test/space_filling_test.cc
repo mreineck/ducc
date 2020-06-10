@@ -3,7 +3,7 @@
 #include "ducc0/infra/error_handling.h"
 
 using namespace std;
-using namespace mr;
+using namespace ducc0;
 
 namespace {
 

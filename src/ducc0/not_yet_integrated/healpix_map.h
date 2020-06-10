@@ -38,7 +38,7 @@
 #include "ducc0/threading.h"
 #include "Healpix_cxx/healpix_base.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace healpix {
 

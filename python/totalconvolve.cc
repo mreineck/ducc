@@ -7,7 +7,7 @@
 #include <pybind11/numpy.h>
 #include "python/totalconvolve.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_pymodule_totalconvolve {
 

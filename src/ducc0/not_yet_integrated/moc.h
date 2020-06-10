@@ -35,7 +35,7 @@
 #include "Healpix_cxx/healpix_base.h"
 #include "ducc0/compress_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace healpix {
 

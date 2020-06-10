@@ -38,7 +38,7 @@
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/vec3.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_geom_utils {
 

@@ -25,7 +25,7 @@
 #include <cstdlib>
 #include <memory>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_aligned_array {
 

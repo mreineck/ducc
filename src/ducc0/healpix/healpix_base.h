@@ -37,7 +37,7 @@
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/rangeset.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_healpix {
 

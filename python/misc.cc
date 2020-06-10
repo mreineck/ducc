@@ -37,7 +37,7 @@
 #include "ducc0/bindings/pybind_utils.h"
 #include "python/alm.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_pymodule_misc {
 

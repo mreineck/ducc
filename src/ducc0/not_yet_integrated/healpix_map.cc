@@ -33,7 +33,7 @@
 
 using namespace std;
 
-namespace mr {
+namespace ducc0 {
 
 namespace healpix {
 

@@ -22,7 +22,7 @@
 #ifndef DUCC0_CMPLX_H
 #define DUCC0_CMPLX_H
 
-namespace mr {
+namespace ducc0 {
 
 template<typename T> struct Cmplx {
   T r, i;

@@ -39,7 +39,7 @@
 #include <cstdint>
 #include "ducc0/error_handling.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace datatypes {
 

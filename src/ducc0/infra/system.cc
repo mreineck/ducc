@@ -28,7 +28,7 @@
 #include "ducc0/infra/system.h"
 #include "ducc0/infra/string_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_system {
 

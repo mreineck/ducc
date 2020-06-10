@@ -35,7 +35,7 @@
 
 using namespace std;
 
-namespace mr {
+namespace ducc0 {
 
 vec3 pointing::to_vec3() const
   {

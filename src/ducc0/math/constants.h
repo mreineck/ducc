@@ -29,7 +29,7 @@
 #ifndef DUCC0_CONSTANTS_H
 #define DUCC0_CONSTANTS_H
 
-namespace mr {
+namespace ducc0 {
 
 /*! \defgroup mathconstgroup Mathematical constants */
 /*! \{ */

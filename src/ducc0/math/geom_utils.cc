@@ -30,7 +30,7 @@
 #include "ducc0/math/geom_utils.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_geom_utils {
 

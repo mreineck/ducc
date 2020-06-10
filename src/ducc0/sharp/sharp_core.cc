@@ -31,7 +31,7 @@
 #undef GENERIC_ARCH
 #undef ARCH
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

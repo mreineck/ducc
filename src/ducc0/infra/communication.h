@@ -33,7 +33,7 @@
 
 #include "ducc0/infra/types.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_communication {
 

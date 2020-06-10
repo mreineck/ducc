@@ -25,7 +25,7 @@
 #include <vector>
 #include <map>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_string_utils {
 

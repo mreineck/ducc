@@ -23,7 +23,7 @@
 #include "python/alm.h"
 #include "ducc0/math/fft.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_fft {
 

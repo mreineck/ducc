@@ -48,7 +48,7 @@
 #include <x86intrin.h>
 #endif
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_simd {
 

@@ -25,7 +25,7 @@
 #include <string>
 #include <cstdlib>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_system {
 

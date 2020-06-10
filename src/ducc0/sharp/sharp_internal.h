@@ -33,7 +33,7 @@
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

@@ -28,7 +28,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

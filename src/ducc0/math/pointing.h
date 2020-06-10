@@ -35,7 +35,7 @@
 #include <cmath>
 #include "ducc0/math/vec3.h"
 
-namespace mr {
+namespace ducc0 {
 
 /*! \defgroup pointinggroup Pointings */
 /*! \{ */

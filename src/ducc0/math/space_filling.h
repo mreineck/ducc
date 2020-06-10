@@ -40,7 +40,7 @@
 #include <x86intrin.h>
 #endif
 
-namespace mr {
+namespace ducc0 {
 
 #ifndef __BMI2__
 

@@ -35,7 +35,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/math_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 
@@ -205,7 +205,7 @@ unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t np
   vector<double> phi0_(nrings, phi0);
   vector<ptrdiff_t> ofs(nrings);
 
-  mr::GL_Integrator integ(nrings);
+  ducc0::GL_Integrator integ(nrings);
   auto theta = integ.coords();
   auto weight = integ.weights();
   for (size_t m=0; m<nrings; ++m)

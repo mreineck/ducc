@@ -36,7 +36,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace mr {
+namespace ducc0 {
 
 /*! Returns \e true if | \a a-b | <= \a epsilon * | \a b |, else \e false. */
 template<typename F> inline bool approx (F a, F b, F epsilon=F(1e-5L))

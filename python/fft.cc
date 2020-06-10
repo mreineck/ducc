@@ -19,16 +19,16 @@
 #include "ducc0/math/fft.h"
 #include "ducc0/bindings/pybind_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_pymodule_fft {
 
 namespace {
 
-using shape_t = mr::fmav_info::shape_t;
-using mr::fmav;
-using mr::to_fmav;
-using mr::get_optional_Pyarr;
+using shape_t = ducc0::fmav_info::shape_t;
+using ducc0::fmav;
+using ducc0::to_fmav;
+using ducc0::get_optional_Pyarr;
 using std::size_t;
 using std::ptrdiff_t;
 
@@ -106,7 +106,7 @@ template<typename T> py::array c2c_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::c2c(ain, aout, axes, forward, fct, nthreads);
+  ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
   }
   return move(out);
   }
@@ -122,9 +122,9 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::r2c(ain, aout, axes, forward, fct, nthreads);
+  ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   // now fill in second half
-  using namespace mr::detail_fft;
+  using namespace ducc0::detail_fft;
   rev_iter iter(aout, axes);
   while(iter.remaining()>0)
     {
@@ -160,7 +160,7 @@ template<typename T> py::array r2c_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::r2c(ain, aout, axes, forward, fct, nthreads);
+  ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   }
   return move(out);
   }
@@ -183,7 +183,7 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
+  ducc0::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
   return std::move(out);
   }
@@ -209,7 +209,7 @@ template<typename T> py::array dct_internal(const py::array &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = inorm == true;
-  mr::dct(ain, aout, axes, type, fct, ortho, nthreads);
+  ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return std::move(out);
   }
@@ -235,7 +235,7 @@ template<typename T> py::array dst_internal(const py::array &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = inorm == true;
-  mr::dst(ain, aout, axes, type, fct, ortho, nthreads);
+  ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return std::move(out);
   }
@@ -265,7 +265,7 @@ template<typename T> py::array c2r_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
-  mr::c2r(ain, aout, axes, forward, fct, nthreads);
+  ducc0::c2r(ain, aout, axes, forward, fct, nthreads);
   }
   return std::move(out);
   }
@@ -287,7 +287,7 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
+  ducc0::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
   return std::move(out);
   }
@@ -309,7 +309,7 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  mr::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
+  ducc0::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
   return std::move(out);
   }
@@ -341,7 +341,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     return nullptr;
     }
   const auto n = static_cast<size_t>(n_);
-  using namespace mr::detail_fft;
+  using namespace ducc0::detail_fft;
   return PyLong_FromSize_t(
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }

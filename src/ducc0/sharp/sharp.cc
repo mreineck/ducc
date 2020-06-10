@@ -39,7 +39,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/timers.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 
@@ -294,7 +294,7 @@ DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
   {
   if (type != SHARP_MAP2ALM) return;
   size_t pstride = s_m;
-  mr::execDynamic(ulim-llim, nthreads, 1, [&](mr::Scheduler &sched)
+  ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
@@ -322,7 +322,7 @@ DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
   {
   if (type == SHARP_MAP2ALM) return;
   size_t pstride = s_m;
-  mr::execDynamic(ulim-llim, nthreads, 1, [&](mr::Scheduler &sched)
+  ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
@@ -348,7 +348,7 @@ DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
 
 DUCC0_NOINLINE void sharp_job::execute()
   {
-  mr::SimpleTimer timer;
+  ducc0::SimpleTimer timer;
   opcnt=0;
   size_t lmax = ainfo.lmax(),
          mmax = ainfo.mmax();
@@ -386,7 +386,7 @@ DUCC0_NOINLINE void sharp_job::execute()
 /* map->phase where necessary */
     map2phase(mmax, llim, ulim);
 
-    mr::execDynamic(ainfo.nm(), nthreads, 1, [&](mr::Scheduler &sched)
+    ducc0::execDynamic(ainfo.nm(), nthreads, 1, [&](ducc0::Scheduler &sched)
       {
       sharp_job ljob = *this;
       ljob.opcnt=0;

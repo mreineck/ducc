@@ -27,7 +27,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_gl_integrator {
 

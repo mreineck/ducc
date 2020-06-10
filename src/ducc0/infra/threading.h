@@ -24,7 +24,7 @@
 
 #include <functional>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_threading {
 
@@ -73,6 +73,6 @@ using detail_threading::execDynamic;
 using detail_threading::execGuided;
 using detail_threading::execParallel;
 
-} // end of namespace mr
+} // end of namespace ducc0
 
 #endif

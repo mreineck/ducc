@@ -20,7 +20,7 @@
 #include "python/healpix.cc"
 #include "python/misc.cc"
 
-using namespace mr;
+using namespace ducc0;
 
 PYBIND11_MODULE(PKGNAME, m)
   {

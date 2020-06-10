@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include "ducc0/infra/error_handling.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_types {
 

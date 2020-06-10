@@ -30,7 +30,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_es_kernel {
 

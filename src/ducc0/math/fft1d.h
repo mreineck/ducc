@@ -41,7 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/unity_roots.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_fft {
 

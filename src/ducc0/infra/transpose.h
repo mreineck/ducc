@@ -32,7 +32,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_transpose {
 

@@ -34,7 +34,7 @@
 #endif
 #endif
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_threading {
 

@@ -24,7 +24,7 @@
 #include "ducc0/bindings/pybind_utils.h"
 #include "python/gridder_cxx.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_pymodule_wgridder {
 

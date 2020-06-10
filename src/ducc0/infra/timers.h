@@ -28,7 +28,7 @@
 
 #include "ducc0/infra/error_handling.h"
 
-namespace mr {
+namespace ducc0 {
 
 class SimpleTimer
   {

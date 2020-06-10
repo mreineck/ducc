@@ -35,7 +35,7 @@
 #include <cstdint>
 #include <string>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_healpix {
 

@@ -36,7 +36,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/es_kernel.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_gridder {
 
@@ -1121,6 +1121,6 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
 using detail_gridder::ms2dirty;
 using detail_gridder::dirty2ms;
 
-} // namespace mr
+} // namespace ducc0
 
 #endif

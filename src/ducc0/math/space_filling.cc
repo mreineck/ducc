@@ -31,7 +31,7 @@
 
 #include "ducc0/math/space_filling.h"
 
-namespace mr {
+namespace ducc0 {
 
 #ifndef __BMI2__
 

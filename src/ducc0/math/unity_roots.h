@@ -26,7 +26,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_unity_roots {
 

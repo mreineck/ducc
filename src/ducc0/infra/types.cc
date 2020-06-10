@@ -26,7 +26,7 @@
 
 using namespace std;
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_types {
 

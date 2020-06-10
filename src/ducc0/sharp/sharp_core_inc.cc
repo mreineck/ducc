@@ -45,7 +45,7 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/simd.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

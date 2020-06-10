@@ -66,8 +66,8 @@ Candidates for testing the validity of the Healpix routines:
 //#include "powspec.h"
 
 using namespace std;
-using namespace mr;
-using namespace mr::healpix;
+using namespace ducc0;
+using namespace ducc0::healpix;
 
 #define UNITTESTS
 

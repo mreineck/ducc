@@ -34,7 +34,7 @@
 #include <memory>
 #include <any>
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

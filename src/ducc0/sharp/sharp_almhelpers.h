@@ -31,7 +31,7 @@
 #include <memory>
 #include "ducc0/sharp/sharp.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_sharp {
 

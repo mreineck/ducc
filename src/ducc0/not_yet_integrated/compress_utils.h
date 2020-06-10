@@ -39,7 +39,7 @@
 #include "ducc0/error_handling.h"
 #include "ducc0/math_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 class obitstream
   {

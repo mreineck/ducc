@@ -27,14 +27,14 @@
 
 #include "ducc0/infra/useful_macros.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_error_handling {
 
 #if defined (__GNUC__)
-#define DUCC0_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
-#define DUCC0_ERROR_HANDLING_LOC_ ::mr::detail_error_handling::CodeLocation(__FILE__, __LINE__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
 
 // to be replaced with std::source_location once generally available
@@ -81,13 +81,13 @@ template<typename ...Args>
 [[noreturn]] void DUCC0_NOINLINE fail__(Args&&... args)
   {
   ::std::ostringstream msg; \
-  ::mr::detail_error_handling::streamDump__(msg, args...); \
+  ::ducc0::detail_error_handling::streamDump__(msg, args...); \
     throw ::std::runtime_error(msg.str()); \
   }
 
 #define MR_fail(...) \
   do { \
-    ::mr::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    ::ducc0::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
     } while(0)
 
 #define MR_assert(cond,...) \

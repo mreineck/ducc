@@ -38,11 +38,11 @@
 #include "ducc0/math/constants.h"
 
 using namespace std;
-using namespace mr;
+using namespace ducc0;
 
 static void threading_status(void)
   {
-  cout << "Threading: " << mr::get_default_nthreads() << " threads active." << endl;
+  cout << "Threading: " << ducc0::get_default_nthreads() << " threads active." << endl;
   }
 
 static void MPI_status(void)
@@ -124,7 +124,7 @@ static double allreduceSumDouble (double val)
 
 static double totalMem()
   {
-  return mr::getProcessInfo("VmHWM")*1024;
+  return ducc0::getProcessInfo("VmHWM")*1024;
   }
 
 static size_t get_nalms(const sharp_alm_info &ainfo)
@@ -549,7 +549,7 @@ int main(int argc, const char **argv)
     {
     string tmp2(tmp);
     if (trim(tmp2)!="")
-      mr::set_default_nthreads(stringToData<size_t>(tmp));
+      ducc0::set_default_nthreads(stringToData<size_t>(tmp));
     }
   mytask=0; ntasks=1;
 

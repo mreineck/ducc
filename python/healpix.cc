@@ -39,7 +39,7 @@
 #include "ducc0/math/geom_utils.h"
 #include "ducc0/bindings/pybind_utils.h"
 
-namespace mr {
+namespace ducc0 {
 
 namespace detail_pymodule_healpix {
 
