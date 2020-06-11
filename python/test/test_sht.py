@@ -1,10 +1,10 @@
 import ducc0.sht as sht
 import numpy as np
-import math
 import pytest
-from numpy.testing import assert_equal, assert_allclose
+from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
+
 
 @pmp('params', [(511, 511, 512, 1024),
                 (511, 2, 512, 5),
@@ -25,6 +25,7 @@ def test_GL(params):
     alm2 = job.map2alm(job.alm2map(alm))
     assert_allclose(alm, alm2)
 
+
 @pmp('params', [(511, 511, 1024, 1024),
                 (511, 2, 1024, 5),
                 (511, 0, 1024, 1)])
@@ -43,6 +44,7 @@ def test_fejer1(params):
     job.set_fejer1_geometry(nlat, nlon)
     alm2 = job.map2alm(job.alm2map(alm))
     assert_allclose(alm, alm2)
+
 
 @pmp('params', [(511, 511, 1024, 1024),
                 (511, 2, 1024, 5),

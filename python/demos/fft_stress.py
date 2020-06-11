@@ -6,7 +6,7 @@ rng = np.random.default_rng(42)
 
 
 def _l2error(a, b, axes):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2,np.prod(np.take(a.shape,axes))]))
+    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2, np.prod(np.take(a.shape, axes))]))
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):
@@ -87,7 +87,7 @@ def test(err):
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
     b = fft.genuine_hartley(
             fft.genuine_hartley(a.real.astype(np.float32), axes=axes,
-                                        nthreads=nthreads),
+                                nthreads=nthreads),
             axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
     if all(a.shape[i] > 1 for i in axes):

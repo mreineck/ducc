@@ -16,14 +16,14 @@ def random_alm(lmax, mmax, ncomp):
     res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
      + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1,:].imag = 0.
+    res[0:lmax+1, :].imag = 0.
     return res
 
 
 # simulation parameters
-lmax=1024 # highest l and m moment for sky, highest l moment for beam
-kmax=13 # highest m moment for beam
-ncomp=3 # T, E and B
+lmax = 1024  # highest l and m moment for sky, highest l moment for beam
+kmax = 13  # highest m moment for beam
+ncomp = 3  # T, E and B
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
@@ -33,11 +33,11 @@ slm = random_alm(lmax, lmax, ncomp)
 blm = random_alm(lmax, kmax, ncomp)
 
 # build random pointings
-npnt = 1000000 # play with this to measure performance
-ptg = rng.uniform(0., 1., (npnt,3))
-ptg[:,0]*=np.pi   # theta
-ptg[:,1]*=2*np.pi # phi
-ptg[:,2]*=2*np.pi # psi
+npnt = 1000000  # play with this to measure performance
+ptg = rng.uniform(0., 1., (npnt, 3))
+ptg[:, 0] *= np.pi   # theta
+ptg[:, 1] *= 2*np.pi  # phi
+ptg[:, 2] *= 2*np.pi  # psi
 
 # build the interpolator
 # For a "classic" CMB experiment we want to combine the T, E and B signals,
@@ -45,7 +45,7 @@ ptg[:,2]*=2*np.pi # psi
 
 print("classic interpolator setup...")
 inter_classic = totalconvolve.PyInterpolator(
-    slm,blm,separate=False,lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
+    slm, blm, separate=False, lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 
 # get interpolated values
@@ -67,7 +67,7 @@ separate = True
 
 print("HWP interpolator setup...")
 inter_hwp = totalconvolve.PyInterpolator(
-    slm,blm,separate=True,lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
+    slm, blm, separate=True, lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 
 # get interpolated values

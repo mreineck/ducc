@@ -2,7 +2,7 @@ import ducc0.healpix as ph
 import numpy as np
 import math
 import pytest
-from numpy.testing import assert_equal, assert_allclose
+from numpy.testing import assert_equal
 
 pmp = pytest.mark.parametrize
 

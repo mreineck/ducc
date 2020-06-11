@@ -56,7 +56,7 @@ def measure_duccfft(a, nrepeat, nthr):
 def measure_scipy_fftpack(a, nrepeat, nthr):
     import scipy.fftpack
     tmin = 1e38
-    if nthr!=1:
+    if nthr != 1:
         raise NotImplementedError("scipy.fftpack does not support multiple threads")
     for i in range(nrepeat):
         t0 = time()
@@ -78,9 +78,8 @@ def measure_scipy_fft(a, nrepeat, nthr):
 
 
 def measure_numpy_fft(a, nrepeat, nthr):
-    import scipy.fft
     tmin = 1e38
-    if nthr!=1:
+    if nthr != 1:
         raise NotImplementedError("numpy.fft does not support multiple threads")
     for i in range(nrepeat):
         t0 = time()
@@ -113,12 +112,12 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
             shp = np.array([duccfft.good_size(sz) for sz in shp])
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
         a = (rng.random(shp)-0.5 + 1j*(rng.random(shp)-0.5)).astype(tp)
-        output=[]
+        output = []
         for func, res in zip(funcs, results):
             tmp = func(a, nrepeat, nthr)
             res.append(tmp[0])
             output.append(tmp[1])
-        print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n],results[1][n],results[0][n]/results[1][n],_l2error(output[0],output[1])))
+        print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n], results[1][n], results[0][n]/results[1][n], _l2error(output[0], output[1])))
     results = np.array(results)
     plt.title("{}: {}D, {}, max_extent={}".format(
         ttl, ndim, str(tp), nmax))
@@ -132,7 +131,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
 
 funcs = (measure_duccfft, measure_fftw)
 ttl = "duccfft/FFTW()"
-ntry=100
+ntry = 100
 nthr = 1
 nice_sizes = True
 bench_nd(1, 8192, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)

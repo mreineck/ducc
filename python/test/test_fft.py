@@ -3,6 +3,8 @@ import ducc0.fft as fft
 import numpy as np
 import pytest
 from numpy.testing import assert_
+import platform
+
 
 pmp = pytest.mark.parametrize
 
@@ -21,44 +23,47 @@ def _assert_close(a, b, epsilon):
     err = _l2error(a, b)
     if (err >= epsilon):
         print("Error: {} > {}".format(err, epsilon))
-    assert_(err<epsilon)
+    assert_(err < epsilon)
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):
     return fft.c2c(a, axes=axes, forward=True, inorm=inorm,
-                           out=out, nthreads=nthreads)
+                   out=out, nthreads=nthreads)
 
 
 def ifftn(a, axes=None, inorm=0, out=None, nthreads=1):
     return fft.c2c(a, axes=axes, forward=False, inorm=inorm,
-                           out=out, nthreads=nthreads)
+                   out=out, nthreads=nthreads)
 
 
 def rfftn(a, axes=None, inorm=0, nthreads=1):
     return fft.r2c(a, axes=axes, forward=True, inorm=inorm,
-                           nthreads=nthreads)
+                   nthreads=nthreads)
 
 
 def irfftn(a, axes=None, lastsize=0, inorm=0, nthreads=1):
     return fft.c2r(a, axes=axes, lastsize=lastsize, forward=False,
-                           inorm=inorm, nthreads=nthreads)
+                   inorm=inorm, nthreads=nthreads)
 
 
 def rfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
     return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=True,
-                                   forward=True, inorm=inorm, out=out,
-                                   nthreads=nthreads)
+                           forward=True, inorm=inorm, out=out,
+                           nthreads=nthreads)
 
 
 def irfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
     return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=False,
-                                   forward=False, inorm=inorm, out=out,
-                                   nthreads=nthreads)
+                           forward=False, inorm=inorm, out=out,
+                           nthreads=nthreads)
+
 
 tol = {np.float32: 6e-7, np.float64: 1.5e-15, np.longfloat: 1e-18}
-ctype = {np.float32: np.complex64, np.float64: np.complex128, np.longfloat: np.longcomplex}
+ctype = {np.float32: np.complex64,
+         np.float64: np.complex128,
+         np.longfloat: np.longcomplex}
 
-import platform
+
 on_wsl = "microsoft" in platform.uname()[3].lower()
 true_long_double = (np.longfloat != np.float64 and not on_wsl)
 dtypes = [np.float32, np.float64,
@@ -120,12 +125,12 @@ def test_rfftn(shp):
     a = rng.random(shp)-0.5
     tmp1 = rfftn(a)
     tmp2 = fftn(a)
-    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
     assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
     tmp1 = rfftn(a)
     tmp2 = fftn(a)
-    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
     assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
 
 
@@ -144,14 +149,14 @@ def test_rfftn(shp):
 def test_rfftn2D(shp, axes):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
-    tmp1 = rfftn(a,axes=axes)
-    tmp2 = fftn(a,axes=axes)
-    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    tmp1 = rfftn(a, axes=axes)
+    tmp2 = fftn(a, axes=axes)
+    part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
     assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
-    tmp1 = rfftn(a,axes=axes)
-    tmp2 = fftn(a,axes=axes)
-    part = tuple(slice(0,tmp1.shape[i]) for i in range(tmp1.ndim))
+    tmp1 = rfftn(a, axes=axes)
+    tmp2 = fftn(a, axes=axes)
+    part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
     assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
 
 
@@ -240,5 +245,7 @@ def testdcst1D(len, inorm, type, dtype):
     itp = (0, 1, 3, 2, 4)
     itype = itp[type]
     if type != 1 or len > 1:  # there are no length-1 type 1 DCTs
-        _assert_close(a, fft.dct(fft.dct(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)
-    _assert_close(a, fft.dst(fft.dst(a, inorm=inorm, type=type), inorm=2-inorm, type=itype), eps)
+        _assert_close(a, fft.dct(fft.dct(a, inorm=inorm, type=type),
+                      inorm=2-inorm, type=itype), eps)
+    _assert_close(a, fft.dst(fft.dst(a, inorm=inorm, type=type), inorm=2-inorm,
+                  type=itype), eps)

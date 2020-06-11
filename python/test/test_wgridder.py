@@ -1,7 +1,7 @@
 import ducc0.wgridder as ng
 import numpy as np
 import pytest
-from numpy.testing import assert_, assert_allclose, assert_array_almost_equal
+from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
 
@@ -33,7 +33,8 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
             if wgt is None:
                 res += (ms[row, chan]*np.exp(2j*np.pi*phase)).real
             else:
-                res += (ms[row, chan]*wgt[row, chan]*np.exp(2j*np.pi*phase)).real
+                res += (ms[row, chan]*wgt[row, chan]
+                        * np.exp(2j*np.pi*phase)).real
     return res/n
 
 
@@ -47,7 +48,8 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("nthreads", (1, 2))
-def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, nthreads):
+def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
+                              singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
         return
     rng = np.random.default_rng(42)
@@ -60,10 +62,10 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, s
     wgt = rng.random((nrow, nchan)) if use_wgt else None
     dirty = rng.random((nxdirty, nydirty))-0.5
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
-    if nu&1:
-        nu+=1
-    if nv&1:
-        nv+=1
+    if nu & 1:
+        nu += 1
+    if nv & 1:
+        nv += 1
     if singleprec:
         ms = ms.astype("c8")
         dirty = dirty.astype("f4")
@@ -83,9 +85,9 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, s
 @pmp("nrow", (2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
-@pmp("singleprec", (True,))
+@pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
-@pmp("use_wgt", (False, True))
+@pmp("use_wgt", (True,))
 @pmp("nthreads", (1, 2))
 @pmp("fov", (1., 20.))
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
@@ -98,12 +100,13 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
     freq = f0 + np.arange(nchan)*(f0/nchan)
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
-    wgt = rng.random((nrow, nchan)) if use_wgt else None
+    wgt = rng.random((nrow, 1)) if use_wgt else None
+    wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
-    if nu&1:
-        nu+=1
-    if nv&1:
-        nv+=1
+    if nu & 1:
+        nu += 1
+    if nv & 1:
+        nv += 1
     if singleprec:
         ms = ms.astype("c8")
         if wgt is not None:

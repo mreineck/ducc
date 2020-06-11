@@ -8,8 +8,10 @@ import ducc0.sht as sht
 import numpy as np
 from time import time
 
+
 def _l2error(a, b):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
+
 
 # set maximum multipole moment
 lmax = 2047
@@ -53,7 +55,7 @@ nlat = lmax+1
 job.set_gauss_geometry(nlat, nlon)
 
 # go from a_lm to map
-t0=time()
+t0 = time()
 map = job.alm2map(alm)
 print("time for map synthesis: {}s".format(time()-t0))
 
@@ -63,12 +65,12 @@ print("time for map synthesis: {}s".format(time()-t0))
 # number of pixels on each iso-latitude ring, which cannot be represented by 2D
 # arrays (e.g. Healpix)
 
-t0=time()
+t0 = time()
 alm2 = job.map2alm(map)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-print("L2 error: ", _l2error(alm,alm2))
+print("L2 error: ", _l2error(alm, alm2))
 
 
 print("testing Driscoll-Healy grid")
@@ -80,7 +82,7 @@ nlat = 2*lmax+2
 job.set_dh_geometry(nlat, nlon)
 
 # go from a_lm to map
-t0=time()
+t0 = time()
 map = job.alm2map(alm)
 print("time for map synthesis: {}s".format(time()-t0))
 
@@ -90,9 +92,9 @@ print("time for map synthesis: {}s".format(time()-t0))
 # number of pixels on each iso-latitude ring, which cannot be represented by 2D
 # arrays (e.g. Healpix)
 
-t0=time()
+t0 = time()
 alm2 = job.map2alm(map)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-print("L2 error: ", _l2error(alm,alm2))
+print("L2 error: ", _l2error(alm, alm2))
