@@ -44,7 +44,7 @@ ptg[:, 2] *= 2*np.pi  # psi
 # so we set `separate` to `False`
 
 print("classic interpolator setup...")
-inter_classic = totalconvolve.PyInterpolator(
+inter_classic = totalconvolve.Interpolator(
     slm, blm, separate=False, lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 
@@ -66,7 +66,7 @@ del inter_classic
 separate = True
 
 print("HWP interpolator setup...")
-inter_hwp = totalconvolve.PyInterpolator(
+inter_hwp = totalconvolve.Interpolator(
     slm, blm, separate=True, lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=2)
 print("...done")
 

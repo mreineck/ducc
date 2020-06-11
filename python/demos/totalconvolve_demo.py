@@ -50,9 +50,9 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 # build interpolator object for slm and blm
-foo = totalconvolve.PyInterpolator(slm, blm, separate, lmax, kmax,
-                                   epsilon=epsilon, ofactor=ofactor,
-                                   nthreads=nthreads)
+foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
+                                 epsilon=epsilon, ofactor=ofactor,
+                                 nthreads=nthreads)
 t1 = time.time()-t0
 
 print("Convolving sky and beam with lmax=mmax={}, kmax={}".format(lmax, kmax))
@@ -82,7 +82,7 @@ del foo
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
 t0 = time.time()
 fake = rng.uniform(0., 1., (ptg.shape[0], ncomp2))
-foo2 = totalconvolve.PyInterpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0 = time.time()
 foo2.deinterpol(ptg.reshape((-1, 3)), fake)
 print("Adjoint interpolation: {}s".format(time.time()-t0))
@@ -96,7 +96,7 @@ print("Adjointness error: {}".format(v1/v2-1.))
 
 # build interpolator object for slm and blm
 t0 = time.time()
-foo_f = totalconvolve.PyInterpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo_f = totalconvolve.Interpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 print("\nSingle precision convolution/interpolation:")
 print("preparation of interpolation grid: {}s".format(time.time()-t0))
 
@@ -108,7 +108,7 @@ t0 = time.time()
 bar_f = foo_f.interpol(ptgf)
 del foo_f
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
-foo2_f = totalconvolve.PyInterpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2_f = totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0 = time.time()
 foo2_f.deinterpol(ptgf.reshape((-1, 3)), fake_f)
 print("Adjoint interpolation: {}s".format(time.time()-t0))

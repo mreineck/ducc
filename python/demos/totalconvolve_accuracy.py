@@ -57,7 +57,7 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 # build interpolator object for slm and blm
-foo = totalconvolve.PyInterpolator(slm, blm, separate, lmax, kmax, epsilon=1e-4, nthreads=2)
+foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-4, nthreads=2)
 print("setup time: ", time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1

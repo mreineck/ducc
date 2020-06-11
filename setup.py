@@ -9,6 +9,7 @@ import pybind11
 pkgname = 'ducc0'
 version = '0.1.0'
 
+
 def _get_files_by_suffix(directory, suffix):
     path = directory
     iterable_sources = (iglob(os.path.join(root, '*.'+suffix))
