@@ -195,6 +195,8 @@ template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op 
     res = op(res, v[i]);
   return res;
   }
+template<typename Op, typename T, size_t len> T accumulate(const vtp<T, len> &v, Op op)
+  { return reduce(v, op); }
 template<typename T> class pseudoscalar
   {
   private:
