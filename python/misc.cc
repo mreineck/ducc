@@ -44,28 +44,26 @@ namespace detail_pymodule_misc {
 using namespace std;
 namespace py = pybind11;
 
-using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
-
-a_d_c GL_weights(int64_t nlat, int64_t nlon)
+py::array GL_weights(size_t nlat, size_t nlon)
   {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i] = wgt[i]*twopi/nlon;
-  return res;
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = wgt[i]*twopi/nlon;
+  return move(res);
   }
 
-a_d_c GL_thetas(int64_t nlat)
+py::array GL_thetas(size_t nlat)
   {
-  a_d_c res(nlat);
-  auto rr=res.mutable_unchecked<1>();
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
   GL_Integrator integ(nlat);
   auto x = integ.coords();
-  for (size_t i=0; i<size_t(rr.shape(0)); ++i)
-    rr[i] = acos(-x[i]);
-  return res;
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = acos(-x[i]);
+  return move(res);
   }
 
 template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
@@ -160,7 +158,7 @@ template<typename T> py::array tphelp(const py::array &in)
   auto out = make_Pyarr<T>(in2.shape());
   auto out2 = to_fmav<T>(out, true);
   transpose(in2, out2, [](const T &in, T &out){out=in;});
-  return out;
+  return move(out);
   }
 
 py::array py_ascontiguousarray(const py::array &in)
