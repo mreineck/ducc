@@ -193,10 +193,10 @@ void add_wgridder(py::module &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("wgridder");
 
-  m.def("ms2dirty", &Pyms2dirty, "uvw"_a, "freq"_a, "ms"_a,
+  m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a,
     "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0);
-  m.def("dirty2ms", &Pydirty2ms, "uvw"_a, "freq"_a, "dirty"_a,
+  m.def("dirty2ms", &Pydirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a, "epsilon"_a,
     "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0);
   }
