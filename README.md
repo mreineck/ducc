@@ -55,7 +55,7 @@ this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need
-the latest incarnation of DUCC 0.1, this will be on branch "ducc0" of the
+the latest incarnation of DUCC 0, this will be on branch "ducc0" of the
 git repository, and it will be installed as the package "ducc0".
 Later versions will be maintained on new branches and will be installed as
 "ducc1" and "ducc2", so that there will be no conflict with potentially

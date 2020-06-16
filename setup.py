@@ -68,9 +68,16 @@ extensions = [Extension(pkgname,
                         extra_link_args=python_module_link_args)]
 
 
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+
+
 setup(name=pkgname,
       version=version,
       description='Distinctly useful code collection',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       url='https://gitlab.mpcdf.mpg.de/mtr/ducc',
       include_package_data=True,
       author='Martin Reinecke',
