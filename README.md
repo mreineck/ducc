@@ -9,13 +9,9 @@ on the sphere and gridding/degridding of radio interferometry data.
 The code is written in C++17, but provides a simple and comprehensive Python
 interface.
 
-
-Installation
-------------
-
 ### Requirements
 
-- [Python 3](https://www.python.org/)
+- [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
 - a C++17-capable C++ compiler (tested with g++ version 7 or newer and clang++;
   recent versions of MSVC on Windows also work, but are tested less frequently)
@@ -43,7 +39,7 @@ the detected target CPU.
 
 
 Installing multiple versions simultaneously
-===========================================
+-------------------------------------------
 
 The interfaces of the DUCC components are expected to evolve over time; whenever
 an interface changes in a manner that is not backwards compatible, the DUCC
@@ -72,8 +68,8 @@ This package provides Fast Fourier, trigonometric and Hartley transforms with a
 simple Python interface. It is an evolution of `pocketfft` and `pypocketfft`
 which are currently used by `numpy` and `scipy`.
 
-The central algorithms are derived from Paul Swarztrauber's FFTPACK code
-(http://www.netlib.org/fftpack).
+The central algorithms are derived from Paul Swarztrauber's [FFTPACK]
+(http://www.netlib.org/fftpack) code.
 
 ### Features
 - supports fully complex and half-complex (i.e. complex-to-real and
@@ -98,7 +94,7 @@ ducc.sht
 --------
 
 This package provides efficient spherical harmonic trasforms (SHTs). Its code
-is derived from `libsharp` (<https://arxiv.org/abs/1303.4945>), with accelerated
+is derived from [libsharp](https://arxiv.org/abs/1303.4945), with accelerated
 recurrence algorithms presented in
 <https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
 
@@ -107,8 +103,8 @@ ducc.healpix
 ------------
 
 This library provides Python bindings for the most important functionality
-related to the HEALPix tesselation (<https://arxiv.org/abs/astro-ph/0409513>),
-except for spherical harmonic transforms, which are covered vy `ducc.sht`.
+related to the [HEALPix](https://arxiv.org/abs/astro-ph/0409513) tesselation,
+except for spherical harmonic transforms, which are covered by `ducc.sht`.
 
 The design goals are
 - similarity to the interface of the HEALPix C++ library
@@ -123,9 +119,9 @@ ducc.totalconvolve
 Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
-This code has evolved from the original `totalconvolver` algorithm described
-in <https://arxiv.org/abs/astro-ph/0008227> via the `conviqt` code
-(<https://arxiv.org/abs/1002.1050>).
+This code has evolved from the original [totalconvolver]
+(https://arxiv.org/abs/astro-ph/0008227) algorithm described
+via the [conviqt](https://arxiv.org/abs/1002.1050) code.
 
 
 ### Algorithmic details:
