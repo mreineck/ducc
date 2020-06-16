@@ -136,8 +136,9 @@ ducc.wgridder
 -------------
 
 Library for high-accuracy gridding/degridding of radio interferometry datasets.
-An earlier version of this code has been integrated into `wsclean`
-(<https://arxiv.org/abs/1407.1943>, <https://sourceforge.net/projects/wsclean/>)
+An earlier version of this code has been integrated into
+[wsclean](https://sourceforge.net/projects/wsclean/)
+(<https://arxiv.org/abs/1407.1943>)
 as the `wgridder` component.
 
 ### Programming aspects
