@@ -34,17 +34,18 @@ def _assert_close(a, b, epsilon):
 
 pmp = pytest.mark.parametrize
 
-@pmp("size", (10, 37, 1000))
+
+@pmp("size", (2, 10, 37, 1000))
 @pmp("t0", (-45.3, 0, 10))
 @pmp("freq", (1, 1.3e-7, 3e10))
 def testp1(size, t0, freq):
     rng = np.random.default_rng(42)
-    quat = rng.uniform(-.5, .5, (size,4))
+    quat = rng.uniform(-.5, .5, (size, 4))
     prov = pp.PointingProvider(t0, freq, quat)
     rquat = np.array([1., 0., 0., 0.])  # a non-rotating quaternion
     quat2 = prov.get_rotated_quaternions(t0, freq, rquat, size)
-    nquat = quat/np.sqrt(np.sum(quat**2,axis=1,keepdims=True))
+    nquat = quat/np.sqrt(np.sum(quat**2, axis=1, keepdims=True))
     # adjust signs
-    nquat = nquat * np.sign(nquat[:,0]).reshape(-1,1)
-    quat2 = quat2 * np.sign(quat2[:,0]).reshape(-1,1)
+    nquat = nquat * np.sign(nquat[:, 0]).reshape(-1, 1)
+    quat2 = quat2 * np.sign(quat2[:, 0]).reshape(-1, 1)
     _assert_close(quat2, nquat, 1e-13)
