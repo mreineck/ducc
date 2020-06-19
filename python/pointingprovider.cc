@@ -70,8 +70,9 @@ template<typename T> class PointingProvider
         {
         double t = t0+i/freq;
         double fi = (t-t0_)*freq_;
-        MR_assert((fi>=0) && fi<quat_.size(), "time outside available range");
+        MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
         size_t idx = size_t(fi);
+        idx = min(idx, quat_.size()-2);
         double frac = fi-idx;
         double omega = rangle[idx];
         double xsin = rxsin[idx];
