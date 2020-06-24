@@ -24,6 +24,7 @@
 #ifndef DUCC0_ALM_H
 #define DUCC0_ALM_H
 
+#if 1
 #include <complex>
 #include <cmath>
 #include "ducc0/infra/threading.h"
