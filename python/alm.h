@@ -77,7 +77,7 @@ class Alm_Base
         {
         MR_assert(mval[i]<=lmax, "m >= lmax");
         if (i>0)
-          MR_assert(mval[i]>mval[i-1], "m not strictly ascending")'
+          MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
         }
       mstart.resize(mval.back(),-2*lmax);
       for (size_t i=0; i<mval.size(); ++i)
