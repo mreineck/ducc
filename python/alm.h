@@ -85,6 +85,11 @@ class Alm_Base
         mstart[mval[i]] = mstart_[i];
       }
 
+    bool operator==(const Alm_Base &other) const
+      {
+      return (lmax==other.lmax) && (mval==other.mval) && (mstart==other.mstart);
+      }
+
     /*! Returns the maximum \a l */
     size_t Lmax() const { return lmax; }
     /*! Returns the maximum \a m */
