@@ -46,10 +46,10 @@ template<typename T> class PointingProvider
       {
       MR_assert(quat.shape(0)>=2, "need at least 2 quaternions");
       MR_assert(quat.shape(1)==4, "need 4 entries in quaternion");
-      quat_[0] = quaternion_t<T>(quat(0,3), quat(0,0), quat(0,1), quat(0,2)).normalized();
+      quat_[0] = quaternion_t<T>(quat(0,0), quat(0,1), quat(0,2), quat(0,3)).normalized();
       for (size_t m=0; m<quat_.size()-1; ++m)
         {
-        quat_[m+1] = quaternion_t<T>(quat(m+1,3), quat(m+1,0), quat(m+1,1), quat(m+1,2)).normalized();
+        quat_[m+1] = quaternion_t<T>(quat(m+1,0), quat(m+1,1), quat(m+1,2), quat(m+1,3)).normalized();
         quaternion_t<T> delta(quat_[m+1]*quat_[m].conj());
         rotflip[m]=false;
         if (delta.w < 0.)
@@ -64,7 +64,7 @@ template<typename T> class PointingProvider
       mav<T,2> &out)
       {
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
-      auto rot_ = quaternion_t<T>(rot(3), rot(0), rot(1), rot(2)).normalized();
+      auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
       double ofs = (t0-t0_)*freq_;
       for (size_t i=0; i<out.shape(0); ++i)
@@ -80,10 +80,10 @@ template<typename T> class PointingProvider
                w2 = sin(frac*omega)*xsin;
         if (rotflip[idx]) w1=-w1;
         const quaternion_t<T> &q1(quat_[idx]), &q2(quat_[idx+1]);
-        quaternion_t<T> q(w1*q1.w + w2*q2.w,
-                          w1*q1.x + w2*q2.x,
+        quaternion_t<T> q(w1*q1.x + w2*q2.x,
                           w1*q1.y + w2*q2.y,
-                          w1*q1.z + w2*q2.z);
+                          w1*q1.z + w2*q2.z,
+                          w1*q1.w + w2*q2.w);
         q *= rot_;
         out.v(i,0) = q.x;
         out.v(i,1) = q.y;
@@ -137,7 +137,7 @@ freq : float
     the frequency at which the provided satellite orientations are sampled
 quat : np.ndarray((nval, 4), dtype=np.float64)
     the satellite orientation quaternions. Coordinates are expecetd in the order
-    (w, x, y, z). The quaternions need not be normalized.
+    (x, y, z, w). The quaternions need not be normalized.
 
 Returns
 -------
@@ -160,7 +160,7 @@ freq : float
 rot : np.ndarray((4,), dtype=np.float64)
     A single rotation quaternion describing the rotation from the satellite to
     the detector reference system. Coordinates are expecetd in the order
-    (w, x, y, z). The quaternion need not be normalized.
+    (x, y, z, w). The quaternion need not be normalized.
 nval : int
     the number of requested quaternions
 

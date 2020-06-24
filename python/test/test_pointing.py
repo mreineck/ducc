@@ -56,7 +56,6 @@ def testp2():
     t01, f1, size1 = 0., 1., 200
     quat1 = rng.uniform(-.5, .5, (size1, 4))
     prov = pp.PointingProvider(t01, f1, quat1)
-    rquat = np.array([1., 0., 0., 0.])  # a non-rotating quaternion
     rquat = rng.uniform(-.5, .5, (4,))
     t02, f2, size2 = 3.7, 10.2, 300
     quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
