@@ -46,10 +46,10 @@ template<typename T> class PointingProvider
       {
       MR_assert(quat.shape(0)>=2, "need at least 2 quaternions");
       MR_assert(quat.shape(1)==4, "need 4 entries in quaternion");
-      quat_[0] = quaternion_t<T>(quat(0,0), quat(0,1), quat(0,2), quat(0,3)).normalized();
+      quat_[0] = quaternion_t<T>(quat(0,3), quat(0,0), quat(0,1), quat(0,2)).normalized();
       for (size_t m=0; m<quat_.size()-1; ++m)
         {
-        quat_[m+1] = quaternion_t<T>(quat(m+1,0), quat(m+1,1), quat(m+1,2), quat(m+1,3)).normalized();
+        quat_[m+1] = quaternion_t<T>(quat(m+1,3), quat(m+1,0), quat(m+1,1), quat(m+1,2)).normalized();
         quaternion_t<T> delta(quat_[m+1]*quat_[m].conj());
         rotflip[m]=false;
         if (delta.w < 0.)
@@ -64,7 +64,7 @@ template<typename T> class PointingProvider
       mav<T,2> &out)
       {
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
-      auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
+      auto rot_ = quaternion_t<T>(rot(3), rot(0), rot(1), rot(2)).normalized();
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
       double ofs = (t0-t0_)*freq_;
       for (size_t i=0; i<out.shape(0); ++i)
@@ -85,10 +85,10 @@ template<typename T> class PointingProvider
                           w1*q1.y + w2*q2.y,
                           w1*q1.z + w2*q2.z);
         q *= rot_;
-        out.v(i,0) = q.w;
-        out.v(i,1) = q.x;
-        out.v(i,2) = q.y;
-        out.v(i,3) = q.z;
+        out.v(i,0) = q.x;
+        out.v(i,1) = q.y;
+        out.v(i,2) = q.z;
+        out.v(i,3) = q.w;
         }
       }
   };
@@ -102,14 +102,19 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
     PyPointingProvider(double t0, double freq, const py::array &quat)
       : PointingProvider<T>(t0, freq, to_mav<T,2>(quat)) {}
 
+    py::array pyget_rotated_quaternions_out(double t0, double freq,
+      const py::array &quat, py::array &out)
+      {
+      auto res2 = to_mav<T,2>(out,true);
+      auto quat2 = to_mav<T,1>(quat);
+      get_rotated_quaternions(t0, freq, quat2, res2);
+      return move(out);
+      }
     py::array pyget_rotated_quaternions(double t0, double freq,
       const py::array &quat, size_t nval)
       {
       auto res = make_Pyarr<T>({nval,4});
-      auto res2 = to_mav<T,2>(res,true);
-      auto quat2 = to_mav<T,1>(quat);
-      get_rotated_quaternions(t0, freq, quat2, res2);
-      return move(res);
+      return pyget_rotated_quaternions_out(t0, freq, quat, res);
       }
   };
 
@@ -175,7 +180,9 @@ void add_pointingprovider(py::module &msup)
   py::class_<pp_d>(m, "PointingProvider", PointingProvider_DS)
     .def(py::init<double, double, const py::array &>(), "t0"_a, "freq"_a, "quat"_a)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
-       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a);
+       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a)
+    .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions_out,
+       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "out"_a);
   }
 
 }

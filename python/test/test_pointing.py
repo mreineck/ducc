@@ -42,10 +42,35 @@ def testp1(size, t0, freq):
     rng = np.random.default_rng(42)
     quat = rng.uniform(-.5, .5, (size, 4))
     prov = pp.PointingProvider(t0, freq, quat)
-    rquat = np.array([1., 0., 0., 0.])  # a non-rotating quaternion
+    rquat = np.array([0., 0., 0., 1.])  # a non-rotating quaternion
     quat2 = prov.get_rotated_quaternions(t0, freq, rquat, size)
     nquat = quat/np.sqrt(np.sum(quat**2, axis=1, keepdims=True))
     # adjust signs
     nquat = nquat * np.sign(nquat[:, 0]).reshape(-1, 1)
     quat2 = quat2 * np.sign(quat2[:, 0]).reshape(-1, 1)
     _assert_close(quat2, nquat, 1e-13)
+
+
+def testp2():
+    rng = np.random.default_rng(42)
+    t01, f1, size1 = 0., 1., 200
+    quat1 = rng.uniform(-.5, .5, (size1, 4))
+    prov = pp.PointingProvider(t01, f1, quat1)
+    rquat = np.array([1., 0., 0., 0.])  # a non-rotating quaternion
+    rquat = rng.uniform(-.5, .5, (4,))
+    t02, f2, size2 = 3.7, 10.2, 300
+    quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
+    quat2 *= np.sign(quat2[:,0]).reshape((-1,1))
+
+    from scipy.spatial.transform import Rotation as R
+    from scipy.spatial.transform import Slerp
+    times1 = t01 + 1./f1*np.arange(size1)
+    r1 = R.from_quat(quat1)
+    rrquat = R.from_quat(rquat)
+    slerp = Slerp(times1, r1)
+    times2 = t02 + 1./f2*np.arange(size2)
+    r2 = slerp(times2)*rrquat
+    squat2 = r2.as_quat()
+    squat2 *= np.sign(squat2[:,0]).reshape((-1,1))
+    _assert_close(quat2, squat2, 1e-13)
+
