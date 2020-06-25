@@ -44,7 +44,7 @@ using namespace std;
 class Alm_Base
   {
   protected:
-    size_t lmax;
+    size_t lmax, arrsize;
     vector<size_t> mval;
     vector<ptrdiff_t> mstart;
 
@@ -55,19 +55,6 @@ class Alm_Base
       {
       MR_assert(m<=l,"mmax must not be larger than lmax");
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
-      }
-
-    /*! Constructs an Alm_Base object with given \a lmax and \a mmax. */
-    Alm_Base (size_t lmax_, size_t mmax_)
-      : lmax(lmax_), mval(mmax_+1), mstart(mmax_+1)
-      {
-      ptrdiff_t idx = 0;
-      for (size_t m=0; m<=mmax_; ++m)
-        {
-        mval[m] = m;
-        mstart[m] = idx-m;
-        idx += lmax-m+1;
-        }
       }
 
     Alm_Base (size_t lmax_, const vector<size_t> &mval_,
@@ -83,14 +70,50 @@ class Alm_Base
           MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
         }
       mstart.resize(mval.back()+1, -2*lmax);
+      arrsize=0;
       for (size_t i=0; i<mval.size(); ++i)
+        {
         mstart[mval[i]] = mstart_[i];
+        arrsize = size_t(max(ptrdiff_t(arrsize), mstart_[i]+ptrdiff_t(lmax+1)));
+        }
+      }
+
+    Alm_Base (size_t lmax_, const vector<size_t> &mval_)
+      : lmax(lmax_), mval(mval_)
+      {
+      MR_assert(mval.size()>0, "no m indices supplied");
+      for (size_t i=0; i<mval.size(); ++i)
+        {
+        MR_assert(mval[i]<=lmax, "m >= lmax");
+        if (i>0)
+          MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
+        }
+      mstart.resize(mval.back()+1, -2*lmax);
+      for (size_t i=0, cnt=0; i<mval.size(); ++i, cnt+=lmax-mval[i]+1)
+        mstart[mval[i]] = ptrdiff_t(cnt)-ptrdiff_t(mval[i]);
+      arrsize = size_t(mstart.back()+ptrdiff_t(lmax+1));
+      }
+
+    /*! Constructs an Alm_Base object with given \a lmax and \a mmax. */
+    Alm_Base (size_t lmax_, size_t mmax_)
+      : lmax(lmax_), mval(mmax_+1), mstart(mmax_+1)
+      {
+      ptrdiff_t idx = 0;
+      for (size_t m=0; m<=mmax_; ++m)
+        {
+        mval[m] = m;
+        mstart[m] = idx-m;
+        idx += lmax-m+1;
+        }
+      arrsize = Num_Alms(lmax_, mmax_);
       }
 
     /*! Returns the maximum \a l */
     size_t Lmax() const { return lmax; }
     /*! Returns the maximum \a m */
     size_t Mmax() const { return mval.back(); }
+
+    size_t n_entries() const { return arrsize; }
 
     /*! Returns an array index for a given m, from which the index of a_lm
         can be obtained by adding l. */
