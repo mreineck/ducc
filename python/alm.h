@@ -44,7 +44,9 @@ using namespace std;
 class Alm_Base
   {
   protected:
-    size_t lmax, mmax, tval;
+    size_t lmax, arrsize;
+    vector<size_t> mval;
+    vector<ptrdiff_t> mstart;
 
   public:
     /*! Returns the total number of coefficients for maximum quantum numbers
@@ -55,28 +57,79 @@ class Alm_Base
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
       }
 
+    Alm_Base (size_t lmax_, const vector<size_t> &mval_,
+              const vector<ptrdiff_t> &mstart_)
+      : lmax(lmax_), mval(mval_)
+      {
+      MR_assert(mval.size()>0, "no m indices supplied");
+      MR_assert(mstart_.size()==mval.size(), "mval and mstart have different sizes");
+      for (size_t i=0; i<mval.size(); ++i)
+        {
+        MR_assert(mval[i]<=lmax, "m >= lmax");
+        if (i>0)
+          MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
+        }
+      mstart.resize(mval.back()+1, -2*lmax);
+      arrsize=0;
+      for (size_t i=0; i<mval.size(); ++i)
+        {
+        mstart[mval[i]] = mstart_[i];
+        arrsize = size_t(max(ptrdiff_t(arrsize), mstart_[i]+ptrdiff_t(lmax+1)));
+        }
+      }
+
+    Alm_Base (size_t lmax_, const vector<size_t> &mval_)
+      : lmax(lmax_), mval(mval_)
+      {
+      MR_assert(mval.size()>0, "no m indices supplied");
+      for (size_t i=0; i<mval.size(); ++i)
+        {
+        MR_assert(mval[i]<=lmax, "m >= lmax");
+        if (i>0)
+          MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
+        }
+      mstart.resize(mval.back()+1, -2*lmax);
+      for (size_t i=0, cnt=0; i<mval.size(); ++i, cnt+=lmax-mval[i]+1)
+        mstart[mval[i]] = ptrdiff_t(cnt)-ptrdiff_t(mval[i]);
+      arrsize = size_t(mstart.back()+ptrdiff_t(lmax+1));
+      }
+
     /*! Constructs an Alm_Base object with given \a lmax and \a mmax. */
-    Alm_Base (size_t lmax_=0, size_t mmax_=0)
-      : lmax(lmax_), mmax(mmax_), tval(2*lmax+1) {}
+    Alm_Base (size_t lmax_, size_t mmax_)
+      : lmax(lmax_), mval(mmax_+1), mstart(mmax_+1)
+      {
+      ptrdiff_t idx = 0;
+      for (size_t m=0; m<=mmax_; ++m)
+        {
+        mval[m] = m;
+        mstart[m] = idx-m;
+        idx += lmax-m+1;
+        }
+      arrsize = Num_Alms(lmax_, mmax_);
+      }
 
     /*! Returns the maximum \a l */
     size_t Lmax() const { return lmax; }
     /*! Returns the maximum \a m */
-    size_t Mmax() const { return mmax; }
+    size_t Mmax() const { return mval.back(); }
+
+    size_t n_entries() const { return arrsize; }
 
     /*! Returns an array index for a given m, from which the index of a_lm
         can be obtained by adding l. */
     size_t index_l0 (size_t m) const
-      { return ((m*(tval-m))>>1); }
+      { return mstart[m]; }
 
     /*! Returns the array index of the specified coefficient. */
     size_t index (size_t l, size_t m) const
       { return index_l0(m) + l; }
 
-    /*! Returns \a true, if both objects have the same \a lmax and \a mmax,
-        else  \a false. */
-    bool conformable (const Alm_Base &other) const
-      { return ((lmax==other.lmax) && (mmax==other.mmax)); }
+    bool conformable(const Alm_Base &other) const
+      {
+      return (lmax==other.lmax) && (mval==other.mval) && (mstart==other.mstart);
+      }
+    bool complete() const
+      { return mval.size() == lmax+1; }
   };
 
 /*! Class for storing spherical harmonic coefficients. */
@@ -87,21 +140,21 @@ template<typename T> class Alm: public Alm_Base
 
     template<typename Func> void applyLM(Func func)
       {
-      for (size_t m=0; m<=mmax; ++m)
+      for (auto m: mval)
         for (size_t l=m; l<=lmax; ++l)
-          func(l,m,alm.v(l,m));
+          func(l,m,alm.v(index(l,m)));
       }
 
   public:
     /*! Constructs an Alm object with given \a lmax and \a mmax. */
     Alm (mav<T,1> &data, size_t lmax_, size_t mmax_)
       : Alm_Base(lmax_, mmax_), alm(data)
-      { MR_assert(alm.size()==Num_Alms(lmax, mmax), "bad array size"); }
+      { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
     Alm (const mav<T,1> &data, size_t lmax_, size_t mmax_)
       : Alm_Base(lmax_, mmax_), alm(data)
-      { MR_assert(alm.size()==Num_Alms(lmax, mmax), "bad array size"); }
+      { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
     Alm (size_t lmax_=0, size_t mmax_=0)
-      : Alm_Base(lmax_,mmax_), alm ({Num_Alms(lmax,mmax)}) {}
+      : Alm_Base(lmax_,mmax_), alm ({Num_Alms(lmax,mmax_)}) {}
 
     /*! Sets all coefficients to zero. */
     void SetToZero ()
@@ -120,13 +173,16 @@ template<typename T> class Alm: public Alm_Base
     /*! \a a(l,m) *= \a factor[m] for all \a l,m. */
     template<typename T2> void ScaleM (const mav<T2,1> &factor)
       {
-      MR_assert(factor.size()>size_t(mmax),
+      MR_assert(factor.size()>size_t(Mmax()),
         "alm.ScaleM: factor array too short");
       applyLM([&factor](size_t /*l*/, size_t m, T &v){v*=factor(m);}); 
       }
     /*! Adds \a num to a_00. */
     template<typename T2> void Add (const T2 &num)
-      { alm.v(0)+=num; }
+      {
+      MR_assert(mval[0]==0, "cannot add a constant: no m=0 mode present");
+      alm.v(index_l0(0))+=num;
+      }
 
     /*! Returns a reference to the specified coefficient. */
     T &operator() (size_t l, size_t m)
@@ -229,8 +285,7 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
   double psi, double theta, double phi)
   {
   auto lmax=alm.Lmax();
-  MR_assert (lmax==alm.Mmax(),
-    "rotate_alm: lmax must be equal to mmax");
+  MR_assert (alm.complete(), "rotate_alm: need complete A_lm set");
 
   if (theta!=0)
     {
