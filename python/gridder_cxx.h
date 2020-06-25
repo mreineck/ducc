@@ -537,9 +537,11 @@ template<typename T, typename T2=complex<T>> class Helper
   public:
     const T2 *p0r;
     T2 *p0w;
-    T kernel[64];
     static constexpr size_t vlen=native_simd<T>::size();
-    native_simd<T> simd_kernel[64/vlen];
+    union {
+      T scalar[64];
+      native_simd<T> simd[64/vlen];
+      } kernel;
 
     Helper(const GridderConfig &gconf_, const T2 *grid_r_, T2 *grid_w_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
@@ -555,11 +557,14 @@ template<typename T, typename T2=complex<T>> class Helper
         nexp(2*supp + do_w_gridding),
         nvecs((nexp+vlen-1)/vlen),
         locks(locks_)
-      {}
+      {
+      for (size_t i=0; i<64/vlen; ++i)
+        kernel.simd[i]=0;
+      }
     ~Helper() { if (grid_w) dump(); }
 
     int lineJump() const { return sv; }
-    T Wfac() const { return kernel[2*supp]; }
+    T Wfac() const { return kernel.scalar[2*supp]; }
     void prep(const UVW &in)
       {
       double u, v;
@@ -569,17 +574,13 @@ template<typename T, typename T2=complex<T>> class Helper
       double y0 = xsupp*(iv0-v);
       for (int i=0; i<supp; ++i)
         {
-        kernel[i  ] = T(x0+i*xsupp);
-        kernel[i+supp] = T(y0+i*xsupp);
+        kernel.scalar[i  ] = T(x0+i*xsupp);
+        kernel.scalar[i+supp] = T(y0+i*xsupp);
         }
       if (do_w_gridding)
-        kernel[2*supp] = T(xdw*xsupp*abs(w0-in.w));
-      for (size_t i=nexp; i<nvecs*vlen; ++i)
-        kernel[i]=0;
-      memcpy(simd_kernel, kernel, nvecs*vlen*sizeof(T));
+        kernel.scalar[2*supp] = T(xdw*xsupp*abs(w0-in.w));
       for (size_t i=0; i<nvecs; ++i)
-        simd_kernel[i] = esk(simd_kernel[i], beta);
-      memcpy(kernel, simd_kernel, nvecs*vlen*sizeof(T));
+        kernel.simd[i] = esk(kernel.simd[i], beta);
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
         if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
@@ -680,8 +681,8 @@ template<typename T, typename Serv> void x2grid_c
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.kernel;
-    const T * DUCC0_RESTRICT kv = hlp.kernel+supp;
+    const T * DUCC0_RESTRICT ku = hlp.kernel.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.kernel.scalar+supp;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -728,8 +729,8 @@ template<typename T, typename Serv> void grid2x_c
     {
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.kernel;
-    const T * DUCC0_RESTRICT kv = hlp.kernel+supp;
+    const T * DUCC0_RESTRICT ku = hlp.kernel.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.kernel.scalar+supp;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
