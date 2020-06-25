@@ -34,6 +34,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/simd.h"
 #include "ducc0/math/es_kernel.h"
 
 namespace ducc0 {
@@ -536,8 +537,9 @@ template<typename T, typename T2=complex<T>> class Helper
   public:
     const T2 *p0r;
     T2 *p0w;
-    T kernel[64] DUCC0_ALIGNED(64);
+    T kernel[64];
     static constexpr size_t vlen=native_simd<T>::size();
+    native_simd<T> simd_kernel[64/vlen];
 
     Helper(const GridderConfig &gconf_, const T2 *grid_r_, T2 *grid_w_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
@@ -551,7 +553,7 @@ template<typename T, typename T2=complex<T>> class Helper
         w0(w0_),
         xdw(T(1)/dw_),
         nexp(2*supp + do_w_gridding),
-        nvecs(vlen*((nexp+vlen-1)/vlen)),
+        nvecs((nexp+vlen-1)/vlen),
         locks(locks_)
       {}
     ~Helper() { if (grid_w) dump(); }
@@ -571,16 +573,13 @@ template<typename T, typename T2=complex<T>> class Helper
         kernel[i+supp] = T(y0+i*xsupp);
         }
       if (do_w_gridding)
-        kernel[2*supp] = min(T(1), T(xdw*xsupp*abs(w0-in.w)));
-      for (size_t i=nexp; i<nvecs; ++i)
+        kernel[2*supp] = T(xdw*xsupp*abs(w0-in.w));
+      for (size_t i=nexp; i<nvecs*vlen; ++i)
         kernel[i]=0;
+      memcpy(simd_kernel, kernel, nvecs*vlen*sizeof(T));
       for (size_t i=0; i<nvecs; ++i)
-        {
-        kernel[i] = T(1) - kernel[i]*kernel[i];
-        kernel[i] = (kernel[i]<0) ? T(-200.) : beta*(sqrt(kernel[i])-T(1));
-        }
-      for (size_t i=0; i<nvecs; ++i)
-        kernel[i] = exp(kernel[i]);
+        simd_kernel[i] = esk(simd_kernel[i], beta);
+      memcpy(kernel, simd_kernel, nvecs*vlen*sizeof(T));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
         if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
