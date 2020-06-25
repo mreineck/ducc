@@ -74,20 +74,17 @@ class Alm_Base
               const vector<ptrdiff_t> &mstart_)
       : lmax(lmax_), mval(mval_)
       {
+      MR_assert(mval.size()>0, "no m indices supplied");
+      MR_assert(mstart_.size()==mval.size(), "mval and mstart have different sizes");
       for (size_t i=0; i<mval.size(); ++i)
         {
         MR_assert(mval[i]<=lmax, "m >= lmax");
         if (i>0)
           MR_assert(mval[i]>mval[i-1], "m not strictly ascending");
         }
-      mstart.resize(mval.back(),-2*lmax);
+      mstart.resize(mval.back()+1, -2*lmax);
       for (size_t i=0; i<mval.size(); ++i)
         mstart[mval[i]] = mstart_[i];
-      }
-
-    bool operator==(const Alm_Base &other) const
-      {
-      return (lmax==other.lmax) && (mval==other.mval) && (mstart==other.mstart);
       }
 
     /*! Returns the maximum \a l */
@@ -103,6 +100,13 @@ class Alm_Base
     /*! Returns the array index of the specified coefficient. */
     size_t index (size_t l, size_t m) const
       { return index_l0(m) + l; }
+
+    bool conformable(const Alm_Base &other) const
+      {
+      return (lmax==other.lmax) && (mval==other.mval) && (mstart==other.mstart);
+      }
+    bool complete() const
+      { return mval.size() == lmax+1; }
   };
 
 /*! Class for storing spherical harmonic coefficients. */
@@ -153,12 +157,8 @@ template<typename T> class Alm: public Alm_Base
     /*! Adds \a num to a_00. */
     template<typename T2> void Add (const T2 &num)
       {
-      for (auto m: mval)
-        if (m==0)
-          {
-          alm.v(index_l0(m))+=num;
-          return;
-          }
+      MR_assert(mval[0]==0, "cannot add a constant: no m=0 mode present");
+      alm.v(index_l0(0))+=num;
       }
 
     /*! Returns a reference to the specified coefficient. */
@@ -189,7 +189,7 @@ template<typename T> class Alm: public Alm_Base
     /*! Adds all coefficients from \a other to the own coefficients. */
     void Add (const Alm &other)
       {
-      MR_assert (Alm_Base(*this)==Alm_Base(other), "A_lm are not conformable");
+      MR_assert (conformable(other), "A_lm are not conformable");
       for (size_t m=0; m<alm.size(); ++m)
         alm.v(m) += other.alm(m);
       }
@@ -262,8 +262,7 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
   double psi, double theta, double phi)
   {
   auto lmax=alm.Lmax();
-  MR_assert (lmax==alm.Mmax(),
-    "rotate_alm: lmax must be equal to mmax");
+  MR_assert (alm.complete(), "rotate_alm: need complete A_lm set");
 
   if (theta!=0)
     {
