@@ -440,8 +440,8 @@ template<typename T> class Interpolator
           } kdata;
         T *wt(kdata.scalar), *wp(kdata.scalar+supp);
         size_t nvec = (2*supp+vl-1)/vl;
-        for (size_t i=0; i<nvec; ++i)
-          kdata.simd[i] = 0;
+        for (auto &v: kdata.simd) v=0;
+        MR_assert(2*supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
@@ -644,8 +644,8 @@ template<typename T> class Interpolator
           } kdata;
         T *wt(kdata.scalar), *wp(kdata.scalar+supp);
         size_t nvec = (2*supp+vl-1)/vl;
-        for (size_t i=0; i<nvec; ++i)
-          kdata.simd[i] = 0;
+        for (auto &v: kdata.simd) v=0;
+        MR_assert(2*supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);

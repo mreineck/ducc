@@ -558,8 +558,8 @@ template<typename T, typename T2=complex<T>> class Helper
         nvecs((nexp+vlen-1)/vlen),
         locks(locks_)
       {
-      for (size_t i=0; i<64/vlen; ++i)
-        kernel.simd[i]=0;
+      MR_assert(2*supp+1<=64, "support too large");
+      for (auto &v: kernel.simd) v=0;
       }
     ~Helper() { if (grid_w) dump(); }
 
