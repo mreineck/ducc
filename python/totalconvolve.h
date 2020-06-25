@@ -220,9 +220,13 @@ template<typename T> class Interpolator
         mapper[itheta*ncp+iphi].push_back(i);
         }
       size_t cnt=0;
-      for (const auto &vec: mapper)
+      for (auto &vec: mapper)
+        {
         for (auto i:vec)
           idx[cnt++] = i;
+        vec.clear();
+        vec.shrink_to_fit();
+        }
       return idx;
       }
 
@@ -434,7 +438,14 @@ template<typename T> class Interpolator
       auto idx = getIdx(ptg);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
-        vector<T> wt(supp), wp(supp);
+        union {
+          native_simd<T> simd[64/vl];
+          T scalar[64];
+          } kdata;
+        T *wt(kdata.scalar), *wp(kdata.scalar+supp);
+        size_t nvec = (2*supp+vl-1)/vl;
+        for (auto &v: kdata.simd) v=0;
+        MR_assert(2*supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
@@ -446,11 +457,13 @@ template<typename T> class Interpolator
           T f0=T(0.5*supp+ptg(i,0)*xdtheta);
           size_t i0 = size_t(f0+T(1));
           for (size_t t=0; t<supp; ++t)
-            wt[t] = kernel((t+i0-f0)*delta - 1);
+            wt[t] = (t+i0-f0)*delta - 1;
           T f1=T(0.5)*supp+ptg(i,1)*xdphi;
           size_t i1 = size_t(f1+1.);
           for (size_t t=0; t<supp; ++t)
-            wp[t] = kernel((t+i1-f1)*delta - 1);
+            wp[t] = (t+i1-f1)*delta - 1;
+          for (size_t t=0; t<nvec; ++t)
+            kdata.simd[t] = kernel(kdata.simd[t]);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -484,25 +497,25 @@ template<typename T> class Interpolator
               {
 #ifdef SPECIAL_CASING
               case 1:
-                interpol_help0<1,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<1,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 2:
-                interpol_help0<2,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<2,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 3:
-                interpol_help0<3,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<3,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 4:
-                interpol_help0<4,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<4,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 5:
-                interpol_help0<5,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<5,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 6:
-                interpol_help0<6,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<6,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 7:
-                interpol_help0<7,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<7,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
 #endif
               default:
@@ -549,25 +562,25 @@ template<typename T> class Interpolator
               {
 #ifdef SPECIAL_CASING
               case 1:
-                interpol_help0<1,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<1,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 2:
-                interpol_help0<2,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<2,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 3:
-                interpol_help0<3,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<3,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 4:
-                interpol_help0<4,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<4,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 5:
-                interpol_help0<5,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<5,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 6:
-                interpol_help0<6,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<6,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
               case 7:
-                interpol_help0<7,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), res, i);
+                interpol_help0<7,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
                 break;
 #endif
               default:
@@ -629,7 +642,14 @@ template<typename T> class Interpolator
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         size_t b_theta=99999999999999, b_phi=9999999999999999;
-        vector<T> wt(supp), wp(supp);
+        union {
+          native_simd<T> simd[64/vl];
+          T scalar[64];
+          } kdata;
+        T *wt(kdata.scalar), *wp(kdata.scalar+supp);
+        size_t nvec = (2*supp+vl-1)/vl;
+        for (auto &v: kdata.simd) v=0;
+        MR_assert(2*supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
@@ -641,11 +661,13 @@ template<typename T> class Interpolator
           T f0=T(0.5)*supp+ptg(i,0)*xdtheta;
           size_t i0 = size_t(f0+1.);
           for (size_t t=0; t<supp; ++t)
-            wt[t] = kernel((t+i0-f0)*delta - 1);
+            wt[t] = (t+i0-f0)*delta - 1;
           T f1=T(0.5)*supp+ptg(i,1)*xdphi;
           size_t i1 = size_t(f1+1.);
           for (size_t t=0; t<supp; ++t)
-            wp[t] = kernel((t+i1-f1)*delta - 1);
+            wp[t] = (t+i1-f1)*delta - 1;
+          for (size_t t=0; t<nvec; ++t)
+            kdata.simd[t] = kernel(kdata.simd[t]);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -696,25 +718,25 @@ template<typename T> class Interpolator
               {
 #ifdef SPECIAL_CASING
               case 1:
-                deinterpol_help0<1,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<1,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 2:
-                deinterpol_help0<2,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<2,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 3:
-                deinterpol_help0<3,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<3,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 4:
-                deinterpol_help0<4,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<4,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 5:
-                deinterpol_help0<5,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<5,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 6:
-                deinterpol_help0<6,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<6,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 7:
-                deinterpol_help0<7,1>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<7,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
 #endif
               default:
@@ -759,25 +781,25 @@ template<typename T> class Interpolator
               {
 #ifdef SPECIAL_CASING
               case 1:
-                deinterpol_help0<1,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<1,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 2:
-                deinterpol_help0<2,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<2,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 3:
-                deinterpol_help0<3,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<3,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 4:
-                deinterpol_help0<4,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<4,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 5:
-                deinterpol_help0<5,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<5,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 6:
-                deinterpol_help0<6,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<6,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
               case 7:
-                deinterpol_help0<7,3>(wt.data(), wp.data(), p, d0, d1, psiarr2.data(), data, i);
+                deinterpol_help0<7,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
                 break;
 #endif
               default:
