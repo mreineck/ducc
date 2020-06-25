@@ -220,9 +220,13 @@ template<typename T> class Interpolator
         mapper[itheta*ncp+iphi].push_back(i);
         }
       size_t cnt=0;
-      for (const auto &vec: mapper)
+      for (auto &vec: mapper)
+        {
         for (auto i:vec)
           idx[cnt++] = i;
+        vec.clear();
+        vec.shrink_to_fit();
+        }
       return idx;
       }
 
