@@ -87,7 +87,7 @@ class ES_Kernel
     template<typename T> T operator()(T v) const
       { return esk(v, T(beta)); }
 
-    template<typename T> native_simd<T> operator()(native_simd<T> v)
+    template<typename T> native_simd<T> operator()(native_simd<T> v) const
       { return esk(v, T(beta)); }
 
     /* Compute correction factors for the ES gridding kernel
