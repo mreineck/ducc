@@ -68,7 +68,7 @@ def testp2():
     rrquat = R.from_quat(rquat)
     slerp = Slerp(times1, r1)
     times2 = t02 + 1./f2*np.arange(size2)
-    r2 = slerp(times2)*rrquat
+    r2 = rrquat*slerp(times2)
     squat2 = r2.as_quat()
     squat2 *= np.sign(squat2[:,0]).reshape((-1,1))
     _assert_close(quat2, squat2, 1e-13)

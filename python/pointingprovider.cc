@@ -84,7 +84,7 @@ template<typename T> class PointingProvider
                           w1*q1.y + w2*q2.y,
                           w1*q1.z + w2*q2.z,
                           w1*q1.w + w2*q2.w);
-        q *= rot_;
+        q = rot_*q;
         out.v(i,0) = q.x;
         out.v(i,1) = q.y;
         out.v(i,2) = q.z;
@@ -136,7 +136,7 @@ t0 : float
 freq : float
     the frequency at which the provided satellite orientations are sampled
 quat : np.ndarray((nval, 4), dtype=np.float64)
-    the satellite orientation quaternions. Coordinates are expecetd in the order
+    the satellite orientation quaternions. Components are expecetd in the order
     (x, y, z, w). The quaternions need not be normalized.
 
 Returns
@@ -159,7 +159,7 @@ freq : float
     the frequency at which the output orientations should be sampled
 rot : np.ndarray((4,), dtype=np.float64)
     A single rotation quaternion describing the rotation from the satellite to
-    the detector reference system. Coordinates are expecetd in the order
+    the detector reference system. Components are expecetd in the order
     (x, y, z, w). The quaternion need not be normalized.
 nval : int
     the number of requested quaternions
@@ -167,7 +167,7 @@ nval : int
 Returns
 -------
 np.ndarray((nval, 4), dtype=np.float64) : the output quaternions
-    The quaternions are normalized
+    The quaternions are normalized and in the order (x, y, z, w)
 )""";
 
 void add_pointingprovider(py::module &msup)
