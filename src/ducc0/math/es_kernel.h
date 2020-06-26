@@ -25,6 +25,7 @@
 #include <cmath>
 #include <vector>
 #include <array>
+#include "ducc0/infra/simd.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/constants.h"
@@ -35,6 +36,28 @@ namespace ducc0 {
 namespace detail_es_kernel {
 
 using namespace std;
+
+template<typename T> T esk (T v, T beta)
+  {
+  auto tmp = (1-v)*(1+v);
+  auto tmp2 = tmp>=0;
+  return tmp2*exp(T(beta)*(sqrt(tmp*tmp2)-1));
+  }
+
+template<typename T> class exponator
+  {
+  public:
+    T operator()(T val) { return exp(val); }
+  };
+template<typename T> native_simd<T> esk (native_simd<T> v, T beta)
+  {
+  auto tmp = (T(1)-v)*(T(1)+v);
+  auto mask = tmp<T(0);
+  where(mask,tmp)*=T(0);
+  auto res = (beta*(sqrt(tmp)-T(1))).apply(exponator<T>());
+  where (mask,res)*=T(0);
+  return res;
+  }
 
 /* This class implements the "exponential of semicircle" gridding kernel
    described in https://arxiv.org/abs/1808.06736 */
@@ -62,11 +85,11 @@ class ES_Kernel
       : ES_Kernel(supp_, 2., nthreads){}
 
     template<typename T> T operator()(T v) const
-      {
-      auto tmp = (1-v)*(1+v);
-      auto tmp2 = tmp>=0;
-      return tmp2*exp(T(beta)*(sqrt(tmp*tmp2)-1));
-      }
+      { return esk(v, T(beta)); }
+
+    template<typename T> native_simd<T> operator()(native_simd<T> v) const
+      { return esk(v, T(beta)); }
+
     /* Compute correction factors for the ES gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
     double corfac(double v) const
@@ -138,6 +161,7 @@ class ES_Kernel
 
 }
 
+using detail_es_kernel::esk;
 using detail_es_kernel::ES_Kernel;
 
 }
