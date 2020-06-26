@@ -123,7 +123,7 @@ Functionality for converting satellite orientations to detector orientations
 at a different frequency
 )""";
 
-const char *PointingProvider_DS = R"""(
+const char *PointingProvider_init_DS = R"""(
 Creates a PointingProvider object from a starting time, a sampling frequency
 and a list of orientation quaternions.
 
@@ -135,7 +135,7 @@ t0 : float
     of the requested detector orientations.
 freq : float
     the frequency at which the provided satellite orientations are sampled
-quat : np.ndarray((nval, 4), dtype=np.float64)
+quat : numpy.ndarray((nval, 4), dtype=numpy.float64)
     the satellite orientation quaternions. Components are expecetd in the order
     (x, y, z, w). The quaternions need not be normalized.
 
@@ -157,7 +157,7 @@ t0 : float
     constructor.
 freq : float
     the frequency at which the output orientations should be sampled
-rot : np.ndarray((4,), dtype=np.float64)
+rot : numpy.ndarray((4,), dtype=numpy.float64)
     A single rotation quaternion describing the rotation from the satellite to
     the detector reference system. Components are expecetd in the order
     (x, y, z, w). The quaternion need not be normalized.
@@ -166,8 +166,35 @@ nval : int
 
 Returns
 -------
-np.ndarray((nval, 4), dtype=np.float64) : the output quaternions
+numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
     The quaternions are normalized and in the order (x, y, z, w)
+)""";
+
+const char *get_rotated_quaternions2_DS = R"""(
+Produces quaternions started at the requested time, sampled at the requested
+frequency, which are rotated relative to the satellite orientation according to
+a provided quaternion.
+
+Parameters
+----------
+t0 : float
+    the time of the first output sample
+    This must use the same reference system as the time passed to the
+    constructor.
+freq : float
+    the frequency at which the output orientations should be sampled
+rot : numpy.ndarray((4,), dtype=numpy.float64)
+    A single rotation quaternion describing the rotation from the satellite to
+    the detector reference system. Components are expecetd in the order
+    (x, y, z, w). The quaternion need not be normalized.
+out : numpy.ndarray((nval, 4), dtype=numpy.float64)
+    the array to put the computed quaternions into
+
+Returns
+-------
+numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
+    The quaternions are normalized and in the order (x, y, z, w)
+    This is identical to the provided "out" array.
 )""";
 
 void add_pointingprovider(py::module &msup)
@@ -177,12 +204,13 @@ void add_pointingprovider(py::module &msup)
   m.doc() = pointingprovider_DS;
 
   using pp_d = PyPointingProvider<double>;
-  py::class_<pp_d>(m, "PointingProvider", PointingProvider_DS)
-    .def(py::init<double, double, const py::array &>(), "t0"_a, "freq"_a, "quat"_a)
+  py::class_<pp_d>(m, "PointingProvider")
+    .def(py::init<double, double, const py::array &>(),
+         PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
        get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions_out,
-       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "out"_a);
+       get_rotated_quaternions2_DS,"t0"_a, "freq"_a, "rot"_a, "out"_a);
   }
 
 }

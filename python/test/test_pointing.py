@@ -59,6 +59,9 @@ def testp2():
     rquat = rng.uniform(-.5, .5, (4,))
     t02, f2, size2 = 3.7, 10.2, 300
     quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
+    quat3 = np.empty((size2, 4), dtype=np.float64)
+    quat3 = prov.get_rotated_quaternions(t02, f2, rquat, quat3)
+    assert_((quat2==quat3).all(), "problem")
     quat2 *= np.sign(quat2[:,0]).reshape((-1,1))
 
     from scipy.spatial.transform import Rotation as R
