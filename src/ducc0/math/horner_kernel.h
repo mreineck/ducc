@@ -34,7 +34,13 @@ namespace detail_horner_kernel {
 using namespace std;
 constexpr double pi=3.141592653589793238462643383279502884197;
 
+/*! Class providing fast piecewise polynomial approximation of a function which
+    is defined on the interval [-1;1]
 
+    W is the number of equal-length intervals into which [-1;1] is subdivided.
+    D is the degree of the approximating polynomials.
+    T is the type at which the approximation is calculated;
+      should be float or double. */
 template<size_t W, size_t D, typename T> class HornerKernel
   {
   private:
@@ -98,6 +104,10 @@ template<size_t W, size_t D, typename T> class HornerKernel
         }
       }
 
+    /*! Returns the function approximation at W different locations with the
+        abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
+
+        x must lie in [-1; -1+2./W].  */
     const array<T,W> & DUCC0_NOINLINE eval(T x)
       {
       x = (x+1)*W-1;
