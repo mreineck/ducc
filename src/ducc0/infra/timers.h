@@ -39,6 +39,8 @@ class SimpleTimer
   public:
     SimpleTimer()
       : starttime(clock::now()) {}
+    void reset()
+      { starttime = clock::now(); }
     double operator()() const
       {
       return std::chrono::duration<double>(clock::now() - starttime).count();
