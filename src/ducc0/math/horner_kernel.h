@@ -111,16 +111,6 @@ template<size_t W, size_t D, typename T> class HornerKernel
     const T *DUCC0_NOINLINE eval(T x)
       {
       x = (x+1)*W-1;
-#if 0
-      array<Tsimd,nvec> tval;
-      for (size_t i=0; i<nvec; ++i)
-        tval[i] = coeff[0][i];
-      for (size_t j=1; j<=D; ++j)
-        for (size_t i=0; i<nvec; ++i)
-          tval[i] = tval[i]*x+coeff[j][i];
-      for (size_t i=0; i<nvec; ++i)
-        res.v[i] = tval[i];
-#else
       for (size_t i=0; i<nvec; ++i)
         {
         auto tval = coeff[0][i];
@@ -128,7 +118,6 @@ template<size_t W, size_t D, typename T> class HornerKernel
           tval = tval*x + coeff[j][i];
         res.v[i] = tval;
         }
-#endif
       return &res.s[0]; 
       }
   };
@@ -137,6 +126,7 @@ template<size_t W, size_t D, typename T> class HornerKernel
 template<typename T> class HornerKernelFlexible
   {
   private:
+    static constexpr size_t MAXW=16, MINDEG=5, MAXDEG=12;
     using Tsimd = native_simd<T>;
     static constexpr auto vlen = Tsimd::size();
     size_t W, D, nvec;
@@ -148,16 +138,6 @@ template<typename T> class HornerKernelFlexible
     template<size_t NV, size_t DEG> const T *eval_intern(T x)
       {
       x = (x+1)*W-1;
-#if 0
-      array<Tsimd,NV> tval;
-      for (size_t i=0; i<NV; ++i)
-        tval[i] = coeff[i];
-      for (size_t j=1; j<=DEG; ++j)
-        for (size_t i=0; i<NV; ++i)
-          tval[i] = tval[i]*x+coeff[j*NV+i];
-      for (size_t i=0; i<NV; ++i)
-        tval[i].storeu(&res[vlen*i]);
-#else
       for (size_t i=0; i<NV; ++i)
         {
         auto tval = coeff[i];
@@ -165,7 +145,6 @@ template<typename T> class HornerKernelFlexible
           tval = tval*x + coeff[j*NV+i];
         tval.storeu(&res[vlen*i]);
         }
-#endif
       return res.data();
       }
 
@@ -182,72 +161,25 @@ template<typename T> class HornerKernelFlexible
       return res.data();
       }
 
-    template<size_t NV> auto get_evalfunc2() const
+    template<size_t NV, size_t DEG> auto evfhelper2() const
       {
-      switch (D)
-        {
-        case 0:
-          return &HornerKernelFlexible::eval_intern<NV,0>;
-        case 1:
-          return &HornerKernelFlexible::eval_intern<NV,1>;
-        case 2:
-          return &HornerKernelFlexible::eval_intern<NV,2>;
-        case 3:
-          return &HornerKernelFlexible::eval_intern<NV,3>;
-        case 4:
-          return &HornerKernelFlexible::eval_intern<NV,4>;
-        case 5:
-          return &HornerKernelFlexible::eval_intern<NV,5>;
-        case 6:
-          return &HornerKernelFlexible::eval_intern<NV,6>;
-        case 7:
-          return &HornerKernelFlexible::eval_intern<NV,7>;
-        case 8:
-          return &HornerKernelFlexible::eval_intern<NV,8>;
-        case 9:
-          return &HornerKernelFlexible::eval_intern<NV,9>;
-        case 10:
-          return &HornerKernelFlexible::eval_intern<NV,10>;
-        case 11:
-          return &HornerKernelFlexible::eval_intern<NV,11>;
-        case 12:
-          return &HornerKernelFlexible::eval_intern<NV,12>;
-        default:
-          return &HornerKernelFlexible::eval_intern_general;
-        }
+      if (DEG==D)
+        return &HornerKernelFlexible::eval_intern<NV,DEG>;
+      if (DEG>MAXDEG)
+        return &HornerKernelFlexible::eval_intern_general;
+      return evfhelper2<NV, ((DEG>MAXDEG) ? DEG : DEG+1)>();
+      }
+
+    template<size_t NV> auto evfhelper1() const
+      {
+      if (nvec==NV) return evfhelper2<NV,0>();
+      if (nvec*vlen>MAXW) return &HornerKernelFlexible::eval_intern_general;
+      return evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
       }
 
     auto get_evalfunc() const
       {
-      switch (nvec)
-        {
-        case 1:
-          return get_evalfunc2<1>();
-        case 2:
-          return get_evalfunc2<2>();
-        case 3:
-          return get_evalfunc2<3>();
-        case 4:
-          return get_evalfunc2<4>();
-        case 5:
-          return get_evalfunc2<5>();
-        case 6:
-          return get_evalfunc2<6>();
-        case 7:
-          return get_evalfunc2<7>();
-        case 8:
-          return get_evalfunc2<8>();
-        case 9:
-          return get_evalfunc2<9>();
-        case 10:
-          return get_evalfunc2<10>();
-        case 11:
-          return get_evalfunc2<11>();
-        case 12:
-          return get_evalfunc2<12>();
-        default:
-          return &HornerKernelFlexible::eval_intern_general;
-        }
+      return evfhelper1<1>();
       }
 
 
