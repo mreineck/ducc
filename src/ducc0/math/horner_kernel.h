@@ -23,6 +23,7 @@
 #define DUCC0_HORNER_KERNEL_H
 
 #include <cmath>
+#include <functional>
 #include <array>
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/useful_macros.h"
@@ -34,7 +35,7 @@ namespace detail_horner_kernel {
 using namespace std;
 constexpr double pi=3.141592653589793238462643383279502884197;
 
-template<typename Func> vector<double> getCoeffs(size_t W, size_t D, Func func)
+vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &func)
   {
   vector<double> coeff(W*(D+1));
   vector<double> chebroot(D+1);
