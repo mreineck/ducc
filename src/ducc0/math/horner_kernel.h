@@ -34,6 +34,48 @@ namespace detail_horner_kernel {
 using namespace std;
 constexpr double pi=3.141592653589793238462643383279502884197;
 
+template<typename Func> vector<double> getCoeffs(size_t W, size_t D, Func func)
+  {
+  vector<double> coeff(W*(D+1));
+  vector<double> chebroot(D+1);
+  for (size_t i=0; i<=D; ++i)
+    chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
+  vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
+  for (size_t i=0; i<W; ++i)
+    {
+    double l = -1+2.*i/double(W);
+    double r = -1+2.*(i+1)/double(W);
+    // function values at Chebyshev nodes
+    for (size_t j=0; j<=D; ++j)
+      y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
+    // Chebyshev coefficients
+    for (size_t j=0; j<=D; ++j)
+      {
+      lcf[j] = 0;
+      for (size_t k=0; k<=D; ++k)
+        lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
+      }
+    lcf[0] *= 0.5;
+    // Polynomial coefficients
+    fill(C.begin(), C.end(), 0.);
+    C[0] = 1.;
+    C[1*(D+1) + 1] = 1.;
+    for (size_t j=2; j<=D; ++j)
+      {
+      C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
+      for (size_t k=1; k<=j; ++k)
+        C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
+      }
+    for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
+    for (size_t j=0; j<=D; ++j)
+      for (size_t k=0; k<=D; ++k)
+        lcf2[k] += C[j*(D+1) + k]*lcf[j];
+    for (size_t j=0; j<=D; ++j)
+      coeff[j*W + i] = lcf2[D-j];
+    }
+  return coeff;
+  }
+
 /*! Class providing fast piecewise polynomial approximation of a function which
     is defined on the interval [-1;1]
 
@@ -58,49 +100,13 @@ template<size_t W, size_t D, typename T> class HornerKernel
   public:
     template<typename Func> HornerKernel(Func func)
       {
-      for (size_t i=0; i<=D; ++i)
-        for (size_t j=0; j<nvec; ++j)
-          coeff[i][j] = 0;
-      array<double,D+1> chebroot;
-      for (size_t i=0; i<=D; ++i)
-        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
-      for (size_t i=0; i<W; ++i)
+      auto coeff_raw = getCoeffs(W,D,func);
+      for (size_t j=0; j<=D; ++j)
         {
-        double l = -1+2.*i/double(W);
-        double r = -1+2.*(i+1)/double(W);
-        // function values at Chebyshev nodes
-        array<double,D+1> y;
-        for (size_t j=0; j<=D; ++j)
-          y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
-        // Chebyshev coefficients
-        array<double, D+1> lcf;
-        for (size_t j=0; j<=D; ++j)
-          {
-          lcf[j] = 0;
-          for (size_t k=0; k<=D; ++k)
-            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
-          }
-        lcf[0] *= 0.5;
-        // Polynomial coefficients
-        array<array<double,D+1>,D+1> C;
-        for (size_t j=0; j<=D; ++j)
-          for (size_t k=0; k<=D; ++k)
-            C[j][k] = 0;
-        C[0][0] = 1.;
-        C[1][1] = 1.;
-        for (size_t j=2; j<=D; ++j)
-          {
-          C[j][0] = -C[j-2][0];
-          for (size_t k=1; k<=j; ++k)
-            C[j][k] = 2*C[j-1][k-1] - C[j-2][k];
-          }
-        array<double, D+1> lcf2;
-        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
-        for (size_t j=0; j<=D; ++j)
-          for (size_t k=0; k<=D; ++k)
-            lcf2[k] += C[j][k]*lcf[j];
-        for (size_t j=0; j<=D; ++j)
-          coeff[j][i/vlen][i%vlen] = T(lcf2[D-j]);
+        for (size_t i=0; i<W; ++i)
+          coeff[j][i/vlen][i%vlen] = T(coeff_raw[j*W+i]);
+        for (size_t i=W; i<vlen*nvec; ++i)
+          coeff[j][i/vlen][i%vlen] = T(0);
         }
       }
 
@@ -187,41 +193,13 @@ template<typename T> class HornerKernelFlexible
       : W(W_), D(D_), nvec((W+vlen-1)/vlen), res(nvec),
         coeff(nvec*(D+1), 0), evalfunc(evfhelper1<1>())
       {
-      vector<double> chebroot(D+1);
-      for (size_t i=0; i<=D; ++i)
-        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
-      vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
-      for (size_t i=0; i<W; ++i)
+      auto coeff_raw = getCoeffs(W,D,func);
+      for (size_t j=0; j<=D; ++j)
         {
-        double l = -1+2.*i/double(W);
-        double r = -1+2.*(i+1)/double(W);
-        // function values at Chebyshev nodes
-        for (size_t j=0; j<=D; ++j)
-          y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
-        // Chebyshev coefficients
-        for (size_t j=0; j<=D; ++j)
-          {
-          lcf[j] = 0;
-          for (size_t k=0; k<=D; ++k)
-            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
-          }
-        lcf[0] *= 0.5;
-        // Polynomial coefficients
-        fill(C.begin(), C.end(), 0.);
-        C[0] = 1.;
-        C[1*(D+1) + 1] = 1.;
-        for (size_t j=2; j<=D; ++j)
-          {
-          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
-          for (size_t k=1; k<=j; ++k)
-            C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
-          }
-        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
-        for (size_t j=0; j<=D; ++j)
-          for (size_t k=0; k<=D; ++k)
-            lcf2[k] += C[j*(D+1) + k]*lcf[j];
-        for (size_t j=0; j<=D; ++j)
-          coeff[j*nvec + i/vlen][i%vlen] = T(lcf2[D-j]);
+        for (size_t i=0; i<W; ++i)
+          coeff[j*nvec + i/vlen][i%vlen] = T(coeff_raw[j*W+i]);
+        for (size_t i=W; i<vlen*nvec; ++i)
+          coeff[j*nvec + i/vlen][i%vlen] = T(0);
         }
       }
 
