@@ -126,11 +126,16 @@ template<size_t W, size_t D, typename T> class HornerKernel
 template<typename T> class HornerKernelFlexible
   {
   private:
-    static constexpr size_t MAXW=16, MINDEG=5, MAXDEG=12;
+    static constexpr size_t MAXW=16, MINDEG=0, MAXDEG=12;
     using Tsimd = native_simd<T>;
     static constexpr auto vlen = Tsimd::size();
     size_t W, D, nvec;
-    vector<T> res;
+
+    union Tu {
+      Tsimd simd;
+      T scalar[vlen];
+      };
+    vector<Tu> res;
 
     vector<Tsimd> coeff;
     const T *(HornerKernelFlexible<T>::* evalfunc) (T);
@@ -143,9 +148,9 @@ template<typename T> class HornerKernelFlexible
         auto tval = coeff[i];
         for (size_t j=1; j<=DEG; ++j)
           tval = tval*x + coeff[j*NV+i];
-        tval.storeu(&res[vlen*i]);
+        res[i].simd = tval;
         }
-      return res.data();
+      return &(res[0].scalar[0]);
       }
 
     const T *eval_intern_general(T x)
@@ -156,9 +161,9 @@ template<typename T> class HornerKernelFlexible
         auto tval = coeff[i];
         for (size_t j=1; j<=D; ++j)
           tval = tval*x+coeff[j*nvec+i];
-        tval.storeu(&res[vlen*i]);
+        res[i].simd = tval;
         }
-      return res.data();
+      return &(res[0].scalar[0]);
       }
 
     template<size_t NV, size_t DEG> auto evfhelper2() const
@@ -177,16 +182,10 @@ template<typename T> class HornerKernelFlexible
       return evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
       }
 
-    auto get_evalfunc() const
-      {
-      return evfhelper1<1>();
-      }
-
-
   public:
     template<typename Func> HornerKernelFlexible(size_t W_, size_t D_, Func func)
-      : W(W_), D(D_), nvec((W+vlen-1)/vlen), res(nvec*vlen),
-        coeff(nvec*(D+1), 0), evalfunc(get_evalfunc())
+      : W(W_), D(D_), nvec((W+vlen-1)/vlen), res(nvec),
+        coeff(nvec*(D+1), 0), evalfunc(evfhelper1<1>())
       {
       vector<double> chebroot(D+1);
       for (size_t i=0; i<=D; ++i)
