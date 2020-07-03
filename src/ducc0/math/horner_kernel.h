@@ -113,7 +113,6 @@ template<size_t W, size_t D, typename T> class HornerKernel
 
     /*! Returns the function approximation at W different locations with the
         abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
-
         x must lie in [-1; -1+2./W].  */
     const T *DUCC0_NOINLINE eval(T x)
       {
@@ -126,6 +125,19 @@ template<size_t W, size_t D, typename T> class HornerKernel
         res.v[i] = tval;
         }
       return &res.s[0]; 
+      }
+    /*! Returns the function approximation at location x.
+        x must lie in [-1; 1].  */
+    T DUCC0_NOINLINE eval_single(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto i = nth/vlen;
+      auto imod = nth%vlen;
+      auto tval = coeff[0][i][imod];
+      for (size_t j=1; j<=D; ++j)
+        tval = tval*x + coeff[j][i][imod];
+      return tval;
       }
   };
 
@@ -206,10 +218,22 @@ template<typename T> class HornerKernelFlexible
 
     /*! Returns the function approximation at W different locations with the
         abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
-
         x must lie in [-1; -1+2./W].  */
     const T *eval(T x)
       { return (this->*evalfunc)(x); }
+    /*! Returns the function approximation at location x.
+        x must lie in [-1; 1].  */
+    T DUCC0_NOINLINE eval_single(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto i = nth/vlen;
+      auto imod = nth%vlen;
+      auto tval = coeff[i][imod];
+      for (size_t j=1; j<=D; ++j)
+        tval = tval*x + coeff[j*nvec+i][imod];
+      return tval;
+      }
   };
 
 }
