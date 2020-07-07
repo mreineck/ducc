@@ -25,6 +25,7 @@
 #include <cmath>
 #include <functional>
 #include <array>
+#include <vector>
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/useful_macros.h"
 
@@ -145,21 +146,16 @@ template<size_t W, size_t D, typename T> class HornerKernel
 template<typename T> class HornerKernelFlexible
   {
   private:
-    static constexpr size_t MAXW=16, MINDEG=0, MAXDEG=12;
+    static constexpr size_t MAXW=16, MINDEG=0, MAXDEG=20;
     using Tsimd = native_simd<T>;
     static constexpr auto vlen = Tsimd::size();
     size_t W, D, nvec;
-
-    union Tu {
-      Tsimd simd;
-      T scalar[vlen];
-      };
-    vector<Tu> res;
+    size_t n_gl;
 
     vector<Tsimd> coeff;
-    const T *(HornerKernelFlexible<T>::* evalfunc) (T);
+    void (HornerKernelFlexible<T>::* evalfunc) (T, native_simd<T> *) const;
 
-    template<size_t NV, size_t DEG> const T *eval_intern(T x)
+    template<size_t NV, size_t DEG> void eval_intern(T x, native_simd<T> *res) const
       {
       x = (x+1)*W-1;
       for (size_t i=0; i<NV; ++i)
@@ -167,12 +163,11 @@ template<typename T> class HornerKernelFlexible
         auto tval = coeff[i];
         for (size_t j=1; j<=DEG; ++j)
           tval = tval*x + coeff[j*NV+i];
-        res[i].simd = tval;
+        res[i] = tval;
         }
-      return &(res[0].scalar[0]);
       }
 
-    const T *eval_intern_general(T x)
+    void eval_intern_general(T x, native_simd<T> *res) const
       {
       x = (x+1)*W-1;
       for (size_t i=0; i<nvec; ++i)
@@ -180,9 +175,8 @@ template<typename T> class HornerKernelFlexible
         auto tval = coeff[i];
         for (size_t j=1; j<=D; ++j)
           tval = tval*x+coeff[j*nvec+i];
-        res[i].simd = tval;
+        res[i] = tval;
         }
-      return &(res[0].scalar[0]);
       }
 
     template<size_t NV, size_t DEG> auto evfhelper2() const
@@ -202,8 +196,8 @@ template<typename T> class HornerKernelFlexible
       }
 
   public:
-    template<typename Func> HornerKernelFlexible(size_t W_, size_t D_, Func func)
-      : W(W_), D(D_), nvec((W+vlen-1)/vlen), res(nvec),
+    HornerKernelFlexible(size_t W_, size_t D_, const function<double(double)> &func)
+      : W(W_), D(D_), nvec((W+vlen-1)/vlen),
         coeff(nvec*(D+1), 0), evalfunc(evfhelper1<1>())
       {
       auto coeff_raw = getCoeffs(W,D,func);
@@ -218,9 +212,12 @@ template<typename T> class HornerKernelFlexible
 
     /*! Returns the function approximation at W different locations with the
         abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
-        x must lie in [-1; -1+2./W].  */
-    const T *eval(T x)
-      { return (this->*evalfunc)(x); }
+        x must lie in [-1; -1+2./W].
+        NOTE: res must point to memory large enough to hold
+        ((W+vlen-1)/vlen) objects of type native_simd<T>!
+        */
+    void eval(T x, native_simd<T> *res) const
+      { (this->*evalfunc)(x, res); }
     /*! Returns the function approximation at location x.
         x must lie in [-1; 1].  */
     T DUCC0_NOINLINE eval_single(T x) const
@@ -236,10 +233,56 @@ template<typename T> class HornerKernelFlexible
       }
   };
 
+
+#if 0
+class KernelCorrection
+  {
+  private:
+    vector<double> x, wgtpsi;
+    size_t supp;
+
+  public:
+    KernelCorrection(size_t W, const function<double(double)> &func)
+      : supp(W)
+      {
+      size_t p = 1.5*supp+2; // estimate; may need to be higher for arbitrary kernels
+      GL_Integrator integ(2*p, 1);
+      x = integ.coordsSymmetric();
+      wgtpsi = integ.weightsSymmetric();
+      for (size_t i=0; i<x.size(); ++i)
+        wgtpsi[i] *= func(x[i]);
+      }
+
+    /* Compute correction factors for gridding kernel
+       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
+    double corfac(double v) const
+      {
+      double tmp=0;
+      for (int i=0; i<x.size(); ++i)
+        tmp += wgtpsi[i]*cos(pi*supp*v*x[i]);
+      return 2./(supp*tmp);
+      }
+    /* Compute correction factors for gridding kernel
+       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
+    vector<double> correction_factors(size_t n, size_t nval, int nthreads=1)
+      {
+      vector<double> res(nval);
+      double xn = 1./n;
+      execStatic(nval, nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          res[i] = corfac(i*xn);
+        });
+      return res;
+      }
+  };
+#endif
+
 }
 
 using detail_horner_kernel::HornerKernel;
 using detail_horner_kernel::HornerKernelFlexible;
+//using detail_horner_kernel::KernelCorrection;
 
 }
 
