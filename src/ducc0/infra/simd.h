@@ -41,6 +41,7 @@
 #endif
 #endif
 
+#include <cstdint>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -104,6 +105,10 @@ template<typename T, size_t len> class vtp
     vtp(const vtp &other) = default;
     vtp &operator=(const T &other) { v=hlp::from_scalar(other); return *this; }
     operator Tv() const { return v; }
+
+    static vtp loadu(const T *ptr) { return vtp(hlp::loadu(ptr)); }
+    void storeu(T *ptr) const { hlp::storeu(ptr, v); }
+
     vtp operator-() const { return vtp(-v); }
     vtp operator+(vtp other) const { return vtp(v+other.v); }
     vtp operator-(vtp other) const { return vtp(v-other.v); }
@@ -240,6 +245,9 @@ template<typename T> class helper_<T,1>
     using Tv = pseudoscalar<T>;
     using Tm = bool;
 
+    static Tv loadu(const T *ptr) { return *ptr; }
+    static void storeu(T *ptr, Tv v) { *ptr = v.v; }
+
     static Tv from_scalar(T v) { return v; }
     static Tv abs(Tv v) { return v.abs(); }
     static Tv max(Tv v1, Tv v2) { return v1.max(v2); }
@@ -265,6 +273,9 @@ template<> class helper_<double,8>
     using Tv = __m512d;
     using Tm = __mmask8;
 
+    static Tv loadu(const T *ptr) { return _mm512_loadu_pd(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm512_storeu_pd(ptr, v); }
+
     static Tv from_scalar(T v) { return _mm512_set1_pd(v); }
     static Tv abs(Tv v) { return __m512d(_mm512_andnot_epi64(__m512i(_mm512_set1_pd(-0.)),__m512i(v))); }
     static Tv max(Tv v1, Tv v2) { return _mm512_max_pd(v1, v2); }
@@ -285,6 +296,9 @@ template<> class helper_<float,16>
   public:
     using Tv = __m512;
     using Tm = __mmask16;
+
+    static Tv loadu(const T *ptr) { return _mm512_loadu_ps(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm512_storeu_ps(ptr, v); }
 
     static Tv from_scalar(T v) { return _mm512_set1_ps(v); }
     static Tv abs(Tv v) { return __m512(_mm512_andnot_epi32(__m512i(_mm512_set1_ps(-0.)),__m512i(v))); }
@@ -310,6 +324,9 @@ template<> class helper_<double,4>
     using Tv = __m256d;
     using Tm = __m256d;
 
+    static Tv loadu(const T *ptr) { return _mm256_loadu_pd(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm256_storeu_pd(ptr, v); }
+
     static Tv from_scalar(T v) { return _mm256_set1_pd(v); }
     static Tv abs(Tv v) { return _mm256_andnot_pd(_mm256_set1_pd(-0.),v); }
     static Tv max(Tv v1, Tv v2) { return _mm256_max_pd(v1, v2); }
@@ -330,6 +347,9 @@ template<> class helper_<float,8>
   public:
     using Tv = __m256;
     using Tm = __m256;
+
+    static Tv loadu(const T *ptr) { return _mm256_loadu_ps(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm256_storeu_ps(ptr, v); }
 
     static Tv from_scalar(T v) { return _mm256_set1_ps(v); }
     static Tv abs(Tv v) { return _mm256_andnot_ps(_mm256_set1_ps(-0.),v); }
@@ -354,6 +374,9 @@ template<> class helper_<double,2>
   public:
     using Tv = __m128d;
     using Tm = __m128d;
+
+    static Tv loadu(const T *ptr) { return _mm_loadu_pd(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm_storeu_pd(ptr, v); }
 
     static Tv from_scalar(T v) { return _mm_set1_pd(v); }
     static Tv abs(Tv v) { return _mm_andnot_pd(_mm_set1_pd(-0.),v); }
@@ -382,6 +405,9 @@ template<> class helper_<float,4>
   public:
     using Tv = __m128;
     using Tm = __m128;
+
+    static Tv loadu(const T *ptr) { return _mm_loadu_ps(ptr); }
+    static void storeu(T *ptr, Tv v) { _mm_storeu_ps(ptr, v); }
 
     static Tv from_scalar(T v) { return _mm_set1_ps(v); }
     static Tv abs(Tv v) { return _mm_andnot_ps(_mm_set1_ps(-0.),v); }
@@ -428,7 +454,6 @@ using detail_simd::all_of;
 using std::abs;
 using std::sqrt;
 using std::max;
-
 
 }
 
