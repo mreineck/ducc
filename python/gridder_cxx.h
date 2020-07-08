@@ -36,8 +36,8 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
-#include "ducc0/math/es_kernel.h"
 #include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/least_misfit.h"
 
 namespace ducc0 {
 
@@ -202,15 +202,18 @@ template<typename T> class GridderConfig
   {
   protected:
     size_t nx_dirty, ny_dirty, nu, nv;
-    double ofactor, eps, psx, psy;
+    double ofactor;
+
+  public:
+    shared_ptr<GriddingKernel<T>> krn;
+
+  protected:
+    double psx, psy;
     size_t supp, nsafe;
     double beta;
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
-  public:
-    shared_ptr<GriddingKernel<T>> krn;
-  protected:
 
     complex<T> wscreen(T x, T y, T w, bool adjoint) const
       {
@@ -228,14 +231,12 @@ template<typename T> class GridderConfig
       double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
-        eps(epsilon),
+        krn(make_shared<HornerKernel<T>>(selectLeastMisfitKernel(ofactor, epsilon))),
         psx(pixsize_x), psy(pixsize_y),
-        supp(ES_Kernel::get_supp(epsilon, ofactor)), nsafe((supp+1)/2),
-        beta(ES_Kernel::get_beta(supp, ofactor)*supp),
+        supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
         ushift(supp*(-0.5)+1+nu), vshift(supp*(-0.5)+1+nv),
-        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp),
-        krn(make_shared<HornerKernel<T>>(supp, supp+3, [this](double v){return double(esk(v,double(beta)));}))
+        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp)
       {
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
@@ -246,8 +247,6 @@ template<typename T> class GridderConfig
       MR_assert(epsilon>0, "epsilon must be positive");
       MR_assert(pixsize_x>0, "pixsize_x must be positive");
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
-      MR_assert(ofactor>=1.175,
-        "oversampling factor too small (>=1.2 recommended)");
       }
     GridderConfig(size_t nxdirty, size_t nydirty,
       double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
@@ -256,7 +255,6 @@ template<typename T> class GridderConfig
                       pixsize_y, nthreads_) {}
     size_t Nxdirty() const { return nx_dirty; }
     size_t Nydirty() const { return ny_dirty; }
-    double Epsilon() const { return eps; }
     double Pixsize_x() const { return psx; }
     double Pixsize_y() const { return psy; }
     size_t Nu() const { return nu; }
@@ -264,7 +262,6 @@ template<typename T> class GridderConfig
     size_t Supp() const { return supp; }
     size_t Nsafe() const { return nsafe; }
     size_t Nthreads() const { return nthreads; }
-    double Ofactor() const{ return ofactor; }
 
     void grid2dirty_post(mav<T,2> &tmav,
       mav<T,2> &dirty) const

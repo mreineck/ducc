@@ -25,6 +25,7 @@
 #include <vector>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gl_integrator.h"
+#include "ducc0/math/least_misfit.h"
 
 namespace ducc0 {
 
@@ -84,7 +85,9 @@ template<typename T> class GriddingKernel
   {
   public:
     virtual ~GriddingKernel() {}
-//    virtual size_t W() const = 0;
+
+    virtual size_t support() const = 0;
+
     /*! Returns the function approximation at W different locations with the
         abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
         x must lie in [-1; -1+2./W].
@@ -143,7 +146,6 @@ class KernelCorrection
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
           res[i] = corfunc(i*dx);
         });
-      cout <<"bleep" << n << " " << res.size() << endl;
       return res;
       }
   };
@@ -216,6 +218,33 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
         }
       return coeff;
       }
+    static vector<Tsimd> coeffFromPolyKernel(const PolyKernel &krn)
+      {
+      auto W = krn.W;
+      auto D = krn.coeff.size()/((W+1)/2)-1;
+      auto nvec = ((W+vlen-1)/vlen);
+      vector<Tsimd> coeff(nvec*(D+1), 0);
+      vector<double> coeff_raw(W*(D+1), 0);
+      size_t Whalf = W/2;
+      for (size_t j=0; j<=D; ++j)
+        {
+        double flip = (j&1) ? -1:1;
+        for (size_t i=Whalf; i<W; ++i)
+          {
+          double val = krn.coeff[(i-Whalf)*(D+1)+j];
+          coeff_raw[j*W+i] = val;
+          coeff_raw[j*W+W-1-i] = flip*val;
+          }
+        }
+      for (size_t j=0; j<=D; ++j)
+        {
+        for (size_t i=0; i<W; ++i)
+          coeff[(D-j)*nvec + i/vlen][i%vlen] = T(coeff_raw[j*W+i]);
+        for (size_t i=W; i<vlen*nvec; ++i)
+          coeff[(D-j)*nvec + i/vlen][i%vlen] = T(0);
+        }
+      return coeff;
+      }
 
   public:
     using GriddingKernel<T>::eval;
@@ -227,6 +256,14 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
         coeff(makeCoeff(W_, D_, func)), evalfunc(evfhelper1<1>()),
         corr(W_, [this](T v){return eval_single(v);})
       {}
+
+    HornerKernel(const PolyKernel &krn)
+      : W(krn.W), D(krn.coeff.size()/((W+1)/2)-1), nvec((W+vlen-1)/vlen),
+        coeff(coeffFromPolyKernel(krn)), evalfunc(evfhelper1<1>()),
+        corr(W, [this](T v){return eval_single(v);})
+      {}
+
+    virtual size_t support() const { return W; }
 
     virtual void eval(T x, native_simd<T> *res) const
       { (this->*evalfunc)(x, res); }
