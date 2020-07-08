@@ -28,6 +28,7 @@
 #include <cmath>
 #include <vector>
 #include <array>
+#include <memory>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/fft.h"
@@ -36,6 +37,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/es_kernel.h"
+#include "ducc0/math/gridding_kernel.h"
 
 namespace ducc0 {
 
@@ -121,15 +123,6 @@ template<typename T> void hartley2_2D(const mav<T,2> &in,
      });
   }
 
-/* Compute correction factors for the ES gridding kernel
-   This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-vector<double> correction_factors(size_t n, double ofactor, size_t nval, size_t supp,
-  size_t nthreads)
-  {
-  ES_Kernel kernel(supp, ofactor, nthreads);
-  return kernel.correction_factors(n, nval, nthreads);
-  }
-
 using idx_t = uint32_t;
 
 struct RowChan
@@ -205,7 +198,7 @@ class Baselines
       { return ichan+(irow<<shift); }
   };
 
-class GridderConfig
+template<typename T> class GridderConfig
   {
   protected:
     size_t nx_dirty, ny_dirty, nu, nv;
@@ -215,8 +208,11 @@ class GridderConfig
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
+  public:
+    shared_ptr<GriddingKernel<T>> krn;
+  protected:
 
-    template<typename T> complex<T> wscreen(T x, T y, T w, bool adjoint) const
+    complex<T> wscreen(T x, T y, T w, bool adjoint) const
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
@@ -238,7 +234,8 @@ class GridderConfig
         beta(ES_Kernel::get_beta(supp, ofactor)*supp),
         nthreads(nthreads_),
         ushift(supp*(-0.5)+1+nu), vshift(supp*(-0.5)+1+nv),
-        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp)
+        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp),
+        krn(make_shared<HornerKernel<T>>(supp, supp+3, [this](double v){return double(esk(v,double(beta)));}))
       {
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
@@ -266,16 +263,15 @@ class GridderConfig
     size_t Nv() const { return nv; }
     size_t Supp() const { return supp; }
     size_t Nsafe() const { return nsafe; }
-    double Beta() const { return beta; }
     size_t Nthreads() const { return nthreads; }
     double Ofactor() const{ return ofactor; }
 
-    template<typename T> void grid2dirty_post(mav<T,2> &tmav,
+    void grid2dirty_post(mav<T,2> &tmav,
       mav<T,2> &dirty) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
-      auto cfu = correction_factors(nu, ofactor, nx_dirty/2+1, supp, nthreads);
-      auto cfv = correction_factors(nv, ofactor, ny_dirty/2+1, supp, nthreads);
+      auto cfu = krn->corfunc(nx_dirty/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(ny_dirty/2+1, 1./nv, nthreads);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
         {
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
@@ -295,7 +291,7 @@ class GridderConfig
           }
         });
       }
-    template<typename T> void grid2dirty_post2(
+    void grid2dirty_post2(
       mav<complex<T>,2> &tmav, mav<T,2> &dirty, T w) const
       {
       checkShape(dirty.shape(), {nx_dirty,ny_dirty});
@@ -334,7 +330,7 @@ class GridderConfig
         });
       }
 
-    template<typename T> void grid2dirty(const mav<T,2> &grid,
+    void grid2dirty(const mav<T,2> &grid,
       mav<T,2> &dirty) const
       {
       checkShape(grid.shape(), {nu,nv});
@@ -343,7 +339,7 @@ class GridderConfig
       grid2dirty_post(tmav, dirty);
       }
 
-    template<typename T> void grid2dirty_c_overwrite_wscreen_add
+    void grid2dirty_c_overwrite_wscreen_add
       (mav<complex<T>,2> &grid, mav<T,2> &dirty, T w) const
       {
       checkShape(grid.shape(), {nu,nv});
@@ -352,13 +348,13 @@ class GridderConfig
       grid2dirty_post2(grid, dirty, w);
       }
 
-    template<typename T> void dirty2grid_pre(const mav<T,2> &dirty,
+    void dirty2grid_pre(const mav<T,2> &dirty,
       mav<T,2> &grid) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
       checkShape(grid.shape(), {nu, nv});
-      auto cfu = correction_factors(nu, ofactor, nx_dirty/2+1, supp, nthreads);
-      auto cfv = correction_factors(nv, ofactor, ny_dirty/2+1, supp, nthreads);
+      auto cfu = krn->corfunc(nx_dirty/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(ny_dirty/2+1, 1./nv, nthreads);
       grid.fill(0);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
         {
@@ -377,7 +373,7 @@ class GridderConfig
           }
         });
       }
-    template<typename T> void dirty2grid_pre2(const mav<T,2> &dirty,
+    void dirty2grid_pre2(const mav<T,2> &dirty,
       mav<complex<T>,2> &grid, T w) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
@@ -419,14 +415,14 @@ class GridderConfig
         });
       }
 
-    template<typename T> void dirty2grid(const mav<T,2> &dirty,
+    void dirty2grid(const mav<T,2> &dirty,
       mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
       hartley2_2D<T>(grid, grid, nthreads);
       }
 
-    template<typename T> void dirty2grid_c_wscreen(const mav<T,2> &dirty,
+    void dirty2grid_c_wscreen(const mav<T,2> &dirty,
       mav<complex<T>,2> &grid, T w) const
       {
       dirty2grid_pre2(dirty, grid, w);
@@ -442,7 +438,7 @@ class GridderConfig
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
       }
 
-    template<typename T> void apply_wscreen(const mav<complex<T>,2> &dirty,
+    void apply_wscreen(const mav<complex<T>,2> &dirty,
       mav<complex<T>,2> &dirty2, double w, bool adjoint) const
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
@@ -481,14 +477,14 @@ constexpr int logsquare=4;
 template<typename T, typename T2=complex<T>> class Helper
   {
   private:
-    const GridderConfig &gconf;
+    const GridderConfig<T> &gconf;
     int nu, nv, nsafe, supp;
-    T beta;
     const T2 *grid_r;
     T2 *grid_w;
     int su, sv;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
+    T wfac;
 
     vector<T2> rbuf, wbuf;
     bool do_w_gridding;
@@ -538,15 +534,16 @@ template<typename T, typename T2=complex<T>> class Helper
     const T2 *p0r;
     T2 *p0w;
     static constexpr size_t vlen=native_simd<T>::size();
-    union {
+    union kbuf {
       T scalar[64];
       native_simd<T> simd[64/vlen];
-      } kernel;
+      };
+    kbuf bufx, bufy;
 
-    Helper(const GridderConfig &gconf_, const T2 *grid_r_, T2 *grid_w_,
+    Helper(const GridderConfig<T> &gconf_, const T2 *grid_r_, T2 *grid_w_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
       : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), nsafe(gconf.Nsafe()),
-        supp(gconf.Supp()), beta(T(gconf.Beta())), grid_r(grid_r_),
+        supp(gconf.Supp()), grid_r(grid_r_),
         grid_w(grid_w_), su(2*nsafe+(1<<logsquare)), sv(2*nsafe+(1<<logsquare)),
         bu0(-1000000), bv0(-1000000),
         rbuf(su*sv*(grid_r!=nullptr),T(0)),
@@ -558,29 +555,24 @@ template<typename T, typename T2=complex<T>> class Helper
         nvecs((nexp+vlen-1)/vlen),
         locks(locks_)
       {
-      MR_assert(2*supp+1<=64, "support too large");
-      for (auto &v: kernel.simd) v=0;
+      MR_assert(supp<=64, "support too large");
       }
     ~Helper() { if (grid_w) dump(); }
 
     int lineJump() const { return sv; }
-    T Wfac() const { return kernel.scalar[2*supp]; }
+    T Wfac() const { return wfac; }
     void prep(const UVW &in)
       {
+      const auto &krn(*(gconf.krn));
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
       double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
-      for (int i=0; i<supp; ++i)
-        {
-        kernel.scalar[i  ] = T(x0+i*xsupp);
-        kernel.scalar[i+supp] = T(y0+i*xsupp);
-        }
+      krn.eval(T(x0), bufx.simd);
+      krn.eval(T(y0), bufy.simd);
       if (do_w_gridding)
-        kernel.scalar[2*supp] = T(xdw*xsupp*abs(w0-in.w));
-      for (size_t i=0; i<nvecs; ++i)
-        kernel.simd[i] = esk(kernel.simd[i], beta);
+        wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
         if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
@@ -666,7 +658,7 @@ template<class T, class T2> MsServ<T, T2> makeMsServ
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
 
 template<typename T, typename Serv> void x2grid_c
-  (const GridderConfig &gconf, Serv &srv, mav<complex<T>,2> &grid,
+  (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
@@ -681,8 +673,8 @@ template<typename T, typename Serv> void x2grid_c
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.kernel.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.kernel.scalar+supp;
+    const T * DUCC0_RESTRICT ku = hlp.bufx.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.bufy.scalar;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -713,7 +705,7 @@ template<typename T, typename Serv> void x2grid_c
   }
 
 template<typename T, typename Serv> void grid2x_c
-  (const GridderConfig &gconf, const mav<complex<T>,2> &grid,
+  (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
   Serv &srv, double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
@@ -729,8 +721,8 @@ template<typename T, typename Serv> void grid2x_c
     {
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.kernel.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.kernel.scalar+supp;
+    const T * DUCC0_RESTRICT ku = hlp.bufx.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.bufy.scalar;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -760,8 +752,8 @@ template<typename T, typename Serv> void grid2x_c
     });
   }
 
-template<typename T> void apply_global_corrections(const GridderConfig &gconf,
-  mav<T,2> &dirty, const ES_Kernel &kernel, double dw, bool divide_by_n)
+template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf,
+  mav<T,2> &dirty, double dw, bool divide_by_n)
   {
   auto nx_dirty=gconf.Nxdirty();
   auto ny_dirty=gconf.Nydirty();
@@ -770,10 +762,8 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
   auto psy=gconf.Pixsize_y();
   double x0 = -0.5*nx_dirty*psx,
          y0 = -0.5*ny_dirty*psy;
-  auto cfu = correction_factors(gconf.Nu(), gconf.Ofactor(),
-                                nx_dirty/2+1, gconf.Supp(), nthreads);
-  auto cfv = correction_factors(gconf.Nv(), gconf.Ofactor(),
-                                ny_dirty/2+1, gconf.Supp(), nthreads);
+  auto cfu = gconf.krn->corfunc(nx_dirty/2+1, 1./gconf.Nu(), nthreads);
+  auto cfv = gconf.krn->corfunc(ny_dirty/2+1, 1./gconf.Nv(), nthreads);
   execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
@@ -789,7 +779,7 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
         if (tmp>=0)
           {
           auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-          fct = T(kernel.corfac(nm1*dw));
+          fct = T(gconf.krn->corfunc(nm1*dw));
           if (divide_by_n)
             fct /= nm1+1;
           }
@@ -800,7 +790,7 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
           else
             {
             auto nm1 = sqrt(-tmp)-1;
-            fct = T(kernel.corfac(nm1*dw));
+            fct = T(gconf.krn->corfunc(nm1*dw));
             }
           }
         fct *= T(cfu[nx_dirty/2-i]*cfv[ny_dirty/2-j]);
@@ -819,7 +809,7 @@ template<typename T> void apply_global_corrections(const GridderConfig &gconf,
     });
   }
 
-template<typename Serv> class WgridHelper
+template<typename T, typename Serv> class WgridHelper
   {
   private:
     Serv &srv;
@@ -846,11 +836,11 @@ template<typename Serv> class WgridHelper
         }
       }
 
-    template<typename T> static void update_idx(vector<T> &v, const vector<T> &add,
-      const vector<T> &del)
+    template<typename T2> static void update_idx(vector<T2> &v, const vector<T2> &add,
+      const vector<T2> &del)
       {
       MR_assert(v.size()>=del.size(), "must not happen");
-      vector<T> res;
+      vector<T2> res;
       res.reserve((v.size()+add.size())-del.size());
       auto iin=v.begin(), ein=v.end();
       auto iadd=add.begin(), eadd=add.end();
@@ -873,7 +863,7 @@ template<typename Serv> class WgridHelper
       }
 
   public:
-    WgridHelper(const GridderConfig &gconf, Serv &srv_, size_t verbosity_)
+    WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, size_t verbosity_)
       : srv(srv_), verbosity(verbosity_), curplane(-1)
       {
       size_t nvis = srv.Nvis();
@@ -950,14 +940,13 @@ template<typename Serv> class WgridHelper
   };
 
 template<typename T, typename Serv> void x2dirty(
-  const GridderConfig &gconf, Serv &srv, mav<T,2> &dirty,
+  const GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
   bool do_wstacking, size_t verbosity)
   {
   if (do_wstacking)
     {
-    size_t nthreads = gconf.Nthreads();
     if (verbosity>0) cout << "Gridding using improved w-stacking" << endl;
-    WgridHelper<Serv> hlp(gconf, srv, verbosity);
+    WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
     mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
@@ -970,7 +959,7 @@ template<typename T, typename Serv> void x2dirty(
       gconf.grid2dirty_c_overwrite_wscreen_add(grid, dirty, T(hlp.W()));
       }
     // correct for w gridding etc.
-    apply_global_corrections(gconf, dirty, ES_Kernel(gconf.Supp(), gconf.Ofactor(), nthreads), dw, true);
+    apply_global_corrections(gconf, dirty, dw, true);
     }
   else
     {
@@ -989,22 +978,21 @@ template<typename T, typename Serv> void x2dirty(
   }
 
 template<typename T, typename Serv> void dirty2x(
-  const GridderConfig &gconf,  const mav<T,2> &dirty,
+  const GridderConfig<T> &gconf,  const mav<T,2> &dirty,
   Serv &srv, bool do_wstacking, size_t verbosity)
   {
   if (do_wstacking)
     {
     size_t nx_dirty=gconf.Nxdirty(), ny_dirty=gconf.Nydirty();
-    size_t nthreads = gconf.Nthreads();
     if (verbosity>0) cout << "Degridding using improved w-stacking" << endl;
-    WgridHelper<Serv> hlp(gconf, srv, verbosity);
+    WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
     mav<T,2> tdirty({nx_dirty,ny_dirty});
     for (size_t i=0; i<nx_dirty; ++i)
       for (size_t j=0; j<ny_dirty; ++j)
         tdirty.v(i,j) = dirty(i,j);
     // correct for w gridding etc.
-    apply_global_corrections(gconf, tdirty, ES_Kernel(gconf.Supp(), gconf.Ofactor(), nthreads), dw, true);
+    apply_global_corrections(gconf, tdirty, dw, true);
     mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
     while(hlp.advance())  // iterate over w planes
       {
@@ -1040,7 +1028,7 @@ void calc_share(size_t nshares, size_t myshare, size_t nwork, size_t &lo,
 
 
 template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
-  const GridderConfig &gconf, const mav<T,2> &wgt,
+  const GridderConfig<T> &gconf, const mav<T,2> &wgt,
   const mav<complex<T>,2> &ms)
   {
   size_t nrow=baselines.Nrows(),
@@ -1092,7 +1080,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
-  GridderConfig gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
@@ -1106,7 +1094,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   size_t verbosity, bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
-  GridderConfig gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
   mav<complex<T>,2> null_ms(nullptr, {0,0}, true);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
