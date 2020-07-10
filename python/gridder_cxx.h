@@ -37,7 +37,6 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gridding_kernel.h"
-#include "ducc0/math/least_misfit.h"
 
 namespace ducc0 {
 
@@ -231,7 +230,8 @@ template<typename T> class GridderConfig
       double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
-        krn(make_shared<HornerKernel<T>>(selectLeastMisfitKernel(ofactor, epsilon))),
+//        krn(make_shared<HornerKernel<T>>(selectLeastMisfitKernel(ofactor, epsilon))),
+        krn(selectESKernel<T>(ofactor, epsilon)),
         psx(pixsize_x), psy(pixsize_y),
         supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
@@ -880,6 +880,8 @@ template<typename T, typename Serv> class WgridHelper
       dw = 0.25/abs(nmin);
       nplanes = size_t((wmax-wmin)/dw+2);
       dw = (1.+1e-13)*(wmax-wmin)/(nplanes-1);
+      // paranoid fix
+      if (dw==0.) dw=1e-3;
 
       supp = gconf.Supp();
       wmin -= (0.5*supp-1)*dw;

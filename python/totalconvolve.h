@@ -30,7 +30,7 @@
 #include <cmath>
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
-#include "ducc0/math/es_kernel.h"
+#include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/sharp/sharp.h"
@@ -143,7 +143,7 @@ template<typename T> class Interpolator
     int nthreads;
     T ofactor;
     size_t supp;
-    ES_Kernel kernel;
+    ES_Kernel<T> kernel;
     size_t ncomp;
 #ifdef SIMD_INTERPOL
     mav<native_simd<T>,4> scube;
@@ -166,7 +166,7 @@ template<typename T> class Interpolator
           }
       for (size_t j=0; j<nphi0; ++j)
         tmp.v(ntheta0-1,j) = arr(ntheta0-1,j);
-      auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
+      auto fct = kernel.corfunc(nphi0/2+1, 1./nphi, nthreads);
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi0);
       fmav<T> ftmp(tmp);
@@ -180,7 +180,7 @@ template<typename T> class Interpolator
       {
       T sfct = (spin&1) ? -1 : 1;
       mav<T,2> tmp({nphi,nphi0});
-      auto fct = kernel.correction_factors(nphi, nphi0/2+1, nthreads);
+      auto fct = kernel.corfunc(nphi0/2+1, 1./nphi, nthreads);
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi0);
       fmav<T> farr(arr);
@@ -243,8 +243,8 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        supp(ES_Kernel::get_supp(epsilon, ofactor)),
-        kernel(supp, ofactor, nthreads),
+        supp(esk_support(epsilon, ofactor)),
+        kernel(supp, esk_beta(supp, ofactor)*supp),
         ncomp(separate ? slm.size() : 1),
 #ifdef SIMD_INTERPOL
         scube({ntheta+2*supp, nphi+2*supp, ncomp, (2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size()}),
@@ -359,8 +359,8 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        supp(ES_Kernel::get_supp(epsilon, ofactor)),
-        kernel(supp, ofactor, nthreads),
+        supp(esk_support(epsilon, ofactor)),
+        kernel(supp, esk_beta(supp, ofactor)*supp),
         ncomp(ncomp_),
 #ifdef SIMD_INTERPOL
         scube({ntheta+2*supp, nphi+2*supp, ncomp, (2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size()}),
@@ -441,11 +441,11 @@ template<typename T> class Interpolator
         union {
           native_simd<T> simd[64/vl];
           T scalar[64];
-          } kdata;
-        T *wt(kdata.scalar), *wp(kdata.scalar+supp);
-        size_t nvec = (2*supp+vl-1)/vl;
-        for (auto &v: kdata.simd) v=0;
-        MR_assert(2*supp<=64, "support too large");
+          } tbuf, pbuf;
+        T *wt(tbuf.scalar), *wp(pbuf.scalar);
+        for (auto &v: tbuf.simd) v=0;
+        for (auto &v: pbuf.simd) v=0;
+        MR_assert(supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
@@ -456,14 +456,10 @@ template<typename T> class Interpolator
           size_t i=idx[ind];
           T f0=T(0.5*supp+ptg(i,0)*xdtheta);
           size_t i0 = size_t(f0+T(1));
-          for (size_t t=0; t<supp; ++t)
-            wt[t] = (t+i0-f0)*delta - 1;
+          kernel.eval((i0-f0)*delta-1, tbuf.simd);
           T f1=T(0.5)*supp+ptg(i,1)*xdphi;
           size_t i1 = size_t(f1+1.);
-          for (size_t t=0; t<supp; ++t)
-            wp[t] = (t+i1-f1)*delta - 1;
-          for (size_t t=0; t<nvec; ++t)
-            kdata.simd[t] = kernel(kdata.simd[t]);
+          kernel.eval((i1-f1)*delta-1, pbuf.simd);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
@@ -645,11 +641,11 @@ template<typename T> class Interpolator
         union {
           native_simd<T> simd[64/vl];
           T scalar[64];
-          } kdata;
-        T *wt(kdata.scalar), *wp(kdata.scalar+supp);
-        size_t nvec = (2*supp+vl-1)/vl;
-        for (auto &v: kdata.simd) v=0;
-        MR_assert(2*supp<=64, "support too large");
+          } tbuf, pbuf;
+        T *wt(tbuf.scalar), *wp(pbuf.scalar);
+        for (auto &v: tbuf.simd) v=0;
+        for (auto &v: pbuf.simd) v=0;
+        MR_assert(supp<=64, "support too large");
         vector<T> psiarr(2*kmax+1);
 #ifdef SIMD_INTERPOL
         vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
@@ -658,16 +654,12 @@ template<typename T> class Interpolator
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
-          T f0=T(0.5)*supp+ptg(i,0)*xdtheta;
-          size_t i0 = size_t(f0+1.);
-          for (size_t t=0; t<supp; ++t)
-            wt[t] = (t+i0-f0)*delta - 1;
+          T f0=T(0.5*supp+ptg(i,0)*xdtheta);
+          size_t i0 = size_t(f0+T(1));
+          kernel.eval((i0-f0)*delta-1, tbuf.simd);
           T f1=T(0.5)*supp+ptg(i,1)*xdphi;
           size_t i1 = size_t(f1+1.);
-          for (size_t t=0; t<supp; ++t)
-            wp[t] = (t+i1-f1)*delta - 1;
-          for (size_t t=0; t<nvec; ++t)
-            kdata.simd[t] = kernel(kdata.simd[t]);
+          kernel.eval((i1-f1)*delta-1, pbuf.simd);
           psiarr[0]=1.;
           double psi=ptg(i,2);
           double cpsi=cos(psi), spsi=sin(psi);
