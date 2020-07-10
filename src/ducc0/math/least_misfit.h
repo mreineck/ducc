@@ -24,8 +24,6 @@
 
 #include <vector>
 
-//#include "least_misfit.h"
-
 namespace ducc0 {
 
 namespace detail_least_misfit {

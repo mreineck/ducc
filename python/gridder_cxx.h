@@ -203,6 +203,7 @@ template<typename T> class GridderConfig
     size_t nx_dirty, ny_dirty, nu, nv;
     double ofactor;
 
+  // FIXME: this should probably be done more cleanly
   public:
     shared_ptr<GriddingKernel<T>> krn;
 
@@ -880,7 +881,7 @@ template<typename T, typename Serv> class WgridHelper
       dw = 0.25/abs(nmin);
       nplanes = size_t((wmax-wmin)/dw+2);
       dw = (1.+1e-13)*(wmax-wmin)/(nplanes-1);
-      // paranoid fix
+      // FIXME: needs improvement
       if (dw==0.) dw=1e-3;
 
       supp = gconf.Supp();

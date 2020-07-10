@@ -27,14 +27,13 @@
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/least_misfit.h"
 #include "ducc0/math/es_kernel.h"
+#include "ducc0/math/constants.h"
 
 namespace ducc0 {
 
 namespace detail_gridding_kernel {
 
 using namespace std;
-constexpr double pi=3.141592653589793238462643383279502884197;
-
 
 vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &func)
   {
