@@ -39,12 +39,12 @@ struct PolyKernel
   vector<double> coeff;
   };
 
-const PolyKernel &selectLeastMisfitKernel(double ofactor, double epsilon);
+//const PolyKernel &selectLeastMisfitKernel(double ofactor, double epsilon);
 
 } // namespace detail_least_misfit
 
 using detail_least_misfit::PolyKernel;
-using detail_least_misfit::selectLeastMisfitKernel;
+//using detail_least_misfit::selectLeastMisfitKernel;
 
 } // namespace ducc0
 

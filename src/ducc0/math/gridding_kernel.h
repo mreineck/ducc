@@ -390,8 +390,8 @@ template<typename T> auto selectESKernel(double ofactor, double epsilon)
   {
   auto supp = esk_support(epsilon, ofactor);
   auto beta = esk_beta(supp, ofactor)*supp;
-//  return make_shared<HornerKernel<T>>(supp, supp+3, [beta](double v){return esk(v, beta);});
-  return make_shared<ES_Kernel<T>>(supp, beta);
+  return make_shared<HornerKernel<T>>(supp, supp+3, [beta](double v){return esk(v, beta);});
+//  return make_shared<ES_Kernel<T>>(supp, beta);
   }
 
 }
