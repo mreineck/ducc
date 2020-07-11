@@ -231,8 +231,7 @@ template<typename T> class GridderConfig
       double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
-//        krn(make_shared<HornerKernel<T>>(selectLeastMisfitKernel(ofactor, epsilon))),
-        krn(selectESKernel<T>(ofactor, epsilon)),
+        krn(selectNESKernel<T>(ofactor, epsilon)),
         psx(pixsize_x), psy(pixsize_y),
         supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
