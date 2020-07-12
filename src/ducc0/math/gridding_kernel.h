@@ -97,7 +97,6 @@ template<typename T> class GriddingKernel
         x must lie in [-1; 1].  */
     virtual T eval_single(T x) const = 0;
 
-
     /* Computes the correction function at a given coordinate.
        Useful coordinates lie in the range [0; 0.5]. */
     virtual double corfunc(double x) const = 0;
@@ -137,32 +136,32 @@ class KernelCorrection
       }
   };
 
-class PiecewiseKernelCorrection: public KernelCorrection
-  {
-  private:
-    static constexpr size_t ideg=10; // integration points per interval
-    static_assert((ideg&1)==0, "ideg must be even");
-
-  public:
-    PiecewiseKernelCorrection(size_t W, const function<double(double)> &func)
-      {
-      supp = W;
-      // we know that the kernel is piecewise smooth in all W sections but not
-      // necessarily at borders between sections. Therefore we integrate piece
-      // by piece.
-      GL_Integrator integ(ideg, 1);
-      auto xgl = integ.coords();
-      auto wgl = integ.weights();
-      x.resize((supp*ideg)/2);
-      wgtpsi.resize((supp*ideg)/2);
-      for (size_t i=0; i<x.size(); ++i)
-        {
-        size_t iiv = i/ideg;
-        x[i] = -1. + iiv*2./supp + (1.+xgl[i%ideg])/supp;
-        wgtpsi[i] = wgl[i%ideg]*func(x[i]);
-        }
-      }
-  };
+// class PiecewiseKernelCorrection: public KernelCorrection
+//   {
+//   private:
+//     static constexpr size_t ideg=10; // integration points per interval
+//     static_assert((ideg&1)==0, "ideg must be even");
+//
+//   public:
+//     PiecewiseKernelCorrection(size_t W, const function<double(double)> &func)
+//       {
+//       supp = W;
+//       // we know that the kernel is piecewise smooth in all W sections but not
+//       // necessarily at borders between sections. Therefore we integrate piece
+//       // by piece.
+//       GL_Integrator integ(ideg, 1);
+//       auto xgl = integ.coords();
+//       auto wgl = integ.weights();
+//       x.resize((supp*ideg)/2);
+//       wgtpsi.resize((supp*ideg)/2);
+//       for (size_t i=0; i<x.size(); ++i)
+//         {
+//         size_t iiv = i/ideg;
+//         x[i] = -1. + iiv*2./supp + (1.+xgl[i%ideg])/supp;
+//         wgtpsi[i] = wgl[i%ideg]*func(x[i]);
+//         }
+//       }
+//   };
 
 class GLFullCorrection: public KernelCorrection
   {
@@ -260,10 +259,10 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
         corr(corr_)
       {}
 
-    HornerKernel(size_t W_, size_t D_, const function<double(double)> &func)
-      : W(W_), D(D_), nvec((W+vlen-1)/vlen),
-        coeff(makeCoeff(W_, D_, func)), evalfunc(evfhelper1<1>()),
-        corr(PiecewiseKernelCorrection(W_, [this](T v){return eval_single(v);})) {}
+//     HornerKernel(size_t W_, size_t D_, const function<double(double)> &func)
+//       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
+//         coeff(makeCoeff(W_, D_, func)), evalfunc(evfhelper1<1>()),
+//         corr(PiecewiseKernelCorrection(W_, [this](T v){return eval_single(v);})) {}
 
     virtual size_t support() const { return W; }
 
@@ -292,119 +291,119 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       { return corr.corfunc(n, dx, nthreads); }
   };
 
-template<typename T> T esk (T v, T beta)
-  {
-  auto tmp = (1-v)*(1+v);
-  auto tmp2 = tmp>=0;
-  return tmp2*exp(T(beta)*(sqrt(tmp*tmp2)-1));
-  }
-
-template<typename T> class exponator
-  {
-  public:
-    T operator()(T val) { return exp(val); }
-  };
-
-template<typename T> native_simd<T> esk (native_simd<T> v, T beta)
-  {
-  auto tmp = (T(1)-v)*(T(1)+v);
-  auto mask = tmp<T(0);
-  where(mask,tmp)*=T(0);
-  auto res = (beta*(sqrt(tmp)-T(1))).apply(exponator<T>());
-  where (mask,res)*=T(0);
-  return res;
-  }
-
-double esk_beta(size_t supp, double ofactor)
-  {
-  MR_assert((supp>=2) && (supp<=15), "unsupported support size");
-  if (ofactor>=2)
-    {
-    static const array<double,16> opt_beta {-1, 0.14, 1.70, 2.08, 2.205, 2.26,
-      2.29, 2.307, 2.316, 2.3265, 2.3324, 2.282, 2.294, 2.304, 2.3138, 2.317};
-    MR_assert(supp<opt_beta.size(), "bad support size");
-    return opt_beta[supp];
-    }
-  if (ofactor>=1.175)
-    {
-    // empirical, but pretty accurate approximation
-    static const array<double,16> betacorr{0,0,-0.51,-0.21,-0.1,-0.05,-0.025,-0.0125,0,0,0,0,0,0,0,0};
-    auto x0 = 1./(2*ofactor);
-    auto bcstrength=1.+(x0-0.25)*2.5;
-    return 2.32+bcstrength*betacorr[supp]+(0.25-x0)*3.1;
-    }
-  MR_fail("oversampling factor is too small");
-  }
-
-size_t esk_support(double epsilon, double ofactor)
-  {
-  double epssq = epsilon*epsilon;
-  if (ofactor>=2)
-    {
-    static const array<double,16> maxmaperr { 1e8, 0.19, 2.98e-3, 5.98e-5,
-      1.11e-6, 2.01e-8, 3.55e-10, 5.31e-12, 8.81e-14, 1.34e-15, 2.17e-17,
-      2.12e-19, 2.88e-21, 3.92e-23, 8.21e-25, 7.13e-27 };
-
-    for (size_t i=2; i<maxmaperr.size(); ++i)
-      if (epssq>maxmaperr[i]) return i;
-    MR_fail("requested epsilon too small - minimum is 1e-13");
-    }
-  if (ofactor>=1.175)
-    {
-    for (size_t w=2; w<16; ++w)
-      {
-      auto estimate = 12*exp(-2.*w*ofactor); // empirical, not very good approximation
-      if (epssq>estimate) return w;
-      }
-    MR_fail("requested epsilon too small");
-    }
-  MR_fail("oversampling factor is too small");
-  }
-
-template<typename T> class ES_Kernel: public GriddingKernel<T>
-  {
-  private:
-    using Tsimd = native_simd<T>;
-    static constexpr auto vlen = Tsimd::size();
-    size_t W, nvec;
-    double beta;
-
-    KernelCorrection corr;
-
-  public:
-    using GriddingKernel<T>::eval;
-    using GriddingKernel<T>::eval_single;
-    using GriddingKernel<T>::corfunc;
-
-    ES_Kernel(size_t W_, double beta_)
-      : W(W_), nvec((W+vlen-1)/vlen), beta(beta_),
-        corr(GLFullCorrection(W, [this](T v){return eval_single(v);})) {}
-
-    virtual size_t support() const { return W; }
-
-    virtual void eval(T x, native_simd<T> *res) const
-      {
-      T dist = T(2./W);
-      for (size_t i=0; i<W; ++i)
-        res[i/vlen][i%vlen] = x+i*dist;
-      for (size_t i=W; i<nvec*vlen; ++i)
-        res[i/vlen][i%vlen] = 0;
-      for (size_t i=0; i<nvec; ++i)
-        res[i] = esk(res[i], T(beta));
-      }
-
-    /*! Returns the function approximation at location x.
-        x must lie in [-1; 1].  */
-    virtual T eval_single(T x) const
-      { return esk(x, T(beta)); }
-
-    virtual double corfunc(double x) const {return corr.corfunc(x); }
-
-    /* Computes the correction function values at a coordinates
-       [0, dx, 2*dx, ..., (n-1)*dx]  */
-    virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const
-      { return corr.corfunc(n, dx, nthreads); }
-  };
+// template<typename T> T esk (T v, T beta)
+//   {
+//   auto tmp = (1-v)*(1+v);
+//   auto tmp2 = tmp>=0;
+//   return tmp2*exp(T(beta)*(sqrt(tmp*tmp2)-1));
+//   }
+//
+// template<typename T> class exponator
+//   {
+//   public:
+//     T operator()(T val) { return exp(val); }
+//   };
+//
+// template<typename T> native_simd<T> esk (native_simd<T> v, T beta)
+//   {
+//   auto tmp = (T(1)-v)*(T(1)+v);
+//   auto mask = tmp<T(0);
+//   where(mask,tmp)*=T(0);
+//   auto res = (beta*(sqrt(tmp)-T(1))).apply(exponator<T>());
+//   where (mask,res)*=T(0);
+//   return res;
+//   }
+//
+// double esk_beta(size_t supp, double ofactor)
+//   {
+//   MR_assert((supp>=2) && (supp<=15), "unsupported support size");
+//   if (ofactor>=2)
+//     {
+//     static const array<double,16> opt_beta {-1, 0.14, 1.70, 2.08, 2.205, 2.26,
+//       2.29, 2.307, 2.316, 2.3265, 2.3324, 2.282, 2.294, 2.304, 2.3138, 2.317};
+//     MR_assert(supp<opt_beta.size(), "bad support size");
+//     return opt_beta[supp];
+//     }
+//   if (ofactor>=1.175)
+//     {
+//     // empirical, but pretty accurate approximation
+//     static const array<double,16> betacorr{0,0,-0.51,-0.21,-0.1,-0.05,-0.025,-0.0125,0,0,0,0,0,0,0,0};
+//     auto x0 = 1./(2*ofactor);
+//     auto bcstrength=1.+(x0-0.25)*2.5;
+//     return 2.32+bcstrength*betacorr[supp]+(0.25-x0)*3.1;
+//     }
+//   MR_fail("oversampling factor is too small");
+//   }
+//
+// size_t esk_support(double epsilon, double ofactor)
+//   {
+//   double epssq = epsilon*epsilon;
+//   if (ofactor>=2)
+//     {
+//     static const array<double,16> maxmaperr { 1e8, 0.19, 2.98e-3, 5.98e-5,
+//       1.11e-6, 2.01e-8, 3.55e-10, 5.31e-12, 8.81e-14, 1.34e-15, 2.17e-17,
+//       2.12e-19, 2.88e-21, 3.92e-23, 8.21e-25, 7.13e-27 };
+//
+//     for (size_t i=2; i<maxmaperr.size(); ++i)
+//       if (epssq>maxmaperr[i]) return i;
+//     MR_fail("requested epsilon too small - minimum is 1e-13");
+//     }
+//   if (ofactor>=1.175)
+//     {
+//     for (size_t w=2; w<16; ++w)
+//       {
+//       auto estimate = 12*exp(-2.*w*ofactor); // empirical, not very good approximation
+//       if (epssq>estimate) return w;
+//       }
+//     MR_fail("requested epsilon too small");
+//     }
+//   MR_fail("oversampling factor is too small");
+//   }
+//
+// template<typename T> class ES_Kernel: public GriddingKernel<T>
+//   {
+//   private:
+//     using Tsimd = native_simd<T>;
+//     static constexpr auto vlen = Tsimd::size();
+//     size_t W, nvec;
+//     double beta;
+//
+//     KernelCorrection corr;
+//
+//   public:
+//     using GriddingKernel<T>::eval;
+//     using GriddingKernel<T>::eval_single;
+//     using GriddingKernel<T>::corfunc;
+//
+//     ES_Kernel(size_t W_, double beta_)
+//       : W(W_), nvec((W+vlen-1)/vlen), beta(beta_),
+//         corr(GLFullCorrection(W, [this](T v){return eval_single(v);})) {}
+//
+//     virtual size_t support() const { return W; }
+//
+//     virtual void eval(T x, native_simd<T> *res) const
+//       {
+//       T dist = T(2./W);
+//       for (size_t i=0; i<W; ++i)
+//         res[i/vlen][i%vlen] = x+i*dist;
+//       for (size_t i=W; i<nvec*vlen; ++i)
+//         res[i/vlen][i%vlen] = 0;
+//       for (size_t i=0; i<nvec; ++i)
+//         res[i] = esk(res[i], T(beta));
+//       }
+//
+//     /*! Returns the function approximation at location x.
+//         x must lie in [-1; 1].  */
+//     virtual T eval_single(T x) const
+//       { return esk(x, T(beta)); }
+//
+//     virtual double corfunc(double x) const {return corr.corfunc(x); }
+//
+//     /* Computes the correction function values at a coordinates
+//        [0, dx, 2*dx, ..., (n-1)*dx]  */
+//     virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const
+//       { return corr.corfunc(n, dx, nthreads); }
+//   };
 
 struct NESdata
   {
@@ -452,7 +451,7 @@ const vector<NESdata> NEScache {
 {8, 1.2, 8.38719628704345e-05, 1.6249186197916665, 0.5212163628472221},
 {8, 1.3, 1.4776178056293107e-05, 1.7333170572916663, 0.5189051649305555},
 {8, 1.4, 4.593178465697842e-06, 1.8236490885416665, 0.5172233072916667},
-{8, 1.5, 1.75864010216122e-06, 1.8983561197916665, 0.5164095052083334},
+{8, 1.5, 1.6176997163066937e-06, 1.916834513346354, 0.5150358751085068},
 {8, 1.6, 7.572788341219199e-07, 1.9797363281250002, 0.5151508246527778},
 {8, 1.7, 4.307772667559197e-07, 2.0407714843750004, 0.5133930121527777},
 {8, 1.8, 2.4097873028482365e-07, 2.0912272135416665, 0.5127528211805555},
