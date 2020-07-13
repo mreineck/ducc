@@ -67,7 +67,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
-        return
+        pytest.skip()
     rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
