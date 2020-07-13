@@ -23,6 +23,7 @@
 #define DUCC0_GRIDDING_KERNEL_H
 
 #include <vector>
+#include <memory>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -188,6 +189,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
 
     vector<Tsimd> coeff;
     void (HornerKernel<T>::* evalfunc) (T, native_simd<T> *) const;
+    T (HornerKernel<T>::* evalsinglefunc) (T) const;
 
     KernelCorrection corr;
 
@@ -203,6 +205,18 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
         }
       }
 
+    template<size_t DEG> T eval_single_intern(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto i = nth/vlen;
+      auto imod = nth%vlen;
+      auto tval = coeff[i][imod];
+      for (size_t j=1; j<=DEG; ++j)
+        tval = tval*x + coeff[j*nvec+i][imod];
+      return tval;
+      }
+
     void eval_intern_general(T x, native_simd<T> *res) const
       {
       x = (x+1)*W-1;
@@ -213,6 +227,18 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
           tval = tval*x+coeff[j*nvec+i];
         res[i] = tval;
         }
+      }
+
+    T eval_single_intern_general(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto i = nth/vlen;
+      auto imod = nth%vlen;
+      auto tval = coeff[i][imod];
+      for (size_t j=1; j<=D; ++j)
+        tval = tval*x + coeff[j*nvec+i][imod];
+      return tval;
       }
 
     template<size_t NV, size_t DEG> auto evfhelper2() const
@@ -229,6 +255,15 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       if (nvec==NV) return evfhelper2<NV,0>();
       if (nvec*vlen>MAXW) return &HornerKernel::eval_intern_general;
       return evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
+      }
+
+    template<size_t DEG> auto evsfhelper1() const
+      {
+      if (DEG==D)
+        return &HornerKernel::eval_single_intern<DEG>;
+      if (DEG>MAXDEG)
+        return &HornerKernel::eval_single_intern_general;
+      return evsfhelper1<((DEG>MAXDEG) ? DEG : DEG+1)>();
       }
 
     static vector<Tsimd> makeCoeff(size_t W, size_t D,
@@ -256,6 +291,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       const KernelCorrection &corr_)
       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
         coeff(makeCoeff(W_, D_, func)), evalfunc(evfhelper1<1>()),
+        evalsinglefunc(evsfhelper1<0>()),
         corr(corr_)
       {}
 
@@ -268,20 +304,19 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
 
     virtual void eval(T x, native_simd<T> *res) const
       { (this->*evalfunc)(x, res); }
-    /*! Returns the function approximation at location x.
-        x must lie in [-1; 1].  */
 
     virtual T eval_single(T x) const
-      {
-      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
-      x = (x+1)*W-2*nth-1;
-      auto i = nth/vlen;
-      auto imod = nth%vlen;
-      auto tval = coeff[i][imod];
-      for (size_t j=1; j<=D; ++j)
-        tval = tval*x + coeff[j*nvec+i][imod];
-      return tval;
-      }
+      { return (this->*evalsinglefunc)(x); }
+//       {
+//       auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+//       x = (x+1)*W-2*nth-1;
+//       auto i = nth/vlen;
+//       auto imod = nth%vlen;
+//       auto tval = coeff[i][imod];
+//       for (size_t j=1; j<=D; ++j)
+//         tval = tval*x + coeff[j*nvec+i][imod];
+//       return tval;
+//       }
 
     virtual double corfunc(double x) const {return corr.corfunc(x); }
 
@@ -529,6 +564,8 @@ template<typename T> T esknew (T v, T beta, T e0)
   return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
   }
 
+/*! Returns the best matching 2-parameter ES kernel for the given oversampling
+    factor and error. */
 template<typename T> auto selectNESKernel(double ofactor, double epsilon)
   {
   size_t Wmin=1000;
