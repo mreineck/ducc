@@ -879,14 +879,15 @@ template<typename T, typename Serv> class WgridHelper
         nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
       dw = 0.25/abs(nmin);
       nplanes = size_t((wmax-wmin)/dw+2);
-      dw = (1.+1e-13)*(wmax-wmin)/(nplanes-1);
+//      dw = (1.+1e-13)*(wmax-wmin)/(nplanes-1);
       // FIXME: needs improvement
-      if (dw==0.) dw=1e-3;
+//      if (dw==0.) dw=1e-3;
 
       supp = gconf.Supp();
-      wmin -= (0.5*supp-1)*dw;
-      wmax += (0.5*supp-1)*dw;
+//      wmin -= (0.5*supp-1)*dw;
+//      wmax += (0.5*supp-1)*dw;
       nplanes += supp-2;
+      wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
       if (verbosity>0) cout << "Kernel support: " << supp << endl;
       if (verbosity>0) cout << "nplanes: " << nplanes << endl;
 
