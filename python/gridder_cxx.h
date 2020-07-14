@@ -861,7 +861,7 @@ template<typename T, typename Serv> class WgridHelper
 
   public:
     WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, size_t verbosity_)
-      : srv(srv_), verbosity(verbosity_), curplane(-1)
+      : srv(srv_), supp(gconf.Supp()), verbosity(verbosity_), curplane(-1)
       {
       size_t nvis = srv.Nvis();
       size_t nthreads = gconf.Nthreads();
@@ -878,15 +878,7 @@ template<typename T, typename Serv> class WgridHelper
       if (x0*x0+y0*y0>1.)
         nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
       dw = 0.25/abs(nmin);
-      nplanes = size_t((wmax-wmin)/dw+2);
-//      dw = (1.+1e-13)*(wmax-wmin)/(nplanes-1);
-      // FIXME: needs improvement
-//      if (dw==0.) dw=1e-3;
-
-      supp = gconf.Supp();
-//      wmin -= (0.5*supp-1)*dw;
-//      wmax += (0.5*supp-1)*dw;
-      nplanes += supp-2;
+      nplanes = size_t((wmax-wmin)/dw+supp);
       wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
       if (verbosity>0) cout << "Kernel support: " << supp << endl;
       if (verbosity>0) cout << "nplanes: " << nplanes << endl;
