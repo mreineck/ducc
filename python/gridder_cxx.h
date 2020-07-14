@@ -1079,6 +1079,8 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
+  // adjust for increased error when gridding in 2 or 3 dimensions
+  epsilon /= do_wstacking ? 3 : 2;
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
@@ -1093,6 +1095,8 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   size_t verbosity, bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
+  // adjust for increased error when gridding in 2 or 3 dimensions
+  epsilon /= do_wstacking ? 3 : 2;
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
   mav<complex<T>,2> null_ms(nullptr, {0,0}, true);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);

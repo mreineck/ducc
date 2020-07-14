@@ -571,7 +571,7 @@ template<typename T> auto selectNESKernel(double ofactor, double epsilon)
   size_t Wmin=1000;
   size_t idx = NEScache.size();
   for (size_t i=0; i<NEScache.size(); ++i)
-    if ((NEScache[i].ofactor<=ofactor) && (1.3*NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
+    if ((NEScache[i].ofactor<=ofactor) && (NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
       {
       idx = i;
       Wmin = NEScache[i].W;
