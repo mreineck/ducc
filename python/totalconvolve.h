@@ -243,7 +243,7 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectNESKernel<T>(ofactor, 0.5*epsilon)),
+        kernel(selectKernel<T>(ofactor, 0.5*epsilon)),
         supp(kernel->support()),
         ncomp(separate ? slm.size() : 1),
 #ifdef SIMD_INTERPOL
@@ -359,7 +359,7 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectNESKernel<T>(ofactor, 0.5*epsilon)),
+        kernel(selectKernel<T>(ofactor, 0.5*epsilon)),
         supp(kernel->support()),
         ncomp(ncomp_),
 #ifdef SIMD_INTERPOL
