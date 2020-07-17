@@ -486,8 +486,6 @@ template<typename T, typename T2=complex<T>> class Helper
     vector<T2> rbuf, wbuf;
     bool do_w_gridding;
     double w0, xdw;
-    size_t nexp;
-    size_t nvecs;
     vector<std::mutex> &locks;
 
     void dump() const
@@ -528,6 +526,7 @@ template<typename T, typename T2=complex<T>> class Helper
       }
 
   public:
+    size_t nvec;
     const T2 *p0r;
     T2 *p0w;
     static constexpr size_t vlen=native_simd<T>::size();
@@ -535,7 +534,7 @@ template<typename T, typename T2=complex<T>> class Helper
       T scalar[64];
       native_simd<T> simd[64/vlen];
       };
-    kbuf bufx, bufy;
+    kbuf buf;
 
     Helper(const GridderConfig<T> &gconf_, const T2 *grid_r_, T2 *grid_w_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
@@ -548,11 +547,10 @@ template<typename T, typename T2=complex<T>> class Helper
         do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
-        nexp(2*supp + do_w_gridding),
-        nvecs((nexp+vlen-1)/vlen),
-        locks(locks_)
+        locks(locks_),
+        nvec((supp+vlen-1)/vlen)
       {
-      MR_assert(supp<=64, "support too large");
+      MR_assert(supp<=32, "support too large");
       }
     ~Helper() { if (grid_w) dump(); }
 
@@ -566,8 +564,8 @@ template<typename T, typename T2=complex<T>> class Helper
       double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
-      krn.eval(T(x0), bufx.simd);
-      krn.eval(T(y0), bufy.simd);
+      krn.eval(T(x0), &buf.simd[0]);
+      krn.eval(T(y0), &buf.simd[nvec]);
       if (do_w_gridding)
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
@@ -670,8 +668,8 @@ template<typename T, typename Serv> void x2grid_c
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.bufx.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.bufy.scalar;
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -718,8 +716,8 @@ template<typename T, typename Serv> void grid2x_c
     {
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.bufx.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.bufy.scalar;
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {

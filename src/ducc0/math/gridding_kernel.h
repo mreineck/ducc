@@ -241,29 +241,40 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       return tval;
       }
 
-    template<size_t NV, size_t DEG> auto evfhelper2() const
+    template<size_t NV, size_t DEG> void evfhelper2()
       {
       if (DEG==D)
-        return &HornerKernel::eval_intern<NV,DEG>;
-      if (DEG>MAXDEG)
-        return &HornerKernel::eval_intern_general;
-      return evfhelper2<NV, ((DEG>MAXDEG) ? DEG : DEG+1)>();
+        evalfunc = &HornerKernel::eval_intern<NV,DEG>;
+      else if (DEG>MAXDEG)
+        evalfunc = &HornerKernel::eval_intern_general;
+      else
+        evfhelper2<NV, ((DEG>MAXDEG) ? DEG : DEG+1)>();
       }
 
-    template<size_t NV> auto evfhelper1() const
+    template<size_t NV> void evfhelper1()
       {
-      if (nvec==NV) return evfhelper2<NV,0>();
-      if (nvec*vlen>MAXW) return &HornerKernel::eval_intern_general;
-      return evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
+      if (nvec==NV)
+        evfhelper2<NV,0>();
+      else if (nvec*vlen>MAXW)
+        evalfunc = &HornerKernel::eval_intern_general;
+      else
+        evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
       }
 
-    template<size_t DEG> auto evsfhelper1() const
+    template<size_t DEG> void evsfhelper1()
       {
       if (DEG==D)
-        return &HornerKernel::eval_single_intern<DEG>;
-      if (DEG>MAXDEG)
-        return &HornerKernel::eval_single_intern_general;
-      return evsfhelper1<((DEG>MAXDEG) ? DEG : DEG+1)>();
+        evalsinglefunc = &HornerKernel::eval_single_intern<DEG>;
+      else if (DEG>MAXDEG)
+        evalsinglefunc = &HornerKernel::eval_single_intern_general;
+      else
+        evsfhelper1<((DEG>MAXDEG) ? DEG : DEG+1)>();
+      }
+
+    void wire_eval()
+      {
+      evfhelper1<1>();
+      evsfhelper1<0>();
       }
 
     static vector<Tsimd> makeCoeff(size_t W, size_t D,
@@ -290,10 +301,8 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     HornerKernel(size_t W_, size_t D_, const function<double(double)> &func,
       const KernelCorrection &corr_)
       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
-        coeff(makeCoeff(W_, D_, func)), evalfunc(evfhelper1<1>()),
-        evalsinglefunc(evsfhelper1<0>()),
-        corr(corr_)
-      {}
+        coeff(makeCoeff(W_, D_, func)), corr(corr_)
+      { wire_eval(); }
 
 //     HornerKernel(size_t W_, size_t D_, const function<double(double)> &func)
 //       : W(W_), D(D_), nvec((W+vlen-1)/vlen),

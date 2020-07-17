@@ -394,6 +394,19 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       }
   };
 
+// template<typename Func, typename T0, typename Ts...> void fmav_pointwise_op(Func func, T0 & arg0, Ts&... args)
+//   {
+//   MR_assert(multiequal(arg0.shape()==args.shape()...), "fmav shape mismatch");
+//   if (multiequal(true, arg0.stride()==args.stride()...)) // equal strides, we can make simplifications
+//     {
+//     if (arg0.compact()) // even better, we can go through everything in a single loop
+//       {
+//       for (size_t i=0; i<arg0.size(); ++i)
+//         func(arg0.ptr[i], args.ptr[i]...);
+//       }
+//     else
+//   }
+
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
   {
 //  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
