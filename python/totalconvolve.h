@@ -207,7 +207,6 @@ template<typename T> class Interpolator
 
     vector<size_t> getIdx(const mav<T,2> &ptg) const
       {
-      vector<size_t> idx(ptg.shape(0));
       constexpr size_t cellsize=16;
       size_t nct = ntheta/cellsize+1,
              ncp = nphi/cellsize+1;
@@ -219,6 +218,7 @@ template<typename T> class Interpolator
 //        MR_assert((itheta<nct)&&(iphi<ncp), "oops");
         mapper[itheta*ncp+iphi].push_back(i);
         }
+      vector<size_t> idx(ptg.shape(0));
       size_t cnt=0;
       for (auto &vec: mapper)
         {
