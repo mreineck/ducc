@@ -41,7 +41,7 @@ namespace ducc0 {
 /*! \{ */
 
 /*! Class representing a 3D cartesian vector. */
-template<typename T>class vec3_t
+template<typename T> class vec3_t
   {
   public:
     T x, /*!< x-coordinate */

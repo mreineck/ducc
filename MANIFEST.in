@@ -29,6 +29,7 @@ include src/ducc0/math/gl_integrator.h
 include src/ducc0/math/math_utils.h
 include src/ducc0/math/pointing.cc
 include src/ducc0/math/pointing.h
+include src/ducc0/math/quaternion.h
 include src/ducc0/math/rangeset.h
 include src/ducc0/math/space_filling.cc
 include src/ducc0/math/space_filling.h
@@ -60,9 +61,11 @@ include python/alm.h
 include python/totalconvolve.h
 include python/totalconvolve.cc
 include python/misc.cc
+include python/pointingprovider.cc
 
 include python/test/test_fft.py
 include python/test/test_healpix.py
+include python/test/test_pointing.py
 include python/test/test_sht.py
 include python/test/test_totalconvolve.py
 include python/test/test_wgridder.py

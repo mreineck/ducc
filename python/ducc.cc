@@ -19,6 +19,7 @@
 #include "python/wgridder.cc"
 #include "python/healpix.cc"
 #include "python/misc.cc"
+#include "python/pointingprovider.cc"
 
 using namespace ducc0;
 
@@ -32,4 +33,5 @@ PYBIND11_MODULE(PKGNAME, m)
   add_wgridder(m);
   add_healpix(m);
   add_misc(m);
+  add_pointingprovider(m);
   }
