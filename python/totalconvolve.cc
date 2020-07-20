@@ -264,7 +264,6 @@ void add_totalconvolve(py::module &msup)
     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_f::support);
-  m.def("epsilon_guess", &epsilon_guess, "support"_a, "ofactor"_a);
   }
 
 }

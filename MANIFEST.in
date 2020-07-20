@@ -20,12 +20,12 @@ include src/ducc0/bindings/pybind_utils.h
 
 include src/ducc0/math/cmplx.h
 include src/ducc0/math/constants.h
-include src/ducc0/math/es_kernel.h
 include src/ducc0/math/fft1d.h
 include src/ducc0/math/fft.h
 include src/ducc0/math/geom_utils.cc
 include src/ducc0/math/geom_utils.h
 include src/ducc0/math/gl_integrator.h
+include src/ducc0/math/gridding_kernel.h
 include src/ducc0/math/math_utils.h
 include src/ducc0/math/pointing.cc
 include src/ducc0/math/pointing.h
