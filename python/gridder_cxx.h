@@ -98,20 +98,20 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim, bool g2d,
-  size_t nthreads)
+template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
+  bool first_fast, size_t nthreads)
   {
   size_t nu=arr.shape(0), nv=arr.shape(1);
   fmav<T> farr(arr);
   if (2*vlim<nv)
     {
-    if (!g2d)
+    if (!first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
     auto flo = farr.subarray({0,0},{farr.shape(0),vlim});
     r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
     auto fhi = farr.subarray({0,farr.shape(1)-vlim},{farr.shape(0),vlim});
     r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
-    if (g2d)
+    if (first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
     }
   else
@@ -235,6 +235,7 @@ template<typename T> class GridderConfig
     double ushift, vshift;
     int maxiu0, maxiv0;
     size_t vlim;
+    bool uv_side_fast;
 
     complex<T> wscreen(T x, T y, T w, bool adjoint) const
       {
@@ -259,8 +260,15 @@ template<typename T> class GridderConfig
         nthreads(nthreads_),
         ushift(supp*(-0.5)+1+nu), vshift(supp*(-0.5)+1+nv),
         maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp),
-        vlim(min(nv/2, size_t(nv*baselines.Vmax()*psy+0.5*supp+1)))
+        vlim(min(nv/2, size_t(nv*baselines.Vmax()*psy+0.5*supp+1))),
+        uv_side_fast(true)
       {
+      size_t vlim2 = (nydirty+1)/2+(supp+1)/2;
+      if (vlim2<vlim)
+        {
+        vlim = vlim2;
+        uv_side_fast = false;
+        }
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
       MR_assert((nx_dirty&1)==0, "nx_dirty must be even");
@@ -351,7 +359,7 @@ template<typename T> class GridderConfig
       checkShape(grid.shape(), {nu,nv});
       mav<T,2> tmav({nu,nv});
       tmav.apply(grid, [](T&a, T b) {a=b;});
-      hartley2_2D<T>(tmav, vlim, true, nthreads);
+      hartley2_2D<T>(tmav, vlim, uv_side_fast, nthreads);
       grid2dirty_post(tmav, dirty);
       }
 
@@ -362,11 +370,14 @@ template<typename T> class GridderConfig
       fmav<complex<T>> inout(grid);
       if (2*vlim<nv)
         {
+        if (!uv_side_fast)
+          c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
         auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
         c2c(inout_lo, inout_lo, {0}, BACKWARD, T(1), nthreads);
         auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
         c2c(inout_hi, inout_hi, {0}, BACKWARD, T(1), nthreads);
-        c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
+        if (uv_side_fast)
+          c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
         }
       else
         c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
@@ -444,7 +455,7 @@ template<typename T> class GridderConfig
       mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
-      hartley2_2D<T>(grid, vlim, false, nthreads);
+      hartley2_2D<T>(grid, vlim, !uv_side_fast, nthreads);
       }
 
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
@@ -454,11 +465,14 @@ template<typename T> class GridderConfig
       fmav<complex<T>> inout(grid);
       if (2*vlim<nv)
         {
-        c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
+        if (uv_side_fast)
+          c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
         auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
         c2c(inout_lo, inout_lo, {0}, FORWARD, T(1), nthreads);
         auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
         c2c(inout_hi, inout_hi, {0}, FORWARD, T(1), nthreads);
+        if (!uv_side_fast)
+          c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
         }
       else
         c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
