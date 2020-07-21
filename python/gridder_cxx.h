@@ -98,26 +98,37 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(const mav<T,2> &in,
-  mav<T,2> &out, size_t nthreads)
+template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
+  bool first_fast, size_t nthreads)
   {
-  MR_assert(in.conformable(out), "shape mismatch");
-  size_t nu=in.shape(0), nv=in.shape(1);
-  fmav<T> fin(in), fout(out);
-  r2r_separable_hartley(fin, fout, {0,1}, T(1), nthreads);
+  size_t nu=arr.shape(0), nv=arr.shape(1);
+  fmav<T> farr(arr);
+  if (2*vlim<nv)
+    {
+    if (!first_fast)
+      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+    auto flo = farr.subarray({0,0},{farr.shape(0),vlim});
+    r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
+    auto fhi = farr.subarray({0,farr.shape(1)-vlim},{farr.shape(0),vlim});
+    r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
+    if (first_fast)
+      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+    }
+  else
+    r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
   execStatic((nu+1)/2-1, nthreads, 0, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext()) for(auto i=rng.lo+1; i<rng.hi+1; ++i)
       for(size_t j=1; j<(nv+1)/2; ++j)
          {
-         T a = out(i,j);
-         T b = out(nu-i,j);
-         T c = out(i,nv-j);
-         T d = out(nu-i,nv-j);
-         out.v(i,j) = T(0.5)*(a+b+c-d);
-         out.v(nu-i,j) = T(0.5)*(a+b+d-c);
-         out.v(i,nv-j) = T(0.5)*(a+c+d-b);
-         out.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
+         T a = arr(i,j);
+         T b = arr(nu-i,j);
+         T c = arr(i,nv-j);
+         T d = arr(nu-i,nv-j);
+         arr.v(i,j) = T(0.5)*(a+b+c-d);
+         arr.v(nu-i,j) = T(0.5)*(a+b+d-c);
+         arr.v(i,nv-j) = T(0.5)*(a+c+d-b);
+         arr.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
          }
      });
   }
@@ -152,6 +163,7 @@ class Baselines
     vector<double> f_over_c;
     idx_t nrows, nchan;
     idx_t shift, mask;
+    double umax, vmax;
 
   public:
     template<typename T> Baselines(const mav<T,2> &coord_,
@@ -170,18 +182,24 @@ class Baselines
       mask=(idx_t(1)<<shift)-1;
       MR_assert(nrows*(mask+1)<hugeval, "too many entries in MS");
       f_over_c.resize(nchan);
+      double fcmax = 0;
       for (size_t i=0; i<nchan; ++i)
         {
         MR_assert(freq(i)>0, "negative channel frequency encountered");
         f_over_c[i] = freq(i)/speedOfLight;
+        fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
-      if (negate_v)
-        for (size_t i=0; i<coord.size(); ++i)
-          coord[i] = UVW(coord_(i,0), -coord_(i,1), coord_(i,2));
-      else
-        for (size_t i=0; i<coord.size(); ++i)
-          coord[i] = UVW(coord_(i,0), coord_(i,1), coord_(i,2));
+      double vfac = negate_v ? -1 : 1;
+      vmax=0;
+      for (size_t i=0; i<coord.size(); ++i)
+        {
+        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        umax = max(umax, abs(coord_(i,0)));
+        vmax = max(vmax, abs(coord_(i,1)));
+        }
+      umax *= fcmax;
+      vmax *= fcmax;
       }
 
     RowChan getRowChan(idx_t index) const
@@ -195,6 +213,8 @@ class Baselines
     size_t Nchannels() const { return nchan; }
     idx_t getIdx(idx_t irow, idx_t ichan) const
       { return ichan+(irow<<shift); }
+    double Umax() const { return umax; }
+    double Vmax() const { return vmax; }
   };
 
 template<typename T> class GridderConfig
@@ -214,6 +234,8 @@ template<typename T> class GridderConfig
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
+    size_t vlim;
+    bool uv_side_fast;
 
     complex<T> wscreen(T x, T y, T w, bool adjoint) const
       {
@@ -228,7 +250,8 @@ template<typename T> class GridderConfig
 
   public:
     GridderConfig(size_t nxdirty, size_t nydirty, size_t nu_, size_t nv_,
-      double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
+      double epsilon, double pixsize_x, double pixsize_y,
+      const Baselines &baselines, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
         krn(selectKernel<T>(ofactor, epsilon)),
@@ -236,8 +259,16 @@ template<typename T> class GridderConfig
         supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
         ushift(supp*(-0.5)+1+nu), vshift(supp*(-0.5)+1+nv),
-        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp)
+        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp),
+        vlim(min(nv/2, size_t(nv*baselines.Vmax()*psy+0.5*supp+1))),
+        uv_side_fast(true)
       {
+      size_t vlim2 = (nydirty+1)/2+(supp+1)/2;
+      if (vlim2<vlim)
+        {
+        vlim = vlim2;
+        uv_side_fast = false;
+        }
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
       MR_assert((nx_dirty&1)==0, "nx_dirty must be even");
@@ -248,11 +279,6 @@ template<typename T> class GridderConfig
       MR_assert(pixsize_x>0, "pixsize_x must be positive");
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
       }
-    GridderConfig(size_t nxdirty, size_t nydirty,
-      double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
-      : GridderConfig(nxdirty, nydirty, max<size_t>(30,2*nxdirty),
-                      max<size_t>(30,2*nydirty), epsilon, pixsize_x,
-                      pixsize_y, nthreads_) {}
     size_t Nxdirty() const { return nx_dirty; }
     size_t Nydirty() const { return ny_dirty; }
     double Pixsize_x() const { return psx; }
@@ -332,7 +358,8 @@ template<typename T> class GridderConfig
       {
       checkShape(grid.shape(), {nu,nv});
       mav<T,2> tmav({nu,nv});
-      hartley2_2D<T>(grid, tmav, nthreads);
+      tmav.apply(grid, [](T&a, T b) {a=b;});
+      hartley2_2D<T>(tmav, vlim, uv_side_fast, nthreads);
       grid2dirty_post(tmav, dirty);
       }
 
@@ -341,7 +368,19 @@ template<typename T> class GridderConfig
       {
       checkShape(grid.shape(), {nu,nv});
       fmav<complex<T>> inout(grid);
-      c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
+      if (2*vlim<nv)
+        {
+        if (!uv_side_fast)
+          c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
+        c2c(inout_lo, inout_lo, {0}, BACKWARD, T(1), nthreads);
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
+        c2c(inout_hi, inout_hi, {0}, BACKWARD, T(1), nthreads);
+        if (uv_side_fast)
+          c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
+        }
+      else
+        c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
       grid2dirty_post2(grid, dirty, w);
       }
 
@@ -416,7 +455,7 @@ template<typename T> class GridderConfig
       mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
-      hartley2_2D<T>(grid, grid, nthreads);
+      hartley2_2D<T>(grid, vlim, !uv_side_fast, nthreads);
       }
 
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
@@ -424,7 +463,19 @@ template<typename T> class GridderConfig
       {
       dirty2grid_pre2(dirty, grid, w);
       fmav<complex<T>> inout(grid);
-      c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
+      if (2*vlim<nv)
+        {
+        if (uv_side_fast)
+          c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
+        c2c(inout_lo, inout_lo, {0}, FORWARD, T(1), nthreads);
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
+        c2c(inout_hi, inout_hi, {0}, FORWARD, T(1), nthreads);
+        if (!uv_side_fast)
+          c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
+        }
+      else
+        c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
       }
 
     void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
@@ -1072,7 +1123,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
@@ -1088,7 +1139,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   mav<complex<T>,2> null_ms(nullptr, {0,0}, true);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
