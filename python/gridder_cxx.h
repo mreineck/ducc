@@ -44,8 +44,6 @@ namespace detail_gridder {
 
 using namespace std;
 
-size_t ivmaxglob=0;
-
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
   { MR_assert(shp1==shp2, "shape mismatch"); }
@@ -100,17 +98,18 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(mav<T,2> &arr, bool g2d, size_t nthreads)
+template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim, bool g2d,
+  size_t nthreads)
   {
   size_t nu=arr.shape(0), nv=arr.shape(1);
   fmav<T> farr(arr);
-  if (2*ivmaxglob<nv)
+  if (2*vlim<nv)
     {
     if (!g2d)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
-    auto flo = farr.subarray({0,0},{farr.shape(0),ivmaxglob});
+    auto flo = farr.subarray({0,0},{farr.shape(0),vlim});
     r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
-    auto fhi = farr.subarray({0,farr.shape(1)-ivmaxglob},{farr.shape(0),ivmaxglob});
+    auto fhi = farr.subarray({0,farr.shape(1)-vlim},{farr.shape(0),vlim});
     r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
     if (g2d)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
@@ -235,6 +234,7 @@ template<typename T> class GridderConfig
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
+    size_t vlim;
 
     complex<T> wscreen(T x, T y, T w, bool adjoint) const
       {
@@ -249,7 +249,8 @@ template<typename T> class GridderConfig
 
   public:
     GridderConfig(size_t nxdirty, size_t nydirty, size_t nu_, size_t nv_,
-      double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
+      double epsilon, double pixsize_x, double pixsize_y,
+      const Baselines &baselines, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
         krn(selectKernel<T>(ofactor, epsilon)),
@@ -257,7 +258,8 @@ template<typename T> class GridderConfig
         supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
         ushift(supp*(-0.5)+1+nu), vshift(supp*(-0.5)+1+nv),
-        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp)
+        maxiu0((nu+nsafe)-supp), maxiv0((nv+nsafe)-supp),
+        vlim(min(nv/2, size_t(nv*baselines.Vmax()*psy+0.5*supp+1)))
       {
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
@@ -269,11 +271,6 @@ template<typename T> class GridderConfig
       MR_assert(pixsize_x>0, "pixsize_x must be positive");
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
       }
-    GridderConfig(size_t nxdirty, size_t nydirty,
-      double epsilon, double pixsize_x, double pixsize_y, size_t nthreads_)
-      : GridderConfig(nxdirty, nydirty, max<size_t>(30,2*nxdirty),
-                      max<size_t>(30,2*nydirty), epsilon, pixsize_x,
-                      pixsize_y, nthreads_) {}
     size_t Nxdirty() const { return nx_dirty; }
     size_t Nydirty() const { return ny_dirty; }
     double Pixsize_x() const { return psx; }
@@ -354,7 +351,7 @@ template<typename T> class GridderConfig
       checkShape(grid.shape(), {nu,nv});
       mav<T,2> tmav({nu,nv});
       tmav.apply(grid, [](T&a, T b) {a=b;});
-      hartley2_2D<T>(tmav, true, nthreads);
+      hartley2_2D<T>(tmav, vlim, true, nthreads);
       grid2dirty_post(tmav, dirty);
       }
 
@@ -363,11 +360,11 @@ template<typename T> class GridderConfig
       {
       checkShape(grid.shape(), {nu,nv});
       fmav<complex<T>> inout(grid);
-      if (2*ivmaxglob<nv)
+      if (2*vlim<nv)
         {
-        auto inout_lo = inout.subarray({0,0},{inout.shape(0),ivmaxglob});
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
         c2c(inout_lo, inout_lo, {0}, BACKWARD, T(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-ivmaxglob},{inout.shape(0),ivmaxglob});
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
         c2c(inout_hi, inout_hi, {0}, BACKWARD, T(1), nthreads);
         c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
         }
@@ -447,7 +444,7 @@ template<typename T> class GridderConfig
       mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
-      hartley2_2D<T>(grid, false, nthreads);
+      hartley2_2D<T>(grid, vlim, false, nthreads);
       }
 
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
@@ -455,12 +452,12 @@ template<typename T> class GridderConfig
       {
       dirty2grid_pre2(dirty, grid, w);
       fmav<complex<T>> inout(grid);
-      if (2*ivmaxglob<nv)
+      if (2*vlim<nv)
         {
         c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
-        auto inout_lo = inout.subarray({0,0},{inout.shape(0),ivmaxglob});
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
         c2c(inout_lo, inout_lo, {0}, FORWARD, T(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-ivmaxglob},{inout.shape(0),ivmaxglob});
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
         c2c(inout_hi, inout_hi, {0}, FORWARD, T(1), nthreads);
         }
       else
@@ -1112,10 +1109,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
-ivmaxglob = size_t(nv*baselines.Vmax()*pixsize_y + 0.5*gconf.Supp() + 1);
-ivmaxglob = min(ivmaxglob,nv/2);
-cout << "Saving " << (nv-2.*ivmaxglob)/nv*100 << "%" << endl;
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
@@ -1131,15 +1125,12 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   mav<complex<T>,2> null_ms(nullptr, {0,0}, true);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   ms.fill(0);
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
-ivmaxglob = size_t(nv*baselines.Vmax()*pixsize_y + 0.5*gconf.Supp() + 1);
-ivmaxglob = min(ivmaxglob,nv/2);
-//cout << "Saving " << (nv-2.*ivmaxglob)/nv*100 << "%" << endl;
   dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
   }
 
