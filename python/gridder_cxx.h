@@ -44,6 +44,8 @@ namespace detail_gridder {
 
 using namespace std;
 
+size_t ivmaxglob=0;
+
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
   { MR_assert(shp1==shp2, "shape mismatch"); }
@@ -98,26 +100,36 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(const mav<T,2> &in,
-  mav<T,2> &out, size_t nthreads)
+template<typename T> void hartley2_2D(mav<T,2> &arr, bool g2d, size_t nthreads)
   {
-  MR_assert(in.conformable(out), "shape mismatch");
-  size_t nu=in.shape(0), nv=in.shape(1);
-  fmav<T> fin(in), fout(out);
-  r2r_separable_hartley(fin, fout, {0,1}, T(1), nthreads);
+  size_t nu=arr.shape(0), nv=arr.shape(1);
+  fmav<T> farr(arr);
+  if (2*ivmaxglob<nv)
+    {
+    if (!g2d)
+      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+    auto flo = farr.subarray({0,0},{farr.shape(0),ivmaxglob});
+    r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
+    auto fhi = farr.subarray({0,farr.shape(1)-ivmaxglob},{farr.shape(0),ivmaxglob});
+    r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
+    if (g2d)
+      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+    }
+  else
+    r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
   execStatic((nu+1)/2-1, nthreads, 0, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext()) for(auto i=rng.lo+1; i<rng.hi+1; ++i)
       for(size_t j=1; j<(nv+1)/2; ++j)
          {
-         T a = out(i,j);
-         T b = out(nu-i,j);
-         T c = out(i,nv-j);
-         T d = out(nu-i,nv-j);
-         out.v(i,j) = T(0.5)*(a+b+c-d);
-         out.v(nu-i,j) = T(0.5)*(a+b+d-c);
-         out.v(i,nv-j) = T(0.5)*(a+c+d-b);
-         out.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
+         T a = arr(i,j);
+         T b = arr(nu-i,j);
+         T c = arr(i,nv-j);
+         T d = arr(nu-i,nv-j);
+         arr.v(i,j) = T(0.5)*(a+b+c-d);
+         arr.v(nu-i,j) = T(0.5)*(a+b+d-c);
+         arr.v(i,nv-j) = T(0.5)*(a+c+d-b);
+         arr.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
          }
      });
   }
@@ -152,6 +164,7 @@ class Baselines
     vector<double> f_over_c;
     idx_t nrows, nchan;
     idx_t shift, mask;
+    double umax, vmax;
 
   public:
     template<typename T> Baselines(const mav<T,2> &coord_,
@@ -170,18 +183,24 @@ class Baselines
       mask=(idx_t(1)<<shift)-1;
       MR_assert(nrows*(mask+1)<hugeval, "too many entries in MS");
       f_over_c.resize(nchan);
+      double fcmax = 0;
       for (size_t i=0; i<nchan; ++i)
         {
         MR_assert(freq(i)>0, "negative channel frequency encountered");
         f_over_c[i] = freq(i)/speedOfLight;
+        fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
-      if (negate_v)
-        for (size_t i=0; i<coord.size(); ++i)
-          coord[i] = UVW(coord_(i,0), -coord_(i,1), coord_(i,2));
-      else
-        for (size_t i=0; i<coord.size(); ++i)
-          coord[i] = UVW(coord_(i,0), coord_(i,1), coord_(i,2));
+      double vfac = negate_v ? -1 : 1;
+      vmax=0;
+      for (size_t i=0; i<coord.size(); ++i)
+        {
+        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        umax = max(umax, abs(coord_(i,0)));
+        vmax = max(vmax, abs(coord_(i,1)));
+        }
+      umax *= fcmax;
+      vmax *= fcmax;
       }
 
     RowChan getRowChan(idx_t index) const
@@ -195,6 +214,8 @@ class Baselines
     size_t Nchannels() const { return nchan; }
     idx_t getIdx(idx_t irow, idx_t ichan) const
       { return ichan+(irow<<shift); }
+    double Umax() const { return umax; }
+    double Vmax() const { return vmax; }
   };
 
 template<typename T> class GridderConfig
@@ -332,7 +353,8 @@ template<typename T> class GridderConfig
       {
       checkShape(grid.shape(), {nu,nv});
       mav<T,2> tmav({nu,nv});
-      hartley2_2D<T>(grid, tmav, nthreads);
+      tmav.apply(grid, [](T&a, T b) {a=b;});
+      hartley2_2D<T>(tmav, true, nthreads);
       grid2dirty_post(tmav, dirty);
       }
 
@@ -341,7 +363,16 @@ template<typename T> class GridderConfig
       {
       checkShape(grid.shape(), {nu,nv});
       fmav<complex<T>> inout(grid);
-      c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
+      if (2*ivmaxglob<nv)
+        {
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),ivmaxglob});
+        c2c(inout_lo, inout_lo, {0}, BACKWARD, T(1), nthreads);
+        auto inout_hi = inout.subarray({0,inout.shape(1)-ivmaxglob},{inout.shape(0),ivmaxglob});
+        c2c(inout_hi, inout_hi, {0}, BACKWARD, T(1), nthreads);
+        c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
+        }
+      else
+        c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
       grid2dirty_post2(grid, dirty, w);
       }
 
@@ -416,7 +447,7 @@ template<typename T> class GridderConfig
       mav<T,2> &grid) const
       {
       dirty2grid_pre(dirty, grid);
-      hartley2_2D<T>(grid, grid, nthreads);
+      hartley2_2D<T>(grid, false, nthreads);
       }
 
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
@@ -424,7 +455,16 @@ template<typename T> class GridderConfig
       {
       dirty2grid_pre2(dirty, grid, w);
       fmav<complex<T>> inout(grid);
-      c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
+      if (2*ivmaxglob<nv)
+        {
+        c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
+        auto inout_lo = inout.subarray({0,0},{inout.shape(0),ivmaxglob});
+        c2c(inout_lo, inout_lo, {0}, FORWARD, T(1), nthreads);
+        auto inout_hi = inout.subarray({0,inout.shape(1)-ivmaxglob},{inout.shape(0),ivmaxglob});
+        c2c(inout_hi, inout_hi, {0}, FORWARD, T(1), nthreads);
+        }
+      else
+        c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
       }
 
     void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
@@ -1073,6 +1113,9 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, nthreads);
+ivmaxglob = size_t(nv*baselines.Vmax()*pixsize_y + 0.5*gconf.Supp() + 1);
+ivmaxglob = min(ivmaxglob,nv/2);
+cout << "Saving " << (nv-2.*ivmaxglob)/nv*100 << "%" << endl;
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
@@ -1094,6 +1137,9 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   ms.fill(0);
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
+ivmaxglob = size_t(nv*baselines.Vmax()*pixsize_y + 0.5*gconf.Supp() + 1);
+ivmaxglob = min(ivmaxglob,nv/2);
+//cout << "Saving " << (nv-2.*ivmaxglob)/nv*100 << "%" << endl;
   dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
   }
 
