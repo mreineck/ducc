@@ -46,7 +46,7 @@ an interface changes in a manner that is not backwards compatible, the DUCC
 version number will increase. As a consequence it might happen that one part of
 a Python code may use an older version of DUCC while at the same time another
 part requires a newer version. Since DUCC's version number is included in the
-module name itself (the module is not called "ducc", but rather "ducc<X>"),
+module name itself (the module is not called `ducc`, but rather `ducc<X>`),
 this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
