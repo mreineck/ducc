@@ -1,0 +1,15 @@
+0.2.0:
+
+- wgridder:
+  - kernels are now evaluated via polynomial approximation, allowing much
+    more freedom in the choice of kernel function
+  - switch to 2-parameter ES kernels for better accuracy
+  - unnecessary FFT calculations are skipped
+
+- totalconvolve:
+  - improved accuracy by making use of the new wgridder kernels
+  - *INTERFACE CHANGE* removed method "epsilon_guess()"
+
+- pointingprovider:
+  new, experimental module for computing detector pointings from a time stream
+  of satellite pointings. To be used by litebird_sim initially.

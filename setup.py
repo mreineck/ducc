@@ -7,7 +7,7 @@ from setuptools import setup, Extension
 import pybind11
 
 pkgname = 'ducc0'
-version = '0.1.9'
+version = '0.2.0'
 
 
 def _get_files_by_suffix(directory, suffix):
