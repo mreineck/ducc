@@ -56,7 +56,7 @@ template<typename T> class membuf
       : d(d_), rw(false) {}
     // allocate own memory
     membuf(size_t sz)
-      : ptr(make_unique<vector<T>>(sz)), d(ptr->data()), rw(true) {}
+      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     // share another memory buffer, but read-only
     membuf(const membuf &other)
       : ptr(other.ptr), d(other.d), rw(false) {}
