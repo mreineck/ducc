@@ -237,15 +237,15 @@ template<typename T> class GridderConfig
     size_t vlim;
     bool uv_side_fast;
 
-    complex<T> wscreen(T x, T y, T w, bool adjoint) const
+    T phase (T x, T y, T w, bool adjoint) const
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
       if (tmp<=0) return 1; // no phase factor beyond the horizon
       T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-      T phase = 2*pi*w*nm1;
-      if (adjoint) phase *= -1;
-      return complex<T>(cos(phase), sin(phase));
+      T phs = 2*pi*w*nm1;
+      if (adjoint) phs *= -1;
+      return phs;
       }
 
   public:
@@ -307,8 +307,6 @@ template<typename T> class GridderConfig
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-ny_dirty/2+j;
             if (j2>=nv) j2-=nv;
-            // FIXME: for some reason g++ warns about double-to-float conversion
-            // here, even though there is an explicit cast...
             dirty.v(i,j) = tmav(i2,j2)*T(cfu[icfu]*cfv[icfv]);
             }
           }
@@ -322,33 +320,45 @@ template<typename T> class GridderConfig
              y0 = -0.5*ny_dirty*psy;
       execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
         {
+        using vtype = native_simd<T>;
+        constexpr size_t vlen=vtype::size();
+        size_t nvec = (ny_dirty/2+1+(vlen-1))/vlen;
+        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
           {
           T fx = T(x0+i*psx);
           fx *= fx;
+          size_t ix = nu-nx_dirty/2+i;
+          if (ix>=nu) ix-=nu;
+          size_t i2 = nx_dirty-i;
+          size_t ix2 = nu-nx_dirty/2+i2;
+          if (ix2>=nu) ix2-=nu;
           for (size_t j=0; j<=ny_dirty/2; ++j)
             {
             T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, w, true);
-            size_t ix = nu-nx_dirty/2+i;
-            if (ix>=nu) ix-=nu;
-            size_t jx = nv-ny_dirty/2+j;
-            if (jx>=nv) jx-=nv;
-            dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            size_t ix2 = nu-nx_dirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            size_t jx2 = nv-ny_dirty/2+j2;
-            if (jx2>=nv) jx2-=nv;
-            if ((i>0)&&(i<i2))
-              {
-              dirty.v(i2,j) += (tmav(ix2,jx)*ws).real(); // lower right
-              if ((j>0)&&(j<j2))
-                dirty.v(i2,j2) += (tmav(ix2,jx2)*ws).real(); // upper right
-              }
-            if ((j>0)&&(j<j2))
-              dirty.v(i,j2) += (tmav(ix,jx2)*ws).real(); // upper left
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, true);
             }
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+               sp[j][k]=sin(ph[j][k]);
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+              cp[j][k]=cos(ph[j][k]);
+          if ((i>0)&&(i<i2))
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
+              dirty.v(i2,j) += (tmav(ix2,jx)*ws).real(); // lower right
+              }
+          else
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
+              }
           }
         });
       }
@@ -420,33 +430,45 @@ template<typename T> class GridderConfig
              y0 = -0.5*ny_dirty*psy;
       execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
         {
+        using vtype = native_simd<T>;
+        constexpr size_t vlen=vtype::size();
+        size_t nvec = (ny_dirty/2+1+(vlen-1))/vlen;
+        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
           {
           T fx = T(x0+i*psx);
           fx *= fx;
+          size_t ix = nu-nx_dirty/2+i;
+          if (ix>=nu) ix-=nu;
+          size_t i2 = nx_dirty-i;
+          size_t ix2 = nu-nx_dirty/2+i2;
+          if (ix2>=nu) ix2-=nu;
           for (size_t j=0; j<=ny_dirty/2; ++j)
             {
             T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, w, false);
-            size_t ix = nu-nx_dirty/2+i;
-            if (ix>=nu) ix-=nu;
-            size_t jx = nv-ny_dirty/2+j;
-            if (jx>=nv) jx-=nv;
-            grid.v(ix,jx) = dirty(i,j)*ws; // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            size_t ix2 = nu-nx_dirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            size_t jx2 = nv-ny_dirty/2+j2;
-            if (jx2>=nv) jx2-=nv;
-            if ((i>0)&&(i<i2))
-              {
-              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
-              if ((j>0)&&(j<j2))
-                grid.v(ix2,jx2) = dirty(i2,j2)*ws; // upper right
-              }
-            if ((j>0)&&(j<j2))
-              grid.v(ix,jx2) = dirty(i,j2)*ws; // upper left
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, false);
             }
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+               sp[j][k]=sin(ph[j][k]);
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+              cp[j][k]=cos(ph[j][k]);
+          if ((i>0)&&(i<i2))
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
+              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
+              }
+          else
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
+              }
           }
         });
       }
@@ -484,39 +506,6 @@ template<typename T> class GridderConfig
       iu0 = min(int(u+ushift)-int(nu), maxiu0);
       v=fmod1(v_in*psy)*nv;
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
-      }
-
-    void apply_wscreen(const mav<complex<T>,2> &dirty,
-      mav<complex<T>,2> &dirty2, double w, bool adjoint) const
-      {
-      checkShape(dirty.shape(), {nx_dirty, ny_dirty});
-      checkShape(dirty2.shape(), {nx_dirty, ny_dirty});
-
-      double x0 = -0.5*nx_dirty*psx,
-             y0 = -0.5*ny_dirty*psy;
-      execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
-        {
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
-          {
-          T fx = T(x0+i*psx);
-          fx *= fx;
-          for (size_t j=0; j<=ny_dirty/2; ++j)
-            {
-            T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, T(w), adjoint);
-            dirty2(i,j) = dirty(i,j)*ws; // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            if ((i>0)&&(i<i2))
-              {
-              dirty2(i2,j) = dirty(i2,j)*ws; // lower right
-              if ((j>0)&&(j<j2))
-                dirty2(i2,j2) = dirty(i2,j2)*ws; // upper right
-              }
-            if ((j>0)&&(j<j2))
-              dirty2(i,j2) = dirty(i,j2)*ws; // upper left
-            }
-          }
-        });
       }
   };
 
