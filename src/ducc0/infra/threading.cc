@@ -29,6 +29,7 @@
 #include <queue>
 #include <atomic>
 #include <vector>
+#include <memory>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
@@ -159,6 +160,8 @@ class thread_pool
 
     ~thread_pool() { shutdown(); }
 
+    size_t size() const { return threads_.size(); }
+
     void submit(std::function<void()> work)
       {
       work_queue_.push(move(work));
@@ -195,6 +198,27 @@ inline thread_pool &get_pool()
 #endif
 
   return pool;
+  }
+inline thread_pool &get_pool2(size_t nthreads=0)
+  {
+  static std::unique_ptr<thread_pool> pool(std::make_unique<thread_pool>(1));
+  if ((!pool) || ((nthreads!=0) && (nthreads!=pool->size()))) // resize
+    {
+    pool = std::make_unique<thread_pool>(nthreads);
+    }
+#if __has_include(<pthread.h>)
+  static std::once_flag f;
+  call_once(f,
+    []{
+    pthread_atfork(
+      +[]{ get_pool2().shutdown(); },  // prepare
+      +[]{ get_pool2().restart(); },   // parent
+      +[]{ get_pool2().restart(); }    // child
+      );
+    });
+#endif
+
+  return *pool;
   }
 
 class Distribution
@@ -317,7 +341,8 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  auto & pool = get_pool();
+  auto & pool = get_pool2(nthreads_);
+//  auto & pool = get_pool();
   latch counter(nthreads_);
   std::exception_ptr ex;
   std::mutex ex_mut;
