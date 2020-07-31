@@ -348,16 +348,16 @@ template<typename T> class GridderConfig
             for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, ny_dirty-j);
-              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
-              dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
-              dirty.v(i2,j) += (tmav(ix2,jx)*ws).real(); // lower right
+              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im;
+              dirty.v(i2,j) += tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im;
               }
           else
             for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, ny_dirty-j);
-              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
-              dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
+              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im; // lower left
               }
           }
         });
