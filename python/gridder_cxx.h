@@ -931,22 +931,23 @@ template<typename T, typename Serv> class WgridHelper
         }
 #else
       // more efficient: precalculate final vector sizes and avoid reallocations
+      vector<int> p0(nvis);
+      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
+        {
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          p0[i] = max(0,int(1+(abs(srv.getCoord(i).w)-(0.5*supp*dw)-wmin)/dw));
+        });
+
       vector<size_t> cnt(nplanes,0);
       for(size_t ipart=0; ipart<nvis; ++ipart)
-        {
-        int plane0 = max(0,int(1+(abs(srv.getCoord(ipart).w)-(0.5*supp*dw)-wmin)/dw));
-        ++cnt[plane0];
-        }
+        ++cnt[p0[ipart]];
 
       // fill minplane
       for (size_t j=0; j<nplanes; ++j)
         minplane[j].resize(cnt[j]);
       vector<size_t> ofs(nplanes, 0);
       for (size_t ipart=0; ipart<nvis; ++ipart)
-        {
-        int plane0 = max(0,int(1+(abs(srv.getCoord(ipart).w)-(0.5*supp*dw)-wmin)/dw));
-        minplane[plane0][ofs[plane0]++]=idx_t(ipart);
-        }
+        minplane[p0[ipart]][ofs[p0[ipart]]++]=idx_t(ipart);
 #endif
       }
 
@@ -1063,7 +1064,8 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   {
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
-         nsafe=gconf.Nsafe();
+         nsafe=gconf.Nsafe(),
+         nthreads=gconf.Nthreads();
   bool have_wgt=wgt.size()!=0;
   if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
   bool have_ms=ms.size()!=0;
@@ -1074,10 +1076,13 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   vector<idx_t> acc(nbu*nbv+1,0);
   vector<idx_t> tmp(nrow*nchan);
 
-  for (idx_t irow=0, idx=0; irow<nrow; ++irow)
-    for (idx_t ichan=0; ichan<nchan; ++ichan, ++idx)
-      if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
-          ((!have_wgt) || (wgt(irow,ichan)!=0)))
+  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+      {
+      for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+        if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
+            ((!have_wgt) || (wgt(irow,ichan)!=0)))
         {
         auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
         if (uvw.w<0) uvw.Flip();
@@ -1086,11 +1091,15 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
         gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
         iu0 = (iu0+nsafe)>>logsquare;
         iv0 = (iv0+nsafe)>>logsquare;
-        ++acc[nbv*iu0 + iv0 + 1];
         tmp[idx] = nbv*iu0 + iv0;
         }
       else
         tmp[idx] = ~idx_t(0);
+      }
+    });
+  for (idx_t idx=0; idx<nrow*nchan; ++idx)
+    if (tmp[idx]!=(~idx_t(0)))
+      ++acc[tmp[idx] + 1];
 
   for (size_t i=1; i<acc.size(); ++i)
     acc[i] += acc[i-1];
