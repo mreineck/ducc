@@ -1073,11 +1073,12 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   constexpr int side=1<<logsquare;
   size_t nbu = (gconf.Nu()+1+side-1) >> logsquare,
          nbv = (gconf.Nv()+1+side-1) >> logsquare;
-  vector<idx_t> acc(nbu*nbv+1,0);
+  mav<idx_t,2> acc({nthreads, (nbu*nbv+16)}); // the 16 is safety distance to avoid false sharing
   vector<idx_t> tmp(nrow*nchan);
 
   execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
     {
+    idx_t tid = sched.thread_num();
     while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
       {
       for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
@@ -1092,23 +1093,31 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
         iu0 = (iu0+nsafe)>>logsquare;
         iv0 = (iv0+nsafe)>>logsquare;
         tmp[idx] = nbv*iu0 + iv0;
+        ++acc.v(tid, tmp[idx]);
         }
       else
         tmp[idx] = ~idx_t(0);
       }
     });
-  for (idx_t idx=0; idx<nrow*nchan; ++idx)
-    if (tmp[idx]!=(~idx_t(0)))
-      ++acc[tmp[idx] + 1];
 
-  for (size_t i=1; i<acc.size(); ++i)
-    acc[i] += acc[i-1];
+  idx_t offset=0;
+  for (idx_t idx=0; idx<nbu*nbv; ++idx)
+    for (idx_t tid=0; tid<nthreads; ++tid)
+      {
+      auto tmp = acc(tid, idx);
+      acc.v(tid, idx) = offset;
+      offset += tmp;
+      }
 
-  vector<idx_t> res(acc.back());
-  for (size_t irow=0, idx=0; irow<nrow; ++irow)
-    for (size_t ichan=0; ichan<nchan; ++ichan, ++idx)
-      if (tmp[idx]!=(~idx_t(0)))
-        res[acc[tmp[idx]]++] = baselines.getIdx(irow, ichan);
+  vector<idx_t> res(offset);
+  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+    {
+    idx_t tid = sched.thread_num();
+    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+      for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+        if (tmp[idx]!=(~idx_t(0)))
+          res[acc.v(tid, tmp[idx])++] = baselines.getIdx(irow, ichan);
+    });
   return res;
   }
 
