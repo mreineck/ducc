@@ -844,12 +844,21 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
     });
   }
 
+auto calc_share(size_t nshares, size_t myshare, size_t nwork)
+  {
+  size_t nbase = nwork/nshares;
+  size_t additional = nwork%nshares;
+  size_t lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
+  size_t hi = lo+nbase+(myshare<additional);
+  return make_tuple(lo, hi);
+  }
+
 template<typename T, typename Serv> class WgridHelper
   {
   private:
     Serv &srv;
     double wmin, dw;
-    size_t nplanes, supp;
+    size_t nplanes, supp, nthreads;
     vector<vector<idx_t>> minplane;
     size_t verbosity;
 
@@ -872,11 +881,12 @@ template<typename T, typename Serv> class WgridHelper
       }
 
     template<typename T2> static void update_idx(vector<T2> &v, const vector<T2> &add,
-      const vector<T2> &del)
+      const vector<T2> &del, size_t nthreads)
       {
       MR_assert(v.size()>=del.size(), "must not happen");
       vector<T2> res;
       res.reserve((v.size()+add.size())-del.size());
+#if 0
       auto iin=v.begin(), ein=v.end();
       auto iadd=add.begin(), eadd=add.end();
       auto irem=del.begin(), erem=del.end();
@@ -893,16 +903,51 @@ template<typename T, typename Serv> class WgridHelper
       MR_assert(irem==erem, "must not happen");
       while(iadd!=eadd)
         res.push_back(*(iadd++));
+#else
+      if (v.empty()) //special case
+        {
+        MR_assert(del.empty(), "must not happen");
+        for (auto x: add)
+          res.push_back(x);
+        }
+      else
+        {
+        res.resize((v.size()+add.size())-del.size());
+        execParallel(nthreads, [&](Scheduler &sched) {
+          auto tid = sched.thread_num();
+          auto [lo, hi] = calc_share(nthreads, tid, v.size());
+          if (lo==hi) return; // if interval is empty, do nothing
+          auto iin=v.begin()+lo, ein=v.begin()+hi;
+          auto iadd = (iin==v.begin()) ? add.begin() : lower_bound(add.begin(), add.end(), *iin);
+          auto eadd = (ein==v.end()) ? add.end() : lower_bound(add.begin(), add.end(), *ein);
+          auto irem = (iin==v.begin()) ? del.begin() : lower_bound(del.begin(), del.end(), *iin);
+          auto erem = (ein==v.end()) ? del.end() : lower_bound(del.begin(), del.end(), *ein);
+          auto iout = res.begin()+lo-(irem-del.begin())+(iadd-add.begin());
+          while(iin!=ein)
+            {
+            if ((irem!=erem) && (*iin==*irem))
+              { ++irem; ++iin; } // skip removed entry
+            else if ((iadd!=eadd) && (*iadd<*iin))
+              *(iout++) = *(iadd++); // add new entry
+            else
+              *(iout++) = *(iin++);
+            }
+          MR_assert(irem==erem, "must not happen");
+          while(iadd!=eadd)
+            *(iout++) = *(iadd++);
+          });
+        }
+#endif
       MR_assert(res.size()==(v.size()+add.size())-del.size(), "must not happen");
       v.swap(res);
       }
 
   public:
     WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, size_t verbosity_)
-      : srv(srv_), supp(gconf.Supp()), verbosity(verbosity_), curplane(-1)
+      : srv(srv_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
+        verbosity(verbosity_), curplane(-1)
       {
       size_t nvis = srv.Nvis();
-      size_t nthreads = gconf.Nthreads();
       double wmax;
 
       wminmax(srv, wmin, wmax);
@@ -932,22 +977,36 @@ template<typename T, typename Serv> class WgridHelper
 #else
       // more efficient: precalculate final vector sizes and avoid reallocations
       vector<int> p0(nvis);
+      mav<size_t,2> cnt({nthreads, nplanes+16}); // safety distance against false sharing
       execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
         {
+        auto tid=sched.thread_num();
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          {
           p0[i] = max(0,int(1+(abs(srv.getCoord(i).w)-(0.5*supp*dw)-wmin)/dw));
+          ++cnt.v(tid, p0[i]);
+          }
         });
 
-      vector<size_t> cnt(nplanes,0);
-      for(size_t ipart=0; ipart<nvis; ++ipart)
-        ++cnt[p0[ipart]];
+      for (size_t p=0; p<nplanes; ++p)
+        {
+        size_t offset=0;
+        for (idx_t tid=0; tid<nthreads; ++tid)
+          {
+          auto tmp = cnt(tid, p);
+          cnt.v(tid, p) = offset;
+          offset += tmp;
+          }
+        minplane[p].resize(offset);
+        }
 
       // fill minplane
-      for (size_t j=0; j<nplanes; ++j)
-        minplane[j].resize(cnt[j]);
-      vector<size_t> ofs(nplanes, 0);
-      for (size_t ipart=0; ipart<nvis; ++ipart)
-        minplane[p0[ipart]][ofs[p0[ipart]]++]=idx_t(ipart);
+      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
+        {
+        auto tid=sched.thread_num();
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          minplane[p0[i]][cnt.v(tid,p0[i])++]=idx_t(i);
+        });
 #endif
       }
 
@@ -962,7 +1021,7 @@ template<typename T, typename Serv> class WgridHelper
     bool advance()
       {
       if (++curplane>=int(nplanes)) return false;
-      update_idx(subidx, minplane[curplane], curplane>=int(supp) ? minplane[curplane-supp] : vector<idx_t>());
+      update_idx(subidx, minplane[curplane], curplane>=int(supp) ? minplane[curplane-supp] : vector<idx_t>(), nthreads);
       if (verbosity>1)
         cout << "Working on plane " << curplane << " containing " << subidx.size()
              << " visibilities" << endl;
