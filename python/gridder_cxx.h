@@ -511,19 +511,20 @@ template<typename T> class GridderConfig
 
 constexpr int logsquare=4;
 
-template<typename T, typename T2=complex<T>> class Helper
+template<typename T> class Helper
   {
   private:
+    using T2=complex<T>;
     const GridderConfig<T> &gconf;
     int nu, nv, nsafe, supp;
     const T2 *grid_r;
     T2 *grid_w;
-    int su, sv;
+    int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
     T wfac;
 
-    vector<T2> rbuf, wbuf;
+    mav<T,2> rbufr, rbufi, wbufr, wbufi;
     bool do_w_gridding;
     double w0, xdw;
     vector<std::mutex> &locks;
@@ -541,7 +542,7 @@ template<typename T, typename T2=complex<T>> class Helper
         std::lock_guard<std::mutex> lock(locks[idxu]);
         for (int iv=0; iv<sv; ++iv)
           {
-          grid_w[idxu*nv + idxv] += wbuf[iu*sv + iv];
+          grid_w[idxu*nv + idxv] += complex<T>(wbufr(iu,iv), wbufi(iu,iv));
           if (++idxv>=nv) idxv=0;
           }
         }
@@ -558,7 +559,8 @@ template<typename T, typename T2=complex<T>> class Helper
         int idxv = idxv0;
         for (int iv=0; iv<sv; ++iv)
           {
-          rbuf[iu*sv + iv] = grid_r[idxu*nv + idxv];
+          rbufr.v(iu,iv) = grid_r[idxu*nv + idxv].real();
+          rbufi.v(iu,iv) = grid_r[idxu*nv + idxv].imag();
           if (++idxv>=nv) idxv=0;
           }
         if (++idxu>=nu) idxu=0;
@@ -567,8 +569,8 @@ template<typename T, typename T2=complex<T>> class Helper
 
   public:
     size_t nvec;
-    const T2 *p0r;
-    T2 *p0w;
+    const T *p0rr, *p0ri;
+    T *p0wr, *p0wi;
     static constexpr size_t vlen=native_simd<T>::size();
     union kbuf {
       T scalar[64];
@@ -580,10 +582,15 @@ template<typename T, typename T2=complex<T>> class Helper
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
       : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), nsafe(gconf.Nsafe()),
         supp(gconf.Supp()), grid_r(grid_r_),
-        grid_w(grid_w_), su(2*nsafe+(1<<logsquare)), sv(2*nsafe+(1<<logsquare)),
+        grid_w(grid_w_),
+        su(2*nsafe+(1<<logsquare)),
+        sv(2*nsafe+(1<<logsquare)),
+        svvec(((sv+vlen-1)/vlen)*vlen),
         bu0(-1000000), bv0(-1000000),
-        rbuf(su*sv*(grid_r!=nullptr),T(0)),
-        wbuf(su*sv*(grid_w!=nullptr),T(0)),
+        rbufr({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
+        rbufi({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
+        wbufr({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
+        wbufi({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
         do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
@@ -594,7 +601,7 @@ template<typename T, typename T2=complex<T>> class Helper
       }
     ~Helper() { if (grid_w) dump(); }
 
-    int lineJump() const { return sv; }
+    int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
     void prep(const UVW &in)
       {
@@ -610,13 +617,20 @@ template<typename T, typename T2=complex<T>> class Helper
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
-        if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
+        if (grid_w)
+          {
+          dump();
+          wbufr.apply([](T &v){v=0;});
+          wbufi.apply([](T &v){v=0;});
+          }
         bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
         bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         if (grid_r) load();
         }
-      p0r = grid_r ? rbuf.data() + sv*(iu0-bu0) + iv0-bv0 : nullptr;
-      p0w = grid_w ? wbuf.data() + sv*(iu0-bu0) + iv0-bv0 : nullptr;
+      p0rr = grid_r ? &rbufr(iu0-bu0, iv0-bv0) : nullptr;
+      p0ri = grid_r ? &rbufi(iu0-bu0, iv0-bv0) : nullptr;
+      p0wr = grid_w ? &wbufr.v(iu0-bu0, iv0-bv0) : nullptr;
+      p0wi = grid_w ? &wbufi.v(iu0-bu0, iv0-bv0) : nullptr;
       }
   };
 
@@ -702,38 +716,181 @@ template<typename T, typename Serv> void x2grid_c
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
-
+  constexpr size_t vlen=native_simd<T>::size();
+  size_t nvec((supp+vlen-1)/vlen);
   size_t np = srv.Nvis();
+  if (nvec==1)
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      auto * DUCC0_RESTRICT ptr = hlp.p0w;
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
       for (size_t cu=0; cu<supp; ++cu)
         {
         complex<T> tmp(v*ku[cu]);
-        size_t cv=0;
-        for (; cv+3<supp; cv+=4)
+        for (size_t cv=0; cv<1; ++cv)
           {
-          ptr[cv  ] += tmp*kv[cv  ];
-          ptr[cv+1] += tmp*kv[cv+1];
-          ptr[cv+2] += tmp*kv[cv+2];
-          ptr[cv+3] += tmp*kv[cv+3];
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
           }
-        for (; cv<supp; ++cv)
-          ptr[cv] += tmp*kv[cv];
-        ptr+=jump;
+        ptrr+=jump;
+        ptri+=jump;
+        }
+      }
+    });
+  else if (nvec==2)
+  execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
+      auto v(srv.getVis(ipart));
+      if (do_w_gridding) v*=hlp.Wfac();
+      if (flip) v=conj(v);
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        complex<T> tmp(v*ku[cu]);
+        for (size_t cv=0; cv<2; ++cv)
+          {
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
+          }
+        ptrr+=jump;
+        ptri+=jump;
+        }
+      }
+    });
+  else if (nvec==3)
+  execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
+      auto v(srv.getVis(ipart));
+      if (do_w_gridding) v*=hlp.Wfac();
+      if (flip) v=conj(v);
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        complex<T> tmp(v*ku[cu]);
+        for (size_t cv=0; cv<3; ++cv)
+          {
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
+          }
+        ptrr+=jump;
+        ptri+=jump;
+        }
+      }
+    });
+  else if (nvec==4)
+  execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
+      auto v(srv.getVis(ipart));
+      if (do_w_gridding) v*=hlp.Wfac();
+      if (flip) v=conj(v);
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        complex<T> tmp(v*ku[cu]);
+        for (size_t cv=0; cv<4; ++cv)
+          {
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
+          }
+        ptrr+=jump;
+        ptri+=jump;
+        }
+      }
+    });
+  else
+  execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
+      auto v(srv.getVis(ipart));
+      if (do_w_gridding) v*=hlp.Wfac();
+      if (flip) v=conj(v);
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        complex<T> tmp(v*ku[cu]);
+        for (size_t cv=0; cv<hlp.nvec; ++cv)
+          {
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
+          }
+        ptrr+=jump;
+        ptri+=jump;
         }
       }
     });
@@ -749,15 +906,18 @@ template<typename T, typename Serv> void grid2x_c
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
+  constexpr size_t vlen=native_simd<T>::size();
+  size_t nvec((supp+vlen-1)/vlen);
 
   // Loop over sampling points
   size_t np = srv.Nvis();
+  if (nvec==1)
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -765,20 +925,151 @@ template<typename T, typename Serv> void grid2x_c
       auto flip = coord.FixW();
       hlp.prep(coord);
       complex<T> r = 0;
-      const auto * DUCC0_RESTRICT ptr = hlp.p0r;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
         {
-        complex<T> tmp(0);
-        size_t cv=0;
-        for (; cv+3<supp; cv+=4)
-          tmp += ptr[cv  ]*kv[cv  ]
-               + ptr[cv+1]*kv[cv+1]
-               + ptr[cv+2]*kv[cv+2]
-               + ptr[cv+3]*kv[cv+3];
-        for (; cv<supp; ++cv)
-          tmp += ptr[cv] * kv[cv];
-        r += tmp*ku[cu];
-        ptr += jump;
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<1; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ptrr += jump;
+        ptri += jump;
+        }
+      if (flip) r=conj(r);
+      if (do_w_gridding) r*=hlp.Wfac();
+      srv.addVis(ipart, r);
+      }
+    });
+  else if (nvec==2)
+  execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      complex<T> r = 0;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<2; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ptrr += jump;
+        ptri += jump;
+        }
+      if (flip) r=conj(r);
+      if (do_w_gridding) r*=hlp.Wfac();
+      srv.addVis(ipart, r);
+      }
+    });
+  else if (nvec==3)
+  execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      complex<T> r = 0;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<3; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ptrr += jump;
+        ptri += jump;
+        }
+      if (flip) r=conj(r);
+      if (do_w_gridding) r*=hlp.Wfac();
+      srv.addVis(ipart, r);
+      }
+    });
+  else if (nvec==4)
+  execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      complex<T> r = 0;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<4; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ptrr += jump;
+        ptri += jump;
+        }
+      if (flip) r=conj(r);
+      if (do_w_gridding) r*=hlp.Wfac();
+      srv.addVis(ipart, r);
+      }
+    });
+  else
+  execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
+    {
+    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
+    int jump = hlp.lineJump();
+    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+
+    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
+      {
+      UVW coord = srv.getCoord(ipart);
+      auto flip = coord.FixW();
+      hlp.prep(coord);
+      complex<T> r = 0;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      for (size_t cu=0; cu<supp; ++cu)
+        {
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<hlp.nvec; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ptrr += jump;
+        ptri += jump;
         }
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
