@@ -924,7 +924,7 @@ template<typename T, typename Serv> void grid2x_c
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
+      native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
@@ -935,10 +935,12 @@ template<typename T, typename Serv> void grid2x_c
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
-        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
         ptrr += jump;
         ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
@@ -957,7 +959,7 @@ template<typename T, typename Serv> void grid2x_c
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
+      native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
@@ -968,10 +970,12 @@ template<typename T, typename Serv> void grid2x_c
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
-        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
         ptrr += jump;
         ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
@@ -990,7 +994,7 @@ template<typename T, typename Serv> void grid2x_c
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
+      native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
@@ -1001,10 +1005,12 @@ template<typename T, typename Serv> void grid2x_c
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
-        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
         ptrr += jump;
         ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
@@ -1023,7 +1029,7 @@ template<typename T, typename Serv> void grid2x_c
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
+      native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
@@ -1034,10 +1040,12 @@ template<typename T, typename Serv> void grid2x_c
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
-        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
         ptrr += jump;
         ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
@@ -1056,7 +1064,7 @@ template<typename T, typename Serv> void grid2x_c
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
+      native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
       for (size_t cu=0; cu<supp; ++cu)
@@ -1067,10 +1075,12 @@ template<typename T, typename Serv> void grid2x_c
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
-        r += ku[cu]*complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
         ptrr += jump;
         ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
