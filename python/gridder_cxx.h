@@ -707,11 +707,12 @@ template<class T, class T2> MsServ<T, T2> makeMsServ
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
 
 
-template<size_t NVEC, typename T, typename Serv> void x2grid_c_helper
+template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_helper
   (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
-  size_t supp = gconf.Supp();
+  constexpr size_t vlen=native_simd<T>::size();
+  constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
@@ -733,55 +734,10 @@ template<size_t NVEC, typename T, typename Serv> void x2grid_c_helper
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
-      for (size_t cu=0; cu<supp; ++cu)
+      for (size_t cu=0; cu<SUPP; ++cu)
         {
         complex<T> tmp(v*ku[cu]);
         for (size_t cv=0; cv<NVEC; ++cv)
-          {
-          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
-          tr += tmp.real()*kv[cv];
-          tr.storeu(ptrr+cv*hlp.vlen);
-          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
-          ti += tmp.imag()*kv[cv];
-          ti.storeu(ptri+cv*hlp.vlen);
-          }
-        ptrr+=jump;
-        ptri+=jump;
-        }
-      }
-    });
-  }
-
-template<typename T, typename Serv> void x2grid_c_helper_general
-  (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
-  double w0=-1, double dw=-1)
-  {
-  size_t supp = gconf.Supp();
-  size_t nthreads = gconf.Nthreads();
-  bool do_w_gridding = dw>0;
-  vector<std::mutex> locks(gconf.Nu());
-  size_t np = srv.Nvis();
-  execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
-    {
-    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
-    int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
-
-    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
-      {
-      UVW coord = srv.getCoord(ipart);
-      auto flip = coord.FixW();
-      hlp.prep(coord);
-      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
-      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
-      auto v(srv.getVis(ipart));
-      if (do_w_gridding) v*=hlp.Wfac();
-      if (flip) v=conj(v);
-      for (size_t cu=0; cu<supp; ++cu)
-        {
-        complex<T> tmp(v*ku[cu]);
-        for (size_t cv=0; cv<hlp.nvec; ++cv)
           {
           auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
           tr += tmp.real()*kv[cv];
@@ -803,26 +759,35 @@ template<typename T, typename Serv> void x2grid_c
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
   MR_assert(grid.contiguous(), "grid is not contiguous");
-  constexpr size_t vlen=native_simd<T>::size();
-  size_t nvec((gconf.Supp()+vlen-1)/vlen);
 
-  if (nvec==1)
-    x2grid_c_helper<1>(gconf, srv, grid, w0, dw);
-  else if (nvec==2)
-    x2grid_c_helper<2>(gconf, srv, grid, w0, dw);
-  else if (nvec==3)
-    x2grid_c_helper<3>(gconf, srv, grid, w0, dw);
-  else if (nvec==4)
-    x2grid_c_helper<4>(gconf, srv, grid, w0, dw);
-  else
-    x2grid_c_helper_general(gconf, srv, grid, w0, dw);
+  switch(gconf.Supp())
+    {
+    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
+    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
+    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
+    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
+    case  5: x2grid_c_helper< 5>(gconf, srv, grid, w0, dw); break;
+    case  6: x2grid_c_helper< 6>(gconf, srv, grid, w0, dw); break;
+    case  7: x2grid_c_helper< 7>(gconf, srv, grid, w0, dw); break;
+    case  8: x2grid_c_helper< 8>(gconf, srv, grid, w0, dw); break;
+    case  9: x2grid_c_helper< 9>(gconf, srv, grid, w0, dw); break;
+    case 10: x2grid_c_helper<10>(gconf, srv, grid, w0, dw); break;
+    case 11: x2grid_c_helper<11>(gconf, srv, grid, w0, dw); break;
+    case 12: x2grid_c_helper<12>(gconf, srv, grid, w0, dw); break;
+    case 13: x2grid_c_helper<13>(gconf, srv, grid, w0, dw); break;
+    case 14: x2grid_c_helper<14>(gconf, srv, grid, w0, dw); break;
+    case 15: x2grid_c_helper<15>(gconf, srv, grid, w0, dw); break;
+    case 16: x2grid_c_helper<16>(gconf, srv, grid, w0, dw); break;
+    default: MR_fail("must not happen");
+    }
   }
 
-template<size_t NVEC, typename T, typename Serv> void grid2x_c_helper
+template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_helper
   (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
   Serv &srv, double w0=-1, double dw=-1)
   {
-  size_t supp = gconf.Supp();
+  constexpr size_t vlen=native_simd<T>::size();
+  constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
@@ -844,57 +809,10 @@ template<size_t NVEC, typename T, typename Serv> void grid2x_c_helper
       native_simd<T> rr=0, ri=0;
       const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
       const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
-      for (size_t cu=0; cu<supp; ++cu)
+      for (size_t cu=0; cu<SUPP; ++cu)
         {
         native_simd<T> tmpr(0), tmpi(0);
         for (size_t cv=0; cv<NVEC; ++cv)
-          {
-          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
-          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
-          }
-        rr += ku[cu]*tmpr;
-        ri += ku[cu]*tmpi;
-        ptrr += jump;
-        ptri += jump;
-        }
-      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
-      if (flip) r=conj(r);
-      if (do_w_gridding) r*=hlp.Wfac();
-      srv.addVis(ipart, r);
-      }
-    });
-  }
-
-template<typename T, typename Serv> void grid2x_c_helper_general
-  (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
-  Serv &srv, double w0=-1, double dw=-1)
-  {
-  size_t supp = gconf.Supp();
-  size_t nthreads = gconf.Nthreads();
-  bool do_w_gridding = dw>0;
-  vector<std::mutex> locks(gconf.Nu());
-
-  // Loop over sampling points
-  size_t np = srv.Nvis();
-  execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
-    {
-    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
-    int jump = hlp.lineJump();
-    const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
-
-    while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
-      {
-      UVW coord = srv.getCoord(ipart);
-      auto flip = coord.FixW();
-      hlp.prep(coord);
-      native_simd<T> rr=0, ri=0;
-      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
-      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
-      for (size_t cu=0; cu<supp; ++cu)
-        {
-        native_simd<T> tmpr(0), tmpi(0);
-        for (size_t cv=0; cv<hlp.nvec; ++cv)
           {
           tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
@@ -918,19 +836,27 @@ template<typename T, typename Serv> void grid2x_c
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
   MR_assert(grid.contiguous(), "grid is not contiguous");
-  constexpr size_t vlen=native_simd<T>::size();
-  size_t nvec((gconf.Supp()+vlen-1)/vlen);
 
-  if (nvec==1)
-    grid2x_c_helper<1>(gconf, grid, srv, w0, dw);
-  else if (nvec==2)
-    grid2x_c_helper<2>(gconf, grid, srv, w0, dw);
-  else if (nvec==3)
-    grid2x_c_helper<3>(gconf, grid, srv, w0, dw);
-  else if (nvec==4)
-    grid2x_c_helper<4>(gconf, grid, srv, w0, dw);
-  else
-    grid2x_c_helper_general(gconf, grid, srv, w0, dw);
+  switch(gconf.Supp())
+    {
+    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
+    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
+    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
+    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
+    case  5: grid2x_c_helper< 5>(gconf, grid, srv, w0, dw); break;
+    case  6: grid2x_c_helper< 6>(gconf, grid, srv, w0, dw); break;
+    case  7: grid2x_c_helper< 7>(gconf, grid, srv, w0, dw); break;
+    case  8: grid2x_c_helper< 8>(gconf, grid, srv, w0, dw); break;
+    case  9: grid2x_c_helper< 9>(gconf, grid, srv, w0, dw); break;
+    case 10: grid2x_c_helper<10>(gconf, grid, srv, w0, dw); break;
+    case 11: grid2x_c_helper<11>(gconf, grid, srv, w0, dw); break;
+    case 12: grid2x_c_helper<12>(gconf, grid, srv, w0, dw); break;
+    case 13: grid2x_c_helper<13>(gconf, grid, srv, w0, dw); break;
+    case 14: grid2x_c_helper<14>(gconf, grid, srv, w0, dw); break;
+    case 15: grid2x_c_helper<15>(gconf, grid, srv, w0, dw); break;
+    case 16: grid2x_c_helper<16>(gconf, grid, srv, w0, dw); break;
+    default: MR_fail("must not happen");
+    }
   }
 
 template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf,
