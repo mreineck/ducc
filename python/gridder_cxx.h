@@ -853,7 +853,7 @@ template<size_t NVEC, typename T, typename Serv> void grid2x_c_helper
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
         rr += ku[cu]*tmpr;
-        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ri += ku[cu]*tmpi;
         ptrr += jump;
         ptri += jump;
         }
@@ -900,7 +900,7 @@ template<typename T, typename Serv> void grid2x_c_helper_general
           tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
           }
         rr += ku[cu]*tmpr;
-        ri += ku[cu]*tmpi;complex<T>(reduce(tmpr, std::plus<>()), reduce(tmpi, std::plus<>()));
+        ri += ku[cu]*tmpi;
         ptrr += jump;
         ptri += jump;
         }
