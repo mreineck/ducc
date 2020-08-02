@@ -64,8 +64,11 @@ def testp2():
     assert_((quat2==quat3).all(), "problem")
     quat2 *= np.sign(quat2[:,0]).reshape((-1,1))
 
-    from scipy.spatial.transform import Rotation as R
-    from scipy.spatial.transform import Slerp
+    try:
+        from scipy.spatial.transform import Rotation as R
+        from scipy.spatial.transform import Slerp
+    except:
+        pytest.skip()
     times1 = t01 + 1./f1*np.arange(size1)
     r1 = R.from_quat(quat1)
     rrquat = R.from_quat(rquat)
