@@ -294,6 +294,135 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       { return corr.corfunc(n, dx, nthreads); }
   };
 
+template<size_t W> class TemplateCorrection
+  {
+  protected:
+    static constexpr auto N = W+W/2+2;
+    vector<double> x, wgtpsi;
+
+  public:
+    TemplateCorrection(const function<double(double)> &func)
+      {
+      GL_Integrator integ(2*N,1);
+      x = integ.coordsSymmetric();
+      wgtpsi = integ.weightsSymmetric();
+      for (size_t i=0; i<x.size(); ++i)
+        wgtpsi[i] *= func(x[i])*W*0.5;
+      }
+
+    /* Compute correction factors for gridding kernel
+       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
+    double corfunc(double v) const
+      {
+      double tmp=0;
+      for (size_t i=0; i<N; ++i)
+        tmp += wgtpsi[i]*cos(pi*W*v*x[i]);
+      return 1./tmp;
+      }
+    /* Compute correction factors for gridding kernel
+       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
+    vector<double> corfunc(size_t n, double dx, int nthreads=1) const
+      {
+      vector<double> res(n);
+      execStatic(n, nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          res[i] = corfunc(i*dx);
+        });
+      return res;
+      }
+  };
+
+template<size_t W, typename T> class TemplateKernel
+  {
+  private:
+    static constexpr auto D=W+3;
+    using Tsimd = native_simd<T>;
+    static constexpr auto vlen = Tsimd::size();
+    static constexpr auto nvec = (W+vlen-1)/vlen;
+
+    std::array<Tsimd,(D+1)*nvec> coeff;
+    const T *scoeff;
+    static constexpr auto sstride = nvec*vlen;
+
+    KernelCorrection corr;
+
+    template<size_t NV, size_t DEG> void eval_intern(T x, native_simd<T> *res) const
+      {
+      x = (x+1)*W-1;
+      for (size_t i=0; i<NV; ++i)
+        {
+        auto tval = coeff[i];
+        for (size_t j=1; j<=DEG; ++j)
+          tval = tval*x + coeff[j*NV+i];
+        res[i] = tval;
+        }
+      }
+
+    template<size_t DEG> T eval_single_intern(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto ptr = scoeff+nth;
+      auto tval = *ptr;
+      for (size_t j=1; j<=DEG; ++j)
+        tval = tval*x + ptr[j*sstride];
+      return tval;
+      }
+
+    static vector<Tsimd> makeCoeff(const function<double(double)> &func,
+      array<Tsimd, (D+1)*nvec> &coeff)
+      {
+      auto coeff_raw = getCoeffs(W,D,func);
+      for (size_t j=0; j<=D; ++j)
+        {
+        for (size_t i=0; i<W; ++i)
+          coeff[j*nvec + i/vlen][i%vlen] = T(coeff_raw[j*W+i]);
+        for (size_t i=W; i<vlen*nvec; ++i)
+          coeff[j*nvec + i/vlen][i%vlen] = T(0);
+        }
+      }
+
+  public:
+    TemplateKernel(const function<double(double)> &func,
+      const KernelCorrection &corr_)
+      : scoeff(reinterpret_cast<T *>(&coeff[0])),
+        corr(corr_)
+      { makeCoeff(func, coeff); }
+
+    constexpr size_t support() const { return W; }
+
+    void eval(T x, native_simd<T> *res) const
+      {
+      x = (x+1)*W-1;
+      for (size_t i=0; i<nvec; ++i)
+        {
+        auto tval = coeff[i];
+        for (size_t j=1; j<=D; ++j)
+          tval = tval*x + coeff[j*nvec+i];
+        res[i] = tval;
+        }
+      }
+
+    T eval_single(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto ptr = scoeff+nth;
+      auto tval = *ptr;
+      for (size_t j=1; j<=D; ++j)
+        tval = tval*x + ptr[j*sstride];
+      return tval;
+      }
+
+    double corfunc(double x) const {return corr.corfunc(x); }
+
+    /* Computes the correction function values at a coordinates
+       [0, dx, 2*dx, ..., (n-1)*dx]  */
+    vector<double> corfunc(size_t n, double dx, int nthreads=1) const
+      { return corr.corfunc(n, dx, nthreads); }
+  };
+
 struct NESdata
   {
   size_t W;

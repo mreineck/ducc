@@ -231,7 +231,6 @@ template<typename T> class GridderConfig
   protected:
     double psx, psy;
     size_t supp, nsafe;
-    double beta;
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
