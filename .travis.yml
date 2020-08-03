@@ -36,7 +36,7 @@ before_install:
   - pip3 install pytest
 
 install:
-  - python3 setup.py install
+  - pip3 install .
 
 script:
   - pytest python/test
