@@ -85,6 +85,6 @@ setup(name=pkgname,
       packages=[],
       python_requires=">=3.6",
       ext_modules=extensions,
-      install_requires=['numpy>=1.17.0'],
+      install_requires=['pybind11>=2.5.0', 'numpy>=1.17.0'],
       license="GPLv2",
       )
