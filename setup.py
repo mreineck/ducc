@@ -30,8 +30,8 @@ define_macros = [("PKGNAME", pkgname),
 
 if sys.platform == 'darwin':
     import distutils.sysconfig
-    extra_compile_args += ['-mmacosx-version-min=10.15']
-    python_module_link_args += ['-mmacosx-version-min=10.15', '-bundle']
+    extra_compile_args += ['-mmacosx-version-min=10.14']
+    python_module_link_args += ['-mmacosx-version-min=10.14', '-bundle']
     cfg_vars = distutils.sysconfig.get_config_vars()
     cfg_vars['LDSHARED'] = cfg_vars['LDSHARED'].replace('-bundle', '')
 elif sys.platform == 'win32':
