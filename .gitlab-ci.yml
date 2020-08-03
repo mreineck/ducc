@@ -19,14 +19,16 @@ build_docker:
 test_gcc:
   stage: testing
   script:
-    - python3 setup.py install --user -f
-    - pytest-3 -q python/test
+    - python3 setup.py sdist
+    - 'tar xvzf sdist/ducc0*.tar.gz'
+    - 'cd ducc0-* && python3 setup.py install --user -f && pytest-3 -q python/test'
 
 test_clang:
   stage: testing
   script:
-    - CC="clang -fsized-deallocation" python3 setup.py install --user -f
-    - pytest-3 -q python/test
+    - python3 setup.py sdist
+    - 'tar xvzf sdist/ducc0*.tar.gz'
+    - 'cd ducc0-* && CC="clang -fsized-deallocation" python3 setup.py install --user -f && pytest-3 -q python/test'
 
 release:
   stage: build_tarballs
