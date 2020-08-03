@@ -33,6 +33,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
@@ -916,15 +917,6 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
     });
   }
 
-auto calc_share(size_t nshares, size_t myshare, size_t nwork)
-  {
-  size_t nbase = nwork/nshares;
-  size_t additional = nwork%nshares;
-  size_t lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
-  size_t hi = lo+nbase+(myshare<additional);
-  return make_tuple(lo, hi);
-  }
-
 template<typename T, typename Serv> class WgridHelper
   {
   private:
@@ -987,7 +979,7 @@ template<typename T, typename Serv> class WgridHelper
         res.resize((v.size()+add.size())-del.size());
         execParallel(nthreads, [&](Scheduler &sched) {
           auto tid = sched.thread_num();
-          auto [lo, hi] = calc_share(nthreads, tid, v.size());
+          auto [lo, hi] = calcShare(nthreads, tid, v.size());
           if (lo==hi) return; // if interval is empty, do nothing
           auto iin=v.begin()+lo, ein=v.begin()+hi;
           auto iadd = (iin==v.begin()) ? add.begin() : lower_bound(add.begin(), add.end(), *iin);
@@ -1179,16 +1171,6 @@ template<typename T, typename Serv> void dirty2x(
     }
   }
 
-void calc_share(size_t nshares, size_t myshare, size_t nwork, size_t &lo,
-  size_t &hi)
-  {
-  size_t nbase = nwork/nshares;
-  size_t additional = nwork%nshares;
-  lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
-  hi = lo+nbase+(myshare<additional);
-  }
-
-
 template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   const GridderConfig<T> &gconf, const mav<T,2> &wgt,
   const mav<complex<T>,2> &ms)
@@ -1207,10 +1189,11 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   mav<idx_t,2> acc({nthreads, (nbu*nbv+16)}); // the 16 is safety distance to avoid false sharing
   vector<idx_t> tmp(nrow*nchan);
 
-  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+  execParallel(nthreads, [&](Scheduler &sched)
     {
     idx_t tid = sched.thread_num();
-    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
       {
       for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
         if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&

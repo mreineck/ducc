@@ -5,6 +5,7 @@ include LICENSE
 include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/error_handling.h
 include src/ducc0/infra/mav.h
+include src/ducc0/infra/misc_utils.h
 include src/ducc0/infra/simd.h
 include src/ducc0/infra/string_utils.cc
 include src/ducc0/infra/string_utils.h
