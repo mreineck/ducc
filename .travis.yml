@@ -29,6 +29,7 @@ addons:
     update: true
 
 install:
+  - pip3 install pybind11
   - python3 setup.py install
 
 script:
