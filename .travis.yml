@@ -14,9 +14,13 @@ compiler:
 
 matrix:
   include:
-    - name: "Python 3.7 on MacOSX"
+    - name: "Python 3.7 on MacOSX 10.15"
       os: osx
       osx_image: xcode12
+      language: shell
+    - name: "Python 3.7 on MacOSX 10.14"
+      os: osx
+      osx_image: xcode10.2
       language: shell
 
 cache:
