@@ -203,6 +203,8 @@ py::array py_transpose(const py::array &in, py::array &out)
   MR_fail("unsupported datatype");
   }
 
+void py_set_thread_pool_size(size_t new_pool_size)
+  { set_pool_size(new_pool_size); }
 
 const char *misc_DS = R"""(
 Various unsorted utilities
@@ -225,6 +227,8 @@ void add_misc(py::module &msup)
 
   m.def("ascontiguousarray",&py_ascontiguousarray, "in"_a);
   m.def("transpose",&py_transpose, "in"_a, "out"_a);
+
+  m.def("set_thread_pool_size",&py_set_thread_pool_size, "new_pool_size"_a);
   }
 
 }
