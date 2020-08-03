@@ -161,6 +161,8 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     size_t W, D, nvec;
 
     vector<Tsimd> coeff;
+    const T *scoeff;
+    size_t sstride;
     void (HornerKernel<T>::* evalfunc) (T, native_simd<T> *) const;
     T (HornerKernel<T>::* evalsinglefunc) (T) const;
 
@@ -182,11 +184,10 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       {
       auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
       x = (x+1)*W-2*nth-1;
-      auto i = nth/vlen;
-      auto imod = nth%vlen;
-      auto tval = coeff[i][imod];
+      auto ptr = scoeff+nth;
+      auto tval = *ptr;
       for (size_t j=1; j<=DEG; ++j)
-        tval = tval*x + coeff[j*nvec+i][imod];
+        tval = tval*x + ptr[j*sstride];
       return tval;
       }
 
@@ -206,11 +207,10 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       {
       auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
       x = (x+1)*W-2*nth-1;
-      auto i = nth/vlen;
-      auto imod = nth%vlen;
-      auto tval = coeff[i][imod];
+      auto ptr = scoeff+nth;
+      auto tval = *ptr;
       for (size_t j=1; j<=D; ++j)
-        tval = tval*x + coeff[j*nvec+i][imod];
+        tval = tval*x + ptr[j*sstride];
       return tval;
       }
 
@@ -274,7 +274,8 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     HornerKernel(size_t W_, size_t D_, const function<double(double)> &func,
       const KernelCorrection &corr_)
       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
-        coeff(makeCoeff(W_, D_, func)), corr(corr_)
+        coeff(makeCoeff(W_, D_, func)), scoeff(reinterpret_cast<T *>(&coeff[0])),
+        sstride(vlen*nvec), corr(corr_)
       { wire_eval(); }
 
     virtual size_t support() const { return W; }
