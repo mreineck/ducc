@@ -28,10 +28,12 @@ addons:
   homebrew:
     update: true
 
+before_install:
+  - pip3 install pybind11 pytest
+
 install:
-  - pip3 install pybind11
   - python3 setup.py install
 
 script:
-  - pytest-3 python/test
+  - pytest python/test
 
