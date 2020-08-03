@@ -1,0 +1,36 @@
+language: python
+
+python:
+  - 3.7
+
+os:
+  - linux
+  
+dist:
+  - focal
+
+compiler:
+  - gcc-9
+
+matrix:
+  include:
+    - name: "Python 3.7 on MacOSX"
+      os: osx
+      osx_image: xcode12
+      language: shell
+
+cache:
+  apt: true
+
+addons:
+  apt:
+    update: true
+  homebrew:
+    update: true
+
+install:
+  - python3 setup.py install
+
+script:
+  - pytest-3 python/test
+
