@@ -39,7 +39,8 @@ template<typename T> class aligned_array
     T *p;
     size_t sz;
 
-// let's not use aligned_alloc on Apple for the moment, it's only supported from 10.15 on...
+// FIXME: let's not use aligned_alloc on Apple for the moment,
+// it's only supported from 10.15 on...
 #if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
     static T *ralloc(size_t num)
       {
