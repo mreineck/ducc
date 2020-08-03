@@ -1,7 +1,7 @@
 0.3.0:
 - general:
   - The package should now be installable from PyPI via pip even on MacOS.
-    However, MacOS >= 10.15 is required.
+    However, MacOS >= 10.14 is required.
 
 - wgridder:
   - very substantial performance and scaling improvements
