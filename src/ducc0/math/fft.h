@@ -49,6 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <complex>
 #include <algorithm>
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/mav.h"
 #ifndef DUCC0_NO_THREADING
@@ -117,7 +118,7 @@ struct util // hack to avoid duplicate symbols
     size_t parallel = size / (info.shape(axis) * vlen);
     if (info.shape(axis) < 1000)
       parallel /= 4;
-    size_t max_threads = (nthreads==0) ? ducc0::max_threads() : nthreads;
+    size_t max_threads = (nthreads==0) ? ducc0::get_default_nthreads() : nthreads;
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
@@ -437,10 +438,7 @@ template<size_t N> class multi_iter
       if (nshares==1) return;
       if (nshares==0) throw std::runtime_error("can't run with zero threads");
       if (myshare>=nshares) throw std::runtime_error("impossible share requested");
-      size_t nbase = rem/nshares;
-      size_t additional = rem%nshares;
-      size_t lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
-      size_t hi = lo+nbase+(myshare<additional);
+      auto [lo, hi] = calcShare(nshares, myshare, rem);
       size_t todo = hi-lo;
 
       size_t chunk = rem;

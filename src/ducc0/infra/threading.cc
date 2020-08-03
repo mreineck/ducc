@@ -29,6 +29,7 @@
 #include <queue>
 #include <atomic>
 #include <vector>
+#include <memory>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
@@ -40,17 +41,13 @@ namespace detail_threading {
 
 #ifndef DUCC0_NO_THREADING
 
-static const size_t max_threads_ = std::max<size_t>(1, std::thread::hardware_concurrency());
-
-std::atomic<size_t> default_nthreads_(max_threads_);
+std::atomic<size_t> default_nthreads_(std::max<size_t>(1, std::thread::hardware_concurrency()));
 
 size_t get_default_nthreads()
   { return default_nthreads_; }
 
 void set_default_nthreads(size_t new_default_nthreads)
   { default_nthreads_ = std::max<size_t>(1, new_default_nthreads); }
-
-size_t max_threads() { return max_threads_; }
 
 class latch
   {
@@ -155,9 +152,9 @@ class thread_pool
       threads_(nthreads)
       { create_threads(); }
 
-    thread_pool(): thread_pool(max_threads_) {}
-
     ~thread_pool() { shutdown(); }
+
+    size_t size() const { return threads_.size(); }
 
     void submit(std::function<void()> work)
       {
@@ -179,9 +176,12 @@ class thread_pool
       }
   };
 
-inline thread_pool &get_pool()
+thread_pool &get_pool(size_t nthreads=0)
   {
-  static thread_pool pool;
+  static std::unique_ptr<thread_pool> pool;
+  if ((!pool) && (nthreads==0)) nthreads=default_nthreads_;
+  if ((!pool) || ((nthreads!=0) && (nthreads!=pool->size()))) // resize
+    pool = std::make_unique<thread_pool>(nthreads);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -194,8 +194,11 @@ inline thread_pool &get_pool()
     });
 #endif
 
-  return pool;
+  return *pool;
   }
+
+void set_pool_size(size_t new_pool_size)
+  { get_pool(new_pool_size); }
 
 class Distribution
   {
@@ -317,7 +320,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  auto & pool = get_pool();
+  auto &pool = get_pool();
   latch counter(nthreads_);
   std::exception_ptr ex;
   std::mutex ex_mut;

@@ -33,6 +33,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
@@ -237,15 +238,15 @@ template<typename T> class GridderConfig
     size_t vlim;
     bool uv_side_fast;
 
-    complex<T> wscreen(T x, T y, T w, bool adjoint) const
+    T phase (T x, T y, T w, bool adjoint) const
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
       if (tmp<=0) return 1; // no phase factor beyond the horizon
       T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-      T phase = 2*pi*w*nm1;
-      if (adjoint) phase *= -1;
-      return complex<T>(cos(phase), sin(phase));
+      T phs = 2*pi*w*nm1;
+      if (adjoint) phs *= -1;
+      return phs;
       }
 
   public:
@@ -307,8 +308,6 @@ template<typename T> class GridderConfig
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-ny_dirty/2+j;
             if (j2>=nv) j2-=nv;
-            // FIXME: for some reason g++ warns about double-to-float conversion
-            // here, even though there is an explicit cast...
             dirty.v(i,j) = tmav(i2,j2)*T(cfu[icfu]*cfv[icfv]);
             }
           }
@@ -322,33 +321,45 @@ template<typename T> class GridderConfig
              y0 = -0.5*ny_dirty*psy;
       execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
         {
+        using vtype = native_simd<T>;
+        constexpr size_t vlen=vtype::size();
+        size_t nvec = (ny_dirty/2+1+(vlen-1))/vlen;
+        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
           {
           T fx = T(x0+i*psx);
           fx *= fx;
+          size_t ix = nu-nx_dirty/2+i;
+          if (ix>=nu) ix-=nu;
+          size_t i2 = nx_dirty-i;
+          size_t ix2 = nu-nx_dirty/2+i2;
+          if (ix2>=nu) ix2-=nu;
           for (size_t j=0; j<=ny_dirty/2; ++j)
             {
             T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, w, true);
-            size_t ix = nu-nx_dirty/2+i;
-            if (ix>=nu) ix-=nu;
-            size_t jx = nv-ny_dirty/2+j;
-            if (jx>=nv) jx-=nv;
-            dirty.v(i,j) += (tmav(ix,jx)*ws).real(); // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            size_t ix2 = nu-nx_dirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            size_t jx2 = nv-ny_dirty/2+j2;
-            if (jx2>=nv) jx2-=nv;
-            if ((i>0)&&(i<i2))
-              {
-              dirty.v(i2,j) += (tmav(ix2,jx)*ws).real(); // lower right
-              if ((j>0)&&(j<j2))
-                dirty.v(i2,j2) += (tmav(ix2,jx2)*ws).real(); // upper right
-              }
-            if ((j>0)&&(j<j2))
-              dirty.v(i,j2) += (tmav(ix,jx2)*ws).real(); // upper left
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, true);
             }
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+               sp[j][k]=sin(ph[j][k]);
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+              cp[j][k]=cos(ph[j][k]);
+          if ((i>0)&&(i<i2))
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im;
+              dirty.v(i2,j) += tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im;
+              }
+          else
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im; // lower left
+              }
           }
         });
       }
@@ -420,33 +431,45 @@ template<typename T> class GridderConfig
              y0 = -0.5*ny_dirty*psy;
       execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
         {
+        using vtype = native_simd<T>;
+        constexpr size_t vlen=vtype::size();
+        size_t nvec = (ny_dirty/2+1+(vlen-1))/vlen;
+        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
         while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
           {
           T fx = T(x0+i*psx);
           fx *= fx;
+          size_t ix = nu-nx_dirty/2+i;
+          if (ix>=nu) ix-=nu;
+          size_t i2 = nx_dirty-i;
+          size_t ix2 = nu-nx_dirty/2+i2;
+          if (ix2>=nu) ix2-=nu;
           for (size_t j=0; j<=ny_dirty/2; ++j)
             {
             T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, w, false);
-            size_t ix = nu-nx_dirty/2+i;
-            if (ix>=nu) ix-=nu;
-            size_t jx = nv-ny_dirty/2+j;
-            if (jx>=nv) jx-=nv;
-            grid.v(ix,jx) = dirty(i,j)*ws; // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            size_t ix2 = nu-nx_dirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            size_t jx2 = nv-ny_dirty/2+j2;
-            if (jx2>=nv) jx2-=nv;
-            if ((i>0)&&(i<i2))
-              {
-              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
-              if ((j>0)&&(j<j2))
-                grid.v(ix2,jx2) = dirty(i2,j2)*ws; // upper right
-              }
-            if ((j>0)&&(j<j2))
-              grid.v(ix,jx2) = dirty(i,j2)*ws; // upper left
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, false);
             }
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+               sp[j][k]=sin(ph[j][k]);
+          for (size_t j=0; j<nvec; ++j)
+            for (size_t k=0; k<vlen; ++k)
+              cp[j][k]=cos(ph[j][k]);
+          if ((i>0)&&(i<i2))
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
+              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
+              }
+          else
+            for (size_t j=0, jx=nv-ny_dirty/2; j<ny_dirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
+              size_t j2 = min(j, ny_dirty-j);
+              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
+              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
+              }
           }
         });
       }
@@ -485,56 +508,24 @@ template<typename T> class GridderConfig
       v=fmod1(v_in*psy)*nv;
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
       }
-
-    void apply_wscreen(const mav<complex<T>,2> &dirty,
-      mav<complex<T>,2> &dirty2, double w, bool adjoint) const
-      {
-      checkShape(dirty.shape(), {nx_dirty, ny_dirty});
-      checkShape(dirty2.shape(), {nx_dirty, ny_dirty});
-
-      double x0 = -0.5*nx_dirty*psx,
-             y0 = -0.5*ny_dirty*psy;
-      execStatic(nx_dirty/2+1, nthreads, 0, [&](Scheduler &sched)
-        {
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
-          {
-          T fx = T(x0+i*psx);
-          fx *= fx;
-          for (size_t j=0; j<=ny_dirty/2; ++j)
-            {
-            T fy = T(y0+j*psy);
-            auto ws = wscreen(fx, fy*fy, T(w), adjoint);
-            dirty2(i,j) = dirty(i,j)*ws; // lower left
-            size_t i2 = nx_dirty-i, j2 = ny_dirty-j;
-            if ((i>0)&&(i<i2))
-              {
-              dirty2(i2,j) = dirty(i2,j)*ws; // lower right
-              if ((j>0)&&(j<j2))
-                dirty2(i2,j2) = dirty(i2,j2)*ws; // upper right
-              }
-            if ((j>0)&&(j<j2))
-              dirty2(i,j2) = dirty(i,j2)*ws; // upper left
-            }
-          }
-        });
-      }
   };
 
 constexpr int logsquare=4;
 
-template<typename T, typename T2=complex<T>> class Helper
+template<typename T> class Helper
   {
   private:
+    using T2=complex<T>;
     const GridderConfig<T> &gconf;
     int nu, nv, nsafe, supp;
     const T2 *grid_r;
     T2 *grid_w;
-    int su, sv;
+    int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
     T wfac;
 
-    vector<T2> rbuf, wbuf;
+    mav<T,2> rbufr, rbufi, wbufr, wbufi;
     bool do_w_gridding;
     double w0, xdw;
     vector<std::mutex> &locks;
@@ -552,7 +543,7 @@ template<typename T, typename T2=complex<T>> class Helper
         std::lock_guard<std::mutex> lock(locks[idxu]);
         for (int iv=0; iv<sv; ++iv)
           {
-          grid_w[idxu*nv + idxv] += wbuf[iu*sv + iv];
+          grid_w[idxu*nv + idxv] += complex<T>(wbufr(iu,iv), wbufi(iu,iv));
           if (++idxv>=nv) idxv=0;
           }
         }
@@ -569,7 +560,8 @@ template<typename T, typename T2=complex<T>> class Helper
         int idxv = idxv0;
         for (int iv=0; iv<sv; ++iv)
           {
-          rbuf[iu*sv + iv] = grid_r[idxu*nv + idxv];
+          rbufr.v(iu,iv) = grid_r[idxu*nv + idxv].real();
+          rbufi.v(iu,iv) = grid_r[idxu*nv + idxv].imag();
           if (++idxv>=nv) idxv=0;
           }
         if (++idxu>=nu) idxu=0;
@@ -578,8 +570,8 @@ template<typename T, typename T2=complex<T>> class Helper
 
   public:
     size_t nvec;
-    const T2 *p0r;
-    T2 *p0w;
+    const T *p0rr, *p0ri;
+    T *p0wr, *p0wi;
     static constexpr size_t vlen=native_simd<T>::size();
     union kbuf {
       T scalar[64];
@@ -591,10 +583,15 @@ template<typename T, typename T2=complex<T>> class Helper
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
       : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), nsafe(gconf.Nsafe()),
         supp(gconf.Supp()), grid_r(grid_r_),
-        grid_w(grid_w_), su(2*nsafe+(1<<logsquare)), sv(2*nsafe+(1<<logsquare)),
+        grid_w(grid_w_),
+        su(2*nsafe+(1<<logsquare)),
+        sv(2*nsafe+(1<<logsquare)),
+        svvec(((sv+vlen-1)/vlen)*vlen),
         bu0(-1000000), bv0(-1000000),
-        rbuf(su*sv*(grid_r!=nullptr),T(0)),
-        wbuf(su*sv*(grid_w!=nullptr),T(0)),
+        rbufr({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
+        rbufi({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
+        wbufr({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
+        wbufi({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
         do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
@@ -605,7 +602,7 @@ template<typename T, typename T2=complex<T>> class Helper
       }
     ~Helper() { if (grid_w) dump(); }
 
-    int lineJump() const { return sv; }
+    int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
     void prep(const UVW &in)
       {
@@ -621,13 +618,20 @@ template<typename T, typename T2=complex<T>> class Helper
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
-        if (grid_w) { dump(); fill(wbuf.begin(), wbuf.end(), T(0)); }
+        if (grid_w)
+          {
+          dump();
+          wbufr.apply([](T &v){v=0;});
+          wbufi.apply([](T &v){v=0;});
+          }
         bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
         bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         if (grid_r) load();
         }
-      p0r = grid_r ? rbuf.data() + sv*(iu0-bu0) + iv0-bv0 : nullptr;
-      p0w = grid_w ? wbuf.data() + sv*(iu0-bu0) + iv0-bv0 : nullptr;
+      p0rr = grid_r ? &rbufr(iu0-bu0, iv0-bv0) : nullptr;
+      p0ri = grid_r ? &rbufi(iu0-bu0, iv0-bv0) : nullptr;
+      p0wr = grid_w ? &wbufr.v(iu0-bu0, iv0-bv0) : nullptr;
+      p0wi = grid_w ? &wbufi.v(iu0-bu0, iv0-bv0) : nullptr;
       }
   };
 
@@ -703,60 +707,88 @@ template<class T, class T2> MsServ<T, T2> makeMsServ
    const mav<idx_t,1> &idx, T2 &ms, const mav<T,2> &wgt)
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
 
-template<typename T, typename Serv> void x2grid_c
+
+template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_helper
   (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
-  checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
-  MR_assert(grid.contiguous(), "grid is not contiguous");
-  size_t supp = gconf.Supp();
+  constexpr size_t vlen=native_simd<T>::size();
+  constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
-
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
     Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      auto * DUCC0_RESTRICT ptr = hlp.p0w;
+      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
+      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
-      for (size_t cu=0; cu<supp; ++cu)
+      for (size_t cu=0; cu<SUPP; ++cu)
         {
         complex<T> tmp(v*ku[cu]);
-        size_t cv=0;
-        for (; cv+3<supp; cv+=4)
+        for (size_t cv=0; cv<NVEC; ++cv)
           {
-          ptr[cv  ] += tmp*kv[cv  ];
-          ptr[cv+1] += tmp*kv[cv+1];
-          ptr[cv+2] += tmp*kv[cv+2];
-          ptr[cv+3] += tmp*kv[cv+3];
+          auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+          tr += tmp.real()*kv[cv];
+          tr.storeu(ptrr+cv*hlp.vlen);
+          auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+          ti += tmp.imag()*kv[cv];
+          ti.storeu(ptri+cv*hlp.vlen);
           }
-        for (; cv<supp; ++cv)
-          ptr[cv] += tmp*kv[cv];
-        ptr+=jump;
+        ptrr+=jump;
+        ptri+=jump;
         }
       }
     });
   }
 
-template<typename T, typename Serv> void grid2x_c
-  (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
-  Serv &srv, double w0=-1, double dw=-1)
+template<typename T, typename Serv> void x2grid_c
+  (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
+  double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
   MR_assert(grid.contiguous(), "grid is not contiguous");
-  size_t supp = gconf.Supp();
+
+  switch(gconf.Supp())
+    {
+    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
+    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
+    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
+    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
+    case  5: x2grid_c_helper< 5>(gconf, srv, grid, w0, dw); break;
+    case  6: x2grid_c_helper< 6>(gconf, srv, grid, w0, dw); break;
+    case  7: x2grid_c_helper< 7>(gconf, srv, grid, w0, dw); break;
+    case  8: x2grid_c_helper< 8>(gconf, srv, grid, w0, dw); break;
+    case  9: x2grid_c_helper< 9>(gconf, srv, grid, w0, dw); break;
+    case 10: x2grid_c_helper<10>(gconf, srv, grid, w0, dw); break;
+    case 11: x2grid_c_helper<11>(gconf, srv, grid, w0, dw); break;
+    case 12: x2grid_c_helper<12>(gconf, srv, grid, w0, dw); break;
+    case 13: x2grid_c_helper<13>(gconf, srv, grid, w0, dw); break;
+    case 14: x2grid_c_helper<14>(gconf, srv, grid, w0, dw); break;
+    case 15: x2grid_c_helper<15>(gconf, srv, grid, w0, dw); break;
+    case 16: x2grid_c_helper<16>(gconf, srv, grid, w0, dw); break;
+    default: MR_fail("must not happen");
+    }
+  }
+
+template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_helper
+  (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
+  Serv &srv, double w0=-1, double dw=-1)
+  {
+  constexpr size_t vlen=native_simd<T>::size();
+  constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
   vector<std::mutex> locks(gconf.Nu());
@@ -768,34 +800,64 @@ template<typename T, typename Serv> void grid2x_c
     Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
-    const T * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+    const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      complex<T> r = 0;
-      const auto * DUCC0_RESTRICT ptr = hlp.p0r;
-      for (size_t cu=0; cu<supp; ++cu)
+      native_simd<T> rr=0, ri=0;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      for (size_t cu=0; cu<SUPP; ++cu)
         {
-        complex<T> tmp(0);
-        size_t cv=0;
-        for (; cv+3<supp; cv+=4)
-          tmp += ptr[cv  ]*kv[cv  ]
-               + ptr[cv+1]*kv[cv+1]
-               + ptr[cv+2]*kv[cv+2]
-               + ptr[cv+3]*kv[cv+3];
-        for (; cv<supp; ++cv)
-          tmp += ptr[cv] * kv[cv];
-        r += tmp*ku[cu];
-        ptr += jump;
+        native_simd<T> tmpr(0), tmpi(0);
+        for (size_t cv=0; cv<NVEC; ++cv)
+          {
+          tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
+          tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+          }
+        rr += ku[cu]*tmpr;
+        ri += ku[cu]*tmpi;
+        ptrr += jump;
+        ptri += jump;
         }
+      auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
       if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
       }
     });
+  }
+
+template<typename T, typename Serv> void grid2x_c
+  (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
+  Serv &srv, double w0=-1, double dw=-1)
+  {
+  checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
+  MR_assert(grid.contiguous(), "grid is not contiguous");
+
+  switch(gconf.Supp())
+    {
+    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
+    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
+    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
+    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
+    case  5: grid2x_c_helper< 5>(gconf, grid, srv, w0, dw); break;
+    case  6: grid2x_c_helper< 6>(gconf, grid, srv, w0, dw); break;
+    case  7: grid2x_c_helper< 7>(gconf, grid, srv, w0, dw); break;
+    case  8: grid2x_c_helper< 8>(gconf, grid, srv, w0, dw); break;
+    case  9: grid2x_c_helper< 9>(gconf, grid, srv, w0, dw); break;
+    case 10: grid2x_c_helper<10>(gconf, grid, srv, w0, dw); break;
+    case 11: grid2x_c_helper<11>(gconf, grid, srv, w0, dw); break;
+    case 12: grid2x_c_helper<12>(gconf, grid, srv, w0, dw); break;
+    case 13: grid2x_c_helper<13>(gconf, grid, srv, w0, dw); break;
+    case 14: grid2x_c_helper<14>(gconf, grid, srv, w0, dw); break;
+    case 15: grid2x_c_helper<15>(gconf, grid, srv, w0, dw); break;
+    case 16: grid2x_c_helper<16>(gconf, grid, srv, w0, dw); break;
+    default: MR_fail("must not happen");
+    }
   }
 
 template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf,
@@ -860,7 +922,7 @@ template<typename T, typename Serv> class WgridHelper
   private:
     Serv &srv;
     double wmin, dw;
-    size_t nplanes, supp;
+    size_t nplanes, supp, nthreads;
     vector<vector<idx_t>> minplane;
     size_t verbosity;
 
@@ -883,11 +945,12 @@ template<typename T, typename Serv> class WgridHelper
       }
 
     template<typename T2> static void update_idx(vector<T2> &v, const vector<T2> &add,
-      const vector<T2> &del)
+      const vector<T2> &del, size_t nthreads)
       {
       MR_assert(v.size()>=del.size(), "must not happen");
       vector<T2> res;
       res.reserve((v.size()+add.size())-del.size());
+#if 0
       auto iin=v.begin(), ein=v.end();
       auto iadd=add.begin(), eadd=add.end();
       auto irem=del.begin(), erem=del.end();
@@ -904,16 +967,51 @@ template<typename T, typename Serv> class WgridHelper
       MR_assert(irem==erem, "must not happen");
       while(iadd!=eadd)
         res.push_back(*(iadd++));
+#else
+      if (v.empty()) //special case
+        {
+        MR_assert(del.empty(), "must not happen");
+        for (auto x: add)
+          res.push_back(x);
+        }
+      else
+        {
+        res.resize((v.size()+add.size())-del.size());
+        execParallel(nthreads, [&](Scheduler &sched) {
+          auto tid = sched.thread_num();
+          auto [lo, hi] = calcShare(nthreads, tid, v.size());
+          if (lo==hi) return; // if interval is empty, do nothing
+          auto iin=v.begin()+lo, ein=v.begin()+hi;
+          auto iadd = (iin==v.begin()) ? add.begin() : lower_bound(add.begin(), add.end(), *iin);
+          auto eadd = (ein==v.end()) ? add.end() : lower_bound(add.begin(), add.end(), *ein);
+          auto irem = (iin==v.begin()) ? del.begin() : lower_bound(del.begin(), del.end(), *iin);
+          auto erem = (ein==v.end()) ? del.end() : lower_bound(del.begin(), del.end(), *ein);
+          auto iout = res.begin()+lo-(irem-del.begin())+(iadd-add.begin());
+          while(iin!=ein)
+            {
+            if ((irem!=erem) && (*iin==*irem))
+              { ++irem; ++iin; } // skip removed entry
+            else if ((iadd!=eadd) && (*iadd<*iin))
+              *(iout++) = *(iadd++); // add new entry
+            else
+              *(iout++) = *(iin++);
+            }
+          MR_assert(irem==erem, "must not happen");
+          while(iadd!=eadd)
+            *(iout++) = *(iadd++);
+          });
+        }
+#endif
       MR_assert(res.size()==(v.size()+add.size())-del.size(), "must not happen");
       v.swap(res);
       }
 
   public:
     WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, size_t verbosity_)
-      : srv(srv_), supp(gconf.Supp()), verbosity(verbosity_), curplane(-1)
+      : srv(srv_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
+        verbosity(verbosity_), curplane(-1)
       {
       size_t nvis = srv.Nvis();
-      size_t nthreads = gconf.Nthreads();
       double wmax;
 
       wminmax(srv, wmin, wmax);
@@ -942,22 +1040,37 @@ template<typename T, typename Serv> class WgridHelper
         }
 #else
       // more efficient: precalculate final vector sizes and avoid reallocations
-      vector<size_t> cnt(nplanes,0);
-      for(size_t ipart=0; ipart<nvis; ++ipart)
+      vector<int> p0(nvis);
+      mav<size_t,2> cnt({nthreads, nplanes+16}); // safety distance against false sharing
+      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
         {
-        int plane0 = max(0,int(1+(abs(srv.getCoord(ipart).w)-(0.5*supp*dw)-wmin)/dw));
-        ++cnt[plane0];
+        auto tid=sched.thread_num();
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          {
+          p0[i] = max(0,int(1+(abs(srv.getCoord(i).w)-(0.5*supp*dw)-wmin)/dw));
+          ++cnt.v(tid, p0[i]);
+          }
+        });
+
+      for (size_t p=0; p<nplanes; ++p)
+        {
+        size_t offset=0;
+        for (idx_t tid=0; tid<nthreads; ++tid)
+          {
+          auto tmp = cnt(tid, p);
+          cnt.v(tid, p) = offset;
+          offset += tmp;
+          }
+        minplane[p].resize(offset);
         }
 
       // fill minplane
-      for (size_t j=0; j<nplanes; ++j)
-        minplane[j].resize(cnt[j]);
-      vector<size_t> ofs(nplanes, 0);
-      for (size_t ipart=0; ipart<nvis; ++ipart)
+      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
         {
-        int plane0 = max(0,int(1+(abs(srv.getCoord(ipart).w)-(0.5*supp*dw)-wmin)/dw));
-        minplane[plane0][ofs[plane0]++]=idx_t(ipart);
-        }
+        auto tid=sched.thread_num();
+        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+          minplane[p0[i]][cnt.v(tid,p0[i])++]=idx_t(i);
+        });
 #endif
       }
 
@@ -972,7 +1085,7 @@ template<typename T, typename Serv> class WgridHelper
     bool advance()
       {
       if (++curplane>=int(nplanes)) return false;
-      update_idx(subidx, minplane[curplane], curplane>=int(supp) ? minplane[curplane-supp] : vector<idx_t>());
+      update_idx(subidx, minplane[curplane], curplane>=int(supp) ? minplane[curplane-supp] : vector<idx_t>(), nthreads);
       if (verbosity>1)
         cout << "Working on plane " << curplane << " containing " << subidx.size()
              << " visibilities" << endl;
@@ -1058,23 +1171,14 @@ template<typename T, typename Serv> void dirty2x(
     }
   }
 
-void calc_share(size_t nshares, size_t myshare, size_t nwork, size_t &lo,
-  size_t &hi)
-  {
-  size_t nbase = nwork/nshares;
-  size_t additional = nwork%nshares;
-  lo = myshare*nbase + ((myshare<additional) ? myshare : additional);
-  hi = lo+nbase+(myshare<additional);
-  }
-
-
 template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   const GridderConfig<T> &gconf, const mav<T,2> &wgt,
   const mav<complex<T>,2> &ms)
   {
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
-         nsafe=gconf.Nsafe();
+         nsafe=gconf.Nsafe(),
+         nthreads=gconf.Nthreads();
   bool have_wgt=wgt.size()!=0;
   if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
   bool have_ms=ms.size()!=0;
@@ -1082,13 +1186,18 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   constexpr int side=1<<logsquare;
   size_t nbu = (gconf.Nu()+1+side-1) >> logsquare,
          nbv = (gconf.Nv()+1+side-1) >> logsquare;
-  vector<idx_t> acc(nbu*nbv+1,0);
+  mav<idx_t,2> acc({nthreads, (nbu*nbv+16)}); // the 16 is safety distance to avoid false sharing
   vector<idx_t> tmp(nrow*nchan);
 
-  for (idx_t irow=0, idx=0; irow<nrow; ++irow)
-    for (idx_t ichan=0; ichan<nchan; ++ichan, ++idx)
-      if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
-          ((!have_wgt) || (wgt(irow,ichan)!=0)))
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    idx_t tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
+      {
+      for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+        if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
+            ((!have_wgt) || (wgt(irow,ichan)!=0)))
         {
         auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
         if (uvw.w<0) uvw.Flip();
@@ -1097,20 +1206,32 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
         gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
         iu0 = (iu0+nsafe)>>logsquare;
         iv0 = (iv0+nsafe)>>logsquare;
-        ++acc[nbv*iu0 + iv0 + 1];
         tmp[idx] = nbv*iu0 + iv0;
+        ++acc.v(tid, tmp[idx]);
         }
       else
         tmp[idx] = ~idx_t(0);
+      }
+    });
 
-  for (size_t i=1; i<acc.size(); ++i)
-    acc[i] += acc[i-1];
+  idx_t offset=0;
+  for (idx_t idx=0; idx<nbu*nbv; ++idx)
+    for (idx_t tid=0; tid<nthreads; ++tid)
+      {
+      auto tmp = acc(tid, idx);
+      acc.v(tid, idx) = offset;
+      offset += tmp;
+      }
 
-  vector<idx_t> res(acc.back());
-  for (size_t irow=0, idx=0; irow<nrow; ++irow)
-    for (size_t ichan=0; ichan<nchan; ++ichan, ++idx)
-      if (tmp[idx]!=(~idx_t(0)))
-        res[acc[tmp[idx]]++] = baselines.getIdx(irow, ichan);
+  vector<idx_t> res(offset);
+  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+    {
+    idx_t tid = sched.thread_num();
+    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+      for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+        if (tmp[idx]!=(~idx_t(0)))
+          res[acc.v(tid, tmp[idx])++] = baselines.getIdx(irow, ichan);
+    });
   return res;
   }
 
