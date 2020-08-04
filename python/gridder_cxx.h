@@ -797,16 +797,17 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
+      native_simd<T> vr(v.real()), vi(v.imag());
       for (size_t cu=0; cu<SUPP; ++cu)
         {
-        complex<T> tmp(v*ku[cu]);
+        native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
         for (size_t cv=0; cv<NVEC; ++cv)
           {
           auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
-          tr += tmp.real()*kv[cv];
+          tr += tmpr*kv[cv];
           tr.storeu(ptrr+cv*hlp.vlen);
           auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
-          ti += tmp.imag()*kv[cv];
+          ti += tmpi*kv[cv];
           ti.storeu(ptri+cv*hlp.vlen);
           }
         ptrr+=jump;
