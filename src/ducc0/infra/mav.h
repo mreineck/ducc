@@ -162,9 +162,11 @@ template<size_t ndim> class mav_info
   protected:
     static_assert(ndim>0, "at least 1D required");
 
+  public:
     using shape_t = array<size_t, ndim>;
     using stride_t = array<ptrdiff_t, ndim>;
 
+  protected:
     shape_t shp;
     stride_t str;
     size_t sz;
@@ -252,6 +254,11 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using tbuf = membuf<T>;
     using tinfo = fmav_info;
 
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+
+  protected:
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
       {
       auto ndim = tinfo::ndim();
