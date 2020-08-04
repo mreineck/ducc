@@ -512,27 +512,27 @@ template<typename T> class GridderConfig
 
 constexpr int logsquare=4;
 
-template<typename T> class Helper
+template<typename T> class HelperX2g
   {
   private:
-    using T2=complex<T>;
     const GridderConfig<T> &gconf;
-    int nu, nv, strv, nsafe, supp;
-    const T2 *grid_r;
-    T2 *grid_w;
+    mav<complex<T>,2> &grid;
+    int nu, nv, supp;
     int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
     T wfac;
 
-    mav<T,2> rbufr, rbufi, wbufr, wbufi;
+    mav<T,2> bufr, bufi;
     bool do_w_gridding;
     double w0, xdw;
     vector<std::mutex> &locks;
 
     void dump() const
       {
-      if (bu0<-nsafe) return; // nothing written into buffer yet
+      int nu = int(gconf.Nu());
+      int nv = int(gconf.Nv());
+      if (bu0<-int(gconf.Nsafe())) return; // nothing written into buffer yet
 
       int idxu = (bu0+nu)%nu;
       int idxv0 = (bv0+nv)%nv;
@@ -543,35 +543,17 @@ template<typename T> class Helper
         std::lock_guard<std::mutex> lock(locks[idxu]);
         for (int iv=0; iv<sv; ++iv)
           {
-          grid_w[idxu*strv + idxv] += complex<T>(wbufr(iu,iv), wbufi(iu,iv));
+          grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
           if (++idxv>=nv) idxv=0;
           }
         }
-        if (++idxu>=nu) idxu=0;
-        }
-      }
-
-    void load()
-      {
-      int idxu = (bu0+nu)%nu;
-      int idxv0 = (bv0+nv)%nv;
-      for (int iu=0; iu<su; ++iu)
-        {
-        int idxv = idxv0;
-        for (int iv=0; iv<sv; ++iv)
-          {
-          rbufr.v(iu,iv) = grid_r[idxu*strv + idxv].real();
-          rbufi.v(iu,iv) = grid_r[idxu*strv + idxv].imag();
-          if (++idxv>=nv) idxv=0;
-          }
         if (++idxu>=nu) idxu=0;
         }
       }
 
   public:
     size_t nvec;
-    const T *p0rr, *p0ri;
-    T *p0wr, *p0wi;
+    T *p0r, *p0i;
     static constexpr size_t vlen=native_simd<T>::size();
     union kbuf {
       T scalar[64];
@@ -579,19 +561,16 @@ template<typename T> class Helper
       };
     kbuf buf;
 
-    Helper(const GridderConfig<T> &gconf_, size_t strv_, const T2 *grid_r_, T2 *grid_w_,
+    HelperX2g(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
-      : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), strv(strv_), nsafe(gconf.Nsafe()),
-        supp(gconf.Supp()), grid_r(grid_r_),
-        grid_w(grid_w_),
-        su(2*nsafe+(1<<logsquare)),
-        sv(2*nsafe+(1<<logsquare)),
+      : gconf(gconf_), grid(grid_),
+        supp(gconf.Supp()),
+        su(2*gconf.Nsafe()+(1<<logsquare)),
+        sv(2*gconf.Nsafe()+(1<<logsquare)),
         svvec(((sv+vlen-1)/vlen)*vlen),
         bu0(-1000000), bv0(-1000000),
-        rbufr({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
-        rbufi({size_t(su),size_t(svvec)*(grid_r!=nullptr)}),
-        wbufr({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
-        wbufi({size_t(su),size_t(svvec)*(grid_w!=nullptr)}),
+        bufr({size_t(su),size_t(svvec)}),
+        bufi({size_t(su),size_t(svvec)}),
         do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
@@ -599,8 +578,9 @@ template<typename T> class Helper
         nvec((supp+vlen-1)/vlen)
       {
       MR_assert(supp<=32, "support too large");
+      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
       }
-    ~Helper() { if (grid_w) dump(); }
+    ~HelperX2g() { dump(); }
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
@@ -618,24 +598,106 @@ template<typename T> class Helper
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
-        if (grid_w)
-          {
-          dump();
-          wbufr.apply([](T &v){v=0;});
-          wbufi.apply([](T &v){v=0;});
-          }
-        bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-        bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-        if (grid_r) load();
+        dump();
+        bufr.apply([](T &v){v=0;});
+        bufi.apply([](T &v){v=0;});
+        bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
+        bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         }
-      p0rr = grid_r ? &rbufr(iu0-bu0, iv0-bv0) : nullptr;
-      p0ri = grid_r ? &rbufi(iu0-bu0, iv0-bv0) : nullptr;
-      p0wr = grid_w ? &wbufr.v(iu0-bu0, iv0-bv0) : nullptr;
-      p0wi = grid_w ? &wbufi.v(iu0-bu0, iv0-bv0) : nullptr;
+      p0r = &bufr.v(iu0-bu0, iv0-bv0);
+      p0i = &bufi.v(iu0-bu0, iv0-bv0);
       }
   };
 
-template<class T, class Serv> class SubServ
+template<typename T> class HelperG2x
+  {
+  private:
+    const GridderConfig<T> &gconf;
+    const mav<complex<T>,2> &grid;
+    int supp;
+    int su, sv, svvec;
+    int iu0, iv0; // start index of the current visibility
+    int bu0, bv0; // start index of the current buffer
+    T wfac;
+
+    mav<T,2> bufr, bufi;
+    bool do_w_gridding;
+    double w0, xdw;
+
+    void load()
+      {
+      int nu = int(gconf.Nu());
+      int nv = int(gconf.Nv());
+      int idxu = (bu0+nu)%nu;
+      int idxv0 = (bv0+nv)%nv;
+      for (int iu=0; iu<su; ++iu)
+        {
+        int idxv = idxv0;
+        for (int iv=0; iv<sv; ++iv)
+          {
+          bufr.v(iu,iv) = grid(idxu, idxv).real();
+          bufi.v(iu,iv) = grid(idxu, idxv).imag();
+          if (++idxv>=nv) idxv=0;
+          }
+        if (++idxu>=nu) idxu=0;
+        }
+      }
+
+  public:
+    size_t nvec;
+    const T *p0r, *p0i;
+    static constexpr size_t vlen=native_simd<T>::size();
+    union kbuf {
+      T scalar[64];
+      native_simd<T> simd[64/vlen];
+      };
+    kbuf buf;
+
+    HelperG2x(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
+      double w0_=-1, double dw_=-1)
+      : gconf(gconf_), grid(grid_),
+        supp(gconf.Supp()),
+        su(2*gconf.Nsafe()+(1<<logsquare)),
+        sv(2*gconf.Nsafe()+(1<<logsquare)),
+        svvec(((sv+vlen-1)/vlen)*vlen),
+        bu0(-1000000), bv0(-1000000),
+        bufr({size_t(su),size_t(svvec)}),
+        bufi({size_t(su),size_t(svvec)}),
+        do_w_gridding(dw_>0),
+        w0(w0_),
+        xdw(T(1)/dw_),
+        nvec((supp+vlen-1)/vlen)
+      {
+      MR_assert(supp<=32, "support too large");
+      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
+      }
+
+    int lineJump() const { return svvec; }
+    T Wfac() const { return wfac; }
+    void prep(const UVW &in)
+      {
+      const auto &krn(*(gconf.krn));
+      double u, v;
+      gconf.getpix(in.u, in.v, u, v, iu0, iv0);
+      double xsupp=2./supp;
+      double x0 = xsupp*(iu0-u);
+      double y0 = xsupp*(iv0-v);
+      krn.eval(T(x0), &buf.simd[0]);
+      krn.eval(T(y0), &buf.simd[nvec]);
+      if (do_w_gridding)
+        wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
+      if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
+        {
+        bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
+        bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
+        load();
+        }
+      p0r = &bufr(iu0-bu0, iv0-bv0);
+      p0i = &bufi(iu0-bu0, iv0-bv0);
+      }
+  };
+
+template<typename T, typename Serv> class SubServ
   {
   private:
     Serv &srv;
@@ -657,7 +719,7 @@ template<class T, class Serv> class SubServ
       { srv.addVis(subidx(i), v); }
   };
 
-template<class T, class T2> class MsServ
+template<typename T, typename T2> class MsServ
   {
   private:
     const Baselines &baselines;
@@ -702,7 +764,7 @@ template<class T, class T2> class MsServ
       ms.v(rc.row, rc.chan) += have_wgt ? v*wgt(rc.row, rc.chan) : v;
       }
   };
-template<class T, class T2> MsServ<T, T2> makeMsServ
+template<typename T, typename T2> MsServ<T, T2> makeMsServ
   (const Baselines &baselines,
    const mav<idx_t,1> &idx, T2 &ms, const mav<T,2> &wgt)
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
@@ -720,7 +782,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
-    Helper<T> hlp(gconf, grid.stride(0), nullptr, grid.vdata(), locks, w0, dw);
+    HelperX2g<T> hlp(gconf, grid, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -730,8 +792,8 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
       UVW coord = srv.getCoord(ipart);
       auto flip = coord.FixW();
       hlp.prep(coord);
-      auto * DUCC0_RESTRICT ptrr = hlp.p0wr;
-      auto * DUCC0_RESTRICT ptri = hlp.p0wi;
+      auto * DUCC0_RESTRICT ptrr = hlp.p0r;
+      auto * DUCC0_RESTRICT ptri = hlp.p0i;
       auto v(srv.getVis(ipart));
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
@@ -759,7 +821,6 @@ template<typename T, typename Serv> void x2grid_c
   double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
-  MR_assert(grid.last_contiguous(), "last grid dimension is not contiguous");
 
   switch(gconf.Supp())
     {
@@ -791,13 +852,12 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
   constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
   bool do_w_gridding = dw>0;
-  vector<std::mutex> locks(gconf.Nu());
 
   // Loop over sampling points
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
-    Helper<T> hlp(gconf, grid.stride(0), grid.data(), nullptr, locks, w0, dw);
+    HelperG2x<T> hlp(gconf, grid, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -808,8 +868,8 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
       auto flip = coord.FixW();
       hlp.prep(coord);
       native_simd<T> rr=0, ri=0;
-      const auto * DUCC0_RESTRICT ptrr = hlp.p0rr;
-      const auto * DUCC0_RESTRICT ptri = hlp.p0ri;
+      const auto * DUCC0_RESTRICT ptrr = hlp.p0r;
+      const auto * DUCC0_RESTRICT ptri = hlp.p0i;
       for (size_t cu=0; cu<SUPP; ++cu)
         {
         native_simd<T> tmpr(0), tmpi(0);
@@ -836,7 +896,6 @@ template<typename T, typename Serv> void grid2x_c
   Serv &srv, double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
-  MR_assert(grid.last_contiguous(), "last grid dimension is not contiguous");
 
   switch(gconf.Supp())
     {
