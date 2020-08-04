@@ -558,6 +558,7 @@ template<size_t supp, typename T> class HelperX2g2
     size_t nvec;
     T *p0r, *p0i;
     static constexpr size_t vlen=native_simd<T>::size();
+    static_assert(supp<=32, "support too large");
     union kbuf {
       T scalar[64];
       native_simd<T> simd[64/vlen];
@@ -578,10 +579,7 @@ template<size_t supp, typename T> class HelperX2g2
         xdw(T(1)/dw_),
         locks(locks_),
         nvec((supp+vlen-1)/vlen)
-      {
-      static_assert(supp<=32, "support too large");
-      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
-      }
+      { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
     ~HelperX2g2() { dump(); }
 
     int lineJump() const { return svvec; }
@@ -646,6 +644,7 @@ template<size_t supp, typename T> class HelperG2x2
     size_t nvec;
     const T *p0r, *p0i;
     static constexpr size_t vlen=native_simd<T>::size();
+    static_assert(supp<=32, "support too large");
     union kbuf {
       T scalar[64];
       native_simd<T> simd[64/vlen];
@@ -665,10 +664,7 @@ template<size_t supp, typename T> class HelperG2x2
         w0(w0_),
         xdw(T(1)/dw_),
         nvec((supp+vlen-1)/vlen)
-      {
-      MR_assert(supp<=32, "support too large");
-      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
-      }
+      { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
