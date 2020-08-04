@@ -226,12 +226,11 @@ template<typename T> class GridderConfig
 
   // FIXME: this should probably be done more cleanly
   public:
-    shared_ptr<GriddingKernel<T>> krn;
+    shared_ptr<HornerKernel<T>> krn;
 
   protected:
     double psx, psy;
     size_t supp, nsafe;
-    double beta;
     size_t nthreads;
     double ushift, vshift;
     int maxiu0, maxiv0;
@@ -402,6 +401,7 @@ template<typename T> class GridderConfig
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nx_dirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(ny_dirty/2+1, 1./nv, nthreads);
+      // FIXME: maybe we don't have to fill everything and can save some time
       grid.fill(0);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
         {
@@ -425,6 +425,7 @@ template<typename T> class GridderConfig
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
       checkShape(grid.shape(), {nu, nv});
+      // FIXME: maybe we don't have to fill everything and can save some time
       grid.fill(0);
 
       double x0 = -0.5*nx_dirty*psx,
@@ -512,12 +513,13 @@ template<typename T> class GridderConfig
 
 constexpr int logsquare=4;
 
-template<typename T> class HelperX2g
+template<size_t supp, typename T> class HelperX2g2
   {
   private:
     const GridderConfig<T> &gconf;
+    TemplateKernel<supp, T> krn;
     mav<complex<T>,2> &grid;
-    int nu, nv, supp;
+    int nu, nv;
     int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
@@ -528,7 +530,7 @@ template<typename T> class HelperX2g
     double w0, xdw;
     vector<std::mutex> &locks;
 
-    void dump() const
+    void dump()
       {
       int nu = int(gconf.Nu());
       int nv = int(gconf.Nv());
@@ -544,6 +546,7 @@ template<typename T> class HelperX2g
         for (int iv=0; iv<sv; ++iv)
           {
           grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
+          bufr.v(iu,iv) = bufi.v(iu,iv) = 0;
           if (++idxv>=nv) idxv=0;
           }
         }
@@ -555,16 +558,16 @@ template<typename T> class HelperX2g
     size_t nvec;
     T *p0r, *p0i;
     static constexpr size_t vlen=native_simd<T>::size();
+    static_assert(supp<=32, "support too large");
     union kbuf {
       T scalar[64];
       native_simd<T> simd[64/vlen];
       };
     kbuf buf;
 
-    HelperX2g(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
+    HelperX2g2(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
-      : gconf(gconf_), grid(grid_),
-        supp(gconf.Supp()),
+      : gconf(gconf_), krn(*gconf.krn), grid(grid_),
         su(2*gconf.Nsafe()+(1<<logsquare)),
         sv(2*gconf.Nsafe()+(1<<logsquare)),
         svvec(((sv+vlen-1)/vlen)*vlen),
@@ -576,31 +579,25 @@ template<typename T> class HelperX2g
         xdw(T(1)/dw_),
         locks(locks_),
         nvec((supp+vlen-1)/vlen)
-      {
-      MR_assert(supp<=32, "support too large");
-      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
-      }
-    ~HelperX2g() { dump(); }
+      { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
+    ~HelperX2g2() { dump(); }
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    void prep(const UVW &in)
+    [[gnu::hot]] void prep(const UVW &in)
       {
-      const auto &krn(*(gconf.krn));
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double xsupp=2./supp;
+      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
       krn.eval(T(y0), &buf.simd[nvec]);
       if (do_w_gridding)
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
-      if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
+      if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         dump();
-        bufr.apply([](T &v){v=0;});
-        bufi.apply([](T &v){v=0;});
         bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         }
@@ -609,12 +606,12 @@ template<typename T> class HelperX2g
       }
   };
 
-template<typename T> class HelperG2x
+template<size_t supp, typename T> class HelperG2x2
   {
   private:
     const GridderConfig<T> &gconf;
+    TemplateKernel<supp, T> krn;
     const mav<complex<T>,2> &grid;
-    int supp;
     int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
@@ -647,16 +644,16 @@ template<typename T> class HelperG2x
     size_t nvec;
     const T *p0r, *p0i;
     static constexpr size_t vlen=native_simd<T>::size();
+    static_assert(supp<=32, "support too large");
     union kbuf {
       T scalar[64];
       native_simd<T> simd[64/vlen];
       };
     kbuf buf;
 
-    HelperG2x(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
+    HelperG2x2(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
       double w0_=-1, double dw_=-1)
-      : gconf(gconf_), grid(grid_),
-        supp(gconf.Supp()),
+      : gconf(gconf_), krn(*gconf.krn), grid(grid_),
         su(2*gconf.Nsafe()+(1<<logsquare)),
         sv(2*gconf.Nsafe()+(1<<logsquare)),
         svvec(((sv+vlen-1)/vlen)*vlen),
@@ -667,26 +664,22 @@ template<typename T> class HelperG2x
         w0(w0_),
         xdw(T(1)/dw_),
         nvec((supp+vlen-1)/vlen)
-      {
-      MR_assert(supp<=32, "support too large");
-      checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
-      }
+      { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    void prep(const UVW &in)
+    [[gnu::hot]] void prep(const UVW &in)
       {
-      const auto &krn(*(gconf.krn));
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double xsupp=2./supp;
+      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
       krn.eval(T(y0), &buf.simd[nvec]);
       if (do_w_gridding)
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
-      if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
+      if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
@@ -782,7 +775,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
-    HelperX2g<T> hlp(gconf, grid, locks, w0, dw);
+    HelperX2g2<SUPP,T> hlp(gconf, grid, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -858,7 +851,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
-    HelperG2x<T> hlp(gconf, grid, w0, dw);
+    HelperG2x2<SUPP,T> hlp(gconf, grid, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -1182,10 +1175,9 @@ template<typename T, typename Serv> void x2dirty(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    mav<complex<T>,2> grid({gconf.Nu(), gconf.Nv()});
-    grid.fill(0.);
+    auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     x2grid_c(gconf, srv, grid);
-    mav<T,2> rgrid(grid.shape());
+    auto rgrid = mav<T,2>::build_noncritical(grid.shape());
     complex2hartley(grid, rgrid, gconf.Nthreads());
     gconf.grid2dirty(rgrid, dirty);
     }
@@ -1223,9 +1215,9 @@ template<typename T, typename Serv> void dirty2x(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    mav<T,2> grid({gconf.Nu(), gconf.Nv()});
+    auto grid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     gconf.dirty2grid(dirty, grid);
-    mav<complex<T>,2> grid2(grid.shape());
+    auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
     hartley2complex(grid, grid2, gconf.Nthreads());
     grid2x_c(gconf, grid2, srv);
     }

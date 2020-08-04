@@ -292,6 +292,56 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
        [0, dx, 2*dx, ..., (n-1)*dx]  */
     virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       { return corr.corfunc(n, dx, nthreads); }
+
+    const vector<Tsimd> &Coeff() const { return coeff; }
+    size_t degree() const { return D; }
+  };
+
+template<size_t W, typename T> class TemplateKernel
+  {
+  private:
+    static constexpr auto D=W+3;
+    using Tsimd = native_simd<T>;
+    static constexpr auto vlen = Tsimd::size();
+    static constexpr auto nvec = (W+vlen-1)/vlen;
+
+    std::array<Tsimd,(D+1)*nvec> coeff;
+    const T *scoeff;
+    static constexpr auto sstride = nvec*vlen;
+
+  public:
+    TemplateKernel(const HornerKernel<T> &krn)
+      : scoeff(reinterpret_cast<T *>(&coeff[0]))
+      {
+      MR_assert(W==krn.support(), "support mismatch");
+      MR_assert(D==krn.degree(), "degree mismatch");
+      for (size_t i=0; i<coeff.size(); ++i) coeff[i] = krn.Coeff()[i];
+      }
+
+    constexpr size_t support() const { return W; }
+
+    void eval(T x, native_simd<T> *res) const
+      {
+      x = (x+1)*W-1;
+      for (size_t i=0; i<nvec; ++i)
+        {
+        auto tval = coeff[i];
+        for (size_t j=1; j<=D; ++j)
+          tval = tval*x + coeff[j*nvec+i];
+        res[i] = tval;
+        }
+      }
+
+    T eval_single(T x) const
+      {
+      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
+      x = (x+1)*W-2*nth-1;
+      auto ptr = scoeff+nth;
+      auto tval = *ptr;
+      for (size_t j=1; j<=D; ++j)
+        tval = tval*x + ptr[j*sstride];
+      return tval;
+      }
   };
 
 struct NESdata
@@ -566,6 +616,8 @@ template<typename T> auto selectKernel(double ofactor, double epsilon)
 
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::selectKernel;
+using detail_gridding_kernel::HornerKernel;
+using detail_gridding_kernel::TemplateKernel;
 
 }
 
