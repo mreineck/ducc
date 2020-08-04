@@ -276,7 +276,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
         coeff(makeCoeff(W_, D_, func)), scoeff(reinterpret_cast<T *>(&coeff[0])),
         sstride(vlen*nvec), corr(corr_)
-      { wire_eval(); }
+      {}
 
     virtual size_t support() const { return W; }
 
@@ -292,45 +292,9 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
        [0, dx, 2*dx, ..., (n-1)*dx]  */
     virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       { return corr.corfunc(n, dx, nthreads); }
-  };
 
-template<size_t W> class TemplateCorrection
-  {
-  protected:
-    static constexpr auto N = W+W/2+2;
-    vector<double> x, wgtpsi;
-
-  public:
-    TemplateCorrection(const function<double(double)> &func)
-      {
-      GL_Integrator integ(2*N,1);
-      x = integ.coordsSymmetric();
-      wgtpsi = integ.weightsSymmetric();
-      for (size_t i=0; i<x.size(); ++i)
-        wgtpsi[i] *= func(x[i])*W*0.5;
-      }
-
-    /* Compute correction factors for gridding kernel
-       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    double corfunc(double v) const
-      {
-      double tmp=0;
-      for (size_t i=0; i<N; ++i)
-        tmp += wgtpsi[i]*cos(pi*W*v*x[i]);
-      return 1./tmp;
-      }
-    /* Compute correction factors for gridding kernel
-       This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    vector<double> corfunc(size_t n, double dx, int nthreads=1) const
-      {
-      vector<double> res(n);
-      execStatic(n, nthreads, 0, [&](auto &sched)
-        {
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
-          res[i] = corfunc(i*dx);
-        });
-      return res;
-      }
+    const vector<Tsimd> &Coeff() const { return coeff; }
+    size_t degree() const { return D; }
   };
 
 template<size_t W, typename T> class TemplateKernel
@@ -344,8 +308,6 @@ template<size_t W, typename T> class TemplateKernel
     std::array<Tsimd,(D+1)*nvec> coeff;
     const T *scoeff;
     static constexpr auto sstride = nvec*vlen;
-
-    KernelCorrection corr;
 
     template<size_t NV, size_t DEG> void eval_intern(T x, native_simd<T> *res) const
       {
@@ -384,11 +346,13 @@ template<size_t W, typename T> class TemplateKernel
       }
 
   public:
-    TemplateKernel(const function<double(double)> &func,
-      const KernelCorrection &corr_)
-      : scoeff(reinterpret_cast<T *>(&coeff[0])),
-        corr(corr_)
-      { makeCoeff(func, coeff); }
+    TemplateKernel(const HornerKernel<T> &krn)
+      : scoeff(reinterpret_cast<T *>(&coeff[0]))
+      {
+      MR_assert(W==krn.support(), "support mismatch");
+      MR_assert(D==krn.degree(), "degree mismatch");
+      for (size_t i=0; i<coeff.size(); ++i) coeff[i] = krn.Coeff()[i];
+      }
 
     constexpr size_t support() const { return W; }
 
@@ -414,13 +378,6 @@ template<size_t W, typename T> class TemplateKernel
         tval = tval*x + ptr[j*sstride];
       return tval;
       }
-
-    double corfunc(double x) const {return corr.corfunc(x); }
-
-    /* Computes the correction function values at a coordinates
-       [0, dx, 2*dx, ..., (n-1)*dx]  */
-    vector<double> corfunc(size_t n, double dx, int nthreads=1) const
-      { return corr.corfunc(n, dx, nthreads); }
   };
 
 struct NESdata
@@ -695,6 +652,8 @@ template<typename T> auto selectKernel(double ofactor, double epsilon)
 
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::selectKernel;
+using detail_gridding_kernel::HornerKernel;
+using detail_gridding_kernel::TemplateKernel;
 
 }
 

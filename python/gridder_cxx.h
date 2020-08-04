@@ -226,7 +226,7 @@ template<typename T> class GridderConfig
 
   // FIXME: this should probably be done more cleanly
   public:
-    shared_ptr<GriddingKernel<T>> krn;
+    shared_ptr<HornerKernel<T>> krn;
 
   protected:
     double psx, psy;
@@ -513,12 +513,13 @@ template<typename T> class GridderConfig
 
 constexpr int logsquare=4;
 
-template<typename T> class HelperX2g
+template<size_t supp, typename T> class HelperX2g2
   {
   private:
     const GridderConfig<T> &gconf;
+    TemplateKernel<supp, T> krn;
     mav<complex<T>,2> &grid;
-    int nu, nv, supp;
+    int nu, nv;
     int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
@@ -563,10 +564,9 @@ template<typename T> class HelperX2g
       };
     kbuf buf;
 
-    HelperX2g(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
+    HelperX2g2(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
-      : gconf(gconf_), grid(grid_),
-        supp(gconf.Supp()),
+      : gconf(gconf_), krn(*gconf.krn), grid(grid_),
         su(2*gconf.Nsafe()+(1<<logsquare)),
         sv(2*gconf.Nsafe()+(1<<logsquare)),
         svvec(((sv+vlen-1)/vlen)*vlen),
@@ -579,26 +579,25 @@ template<typename T> class HelperX2g
         locks(locks_),
         nvec((supp+vlen-1)/vlen)
       {
-      MR_assert(supp<=32, "support too large");
+      static_assert(supp<=32, "support too large");
       checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()});
       }
-    ~HelperX2g() { dump(); }
+    ~HelperX2g2() { dump(); }
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    void prep(const UVW &in)
+    [[gnu::hot]] void prep(const UVW &in)
       {
-      const auto &krn(*(gconf.krn));
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double xsupp=2./supp;
+      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
       krn.eval(T(y0), &buf.simd[nvec]);
       if (do_w_gridding)
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
-      if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
+      if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         dump();
         bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
@@ -609,12 +608,12 @@ template<typename T> class HelperX2g
       }
   };
 
-template<typename T> class HelperG2x
+template<size_t supp, typename T> class HelperG2x2
   {
   private:
     const GridderConfig<T> &gconf;
+    TemplateKernel<supp, T> krn;
     const mav<complex<T>,2> &grid;
-    int supp;
     int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
@@ -653,10 +652,9 @@ template<typename T> class HelperG2x
       };
     kbuf buf;
 
-    HelperG2x(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
+    HelperG2x2(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
       double w0_=-1, double dw_=-1)
-      : gconf(gconf_), grid(grid_),
-        supp(gconf.Supp()),
+      : gconf(gconf_), krn(*gconf.krn), grid(grid_),
         su(2*gconf.Nsafe()+(1<<logsquare)),
         sv(2*gconf.Nsafe()+(1<<logsquare)),
         svvec(((sv+vlen-1)/vlen)*vlen),
@@ -674,19 +672,18 @@ template<typename T> class HelperG2x
 
     int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    void prep(const UVW &in)
+    [[gnu::hot]] void prep(const UVW &in)
       {
-      const auto &krn(*(gconf.krn));
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double xsupp=2./supp;
+      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
       krn.eval(T(y0), &buf.simd[nvec]);
       if (do_w_gridding)
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
-      if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
+      if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
@@ -782,7 +779,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
-    HelperX2g<T> hlp(gconf, grid, locks, w0, dw);
+    HelperX2g2<SUPP,T> hlp(gconf, grid, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -857,7 +854,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
-    HelperG2x<T> hlp(gconf, grid, w0, dw);
+    HelperG2x2<SUPP,T> hlp(gconf, grid, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
