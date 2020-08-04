@@ -414,10 +414,13 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
   protected:
     using tinfo = mav_info<ndim>;
     using tbuf = membuf<T>;
-    using typename tinfo::shape_t;
-    using typename tinfo::stride_t;
     using tinfo::shp, tinfo::str;
 
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+
+  protected:
     template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
       {
       if constexpr (idim+1<ndim)
@@ -549,6 +552,22 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
       return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
+      }
+
+    static mav build_noncritical(const shape_t &shape)
+      {
+      if (ndim==1) return mav(shape);
+      shape_t shape2(shape);
+      size_t stride = sizeof(T);
+      for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
+        {
+        size_t tstride = stride*shape[xi];
+        if ((tstride&4095)==0)
+          shape2[xi] += 3;
+        stride *= shape2[xi];
+        }
+      mav tmp(shape2);
+      return tmp.subarray<ndim>(shape_t(), shape);
       }
   };
 

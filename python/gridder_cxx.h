@@ -517,7 +517,7 @@ template<typename T> class Helper
   private:
     using T2=complex<T>;
     const GridderConfig<T> &gconf;
-    int nu, nv, nsafe, supp;
+    int nu, nv, strv, nsafe, supp;
     const T2 *grid_r;
     T2 *grid_w;
     int su, sv, svvec;
@@ -543,7 +543,7 @@ template<typename T> class Helper
         std::lock_guard<std::mutex> lock(locks[idxu]);
         for (int iv=0; iv<sv; ++iv)
           {
-          grid_w[idxu*nv + idxv] += complex<T>(wbufr(iu,iv), wbufi(iu,iv));
+          grid_w[idxu*strv + idxv] += complex<T>(wbufr(iu,iv), wbufi(iu,iv));
           if (++idxv>=nv) idxv=0;
           }
         }
@@ -560,8 +560,8 @@ template<typename T> class Helper
         int idxv = idxv0;
         for (int iv=0; iv<sv; ++iv)
           {
-          rbufr.v(iu,iv) = grid_r[idxu*nv + idxv].real();
-          rbufi.v(iu,iv) = grid_r[idxu*nv + idxv].imag();
+          rbufr.v(iu,iv) = grid_r[idxu*strv + idxv].real();
+          rbufi.v(iu,iv) = grid_r[idxu*strv + idxv].imag();
           if (++idxv>=nv) idxv=0;
           }
         if (++idxu>=nu) idxu=0;
@@ -579,9 +579,9 @@ template<typename T> class Helper
       };
     kbuf buf;
 
-    Helper(const GridderConfig<T> &gconf_, const T2 *grid_r_, T2 *grid_w_,
+    Helper(const GridderConfig<T> &gconf_, size_t strv_, const T2 *grid_r_, T2 *grid_w_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
-      : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), nsafe(gconf.Nsafe()),
+      : gconf(gconf_), nu(gconf.Nu()), nv(gconf.Nv()), strv(strv_), nsafe(gconf.Nsafe()),
         supp(gconf.Supp()), grid_r(grid_r_),
         grid_w(grid_w_),
         su(2*nsafe+(1<<logsquare)),
@@ -720,7 +720,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
-    Helper<T> hlp(gconf, nullptr, grid.vdata(), locks, w0, dw);
+    Helper<T> hlp(gconf, grid.stride(0), nullptr, grid.vdata(), locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -759,7 +759,7 @@ template<typename T, typename Serv> void x2grid_c
   double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
-  MR_assert(grid.contiguous(), "grid is not contiguous");
+  MR_assert(grid.last_contiguous(), "last grid dimension is not contiguous");
 
   switch(gconf.Supp())
     {
@@ -797,7 +797,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
-    Helper<T> hlp(gconf, grid.data(), nullptr, locks, w0, dw);
+    Helper<T> hlp(gconf, grid.stride(0), grid.data(), nullptr, locks, w0, dw);
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -836,7 +836,7 @@ template<typename T, typename Serv> void grid2x_c
   Serv &srv, double w0=-1, double dw=-1)
   {
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
-  MR_assert(grid.contiguous(), "grid is not contiguous");
+  MR_assert(grid.last_contiguous(), "last grid dimension is not contiguous");
 
   switch(gconf.Supp())
     {
@@ -1103,7 +1103,7 @@ template<typename T, typename Serv> void x2dirty(
     WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
-    mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
+    auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
@@ -1147,7 +1147,7 @@ template<typename T, typename Serv> void dirty2x(
         tdirty.v(i,j) = dirty(i,j);
     // correct for w gridding etc.
     apply_global_corrections(gconf, tdirty, dw, true);
-    mav<complex<T>,2> grid({gconf.Nu(),gconf.Nv()});
+    auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
@@ -1261,7 +1261,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
-  mav<complex<T>,2> null_ms(nullptr, {0,0}, true);
+  mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   ms.fill(0);
