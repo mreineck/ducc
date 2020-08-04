@@ -276,7 +276,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       : W(W_), D(D_), nvec((W+vlen-1)/vlen),
         coeff(makeCoeff(W_, D_, func)), scoeff(reinterpret_cast<T *>(&coeff[0])),
         sstride(vlen*nvec), corr(corr_)
-      {}
+      { wire_eval(); }
 
     virtual size_t support() const { return W; }
 
@@ -308,42 +308,6 @@ template<size_t W, typename T> class TemplateKernel
     std::array<Tsimd,(D+1)*nvec> coeff;
     const T *scoeff;
     static constexpr auto sstride = nvec*vlen;
-
-    template<size_t NV, size_t DEG> void eval_intern(T x, native_simd<T> *res) const
-      {
-      x = (x+1)*W-1;
-      for (size_t i=0; i<NV; ++i)
-        {
-        auto tval = coeff[i];
-        for (size_t j=1; j<=DEG; ++j)
-          tval = tval*x + coeff[j*NV+i];
-        res[i] = tval;
-        }
-      }
-
-    template<size_t DEG> T eval_single_intern(T x) const
-      {
-      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
-      x = (x+1)*W-2*nth-1;
-      auto ptr = scoeff+nth;
-      auto tval = *ptr;
-      for (size_t j=1; j<=DEG; ++j)
-        tval = tval*x + ptr[j*sstride];
-      return tval;
-      }
-
-    static vector<Tsimd> makeCoeff(const function<double(double)> &func,
-      array<Tsimd, (D+1)*nvec> &coeff)
-      {
-      auto coeff_raw = getCoeffs(W,D,func);
-      for (size_t j=0; j<=D; ++j)
-        {
-        for (size_t i=0; i<W; ++i)
-          coeff[j*nvec + i/vlen][i%vlen] = T(coeff_raw[j*W+i]);
-        for (size_t i=W; i<vlen*nvec; ++i)
-          coeff[j*nvec + i/vlen][i%vlen] = T(0);
-        }
-      }
 
   public:
     TemplateKernel(const HornerKernel<T> &krn)
