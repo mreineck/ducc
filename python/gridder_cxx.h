@@ -402,6 +402,7 @@ template<typename T> class GridderConfig
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nx_dirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(ny_dirty/2+1, 1./nv, nthreads);
+      // FIXME: maybe we don't have to fill everything and can save some time
       grid.fill(0);
       execStatic(nx_dirty, nthreads, 0, [&](Scheduler &sched)
         {
@@ -425,6 +426,7 @@ template<typename T> class GridderConfig
       {
       checkShape(dirty.shape(), {nx_dirty, ny_dirty});
       checkShape(grid.shape(), {nu, nv});
+      // FIXME: maybe we don't have to fill everything and can save some time
       grid.fill(0);
 
       double x0 = -0.5*nx_dirty*psx,
@@ -528,7 +530,7 @@ template<typename T> class HelperX2g
     double w0, xdw;
     vector<std::mutex> &locks;
 
-    void dump() const
+    void dump()
       {
       int nu = int(gconf.Nu());
       int nv = int(gconf.Nv());
@@ -544,6 +546,7 @@ template<typename T> class HelperX2g
         for (int iv=0; iv<sv; ++iv)
           {
           grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
+          bufr.v(iu,iv) = bufi.v(iu,iv) = 0;
           if (++idxv>=nv) idxv=0;
           }
         }
@@ -599,8 +602,6 @@ template<typename T> class HelperX2g
       if ((iu0<bu0) || (iv0<bv0) || (iu0+supp>bu0+su) || (iv0+supp>bv0+sv))
         {
         dump();
-        bufr.apply([](T &v){v=0;});
-        bufi.apply([](T &v){v=0;});
         bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
         }
@@ -1181,10 +1182,9 @@ template<typename T, typename Serv> void x2dirty(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    mav<complex<T>,2> grid({gconf.Nu(), gconf.Nv()});
-    grid.fill(0.);
+    auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     x2grid_c(gconf, srv, grid);
-    mav<T,2> rgrid(grid.shape());
+    auto rgrid = mav<T,2>::build_noncritical(grid.shape());
     complex2hartley(grid, rgrid, gconf.Nthreads());
     gconf.grid2dirty(rgrid, dirty);
     }
@@ -1222,9 +1222,9 @@ template<typename T, typename Serv> void dirty2x(
            << " visibilities" << endl;
     if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
 
-    mav<T,2> grid({gconf.Nu(), gconf.Nv()});
+    auto grid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     gconf.dirty2grid(dirty, grid);
-    mav<complex<T>,2> grid2(grid.shape());
+    auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
     hartley2complex(grid, grid2, gconf.Nthreads());
     grid2x_c(gconf, grid2, srv);
     }
