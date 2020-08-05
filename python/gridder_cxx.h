@@ -781,7 +781,6 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
     int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
-    array<native_simd<T>,NVEC> txr, txi;
 
     while (auto rng=sched.getNext()) for(auto ipart=rng.lo; ipart<rng.hi; ++ipart)
       {
@@ -794,21 +793,16 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
       if (do_w_gridding) v*=hlp.Wfac();
       if (flip) v=conj(v);
       native_simd<T> vr(v.real()), vi(v.imag());
-      for (size_t i=0; i<NVEC; ++i)
-        {
-        txr[i] = vr*kv[i];
-        txi[i] = vi*kv[i];
-        }
       for (size_t cu=0; cu<SUPP; ++cu)
         {
-   //     native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+        native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
         for (size_t cv=0; cv<NVEC; ++cv)
           {
           auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
-          tr += txr[cv]*ku[cu];
+          tr += tmpr*kv[cv];
           tr.storeu(ptrr+cv*hlp.vlen);
           auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
-          ti += txi[cv]*ku[cu];
+          ti += tmpi*kv[cv];
           ti.storeu(ptri+cv*hlp.vlen);
           }
         ptrr+=jump;
