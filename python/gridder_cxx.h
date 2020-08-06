@@ -515,12 +515,21 @@ constexpr int logsquare=4;
 
 template<size_t supp, typename T> class HelperX2g2
   {
+  public:
+    static constexpr size_t vlen = native_simd<T>::size();
+    static constexpr size_t nvec = (supp+vlen-1)/vlen;
+
   private:
+    static constexpr int nsafe = (supp+1)/2;
+    static constexpr int su = 2*nsafe+(1<<logsquare);
+    static constexpr int sv = 2*nsafe+(1<<logsquare);
+    static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
+    static constexpr double xsupp=2./supp;
+
     const GridderConfig<T> &gconf;
     TemplateKernel<supp, T> krn;
     mav<complex<T>,2> &grid;
     int nu, nv;
-    int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
     T wfac;
@@ -534,7 +543,7 @@ template<size_t supp, typename T> class HelperX2g2
       {
       int nu = int(gconf.Nu());
       int nv = int(gconf.Nv());
-      if (bu0<-int(gconf.Nsafe())) return; // nothing written into buffer yet
+      if (bu0<-nsafe) return; // nothing written into buffer yet
 
       int idxu = (bu0+nu)%nu;
       int idxv0 = (bv0+nv)%nv;
@@ -555,30 +564,23 @@ template<size_t supp, typename T> class HelperX2g2
       }
 
   public:
-    size_t nvec;
-    T *p0r, *p0i;
-    static constexpr size_t vlen=native_simd<T>::size();
-    static_assert(supp<=32, "support too large");
+    T * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
     union kbuf {
-      T scalar[64];
-      native_simd<T> simd[64/vlen];
+      T scalar[2*nvec*vlen];
+      native_simd<T> simd[2*nvec];
       };
     kbuf buf;
 
     HelperX2g2(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
       : gconf(gconf_), krn(*gconf.krn), grid(grid_),
-        su(2*gconf.Nsafe()+(1<<logsquare)),
-        sv(2*gconf.Nsafe()+(1<<logsquare)),
-        svvec(((sv+vlen-1)/vlen)*vlen),
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
         do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
-        locks(locks_),
-        nvec((supp+vlen-1)/vlen)
+        locks(locks_)
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
     ~HelperX2g2() { dump(); }
 
@@ -588,7 +590,6 @@ template<size_t supp, typename T> class HelperX2g2
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
@@ -598,8 +599,8 @@ template<size_t supp, typename T> class HelperX2g2
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         dump();
-        bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
-        bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
+        bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+        bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         }
       p0r = &bufr.v(iu0-bu0, iv0-bv0);
       p0i = &bufi.v(iu0-bu0, iv0-bv0);
@@ -608,11 +609,20 @@ template<size_t supp, typename T> class HelperX2g2
 
 template<size_t supp, typename T> class HelperG2x2
   {
+  public:
+    static constexpr size_t vlen = native_simd<T>::size();
+    static constexpr size_t nvec = (supp+vlen-1)/vlen;
+
   private:
+    static constexpr int nsafe = (supp+1)/2;
+    static constexpr int su = 2*nsafe+(1<<logsquare);
+    static constexpr int sv = 2*nsafe+(1<<logsquare);
+    static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
+    static constexpr double xsupp=2./supp;
+
     const GridderConfig<T> &gconf;
     TemplateKernel<supp, T> krn;
     const mav<complex<T>,2> &grid;
-    int su, sv, svvec;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
     T wfac;
@@ -641,29 +651,22 @@ template<size_t supp, typename T> class HelperG2x2
       }
 
   public:
-    size_t nvec;
-    const T *p0r, *p0i;
-    static constexpr size_t vlen=native_simd<T>::size();
-    static_assert(supp<=32, "support too large");
+    const T * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
     union kbuf {
-      T scalar[64];
-      native_simd<T> simd[64/vlen];
+      T scalar[2*nvec*vlen];
+      native_simd<T> simd[2*nvec];
       };
     kbuf buf;
 
     HelperG2x2(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
       double w0_=-1, double dw_=-1)
       : gconf(gconf_), krn(*gconf.krn), grid(grid_),
-        su(2*gconf.Nsafe()+(1<<logsquare)),
-        sv(2*gconf.Nsafe()+(1<<logsquare)),
-        svvec(((sv+vlen-1)/vlen)*vlen),
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
         do_w_gridding(dw_>0),
         w0(w0_),
-        xdw(T(1)/dw_),
-        nvec((supp+vlen-1)/vlen)
+        xdw(T(1)/dw_)
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
 
     int lineJump() const { return svvec; }
@@ -672,7 +675,6 @@ template<size_t supp, typename T> class HelperG2x2
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      constexpr double xsupp=2./supp;
       double x0 = xsupp*(iu0-u);
       double y0 = xsupp*(iv0-v);
       krn.eval(T(x0), &buf.simd[0]);
@@ -681,8 +683,8 @@ template<size_t supp, typename T> class HelperG2x2
         wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
-        bu0=((((iu0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
-        bv0=((((iv0+gconf.Nsafe())>>logsquare)<<logsquare))-gconf.Nsafe();
+        bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+        bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         load();
         }
       p0r = &bufr(iu0-bu0, iv0-bv0);
