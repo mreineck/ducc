@@ -26,7 +26,7 @@
  */
 
 // FIXME: special ugly workaround for problems on OSX
-#if (!defined(__APPLE__)) || (!defined(__AVX512F__))
+#if (defined(GENERIC_ARCH) || (!defined(__APPLE__)) || (!defined(__AVX512F__)))
 
 #if (defined(MULTIARCH) || defined(GENERIC_ARCH))
 
