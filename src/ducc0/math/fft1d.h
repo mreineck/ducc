@@ -74,7 +74,7 @@ template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
 
 struct util1d // hack to avoid duplicate symbols
   {
-  static DUCC0_NOINLINE size_t largest_prime_factor (size_t n)
+  DUCC0_NOINLINE static size_t largest_prime_factor (size_t n)
     {
     size_t res=1;
     while ((n&1)==0)
@@ -86,7 +86,7 @@ struct util1d // hack to avoid duplicate symbols
     return res;
     }
 
-  static DUCC0_NOINLINE double cost_guess (size_t n)
+  DUCC0_NOINLINE static double cost_guess (size_t n)
     {
     constexpr double lfp=1.1; // penalty for non-hardcoded larger factors
     size_t ni=n;
@@ -104,7 +104,7 @@ struct util1d // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
-  static DUCC0_NOINLINE size_t good_size_cmplx(size_t n)
+  DUCC0_NOINLINE static size_t good_size_cmplx(size_t n)
     {
     if (n<=12) return n;
 
@@ -133,7 +133,7 @@ struct util1d // hack to avoid duplicate symbols
     }
 
   /* returns the smallest composite of 2, 3, 5 which is >= n */
-  static DUCC0_NOINLINE size_t good_size_real(size_t n)
+  DUCC0_NOINLINE static size_t good_size_real(size_t n)
     {
     if (n<=6) return n;
 
