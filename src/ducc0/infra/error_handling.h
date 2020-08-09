@@ -78,7 +78,7 @@ void streamDump__(::std::ostream &os, const T& value,
   }
 #endif
 template<typename ...Args>
-[[noreturn]] void DUCC0_NOINLINE fail__(Args&&... args)
+[[noreturn]] DUCC0_NOINLINE void fail__(Args&&... args)
   {
   ::std::ostringstream msg; \
   ::ducc0::detail_error_handling::streamDump__(msg, args...); \
