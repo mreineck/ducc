@@ -288,6 +288,7 @@ template<typename T> class GridderConfig
     size_t Supp() const { return supp; }
     size_t Nsafe() const { return nsafe; }
     size_t Nthreads() const { return nthreads; }
+    double Ofactor() const { return ofactor; }
 
     void grid2dirty_post(mav<T,2> &tmav,
       mav<T,2> &dirty) const
@@ -1079,7 +1080,7 @@ template<typename T, typename Serv> class WgridHelper
       double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-      dw = 0.25/abs(nmin);
+      dw = 0.5/gconf.Ofactor()/abs(nmin);
       nplanes = size_t((wmax-wmin)/dw+supp);
       wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
       if (verbosity>0) cout << "Kernel support: " << supp << endl;

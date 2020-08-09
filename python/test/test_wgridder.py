@@ -91,7 +91,9 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0).astype("f8")
     ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv, epsilon,
                       wstacking, nthreads, 0).astype("c16")
-    tol = 5e-4 if singleprec else 5e-11
+    ref = max(np.vdot(ms,ms).real, np.vdot(ms2,ms2).real,
+              np.vdot(dirty, dirty), np.vdot(dirty2, dirty2))
+    tol = 1e-5*ref if singleprec else 1e-13*ref
     assert_allclose(np.vdot(ms, ms2).real, np.vdot(dirty2, dirty), rtol=tol)
 
 
