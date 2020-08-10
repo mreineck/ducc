@@ -22,6 +22,17 @@ from numpy.testing import assert_allclose
 pmp = pytest.mark.parametrize
 
 
+# attempt to write a more accurate version of numpy.vdot()
+def my_vdot(a, b):
+    import math
+    if np.issubdtype(a.dtype, np.complexfloating) or np.issubdtype(b.dtype, np.complexfloating):
+        tmp = (np.conj(a)*b).reshape((-1,))
+        return math.fsum(tmp.real)+1j*math.fsum(tmp.imag)
+    else:
+        tmp = (a*b).reshape((-1,))
+        return math.fsum(tmp)
+
+
 def _l2error(a, b):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.maximum(np.sum(np.abs(a)**2),
                                                      np.sum(np.abs(b)**2)))
@@ -91,10 +102,10 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0).astype("f8")
     ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv, epsilon,
                       wstacking, nthreads, 0).astype("c16")
-    ref = max(np.vdot(ms,ms).real, np.vdot(ms2,ms2).real,
-              np.vdot(dirty, dirty), np.vdot(dirty2, dirty2))
+    ref = max(my_vdot(ms,ms).real, my_vdot(ms2,ms2).real,
+              my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
     tol = 1e-5*ref if singleprec else 1e-13*ref
-    assert_allclose(np.vdot(ms, ms2).real, np.vdot(dirty2, dirty), rtol=tol)
+    assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
 
 
 @pmp('nxdirty', [16, 64])
