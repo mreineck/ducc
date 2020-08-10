@@ -320,7 +320,7 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    void eval(T x, native_simd<T> *res) const
+    [[gnu::always_inline]] void eval(T x, native_simd<T> *res) const
       {
       x = (x+1)*W-1;
       for (size_t i=0; i<nvec; ++i)
@@ -332,7 +332,7 @@ template<size_t W, typename T> class TemplateKernel
         }
       }
 
-    T eval_single(T x) const
+    [[gnu::always_inline]] T eval_single(T x) const
       {
       auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
       x = (x+1)*W-2*nth-1;
@@ -624,11 +624,11 @@ size_t getMinSupport(double epsilon)
   return Wmin;
   }
 
-auto getAvailableKernels(double epsilon)
+auto getAvailableKernels(double epsilon, bool single_precision)
   {
   size_t supp0 = getMinSupport(epsilon);
   vector<double> ofactors;
-  for (size_t supp=supp0; supp<15; ++supp)
+  for (size_t supp=supp0; supp<(single_precision ? 9 : 17); ++supp)
     {
     double ofac=3;
     size_t idx = NEScache.size();
