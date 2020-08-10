@@ -86,7 +86,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
     freq = f0 + np.arange(nchan)*(f0/nchan)
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/speedoflight)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
-    wgt = rng.random((nrow, nchan)) if use_wgt else None
+    wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     dirty = rng.random((nxdirty, nydirty))-0.5
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
     if nu & 1:
@@ -129,7 +129,7 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
     freq = f0 + np.arange(nchan)*(f0/nchan)
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
-    wgt = rng.random((nrow, 1)) if use_wgt else None
+    wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
     wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
     nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
     if nu & 1:
