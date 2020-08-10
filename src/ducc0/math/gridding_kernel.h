@@ -614,10 +614,41 @@ template<typename T> auto selectKernel(double ofactor, double epsilon)
   return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
+size_t getMinSupport(double epsilon)
+  {
+  size_t Wmin=1000;
+  for (size_t i=0; i<NEScache.size(); ++i)
+    if ((NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
+      Wmin = NEScache[i].W;
+  MR_assert(Wmin<1000, "no appropriate kernel found");
+  return Wmin;
+  }
+
+auto getAvailableKernels(double epsilon)
+  {
+  size_t supp0 = getMinSupport(epsilon);
+  vector<double> ofactors;
+  for (size_t supp=supp0; supp<15; ++supp)
+    {
+    double ofac=3;
+    size_t idx = NEScache.size();
+    for (size_t i=0; i<NEScache.size(); ++i)
+      if ((NEScache[i].epsilon<=epsilon) && (NEScache[i].ofactor<ofac) && (NEScache[i].W==supp))
+      {
+      idx = i;
+      ofac = NEScache[i].ofactor;
+      }
+    MR_assert(idx<NEScache.size(), "no appropriate kernel found");
+    ofactors.push_back(NEScache[idx].ofactor);
+    }
+  return make_tuple(supp0, ofactors);
+  }
+
 }
 
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::selectKernel;
+using detail_gridding_kernel::getAvailableKernels;
 using detail_gridding_kernel::HornerKernel;
 using detail_gridding_kernel::TemplateKernel;
 
