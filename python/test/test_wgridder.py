@@ -67,6 +67,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 
 @pmp("nxdirty", (30, 128))
 @pmp("nydirty", (128, 250))
+@pmp("ofactor", (0, 1.2, 1.5, 1.7, 2.0))
 @pmp("nrow", (2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 1e-5))
@@ -74,7 +75,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("nthreads", (1, 2))
-def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
+def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
         pytest.skip()
@@ -87,14 +88,21 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     dirty = rng.random((nxdirty, nydirty))-0.5
+    nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
+    if nu & 1:
+        nu += 1
+    if nv & 1:
+        nv += 1
+    if ofactor == 0:
+        nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         dirty = dirty.astype("f4")
         if wgt is not None:
             wgt = wgt.astype("f4")
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, epsilon, wstacking, nthreads, 0).astype("f8")
-    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, epsilon,
+                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0).astype("f8")
+    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv, epsilon,
                       wstacking, nthreads, 0).astype("c16")
     ref = max(my_vdot(ms,ms).real, my_vdot(ms2,ms2).real,
               my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
@@ -104,6 +112,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 
 @pmp('nxdirty', [16, 64])
 @pmp('nydirty', [64])
+@pmp('ofactor', [0, 1.2, 1.4, 1.7, 2])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
@@ -112,7 +121,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp("use_wgt", (True,))
 @pmp("nthreads", (1, 2))
 @pmp("fov", (1., 20.))
-def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
+def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -124,11 +133,18 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
     wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
+    nu, nv = int(nxdirty*ofactor)+1, int(nydirty*ofactor)+1
+    if nu & 1:
+        nu += 1
+    if nv & 1:
+        nv += 1
+    if ofactor == 0:
+        nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         if wgt is not None:
             wgt = wgt.astype("f4")
     dirty = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                        pixsizey, epsilon, wstacking, nthreads, 0).astype("f8")
+                        pixsizey, nu, nv, epsilon, wstacking, nthreads, 0).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex, pixsizey, wstacking)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)

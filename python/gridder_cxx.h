@@ -1370,14 +1370,19 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
 
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
+  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  auto [nu, nv] = getNuNv(baselines, ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+  if (nu*nv==0)
+    {
+    auto [nu2, nv2] = getNuNv(baselines, ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    nu = nu2;
+    nv = nv2;
+    }
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
@@ -1387,15 +1392,20 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
+  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv,
+  double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false)
   {
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
-  auto [nu, nv] = getNuNv(baselines, null_ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+  if (nu*nv==0)
+    {
+    auto [nu2, nv2] = getNuNv(baselines, null_ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    nu = nu2;
+    nv = nv2;
+    }
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
   auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
