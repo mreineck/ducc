@@ -104,7 +104,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                       wstacking, nthreads, 0).astype("c16")
     ref = max(my_vdot(ms,ms).real, my_vdot(ms2,ms2).real,
               my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
-    tol = 1e-5*ref if singleprec else 1e-13*ref
+    tol = 1e-5*ref if singleprec else 1e-11*ref
     assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
 
 
