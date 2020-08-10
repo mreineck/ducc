@@ -79,14 +79,14 @@ struct util // hack to avoid duplicate symbols
       }
     }
 
-  static DUCC0_NOINLINE void sanity_check_onetype(const fmav_info &a1,
+  DUCC0_NOINLINE static void sanity_check_onetype(const fmav_info &a1,
     const fmav_info &a2, bool inplace, const shape_t &axes)
     {
     sanity_check_axes(a1.ndim(), axes);
     MR_assert(a1.conformable(a2), "array sizes are not conformable");
     if (inplace) MR_assert(a1.stride()==a2.stride(), "stride mismatch");
     }
-  static DUCC0_NOINLINE void sanity_check_cr(const fmav_info &ac,
+  DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, const shape_t &axes)
     {
     sanity_check_axes(ac.ndim(), axes);
@@ -95,7 +95,7 @@ struct util // hack to avoid duplicate symbols
       MR_assert(ac.shape(i)== (i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i),
         "axis length mismatch");
     }
-  static DUCC0_NOINLINE void sanity_check_cr(const fmav_info &ac,
+  DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, const size_t axis)
     {
     if (axis>=ac.ndim()) throw std::invalid_argument("bad axis number");
