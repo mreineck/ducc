@@ -1071,9 +1071,6 @@ template<typename T, typename Serv> class WgridHelper
       double wmax;
 
       wminmax(srv, wmin, wmax);
-      if (verbosity>0) cout << "Using " << nthreads << " thread"
-                            << ((nthreads!=1) ? "s" : "") << endl;
-      if (verbosity>0) cout << "W range: " << wmin << " to " << wmax << endl;
 
       double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
              y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
@@ -1083,8 +1080,6 @@ template<typename T, typename Serv> class WgridHelper
       dw = 0.5/gconf.Ofactor()/abs(nmin);
       nplanes = size_t((wmax-wmin)/dw+supp);
       wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
-      if (verbosity>0) cout << "Kernel support: " << supp << endl;
-      if (verbosity>0) cout << "nplanes: " << nplanes << endl;
 
       minplane.resize(nplanes);
 #if 0
@@ -1138,6 +1133,7 @@ template<typename T, typename Serv> class WgridHelper
     double W() const { return wmin+curplane*dw; }
     size_t Nvis() const { return subidx.size(); }
     double DW() const { return dw; }
+    size_t Nplanes() const { return nplanes; }
     bool advance()
       {
       if (++curplane>=int(nplanes)) return false;
@@ -1149,17 +1145,28 @@ template<typename T, typename Serv> class WgridHelper
       }
   };
 
+template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
+  size_t nplanes, bool gridding, size_t verbosity)
+  {
+  if (verbosity==0) return;
+  cout << (gridding ? "Gridding" : "Degridding")
+       << " (" << gconf.Nthreads() <<" threads): "
+       << "dirty " << gconf.Nxdirty() << "x" << gconf.Nydirty() << ", "
+       << "grid " << gconf.Nu() << "x" << gconf.Nv();
+  if (nplanes>0) cout << "x" << nplanes;
+  cout << ", nvis " << nvis
+       << ", supp " << gconf.Supp()
+       << endl;
+  }
+
 template<typename T, typename Serv> void x2dirty(
   const GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
   bool do_wstacking, size_t verbosity)
   {
   if (do_wstacking)
     {
-    if (verbosity>0)
-      cout << "Gridding using improved w-stacking" << endl
-           << "Support: " << gconf.Supp() << endl
-           << "Oversampling factor: " << gconf. Ofactor() << endl;
     WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
+    report(gconf, srv.Nvis(), hlp.Nplanes(), true, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
@@ -1176,13 +1183,7 @@ template<typename T, typename Serv> void x2dirty(
     }
   else
     {
-    if (verbosity>0)
-      cout << "Gridding without w-stacking: " << srv.Nvis()
-           << " visibilities" << endl
-           << "Support: " << gconf.Supp() << endl
-           << "Oversampling factor: " << gconf. Ofactor() << endl;
-    if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
-
+    report(gconf, srv.Nvis(), 0, true, verbosity);
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     x2grid_c(gconf, srv, grid);
     auto rgrid = mav<T,2>::build_noncritical(grid.shape());
@@ -1198,11 +1199,8 @@ template<typename T, typename Serv> void dirty2x(
   if (do_wstacking)
     {
     size_t nx_dirty=gconf.Nxdirty(), ny_dirty=gconf.Nydirty();
-    if (verbosity>0)
-      cout << "Degridding using improved w-stacking" << endl
-           << "Support: " << gconf.Supp() << endl
-           << "Oversampling factor: " << gconf. Ofactor() << endl;
     WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
+    report(gconf, srv.Nvis(), hlp.Nplanes(), false, verbosity);
     double dw = hlp.DW();
     mav<T,2> tdirty({nx_dirty,ny_dirty});
     for (size_t i=0; i<nx_dirty; ++i)
@@ -1221,13 +1219,7 @@ template<typename T, typename Serv> void dirty2x(
     }
   else
     {
-    if (verbosity>0)
-      cout << "Degridding without w-stacking: " << srv.Nvis()
-           << " visibilities" << endl
-           << "Support: " << gconf.Supp() << endl
-           << "Oversampling factor: " << gconf. Ofactor() << endl;
-    if (verbosity>0) cout << "Using " << gconf.Nthreads() << " threads" << endl;
-
+    report(gconf, srv.Nvis(), 0, false, verbosity);
     auto grid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     gconf.dirty2grid(dirty, grid);
     auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
