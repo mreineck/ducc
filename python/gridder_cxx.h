@@ -37,6 +37,7 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
+#include "ducc0/infra/timers.h"
 #include "ducc0/math/gridding_kernel.h"
 
 namespace ducc0 {
@@ -222,7 +223,7 @@ template<typename T> class GridderConfig
   {
   protected:
     size_t nx_dirty, ny_dirty, nu, nv;
-    double ofactor;
+    double epsilon, ofactor;
 
   // FIXME: this should probably be done more cleanly
   public:
@@ -250,9 +251,10 @@ template<typename T> class GridderConfig
 
   public:
     GridderConfig(size_t nxdirty, size_t nydirty, size_t nu_, size_t nv_,
-      double epsilon, double pixsize_x, double pixsize_y,
+      double epsilon_, double pixsize_x, double pixsize_y,
       const Baselines &baselines, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
+        epsilon(epsilon_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
         krn(selectKernel<T>(ofactor, epsilon)),
         psx(pixsize_x), psy(pixsize_y),
@@ -288,6 +290,7 @@ template<typename T> class GridderConfig
     size_t Supp() const { return supp; }
     size_t Nsafe() const { return nsafe; }
     size_t Nthreads() const { return nthreads; }
+    double Epsilon() const { return epsilon; }
     double Ofactor() const { return ofactor; }
 
     void grid2dirty_post(mav<T,2> &tmav,
@@ -1151,11 +1154,12 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
   if (verbosity==0) return;
   cout << (gridding ? "Gridding" : "Degridding")
        << " (" << gconf.Nthreads() <<" threads): "
-       << "dirty " << gconf.Nxdirty() << "x" << gconf.Nydirty() << ", "
-       << "grid " << gconf.Nu() << "x" << gconf.Nv();
+       << "dirty=(" << gconf.Nxdirty() << "x" << gconf.Nydirty() << "), "
+       << "grid=(" << gconf.Nu() << "x" << gconf.Nv();
   if (nplanes>0) cout << "x" << nplanes;
-  cout << ", nvis " << nvis
-       << ", supp " << gconf.Supp()
+  cout << "), nvis=" << nvis
+       << ", supp=" << gconf.Supp()
+       << ", eps=" << (gconf.Epsilon() * ((nplanes==0) ? 2 : 3))
        << endl;
   }
 
@@ -1366,6 +1370,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false)
   {
+  SimpleTimer timer;
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
@@ -1380,6 +1385,8 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   x2dirty(gconf, serv, dirty, do_wstacking, verbosity);
+  if (verbosity>0)
+    cout << "Wall clock time for gridding: " << timer() << "s" << endl;
   }
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
@@ -1388,6 +1395,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false)
   {
+  SimpleTimer timer;
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
@@ -1404,6 +1412,8 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   ms.fill(0);
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
+  if (verbosity>0)
+    cout << "Wall clock time for degridding: " << timer() << "s" << endl;
   }
 
 } // namespace detail_gridder
