@@ -13,7 +13,7 @@ interface.
 
 - [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
-- a C++17-capable C++ compiler (tested with g++ version 7 or newer and clang++;
+- a C++17-capable compiler (tested with g++ version 7 or newer and clang++;
   recent versions of MSVC on Windows also work, but are tested less frequently)
 
 ### Sources
@@ -32,7 +32,7 @@ DUCC and its mandatory dependencies can be installed via:
     sudo apt-get install git python3 python3-pip python3-dev python3-pybind11 pybind11-dev
     pip3 install --user git+https://gitlab.mpcdf.mpg.de/mtr/ducc.git
 
-NOTE: compilation of the code will take a sinificant amount of time
+NOTE: compilation of the code will take a significant amount of time
 (several minutes). Binary packages are deliberately not made available, since
 much better performance can be achieved by compiling the code specifically for
 the detected target CPU.
