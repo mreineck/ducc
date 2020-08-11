@@ -503,7 +503,7 @@ template<typename T> class GridderConfig
         c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
       }
 
-    void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
       u=fmod1(u_in*psx)*nu;
       iu0 = min(int(u+ushift)-int(nu), maxiu0);
@@ -540,7 +540,7 @@ template<size_t supp, typename T> class HelperX2g2
     double w0, xdw;
     vector<std::mutex> &locks;
 
-    void dump()
+    DUCC0_NOINLINE void dump()
       {
       int nu = int(gconf.Nu());
       int nv = int(gconf.Nv());
@@ -585,9 +585,9 @@ template<size_t supp, typename T> class HelperX2g2
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
     ~HelperX2g2() { dump(); }
 
-    int lineJump() const { return svvec; }
+    constexpr int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    [[gnu::hot]] void prep(const UVW &in)
+    [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
@@ -632,7 +632,7 @@ template<size_t supp, typename T> class HelperG2x2
     bool do_w_gridding;
     double w0, xdw;
 
-    void load()
+    DUCC0_NOINLINE void load()
       {
       int nu = int(gconf.Nu());
       int nv = int(gconf.Nv());
@@ -670,9 +670,9 @@ template<size_t supp, typename T> class HelperG2x2
         xdw(T(1)/dw_)
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
 
-    int lineJump() const { return svvec; }
+    constexpr int lineJump() const { return svvec; }
     T Wfac() const { return wfac; }
-    [[gnu::hot]] void prep(const UVW &in)
+    [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
@@ -779,7 +779,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
     HelperX2g2<SUPP,T> hlp(gconf, grid, locks, w0, dw);
-    int jump = hlp.lineJump();
+    constexpr int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
@@ -855,7 +855,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
     HelperG2x2<SUPP,T> hlp(gconf, grid, w0, dw);
-    int jump = hlp.lineJump();
+    constexpr int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
@@ -1264,7 +1264,7 @@ template<typename T> auto getNuNv(const Baselines &baselines,
   double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
   if (x0*x0+y0*y0>1.)
     nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-  auto [supp0, ofactors] = getAvailableKernels(epsilon);
+  auto [supp0, ofactors] = getAvailableKernels(epsilon, sizeof(T)<8);
   double mincost = 1e300;
   constexpr double nref_fft=2048;
   constexpr double costref_fft=0.0693;

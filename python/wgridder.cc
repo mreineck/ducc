@@ -93,7 +93,7 @@ nu, nv: int
     oversampling values lie between 1.5 and 2.
     Increasing the oversampling factor decreases the kernel support width
     required for the desired accuracy, so it typically reduces run-time; on the
-    other hand, this will increase memory consumption. 
+    other hand, this will increase memory consumption.
     If at least one of these two values is 0, the library will automatically
     pick values that result in a fast computation.
 epsilon: float
@@ -170,7 +170,7 @@ nu, nv: int
     oversampling values lie between 1.5 and 2.
     Increasing the oversampling factor decreases the kernel support width
     required for the desired accuracy, so it typically reduces run-time; on the
-    other hand, this will increase memory consumption. 
+    other hand, this will increase memory consumption.
     If at least one of these two values is 0, the library will automatically
     pick values that result in a fast computation.
 epsilon: float
