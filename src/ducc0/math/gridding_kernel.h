@@ -24,6 +24,7 @@
 
 #include <vector>
 #include <memory>
+#include <cmath>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -286,7 +287,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     virtual T eval_single(T x) const
       { return (this->*evalsinglefunc)(x); }
 
-    virtual double corfunc(double x) const {return corr.corfunc(x); }
+    virtual double corfunc(double x) const { return corr.corfunc(x); }
 
     /* Computes the correction function values at a coordinates
        [0, dx, 2*dx, ..., (n-1)*dx]  */
@@ -344,13 +345,13 @@ template<size_t W, typename T> class TemplateKernel
       }
   };
 
-struct NESdata
+struct KernelParams
   {
   size_t W;
   double ofactor, epsilon, beta, e0;
   };
 
-const vector<NESdata> NEScache {
+const vector<KernelParams> KernelDB {
 { 4, 1.15,   0.025654879, 1.3873426689, 0.5436851297},
 { 4, 1.20,   0.013809249, 1.3008419165, 0.5902137484},
 { 4, 1.25,  0.0085840685, 1.3274088935, 0.5953499486},
@@ -594,54 +595,56 @@ template<typename T> T esknew (T v, T beta, T e0)
   return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
   }
 
+template<typename T> auto selectKernel(size_t idx)
+  {
+  MR_assert(idx<KernelDB.size(), "no appropriate kernel found");
+  auto supp = KernelDB[idx].W;
+  auto beta = KernelDB[idx].beta*supp;
+  auto e0 = KernelDB[idx].e0;
+  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
+  return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  }
+
 /*! Returns the best matching 2-parameter ES kernel for the given oversampling
     factor and error. */
 template<typename T> auto selectKernel(double ofactor, double epsilon)
   {
   size_t Wmin=1000;
-  size_t idx = NEScache.size();
-  for (size_t i=0; i<NEScache.size(); ++i)
-    if ((NEScache[i].ofactor<=ofactor) && (NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
+  size_t idx = KernelDB.size();
+  for (size_t i=0; i<KernelDB.size(); ++i)
+    if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon) && (KernelDB[i].W<=Wmin))
       {
       idx = i;
-      Wmin = NEScache[i].W;
+      Wmin = KernelDB[i].W;
       }
-  MR_assert(idx<NEScache.size(), "no appropriate kernel found");
-  auto supp = NEScache[idx].W;
-  auto beta = NEScache[idx].beta*supp;
-  auto e0 = NEScache[idx].e0;
-  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  return selectKernel<T>(idx);
   }
-
-size_t getMinSupport(double epsilon)
+template<typename T> auto selectKernel(double ofactor, double epsilon, size_t idx)
   {
-  size_t Wmin=1000;
-  for (size_t i=0; i<NEScache.size(); ++i)
-    if ((NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
-      Wmin = NEScache[i].W;
-  MR_assert(Wmin<1000, "no appropriate kernel found");
-  return Wmin;
+  return (idx<KernelDB.size()) ?
+    selectKernel<T>(idx) : selectKernel<T>(ofactor, epsilon);
   }
 
 auto getAvailableKernels(double epsilon, bool single_precision)
   {
-  size_t supp0 = getMinSupport(epsilon);
-  vector<double> ofactors;
-  for (size_t supp=supp0; supp<(single_precision ? 9 : 17); ++supp)
+  vector<double> ofc(20, 100.);
+  vector<size_t> idx(20, KernelDB.size());
+  size_t Wlim = single_precision ? 8 : 16;
+  for (size_t i=0; i<KernelDB.size(); ++i)
     {
-    double ofac=3;
-    size_t idx = NEScache.size();
-    for (size_t i=0; i<NEScache.size(); ++i)
-      if ((NEScache[i].epsilon<=epsilon) && (NEScache[i].ofactor<ofac) && (NEScache[i].W==supp))
+    size_t W = KernelDB[i].W;
+    if ((W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
+     && (KernelDB[i].ofactor<ofc[W]))
       {
-      idx = i;
-      ofac = NEScache[i].ofactor;
+      ofc[W] = KernelDB[i].ofactor;
+      idx[W] = i;
       }
-    MR_assert(idx<NEScache.size(), "no appropriate kernel found");
-    ofactors.push_back(NEScache[idx].ofactor);
     }
-  return make_tuple(supp0, ofactors);
+  vector<size_t> res;
+  for (auto v: idx)
+    if (v<KernelDB.size()) res.push_back(v);
+  MR_assert(!res.empty(), "no appropriate kernel found");
+  return res;
   }
 
 }
@@ -651,6 +654,8 @@ using detail_gridding_kernel::selectKernel;
 using detail_gridding_kernel::getAvailableKernels;
 using detail_gridding_kernel::HornerKernel;
 using detail_gridding_kernel::TemplateKernel;
+using detail_gridding_kernel::KernelParams;
+using detail_gridding_kernel::KernelDB;
 
 }
 

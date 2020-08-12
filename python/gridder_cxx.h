@@ -251,12 +251,12 @@ template<typename T> class GridderConfig
 
   public:
     GridderConfig(size_t nxdirty, size_t nydirty, size_t nu_, size_t nv_,
-      double epsilon_, double pixsize_x, double pixsize_y,
+      size_t kidx, double epsilon_, double pixsize_x, double pixsize_y,
       const Baselines &baselines, size_t nthreads_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         epsilon(epsilon_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
-        krn(selectKernel<T>(ofactor, epsilon)),
+        krn(selectKernel<T>(ofactor, epsilon,kidx)),
         psx(pixsize_x), psy(pixsize_y),
         supp(krn->support()), nsafe((supp+1)/2),
         nthreads(nthreads_),
@@ -824,10 +824,10 @@ template<typename T, typename Serv> void x2grid_c
 
   switch(gconf.Supp())
     {
-    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
-    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
-    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
-    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
+//    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
+//    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
+//    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
+//    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
     case  5: x2grid_c_helper< 5>(gconf, srv, grid, w0, dw); break;
     case  6: x2grid_c_helper< 6>(gconf, srv, grid, w0, dw); break;
     case  7: x2grid_c_helper< 7>(gconf, srv, grid, w0, dw); break;
@@ -899,10 +899,10 @@ template<typename T, typename Serv> void grid2x_c
 
   switch(gconf.Supp())
     {
-    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
-    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
-    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
-    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
+//    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
+//    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
+//    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
+//    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
     case  5: grid2x_c_helper< 5>(gconf, grid, srv, w0, dw); break;
     case  6: grid2x_c_helper< 6>(gconf, grid, srv, w0, dw); break;
     case  7: grid2x_c_helper< 7>(gconf, grid, srv, w0, dw); break;
@@ -988,21 +988,6 @@ template<typename T, typename Serv> class WgridHelper
     int curplane;
     vector<idx_t> subidx;
 
-    static void wminmax(const Serv &srv, double &wmin, double &wmax)
-      {
-      size_t nvis = srv.Nvis();
-
-      wmin= 1e38;
-      wmax=-1e38;
-      // FIXME maybe this can be done more intelligently
-      for (size_t ipart=0; ipart<nvis; ++ipart)
-        {
-        auto wval = abs(srv.getCoord(ipart).w);
-        wmin = min(wmin,wval);
-        wmax = max(wmax,wval);
-        }
-      }
-
     template<typename T2> static void update_idx(vector<T2> &v, const vector<T2> &add,
       const vector<T2> &del, size_t nthreads)
       {
@@ -1010,6 +995,7 @@ template<typename T, typename Serv> class WgridHelper
       vector<T2> res;
       res.reserve((v.size()+add.size())-del.size());
 #if 0
+      // scalar version for illustration
       auto iin=v.begin(), ein=v.end();
       auto iadd=add.begin(), eadd=add.end();
       auto irem=del.begin(), erem=del.end();
@@ -1066,15 +1052,11 @@ template<typename T, typename Serv> class WgridHelper
       }
 
   public:
-    WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, size_t verbosity_)
-      : srv(srv_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
+    WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, double wmin_, double wmax, size_t verbosity_)
+      : srv(srv_), wmin(wmin_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
         verbosity(verbosity_), curplane(-1)
       {
       size_t nvis = srv.Nvis();
-      double wmax;
-
-      wminmax(srv, wmin, wmax);
-
       double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
              y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
       double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
@@ -1153,7 +1135,7 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
   {
   if (verbosity==0) return;
   cout << (gridding ? "Gridding" : "Degridding")
-       << " (" << gconf.Nthreads() <<" threads): "
+       << ": nthreads=" << gconf.Nthreads() << ", "
        << "dirty=(" << gconf.Nxdirty() << "x" << gconf.Nydirty() << "), "
        << "grid=(" << gconf.Nu() << "x" << gconf.Nv();
   if (nplanes>0) cout << "x" << nplanes;
@@ -1165,11 +1147,11 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
 
 template<typename T, typename Serv> void x2dirty(
   const GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
-  bool do_wstacking, size_t verbosity)
+  bool do_wstacking, double wmin, double wmax, size_t verbosity)
   {
   if (do_wstacking)
     {
-    WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
+    WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
     report(gconf, srv.Nvis(), hlp.Nplanes(), true, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
@@ -1198,12 +1180,12 @@ template<typename T, typename Serv> void x2dirty(
 
 template<typename T, typename Serv> void dirty2x(
   const GridderConfig<T> &gconf,  const mav<T,2> &dirty,
-  Serv &srv, bool do_wstacking, size_t verbosity)
+  Serv &srv, bool do_wstacking, double wmin, double wmax, size_t verbosity)
   {
   if (do_wstacking)
     {
     size_t nx_dirty=gconf.Nxdirty(), ny_dirty=gconf.Nydirty();
-    WgridHelper<T, Serv> hlp(gconf, srv, verbosity);
+    WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
     report(gconf, srv.Nvis(), hlp.Nplanes(), false, verbosity);
     double dw = hlp.DW();
     mav<T,2> tdirty({nx_dirty,ny_dirty});
@@ -1232,56 +1214,32 @@ template<typename T, typename Serv> void dirty2x(
     }
   }
 
-template<typename T> auto getNuNv(const Baselines &baselines,
-  const mav<complex<T>,2> &ms, const mav<T,2> &wgt, double epsilon, bool do_wstacking,
+template<typename T> auto getNuNv(double epsilon,
+  bool do_wstacking, double wmin, double wmax, size_t nvis,
   size_t nxdirty, size_t nydirty, double pixsize_x, double pixsize_y)
   {
-  size_t nrow=baselines.Nrows(),
-         nchan=baselines.Nchannels();
-  bool have_wgt=wgt.size()!=0;
-  if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
-  bool have_ms=ms.size()!=0;
-  if (have_ms) checkShape(ms.shape(), {nrow,nchan});
-
-  size_t nvis=nrow*nchan;
-  double wmin=0, wmax=0;
-  if (do_wstacking)
-    {
-    nvis = 0;
-    wmin = 1e300;
-    wmax = -1e300;
-    for(idx_t irow=0; irow<nrow; ++irow)
-      for (idx_t ichan=0; ichan<nchan; ++ichan)
-        if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
-            ((!have_wgt) || (wgt(irow,ichan)!=0)))
-          {
-          ++nvis;
-          auto uvw = baselines.effectiveCoord(RowChan{irow,ichan});
-          double w = abs(uvw.w);
-          wmin = min(wmin, w);
-          wmax = max(wmax, w);
-          }
-    }
-
   double x0 = -0.5*nxdirty*pixsize_x,
          y0 = -0.5*nydirty*pixsize_y;
   double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
   if (x0*x0+y0*y0>1.)
     nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-  auto [supp0, ofactors] = getAvailableKernels(epsilon, sizeof(T)<8);
+  auto idx = getAvailableKernels(epsilon, sizeof(T)<8);
   double mincost = 1e300;
   constexpr double nref_fft=2048;
   constexpr double costref_fft=0.0693;
-  size_t minnu=0, minnv=0;
-  for (size_t i=0; i<ofactors.size(); ++i)
+  size_t minnu=0, minnv=0, minidx=KernelDB.size();
+  constexpr size_t vlen = native_simd<T>::size();
+  for (size_t i=0; i<idx.size(); ++i)
     {
-    auto supp = supp0+i;
-    auto ofactor = ofactors[i];
+    const auto &krn(KernelDB[idx[i]]);
+    auto supp = krn.W;
+    auto nvec = (supp+vlen-1)/vlen;
+    auto ofactor = krn.ofactor;
     size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
     size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
     double logterm = log(nu*nv)/log(nref_fft*nref_fft);
     double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
-    double gridcost = 1e-9*nvis*supp*supp;
+    double gridcost = 1e-9*nvis*supp*nvec*vlen;
     if (do_wstacking)
       {
       double dw = 0.5/ofactor/abs(nmin);
@@ -1295,23 +1253,20 @@ template<typename T> auto getNuNv(const Baselines &baselines,
       mincost=cost;
       minnu=nu;
       minnv=nv;
+      minidx = idx[i];
       }
     }
-  return make_tuple(minnu, minnv);
+  return make_tuple(minnu, minnv, minidx);
   }
 
-template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
-  const GridderConfig<T> &gconf, const mav<T,2> &wgt,
-  const mav<complex<T>,2> &ms)
+template<typename T> vector<idx_t> getIndices(const Baselines &baselines,
+  const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask)
   {
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
          nsafe=gconf.Nsafe(),
          nthreads=gconf.Nthreads();
-  bool have_wgt=wgt.size()!=0;
-  if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
-  bool have_ms=ms.size()!=0;
-  if (have_ms) checkShape(ms.shape(), {nrow,nchan});
+  checkShape(mask.shape(), {nrow,nchan});
   constexpr int side=1<<logsquare;
   size_t nbu = (gconf.Nu()+1+side-1) >> logsquare,
          nbv = (gconf.Nv()+1+side-1) >> logsquare;
@@ -1325,21 +1280,20 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
     for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
       {
       for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
-        if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
-            ((!have_wgt) || (wgt(irow,ichan)!=0)))
-        {
-        auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
-        if (uvw.w<0) uvw.Flip();
-        double u, v;
-        int iu0, iv0;
-        gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
-        iu0 = (iu0+nsafe)>>logsquare;
-        iv0 = (iv0+nsafe)>>logsquare;
-        tmp[idx] = nbv*iu0 + iv0;
-        ++acc.v(tid, tmp[idx]);
-        }
-      else
-        tmp[idx] = ~idx_t(0);
+        if (mask(irow,ichan))
+          {
+          auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
+          if (uvw.w<0) uvw.Flip();
+          double u, v;
+          int iu0, iv0;
+          gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
+          iu0 = (iu0+nsafe)>>logsquare;
+          iv0 = (iv0+nsafe)>>logsquare;
+          tmp[idx] = nbv*iu0 + iv0;
+          ++acc.v(tid, tmp[idx]);
+          }
+        else
+          tmp[idx] = ~idx_t(0);
       }
     });
 
@@ -1364,9 +1318,54 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
   return res;
   }
 
+template<typename T> auto scanData(const Baselines &baselines, const mav<complex<T>,2> &ms,
+  const mav<T, 2> &wgt, const mav<uint8_t, 2> &mask, size_t nthreads)
+  {
+  size_t nrow=baselines.Nrows(),
+         nchan=baselines.Nchannels();
+  bool have_wgt=wgt.size()!=0;
+  if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
+  bool have_ms=ms.size()!=0;
+  if (have_ms) checkShape(ms.shape(), {nrow,nchan});
+  bool have_mask=mask.size()!=0;
+  if (have_mask) checkShape(mask.shape(), {nrow,nchan});
+
+  mav<uint8_t, 2> mask_out({nrow,nchan});
+  size_t nvis=0;
+  double wmin=1e300, wmax=-1e300;
+  mutex mut;
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    double lwmin=1e300, lwmax=-1e300;
+    size_t lnvis=0;
+    idx_t tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
+      for (idx_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+        if (((!have_ms ) || (norm(ms(irow,ichan))!=0)) &&
+            ((!have_wgt) || (wgt(irow,ichan)!=0)) &&
+            ((!have_mask) || (mask(irow,ichan)!=0)))
+          {
+          ++lnvis;
+          mask_out.v(irow,ichan) = 1;
+          auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
+          double w = abs(uvw.w);
+          lwmin = min(lwmin, w);
+          lwmax = max(lwmax, w);
+          }
+    {
+    lock_guard<mutex> lock(mut);
+    wmin = min(wmin, lwmin);
+    wmax = max(wmax, lwmax);
+    nvis += lnvis;
+    }
+    });
+  return make_tuple(wmin, wmax, nvis, mask_out);
+  } 
+
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
+  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false)
   {
@@ -1374,24 +1373,29 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
+  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, ms, wgt, mask, nthreads);
+  if (nvis==0)
+    { dirty.fill(0); return; }
+  size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2] = getNuNv(baselines, ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
     nu = nu2;
     nv = nv2;
+    kidx = kidx2;
     }
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
-  auto idx = getWgtIndices(baselines, gconf, wgt, ms);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
+  auto idx = getIndices(baselines, gconf, mask_out);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
-  x2dirty(gconf, serv, dirty, do_wstacking, verbosity);
+  x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
     cout << "Wall clock time for gridding: " << timer() << "s" << endl;
   }
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
-  const mav<T,2> &wgt, double pixsize_x, double pixsize_y, size_t nu, size_t nv,
+  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv,
   double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false)
   {
@@ -1400,18 +1404,23 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
+  ms.fill(0);
+  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, null_ms, wgt, mask, nthreads);
+  if (nvis==0)
+    return;
+  size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2] = getNuNv(baselines, null_ms, wgt, epsilon, do_wstacking, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
     nu = nu2;
     nv = nv2;
+    kidx = kidx2;
     }
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
-  auto idx = getWgtIndices(baselines, gconf, wgt, null_ms);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
+  auto idx = getIndices(baselines, gconf, mask_out);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
-  ms.fill(0);
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
-  dirty2x(gconf, dirty, serv, do_wstacking, verbosity);
+  dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
     cout << "Wall clock time for degridding: " << timer() << "s" << endl;
   }

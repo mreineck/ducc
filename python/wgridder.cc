@@ -35,7 +35,7 @@ namespace py = pybind11;
 auto None = py::none();
 
 template<typename T> py::array ms2dirty2(const py::array &uvw_,
-  const py::array &freq_, const py::array &ms_, const py::object &wgt_,
+  const py::array &freq_, const py::array &ms_, const py::object &wgt_, const py::object &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
   size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
   size_t verbosity)
@@ -45,11 +45,13 @@ template<typename T> py::array ms2dirty2(const py::array &uvw_,
   auto ms = to_mav<complex<T>,2>(ms_, false);
   auto wgt = get_optional_const_Pyarr<T>(wgt_, {ms.shape(0),ms.shape(1)});
   auto wgt2 = to_mav<T,2>(wgt, false);
+  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask2 = to_mav<uint8_t,2>(mask, false);
   auto dirty = make_Pyarr<T>({npix_x,npix_y});
   auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
-  ms2dirty(uvw,freq,ms,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
+  ms2dirty(uvw,freq,ms,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
     do_wstacking,nthreads,dirty2,verbosity);
   }
   return move(dirty);
@@ -58,13 +60,13 @@ py::array Pyms2dirty(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
   size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
-  size_t verbosity)
+  size_t verbosity, const py::object &mask)
   {
   if (isPyarr<complex<float>>(ms))
-    return ms2dirty2<float>(uvw, freq, ms, wgt, npix_x, npix_y,
+    return ms2dirty2<float>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   if (isPyarr<complex<double>>(ms))
-    return ms2dirty2<double>(uvw, freq, ms, wgt, npix_x, npix_y,
+    return ms2dirty2<double>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   MR_fail("type matching failed: 'ms' has neither type 'c8' nor 'c16'");
   }
@@ -108,6 +110,8 @@ verbosity: int
     0: no output
     1: some output
     2: detailed output
+mask: np.array((nrows, nchan), dtype=np.uint8), optional
+    If present, only visibilities are processed for which mask!=0
 
 Returns
 =======
@@ -116,7 +120,7 @@ np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
 )""";
 
 template<typename T> py::array dirty2ms2(const py::array &uvw_,
-  const py::array &freq_, const py::array &dirty_, const py::object &wgt_,
+  const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, size_t verbosity)
   {
@@ -125,11 +129,13 @@ template<typename T> py::array dirty2ms2(const py::array &uvw_,
   auto dirty = to_mav<T,2>(dirty_, false);
   auto wgt = get_optional_const_Pyarr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
   auto wgt2 = to_mav<T,2>(wgt, false);
+  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask2 = to_mav<uint8_t,2>(mask, false);
   auto ms = make_Pyarr<complex<T>>({uvw.shape(0),freq.shape(0)});
   auto ms2 = to_mav<complex<T>,2>(ms, true);
   {
   py::gil_scoped_release release;
-  dirty2ms(uvw,freq,dirty,wgt2,pixsize_x,pixsize_y,nu,nv,epsilon,
+  dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
     do_wstacking,nthreads,ms2,verbosity);
   }
   return move(ms);
@@ -137,13 +143,13 @@ template<typename T> py::array dirty2ms2(const py::array &uvw_,
 py::array Pydirty2ms(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, size_t verbosity)
+  bool do_wstacking, size_t nthreads, size_t verbosity, const py::object &mask)
   {
   if (isPyarr<float>(dirty))
-    return dirty2ms2<float>(uvw, freq, dirty, wgt,
+    return dirty2ms2<float>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   if (isPyarr<double>(dirty))
-    return dirty2ms2<double>(uvw, freq, dirty, wgt,
+    return dirty2ms2<double>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
@@ -185,6 +191,8 @@ verbosity: int
     0: no output
     1: some output
     2: detailed output
+mask: np.array((nrows, nchan), dtype=np.uint8), optional
+    If present, only visibilities are processed for which mask!=0
 
 Returns
 =======
@@ -199,10 +207,10 @@ void add_wgridder(py::module &msup)
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a,
-    "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0);
+    "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
   m.def("dirty2ms", &Pydirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a, "epsilon"_a,
-    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0);
+    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
   }
 
 }
