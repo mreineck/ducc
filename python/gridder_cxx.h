@@ -827,7 +827,7 @@ template<typename T, typename Serv> void x2grid_c
 //    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
 //    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
 //    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
-//    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
+    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
     case  5: x2grid_c_helper< 5>(gconf, srv, grid, w0, dw); break;
     case  6: x2grid_c_helper< 6>(gconf, srv, grid, w0, dw); break;
     case  7: x2grid_c_helper< 7>(gconf, srv, grid, w0, dw); break;
@@ -902,7 +902,7 @@ template<typename T, typename Serv> void grid2x_c
 //    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
 //    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
 //    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
-//    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
+    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
     case  5: grid2x_c_helper< 5>(gconf, grid, srv, w0, dw); break;
     case  6: grid2x_c_helper< 6>(gconf, grid, srv, w0, dw); break;
     case  7: grid2x_c_helper< 7>(gconf, grid, srv, w0, dw); break;
