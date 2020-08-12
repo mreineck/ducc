@@ -47,10 +47,9 @@ class Scheduler
     virtual Range getNext() = 0;
   };
 
+size_t max_threads();
 void set_default_nthreads(size_t new_default_nthreads);
 size_t get_default_nthreads();
-
-void set_pool_size(size_t new_pool_size);
 
 void execSingle(size_t nwork,
   std::function<void(Scheduler &)> func);
@@ -64,7 +63,7 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func);
 
 } // end of namespace detail_threading
 
-using detail_threading::set_pool_size;
+using detail_threading::max_threads;
 using detail_threading::get_default_nthreads;
 using detail_threading::set_default_nthreads;
 using detail_threading::Scheduler;
