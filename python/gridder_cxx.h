@@ -1131,7 +1131,7 @@ template<typename T, typename Serv> class WgridHelper
   };
 
 template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
-  size_t nplanes, bool gridding, size_t verbosity)
+  double wmin, double wmax, size_t nplanes, bool gridding, size_t verbosity)
   {
   if (verbosity==0) return;
   cout << (gridding ? "Gridding" : "Degridding")
@@ -1143,6 +1143,14 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
        << ", supp=" << gconf.Supp()
        << ", eps=" << (gconf.Epsilon() * ((nplanes==0) ? 2 : 3))
        << endl;
+  double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
+         y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
+  double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
+  if (x0*x0+y0*y0>1.)
+    nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+  double dw = 0.5/gconf.Ofactor()/abs(nmin);
+  cout << "  w=[" << wmin << "; " << wmax << "], nmin=" << nmin << ", dw=" << dw
+       << ", wmax/dw=" << wmax/dw << endl;
   }
 
 template<typename T, typename Serv> void x2dirty(
@@ -1152,7 +1160,7 @@ template<typename T, typename Serv> void x2dirty(
   if (do_wstacking)
     {
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
-    report(gconf, srv.Nvis(), hlp.Nplanes(), true, verbosity);
+    report(gconf, srv.Nvis(), wmin, wmax, hlp.Nplanes(), true, verbosity);
     double dw = hlp.DW();
     dirty.fill(0);
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
@@ -1169,7 +1177,7 @@ template<typename T, typename Serv> void x2dirty(
     }
   else
     {
-    report(gconf, srv.Nvis(), 0, true, verbosity);
+    report(gconf, srv.Nvis(), wmin, wmax, 0, true, verbosity);
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     x2grid_c(gconf, srv, grid);
     auto rgrid = mav<T,2>::build_noncritical(grid.shape());
@@ -1186,7 +1194,7 @@ template<typename T, typename Serv> void dirty2x(
     {
     size_t nx_dirty=gconf.Nxdirty(), ny_dirty=gconf.Nydirty();
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
-    report(gconf, srv.Nvis(), hlp.Nplanes(), false, verbosity);
+    report(gconf, srv.Nvis(), wmin, wmax, hlp.Nplanes(), false, verbosity);
     double dw = hlp.DW();
     mav<T,2> tdirty({nx_dirty,ny_dirty});
     for (size_t i=0; i<nx_dirty; ++i)
@@ -1205,7 +1213,7 @@ template<typename T, typename Serv> void dirty2x(
     }
   else
     {
-    report(gconf, srv.Nvis(), 0, false, verbosity);
+    report(gconf, srv.Nvis(), wmin, wmax, 0, false, verbosity);
     auto grid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     gconf.dirty2grid(dirty, grid);
     auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
