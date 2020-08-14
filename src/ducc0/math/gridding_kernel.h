@@ -321,27 +321,74 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    [[gnu::always_inline]] void eval(T x, native_simd<T> *res) const
+    [[gnu::always_inline]] void eval2s(T x, T y, T z, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      x = (x+1)*W-1;
-      for (size_t i=0; i<nvec; ++i)
+      z += W*T(0.5); // now in [0; W[
+      auto nth = min(W-1, size_t(max(T(0), z)));
+      z = (z-nth)*2-1;
+      if constexpr (nvec==1)
         {
-        auto tval = coeff[i];
+        auto tvalx = coeff[0];
+        auto tvaly = coeff[0];
+        auto tvalz = coeff[0];
         for (size_t j=1; j<=D; ++j)
-          tval = tval*x + coeff[j*nvec+i];
-        res[i] = tval;
+          {
+          tvalx = tvalx*x + coeff[j];
+          tvaly = tvaly*y + coeff[j];
+          tvalz = tvalz*z + coeff[j];
+          }
+        res[0] = tvalx*T(tvalz[nth]);
+        res[1] = tvaly;
+        }
+      else
+        {
+        auto ptrz = scoeff+nth;
+        auto tvalz = *ptrz;
+        for (size_t j=1; j<=D; ++j)
+          tvalz = tvalz*z + ptrz[j*sstride];
+        for (size_t i=0; i<nvec; ++i)
+          {
+          auto tvalx = coeff[i];
+          auto tvaly = coeff[i];
+          for (size_t j=1; j<=D; ++j)
+            {
+            tvalx = tvalx*x + coeff[j*nvec+i];
+            tvaly = tvaly*y + coeff[j*nvec+i];
+            }
+          res[i] = tvalx*tvalz;
+          res[i+nvec] = tvaly;
+          }
         }
       }
-
-    [[gnu::always_inline]] T eval_single(T x) const
+    [[gnu::always_inline]] void eval2(T x, T y, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
-      x = (x+1)*W-2*nth-1;
-      auto ptr = scoeff+nth;
-      auto tval = *ptr;
-      for (size_t j=1; j<=D; ++j)
-        tval = tval*x + ptr[j*sstride];
-      return tval;
+      if constexpr (nvec==1)
+        {
+        auto tvalx = coeff[0];
+        auto tvaly = coeff[0];
+        for (size_t j=1; j<=D; ++j)
+          {
+          tvalx = tvalx*x + coeff[j];
+          tvaly = tvaly*y + coeff[j];
+          }
+        res[0] = tvalx;
+        res[1] = tvaly;
+        }
+      else
+        {
+        for (size_t i=0; i<nvec; ++i)
+          {
+          auto tvalx = coeff[i];
+          auto tvaly = coeff[i];
+          for (size_t j=1; j<=D; ++j)
+            {
+            tvalx = tvalx*x + coeff[j*nvec+i];
+            tvaly = tvaly*y + coeff[j*nvec+i];
+            }
+          res[i] = tvalx;
+          res[i+nvec] = tvaly;
+          }
+        }
       }
   };
 

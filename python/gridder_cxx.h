@@ -517,7 +517,7 @@ template<typename T> class GridderConfig
 
 constexpr int logsquare=4;
 
-template<size_t supp, typename T> class HelperX2g2
+template<size_t supp, bool wgrid, typename T> class HelperX2g2
   {
   public:
     static constexpr size_t vlen = native_simd<T>::size();
@@ -536,10 +536,8 @@ template<size_t supp, typename T> class HelperX2g2
     int nu, nv;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
-    T wfac;
 
     mav<T,2> bufr, bufi;
-    bool do_w_gridding;
     double w0, xdw;
     vector<std::mutex> &locks;
 
@@ -581,7 +579,6 @@ template<size_t supp, typename T> class HelperX2g2
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
-        do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_),
         locks(locks_)
@@ -589,17 +586,16 @@ template<size_t supp, typename T> class HelperX2g2
     ~HelperX2g2() { dump(); }
 
     constexpr int lineJump() const { return svvec; }
-    T Wfac() const { return wfac; }
     [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double x0 = xsupp*(iu0-u);
-      double y0 = xsupp*(iv0-v);
-      krn.eval(T(x0), &buf.simd[0]);
-      krn.eval(T(y0), &buf.simd[nvec]);
-      if (do_w_gridding)
-        wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
+      T x0 = (iu0-T(u))*2+(supp-1);
+      T y0 = (iv0-T(v))*2+(supp-1); 
+      if constexpr(wgrid)
+        krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
+      else
+        krn.eval2(x0, y0, &buf.simd[0]);
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         dump();
@@ -611,7 +607,7 @@ template<size_t supp, typename T> class HelperX2g2
       }
   };
 
-template<size_t supp, typename T> class HelperG2x2
+template<size_t supp, bool wgrid, typename T> class HelperG2x2
   {
   public:
     static constexpr size_t vlen = native_simd<T>::size();
@@ -629,10 +625,8 @@ template<size_t supp, typename T> class HelperG2x2
     const mav<complex<T>,2> &grid;
     int iu0, iv0; // start index of the current visibility
     int bu0, bv0; // start index of the current buffer
-    T wfac;
 
     mav<T,2> bufr, bufi;
-    bool do_w_gridding;
     double w0, xdw;
 
     DUCC0_NOINLINE void load()
@@ -668,23 +662,21 @@ template<size_t supp, typename T> class HelperG2x2
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
-        do_w_gridding(dw_>0),
         w0(w0_),
         xdw(T(1)/dw_)
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
 
     constexpr int lineJump() const { return svvec; }
-    T Wfac() const { return wfac; }
     [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
-      double x0 = xsupp*(iu0-u);
-      double y0 = xsupp*(iv0-v);
-      krn.eval(T(x0), &buf.simd[0]);
-      krn.eval(T(y0), &buf.simd[nvec]);
-      if (do_w_gridding)
-        wfac = krn.eval_single(T(xdw*xsupp*abs(w0-in.w)));
+      T x0 = (iu0-T(u))*2+(supp-1);
+      T y0 = (iv0-T(v))*2+(supp-1); 
+      if constexpr(wgrid)
+        krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
+      else
+        krn.eval2(x0, y0, &buf.simd[0]);
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
@@ -769,19 +761,19 @@ template<typename T, typename T2> MsServ<T, T2> makeMsServ
   { return MsServ<T, T2>(baselines, idx, ms, wgt); }
 
 
-template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_helper
+template<size_t SUPP, bool wgrid, typename T, typename Serv> [[gnu::hot]] void x2grid_c_helper
   (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
   constexpr size_t vlen=native_simd<T>::size();
   constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
-  bool do_w_gridding = dw>0;
+
   vector<std::mutex> locks(gconf.Nu());
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 100, 0.2, [&](Scheduler &sched)
     {
-    HelperX2g2<SUPP,T> hlp(gconf, grid, locks, w0, dw);
+    HelperX2g2<SUPP,wgrid,T> hlp(gconf, grid, locks, w0, dw);
     constexpr int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -794,7 +786,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
       auto * DUCC0_RESTRICT ptrr = hlp.p0r;
       auto * DUCC0_RESTRICT ptri = hlp.p0i;
       auto v(srv.getVis(ipart));
-      if (do_w_gridding) v*=hlp.Wfac();
+
       if (flip) v=conj(v);
       native_simd<T> vr(v.real()), vi(v.imag());
       for (size_t cu=0; cu<SUPP; ++cu)
@@ -816,7 +808,7 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void x2grid_c_help
     });
   }
 
-template<typename T, typename Serv> void x2grid_c
+template<bool wgrid, typename T, typename Serv> void x2grid_c
   (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
@@ -824,40 +816,36 @@ template<typename T, typename Serv> void x2grid_c
 
   switch(gconf.Supp())
     {
-//    case  1: x2grid_c_helper< 1>(gconf, srv, grid, w0, dw); break;
-//    case  2: x2grid_c_helper< 2>(gconf, srv, grid, w0, dw); break;
-//    case  3: x2grid_c_helper< 3>(gconf, srv, grid, w0, dw); break;
-    case  4: x2grid_c_helper< 4>(gconf, srv, grid, w0, dw); break;
-    case  5: x2grid_c_helper< 5>(gconf, srv, grid, w0, dw); break;
-    case  6: x2grid_c_helper< 6>(gconf, srv, grid, w0, dw); break;
-    case  7: x2grid_c_helper< 7>(gconf, srv, grid, w0, dw); break;
-    case  8: x2grid_c_helper< 8>(gconf, srv, grid, w0, dw); break;
-    case  9: x2grid_c_helper< 9>(gconf, srv, grid, w0, dw); break;
-    case 10: x2grid_c_helper<10>(gconf, srv, grid, w0, dw); break;
-    case 11: x2grid_c_helper<11>(gconf, srv, grid, w0, dw); break;
-    case 12: x2grid_c_helper<12>(gconf, srv, grid, w0, dw); break;
-    case 13: x2grid_c_helper<13>(gconf, srv, grid, w0, dw); break;
-    case 14: x2grid_c_helper<14>(gconf, srv, grid, w0, dw); break;
-    case 15: x2grid_c_helper<15>(gconf, srv, grid, w0, dw); break;
-    case 16: x2grid_c_helper<16>(gconf, srv, grid, w0, dw); break;
+    case  4: x2grid_c_helper< 4, wgrid>(gconf, srv, grid, w0, dw); break;
+    case  5: x2grid_c_helper< 5, wgrid>(gconf, srv, grid, w0, dw); break;
+    case  6: x2grid_c_helper< 6, wgrid>(gconf, srv, grid, w0, dw); break;
+    case  7: x2grid_c_helper< 7, wgrid>(gconf, srv, grid, w0, dw); break;
+    case  8: x2grid_c_helper< 8, wgrid>(gconf, srv, grid, w0, dw); break;
+    case  9: x2grid_c_helper< 9, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 10: x2grid_c_helper<10, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 11: x2grid_c_helper<11, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 12: x2grid_c_helper<12, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 13: x2grid_c_helper<13, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 14: x2grid_c_helper<14, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 15: x2grid_c_helper<15, wgrid>(gconf, srv, grid, w0, dw); break;
+    case 16: x2grid_c_helper<16, wgrid>(gconf, srv, grid, w0, dw); break;
     default: MR_fail("must not happen");
     }
   }
 
-template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_helper
+template<size_t SUPP, bool wgrid, typename T, typename Serv> [[gnu::hot]] void grid2x_c_helper
   (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
   Serv &srv, double w0=-1, double dw=-1)
   {
   constexpr size_t vlen=native_simd<T>::size();
   constexpr size_t NVEC((SUPP+vlen-1)/vlen);
   size_t nthreads = gconf.Nthreads();
-  bool do_w_gridding = dw>0;
 
   // Loop over sampling points
   size_t np = srv.Nvis();
   execGuided(np, nthreads, 1000, 0.5, [&](Scheduler &sched)
     {
-    HelperG2x2<SUPP,T> hlp(gconf, grid, w0, dw);
+    HelperG2x2<SUPP,wgrid,T> hlp(gconf, grid, w0, dw);
     constexpr int jump = hlp.lineJump();
     const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
     const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -885,13 +873,12 @@ template<size_t SUPP, typename T, typename Serv> [[gnu::hot]] void grid2x_c_help
         }
       auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
       if (flip) r=conj(r);
-      if (do_w_gridding) r*=hlp.Wfac();
       srv.addVis(ipart, r);
       }
     });
   }
 
-template<typename T, typename Serv> void grid2x_c
+template<bool wgrid, typename T, typename Serv> void grid2x_c
   (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
   Serv &srv, double w0=-1, double dw=-1)
   {
@@ -899,22 +886,19 @@ template<typename T, typename Serv> void grid2x_c
 
   switch(gconf.Supp())
     {
-//    case  1: grid2x_c_helper< 1>(gconf, grid, srv, w0, dw); break;
-//    case  2: grid2x_c_helper< 2>(gconf, grid, srv, w0, dw); break;
-//    case  3: grid2x_c_helper< 3>(gconf, grid, srv, w0, dw); break;
-    case  4: grid2x_c_helper< 4>(gconf, grid, srv, w0, dw); break;
-    case  5: grid2x_c_helper< 5>(gconf, grid, srv, w0, dw); break;
-    case  6: grid2x_c_helper< 6>(gconf, grid, srv, w0, dw); break;
-    case  7: grid2x_c_helper< 7>(gconf, grid, srv, w0, dw); break;
-    case  8: grid2x_c_helper< 8>(gconf, grid, srv, w0, dw); break;
-    case  9: grid2x_c_helper< 9>(gconf, grid, srv, w0, dw); break;
-    case 10: grid2x_c_helper<10>(gconf, grid, srv, w0, dw); break;
-    case 11: grid2x_c_helper<11>(gconf, grid, srv, w0, dw); break;
-    case 12: grid2x_c_helper<12>(gconf, grid, srv, w0, dw); break;
-    case 13: grid2x_c_helper<13>(gconf, grid, srv, w0, dw); break;
-    case 14: grid2x_c_helper<14>(gconf, grid, srv, w0, dw); break;
-    case 15: grid2x_c_helper<15>(gconf, grid, srv, w0, dw); break;
-    case 16: grid2x_c_helper<16>(gconf, grid, srv, w0, dw); break;
+    case  4: grid2x_c_helper< 4, wgrid>(gconf, grid, srv, w0, dw); break;
+    case  5: grid2x_c_helper< 5, wgrid>(gconf, grid, srv, w0, dw); break;
+    case  6: grid2x_c_helper< 6, wgrid>(gconf, grid, srv, w0, dw); break;
+    case  7: grid2x_c_helper< 7, wgrid>(gconf, grid, srv, w0, dw); break;
+    case  8: grid2x_c_helper< 8, wgrid>(gconf, grid, srv, w0, dw); break;
+    case  9: grid2x_c_helper< 9, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 10: grid2x_c_helper<10, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 11: grid2x_c_helper<11, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 12: grid2x_c_helper<12, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 13: grid2x_c_helper<13, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 14: grid2x_c_helper<14, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 15: grid2x_c_helper<15, wgrid>(gconf, grid, srv, w0, dw); break;
+    case 16: grid2x_c_helper<16, wgrid>(gconf, grid, srv, w0, dw); break;
     default: MR_fail("must not happen");
     }
   }
@@ -1169,7 +1153,7 @@ template<typename T, typename Serv> void x2dirty(
       if (hlp.Nvis()==0) continue;
       grid.fill(0);
       auto serv = hlp.getSubserv();
-      x2grid_c(gconf, serv, grid, hlp.W(), dw);
+      x2grid_c<true>(gconf, serv, grid, hlp.W(), dw);
       gconf.grid2dirty_c_overwrite_wscreen_add(grid, dirty, T(hlp.W()));
       }
     // correct for w gridding etc.
@@ -1179,7 +1163,7 @@ template<typename T, typename Serv> void x2dirty(
     {
     report(gconf, srv.Nvis(), wmin, wmax, 0, true, verbosity);
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
-    x2grid_c(gconf, srv, grid);
+    x2grid_c<false>(gconf, srv, grid);
     auto rgrid = mav<T,2>::build_noncritical(grid.shape());
     complex2hartley(grid, rgrid, gconf.Nthreads());
     gconf.grid2dirty(rgrid, dirty);
@@ -1208,7 +1192,7 @@ template<typename T, typename Serv> void dirty2x(
       if (hlp.Nvis()==0) continue;
       gconf.dirty2grid_c_wscreen(tdirty, grid, T(hlp.W()));
       auto serv = hlp.getSubserv();
-      grid2x_c(gconf, grid, serv, hlp.W(), dw);
+      grid2x_c<true>(gconf, grid, serv, hlp.W(), dw);
       }
     }
   else
@@ -1218,7 +1202,7 @@ template<typename T, typename Serv> void dirty2x(
     gconf.dirty2grid(dirty, grid);
     auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
     hartley2complex(grid, grid2, gconf.Nthreads());
-    grid2x_c(gconf, grid2, srv);
+    grid2x_c<false>(gconf, grid2, srv);
     }
   }
 
