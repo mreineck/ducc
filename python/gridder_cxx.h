@@ -1247,7 +1247,7 @@ template<typename T> auto getNuNv(double epsilon,
     size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
     double logterm = log(nu*nv)/log(nref_fft*nref_fft);
     double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
-    double gridcost = 1e-9*nvis*supp*nvec*vlen;
+    double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
     if (do_wstacking)
       {
       double dw = 0.5/ofactor/abs(nmin);
