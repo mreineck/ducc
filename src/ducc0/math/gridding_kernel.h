@@ -47,8 +47,15 @@ vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &fun
     double l = -1+2.*i/double(W);
     double r = -1+2.*(i+1)/double(W);
     // function values at Chebyshev nodes
+    double avg = 0;
     for (size_t j=0; j<=D; ++j)
+      {
       y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
+      avg += y[j];
+      }
+    avg/=(D+1);
+    for (size_t j=0; j<=D; ++j)
+      y[j] -= avg;
     // Chebyshev coefficients
     for (size_t j=0; j<=D; ++j)
       {
@@ -71,6 +78,7 @@ vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &fun
     for (size_t j=0; j<=D; ++j)
       for (size_t k=0; k<=D; ++k)
         lcf2[k] += C[j*(D+1) + k]*lcf[j];
+    lcf2[0] += avg;
     for (size_t j=0; j<=D; ++j)
       coeff[j*W + i] = lcf2[D-j];
     }
