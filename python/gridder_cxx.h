@@ -227,6 +227,7 @@ template<typename T> class GridderConfig
 
   // FIXME: this should probably be done more cleanly
   public:
+    TimerHierarchy &timers;
     shared_ptr<HornerKernel<T>> krn;
 
   protected:
@@ -252,10 +253,11 @@ template<typename T> class GridderConfig
   public:
     GridderConfig(size_t nxdirty, size_t nydirty, size_t nu_, size_t nv_,
       size_t kidx, double epsilon_, double pixsize_x, double pixsize_y,
-      const Baselines &baselines, size_t nthreads_)
+      const Baselines &baselines, size_t nthreads_, TimerHierarchy &timers_)
       : nx_dirty(nxdirty), ny_dirty(nydirty), nu(nu_), nv(nv_),
         epsilon(epsilon_),
         ofactor(min(double(nu)/nxdirty, double(nv)/nydirty)),
+        timers(timers_),
         krn(selectKernel<T>(ofactor, epsilon,kidx)),
         psx(pixsize_x), psy(pixsize_y),
         supp(krn->support()), nsafe((supp+1)/2),
@@ -367,19 +369,22 @@ template<typename T> class GridderConfig
         });
       }
 
-    void grid2dirty(const mav<T,2> &grid,
-      mav<T,2> &dirty) const
+    void grid2dirty(const mav<T,2> &grid, mav<T,2> &dirty) const
       {
+      timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
       mav<T,2> tmav({nu,nv});
       tmav.apply(grid, [](T&a, T b) {a=b;});
       hartley2_2D<T>(tmav, vlim, uv_side_fast, nthreads);
+      timers.poppush("grid correction");
       grid2dirty_post(tmav, dirty);
+      timers.pop();
       }
 
     void grid2dirty_c_overwrite_wscreen_add
       (mav<complex<T>,2> &grid, mav<T,2> &dirty, T w) const
       {
+      timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
       fmav<complex<T>> inout(grid);
       if (2*vlim<nv)
@@ -395,7 +400,9 @@ template<typename T> class GridderConfig
         }
       else
         c2c(inout, inout, {0,1}, BACKWARD, T(1), nthreads);
+      timers.poppush("wscreen+grid correction");
       grid2dirty_post2(grid, dirty, w);
+      timers.pop();
       }
 
     void dirty2grid_pre(const mav<T,2> &dirty,
@@ -482,14 +489,19 @@ template<typename T> class GridderConfig
     void dirty2grid(const mav<T,2> &dirty,
       mav<T,2> &grid) const
       {
+      timers.push("grid correction");
       dirty2grid_pre(dirty, grid);
+      timers.poppush("FFT");
       hartley2_2D<T>(grid, vlim, !uv_side_fast, nthreads);
+      timers.pop();
       }
 
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
       mav<complex<T>,2> &grid, T w) const
       {
+      timers.push("wscreen+grid correction");
       dirty2grid_pre2(dirty, grid, w);
+      timers.poppush("FFT");
       fmav<complex<T>> inout(grid);
       if (2*vlim<nv)
         {
@@ -504,6 +516,7 @@ template<typename T> class GridderConfig
         }
       else
         c2c(inout, inout, {0,1}, FORWARD, T(1), nthreads);
+      timers.pop();
       }
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
@@ -812,6 +825,7 @@ template<bool wgrid, typename T, typename Serv> void x2grid_c
   (const GridderConfig<T> &gconf, Serv &srv, mav<complex<T>,2> &grid,
   double w0=-1, double dw=-1)
   {
+  gconf.timers.push("gridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
   switch(gconf.Supp())
@@ -831,6 +845,7 @@ template<bool wgrid, typename T, typename Serv> void x2grid_c
     case 16: x2grid_c_helper<16, wgrid>(gconf, srv, grid, w0, dw); break;
     default: MR_fail("must not happen");
     }
+  gconf.timers.pop();
   }
 
 template<size_t SUPP, bool wgrid, typename T, typename Serv> [[gnu::hot]] void grid2x_c_helper
@@ -882,6 +897,7 @@ template<bool wgrid, typename T, typename Serv> void grid2x_c
   (const GridderConfig<T> &gconf, const mav<complex<T>,2> &grid,
   Serv &srv, double w0=-1, double dw=-1)
   {
+  gconf.timers.push("degridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
   switch(gconf.Supp())
@@ -901,11 +917,13 @@ template<bool wgrid, typename T, typename Serv> void grid2x_c
     case 16: grid2x_c_helper<16, wgrid>(gconf, grid, srv, w0, dw); break;
     default: MR_fail("must not happen");
     }
+  gconf.timers.pop();
   }
 
 template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf,
   mav<T,2> &dirty, double dw, bool divide_by_n)
   {
+  gconf.timers.push("global corrections");
   auto nx_dirty=gconf.Nxdirty();
   auto ny_dirty=gconf.Nydirty();
   size_t nthreads = gconf.Nthreads();
@@ -958,11 +976,13 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
         }
       }
     });
+  gconf.timers.pop();
   }
 
 template<typename T, typename Serv> class WgridHelper
   {
   private:
+    GridderConfig<T> &gconf;
     Serv &srv;
     double wmin, dw;
     size_t nplanes, supp, nthreads;
@@ -972,9 +992,10 @@ template<typename T, typename Serv> class WgridHelper
     int curplane;
     vector<idx_t> subidx;
 
-    template<typename T2> static void update_idx(vector<T2> &v, const vector<T2> &add,
+    template<typename T2> void update_idx(vector<T2> &v, const vector<T2> &add,
       const vector<T2> &del, size_t nthreads)
       {
+      gconf.timers.push("update_idx");
       MR_assert(v.size()>=del.size(), "must not happen");
       vector<T2> res;
       res.reserve((v.size()+add.size())-del.size());
@@ -1033,13 +1054,15 @@ template<typename T, typename Serv> class WgridHelper
 #endif
       MR_assert(res.size()==(v.size()+add.size())-del.size(), "must not happen");
       v.swap(res);
+      gconf.timers.pop();
       }
 
   public:
-    WgridHelper(const GridderConfig<T> &gconf, Serv &srv_, double wmin_, double wmax, size_t verbosity_)
-      : srv(srv_), wmin(wmin_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
+    WgridHelper(GridderConfig<T> &gconf_, Serv &srv_, double wmin_, double wmax, size_t verbosity_)
+      : gconf(gconf_), srv(srv_), wmin(wmin_), supp(gconf.Supp()), nthreads(gconf.Nthreads()),
         verbosity(verbosity_), curplane(-1)
       {
+      gconf.timers.push("computing minplane");
       size_t nvis = srv.Nvis();
       double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
              y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
@@ -1092,6 +1115,7 @@ template<typename T, typename Serv> class WgridHelper
           minplane[p0[i]][cnt.v(tid,p0[i])++]=idx_t(i);
         });
 #endif
+      gconf.timers.pop();
       }
 
     typename Serv::Tsub getSubserv() const
@@ -1138,7 +1162,7 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
   }
 
 template<typename T, typename Serv> void x2dirty(
-  const GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
+  GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
   bool do_wstacking, double wmin, double wmax, size_t verbosity)
   {
   if (do_wstacking)
@@ -1171,7 +1195,7 @@ template<typename T, typename Serv> void x2dirty(
   }
 
 template<typename T, typename Serv> void dirty2x(
-  const GridderConfig<T> &gconf,  const mav<T,2> &dirty,
+  GridderConfig<T> &gconf,  const mav<T,2> &dirty,
   Serv &srv, bool do_wstacking, double wmin, double wmax, size_t verbosity)
   {
   if (do_wstacking)
@@ -1208,8 +1232,9 @@ template<typename T, typename Serv> void dirty2x(
 
 template<typename T> auto getNuNv(double epsilon,
   bool do_wstacking, double wmin, double wmax, size_t nvis,
-  size_t nxdirty, size_t nydirty, double pixsize_x, double pixsize_y)
+  size_t nxdirty, size_t nydirty, double pixsize_x, double pixsize_y, TimerHierarchy &timers)
   {
+  timers.push("parameter calculation");
   double x0 = -0.5*nxdirty*pixsize_x,
          y0 = -0.5*nydirty*pixsize_y;
   double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
@@ -1248,12 +1273,14 @@ template<typename T> auto getNuNv(double epsilon,
       minidx = idx[i];
       }
     }
+  timers.pop();
   return make_tuple(minnu, minnv, minidx);
   }
 
 template<typename T> vector<idx_t> getIndices(const Baselines &baselines,
   const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask)
   {
+  gconf.timers.push("Index generation");
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
          nsafe=gconf.Nsafe(),
@@ -1307,12 +1334,14 @@ template<typename T> vector<idx_t> getIndices(const Baselines &baselines,
         if (tmp[idx]!=(~idx_t(0)))
           res[acc.v(tid, tmp[idx])++] = baselines.getIdx(irow, ichan);
     });
+  gconf.timers.pop();
   return res;
   }
 
 template<typename T> auto scanData(const Baselines &baselines, const mav<complex<T>,2> &ms,
-  const mav<T, 2> &wgt, const mav<uint8_t, 2> &mask, size_t nthreads)
+  const mav<T, 2> &wgt, const mav<uint8_t, 2> &mask, size_t nthreads, TimerHierarchy &timers)
   {
+  timers.push("Initial scan");
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels();
   bool have_wgt=wgt.size()!=0;
@@ -1352,6 +1381,7 @@ template<typename T> auto scanData(const Baselines &baselines, const mav<complex
     nvis += lnvis;
     }
     });
+  timers.pop();
   return make_tuple(wmin, wmax, nvis, mask_out);
   } 
 
@@ -1361,28 +1391,28 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false)
   {
-  SimpleTimer timer;
+  TimerHierarchy timers("gridding");
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
-  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, ms, wgt, mask, nthreads);
+  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, ms, wgt, mask, nthreads, timers);
   if (nvis==0)
     { dirty.fill(0); return; }
   size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
     nu = nu2;
     nv = nv2;
     kidx = kidx2;
     }
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads, timers);
   auto idx = getIndices(baselines, gconf, mask_out);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
-    cout << "Wall clock time for gridding: " << timer() << "s" << endl;
+    timers.report(cout);
   }
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
@@ -1391,30 +1421,30 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false)
   {
-  SimpleTimer timer;
+  TimerHierarchy timers("degridding");
   Baselines baselines(uvw, freq, negate_v);
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
   ms.fill(0);
-  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, null_ms, wgt, mask, nthreads);
+  auto [wmin, wmax, nvis, mask_out] = scanData(baselines, null_ms, wgt, mask, nthreads, timers);
   if (nvis==0)
     return;
   size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
     nu = nu2;
     nv = nv2;
     kidx = kidx2;
     }
-  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads);
+  GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads, timers);
   auto idx = getIndices(baselines, gconf, mask_out);
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
-    cout << "Wall clock time for degridding: " << timer() << "s" << endl;
+    timers.report(cout);
   }
 
 } // namespace detail_gridder
