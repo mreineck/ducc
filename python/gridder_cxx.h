@@ -1170,13 +1170,19 @@ template<typename T, typename Serv> void x2dirty(
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
     report(gconf, srv.Nvis(), wmin, wmax, hlp.Nplanes(), true, verbosity);
     double dw = hlp.DW();
+    gconf.timers.push("zeroing dirty image");
     dirty.fill(0);
+    gconf.timers.poppush("allocating grid");
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
+    gconf.timers.pop();
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
+      gconf.timers.push("zeroing grid");
       grid.fill(0);
+      gconf.timers.poppush("getSubserv");
       auto serv = hlp.getSubserv();
+      gconf.timers.pop();
       x2grid_c<true>(gconf, serv, grid, hlp.W(), dw);
       gconf.grid2dirty_c_overwrite_wscreen_add(grid, dirty, T(hlp.W()));
       }
@@ -1186,10 +1192,15 @@ template<typename T, typename Serv> void x2dirty(
   else
     {
     report(gconf, srv.Nvis(), wmin, wmax, 0, true, verbosity);
+    gconf.timers.push("allocating grid");
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
+    gconf.timers.pop();
     x2grid_c<false>(gconf, srv, grid);
+    gconf.timers.push("allocating rgrid");
     auto rgrid = mav<T,2>::build_noncritical(grid.shape());
+    gconf.timers.poppush("complex2hartley");
     complex2hartley(grid, rgrid, gconf.Nthreads());
+    gconf.timers.pop();
     gconf.grid2dirty(rgrid, dirty);
     }
   }
@@ -1204,29 +1215,38 @@ template<typename T, typename Serv> void dirty2x(
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
     report(gconf, srv.Nvis(), wmin, wmax, hlp.Nplanes(), false, verbosity);
     double dw = hlp.DW();
+    gconf.timers.push("copying dirty image");
     mav<T,2> tdirty({nx_dirty,ny_dirty});
-    for (size_t i=0; i<nx_dirty; ++i)
-      for (size_t j=0; j<ny_dirty; ++j)
-        tdirty.v(i,j) = dirty(i,j);
+    tdirty.apply(dirty, [](T&a, T b) {a=b;});
+    gconf.timers.pop();
     // correct for w gridding etc.
     apply_global_corrections(gconf, tdirty, dw, true);
+    gconf.timers.push("allocating grid");
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
+    gconf.timers.pop();
     while(hlp.advance())  // iterate over w planes
       {
       if (hlp.Nvis()==0) continue;
       gconf.dirty2grid_c_wscreen(tdirty, grid, T(hlp.W()));
+      gconf.timers.push("getSubserv");
       auto serv = hlp.getSubserv();
+      gconf.timers.pop();
       grid2x_c<true>(gconf, grid, serv, hlp.W(), dw);
       }
     }
   else
     {
     report(gconf, srv.Nvis(), wmin, wmax, 0, false, verbosity);
-    auto grid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
-    gconf.dirty2grid(dirty, grid);
-    auto grid2 = mav<complex<T>,2>::build_noncritical(grid.shape());
-    hartley2complex(grid, grid2, gconf.Nthreads());
-    grid2x_c<false>(gconf, grid2, srv);
+    gconf.timers.push("allocating rgrid");
+    auto rgrid = mav<T,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
+    gconf.timers.pop();
+    gconf.dirty2grid(dirty, rgrid);
+    gconf.timers.push("allocating grid");
+    auto grid = mav<complex<T>,2>::build_noncritical(rgrid.shape());
+    gconf.timers.poppush("hartley2complex");
+    hartley2complex(rgrid, grid, gconf.Nthreads());
+    gconf.timers.pop();
+    grid2x_c<false>(gconf, grid, srv);
     }
   }
 
@@ -1392,7 +1412,9 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   bool negate_v=false)
   {
   TimerHierarchy timers("gridding");
+  timers.push("Baseline construction");
   Baselines baselines(uvw, freq, negate_v);
+  timers.pop();
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   auto [wmin, wmax, nvis, mask_out] = scanData(baselines, ms, wgt, mask, nthreads, timers);
@@ -1408,8 +1430,10 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
     }
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads, timers);
   auto idx = getIndices(baselines, gconf, mask_out);
+  timers.push("MsServ construction");
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
+  timers.pop();
   x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
     timers.report(cout);
@@ -1422,11 +1446,15 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   size_t verbosity, bool negate_v=false)
   {
   TimerHierarchy timers("degridding");
+  timers.push("Baseline construction");
   Baselines baselines(uvw, freq, negate_v);
+  timers.pop();
   // adjust for increased error when gridding in 2 or 3 dimensions
   epsilon /= do_wstacking ? 3 : 2;
   mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
+  timers.push("MS zeroing");
   ms.fill(0);
+  timers.pop();
   auto [wmin, wmax, nvis, mask_out] = scanData(baselines, null_ms, wgt, mask, nthreads, timers);
   if (nvis==0)
     return;
@@ -1440,7 +1468,9 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
     }
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads, timers);
   auto idx = getIndices(baselines, gconf, mask_out);
+  timers.push("MsServ construction");
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
+  timers.pop();
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity);
   if (verbosity>0)
