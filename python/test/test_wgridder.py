@@ -74,7 +74,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
-@pmp("nthreads", (1, 2))
+@pmp("nthreads", (1, 2, 7))
 def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
@@ -119,7 +119,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
 @pmp("singleprec", (False,))
 @pmp("wstacking", (False, True))
 @pmp("use_wgt", (True,))
-@pmp("nthreads", (1, 2))
+@pmp("nthreads", (1, 2, 7))
 @pmp("fov", (1., 20.))
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
