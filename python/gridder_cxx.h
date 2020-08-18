@@ -369,15 +369,13 @@ template<typename T> class GridderConfig
         });
       }
 
-    void grid2dirty(const mav<T,2> &grid, mav<T,2> &dirty) const
+    void grid2dirty_overwrite(mav<T,2> &grid, mav<T,2> &dirty) const
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
-      mav<T,2> tmav({nu,nv});
-      tmav.apply(grid, [](T&a, T b) {a=b;});
-      hartley2_2D<T>(tmav, vlim, uv_side_fast, nthreads);
+      hartley2_2D<T>(grid, vlim, uv_side_fast, nthreads);
       timers.poppush("grid correction");
-      grid2dirty_post(tmav, dirty);
+      grid2dirty_post(grid, dirty);
       timers.pop();
       }
 
@@ -551,6 +549,7 @@ template<size_t supp, bool wgrid, typename T> class HelperX2g2
     int bu0, bv0; // start index of the current buffer
 
     mav<T,2> bufr, bufi;
+    T *px0r, *px0i;
     double w0, xdw;
     vector<std::mutex> &locks;
 
@@ -589,9 +588,11 @@ template<size_t supp, bool wgrid, typename T> class HelperX2g2
     HelperX2g2(const GridderConfig<T> &gconf_, mav<complex<T>,2> &grid_,
       vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
       : gconf(gconf_), krn(*gconf.krn), grid(grid_),
+        iu0(-1000000), iv0(-1000000),
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
+        px0r(bufr.vdata()), px0i(bufi.vdata()),
         w0(w0_),
         xdw(T(1)/dw_),
         locks(locks_)
@@ -602,6 +603,8 @@ template<size_t supp, bool wgrid, typename T> class HelperX2g2
     [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
+      auto iu0old = iu0;
+      auto iv0old = iv0;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
       T x0 = (iu0-T(u))*2+(supp-1);
       T y0 = (iv0-T(v))*2+(supp-1); 
@@ -609,14 +612,16 @@ template<size_t supp, bool wgrid, typename T> class HelperX2g2
         krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
       else
         krn.eval2(x0, y0, &buf.simd[0]);
+      if ((iu0==iu0old) && (iv0==iv0old)) return;
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         dump();
         bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
         bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         }
-      p0r = &bufr.v(iu0-bu0, iv0-bv0);
-      p0i = &bufi.v(iu0-bu0, iv0-bv0);
+      auto ofs = (iu0-bu0)*svvec + iv0-bv0;
+      p0r = px0r+ofs;
+      p0i = px0i+ofs;
       }
   };
 
@@ -640,6 +645,7 @@ template<size_t supp, bool wgrid, typename T> class HelperG2x2
     int bu0, bv0; // start index of the current buffer
 
     mav<T,2> bufr, bufi;
+    const T *px0r, *px0i;
     double w0, xdw;
 
     DUCC0_NOINLINE void load()
@@ -672,9 +678,11 @@ template<size_t supp, bool wgrid, typename T> class HelperG2x2
     HelperG2x2(const GridderConfig<T> &gconf_, const mav<complex<T>,2> &grid_,
       double w0_=-1, double dw_=-1)
       : gconf(gconf_), krn(*gconf.krn), grid(grid_),
+        iu0(-1000000), iv0(-1000000),
         bu0(-1000000), bv0(-1000000),
         bufr({size_t(su),size_t(svvec)}),
         bufi({size_t(su),size_t(svvec)}),
+        px0r(bufr.data()), px0i(bufi.data()),
         w0(w0_),
         xdw(T(1)/dw_)
       { checkShape(grid.shape(), {gconf.Nu(),gconf.Nv()}); }
@@ -683,6 +691,8 @@ template<size_t supp, bool wgrid, typename T> class HelperG2x2
     [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
       {
       double u, v;
+      auto iu0old = iu0;
+      auto iv0old = iv0;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
       T x0 = (iu0-T(u))*2+(supp-1);
       T y0 = (iv0-T(v))*2+(supp-1); 
@@ -690,14 +700,16 @@ template<size_t supp, bool wgrid, typename T> class HelperG2x2
         krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
       else
         krn.eval2(x0, y0, &buf.simd[0]);
+      if ((iu0==iu0old) && (iv0==iv0old)) return;
       if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
         {
         bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
         bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
         load();
         }
-      p0r = &bufr(iu0-bu0, iv0-bv0);
-      p0i = &bufi(iu0-bu0, iv0-bv0);
+      auto ofs = (iu0-bu0)*svvec + iv0-bv0;
+      p0r = px0r+ofs;
+      p0i = px0i+ofs;
       }
   };
 
@@ -1223,7 +1235,7 @@ template<typename T, typename Serv> void x2dirty(
     gconf.timers.poppush("complex2hartley");
     complex2hartley(grid, rgrid, gconf.Nthreads());
     gconf.timers.pop();
-    gconf.grid2dirty(rgrid, dirty);
+    gconf.grid2dirty_overwrite(rgrid, dirty);
     }
   }
 
@@ -1368,10 +1380,11 @@ template<typename T> vector<idx_t> getIndices(const Baselines &baselines,
       }
 
   vector<idx_t> res(offset);
-  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+  execParallel(nthreads, [&](Scheduler &sched)
     {
     idx_t tid = sched.thread_num();
-    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
       for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
         if (tmp[idx]!=(~idx_t(0)))
           res[acc.v(tid, tmp[idx])++] = baselines.getIdx(irow, ichan);

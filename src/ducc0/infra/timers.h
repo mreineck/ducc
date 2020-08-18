@@ -25,6 +25,7 @@
 #include <chrono>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <iomanip>
 #include <map>
 
@@ -205,7 +206,7 @@ class TimerHierarchy
       return res;
       }
     void report(ostream &os) const
-      { root.report(os); }
+      { ostringstream oss; root.report(oss); os<<oss.str(); }
   };
 
 }
