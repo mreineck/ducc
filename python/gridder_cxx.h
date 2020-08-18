@@ -828,23 +828,34 @@ template<bool wgrid, typename T, typename Serv> void x2grid_c
   gconf.timers.push("gridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
-  switch(gconf.Supp())
-    {
-    case  4: x2grid_c_helper< 4, wgrid>(gconf, srv, grid, w0, dw); break;
-    case  5: x2grid_c_helper< 5, wgrid>(gconf, srv, grid, w0, dw); break;
-    case  6: x2grid_c_helper< 6, wgrid>(gconf, srv, grid, w0, dw); break;
-    case  7: x2grid_c_helper< 7, wgrid>(gconf, srv, grid, w0, dw); break;
-    case  8: x2grid_c_helper< 8, wgrid>(gconf, srv, grid, w0, dw); break;
-    case  9: x2grid_c_helper< 9, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 10: x2grid_c_helper<10, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 11: x2grid_c_helper<11, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 12: x2grid_c_helper<12, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 13: x2grid_c_helper<13, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 14: x2grid_c_helper<14, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 15: x2grid_c_helper<15, wgrid>(gconf, srv, grid, w0, dw); break;
-    case 16: x2grid_c_helper<16, wgrid>(gconf, srv, grid, w0, dw); break;
-    default: MR_fail("must not happen");
-    }
+  if constexpr (is_same<T, float>::value) 
+    switch(gconf.Supp())
+      {
+      case  4: x2grid_c_helper< 4, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  5: x2grid_c_helper< 5, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  6: x2grid_c_helper< 6, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  7: x2grid_c_helper< 7, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  8: x2grid_c_helper< 8, wgrid>(gconf, srv, grid, w0, dw); break;
+      default: MR_fail("must not happen");
+      }
+  else
+    switch(gconf.Supp())
+      {
+      case  4: x2grid_c_helper< 4, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  5: x2grid_c_helper< 5, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  6: x2grid_c_helper< 6, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  7: x2grid_c_helper< 7, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  8: x2grid_c_helper< 8, wgrid>(gconf, srv, grid, w0, dw); break;
+      case  9: x2grid_c_helper< 9, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 10: x2grid_c_helper<10, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 11: x2grid_c_helper<11, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 12: x2grid_c_helper<12, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 13: x2grid_c_helper<13, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 14: x2grid_c_helper<14, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 15: x2grid_c_helper<15, wgrid>(gconf, srv, grid, w0, dw); break;
+      case 16: x2grid_c_helper<16, wgrid>(gconf, srv, grid, w0, dw); break;
+      default: MR_fail("must not happen");
+      }
   gconf.timers.pop();
   }
 
@@ -900,23 +911,34 @@ template<bool wgrid, typename T, typename Serv> void grid2x_c
   gconf.timers.push("degridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
-  switch(gconf.Supp())
-    {
-    case  4: grid2x_c_helper< 4, wgrid>(gconf, grid, srv, w0, dw); break;
-    case  5: grid2x_c_helper< 5, wgrid>(gconf, grid, srv, w0, dw); break;
-    case  6: grid2x_c_helper< 6, wgrid>(gconf, grid, srv, w0, dw); break;
-    case  7: grid2x_c_helper< 7, wgrid>(gconf, grid, srv, w0, dw); break;
-    case  8: grid2x_c_helper< 8, wgrid>(gconf, grid, srv, w0, dw); break;
-    case  9: grid2x_c_helper< 9, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 10: grid2x_c_helper<10, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 11: grid2x_c_helper<11, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 12: grid2x_c_helper<12, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 13: grid2x_c_helper<13, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 14: grid2x_c_helper<14, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 15: grid2x_c_helper<15, wgrid>(gconf, grid, srv, w0, dw); break;
-    case 16: grid2x_c_helper<16, wgrid>(gconf, grid, srv, w0, dw); break;
-    default: MR_fail("must not happen");
-    }
+  if constexpr (is_same<T, float>::value) 
+    switch(gconf.Supp())
+      {
+      case  4: grid2x_c_helper< 4, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  5: grid2x_c_helper< 5, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  6: grid2x_c_helper< 6, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  7: grid2x_c_helper< 7, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  8: grid2x_c_helper< 8, wgrid>(gconf, grid, srv, w0, dw); break;
+      default: MR_fail("must not happen");
+      }
+  else
+    switch(gconf.Supp())
+      {
+      case  4: grid2x_c_helper< 4, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  5: grid2x_c_helper< 5, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  6: grid2x_c_helper< 6, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  7: grid2x_c_helper< 7, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  8: grid2x_c_helper< 8, wgrid>(gconf, grid, srv, w0, dw); break;
+      case  9: grid2x_c_helper< 9, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 10: grid2x_c_helper<10, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 11: grid2x_c_helper<11, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 12: grid2x_c_helper<12, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 13: grid2x_c_helper<13, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 14: grid2x_c_helper<14, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 15: grid2x_c_helper<15, wgrid>(gconf, grid, srv, w0, dw); break;
+      case 16: grid2x_c_helper<16, wgrid>(gconf, grid, srv, w0, dw); break;
+      default: MR_fail("must not happen");
+      }
   gconf.timers.pop();
   }
 
@@ -1260,7 +1282,7 @@ template<typename T> auto getNuNv(double epsilon,
   double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
   if (x0*x0+y0*y0>1.)
     nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-  auto idx = getAvailableKernels(epsilon, sizeof(T)<8);
+  auto idx = getAvailableKernels<T>(epsilon);
   double mincost = 1e300;
   constexpr double nref_fft=2048;
   constexpr double costref_fft=0.0693;

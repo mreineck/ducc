@@ -25,6 +25,7 @@
 #include <vector>
 #include <memory>
 #include <cmath>
+#include <type_traits>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -664,7 +665,7 @@ template<typename T> auto selectKernel(size_t idx)
     factor and error. */
 template<typename T> auto selectKernel(double ofactor, double epsilon)
   {
-  size_t Wmin=1000;
+  size_t Wmin = is_same<T, float>::value ? 8 : 1000;
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
     if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon) && (KernelDB[i].W<=Wmin))
@@ -680,11 +681,11 @@ template<typename T> auto selectKernel(double ofactor, double epsilon, size_t id
     selectKernel<T>(idx) : selectKernel<T>(ofactor, epsilon);
   }
 
-auto getAvailableKernels(double epsilon, bool single_precision)
+template<typename T> auto getAvailableKernels(double epsilon)
   {
   vector<double> ofc(20, 100.);
   vector<size_t> idx(20, KernelDB.size());
-  size_t Wlim = single_precision ? 8 : 16;
+  size_t Wlim = is_same<T, float>::value ? 8 : 16;
   for (size_t i=0; i<KernelDB.size(); ++i)
     {
     size_t W = KernelDB[i].W;
