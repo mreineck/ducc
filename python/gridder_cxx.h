@@ -1098,10 +1098,11 @@ template<typename T, typename Serv> class WgridHelper
       // more efficient: precalculate final vector sizes and avoid reallocations
       vector<int> p0(nvis);
       mav<size_t,2> cnt({nthreads, nplanes+16}); // safety distance against false sharing
-      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
+      execParallel(nthreads, [&](Scheduler &sched)
         {
         auto tid=sched.thread_num();
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+        auto [lo, hi] = calcShare(nthreads, tid, nvis);
+        for(auto i=lo; i<hi; ++i)
           {
           p0[i] = max(0,int(1+(abs(srv.getCoord(i).w)-(0.5*supp*dw)-wmin)/dw));
           ++cnt.v(tid, p0[i]);
@@ -1121,10 +1122,11 @@ template<typename T, typename Serv> class WgridHelper
         }
 
       // fill minplane
-      execStatic(nvis, nthreads, 0, [&](Scheduler &sched)
+      execParallel(nthreads, [&](Scheduler &sched)
         {
         auto tid=sched.thread_num();
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
+        auto [lo, hi] = calcShare(nthreads, tid, nvis);
+        for(auto i=lo; i<hi; ++i)
           minplane[p0[i]][cnt.v(tid,p0[i])++]=idx_t(i);
         });
 #endif
@@ -1279,10 +1281,11 @@ template<typename T> vector<idx_t> getWgtIndices(const Baselines &baselines,
       }
 
   vector<idx_t> res(offset);
-  execStatic(nrow, nthreads, 0, [&](Scheduler &sched)
+  execParallel(nthreads, [&](Scheduler &sched)
     {
     idx_t tid = sched.thread_num();
-    while (auto rng=sched.getNext()) for(auto irow=idx_t(rng.lo); irow<idx_t(rng.hi); ++irow)
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
       for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
         if (tmp[idx]!=(~idx_t(0)))
           res[acc.v(tid, tmp[idx])++] = baselines.getIdx(irow, ichan);
