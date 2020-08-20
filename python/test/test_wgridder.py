@@ -67,14 +67,14 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 
 @pmp("nxdirty", (30, 128))
 @pmp("nydirty", (128, 250))
-@pmp("ofactor", (1.2, 1.5, 1.7, 2.0))
+@pmp("ofactor", (0, 1.2, 1.5, 1.7, 2.0))
 @pmp("nrow", (2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 1e-5))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
-@pmp("nthreads", (1, 2))
+@pmp("nthreads", (1, 2, 7))
 def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads):
     if singleprec and epsilon < 5e-5:
@@ -93,6 +93,8 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
         nu += 1
     if nv & 1:
         nv += 1
+    if ofactor == 0:
+        nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         dirty = dirty.astype("f4")
@@ -110,14 +112,14 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
 
 @pmp('nxdirty', [16, 64])
 @pmp('nydirty', [64])
-@pmp('ofactor', [1.2, 1.4, 1.7, 2])
+@pmp('ofactor', [0, 1.2, 1.4, 1.7, 2])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (False, True))
 @pmp("use_wgt", (True,))
-@pmp("nthreads", (1, 2))
+@pmp("nthreads", (1, 2, 7))
 @pmp("fov", (1., 20.))
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
@@ -136,6 +138,8 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, ofactor, nrow, nchan, epsilon,
         nu += 1
     if nv & 1:
         nv += 1
+    if ofactor == 0:
+        nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         if wgt is not None:

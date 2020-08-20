@@ -24,6 +24,8 @@
 
 #include <vector>
 #include <memory>
+#include <cmath>
+#include <type_traits>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -46,8 +48,15 @@ vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &fun
     double l = -1+2.*i/double(W);
     double r = -1+2.*(i+1)/double(W);
     // function values at Chebyshev nodes
+    double avg = 0;
     for (size_t j=0; j<=D; ++j)
+      {
       y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
+      avg += y[j];
+      }
+    avg/=(D+1);
+    for (size_t j=0; j<=D; ++j)
+      y[j] -= avg;
     // Chebyshev coefficients
     for (size_t j=0; j<=D; ++j)
       {
@@ -70,6 +79,7 @@ vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &fun
     for (size_t j=0; j<=D; ++j)
       for (size_t k=0; k<=D; ++k)
         lcf2[k] += C[j*(D+1) + k]*lcf[j];
+    lcf2[0] += avg;
     for (size_t j=0; j<=D; ++j)
       coeff[j*W + i] = lcf2[D-j];
     }
@@ -286,7 +296,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     virtual T eval_single(T x) const
       { return (this->*evalsinglefunc)(x); }
 
-    virtual double corfunc(double x) const {return corr.corfunc(x); }
+    virtual double corfunc(double x) const { return corr.corfunc(x); }
 
     /* Computes the correction function values at a coordinates
        [0, dx, 2*dx, ..., (n-1)*dx]  */
@@ -320,37 +330,84 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    void eval(T x, native_simd<T> *res) const
+    [[gnu::always_inline]] void eval2s(T x, T y, T z, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      x = (x+1)*W-1;
-      for (size_t i=0; i<nvec; ++i)
+      z += W*T(0.5); // now in [0; W[
+      auto nth = min(W-1, size_t(max(T(0), z)));
+      z = (z-nth)*2-1;
+      if constexpr (nvec==1)
         {
-        auto tval = coeff[i];
+        auto tvalx = coeff[0];
+        auto tvaly = coeff[0];
+        auto tvalz = coeff[0];
         for (size_t j=1; j<=D; ++j)
-          tval = tval*x + coeff[j*nvec+i];
-        res[i] = tval;
+          {
+          tvalx = tvalx*x + coeff[j];
+          tvaly = tvaly*y + coeff[j];
+          tvalz = tvalz*z + coeff[j];
+          }
+        res[0] = tvalx*T(tvalz[nth]);
+        res[1] = tvaly;
+        }
+      else
+        {
+        auto ptrz = scoeff+nth;
+        auto tvalz = *ptrz;
+        for (size_t j=1; j<=D; ++j)
+          tvalz = tvalz*z + ptrz[j*sstride];
+        for (size_t i=0; i<nvec; ++i)
+          {
+          auto tvalx = coeff[i];
+          auto tvaly = coeff[i];
+          for (size_t j=1; j<=D; ++j)
+            {
+            tvalx = tvalx*x + coeff[j*nvec+i];
+            tvaly = tvaly*y + coeff[j*nvec+i];
+            }
+          res[i] = tvalx*tvalz;
+          res[i+nvec] = tvaly;
+          }
         }
       }
-
-    T eval_single(T x) const
+    [[gnu::always_inline]] void eval2(T x, T y, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      auto nth = min(W-1, size_t(max(T(0), (x+1)*W*T(0.5))));
-      x = (x+1)*W-2*nth-1;
-      auto ptr = scoeff+nth;
-      auto tval = *ptr;
-      for (size_t j=1; j<=D; ++j)
-        tval = tval*x + ptr[j*sstride];
-      return tval;
+      if constexpr (nvec==1)
+        {
+        auto tvalx = coeff[0];
+        auto tvaly = coeff[0];
+        for (size_t j=1; j<=D; ++j)
+          {
+          tvalx = tvalx*x + coeff[j];
+          tvaly = tvaly*y + coeff[j];
+          }
+        res[0] = tvalx;
+        res[1] = tvaly;
+        }
+      else
+        {
+        for (size_t i=0; i<nvec; ++i)
+          {
+          auto tvalx = coeff[i];
+          auto tvaly = coeff[i];
+          for (size_t j=1; j<=D; ++j)
+            {
+            tvalx = tvalx*x + coeff[j*nvec+i];
+            tvaly = tvaly*y + coeff[j*nvec+i];
+            }
+          res[i] = tvalx;
+          res[i+nvec] = tvaly;
+          }
+        }
       }
   };
 
-struct NESdata
+struct KernelParams
   {
   size_t W;
   double ofactor, epsilon, beta, e0;
   };
 
-const vector<NESdata> NEScache {
+const vector<KernelParams> KernelDB {
 { 4, 1.15,   0.025654879, 1.3873426689, 0.5436851297},
 { 4, 1.20,   0.013809249, 1.3008419165, 0.5902137484},
 { 4, 1.25,  0.0085840685, 1.3274088935, 0.5953499486},
@@ -594,32 +651,67 @@ template<typename T> T esknew (T v, T beta, T e0)
   return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
   }
 
+template<typename T> auto selectKernel(size_t idx)
+  {
+  MR_assert(idx<KernelDB.size(), "no appropriate kernel found");
+  auto supp = KernelDB[idx].W;
+  auto beta = KernelDB[idx].beta*supp;
+  auto e0 = KernelDB[idx].e0;
+  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
+  return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  }
+
 /*! Returns the best matching 2-parameter ES kernel for the given oversampling
     factor and error. */
 template<typename T> auto selectKernel(double ofactor, double epsilon)
   {
-  size_t Wmin=1000;
-  size_t idx = NEScache.size();
-  for (size_t i=0; i<NEScache.size(); ++i)
-    if ((NEScache[i].ofactor<=ofactor) && (NEScache[i].epsilon<=epsilon) && (NEScache[i].W<=Wmin))
+  size_t Wmin = is_same<T, float>::value ? 8 : 1000;
+  size_t idx = KernelDB.size();
+  for (size_t i=0; i<KernelDB.size(); ++i)
+    if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon) && (KernelDB[i].W<=Wmin))
       {
       idx = i;
-      Wmin = NEScache[i].W;
+      Wmin = KernelDB[i].W;
       }
-  MR_assert(idx<NEScache.size(), "no appropriate kernel found");
-  auto supp = NEScache[idx].W;
-  auto beta = NEScache[idx].beta*supp;
-  auto e0 = NEScache[idx].e0;
-  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  return selectKernel<T>(idx);
+  }
+template<typename T> auto selectKernel(double ofactor, double epsilon, size_t idx)
+  {
+  return (idx<KernelDB.size()) ?
+    selectKernel<T>(idx) : selectKernel<T>(ofactor, epsilon);
+  }
+
+template<typename T> auto getAvailableKernels(double epsilon)
+  {
+  vector<double> ofc(20, 100.);
+  vector<size_t> idx(20, KernelDB.size());
+  size_t Wlim = is_same<T, float>::value ? 8 : 16;
+  for (size_t i=0; i<KernelDB.size(); ++i)
+    {
+    size_t W = KernelDB[i].W;
+    if ((W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
+     && (KernelDB[i].ofactor<ofc[W]))
+      {
+      ofc[W] = KernelDB[i].ofactor;
+      idx[W] = i;
+      }
+    }
+  vector<size_t> res;
+  for (auto v: idx)
+    if (v<KernelDB.size()) res.push_back(v);
+  MR_assert(!res.empty(), "no appropriate kernel found");
+  return res;
   }
 
 }
 
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::selectKernel;
+using detail_gridding_kernel::getAvailableKernels;
 using detail_gridding_kernel::HornerKernel;
 using detail_gridding_kernel::TemplateKernel;
+using detail_gridding_kernel::KernelParams;
+using detail_gridding_kernel::KernelDB;
 
 }
 
