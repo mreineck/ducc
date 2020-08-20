@@ -53,13 +53,15 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
   MR_assert(s.size()+nd1,"too few input array dimensions");
-  for (size_t i=0; i<nd1; ++i)
-    MR_assert(si[i]==s[s.size()-nd1+i], "input dimension mismatch");
+  if constexpr (nd1>1)
+    for (size_t i=0; i<nd1; ++i)
+      MR_assert(si[i]==s[s.size()-nd1+i], "input dimension mismatch");
   shape_t snew(s.size()-nd1+nd2);
   for (size_t i=0; i<s.size()-nd1; ++i)
     snew[i]=s[i];
-  for (size_t i=0; i<nd2; ++i)
-    snew[i+s.size()-nd1] = so[i];
+  if constexpr (nd2>1)
+    for (size_t i=0; i<nd2; ++i)
+      snew[i+s.size()-nd1] = so[i];
   return snew;
   }
 
