@@ -61,7 +61,7 @@ template<typename T> class PointingProvider
       }
 
     void get_rotated_quaternions(double t0, double freq, const mav<T,1> &rot,
-      mav<T,2> &out)
+      mav<T,2> &out, bool rot_left)
       {
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
       auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
@@ -84,7 +84,7 @@ template<typename T> class PointingProvider
                           w1*q1.y + w2*q2.y,
                           w1*q1.z + w2*q2.z,
                           w1*q1.w + w2*q2.w);
-        q = rot_*q;
+        q = rot_left ? rot_*q : q*rot_;
         out.v(i,0) = q.x;
         out.v(i,1) = q.y;
         out.v(i,2) = q.z;
@@ -103,18 +103,18 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       : PointingProvider<T>(t0, freq, to_mav<T,2>(quat)) {}
 
     py::array pyget_rotated_quaternions_out(double t0, double freq,
-      const py::array &quat, py::array &out)
+      const py::array &quat, bool rot_left, py::array &out)
       {
       auto res2 = to_mav<T,2>(out,true);
       auto quat2 = to_mav<T,1>(quat);
-      get_rotated_quaternions(t0, freq, quat2, res2);
+      get_rotated_quaternions(t0, freq, quat2, res2, rot_left);
       return move(out);
       }
     py::array pyget_rotated_quaternions(double t0, double freq,
-      const py::array &quat, size_t nval)
+      const py::array &quat, size_t nval, bool rot_left)
       {
       auto res = make_Pyarr<T>({nval,4});
-      return pyget_rotated_quaternions_out(t0, freq, quat, res);
+      return pyget_rotated_quaternions_out(t0, freq, quat, rot_left, res);
       }
   };
 
@@ -163,6 +163,9 @@ rot : numpy.ndarray((4,), dtype=numpy.float64)
     (x, y, z, w). The quaternion need not be normalized.
 nval : int
     the number of requested quaternions
+rot_left : bool (optional, default=True)
+    if True, the rotation quaternion is multiplied from the left side,
+    otherwise from the right.
 
 Returns
 -------
@@ -187,6 +190,9 @@ rot : numpy.ndarray((4,), dtype=numpy.float64)
     A single rotation quaternion describing the rotation from the satellite to
     the detector reference system. Components are expecetd in the order
     (x, y, z, w). The quaternion need not be normalized.
+rot_left : bool (optional, default=True)
+    if True, the rotation quaternion is multiplied from the left side,
+    otherwise from the right.
 out : numpy.ndarray((nval, 4), dtype=numpy.float64)
     the array to put the computed quaternions into
 
@@ -208,9 +214,11 @@ void add_pointingprovider(py::module &msup)
     .def(py::init<double, double, const py::array &>(),
          PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
-       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a)
+       get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a,
+       "rot_left"_a=true)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions_out,
-       get_rotated_quaternions2_DS,"t0"_a, "freq"_a, "rot"_a, "out"_a);
+       get_rotated_quaternions2_DS,"t0"_a, "freq"_a, "rot"_a,
+       "rot_left"_a=true, "out"_a);
   }
 
 }

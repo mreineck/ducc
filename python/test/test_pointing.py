@@ -44,11 +44,14 @@ def testp1(size, t0, freq):
     prov = pp.PointingProvider(t0, freq, quat)
     rquat = np.array([0., 0., 0., 1.])  # a non-rotating quaternion
     quat2 = prov.get_rotated_quaternions(t0, freq, rquat, size)
+    quat3 = prov.get_rotated_quaternions(t0, freq, rquat, size, rot_left=False)
     nquat = quat/np.sqrt(np.sum(quat**2, axis=1, keepdims=True))
     # adjust signs
     nquat = nquat * np.sign(nquat[:, 0]).reshape(-1, 1)
     quat2 = quat2 * np.sign(quat2[:, 0]).reshape(-1, 1)
+    quat3 = quat3 * np.sign(quat3[:, 0]).reshape(-1, 1)
     _assert_close(quat2, nquat, 1e-13)
+    _assert_close(quat3, nquat, 1e-13)
 
 
 def testp2():
@@ -60,9 +63,13 @@ def testp2():
     t02, f2, size2 = 3.7, 10.2, 300
     quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
     quat3 = np.empty((size2, 4), dtype=np.float64)
-    quat3 = prov.get_rotated_quaternions(t02, f2, rquat, quat3)
+    quat3 = prov.get_rotated_quaternions(t02, f2, rquat, out=quat3)
+    quat4 = np.empty((size2, 4), dtype=np.float64)
+    quat4 = prov.get_rotated_quaternions(t02, f2, rquat, rot_left=False,
+                                         out=quat4)
     assert_((quat2==quat3).all(), "problem")
     quat2 *= np.sign(quat2[:,0]).reshape((-1,1))
+    quat4 *= np.sign(quat4[:,0]).reshape((-1,1))
 
     try:
         from scipy.spatial.transform import Rotation as R
@@ -78,4 +85,8 @@ def testp2():
     squat2 = r2.as_quat()
     squat2 *= np.sign(squat2[:,0]).reshape((-1,1))
     _assert_close(quat2, squat2, 1e-13)
+    r3 = slerp(times2)*rrquat
+    squat3 = r3.as_quat()
+    squat3 *= np.sign(squat3[:,0]).reshape((-1,1))
+    _assert_close(quat4, squat3, 1e-13)
 
