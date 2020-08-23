@@ -607,7 +607,7 @@ template<size_t supp, bool wgrid, typename T> class HelperX2g2
       auto iv0old = iv0;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
       T x0 = (iu0-T(u))*2+(supp-1);
-      T y0 = (iv0-T(v))*2+(supp-1); 
+      T y0 = (iv0-T(v))*2+(supp-1);
       if constexpr(wgrid)
         krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
       else
@@ -695,7 +695,7 @@ template<size_t supp, bool wgrid, typename T> class HelperG2x2
       auto iv0old = iv0;
       gconf.getpix(in.u, in.v, u, v, iu0, iv0);
       T x0 = (iu0-T(u))*2+(supp-1);
-      T y0 = (iv0-T(v))*2+(supp-1); 
+      T y0 = (iv0-T(v))*2+(supp-1);
       if constexpr(wgrid)
         krn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
       else
@@ -840,7 +840,7 @@ template<bool wgrid, typename T, typename Serv> void x2grid_c
   gconf.timers.push("gridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
-  if constexpr (is_same<T, float>::value) 
+  if constexpr (is_same<T, float>::value)
     switch(gconf.Supp())
       {
       case  4: x2grid_c_helper< 4, wgrid>(gconf, srv, grid, w0, dw); break;
@@ -923,7 +923,7 @@ template<bool wgrid, typename T, typename Serv> void grid2x_c
   gconf.timers.push("degridding proper");
   checkShape(grid.shape(), {gconf.Nu(), gconf.Nv()});
 
-  if constexpr (is_same<T, float>::value) 
+  if constexpr (is_same<T, float>::value)
     switch(gconf.Supp())
       {
       case  4: grid2x_c_helper< 4, wgrid>(gconf, grid, srv, w0, dw); break;
@@ -1440,7 +1440,7 @@ template<typename T> auto scanData(const Baselines &baselines, const mav<complex
     });
   timers.pop();
   return make_tuple(wmin, wmax, nvis, mask_out);
-  } 
+  }
 
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
