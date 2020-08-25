@@ -1199,7 +1199,8 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
 
 template<typename T, typename Serv> void x2dirty(
   GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
-  bool do_wstacking, double wmin, double wmax, size_t verbosity)
+  bool do_wstacking, double wmin, double wmax, size_t verbosity,
+  bool divide_by_n)
   {
   if (do_wstacking)
     {
@@ -1223,7 +1224,7 @@ template<typename T, typename Serv> void x2dirty(
       gconf.grid2dirty_c_overwrite_wscreen_add(grid, dirty, T(hlp.W()));
       }
     // correct for w gridding etc.
-    apply_global_corrections(gconf, dirty, dw, true);
+    apply_global_corrections(gconf, dirty, dw, divide_by_n);
     }
   else
     {
@@ -1243,7 +1244,8 @@ template<typename T, typename Serv> void x2dirty(
 
 template<typename T, typename Serv> void dirty2x(
   GridderConfig<T> &gconf,  const mav<T,2> &dirty,
-  Serv &srv, bool do_wstacking, double wmin, double wmax, size_t verbosity)
+  Serv &srv, bool do_wstacking, double wmin, double wmax, size_t verbosity,
+  bool divide_by_n)
   {
   if (do_wstacking)
     {
@@ -1256,7 +1258,7 @@ template<typename T, typename Serv> void dirty2x(
     tdirty.apply(dirty, [](T&a, T b) {a=b;});
     gconf.timers.pop();
     // correct for w gridding etc.
-    apply_global_corrections(gconf, tdirty, dw, true);
+    apply_global_corrections(gconf, tdirty, dw, divide_by_n);
     gconf.timers.push("allocating grid");
     auto grid = mav<complex<T>,2>::build_noncritical({gconf.Nu(),gconf.Nv()});
     gconf.timers.pop();
@@ -1442,11 +1444,13 @@ template<typename T> auto scanData(const Baselines &baselines, const mav<complex
   return make_tuple(wmin, wmax, nvis, mask_out);
   } 
 
+// Note to self: divide_by_n should always be true when doing Bayesian imaging,
+// but wsclean needs it to be false, so this must be kept as a parameter.
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
   bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
-  bool negate_v=false)
+  bool negate_v=false, bool divide_by_n=true)
   {
   TimerHierarchy timers("gridding");
   timers.push("Baseline construction");
@@ -1471,7 +1475,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   timers.pop();
-  x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity);
+  x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity, divide_by_n);
   if (verbosity>0)
     timers.report(cout);
   }
@@ -1480,7 +1484,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv,
   double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
-  size_t verbosity, bool negate_v=false)
+  size_t verbosity, bool negate_v=false, bool divide_by_n=true)
   {
   TimerHierarchy timers("degridding");
   timers.push("Baseline construction");
@@ -1509,7 +1513,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   timers.pop();
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
-  dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity);
+  dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity, divide_by_n);
   if (verbosity>0)
     timers.report(cout);
   }
