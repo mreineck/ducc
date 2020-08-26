@@ -1193,7 +1193,7 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
   if (x0*x0+y0*y0>1.)
     nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
   double dw = 0.5/gconf.Ofactor()/abs(nmin);
-  cout << "  w=[" << wmin << "; " << wmax << "], nmin=" << nmin << ", dw=" << dw
+  cout << "  w=[" << wmin << "; " << wmax << "], min(n-1)=" << nmin << ", dw=" << dw
        << ", wmax/dw=" << wmax/dw << endl;
   }
 
