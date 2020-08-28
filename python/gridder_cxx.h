@@ -1013,6 +1013,62 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
   gconf.timers.pop();
   }
 
+template<typename T> void countRanges(const Baselines &baselines, const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask, double wmin, double wmax)
+  {
+  gconf.timers.push("range count");
+  size_t nrow=baselines.Nrows(),
+         nchan=baselines.Nchannels(),
+         nsafe=gconf.Nsafe(),
+         supp = gconf.Supp();
+  double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
+         y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
+  double nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
+  if (x0*x0+y0*y0>1.)
+    nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+  double dw = 0.5/gconf.Ofactor()/abs(nm1min);
+  auto nplanes = size_t((wmax-wmin)/dw+supp);
+  wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
+  checkShape(mask.shape(), {nrow,nchan});
+
+  size_t res = 0;
+
+  for(auto irow=idx_t(0); irow<idx_t(nrow); ++irow)
+    {
+    bool found=false;
+    int iulast, ivlast, plast;
+    for (idx_t ichan=0; ichan<nchan; ++ichan)
+      if (mask(irow,ichan))
+        {
+        auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
+        if (uvw.w<0) uvw.Flip();
+        double u, v;
+        int iu0, iv0, iw;
+        gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
+        iu0 = (iu0+nsafe)>>(logsquare+1);
+        iv0 = (iv0+nsafe)>>(logsquare+1);
+        iw = max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw));
+        if (found && ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)))
+          {
+          ++res;
+          iulast=iu0; ivlast=iv0; plast=iw;
+          }
+        else
+          {
+          if (!found)
+            {
+            found=true;
+            iulast=iu0; ivlast=iv0; plast=iw;
+            }
+          }
+        }
+    if (found) ++res;
+    }
+
+  gconf.timers.pop();
+  cout << " number of channels: " << nchan << endl;
+  cout << " number of ranges found: " << res << endl;
+  }
+
 template<typename T, typename Serv> class WgridHelper
   {
   private:
@@ -1470,6 +1526,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
     kidx = kidx2;
     }
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, baselines, nthreads, timers);
+  countRanges(baselines, gconf, mask_out, wmin, wmax);
   auto idx = getIndices(baselines, gconf, mask_out);
   timers.push("MsServ construction");
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
