@@ -82,77 +82,110 @@ template <typename T> class concurrent_queue
   {
     std::queue<T> q_;
     std::mutex mut_;
-    std::condition_variable item_added_;
-    bool shutdown_;
-    using lock_t = std::unique_lock<std::mutex>;
+    std::atomic<size_t> size_;
+    using lock_t = std::lock_guard<std::mutex>;
 
   public:
-    concurrent_queue(): shutdown_(false) {}
-
     void push(T val)
       {
-      {
+      ++size_;
       lock_t lock(mut_);
-      if (shutdown_)
-        throw std::runtime_error("Item added to queue after shutdown");
-      q_.push(move(val));
-      }
-      item_added_.notify_one();
+      q_.push(std::move(val));
       }
 
-    bool pop(T & val)
+    bool try_pop(T &val)
       {
+      if (size_==0) return false;
       lock_t lock(mut_);
-      item_added_.wait(lock, [this] { return (!q_.empty() || shutdown_); });
-      if (q_.empty())
-        return false;  // We are shutting down
+      // Queue might have been emptied while we acquired the lock
+      if (q_.empty()) return false;
 
+      --size_;
       val = std::move(q_.front());
       q_.pop();
       return true;
       }
-
-    void shutdown()
-      {
-      {
-      lock_t lock(mut_);
-      shutdown_ = true;
-      }
-      item_added_.notify_all();
-      }
-
-    void restart() { shutdown_ = false; }
   };
 
 class thread_pool
   {
-    concurrent_queue<std::function<void()>> work_queue_;
-    std::vector<std::thread> threads_;
-
-    void worker_main()
+  private:
+#if __cpp_lib_hardware_interference_size >= 201603
+    struct alignas(std::hardware_destructive_interference_size) worker
+#else
+    struct alignas(64) worker
+#endif
       {
+      std::thread thread;
+      std::condition_variable work_ready;
+      std::mutex mut;
+      std::atomic_flag busy_flag = ATOMIC_FLAG_INIT;
       std::function<void()> work;
-      while (work_queue_.pop(work))
-        work();
-      }
+
+      void worker_main(std::atomic<bool> & shutdown_flag,
+        concurrent_queue<std::function<void()>> &overflow_work)
+        {
+        using lock_t = std::unique_lock<std::mutex>;
+        lock_t lock(mut);
+        while (!shutdown_flag)
+          {
+          // Wait to be woken by the thread pool with a piece of work
+          work_ready.wait(lock, [&]{ return (work || shutdown_flag); });
+          if (!work) continue;
+          work();
+
+          // Execute any work which queued up while we were busy
+          while (overflow_work.try_pop(work)) work();
+
+          // Mark ourself as available before going back to sleep
+          work = nullptr;
+          busy_flag.clear();
+          }
+        }
+      };
+
+    concurrent_queue<std::function<void()>> overflow_work_;
+    std::mutex mut_;
+    std::vector<worker> workers_;
+    std::atomic<bool> shutdown_;
+    using lock_t = std::lock_guard<std::mutex>;
 
     void create_threads()
       {
-      size_t nthreads = threads_.size();
+      lock_t lock(mut_);
+      size_t nthreads=workers_.size();
       for (size_t i=0; i<nthreads; ++i)
         {
-        try { threads_[i] = std::thread([this]{ worker_main(); }); }
+        try
+          {
+          auto *worker = &workers_[i];
+          worker->busy_flag.clear();
+          worker->work = nullptr;
+          worker->thread = std::thread(
+            [worker, this]{ worker->worker_main(shutdown_, overflow_work_); });
+          }
         catch (...)
           {
-          shutdown();
+          shutdown_locked();
           throw;
           }
         }
       }
 
+    void shutdown_locked()
+      {
+      shutdown_ = true;
+      for (auto &worker : workers_)
+        worker.work_ready.notify_all();
+
+      for (auto &worker : workers_)
+        if (worker.thread.joinable())
+          worker.thread.join();
+      }
+
   public:
     explicit thread_pool(size_t nthreads):
-      threads_(nthreads)
+      workers_(nthreads)
       { create_threads(); }
 
     thread_pool(): thread_pool(max_threads_) {}
@@ -161,20 +194,47 @@ class thread_pool
 
     void submit(std::function<void()> work)
       {
-      work_queue_.push(move(work));
+      lock_t lock(mut_);
+      if (shutdown_)
+        throw std::runtime_error("Work item submitted after shutdown");
+
+      auto submit_to_idle = [&](std::function<void()> &work) -> bool
+        {
+        for (auto &worker : workers_)
+          if (!worker.busy_flag.test_and_set())
+            {
+            {
+            lock_t lock(worker.mut);
+            worker.work = std::move(work);
+            }
+            worker.work_ready.notify_one();
+            return true;
+            }
+        return false;
+        };
+
+      // First check for any idle workers and wake those
+      if (submit_to_idle(work)) return;
+      // If no workers were idle, push onto the overflow queue for later
+      overflow_work_.push(std::move(work));
+
+      // Possible race: All workers might have gone idle between the first
+      // submit attempt and pushing the work item into the queue. So, there
+      // could be no active workers to check the queue.
+      // Resolve with another check for idle workers.
+      std::function<void()> dummy_work = []{};
+      submit_to_idle(dummy_work);
       }
 
     void shutdown()
       {
-      work_queue_.shutdown();
-      for (auto &thread : threads_)
-        if (thread.joinable())
-          thread.join();
+      lock_t lock(mut_);
+      shutdown_locked();
       }
 
     void restart()
       {
-      work_queue_.restart();
+      shutdown_ = false;
       create_threads();
       }
   };
