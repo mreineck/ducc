@@ -1030,12 +1030,13 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
 
 template<typename T> void countRanges(const Baselines &baselines, const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask, double wmin, double wmax)
   {
-  vector<visrange> ranges;
   gconf.timers.push("range count");
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
          nsafe=gconf.Nsafe(),
+         nthreads = gconf.Nthreads(),
          supp = gconf.Supp();
+
   double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
          y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
   double nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
@@ -1046,49 +1047,69 @@ template<typename T> void countRanges(const Baselines &baselines, const GridderC
   wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
   checkShape(mask.shape(), {nrow,nchan});
 
-  for(auto irow=idx_t(0); irow<idx_t(nrow); ++irow)
+  struct bufvec
     {
-    bool active=false;
-    int iulast, ivlast, plast;
-    idx_t chan0=0;
-    for (idx_t ichan=0; ichan<nchan; ++ichan)
+    vector<visrange> v;
+    uint64_t dummy[8];
+    };
+  vector<bufvec> ranges(nthreads);
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    idx_t tid = sched.thread_num();
+    auto &myranges(ranges[tid].v);
+    auto [lo, hi] = calcShare(nthreads, tid, nrow);
+    for(auto irow=idx_t(lo); irow<idx_t(hi); ++irow)
       {
-      if (mask(irow,ichan))
+      bool active=false;
+      int iulast, ivlast, plast;
+      idx_t chan0=0;
+      for (idx_t ichan=0; ichan<nchan; ++ichan)
         {
-        auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
-        if (uvw.w<0) uvw.Flip();
-        double u, v;
-        int iu0, iv0, iw;
-        gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
-        iu0 = (iu0+nsafe)>>logsquare;
-        iv0 = (iv0+nsafe)>>logsquare;
-        iw = max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw));
-        if (!active) // new active region
+        if (mask(irow,ichan))
           {
-          active=true;
-          iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+          auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
+          if (uvw.w<0) uvw.Flip();
+          double u, v;
+          int iu0, iv0, iw;
+          gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
+          iu0 = (iu0+nsafe)>>logsquare;
+          iv0 = (iv0+nsafe)>>logsquare;
+          iw = max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw));
+          if (!active) // new active region
+            {
+            active=true;
+            iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+            }
+          else if ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)) // change of active region
+            {
+            myranges.emplace_back(iu0, iv0, iw, irow, chan0, ichan);
+            iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+            }
           }
-        else if ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)) // change of active region
+        else if (active) // end of active region
           {
-          ranges.emplace_back(iu0, iv0, iw, irow, chan0, ichan);
-          iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+          myranges.emplace_back(iulast, ivlast, plast, irow, chan0, ichan);
+          active=false;
           }
         }
-      else if (active) // end of active region
-        {
-        ranges.emplace_back(iulast, ivlast, plast, irow, chan0, ichan);
-        active=false;
-        }
+      if (active) // end of active region at last channel
+        myranges.emplace_back(iulast, ivlast, plast, irow, chan0, nchan+1);
       }
-    if (active) // end of active region at last channel
-      ranges.emplace_back(iulast, ivlast, plast, irow, chan0, nchan+1);
-    }
+    });
 
+  size_t nranges=0;
+  for (size_t i=0; i<nthreads; ++i)
+    nranges+=ranges[i].v.size();
+  cout << nranges << endl;
+  vector<visrange> res;
+  res.reserve(nranges);
+  for (size_t i=0; i<nthreads; ++i)
+    copy(ranges[i].v.begin(), ranges[i].v.end(), back_inserter(res));
   gconf.timers.poppush("range sorting");
-  sort(ranges.begin(), ranges.end(), [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); });
+  sort(res.begin(), res.end(), [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); });
   gconf.timers.pop();
   cout << " number of channels: " << nchan << endl;
-  cout << " number of ranges found: " << ranges.size() << endl;
+  cout << " number of ranges found: " << res.size() << endl;
   }
 
 template<typename T, typename Serv> class WgridHelper
