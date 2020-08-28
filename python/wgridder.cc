@@ -37,7 +37,7 @@ auto None = py::none();
 template<typename T> py::array ms2dirty2(const py::array &uvw_,
   const py::array &freq_, const py::array &ms_, const py::object &wgt_, const py::object &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
-  size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
+  size_t nv, double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
@@ -52,22 +52,22 @@ template<typename T> py::array ms2dirty2(const py::array &uvw_,
   {
   py::gil_scoped_release release;
   ms2dirty(uvw,freq,ms,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
-    do_wstacking,nthreads,dirty2,verbosity);
+    do_wgridding,nthreads,dirty2,verbosity);
   }
   return move(dirty);
   }
 py::array Pyms2dirty(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
-  size_t nv, double epsilon, bool do_wstacking, size_t nthreads,
+  size_t nv, double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask)
   {
   if (isPyarr<complex<float>>(ms))
     return ms2dirty2<float>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
+      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
   if (isPyarr<complex<double>>(ms))
     return ms2dirty2<double>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
+      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
   MR_fail("type matching failed: 'ms' has neither type 'c8' nor 'c16'");
   }
 constexpr auto ms2dirty_DS = R"""(
@@ -102,7 +102,7 @@ epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `ms` has type np.complex64, it must be larger than 1e-5.
 do_wstacking: bool
-    if True, the full improved w-stacking algorithm is carried out, otherwise
+    if True, the full w-gridding algorithm is carried out, otherwise
     the w values are assumed to be zero.
 nthreads: int
     number of threads to use for the calculation
@@ -122,7 +122,7 @@ np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
 template<typename T> py::array dirty2ms2(const py::array &uvw_,
   const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, size_t verbosity)
+  bool do_wgridding, size_t nthreads, size_t verbosity)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -136,21 +136,21 @@ template<typename T> py::array dirty2ms2(const py::array &uvw_,
   {
   py::gil_scoped_release release;
   dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
-    do_wstacking,nthreads,ms2,verbosity);
+    do_wgridding,nthreads,ms2,verbosity);
   }
   return move(ms);
   }
 py::array Pydirty2ms(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, size_t verbosity, const py::object &mask)
+  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask)
   {
   if (isPyarr<float>(dirty))
     return dirty2ms2<float>(uvw, freq, dirty, wgt, mask,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
+      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
   if (isPyarr<double>(dirty))
     return dirty2ms2<double>(uvw, freq, dirty, wgt, mask,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wstacking, nthreads, verbosity);
+      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
 constexpr auto dirty2ms_DS = R"""(
@@ -183,7 +183,7 @@ epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `dirty` has type np.float32, it must be larger than 1e-5.
 do_wstacking: bool
-    if True, the full improved w-stacking algorithm is carried out, otherwise
+    if True, the full w-gridding algorithm is carried out, otherwise
     the w values are assumed to be zero.
 nthreads: int
     number of threads to use for the calculation

@@ -1100,10 +1100,10 @@ template<typename T, typename Serv> class WgridHelper
       size_t nvis = srv.Nvis();
       double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
              y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
-      double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
+      double nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
-        nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-      dw = 0.5/gconf.Ofactor()/abs(nmin);
+        nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+      dw = 0.5/gconf.Ofactor()/abs(nm1min);
       nplanes = size_t((wmax-wmin)/dw+supp);
       wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
 
@@ -1189,20 +1189,20 @@ template<typename T> void report(const GridderConfig<T> &gconf, size_t nvis,
        << endl;
   double x0 = -0.5*gconf.Nxdirty()*gconf.Pixsize_x(),
          y0 = -0.5*gconf.Nydirty()*gconf.Pixsize_y();
-  double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
+  double nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
   if (x0*x0+y0*y0>1.)
-    nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-  double dw = 0.5/gconf.Ofactor()/abs(nmin);
-  cout << "  w=[" << wmin << "; " << wmax << "], min(n-1)=" << nmin << ", dw=" << dw
+    nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+  double dw = 0.5/gconf.Ofactor()/abs(nm1min);
+  cout << "  w=[" << wmin << "; " << wmax << "], min(n-1)=" << nm1min << ", dw=" << dw
        << ", wmax/dw=" << wmax/dw << endl;
   }
 
 template<typename T, typename Serv> void x2dirty(
   GridderConfig<T> &gconf, Serv &srv, mav<T,2> &dirty,
-  bool do_wstacking, double wmin, double wmax, size_t verbosity,
+  bool do_wgridding, double wmin, double wmax, size_t verbosity,
   bool divide_by_n)
   {
-  if (do_wstacking)
+  if (do_wgridding)
     {
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
     report(gconf, srv.Nvis(), wmin, wmax, hlp.Nplanes(), true, verbosity);
@@ -1244,10 +1244,10 @@ template<typename T, typename Serv> void x2dirty(
 
 template<typename T, typename Serv> void dirty2x(
   GridderConfig<T> &gconf,  const mav<T,2> &dirty,
-  Serv &srv, bool do_wstacking, double wmin, double wmax, size_t verbosity,
+  Serv &srv, bool do_wgridding, double wmin, double wmax, size_t verbosity,
   bool divide_by_n)
   {
-  if (do_wstacking)
+  if (do_wgridding)
     {
     size_t nx_dirty=gconf.Nxdirty(), ny_dirty=gconf.Nydirty();
     WgridHelper<T, Serv> hlp(gconf, srv, wmin, wmax, verbosity);
@@ -1289,15 +1289,15 @@ template<typename T, typename Serv> void dirty2x(
   }
 
 template<typename T> auto getNuNv(double epsilon,
-  bool do_wstacking, double wmin, double wmax, size_t nvis,
+  bool do_wgridding, double wmin, double wmax, size_t nvis,
   size_t nxdirty, size_t nydirty, double pixsize_x, double pixsize_y, TimerHierarchy &timers)
   {
   timers.push("parameter calculation");
   double x0 = -0.5*nxdirty*pixsize_x,
          y0 = -0.5*nydirty*pixsize_y;
-  double nmin = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
+  double nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
   if (x0*x0+y0*y0>1.)
-    nmin = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+    nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
   auto idx = getAvailableKernels<T>(epsilon);
   double mincost = 1e300;
   constexpr double nref_fft=2048;
@@ -1315,9 +1315,9 @@ template<typename T> auto getNuNv(double epsilon,
     double logterm = log(nu*nv)/log(nref_fft*nref_fft);
     double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
     double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
-    if (do_wstacking)
+    if (do_wgridding)
       {
-      double dw = 0.5/ofactor/abs(nmin);
+      double dw = 0.5/ofactor/abs(nm1min);
       size_t nplanes = size_t((wmax-wmin)/dw+supp);
       fftcost *= nplanes;
       gridcost *= supp;
@@ -1449,7 +1449,7 @@ template<typename T> auto scanData(const Baselines &baselines, const mav<complex
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
-  bool do_wstacking, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
+  bool do_wgridding, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true)
   {
   TimerHierarchy timers("gridding");
@@ -1457,14 +1457,14 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   timers.pop();
   // adjust for increased error when gridding in 2 or 3 dimensions
-  epsilon /= do_wstacking ? 3 : 2;
+  epsilon /= do_wgridding ? 3 : 2;
   auto [wmin, wmax, nvis, mask_out] = scanData(baselines, ms, wgt, mask, nthreads, timers);
   if (nvis==0)
     { dirty.fill(0); return; }
   size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wgridding, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
     nu = nu2;
     nv = nv2;
     kidx = kidx2;
@@ -1475,7 +1475,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
   timers.pop();
-  x2dirty(gconf, serv, dirty, do_wstacking, wmin, wmax, verbosity, divide_by_n);
+  x2dirty(gconf, serv, dirty, do_wgridding, wmin, wmax, verbosity, divide_by_n);
   if (verbosity>0)
     timers.report(cout);
   }
@@ -1483,7 +1483,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t nu, size_t nv,
-  double epsilon, bool do_wstacking, size_t nthreads, mav<complex<T>,2> &ms,
+  double epsilon, bool do_wgridding, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true)
   {
   TimerHierarchy timers("degridding");
@@ -1491,7 +1491,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   Baselines baselines(uvw, freq, negate_v);
   timers.pop();
   // adjust for increased error when gridding in 2 or 3 dimensions
-  epsilon /= do_wstacking ? 3 : 2;
+  epsilon /= do_wgridding ? 3 : 2;
   mav<complex<T>,2> null_ms(nullptr, {0,0}, false);
   timers.push("MS zeroing");
   ms.fill(0);
@@ -1502,7 +1502,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   size_t kidx = KernelDB.size();
   if (nu*nv==0)
     {
-    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wstacking, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
+    auto [nu2, nv2, kidx2] = getNuNv<T>(epsilon, do_wgridding, wmin, wmax, nvis, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, timers);
     nu = nu2;
     nv = nv2;
     kidx = kidx2;
@@ -1513,7 +1513,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   auto idx2 = mav<idx_t,1>(idx.data(),{idx.size()});
   timers.pop();
   auto serv = makeMsServ(baselines,idx2,ms,wgt);
-  dirty2x(gconf, dirty, serv, do_wstacking, wmin, wmax, verbosity, divide_by_n);
+  dirty2x(gconf, dirty, serv, do_wgridding, wmin, wmax, verbosity, divide_by_n);
   if (verbosity>0)
     timers.report(cout);
   }
