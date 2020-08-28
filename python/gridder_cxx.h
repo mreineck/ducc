@@ -135,6 +135,21 @@ template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
      });
   }
 
+class visrange
+  {
+  private:
+    uint32_t row;
+    uint16_t tile_u, tile_v, minplane, ch_begin, ch_end;
+
+  public:
+    visrange(uint16_t tile_u_, uint16_t tile_v_, uint16_t minplane_,
+             uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
+      : row(row_), tile_u(tile_u_), tile_v(tile_v_), minplane(minplane_),
+        ch_begin(ch_begin_), ch_end(ch_end_) {}
+    uint64_t uvwidx() const
+      { return (uint64_t(tile_u)<<32) + (uint64_t(tile_v)<<16) + minplane; }
+  };
+
 using idx_t = uint32_t;
 
 struct RowChan
@@ -1015,6 +1030,7 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
 
 template<typename T> void countRanges(const Baselines &baselines, const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask, double wmin, double wmax)
   {
+  vector<visrange> ranges;
   gconf.timers.push("range count");
   size_t nrow=baselines.Nrows(),
          nchan=baselines.Nchannels(),
@@ -1030,13 +1046,13 @@ template<typename T> void countRanges(const Baselines &baselines, const GridderC
   wmin = (wmin+wmax)*0.5 - 0.5*(nplanes-1)*dw;
   checkShape(mask.shape(), {nrow,nchan});
 
-  size_t res = 0;
-
   for(auto irow=idx_t(0); irow<idx_t(nrow); ++irow)
     {
-    bool found=false;
+    bool active=false;
     int iulast, ivlast, plast;
+    idx_t chan0=0;
     for (idx_t ichan=0; ichan<nchan; ++ichan)
+      {
       if (mask(irow,ichan))
         {
         auto uvw = baselines.effectiveCoord(RowChan{irow,idx_t(ichan)});
@@ -1044,29 +1060,35 @@ template<typename T> void countRanges(const Baselines &baselines, const GridderC
         double u, v;
         int iu0, iv0, iw;
         gconf.getpix(uvw.u, uvw.v, u, v, iu0, iv0);
-        iu0 = (iu0+nsafe)>>(logsquare+1);
-        iv0 = (iv0+nsafe)>>(logsquare+1);
+        iu0 = (iu0+nsafe)>>logsquare;
+        iv0 = (iv0+nsafe)>>logsquare;
         iw = max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw));
-        if (found && ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)))
+        if (!active) // new active region
           {
-          ++res;
-          iulast=iu0; ivlast=iv0; plast=iw;
+          active=true;
+          iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
           }
-        else
+        else if ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)) // change of active region
           {
-          if (!found)
-            {
-            found=true;
-            iulast=iu0; ivlast=iv0; plast=iw;
-            }
+          ranges.emplace_back(iu0, iv0, iw, irow, chan0, ichan);
+          iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
           }
         }
-    if (found) ++res;
+      else if (active) // end of active region
+        {
+        ranges.emplace_back(iulast, ivlast, plast, irow, chan0, ichan);
+        active=false;
+        }
+      }
+    if (active) // end of active region at last channel
+      ranges.emplace_back(iulast, ivlast, plast, irow, chan0, nchan+1);
     }
 
+  gconf.timers.poppush("range sorting");
+  sort(ranges.begin(), ranges.end(), [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); });
   gconf.timers.pop();
   cout << " number of channels: " << nchan << endl;
-  cout << " number of ranges found: " << res << endl;
+  cout << " number of ranges found: " << ranges.size() << endl;
   }
 
 template<typename T, typename Serv> class WgridHelper
