@@ -230,8 +230,7 @@ struct Params
   double wmin, dw;
   size_t nplanes;
   double nm1min;
-  vector<bool> active;
-  size_t act_d1;
+  vector<uint8_t> active;
 
   Params(bool gridding_)
     : gridding(gridding_),
@@ -1010,7 +1009,7 @@ template<typename T> void countRanges(const GridderConfig<T> &gconf, Params &par
       size_t chan0=0;
       for (size_t ichan=0; ichan<nchan; ++ichan)
         {
-        if (par.active[irow*par.act_d1+ichan])
+        if (par.active[irow*nchan+ichan])
           {
           auto uvw = par.bl.effectiveCoord(irow, ichan);
           if (uvw.w<0) uvw.Flip();
@@ -1043,6 +1042,8 @@ template<typename T> void countRanges(const GridderConfig<T> &gconf, Params &par
     sort(myranges.begin(), myranges.end(), Sorter);
     });
 
+  // free mask memory
+  vector<uint8_t>().swap(par.active);
   par.timers.poppush("range merging");
   size_t nth = nthreads;
   while (nth>1)
@@ -1219,8 +1220,7 @@ template<typename T> void scanData(const mav<complex<T>,2> &ms,
   bool have_mask=mask.size()!=0;
   if (have_mask) checkShape(mask.shape(), {nrow,nchan});
 
-  par.act_d1 = nchan+64*8; // safety distance to avoid conflicts
-  par.active.resize(nrow*par.act_d1);
+  par.active.resize(nrow*nchan, 0);
   par.nvis=0;
   par.wmin_d=1e300;
   par.wmax_d=-1e300;
@@ -1238,7 +1238,7 @@ template<typename T> void scanData(const mav<complex<T>,2> &ms,
             ((!have_mask) || (mask(irow,ichan)!=0)))
           {
           ++lnvis;
-          par.active[irow*par.act_d1+ichan] = true;
+          par.active[irow*nchan+ichan] = 1;
           auto uvw = par.bl.effectiveCoord(irow,ichan);
           double w = abs(uvw.w);
           lwmin_d = min(lwmin_d, w);
