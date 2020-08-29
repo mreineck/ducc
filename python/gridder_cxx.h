@@ -1245,7 +1245,7 @@ template<typename T> auto scanData(const mav<complex<T>,2> &ms,
 // but wsclean needs it to be false, so this must be kept as a parameter.
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
-  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/, double epsilon,
+  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true)
   {
@@ -1272,7 +1272,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
-  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/,
+  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true)
   {
