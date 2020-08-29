@@ -230,6 +230,8 @@ struct Params
   double wmin, dw;
   size_t nplanes;
   double nm1min;
+  vector<bool> active;
+  size_t act_d1;
 
   Params(bool gridding_)
     : gridding(gridding_),
@@ -976,7 +978,7 @@ template<typename T> void apply_global_corrections(const GridderConfig<T> &gconf
   par.timers.pop();
   }
 
-template<typename T> void countRanges(const GridderConfig<T> &gconf, const mav<uint8_t,2> &mask, Params &par)
+template<typename T> void countRanges(const GridderConfig<T> &gconf, Params &par)
   {
   par.timers.push("range count");
   size_t nrow=par.bl.Nrows(),
@@ -988,13 +990,13 @@ template<typename T> void countRanges(const GridderConfig<T> &gconf, const mav<u
   par.dw = 0.5/gconf.Ofactor()/abs(par.nm1min);
   par.nplanes = size_t((par.wmax_d-par.wmin_d)/par.dw+supp);
   par.wmin = (par.wmin_d+par.wmax_d)*0.5 - 0.5*(par.nplanes-1)*par.dw;
-  checkShape(mask.shape(), {nrow,nchan});
 
   struct bufvec
     {
     VVR v;
     uint64_t dummy[8];
     };
+  auto Sorter = [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); };
   vector<bufvec> ranges(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
@@ -1008,7 +1010,7 @@ template<typename T> void countRanges(const GridderConfig<T> &gconf, const mav<u
       size_t chan0=0;
       for (size_t ichan=0; ichan<nchan; ++ichan)
         {
-        if (mask(irow,ichan))
+        if (par.active[irow*par.act_d1+ichan])
           {
           auto uvw = par.bl.effectiveCoord(irow, ichan);
           if (uvw.w<0) uvw.Flip();
@@ -1038,19 +1040,30 @@ template<typename T> void countRanges(const GridderConfig<T> &gconf, const mav<u
       if (active) // end of active region at last channel
         myranges.emplace_back(iulast, ivlast, plast, irow, chan0, nchan);
       }
+    sort(myranges.begin(), myranges.end(), Sorter);
     });
 
-  size_t nranges=0;
-  for (size_t i=0; i<nthreads; ++i)
-    nranges+=ranges[i].v.size();
-  VVR res;
-  res.reserve(nranges);
-  for (size_t i=0; i<nthreads; ++i)
-    copy(ranges[i].v.begin(), ranges[i].v.end(), back_inserter(res));
-  par.timers.poppush("range sorting");
-  sort(res.begin(), res.end(), [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); });
+  par.timers.poppush("range merging");
+  size_t nth = nthreads;
+  while (nth>1)
+    {
+    auto nmerge=nth/2;
+    execParallel(nmerge, [&](Scheduler &sched)
+      {
+      auto tid = sched.thread_num();
+      auto tid_partner = nth-1-tid;
+      VVR tmp;
+      tmp.reserve(ranges[tid].v.size() + ranges[tid_partner].v.size());
+      merge(ranges[tid].v.begin(), ranges[tid].v.end(),
+            ranges[tid_partner].v.begin(), ranges[tid_partner].v.end(),
+            back_inserter(tmp), Sorter);
+      ranges[tid].v.swap(tmp);
+      VVR().swap(ranges[tid_partner].v);
+      });
+    nth-=nmerge;
+    }
+  par.ranges.swap(ranges[0].v);
   par.timers.pop();
-  par.ranges.swap(res);
   }
 
 template <typename T> void report(const GridderConfig<T> &gconf, Params &par)
@@ -1193,7 +1206,7 @@ template<typename T> auto getNuNv(Params &par,
   return make_tuple(minnu, minnv, minidx);
   }
 
-template<typename T> auto scanData(const mav<complex<T>,2> &ms,
+template<typename T> void scanData(const mav<complex<T>,2> &ms,
   const mav<T, 2> &wgt, const mav<uint8_t, 2> &mask, Params &par)
   {
   par.timers.push("Initial scan");
@@ -1206,7 +1219,8 @@ template<typename T> auto scanData(const mav<complex<T>,2> &ms,
   bool have_mask=mask.size()!=0;
   if (have_mask) checkShape(mask.shape(), {nrow,nchan});
 
-  mav<uint8_t, 2> mask_out({nrow,nchan});
+  par.act_d1 = nchan+64*8; // safety distance to avoid conflicts
+  par.active.resize(nrow*par.act_d1);
   par.nvis=0;
   par.wmin_d=1e300;
   par.wmax_d=-1e300;
@@ -1224,7 +1238,7 @@ template<typename T> auto scanData(const mav<complex<T>,2> &ms,
             ((!have_mask) || (mask(irow,ichan)!=0)))
           {
           ++lnvis;
-          mask_out.v(irow,ichan) = 1;
+          par.active[irow*par.act_d1+ichan] = true;
           auto uvw = par.bl.effectiveCoord(irow,ichan);
           double w = abs(uvw.w);
           lwmin_d = min(lwmin_d, w);
@@ -1238,7 +1252,6 @@ template<typename T> auto scanData(const mav<complex<T>,2> &ms,
     }
     });
   par.timers.pop();
-  return mask_out;
   }
 
 // Note to self: divide_by_n should always be true when doing Bayesian imaging,
@@ -1259,12 +1272,12 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   par.epsilon = epsilon / (par.do_wgridding ? 3 : 2);
   par.verbosity = verbosity;
   par.divide_by_n = divide_by_n;
-  auto mask_out = scanData(ms, wgt, mask, par);
+  scanData(ms, wgt, mask, par);
   if (par.nvis==0)
     { dirty.fill(0); return; }
   auto [nu, nv, kidx] = getNuNv<T>(par, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, par.epsilon, pixsize_x, pixsize_y, par.bl, par.nthreads, par.timers);
-  countRanges(gconf, mask_out, par);
+  countRanges(gconf, par);
   x2dirty(gconf, ms, wgt, dirty, par);
   if (verbosity>0)
     par.timers.report(cout);
@@ -1290,12 +1303,12 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   par.timers.push("MS zeroing");
   ms.fill(0);
   par.timers.pop();
-  auto mask_out = scanData(null_ms, wgt, mask, par);
+  scanData(null_ms, wgt, mask, par);
   if (par.nvis==0)
     return;
   auto [nu, nv, kidx] = getNuNv<T>(par, dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y);
   GridderConfig<T> gconf(dirty.shape(0), dirty.shape(1), nu, nv, kidx, epsilon, pixsize_x, pixsize_y, par.bl, par.nthreads, par.timers);
-  countRanges(gconf, mask_out, par);
+  countRanges(gconf, par);
   dirty2x(gconf, ms, wgt, dirty, par);
   if (par.verbosity>0)
     par.timers.report(cout);
