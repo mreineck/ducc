@@ -1085,8 +1085,6 @@ template<size_t SUPP, bool wgrid, typename T> [[gnu::hot]] void x2grid_c_helper
           UVW coord = par.bl.effectiveCoord(row, ch);
           auto flip = coord.FixW();
           hlp.prep(coord);
-          auto * DUCC0_RESTRICT ptrr = hlp.p0r;
-          auto * DUCC0_RESTRICT ptri = hlp.p0i;
           auto v(vis(row, ch));
 
           if (flip) v=conj(v);
@@ -1097,28 +1095,30 @@ template<size_t SUPP, bool wgrid, typename T> [[gnu::hot]] void x2grid_c_helper
             if constexpr (NVEC==1)
               {
               auto fct = kv[0]*ku[cu];
-              auto tr = native_simd<T>::loadu(ptrr);
+              auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
+              auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
+              auto tr = native_simd<T>::loadu(pxr);
+              auto ti = native_simd<T>::loadu(pxi);
               tr += vr*fct;
-              tr.storeu(ptrr);
-              auto ti = native_simd<T>::loadu(ptri);
               ti += vi*fct;
-              ti.storeu(ptri);
+              tr.storeu(pxr);
+              ti.storeu(pxi);
               }
             else
               {
               native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
               for (size_t cv=0; cv<NVEC; ++cv)
                 {
-                auto tr = native_simd<T>::loadu(ptrr+cv*hlp.vlen);
+                auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
+                auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
+                auto tr = native_simd<T>::loadu(pxr);
                 tr += tmpr*kv[cv];
-                tr.storeu(ptrr+cv*hlp.vlen);
-                auto ti = native_simd<T>::loadu(ptri+cv*hlp.vlen);
+                tr.storeu(pxr);
+                auto ti = native_simd<T>::loadu(pxi);
                 ti += tmpi*kv[cv];
-                ti.storeu(ptri+cv*hlp.vlen);
+                ti.storeu(pxi);
                 }
               }
-            ptrr+=jump;
-            ptri+=jump;
             }
           }
         }
@@ -1193,29 +1193,29 @@ template<size_t SUPP, bool wgrid, typename T> [[gnu::hot]] void grid2x_c_helper
           auto flip = coord.FixW();
           hlp.prep(coord);
           native_simd<T> rr=0, ri=0;
-          const auto * DUCC0_RESTRICT ptrr = hlp.p0r;
-          const auto * DUCC0_RESTRICT ptri = hlp.p0i;
           for (size_t cu=0; cu<SUPP; ++cu)
             {
 //             if constexpr(NVEC==1)
 //               {
 //               auto fct = kv[0]*ku[cu];
-//               rr += native_simd<T>::loadu(ptrr)*fct;
-//               ri += native_simd<T>::loadu(ptri)*fct;
+//               const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
+//               const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
+//               rr += native_simd<T>::loadu(pxr)*fct;
+//               ri += native_simd<T>::loadu(pxi)*fct;
 //               }
 //             else
               {
               native_simd<T> tmpr(0), tmpi(0);
               for (size_t cv=0; cv<NVEC; ++cv)
                 {
-                tmpr += kv[cv]*native_simd<T>::loadu(ptrr+hlp.vlen*cv);
-                tmpi += kv[cv]*native_simd<T>::loadu(ptri+hlp.vlen*cv);
+                const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
+                const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
+                tmpr += kv[cv]*native_simd<T>::loadu(pxr);
+                tmpi += kv[cv]*native_simd<T>::loadu(pxi);
                 }
               rr += ku[cu]*tmpr;
               ri += ku[cu]*tmpi;
               }
-            ptrr += jump;
-            ptri += jump;
             }
           auto r = hsum_cmplx(rr,ri);
 //          auto r = complex<T>(reduce(rr, std::plus<>()), reduce(ri, std::plus<>()));
