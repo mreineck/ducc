@@ -47,11 +47,11 @@ else:
                            '-Woverloaded-virtual',
                            '-Wcast-qual',
                            '-Wcast-align',
-                           '-Wpointer-arith','-g']
+                           '-Wpointer-arith']
 
     python_module_link_args += ['-march=native',
                                 '-Wl,-rpath,$ORIGIN',
-                               ]
+                                '-s']
 
 # if you want debugging info, remove the "-s" from python_module_link_args
 depfiles = (_get_files_by_suffix('.', 'h') +
