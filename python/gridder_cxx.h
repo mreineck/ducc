@@ -1166,15 +1166,18 @@ template<typename T> class Params
               native_simd<T> rr=0, ri=0;
               for (size_t cu=0; cu<SUPP; ++cu)
                 {
-    //             if constexpr(NVEC==1)
-    //               {
-    //               auto fct = kv[0]*ku[cu];
-    //               const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
-    //               const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-    //               rr += native_simd<T>::loadu(pxr)*fct;
-    //               ri += native_simd<T>::loadu(pxi)*fct;
-    //               }
-    //             else
+#if 0
+// whether this is advantageous seems to depend on the hardware ...
+                if constexpr(NVEC==1)
+                  {
+                  auto fct = kv[0]*ku[cu];
+                  const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
+                  const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
+                  rr += native_simd<T>::loadu(pxr)*fct;
+                  ri += native_simd<T>::loadu(pxi)*fct;
+                  }
+               else
+#endif
                   {
                   native_simd<T> tmpr(0), tmpi(0);
                   for (size_t cv=0; cv<NVEC; ++cv)
