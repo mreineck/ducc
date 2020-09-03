@@ -111,11 +111,12 @@ template <typename T> class concurrent_queue
 class thread_pool
   {
   private:
-#if __cpp_lib_hardware_interference_size >= 201603
-    struct alignas(std::hardware_destructive_interference_size) worker
-#else
+//FIXME: temporary ... OSX seems to set the macro, but not to have the variable  
+//#if __cpp_lib_hardware_interference_size >= 201603
+//    struct alignas(std::hardware_destructive_interference_size) worker
+//#else
     struct alignas(64) worker
-#endif
+//#endif
       {
       std::thread thread;
       std::condition_variable work_ready;
