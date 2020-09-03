@@ -280,6 +280,7 @@ template<typename T> class Params
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
+// FIXME: shouldn't this be 0?
       if (tmp<=0) return 1; // no phase factor beyond the horizon
       T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
       T phs = 2*pi*w*nm1;
@@ -557,10 +558,10 @@ template<typename T> class Params
            << ": nthreads=" << nthreads << ", "
            << "dirty=(" << nxdirty << "x" << nydirty << "), "
            << "grid=(" << nu << "x" << nv;
-      if (nplanes>0) cout << "x" << nplanes;
+      if (do_wgridding) cout << "x" << nplanes;
       cout << "), nvis=" << nvis
            << ", supp=" << supp
-           << ", eps=" << (epsilon * ((nplanes==0) ? 2 : 3))
+           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
            << endl;
       cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min << ", dw=" << dw
            << ", wmax/dw=" << wmax_d/dw << ", nranges=" << ranges.size() << endl;
@@ -665,9 +666,18 @@ template<typename T> class Params
       size_t nrow=bl.Nrows(),
              nchan=bl.Nchannels();
 
-      dw = 0.5/ofactor/abs(nm1min);
-      nplanes = size_t((wmax_d-wmin_d)/dw+supp);
-      wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
+      if (do_wgridding)
+        {
+        dw = 0.5/ofactor/abs(nm1min);
+        nplanes = size_t((wmax_d-wmin_d)/dw+supp);
+        wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
+        }
+      else
+        {
+        dw = 0;
+        nplanes = 0;
+        wmin = 0;
+        }
 
       struct bufvec
         {
@@ -697,7 +707,8 @@ template<typename T> class Params
               getpix(uvw.u, uvw.v, u, v, iu0, iv0);
               iu0 = (iu0+nsafe)>>logsquare;
               iv0 = (iv0+nsafe)>>logsquare;
-              iw = max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw));
+              iw = do_wgridding ?
+                max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw)) : 0;
               if (!on) // new active region
                 {
                 on=true;

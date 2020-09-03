@@ -117,7 +117,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp("use_wgt", (True,))
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2, 7))
-@pmp("fov", (0.0001, 1., 20.))
+@pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, use_mask, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         pytest.skip()
