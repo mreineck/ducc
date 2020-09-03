@@ -29,6 +29,7 @@
 #include <queue>
 #include <atomic>
 #include <vector>
+#include <exception>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
@@ -400,7 +401,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     }
   counter.wait();
   if (ex)
-    rethrow_exception(ex);
+    std::rethrow_exception(ex);
   }
 
 void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
