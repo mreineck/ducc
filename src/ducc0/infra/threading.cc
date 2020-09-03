@@ -106,17 +106,31 @@ template <typename T> class concurrent_queue
       q_.pop();
       return true;
       }
+
+
+    // bool try_pop(T &val)
+    //   {
+    //   while (size_ > 0)
+    //     {
+    //     lock_t lock(mut_);
+    //     // Item might not have been added yet
+    //     if (q_.empty()) continue;
+
+    //     --size_;
+    //     val = std::move(q_.front());
+    //     q_.pop();
+    //     return true;
+    //     }
+    //   return false;
+    //   }
   };
 
 class thread_pool
   {
   private:
-//FIXME: temporary ... OSX seems to set the macro, but not to have the variable  
-//#if __cpp_lib_hardware_interference_size >= 201603
-//    struct alignas(std::hardware_destructive_interference_size) worker
-//#else
-    struct alignas(64) worker
-//#endif
+    // A reasonable guess, probably close enough for most hardware
+    static constexpr size_t cache_line_size = 64;
+    struct alignas(cache_line_size) worker
       {
       std::thread thread;
       std::condition_variable work_ready;
@@ -128,19 +142,22 @@ class thread_pool
         concurrent_queue<std::function<void()>> &overflow_work)
         {
         using lock_t = std::unique_lock<std::mutex>;
-        lock_t lock(mut);
         while (!shutdown_flag)
           {
+          std::function<void()> local_work;
+          {
+          lock_t lock(mut);
           // Wait to be woken by the thread pool with a piece of work
           work_ready.wait(lock, [&]{ return (work || shutdown_flag); });
-          if (!work) continue;
-          work();
+          local_work.swap(work);
+          }
+
+          if (local_work) local_work();
 
           // Execute any work which queued up while we were busy
-          while (overflow_work.try_pop(work)) work();
+          while (overflow_work.try_pop(local_work)) local_work();
 
           // Mark ourself as available before going back to sleep
-          work = nullptr;
           busy_flag.clear();
           }
         }
