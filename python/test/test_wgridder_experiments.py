@@ -56,13 +56,13 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 
 @pmp('nxdirty', [16, 64])
 @pmp('nydirty', [64])
-@pmp("nrow", (1, 100, 10000))
-@pmp("nchan", (1,))
+@pmp("nrow", (1, 100))
+@pmp("nchan", (1, 7))
 @pmp("epsilon", list(10.**np.linspace(-2.,-12.,100)))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
 @pmp("use_wgt", (True,))
-@pmp("nthreads", (1,))
+@pmp("nthreads", (1, 10))
 @pmp("fov", (10.,))
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
