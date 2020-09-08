@@ -39,5 +39,5 @@ install:
   - pip3 install .
 
 script:
-  - pytest python/test/test_wgridder.py
+  - pytest python/test
 
