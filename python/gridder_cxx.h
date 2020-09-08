@@ -280,8 +280,7 @@ template<typename T> class Params
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
-// FIXME: shouldn't this be 0?
-      if (tmp<=0) return 1; // no phase factor beyond the horizon
+      if (tmp<=0) return 0; // no phase factor beyond the horizon
       T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
       T phs = 2*pi*w*nm1;
       if (adjoint) phs *= -1;
@@ -407,8 +406,7 @@ template<typename T> class Params
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-      // FIXME: maybe we don't have to fill everything and can save some time
-//      grid.fill(0);
+      // only zero the parts of the grid that are not filled afterwards anyway
       execParallel(nthreads, [&](Scheduler &sched)
         {
         auto tid = sched.thread_num();
@@ -446,8 +444,7 @@ template<typename T> class Params
       {
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      // FIXME: maybe we don't have to fill everything and can save some time
-//      grid.fill(0);
+      // only zero the parts of the grid that are not filled afterwards anyway
       execParallel(nthreads, [&](Scheduler &sched)
         {
         auto tid = sched.thread_num();
