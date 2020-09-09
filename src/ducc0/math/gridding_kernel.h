@@ -320,11 +320,9 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    [[gnu::always_inline]] void eval2s(T x, T y, T z, native_simd<T> * DUCC0_RESTRICT res) const
+    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      z += W*T(0.5); // now in [0; W[
-      auto nth = min(W-1, size_t(max(T(0), z)));
-      z = (z-nth)*2-1;
+      z = (z-nth)*2+(W-1);
       if constexpr (nvec==1)
         {
         auto tvalx = coeff[0];

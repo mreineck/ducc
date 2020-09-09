@@ -719,7 +719,8 @@ template<typename T> class Params
         ~HelperX2g2() { dump(); }
 
         constexpr int lineJump() const { return svvec; }
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
           {
           double u, v;
           auto iu0old = iu0;
@@ -728,7 +729,7 @@ template<typename T> class Params
           T x0 = (iu0-T(u))*2+(supp-1);
           T y0 = (iv0-T(v))*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
+            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), nth, &buf.simd[0]);
           else
             tkrn.eval2(x0, y0, &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
@@ -808,7 +809,8 @@ template<typename T> class Params
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
 
         constexpr int lineJump() const { return svvec; }
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
           {
           double u, v;
           auto iu0old = iu0;
@@ -817,7 +819,7 @@ template<typename T> class Params
           T x0 = (iu0-T(u))*2+(supp-1);
           T y0 = (iv0-T(v))*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), &buf.simd[0]);
+            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), nth, &buf.simd[0]);
           else
             tkrn.eval2(x0, y0, &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
@@ -854,6 +856,7 @@ template<typename T> class Params
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
+            size_t nth = p0-uvwidx.minplane;
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
@@ -861,7 +864,7 @@ template<typename T> class Params
                 {
                 UVW coord = bl.effectiveCoord(row, ch);
                 auto flip = coord.FixW();
-                hlp.prep(coord);
+                hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 
                 if (flip) v=conj(v);
@@ -963,6 +966,7 @@ template<typename T> class Params
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
+            size_t nth = p0-uvwidx.minplane;
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
@@ -970,12 +974,12 @@ template<typename T> class Params
                 {
                 UVW coord = bl.effectiveCoord(row, ch);
                 auto flip = coord.FixW();
-                hlp.prep(coord);
+                hlp.prep(coord, nth);
                 native_simd<T> rr=0, ri=0;
                 for (size_t cu=0; cu<SUPP; ++cu)
                   {
-  #if 0
-  // this doesn't appear to be beneficial, in contrast to the x2grid direction ...
+#if 0
+// this doesn't appear to be beneficial, in contrast to the x2grid direction ...
                   if constexpr(NVEC==1)
                     {
                     auto fct = kv[0]*ku[cu];
@@ -985,7 +989,7 @@ template<typename T> class Params
                     ri += native_simd<T>::loadu(pxi)*fct;
                     }
                  else
-  #endif
+#endif
                     {
                     native_simd<T> tmpr(0), tmpi(0);
                     for (size_t cv=0; cv<NVEC; ++cv)
