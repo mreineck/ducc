@@ -402,8 +402,9 @@ template<typename T> class Params
       }
 
     void dirty2grid_pre(const mav<T,2> &dirty,
-      mav<T,2> &grid) const
+      mav<T,2> &grid)
       {
+      timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -422,6 +423,7 @@ template<typename T> class Params
             ptr[j] = 0;
           }
         });
+      timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -438,10 +440,12 @@ template<typename T> class Params
             }
           }
         });
+      timers.pop();
       }
     void dirty2grid_pre2(const mav<T,2> &dirty,
-      mav<complex<T>,2> &grid, T w) const
+      mav<complex<T>,2> &grid, T w)
       {
+      timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
@@ -459,6 +463,7 @@ template<typename T> class Params
           }
         });
 
+      timers.poppush("wscreen+grid correction");
       double x0 = -0.5*nxdirty*pixsize_x,
              y0 = -0.5*nydirty*pixsize_y;
       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
@@ -504,13 +509,13 @@ template<typename T> class Params
               }
           }
         });
+      timers.pop();
       }
 
     void dirty2grid(const mav<T,2> &dirty, mav<T,2> &grid)
       {
-      timers.push("grid correction");
       dirty2grid_pre(dirty, grid);
-      timers.poppush("FFT");
+      timers.push("FFT");
       hartley2_2D<T>(grid, vlim, !uv_side_fast, nthreads);
       timers.pop();
       }
@@ -518,9 +523,8 @@ template<typename T> class Params
     void dirty2grid_c_wscreen(const mav<T,2> &dirty,
       mav<complex<T>,2> &grid, T w)
       {
-      timers.push("wscreen+grid correction");
       dirty2grid_pre2(dirty, grid, w);
-      timers.poppush("FFT");
+      timers.push("FFT");
       fmav<complex<T>> inout(grid);
       if (2*vlim<nv)
         {
@@ -842,7 +846,7 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
 
-      execGuided(ranges.size(), nthreads, 100, 0.2, [&](Scheduler &sched)
+      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -952,7 +956,7 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-      execGuided(ranges.size(), nthreads, 100, 0.2, [&](Scheduler &sched)
+      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -1119,6 +1123,17 @@ template<typename T> class Params
            << endl;
       cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
            << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+      size_t tmp = 0;
+      for (const auto &v : ranges)
+        tmp += v.second.size()*sizeof(RowchanRange);
+      tmp += ranges.size()*sizeof(VVR);
+      size_t overhead = nu*nv*sizeof(complex<T>)         // grid
+                      + tmp;                             // ranges
+      if (!do_wgridding)
+        overhead += nu*nv*sizeof(T);                     // rgrid
+      if (!gridding)
+        overhead += nxdirty*nydirty*sizeof(T);           // tdirty
+      cout << "memory overhead: " << overhead/double(1<<30) << " GB" << endl;
       }
 
     void x2dirty()
@@ -1193,7 +1208,7 @@ template<typename T> class Params
         }
       else
         {
-        timers.push("allocating rgrid");
+        timers.push("allocating grid");
         auto rgrid = mav<T,2>::build_noncritical({nu,nv});
         timers.pop();
         dirty2grid(dirty_in, rgrid);
