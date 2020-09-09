@@ -1,3 +1,14 @@
+0.6.0:
+- wgridder:
+  - new, smaller internal data structure
+
+
+0.5.0:
+- wgridder:
+  - internally used grid size is now chosen automatically, and the parameters
+    "nu" and "nv" ignored; they will be removed in ducc1.
+
+
 0.3.0:
 - general:
   - The package should now be installable from PyPI via pip even on MacOS.
