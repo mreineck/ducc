@@ -149,22 +149,34 @@ template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
      });
   }
 
-class visrange
+class Uvwidx
+  {
+  public:
+    uint16_t tile_u, tile_v, minplane;
+
+    Uvwidx() {}
+    Uvwidx(uint16_t tile_u_, uint16_t tile_v_, uint16_t minplane_)
+      : tile_u(tile_u_), tile_v(tile_v_), minplane(minplane_) {}
+
+    uint64_t idx() const
+      { return (uint64_t(tile_u)<<32) + (uint64_t(tile_v)<<16) + minplane; }
+    bool operator!=(const Uvwidx &other) const
+      { return idx()!=other.idx(); }
+    bool operator<(const Uvwidx &other) const
+      { return idx()<other.idx(); }
+  };
+
+class RowchanRange
   {
   public:
     uint32_t row;
-    uint16_t tile_u, tile_v, minplane, ch_begin, ch_end;
+    uint16_t ch_begin, ch_end;
 
-  public:
-    visrange(uint16_t tile_u_, uint16_t tile_v_, uint16_t minplane_,
-             uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
-      : row(row_), tile_u(tile_u_), tile_v(tile_v_), minplane(minplane_),
-        ch_begin(ch_begin_), ch_end(ch_end_) {}
-    uint64_t uvwidx() const
-      { return (uint64_t(tile_u)<<32) + (uint64_t(tile_v)<<16) + minplane; }
+    RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
+      : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
   };
 
-using VVR = vector<visrange>;
+using VVR = vector<pair<Uvwidx, vector<RowchanRange>>>;
 
 struct UVW
   {
@@ -544,6 +556,7 @@ template<typename T> class Params
         {
         dw = 0.5/ofactor/abs(nm1min);
         nplanes = size_t((wmax_d-wmin_d)/dw+supp);
+        MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
         wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
         }
       else
@@ -553,20 +566,20 @@ template<typename T> class Params
         wmin = 0;
         }
 
-      struct bufvec
+      using Vmap = map<Uvwidx, vector<RowchanRange>>;
+      struct bufmap
         {
-        VVR v;
+        Vmap m;
         uint64_t dummy[8];
         };
-      auto Sorter = [](const visrange &a, const visrange &b) { return a.uvwidx()<b.uvwidx(); };
-      vector<bufvec> lranges(nthreads);
+      vector<bufmap> buf(nthreads);
       execParallel(nrow, nthreads, [&](size_t tid, size_t lo, size_t hi)
         {
-        auto &myranges(lranges[tid].v);
+        auto &mymap(buf[tid].m);
         for(auto irow=lo; irow<hi; ++irow)
           {
           bool on=false;
-          int iulast, ivlast, plast;
+          Uvwidx uvwlast;
           size_t chan0=0;
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
@@ -581,27 +594,28 @@ template<typename T> class Params
               iv0 = (iv0+nsafe)>>logsquare;
               iw = do_wgridding ?
                 max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw)) : 0;
+              Uvwidx uvwcur(iu0, iv0, iw);
               if (!on) // new active region
                 {
                 on=true;
-                iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+                uvwlast = uvwcur;
+                chan0=ichan;
                 }
-              else if ((iu0!=iulast) || (iv0!=ivlast) || (iw!=plast)) // change of active region
+              else if (uvwlast!=uvwcur) // change of active region
                 {
-                myranges.emplace_back(iulast, ivlast, plast, irow, chan0, ichan);
-                iulast=iu0; ivlast=iv0; plast=iw; chan0=ichan;
+                mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
+                uvwlast = uvwcur; chan0=ichan;
                 }
               }
             else if (on) // end of active region
               {
-              myranges.emplace_back(iulast, ivlast, plast, irow, chan0, ichan);
+              mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            myranges.emplace_back(iulast, ivlast, plast, irow, chan0, nchan);
+            mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, nchan));
           }
-        sort(myranges.begin(), myranges.end(), Sorter);
         });
 
       // free mask memory
@@ -614,18 +628,24 @@ template<typename T> class Params
         execParallel(nmerge, [&](Scheduler &sched)
           {
           auto tid = sched.thread_num();
-          auto tid_partner = nth-1-tid;
-          VVR tmp;
-          tmp.reserve(lranges[tid].v.size() + lranges[tid_partner].v.size());
-          merge(lranges[tid].v.begin(), lranges[tid].v.end(),
-                lranges[tid_partner].v.begin(), lranges[tid_partner].v.end(),
-                back_inserter(tmp), Sorter);
-          lranges[tid].v.swap(tmp);
-          VVR().swap(lranges[tid_partner].v);
+          auto &s1 = buf[tid].m;
+          auto &s2 = buf[nth-1-tid].m;
+          for (const auto &v : s2)
+            {
+            auto &v1(s1[v.first]);
+            v1.reserve(v1.size()+v.second.size());
+            copy(v.second.begin(), v.second.end(), back_inserter(v1));
+            }
+          Vmap().swap(s2);
           });
         nth-=nmerge;
         }
-      ranges.swap(lranges[0].v);
+      ranges.reserve(buf[0].m.size());
+      for (auto &v : buf[0].m)
+        {
+        ranges.emplace_back(v.first, vector<RowchanRange>());
+        ranges.back().second.swap(v.second);
+        }
       timers.pop();
       }
 
@@ -829,48 +849,52 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
-        while (auto rng=sched.getNext()) for(auto irng=rng.lo; irng<rng.hi; ++irng)
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if ((!wgrid) || ((ranges[irng].minplane+SUPP>p0)&&(ranges[irng].minplane<=p0)))
+          const auto &uvwidx(ranges[ix].first);
+          if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
-            size_t row = ranges[irng].row;
-            for (size_t ch=ranges[irng].ch_begin; ch<ranges[irng].ch_end; ++ch)
+            for (const auto rcr: ranges[ix].second)
               {
-              UVW coord = bl.effectiveCoord(row, ch);
-              auto flip = coord.FixW();
-              hlp.prep(coord);
-              auto v(ms_in(row, ch));
-
-              if (flip) v=conj(v);
-              if (have_wgt) v*=wgt(row, ch);
-              native_simd<T> vr(v.real()), vi(v.imag());
-              for (size_t cu=0; cu<SUPP; ++cu)
+              size_t row = rcr.row;
+              for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                if constexpr (NVEC==1)
+                UVW coord = bl.effectiveCoord(row, ch);
+                auto flip = coord.FixW();
+                hlp.prep(coord);
+                auto v(ms_in(row, ch));
+
+                if (flip) v=conj(v);
+                if (have_wgt) v*=wgt(row, ch);
+                native_simd<T> vr(v.real()), vi(v.imag());
+                for (size_t cu=0; cu<SUPP; ++cu)
                   {
-                  auto fct = kv[0]*ku[cu];
-                  auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
-                  auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                  auto tr = native_simd<T>::loadu(pxr);
-                  auto ti = native_simd<T>::loadu(pxi);
-                  tr += vr*fct;
-                  ti += vi*fct;
-                  tr.storeu(pxr);
-                  ti.storeu(pxi);
-                  }
-                else
-                  {
-                  native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
-                  for (size_t cv=0; cv<NVEC; ++cv)
+                  if constexpr (NVEC==1)
                     {
-                    auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
-                    auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
+                    auto fct = kv[0]*ku[cu];
+                    auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
+                    auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
                     auto tr = native_simd<T>::loadu(pxr);
-                    tr += tmpr*kv[cv];
-                    tr.storeu(pxr);
                     auto ti = native_simd<T>::loadu(pxi);
-                    ti += tmpi*kv[cv];
+                    tr += vr*fct;
+                    ti += vi*fct;
+                    tr.storeu(pxr);
                     ti.storeu(pxi);
+                    }
+                  else
+                    {
+                    native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+                    for (size_t cv=0; cv<NVEC; ++cv)
+                      {
+                      auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
+                      auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
+                      auto tr = native_simd<T>::loadu(pxr);
+                      tr += tmpr*kv[cv];
+                      tr.storeu(pxr);
+                      auto ti = native_simd<T>::loadu(pxi);
+                      ti += tmpi*kv[cv];
+                      ti.storeu(pxi);
+                      }
                     }
                   }
                 }
@@ -925,7 +949,7 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-      execGuided(ranges.size(), nthreads, 1000, 0.5, [&](Scheduler &sched)
+      execGuided(ranges.size(), nthreads, 100, 0.2, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -934,48 +958,52 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
-        while (auto rng=sched.getNext()) for(auto irng=rng.lo; irng<rng.hi; ++irng)
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if ((!wgrid) || ((ranges[irng].minplane+SUPP>p0)&&(ranges[irng].minplane<=p0)))
+          const auto &uvwidx(ranges[ix].first);
+          if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
-            size_t row = ranges[irng].row;
-            for (size_t ch=ranges[irng].ch_begin; ch<ranges[irng].ch_end; ++ch)
+            for (const auto rcr: ranges[ix].second)
               {
-              UVW coord = bl.effectiveCoord(row, ch);
-              auto flip = coord.FixW();
-              hlp.prep(coord);
-              native_simd<T> rr=0, ri=0;
-              for (size_t cu=0; cu<SUPP; ++cu)
+              size_t row = rcr.row;
+              for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-#if 0
-// this doesn't appear to be beneficial, in contrast to the x2grid direction ...
-                if constexpr(NVEC==1)
+                UVW coord = bl.effectiveCoord(row, ch);
+                auto flip = coord.FixW();
+                hlp.prep(coord);
+                native_simd<T> rr=0, ri=0;
+                for (size_t cu=0; cu<SUPP; ++cu)
                   {
-                  auto fct = kv[0]*ku[cu];
-                  const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
-                  const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                  rr += native_simd<T>::loadu(pxr)*fct;
-                  ri += native_simd<T>::loadu(pxi)*fct;
-                  }
-               else
-#endif
-                  {
-                  native_simd<T> tmpr(0), tmpi(0);
-                  for (size_t cv=0; cv<NVEC; ++cv)
+  #if 0
+  // this doesn't appear to be beneficial, in contrast to the x2grid direction ...
+                  if constexpr(NVEC==1)
                     {
-                    const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
-                    const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                    tmpr += kv[cv]*native_simd<T>::loadu(pxr);
-                    tmpi += kv[cv]*native_simd<T>::loadu(pxi);
+                    auto fct = kv[0]*ku[cu];
+                    const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
+                    const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
+                    rr += native_simd<T>::loadu(pxr)*fct;
+                    ri += native_simd<T>::loadu(pxi)*fct;
                     }
-                  rr += ku[cu]*tmpr;
-                  ri += ku[cu]*tmpi;
+                 else
+  #endif
+                    {
+                    native_simd<T> tmpr(0), tmpi(0);
+                    for (size_t cv=0; cv<NVEC; ++cv)
+                      {
+                      const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
+                      const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
+                      tmpr += kv[cv]*native_simd<T>::loadu(pxr);
+                      tmpi += kv[cv]*native_simd<T>::loadu(pxi);
+                      }
+                    rr += ku[cu]*tmpr;
+                    ri += ku[cu]*tmpi;
+                    }
                   }
+                auto r = hsum_cmplx(rr,ri);
+                if (flip) r=conj(r);
+                if (have_wgt) r*=wgt(row, ch);
+                ms_out.v(row, ch) += r;
                 }
-              auto r = hsum_cmplx(rr,ri);
-              if (flip) r=conj(r);
-              if (have_wgt) r*=wgt(row, ch);
-              ms_out.v(row, ch) += r;
               }
             }
           }
@@ -1085,8 +1113,8 @@ template<typename T> class Params
            << ", supp=" << supp
            << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
            << endl;
-      cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min << ", dw=" << dw
-           << ", wmax/dw=" << wmax_d/dw << ", nranges=" << ranges.size() << endl;
+      cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
+           << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
       }
 
     void x2dirty()
@@ -1288,6 +1316,8 @@ template<typename T> class Params
       {
       timers.push("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
+      MR_assert(bl.Nrows()<(size_t(1)<<32), "too many rows in the MS");
+      MR_assert(bl.Nchannels()<(size_t(1)<<16), "too many channels in the MS");
       timers.pop();
       // adjust for increased error when gridding in 2 or 3 dimensions
       epsilon /= do_wgridding ? 3 : 2;
@@ -1304,6 +1334,8 @@ template<typename T> class Params
         return;
         }
       auto kidx = getNuNv();
+      MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
+      MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
       krn = selectKernel<T>(ofactor, epsilon,kidx);
       supp = krn->support();
