@@ -269,7 +269,6 @@ template<typename T> class Params
     double wmin, dw;
     size_t nplanes;
     double nm1min;
-    vector<uint8_t> active;
 
     size_t nu, nv;
     double ofactor;
@@ -574,9 +573,15 @@ template<typename T> class Params
       struct bufmap
         {
         Vmap m;
-        uint64_t dummy[8];
+        uint64_t dummy[8]; // separator to keep every entry on a different cache line
         };
       vector<bufmap> buf(nthreads);
+      bool have_wgt=wgt.size()!=0;
+      if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
+      bool have_ms=ms_in.size()!=0;
+      if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
+      bool have_mask=mask.size()!=0;
+      if (have_mask) checkShape(mask.shape(), {nrow,nchan});
       execParallel(nrow, nthreads, [&](size_t tid, size_t lo, size_t hi)
         {
         auto &mymap(buf[tid].m);
@@ -587,7 +592,9 @@ template<typename T> class Params
           size_t chan0=0;
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
-            if (active[irow*nchan+ichan])
+            if (((!have_ms ) || (norm(ms_in(irow,ichan))!=0)) &&
+                ((!have_wgt) || (wgt(irow,ichan)!=0)) &&
+                ((!have_mask) || (mask(irow,ichan)!=0)))
               {
               auto uvw = bl.effectiveCoord(irow, ichan);
               if (uvw.w<0) uvw.Flip();
@@ -623,7 +630,6 @@ template<typename T> class Params
         });
 
       // free mask memory
-      vector<uint8_t>().swap(active);
       timers.poppush("range merging");
       size_t nth = nthreads;
       while (nth>1)
@@ -1280,7 +1286,6 @@ template<typename T> class Params
       bool have_mask=mask.size()!=0;
       if (have_mask) checkShape(mask.shape(), {nrow,nchan});
 
-      active.resize(nrow*nchan, 0);
       nvis=0;
       wmin_d=1e300;
       wmax_d=-1e300;
@@ -1296,7 +1301,6 @@ template<typename T> class Params
                 ((!have_mask) || (mask(irow,ichan)!=0)))
               {
               ++lnvis;
-              active[irow*nchan+ichan] = 1;
               auto uvw = bl.effectiveCoord(irow,ichan);
               double w = abs(uvw.w);
               lwmin_d = min(lwmin_d, w);
