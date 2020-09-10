@@ -74,7 +74,7 @@ constexpr auto ms2dirty_DS = R"""(
 Converts an MS object to dirty image.
 
 Parameters
-==========
+----------
 uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
@@ -107,9 +107,14 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
-=======
+-------
 np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
     the dirty image
+
+Notes
+-----
+The input arrays should be contiguous and in C memory order.
+Other strides will work, but can degrade performance significantly.
 )""";
 
 template<typename T> py::array dirty2ms2(const py::array &uvw_,
@@ -150,7 +155,7 @@ constexpr auto dirty2ms_DS = R"""(
 Converts a dirty image to an MS object.
 
 Parameters
-==========
+----------
 uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
@@ -181,9 +186,14 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
-=======
+-------
 np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
     the measurement set data.
+
+Notes
+-----
+The input arrays should be contiguous and in C memory order.
+Other strides will work, but can degrade performance significantly.
 )""";
 
 void add_wgridder(py::module &msup)
