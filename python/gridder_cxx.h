@@ -292,8 +292,7 @@ template<typename T> class Params
       return phs;
       }
 
-    void grid2dirty_post(mav<T,2> &tmav,
-      mav<T,2> &dirty) const
+    void grid2dirty_post(mav<T,2> &tmav, mav<T,2> &dirty) const
       {
       checkShape(dirty.shape(), {nxdirty, nydirty});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -315,8 +314,7 @@ template<typename T> class Params
           }
         });
       }
-    void grid2dirty_post2(
-      mav<complex<T>,2> &tmav, mav<T,2> &dirty, T w) const
+    void grid2dirty_post2(mav<complex<T>,2> &tmav, mav<T,2> &dirty, T w) const
       {
       checkShape(dirty.shape(), {nxdirty,nydirty});
       double x0 = -0.5*nxdirty*pixsize_x,
@@ -400,8 +398,7 @@ template<typename T> class Params
       timers.pop();
       }
 
-    void dirty2grid_pre(const mav<T,2> &dirty,
-      mav<T,2> &grid)
+    void dirty2grid_pre(const mav<T,2> &dirty, mav<T,2> &grid)
       {
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
@@ -441,8 +438,7 @@ template<typename T> class Params
         });
       timers.pop();
       }
-    void dirty2grid_pre2(const mav<T,2> &dirty,
-      mav<complex<T>,2> &grid, T w)
+    void dirty2grid_pre2(const mav<T,2> &dirty, mav<complex<T>,2> &grid, T w)
       {
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
@@ -846,8 +842,7 @@ template<typename T> class Params
       };
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
-      (mav<complex<T>,2> &grid,
-       size_t p0, double w0)
+      (mav<complex<T>,2> &grid, size_t p0, double w0)
       {
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
@@ -917,9 +912,8 @@ template<typename T> class Params
         });
       }
 
-    template<bool wgrid> void x2grid_c
-      (mav<complex<T>,2> &grid,
-       size_t p0, double w0=-1)
+    template<bool wgrid> void x2grid_c(mav<complex<T>,2> &grid,
+      size_t p0, double w0=-1)
       {
       timers.push("gridding proper");
       checkShape(grid.shape(), {nu, nv});
@@ -956,8 +950,7 @@ template<typename T> class Params
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
-      (const mav<complex<T>,2> &grid,
-       size_t p0, double w0)
+      (const mav<complex<T>,2> &grid, size_t p0, double w0)
       {
       bool have_wgt = wgt.size()!=0;
 
@@ -1024,9 +1017,8 @@ template<typename T> class Params
         });
       }
 
-    template<bool wgrid> void grid2x_c
-      (const mav<complex<T>,2> &grid,
-       size_t p0, double w0=-1)
+    template<bool wgrid> void grid2x_c(const mav<complex<T>,2> &grid,
+      size_t p0, double w0=-1)
       {
       timers.push("degridding proper");
       checkShape(grid.shape(), {nu, nv});
