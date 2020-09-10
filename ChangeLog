@@ -1,4 +1,6 @@
 0.6.0:
+- general:
+  - multi-threading improvements contributed by Peter Bell
 - wgridder:
   - new, smaller internal data structure
 
@@ -6,7 +8,7 @@
 0.5.0:
 - wgridder:
   - internally used grid size is now chosen automatically, and the parameters
-    "nu" and "nv" ignored; they will be removed in ducc1.
+    "nu" and "nv" are ignored; they will be removed in ducc1.
 
 
 0.3.0:
