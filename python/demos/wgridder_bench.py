@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2019 Max-Planck-Society
+# Copyright(C) 2019-2020 Max-Planck-Society
 
 from time import time
 
@@ -60,12 +60,12 @@ def read_ms(name):
             tvis = np.sum(tvis[:, :, ind], axis=2)
             vis[start:stop, :] = tvis
             if fullwgt:
-                twgt = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=stop-start)
+                twgt = t.getcol("WEIGHT_SPECTRUM", startrow=start, nrow=stop-start)[:, :, ind]
                 wgt[start:stop, :] = 1/np.sum(1/twgt, axis=2)
             else:
-                twgt = t.getcol("WEIGHT", startrow=start, nrow=stop-start)
+                twgt = t.getcol("WEIGHT", startrow=start, nrow=stop-start)[:, :, ind]
                 wgt[start:stop] = 1/np.sum(1/twgt, axis=1)
-            tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)
+            tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)[:, :, ind]
             flags[start:stop, :] = np.any(tflags.astype(np.bool), axis=2)
             start = stop
 
