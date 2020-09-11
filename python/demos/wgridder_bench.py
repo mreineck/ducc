@@ -15,8 +15,8 @@
 
 from time import time
 
-import matplotlib.pyplot as plt
 import ducc0.wgridder as wgridder
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -133,7 +133,7 @@ def main():
     print("{} s".format(t))
     t0 = time()
     _ = wgridder.dirty2ms(uvw, freq, dirty, wgt, pixsize,
-                            pixsize, 0, 0, epsilon, do_wstacking, nthreads, verbosity=1, mask=flags)
+                          pixsize, 0, 0, epsilon, do_wstacking, nthreads, verbosity=1, mask=flags)
     print('Done')
     t = time() - t0
     print("{} s".format(t))

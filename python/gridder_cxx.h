@@ -1316,7 +1316,7 @@ template<typename T> class Params
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool negate_v_, bool divide_by_n_)
-      : gridding(ms_in_.size()>0), 
+      : gridding(ms_in_.size()>0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
