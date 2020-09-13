@@ -98,26 +98,29 @@ def read_ms_i(name):
         while start < nrow:
             stop = min(nrow, start+step)
             realstop = realstart+np.sum(active_rows[start:stop])
-            if realstop == realstart:
-                start = stop
-                realstart = realstop
-                continue
-            tvis = t.getcol("DATA", startrow=start, nrow=stop-start)[..., ind]
-            tvis = np.sum(tvis, axis=-1)
-            tvis = tvis[active_rows[start:stop]][:, active_channels]
-            tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)[..., ind]
-            tflags = np.any(tflags.astype(np.bool), axis=-1)
-            tflags = tflags[active_rows[start:stop]][:, active_channels]
-            twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
-            twgt = 1/np.sum(1/twgt, axis=-1)
-            twgt = twgt[active_rows[start:stop]]
-            if fullwgt:
-                twgt = twgt[:, active_channels]
-            tflags[twgt==0] = True
+            if realstop > realstart:
+                allrows = stop-start == realstop-realstart
+                tvis = t.getcol("DATA", startrow=start, nrow=stop-start)[..., ind]
+                tvis = np.sum(tvis, axis=-1)
+                if not allrows:
+                    tvis = tvis[active_rows[start:stop]]
+                tvis = tvis[:, active_channels]
+                tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)[..., ind]
+                tflags = np.any(tflags.astype(np.bool), axis=-1)
+                if not allrows:
+                    tflags = tflags[active_rows[start:stop]]
+                tflags = tflags[:, active_channels]
+                twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
+                twgt = 1/np.sum(1/twgt, axis=-1)
+                if not allrows:
+                    twgt = twgt[active_rows[start:stop]]
+                if fullwgt:
+                    twgt = twgt[:, active_channels]
+                tflags[twgt==0] = True
 
-            vis[realstart:realstop] = tvis
-            wgt[realstart:realstop] = twgt
-            flags[realstart:realstop] = tflags
+                vis[realstart:realstop] = tvis
+                wgt[realstart:realstop] = twgt
+                flags[realstart:realstop] = tflags
 
             start, realstart = stop, realstop
         uvw = t.getcol("UVW")[active_rows]
@@ -126,7 +129,7 @@ def read_ms_i(name):
     print('# Channels: {} ({} fully flagged)'.format(nchan, nchan-vis.shape[1]))
     print('# Correlations: {}'.format(ncorr))
     print('Full weights' if fullwgt else 'Row-only weights')
-    nflagged = np.sum(flags) + (nrow-vis.shape[0])*nchan + (nchan-vis.shape[1])*nrow
+    nflagged = np.sum(flags) + (nrow-nrealrows)*nchan + (nchan-nrealchan)*nrow
     print("{} % flagged".format(nflagged/(nrow*nchan)*100))
     freq = freq[active_channels]
 
@@ -144,7 +147,8 @@ def read_ms_i(name):
 def main():
 #    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.ms', 2.
 #    ms, fov_deg = '/home/martin/ms/1052736496-averaged.ms', 45.
-    ms, fov_deg = '/home/martin/ms/1052735056_cleaned.ms', 45.
+    ms, fov_deg = '/home/martin/ms/1052735056.ms', 45.
+#    ms, fov_deg = '/home/martin/ms/cleaned_G330.89-0.36.ms', 2.
     uvw, freq, vis, wgt, flags = read_ms_i(ms)
 
     npixdirty = 1200
