@@ -23,6 +23,7 @@
 #define DUCC0_THREADING_H
 
 #include <functional>
+#include "ducc0/infra/misc_utils.h"
 
 namespace ducc0 {
 
@@ -60,6 +61,28 @@ void execDynamic(size_t nwork, size_t nthreads, size_t chunksize_min,
 void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   double fact_max, std::function<void(Scheduler &)> func);
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func);
+
+inline void execParallel(size_t nwork, size_t nthreads,
+  std::function<void(size_t, size_t)> func)
+  {
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    auto tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, nwork);
+    func(lo, hi);
+    });
+  }
+
+inline void execParallel(size_t nwork, size_t nthreads,
+  std::function<void(size_t, size_t, size_t)> func)
+  {
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    auto tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, nwork);
+    func(tid, lo, hi);
+    });
+  }
 
 } // end of namespace detail_threading
 

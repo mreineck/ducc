@@ -227,9 +227,12 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     template<size_t NV, size_t DEG> void evfhelper2()
       {
       if (DEG==D)
+        {
         evalfunc = &HornerKernel::eval_intern<NV,DEG>;
+        evalsinglefunc = &HornerKernel::eval_single_intern<DEG>;
+        }
       else if (DEG>MAXDEG)
-        evalfunc = &HornerKernel::eval_intern_general;
+        MR_fail("requested polynomial degree too high");
       else
         evfhelper2<NV, ((DEG>MAXDEG) ? DEG : DEG+1)>();
       }
@@ -237,28 +240,15 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     template<size_t NV> void evfhelper1()
       {
       if (nvec==NV)
-        evfhelper2<NV,0>();
+        evfhelper2<NV,(NV-1)*vlen+4>();
       else if (nvec*vlen>MAXW)
-        evalfunc = &HornerKernel::eval_intern_general;
+        MR_fail("requested kernel support too high");
       else
         evfhelper1<((NV*vlen>MAXW) ? NV : NV+1)>();
       }
 
-    template<size_t DEG> void evsfhelper1()
-      {
-      if (DEG==D)
-        evalsinglefunc = &HornerKernel::eval_single_intern<DEG>;
-      else if (DEG>MAXDEG)
-        evalsinglefunc = &HornerKernel::eval_single_intern_general;
-      else
-        evsfhelper1<((DEG>MAXDEG) ? DEG : DEG+1)>();
-      }
-
     void wire_eval()
-      {
-      evfhelper1<1>();
-      evsfhelper1<0>();
-      }
+      { evfhelper1<1>(); }
 
     static vector<Tsimd> makeCoeff(size_t W, size_t D,
       const function<double(double)> &func)
@@ -330,11 +320,9 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    [[gnu::always_inline]] void eval2s(T x, T y, T z, native_simd<T> * DUCC0_RESTRICT res) const
+    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, native_simd<T> * DUCC0_RESTRICT res) const
       {
-      z += W*T(0.5); // now in [0; W[
-      auto nth = min(W-1, size_t(max(T(0), z)));
-      z = (z-nth)*2-1;
+      z = (z-nth)*2+(W-1);
       if constexpr (nvec==1)
         {
         auto tvalx = coeff[0];

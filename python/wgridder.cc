@@ -36,8 +36,8 @@ auto None = py::none();
 
 template<typename T> py::array ms2dirty2(const py::array &uvw_,
   const py::array &freq_, const py::array &ms_, const py::object &wgt_, const py::object &mask_,
-  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
-  size_t nv, double epsilon, bool do_wgridding, size_t nthreads,
+  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
+  double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
@@ -51,30 +51,30 @@ template<typename T> py::array ms2dirty2(const py::array &uvw_,
   auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
-  ms2dirty(uvw,freq,ms,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
+  ms2dirty(uvw,freq,ms,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
     do_wgridding,nthreads,dirty2,verbosity);
   }
   return move(dirty);
   }
 py::array Pyms2dirty(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
-  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t nu,
-  size_t nv, double epsilon, bool do_wgridding, size_t nthreads,
+  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t /*nu*/,
+  size_t /*nv*/, double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask)
   {
   if (isPyarr<complex<float>>(ms))
     return ms2dirty2<float>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
+      pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity);
   if (isPyarr<complex<double>>(ms))
     return ms2dirty2<double>(uvw, freq, ms, wgt, mask, npix_x, npix_y,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
+      pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity);
   MR_fail("type matching failed: 'ms' has neither type 'c8' nor 'c16'");
   }
 constexpr auto ms2dirty_DS = R"""(
 Converts an MS object to dirty image.
 
 Parameters
-==========
+----------
 uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
@@ -90,14 +90,7 @@ npix_x, npix_y: int
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
 nu, nv: int
-    dimensions of the (oversampled) intermediate uv grid
-    These values must be >= 1.2*the dimensions of the dirty image; tupical
-    oversampling values lie between 1.5 and 2.
-    Increasing the oversampling factor decreases the kernel support width
-    required for the desired accuracy, so it typically reduces run-time; on the
-    other hand, this will increase memory consumption.
-    If at least one of these two values is 0, the library will automatically
-    pick values that result in a fast computation.
+    obsolete, ignored
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `ms` has type np.complex64, it must be larger than 1e-5.
@@ -114,14 +107,19 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
-=======
+-------
 np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
     the dirty image
+
+Notes
+-----
+The input arrays should be contiguous and in C memory order.
+Other strides will work, but can degrade performance significantly.
 )""";
 
 template<typename T> py::array dirty2ms2(const py::array &uvw_,
   const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
-  double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
+  double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, size_t verbosity)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
@@ -135,29 +133,29 @@ template<typename T> py::array dirty2ms2(const py::array &uvw_,
   auto ms2 = to_mav<complex<T>,2>(ms, true);
   {
   py::gil_scoped_release release;
-  dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,nu,nv,epsilon,
+  dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
     do_wgridding,nthreads,ms2,verbosity);
   }
   return move(ms);
   }
 py::array Pydirty2ms(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
-  double pixsize_x, double pixsize_y, size_t nu, size_t nv, double epsilon,
+  double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/, double epsilon,
   bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask)
   {
   if (isPyarr<float>(dirty))
     return dirty2ms2<float>(uvw, freq, dirty, wgt, mask,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
+      pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity);
   if (isPyarr<double>(dirty))
     return dirty2ms2<double>(uvw, freq, dirty, wgt, mask,
-      pixsize_x, pixsize_y, nu, nv, epsilon, do_wgridding, nthreads, verbosity);
+      pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
 constexpr auto dirty2ms_DS = R"""(
 Converts a dirty image to an MS object.
 
 Parameters
-==========
+----------
 uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
@@ -171,14 +169,7 @@ wgt: np.array((nrows, nchan), same dtype as `dirty`), optional
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
 nu, nv: int
-    dimensions of the (oversampled) intermediate uv grid
-    These values must be >= 1.2*the dimensions of the dirty image; tupical
-    oversampling values lie between 1.5 and 2.
-    Increasing the oversampling factor decreases the kernel support width
-    required for the desired accuracy, so it typically reduces run-time; on the
-    other hand, this will increase memory consumption.
-    If at least one of these two values is 0, the library will automatically
-    pick values that result in a fast computation.
+    obsolete, ignored
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `dirty` has type np.float32, it must be larger than 1e-5.
@@ -195,9 +186,14 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
-=======
+-------
 np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
     the measurement set data.
+
+Notes
+-----
+The input arrays should be contiguous and in C memory order.
+Other strides will work, but can degrade performance significantly.
 )""";
 
 void add_wgridder(py::module &msup)
@@ -206,10 +202,10 @@ void add_wgridder(py::module &msup)
   auto m = msup.def_submodule("wgridder");
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
-    "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a,
+    "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,
     "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
   m.def("dirty2ms", &Pydirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
-    "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a, "nv"_a, "epsilon"_a,
+    "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0, "epsilon"_a,
     "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
   }
 
