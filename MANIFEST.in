@@ -1,6 +1,7 @@
 prune .
 
 include LICENSE
+include ChangeLog
 
 include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/error_handling.h
