@@ -86,7 +86,7 @@ ms: np.array((nrows, nchan,), dtype=np.complex64 or np.complex128)
 wgt: np.array((nrows, nchan), float with same precision as `ms`), optional
     If present, its values are multiplied to the output
 npix_x, npix_y: int
-    dimensions of the dirty image
+    dimensions of the dirty image (must both be even and at least 32)
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
 nu, nv: int
@@ -164,6 +164,7 @@ dirty: np.array((nxdirty, nydirty), dtype=np.float32 or np.float64)
     dirty image
     Its data type determines the precision in which the calculation is carried
     out.
+    Both dimensions must be even and at least 32.
 wgt: np.array((nrows, nchan), same dtype as `dirty`), optional
     If present, its values are multiplied to the output
 pixsize_x, pixsize_y: float
