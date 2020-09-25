@@ -108,7 +108,7 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
 
 Returns
 -------
-np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
+np.array((npix_x, npix_y), dtype=float of same precision as `ms`)
     the dirty image
 
 Notes
@@ -160,7 +160,7 @@ uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
     channel frequencies
-dirty: np.array((nxdirty, nydirty), dtype=np.float32 or np.float64)
+dirty: np.array((npix_x, npix_y), dtype=np.float32 or np.float64)
     dirty image
     Its data type determines the precision in which the calculation is carried
     out.
