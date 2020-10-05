@@ -20,6 +20,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
+SPEEDOFLIGHT = 299792458.
 
 
 # attempt to write a more accurate version of numpy.vdot()
@@ -40,7 +41,6 @@ def _l2error(a, b):
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                      apply_w, mask):
-    speedoflight = 299792458.
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
                        indexing='ij')
     x *= xpixsize
@@ -57,7 +57,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
         for chan in range(ms.shape[1]):
             if mask is not None and mask[row, chan] == 0:
                 continue
-            phase = (freq[chan]/speedoflight *
+            phase = (freq[chan]/SPEEDOFLIGHT *
                      (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
             if wgt is None:
                 res += (ms[row, chan]*np.exp(2j*np.pi*phase)).real
@@ -84,9 +84,9 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
     rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
-    speedoflight, f0 = 299792458., 1e9
+    f0 = 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/speedoflight)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
@@ -124,9 +124,9 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
     rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
-    speedoflight, f0 = 299792458., 1e9
+    f0 = 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
