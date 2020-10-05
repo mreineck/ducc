@@ -13,8 +13,8 @@
 #
 # Copyright(C) 2020 Max-Planck-Society
 
-
 import ducc0.wgridder as ng
+import finufft
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
@@ -65,6 +65,17 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                 res += (ms[row, chan]*wgt[row, chan]
                         * np.exp(2j*np.pi*phase)).real
     return res/n
+
+
+def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask, epsilon):
+    u = np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT)*2*np.pi
+    v = np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT)*2*np.pi
+    if wgt is not None:
+        ms = ms*wgt
+    if mask is not None:
+        ms = ms*mask
+    eps = epsilon/10  # Apparently finufft measures epsilon differently
+    return finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty, nydirty), eps=eps).real
 
 
 @pmp("nxdirty", (30, 128))
@@ -141,4 +152,10 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
                         0, mask).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask)
+    assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+
+    if wstacking:
+        return
+    dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                         pixsizey, mask, epsilon)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
