@@ -1110,28 +1110,31 @@ template<typename T> class Params
     void report()
       {
       if (verbosity==0) return;
-      cout << (gridding ? "Gridding" : "Degridding")
-           << ": nthreads=" << nthreads << ", "
+      cout << (gridding ? "Gridding:" : "Degridding:") << endl
+           << "  nthreads=" << nthreads << ", "
            << "dirty=(" << nxdirty << "x" << nydirty << "), "
            << "grid=(" << nu << "x" << nv;
       if (do_wgridding) cout << "x" << nplanes;
-      cout << "), nvis=" << nvis
-           << ", supp=" << supp
+      cout << "), supp=" << supp
            << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
            << endl;
-      cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-           << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
-      size_t tmp = 0;
+      cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
+           << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      if (do_wgridding)
+        cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
+             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+      size_t ovh0 = 0;
       for (const auto &v : ranges)
-        tmp += v.second.size()*sizeof(RowchanRange);
-      tmp += ranges.size()*sizeof(VVR);
-      size_t overhead = nu*nv*sizeof(complex<T>)         // grid
-                      + tmp;                             // ranges
+        ovh0 += v.second.size()*sizeof(RowchanRange);
+      ovh0 += ranges.size()*sizeof(VVR);
+      size_t ovh1 = nu*nv*sizeof(complex<T>);            // grid
       if (!do_wgridding)
-        overhead += nu*nv*sizeof(T);                     // rgrid
+        ovh1 += nu*nv*sizeof(T);                         // rgrid
       if (!gridding)
-        overhead += nxdirty*nydirty*sizeof(T);           // tdirty
-      cout << "memory overhead: " << overhead/double(1<<30) << " GB" << endl;
+        ovh1 += nxdirty*nydirty*sizeof(T);               // tdirty
+      cout << "  memory overhead: "
+           << ovh0/double(1<<30) << "GB (index) + "
+           << ovh1/double(1<<30) << "GB (2D arrays)" << endl;
       }
 
     void x2dirty()
