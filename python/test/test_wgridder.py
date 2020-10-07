@@ -75,7 +75,15 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask,
     if mask is not None:
         ms = ms*mask
     eps = epsilon/10  # Apparently finufft measures epsilon differently
-    return finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty, nydirty), eps=eps).real
+    # Plan on the fly
+    res0 = finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty, nydirty), eps=eps).real
+    # Plan beforehand
+    plan = finufft.Plan(1, (nxdirty, nydirty), eps=eps)
+    plan.setpts(u.ravel(), v.ravel())
+    res1 = plan.execute(ms.ravel()).real
+    np.testing.assert_allclose(res0, res1)
+    return res0
+
 
 
 @pmp("nxdirty", (30, 128))
