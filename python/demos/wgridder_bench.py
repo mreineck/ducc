@@ -145,13 +145,16 @@ def read_ms_i(name):
 
 
 def main():
-#    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.ms', 2.
-#    ms, fov_deg = '/home/martin/ms/1052736496-averaged.ms', 45.
-    ms, fov_deg = '/home/martin/ms/1052735056.ms', 45.
-#    ms, fov_deg = '/home/martin/ms/cleaned_G330.89-0.36.ms', 2.
+#    ms, fov_deg, npixdirty = '/home/martin/ms/supernovashell.55.7+3.4.spw0.ms', 2., 1200
+#    ms, fov_deg, npixdirty = '/home/martin/ms/1052736496-averaged.ms', 25., 2048
+    ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.ms', 45., 1200
+#    ms, fov_deg, npixdirty = '/home/martin/ms/cleaned_G330.89-0.36.ms', 2., 1200
     uvw, freq, vis, wgt, flags = read_ms_i(ms)
 
-    npixdirty = 1200
+    flags[vis==0] = False
+    flags[wgt==0] = False
+#    vis=vis.astype(np.complex128)
+#    wgt=wgt.astype(np.float64)
     DEG2RAD = np.pi/180
     pixsize = fov_deg/npixdirty*DEG2RAD
     nthreads = 2

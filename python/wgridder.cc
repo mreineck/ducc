@@ -79,7 +79,7 @@ uvw: np.array((nrows, 3), dtype=np.float64)
     UVW coordinates from the measurement set
 freq: np.array((nchan,), dtype=np.float64)
     channel frequencies
-ms: np.array((nrows, nchan,), dtype=np.complex64 or np.complex128)
+ms: np.array((nrows, nchan), dtype=np.complex64 or np.complex128)
     the input measurement set data.
     Its data type determines the precision in which the calculation is carried
     out.
@@ -188,7 +188,7 @@ mask: np.array((nrows, nchan), dtype=np.uint8), optional
 
 Returns
 -------
-np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
+np.array((nrows, nchan), dtype=complex of same precision as `dirty`)
     the measurement set data.
 
 Notes
