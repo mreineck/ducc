@@ -911,16 +911,16 @@ template<typename T> class Interpolator
                 {
                 if (separate)
                   {
-                  auto tmp = conj(blm[icomp](l,k))*(-2*lnorm[l]);
+                  auto tmp = blm[icomp](l,k)*(-2*lnorm[l]);
                   slm[icomp](l,m) += conj(a1(l,m))*tmp.real();
-                  slm[icomp](l,m) -= conj(a2(l,m))*tmp.imag();
+                  slm[icomp](l,m) += conj(a2(l,m))*tmp.imag();
                   }
                 else
                   for (size_t j=0; j<blm.size(); ++j)
                     {
-                    auto tmp = conj(blm[j](l,k))*(-2*lnorm[l]);
+                    auto tmp = blm[j](l,k)*(-2*lnorm[l]);
                     slm[j](l,m) += conj(a1(l,m))*tmp.real();
-                    slm[j](l,m) -= conj(a2(l,m))*tmp.imag();
+                    slm[j](l,m) += conj(a2(l,m))*tmp.imag();
                     }
                 }
           }
