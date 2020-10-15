@@ -14,7 +14,11 @@
 # Copyright(C) 2020 Max-Planck-Society
 
 import ducc0.wgridder as ng
-import finufft
+try:
+    import finufft
+    have_finufft = True
+except ImportError:
+    have_finufft = False
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
@@ -162,7 +166,7 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
                            pixsizey, wstacking, mask)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
 
-    if wstacking:
+    if wstacking or (not have_finufft):
         return
     dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, mask, epsilon)
