@@ -6,6 +6,7 @@ variables:
 stages:
   - build_docker
   - testing
+  - demos
   - build_tarballs
 
 build_docker:
@@ -24,11 +25,18 @@ test_gcc:
     - 'cd ducc0-* && python3 setup.py install --user -f && pytest-3 -q python/test'
 
 test_clang:
+  image: debian:buster-slim
   stage: testing
   script:
+    - apt-get update && apt-get install -y git python3-pip python3-pytest python3-scipy python3-pybind11 pybind11-dev clang
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
     - 'cd ducc0-* && CC="clang -fsized-deallocation" python3 setup.py install --user -f && pytest-3 -q python/test'
+
+wgridding_demo:
+  stage: demos
+  script:
+    - python3 setup.py install --user -f && python3 python/demos/wgridder_python_implementations.py
 
 release:
   stage: build_tarballs
