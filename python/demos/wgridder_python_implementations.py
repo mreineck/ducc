@@ -303,7 +303,10 @@ def main():
     nvis = nrow*nchan
 
     dirty0 = None
-    for f in (ms2dirty_dft, ms2dirty_python_slow, ms2dirty_python_fast, ms2dirty_numba, ms2dirty_ducc):
+    # Adapter to old interface
+    ms2dirty_ducc1 = lambda uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding: ms2dirty_ducc(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+    dirty2ms_ducc1 = lambda uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding: dirty2ms_ducc(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+    for f in (ms2dirty_dft, ms2dirty_python_slow, ms2dirty_python_fast, ms2dirty_numba, ms2dirty_ducc1):
         t0 = time()
         dirty = f(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
@@ -314,7 +317,7 @@ def main():
             dirty0 = dirty
 
     ms0 = None
-    for f in (dirty2ms_python_slow, dirty2ms_python_fast, dirty2ms_ducc):
+    for f in (dirty2ms_python_slow, dirty2ms_python_fast, dirty2ms_ducc1):
         t0 = time()
         ms = f(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
@@ -326,4 +329,9 @@ def main():
 
 
 if __name__ == '__main__':
+    print("""Disclaimer:
+Note that the following values for vis/s are unusually small
+since in the demo only few visibilities are used. In typical
+real-world scenarios these values are several orders of magnitude
+larger (except for "*dft" and "*_python_slow").\n""")
     main()
