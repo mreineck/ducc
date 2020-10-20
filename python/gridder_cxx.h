@@ -414,9 +414,9 @@ template<typename T> class Params
           size_t lo2=0, hi2=nv;
           if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
             { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          T * DUCC0_RESTRICT ptr = &grid.v(i,0);
-          for (auto j=lo2; j<hi2; ++j)
-            ptr[j] = 0;
+          // Don't try this at home!
+          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
+                 sizeof(T)*(hi2-lo2));
           }
         });
       timers.poppush("grid correction");
@@ -452,9 +452,9 @@ template<typename T> class Params
           size_t lo2=0, hi2=nv;
           if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
             { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          complex<T> * DUCC0_RESTRICT ptr = &grid.v(i,0);
-          for (auto j=lo2; j<hi2; ++j)
-            ptr[j] = 0;
+          // Don't try this at home!
+          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
+                 sizeof(complex<T>)*(hi2-lo2));
           }
         });
 
@@ -1154,12 +1154,12 @@ template<typename T> class Params
           MR_assert(grid.stride(1)==1, "bad stride");
           execParallel(nu, nthreads, [&](size_t lo, size_t hi)
             {
-            for (auto i=lo; i<hi; ++i)
-              {
-              complex<T> * DUCC0_RESTRICT ptr = &grid.v(i,0);
-              for (size_t j=0; j<nv; ++j)
-                ptr[j] = 0;
-              }
+            // Don't try this at home! This only works because we knoe exactly
+            // how "grid" was allocated. Doing this in circumstances where
+            // you do not have absolute control over an array will be extremely
+            // dangerous.
+            memset(reinterpret_cast<char *>(&grid.v(lo,0)), 0,
+                   sizeof(complex<T>)*((&grid.v(hi,0)) - (&grid.v(lo,0))));
             });
 #else
           // FIXME: speeding this up could be quite helpful.
