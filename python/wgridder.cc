@@ -84,7 +84,7 @@ ms: numpy.ndarray((nrows, nchan), dtype=numpy.complex64 or numpy.complex128)
     Its data type determines the precision in which the calculation is carried
     out.
 wgt: numpy.ndarray((nrows, nchan), float with same precision as `ms`), optional
-    If present, its values are multiplied to the output
+    If present, its values are multiplied to the input before gridding
 npix_x, npix_y: int
     dimensions of the dirty image (must both be even and at least 32)
 pixsize_x, pixsize_y: float
