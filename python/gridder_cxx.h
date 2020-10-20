@@ -405,16 +405,28 @@ template<typename T> class Params
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-      // only zero the parts of the grid that are not filled afterwards anyway
       MR_assert(grid.stride(1)==1, "bad stride");
-      execParallel(nu, nthreads, [&](size_t lo, size_t hi)
+      // only zero the parts of the grid that are not filled afterwards anyway
+      execParallel(0, nxdirty/2, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          size_t lo2=0, hi2=nv;
-          if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
-            { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          // Don't try this at home!
+          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
+          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
+                 sizeof(T)*(hi2-lo2));
+          }
+        });
+      execParallel(nxdirty/2, nu-nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (auto i=lo; i<hi; ++i)
+          memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
+                 sizeof(T)*nv);
+        });
+      execParallel(nu-nxdirty/2+1, nu, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (auto i=lo; i<hi; ++i)
+          {
+          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
           memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
                  sizeof(T)*(hi2-lo2));
           }
@@ -443,16 +455,28 @@ template<typename T> class Params
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      // only zero the parts of the grid that are not filled afterwards anyway
       MR_assert(grid.stride(1)==1, "bad stride");
-      execParallel(nu, nthreads, [&](size_t lo, size_t hi)
+      // only zero the parts of the grid that are not filled afterwards anyway
+      execParallel(0, nxdirty/2, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          size_t lo2=0, hi2=nv;
-          if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
-            { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          // Don't try this at home!
+          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
+          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
+                 sizeof(complex<T>)*(hi2-lo2));
+          }
+        });
+      execParallel(nxdirty/2, nu-nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (auto i=lo; i<hi; ++i)
+          memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
+                 sizeof(complex<T>)*nv);
+        });
+      execParallel(nu-nxdirty/2+1, nu, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (auto i=lo; i<hi; ++i)
+          {
+          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
           memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
                  sizeof(complex<T>)*(hi2-lo2));
           }
@@ -1151,18 +1175,15 @@ template<typename T> class Params
           double w = wmin+pl*dw;
           timers.push("zeroing grid");
 #if 1
+          // parallel zeroing, since this is quite a time sink
           MR_assert(grid.stride(1)==1, "bad stride");
           execParallel(nu, nthreads, [&](size_t lo, size_t hi)
             {
-            // Don't try this at home! This only works because we knoe exactly
-            // how "grid" was allocated. Doing this in circumstances where
-            // you do not have absolute control over an array will be extremely
-            // dangerous.
-            memset(reinterpret_cast<char *>(&grid.v(lo,0)), 0,
-                   sizeof(complex<T>)*((&grid.v(hi,0)) - (&grid.v(lo,0))));
+            for (auto i=lo; i<hi; ++i)
+              memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
+                     sizeof(complex<T>)*((&grid.v(i,nv)) - (&grid.v(i,0))));
             });
 #else
-          // FIXME: speeding this up could be quite helpful.
           grid.fill(0);
 #endif
           timers.pop();
