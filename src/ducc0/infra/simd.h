@@ -154,6 +154,7 @@ template<typename T, size_t len> class vtp
         operator T() const { return v.v[i]; }
       };
 
+    void Set(size_t i, T val) { v[i] = val; }
     reference operator[](size_t i) { return reference(*this, i); }
     T operator[](size_t i) const { return v[i]; }
 
@@ -226,6 +227,8 @@ template<typename T> class pseudoscalar
     pseudoscalar max(const pseudoscalar &other) const
       { return std::max(v, other.v); }
 
+    operator T() const { return v; }
+
     bool operator>(const pseudoscalar &other) const
       { return v>other.v; }
     bool operator>=(const pseudoscalar &other) const
@@ -246,7 +249,7 @@ template<typename T> class helper_<T,1>
     using Tm = bool;
 
     static Tv loadu(const T *ptr) { return *ptr; }
-    static void storeu(T *ptr, Tv v) { *ptr = v.v; }
+    static void storeu(T *ptr, Tv v) { *ptr = v; }
 
     static Tv from_scalar(T v) { return v; }
     static Tv abs(Tv v) { return v.abs(); }
