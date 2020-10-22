@@ -46,6 +46,21 @@ namespace detail_gridder {
 
 using namespace std;
 
+template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
+  {
+#if 0
+  arr.fill(T(0));
+#else
+  MR_assert(arr.stride(1)==1, "bad stride");
+  size_t s0=arr.shape(0), s1=arr.shape(1);
+  execParallel(s0, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (auto i=lo; i<hi; ++i)
+      memset(reinterpret_cast<char *>(&arr.v(i,0)), 0, sizeof(T)*s1);
+    });
+#endif
+  }
+
 template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
   { return complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
 
@@ -405,32 +420,10 @@ template<typename T> class Params
       checkShape(grid.shape(), {nu, nv});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-      MR_assert(grid.stride(1)==1, "bad stride");
       // only zero the parts of the grid that are not filled afterwards anyway
-      execParallel(0, nxdirty/2, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
-          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
-                 sizeof(T)*(hi2-lo2));
-          }
-        });
-      execParallel(nxdirty/2, nu-nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
-                 sizeof(T)*nv);
-        });
-      execParallel(nu-nxdirty/2+1, nu, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
-          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
-                 sizeof(T)*(hi2-lo2));
-          }
-        });
+      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
@@ -455,33 +448,10 @@ template<typename T> class Params
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      MR_assert(grid.stride(1)==1, "bad stride");
       // only zero the parts of the grid that are not filled afterwards anyway
-      execParallel(0, nxdirty/2, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
-          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
-                 sizeof(complex<T>)*(hi2-lo2));
-          }
-        });
-      execParallel(nxdirty/2, nu-nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
-                 sizeof(complex<T>)*nv);
-        });
-      execParallel(nu-nxdirty/2+1, nu, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=nydirty/2, hi2=nv-nydirty/2+1;
-          memset(reinterpret_cast<char *>(&grid.v(i,lo2)), 0,
-                 sizeof(complex<T>)*(hi2-lo2));
-          }
-        });
-
+      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = -0.5*nxdirty*pixsize_x,
              y0 = -0.5*nydirty*pixsize_y;
@@ -1174,18 +1144,7 @@ template<typename T> class Params
           {
           double w = wmin+pl*dw;
           timers.push("zeroing grid");
-#if 1
-          // parallel zeroing, since this is quite a time sink
-          MR_assert(grid.stride(1)==1, "bad stride");
-          execParallel(nu, nthreads, [&](size_t lo, size_t hi)
-            {
-            for (auto i=lo; i<hi; ++i)
-              memset(reinterpret_cast<char *>(&grid.v(i,0)), 0,
-                     sizeof(complex<T>)*((&grid.v(i,nv)) - (&grid.v(i,0))));
-            });
-#else
-          grid.fill(0);
-#endif
+          quickzero(grid, nthreads);
           timers.pop();
           x2grid_c<true>(grid, pl, w);
           grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, T(w));
