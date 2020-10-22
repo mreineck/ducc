@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DUCC0_FFT1D_H
 
 #include <cstring>
+#include <stdexcept>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/aligned_array.h"

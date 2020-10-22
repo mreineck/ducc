@@ -73,6 +73,17 @@ inline void execParallel(size_t nwork, size_t nthreads,
     });
   }
 
+inline void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
+  std::function<void(size_t, size_t)> func)
+  {
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    auto tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, work_lo, work_hi);
+    func(lo, hi);
+    });
+  }
+
 inline void execParallel(size_t nwork, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   {
