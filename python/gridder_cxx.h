@@ -201,11 +201,11 @@ struct UVW
   UVW operator* (double fct) const
     { return UVW(u*fct, v*fct, w*fct); }
   void Flip() { u=-u; v=-v; w=-w; }
-  bool FixW()
+  double FixW()
     {
-    bool flip = w<0;
-    if (flip) Flip();
-    return flip;
+    double res=1.-2.*(w<0);
+    u*=res; v*=res; w*=res;
+    return res;
     }
   };
 
@@ -249,6 +249,10 @@ class Baselines
 
     UVW effectiveCoord(size_t row, size_t chan) const
       { return coord[row]*f_over_c[chan]; }
+    UVW baseCoord(size_t row) const
+      { return coord[row]; }
+    double ffact(size_t chan) const
+      { return f_over_c[chan];}
     size_t Nrows() const { return nrows; }
     size_t Nchannels() const { return nchan; }
     double Umax() const { return umax; }
@@ -859,31 +863,35 @@ template<typename T> class Params
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
+              auto bcoord = bl.baseCoord(row);
+              T imflip = T(bcoord.FixW());
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                UVW coord = bl.effectiveCoord(row, ch);
-                auto flip = coord.FixW();
+                auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 
-                if (flip) v=conj(v);
                 if (have_wgt) v*=wgt(row, ch);
-                native_simd<T> vr(v.real()), vi(v.imag());
-                for (size_t cu=0; cu<SUPP; ++cu)
+
+                if constexpr (NVEC==1)
                   {
-                  if constexpr (NVEC==1)
+                  native_simd<T> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    auto fct = kv[0]*ku[cu];
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
                     auto tr = native_simd<T>::loadu(pxr);
                     auto ti = native_simd<T>::loadu(pxi);
-                    tr += vr*fct;
-                    ti += vi*fct;
+                    tr += vr*ku[cu];
+                    ti += vi*ku[cu];
                     tr.storeu(pxr);
                     ti.storeu(pxi);
                     }
-                  else
+                  }
+                else
+                  {
+                  native_simd<T> vr(v.real()), vi(v.imag()*imflip);
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
                     for (size_t cv=0; cv<NVEC; ++cv)
@@ -967,26 +975,28 @@ template<typename T> class Params
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
+              auto bcoord = bl.baseCoord(row);
+              T imflip = T(bcoord.FixW());
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                UVW coord = bl.effectiveCoord(row, ch);
-                auto flip = coord.FixW();
+                auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 native_simd<T> rr=0, ri=0;
-                for (size_t cu=0; cu<SUPP; ++cu)
+                if constexpr (NVEC==1)
                   {
-#if 0
-// this doesn't appear to be beneficial, in contrast to the x2grid direction ...
-                  if constexpr(NVEC==1)
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    auto fct = kv[0]*ku[cu];
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += native_simd<T>::loadu(pxr)*fct;
-                    ri += native_simd<T>::loadu(pxi)*fct;
+                    rr += native_simd<T>::loadu(pxr)*ku[cu];
+                    ri += native_simd<T>::loadu(pxi)*ku[cu];
                     }
-                 else
-#endif
+                  rr *= kv[0];
+                  ri *= kv[0];
+                  }
+                else
+                  {
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     native_simd<T> tmpr(0), tmpi(0);
                     for (size_t cv=0; cv<NVEC; ++cv)
@@ -1000,8 +1010,8 @@ template<typename T> class Params
                     ri += ku[cu]*tmpi;
                     }
                   }
+                ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
-                if (flip) r=conj(r);
                 if (have_wgt) r*=wgt(row, ch);
                 ms_out.v(row, ch) += r;
                 }
