@@ -25,6 +25,7 @@ def main():
 #    ms, fov_deg, npixdirty = '/home/martin/ms/1052736496-averaged.npz', 25., 2048
     ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.npz', 45., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/G330.89-0.36.npz', 2., 1200
+#    ms, fov_deg, npixdirty = '/home/martin/ms/bigms.npz', 0.0005556*1800, 1800
 
     data = np.load(ms)
     uvw, freq, vis, wgt, flags = data["uvw"], data["freqs"], data["vis"], data["wgt"], data["mask"]
