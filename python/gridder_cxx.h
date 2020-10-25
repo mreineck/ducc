@@ -856,12 +856,8 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
 
-size_t nbunch=do_wgridding ? nplanes : 1;
-//SimpleTimer tglob;
-//      execGuided(ranges.size(), nthreads, 10, 0.05, [&](Scheduler &sched)
-      execDynamic(ranges.size(), nthreads, nbunch, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, 1, [&](Scheduler &sched)
         {
-//SimpleTimer tloc;
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
@@ -926,9 +922,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               }
             }
           }
-//cout << "  tloc: " << tloc() << endl;
         });
-//cout << "tglob: " << tglob() << endl;
       }
 
     template<bool wgrid> void x2grid_c(mav<complex<T>,2> &grid,
@@ -974,9 +968,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-size_t nbunch=do_wgridding ? nplanes : 1;
-      execDynamic(ranges.size(), nthreads, nbunch, [&](Scheduler &sched)
-//      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
