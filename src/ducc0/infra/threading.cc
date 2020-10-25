@@ -282,10 +282,11 @@ class Distribution
     std::mutex mut_;
     size_t nwork_;
     size_t cur_;
+    std::atomic<size_t> cur_dynamic_;
     size_t chunksize_;
     double fact_max_;
     std::vector<size_t> nextstart;
-    enum SchedMode { SINGLE, STATIC, DYNAMIC };
+    enum SchedMode { SINGLE, STATIC, DYNAMIC, GUIDED };
     SchedMode mode;
     bool single_done;
 
@@ -316,10 +317,22 @@ class Distribution
         nextstart[i] = i*chunksize_;
       thread_map(move(f));
       }
-    void execDynamic(size_t nwork, size_t nthreads, size_t chunksize_min,
-      double fact_max, std::function<void(Scheduler &)> f)
+    void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
+      std::function<void(Scheduler &)> f)
       {
       mode = DYNAMIC;
+      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      nwork_ = nwork;
+      chunksize_ = (chunksize<1) ? 1 : chunksize;
+      if (chunksize_*nthreads_>=nwork_)
+        return execStatic(nwork, nthreads, 0, move(f));
+      cur_dynamic_ = 0;
+      thread_map(move(f));
+      }
+    void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
+      double fact_max, std::function<void(Scheduler &)> f)
+      {
+      mode = GUIDED;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
       nwork_ = nwork;
       chunksize_ = (chunksize_min<1) ? 1 : chunksize_min;
@@ -356,6 +369,12 @@ class Distribution
           return Range(lo, hi);
           }
         case DYNAMIC:
+          {
+          auto curval = cur_dynamic_.fetch_add(chunksize_);
+          return Range(std::min(curval, nwork_),
+                       std::min(curval+chunksize_, nwork_));
+          }
+        case GUIDED:
           {
           std::unique_lock<std::mutex> lck(mut_);
           if (cur_>=nwork_) return Range();
@@ -432,17 +451,17 @@ void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
   Distribution dist;
   dist.execStatic(nwork, nthreads, chunksize, move(func));
   }
-void execDynamic(size_t nwork, size_t nthreads, size_t chunksize_min,
+void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execDynamic(nwork, nthreads, chunksize_min, 0., move(func));
+  dist.execDynamic(nwork, nthreads, chunksize, move(func));
   }
 void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   double fact_max, std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execDynamic(nwork, nthreads, chunksize_min, fact_max, move(func));
+  dist.execGuided(nwork, nthreads, chunksize_min, fact_max, move(func));
   }
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
   {
