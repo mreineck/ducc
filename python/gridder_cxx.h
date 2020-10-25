@@ -51,12 +51,23 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
 #if 0
   arr.fill(T(0));
 #else
-  MR_assert(arr.stride(1)==1, "bad stride");
+  MR_assert((arr.stride(0)>0) && (arr.stride(1)>0), "bad memory ordering");
+  MR_assert(arr.stride(0)>=arr.stride(1), "bad memory ordering");
   size_t s0=arr.shape(0), s1=arr.shape(1);
   execParallel(s0, nthreads, [&](size_t lo, size_t hi)
     {
-    for (auto i=lo; i<hi; ++i)
-      memset(reinterpret_cast<char *>(&arr.v(i,0)), 0, sizeof(T)*s1);
+    if (arr.stride(1)==1)
+      {
+      if (size_t(arr.stride(0))==arr.shape(1))
+        memset(reinterpret_cast<char *>(&arr.v(lo,0)), 0, sizeof(T)*s1*(hi-lo));
+      else
+        for (auto i=lo; i<hi; ++i)
+          memset(reinterpret_cast<char *>(&arr.v(i,0)), 0, sizeof(T)*s1);
+      }
+    else
+      for (auto i=lo; i<hi; ++i)
+        for (size_t j=0; j<s1; ++j)
+          arr.v(i,j) = T(0);
     });
 #endif
   }
@@ -845,17 +856,21 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
 
-      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
+size_t nbunch=do_wgridding ? nplanes : 1;
+//SimpleTimer tglob;
+//      execGuided(ranges.size(), nthreads, 10, 0.05, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, nbunch, [&](Scheduler &sched)
         {
+//SimpleTimer tloc;
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
         constexpr int jump = hlp.lineJump();
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
-
-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
+auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
@@ -911,7 +926,9 @@ template<typename T> class Params
               }
             }
           }
+//cout << "  tloc: " << tloc() << endl;
         });
+//cout << "tglob: " << tglob() << endl;
       }
 
     template<bool wgrid> void x2grid_c(mav<complex<T>,2> &grid,
@@ -957,7 +974,9 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
+size_t nbunch=do_wgridding ? nplanes : 1;
+      execDynamic(ranges.size(), nthreads, nbunch, [&](Scheduler &sched)
+//      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -966,8 +985,9 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
+auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
@@ -1332,7 +1352,7 @@ template<typename T> class Params
       if (!gridding)
         {
         timers.push("MS zeroing");
-        ms_out.fill(0);
+        quickzero(ms_out, nthreads);
         timers.pop();
         }
       scanData();
