@@ -76,6 +76,7 @@ template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
   { return complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
 
 #if (defined(__AVX__) && (!defined(__AVX512F__)))
+#if 1
 inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   {
   auto t1 = _mm256_hadd_ps(vr, vi);
@@ -83,6 +84,19 @@ inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
   return complex<float>(t2[0], t2[1]);
   }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return complex<float>(t5[0], t5[1]);
+  }
+#endif
 #endif
 
 template<size_t ndim> void checkShape
@@ -656,11 +670,17 @@ template<typename T> class Params
         nth-=nmerge;
         }
       ranges.reserve(buf[0].m.size());
+size_t szmax=0;
       for (auto &v : buf[0].m)
         {
         ranges.emplace_back(v.first, vector<RowchanRange>());
         ranges.back().second.swap(v.second);
+size_t sz=0;
+for (const auto x: ranges.back().second)
+  sz+=x.ch_end-x.ch_begin;
+szmax=max(sz,szmax);
         }
+cout << "Max entries in a single chunk: " << szmax << endl;
       timers.pop();
       }
 
