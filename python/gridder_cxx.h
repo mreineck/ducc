@@ -648,7 +648,6 @@ template<typename T> class Params
           }
         });
 
-      // free mask memory
       timers.poppush("range merging");
       size_t nth = nthreads;
       while (nth>1)
@@ -670,17 +669,39 @@ template<typename T> class Params
         nth-=nmerge;
         }
       ranges.reserve(buf[0].m.size());
+size_t avgsize = ((do_wgridding ? nplanes : 1) * nvis) / buf[0].m.size();
+size_t max_allowed = 20*avgsize;
 size_t szmax=0;
       for (auto &v : buf[0].m)
         {
-        ranges.emplace_back(v.first, vector<RowchanRange>());
-        ranges.back().second.swap(v.second);
 size_t sz=0;
-for (const auto x: ranges.back().second)
+for (const auto &x: v.second)
   sz+=x.ch_end-x.ch_begin;
 szmax=max(sz,szmax);
+if (sz<=max_allowed)
+        {
+        ranges.emplace_back(v.first, vector<RowchanRange>());
+        ranges.back().second.swap(v.second);
         }
+else
+  {
+  ranges.emplace_back(v.first, vector<RowchanRange>());
+  size_t cursz=0;
+  for (const auto &x: v.second)
+    {
+    if (cursz>max_allowed)
+      {
+      ranges.emplace_back(v.first, vector<RowchanRange>());
+      cursz=0;
+      }
+    cursz+=x.ch_end-x.ch_begin;
+    ranges.back().second.push_back(x);
+    }
+  }
+        }
+cout << "Average chunk size: " << avgsize << endl;
 cout << "Max entries in a single chunk: " << szmax << endl;
+cout << "Additional chunks inserted: " << ranges.size()-buf[0].m.size() << endl;
       timers.pop();
       }
 
