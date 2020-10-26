@@ -669,8 +669,11 @@ template<typename T> class Params
         nth-=nmerge;
         }
       ranges.reserve(buf[0].m.size());
-size_t avgsize = ((do_wgridding ? supp : 1) * nvis) / buf[0].m.size();
-size_t max_allowed = 5*avgsize;
+size_t nbunch = do_wgridding ? supp : 1;
+size_t avgsize = (nbunch * nvis) / buf[0].m.size();
+double max_asymm = 0.01;
+size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
+//size_t max_allowed = 5*avgsize;
 size_t szmax=0;
       for (auto &v : buf[0].m)
         {
@@ -700,6 +703,7 @@ else
   }
         }
 cout << "number of chunks: " << buf[0].m.size() << endl;
+cout << "Max allowed chunk size: " << max_allowed << endl;
 cout << "Average chunk size: " << avgsize << endl;
 cout << "Max entries in a single chunk: " << szmax << endl;
 cout << "Additional chunks inserted: " << ranges.size()-buf[0].m.size() << endl;
@@ -898,7 +902,7 @@ cout << "Additional chunks inserted: " << ranges.size()-buf[0].m.size() << endl;
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
 
-      execDynamic(ranges.size(), nthreads, 1, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -1010,7 +1014,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-      execDynamic(ranges.size(), nthreads, 1, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
