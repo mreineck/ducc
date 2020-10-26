@@ -669,8 +669,8 @@ template<typename T> class Params
         nth-=nmerge;
         }
       ranges.reserve(buf[0].m.size());
-size_t avgsize = ((do_wgridding ? nplanes : 1) * nvis) / buf[0].m.size();
-size_t max_allowed = 20*avgsize;
+size_t avgsize = ((do_wgridding ? supp : 1) * nvis) / buf[0].m.size();
+size_t max_allowed = 5*avgsize;
 size_t szmax=0;
       for (auto &v : buf[0].m)
         {
@@ -699,6 +699,7 @@ else
     }
   }
         }
+cout << "number of chunks: " << buf[0].m.size() << endl;
 cout << "Average chunk size: " << avgsize << endl;
 cout << "Max entries in a single chunk: " << szmax << endl;
 cout << "Additional chunks inserted: " << ranges.size()-buf[0].m.size() << endl;
