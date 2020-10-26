@@ -669,44 +669,37 @@ template<typename T> class Params
         nth-=nmerge;
         }
       ranges.reserve(buf[0].m.size());
-size_t nbunch = do_wgridding ? supp : 1;
-size_t avgsize = (nbunch * nvis) / buf[0].m.size();
-double max_asymm = 0.01;
-size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
-//size_t max_allowed = 5*avgsize;
-size_t szmax=0;
+
+      //FIXME: this needs polishing and possibly parallelization
+      size_t nbunch = do_wgridding ? supp : 1;
+      // we want a maximum deviation of 1% in gridding time between threads
+      constexpr double max_asymm = 0.01;
+      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
       for (auto &v : buf[0].m)
         {
-size_t sz=0;
-for (const auto &x: v.second)
-  sz+=x.ch_end-x.ch_begin;
-szmax=max(sz,szmax);
-if (sz<=max_allowed)
-        {
-        ranges.emplace_back(v.first, vector<RowchanRange>());
-        ranges.back().second.swap(v.second);
+        size_t sz=0;
+        for (const auto &x: v.second)
+          sz+=x.ch_end-x.ch_begin;
+        if (sz<=max_allowed)
+          {
+          ranges.emplace_back(v.first, vector<RowchanRange>());
+          ranges.back().second.swap(v.second);
+          }
+        else
+          {
+          size_t cursz=max_allowed+1;
+          for (const auto &x: v.second)
+            {
+            if (cursz>max_allowed)
+              {
+              ranges.emplace_back(v.first, vector<RowchanRange>());
+              cursz=0;
+              }
+            cursz += x.ch_end-x.ch_begin;
+            ranges.back().second.push_back(x);
+            }
+          }
         }
-else
-  {
-  ranges.emplace_back(v.first, vector<RowchanRange>());
-  size_t cursz=0;
-  for (const auto &x: v.second)
-    {
-    if (cursz>max_allowed)
-      {
-      ranges.emplace_back(v.first, vector<RowchanRange>());
-      cursz=0;
-      }
-    cursz+=x.ch_end-x.ch_begin;
-    ranges.back().second.push_back(x);
-    }
-  }
-        }
-cout << "number of chunks: " << buf[0].m.size() << endl;
-cout << "Max allowed chunk size: " << max_allowed << endl;
-cout << "Average chunk size: " << avgsize << endl;
-cout << "Max entries in a single chunk: " << szmax << endl;
-cout << "Additional chunks inserted: " << ranges.size()-buf[0].m.size() << endl;
       timers.pop();
       }
 
