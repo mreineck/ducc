@@ -903,6 +903,7 @@ template<typename T> class Params
         constexpr int jump = hlp.lineJump();
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+
         while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
 auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();

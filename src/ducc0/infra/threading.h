@@ -56,7 +56,7 @@ void execSingle(size_t nwork,
   std::function<void(Scheduler &)> func);
 void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func);
-void execDynamic(size_t nwork, size_t nthreads, size_t chunksize_min,
+void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func);
 void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   double fact_max, std::function<void(Scheduler &)> func);
