@@ -588,7 +588,7 @@ template<typename T> class Params
         wmin = 0;
         }
 
-      using Vmap = map<Uvwidx, vector<RowchanRange>>;
+      using Vmap = map<Uvwidx, pair<vector<RowchanRange>, size_t>>;
       struct bufmap
         {
         Vmap m;
@@ -633,18 +633,26 @@ template<typename T> class Params
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
+                auto &item(mymap[uvwlast]);
+                item.first.emplace_back(RowchanRange(irow, chan0, ichan));
+                item.second += ichan-chan0;
                 uvwlast = uvwcur; chan0=ichan;
                 }
               }
             else if (on) // end of active region
               {
-              mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
+              auto &item(mymap[uvwlast]);
+              item.first.emplace_back(RowchanRange(irow, chan0, ichan));
+              item.second += ichan-chan0;
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, nchan));
+            {
+            auto &item(mymap[uvwlast]);
+            item.first.emplace_back(RowchanRange(irow, chan0, nchan));
+              item.second += nchan-chan0;
+            }
           }
         });
 
@@ -661,14 +669,15 @@ template<typename T> class Params
           for (const auto &v : s2)
             {
             auto &v1(s1[v.first]);
-            v1.reserve(v1.size()+v.second.size());
-            copy(v.second.begin(), v.second.end(), back_inserter(v1));
+            v1.first.reserve(v1.first.size()+v.second.first.size());
+            copy(v.second.first.begin(), v.second.first.end(), back_inserter(v1.first));
+            v1.second+=v.second.second;
             }
           Vmap().swap(s2);
           });
         nth-=nmerge;
         }
-      ranges.reserve(buf[0].m.size());
+      ranges.reserve(size_t(buf[0].m.size()*1.2));
 
       //FIXME: this needs polishing and possibly parallelization
       size_t nbunch = do_wgridding ? supp : 1;
@@ -677,18 +686,16 @@ template<typename T> class Params
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
       for (auto &v : buf[0].m)
         {
-        size_t sz=0;
-        for (const auto &x: v.second)
-          sz+=x.ch_end-x.ch_begin;
+        size_t sz=v.second.second;
         if (sz<=max_allowed)
           {
           ranges.emplace_back(v.first, vector<RowchanRange>());
-          ranges.back().second.swap(v.second);
+          ranges.back().second.swap(v.second.first);
           }
         else
           {
           size_t cursz=max_allowed+1;
-          for (const auto &x: v.second)
+          for (const auto &x: v.second.first)
             {
             if (cursz>max_allowed)
               {
@@ -701,6 +708,7 @@ template<typename T> class Params
           }
         }
       timers.pop();
+cout << "ranges: " << buf[0].m.size() << " -> " << ranges.size() << endl;
       }
 
     template<size_t supp, bool wgrid> class HelperX2g2
