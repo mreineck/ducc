@@ -195,6 +195,13 @@ template<typename T1, typename T2> inline void rearrange(T1 &v, const T2 &idx)
 
 MPI_Datatype fmav2mpidt(const fmav_info &info, MPI_Datatype origtype)
   {
+  if (info.size()==0)
+    {
+    MPI_Datatype res;
+    MPI_Type_contiguous(0, origtype, &res);
+    MPI_Type_commit(&res);
+    return res;
+    }
   size_t ndim = info.ndim();
   vector<int>shape(ndim), stride(ndim);
   for (size_t i=0; i<ndim; ++i)
