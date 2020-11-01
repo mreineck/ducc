@@ -216,6 +216,15 @@ MPI_Datatype fmav2mpidt(const fmav_info &info, MPI_Datatype origtype)
     }
   shape.push_back(1);
   stride.insert(stride.begin(),shape[0]);
+  // reduce dimensions if possible
+  while ((shape.size()>1) && (shape.back()==stride.back()))
+    {
+    auto val = shape.back();
+    shape.pop_back();
+    stride.pop_back();
+    shape.back()*=val;
+    stride.back()*=val;
+    }
   MPI_Datatype res;
   vector<int> zeros(ndim+1,0);
   MPI_Type_create_subarray(shape.size(),
