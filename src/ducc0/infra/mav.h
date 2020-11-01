@@ -326,6 +326,14 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : tinfo(shp_), tbuf(d_,rw_) {}
     fmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
+    fmav(const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(size())
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
     fmav(const T* d_, const tinfo &info)
       : tinfo(info), tbuf(d_) {}
     fmav(T* d_, const tinfo &info, bool rw_=false)

@@ -186,6 +186,91 @@ void Communicator::all2allvRawVoid (const void *in, const int *numin,
 void Communicator::bcastRawVoid (void *data, type_index type, size_t num, int root) const
   { MPI_Bcast (data,num,ndt2mpi(type),root,comm_); }
 
+template<typename T1, typename T2> inline void rearrange(T1 &v, const T2 &idx)
+  {
+  T1 tmp(v);
+  for (size_t i=0; i<idx.size(); ++i)
+    v[i] = tmp[idx[i]];
+  }
+
+MPI_Datatype fmav2mpidt(const fmav_info &info, MPI_Datatype origtype)
+  {
+  size_t ndim = info.ndim();
+  vector<int>shape(ndim), stride(ndim);
+  for (size_t i=0; i<ndim; ++i)
+    {
+    shape[i] = int(info.shape(i));
+    stride[i] = int(info.stride(i));
+    }
+  vector<size_t> idx(shape.size());
+  iota(idx.begin(), idx.end(), 0);
+  sort (idx.begin(), idx.end(),
+    [&stride](size_t i1, size_t i2) {return stride[i1] > stride[i2];});
+  rearrange(shape, idx);
+  rearrange(stride, idx);
+  for (size_t i=0; i+1<stride.size(); ++i)
+    {
+    auto tmp = stride[i]/stride[i+1];
+    MR_assert(stride[i]==stride[i+1]*tmp, "weird strides");
+    stride[i] = tmp;
+    }
+  shape.push_back(1);
+  stride.insert(stride.begin(),shape[0]);
+  MPI_Datatype res;
+  vector<int> zeros(ndim+1,0);
+  MPI_Type_create_subarray(shape.size(),
+                           stride.data(),
+                           shape.data(),
+                           zeros.data(),
+                           MPI_ORDER_C,
+                           origtype,
+                           &res);
+  MPI_Type_commit(&res);
+  return res;
+  }
+
+void Communicator::redistributeRawVoid(const fmav_info &iin, const void *in,
+  const fmav_info &iout, void *out, size_t axin, size_t axout, type_index type) const
+  {
+  auto ndim = iin.ndim();
+  auto nranks = size_t(num_ranks());
+  MR_assert(ndim==iout.ndim(), "array dimensions must be equal");
+  MR_assert(axin<ndim, "invalid axin");
+  MR_assert(axout<ndim, "invalid axout");
+  for (size_t i=0; i<ndim; ++i)
+    if ((i!=axin) && (i!=axout))
+      MR_assert(iin.shape(i)==iout.shape(i), "shape mismatch");
+  auto s_in = allgatherVec(int(iin.shape(axin)));
+  MR_assert(int(iout.shape(axin))==reduce(s_in.begin(), s_in.end()), "inconsistency");
+  auto s_out = allgatherVec(int(iout.shape(axout)));
+  MR_assert(int(iin.shape(axout))==reduce(s_out.begin(), s_out.end()), "inconsistency");
+
+  vector<MPI_Datatype> v_in(nranks), v_out(nranks);
+  for (size_t i=0; i<nranks; ++i)
+    {
+    auto tmp = iin.shape();
+    tmp[axout] = s_out[i];
+    v_in[i] = fmav2mpidt(fmav_info(tmp, iin.stride()), ndt2mpi(type));
+    tmp = iout.shape();
+    tmp[axin] = s_in[i];
+    v_out[i] = fmav2mpidt(fmav_info(tmp, iout.stride()), ndt2mpi(type));
+    }
+
+  vector<int> disp_in(nranks), disp_out(nranks);
+  for (size_t i=0; i<nranks; ++i)
+    {
+    disp_in[i] = (i==0) ? 0 : disp_in[i-1]+s_out[i-1]*iin.stride(axout)*typesize(type);
+    disp_out[i] = (i==0) ? 0 : disp_out[i-1]+s_in[i-1]*iout.stride(axin)*typesize(type);
+    }
+  vector<int> num(nranks, 1);
+
+  MPI_Alltoallw(in, num.data(), disp_in.data(), v_in.data(),
+                out, num.data(), disp_out.data(), v_out.data(), comm_);
+
+  for (auto &t: v_in) MPI_Type_free(&t);
+  for (auto &t: v_out) MPI_Type_free(&t);
+  }
+
 #else
 
 //static
@@ -261,6 +346,10 @@ void Communicator::all2allvRawVoid (const void *in, const int *numin,
 
 void Communicator::bcastRawVoid (void *, type_index, size_t, int) const
   {}
+
+void Communicator::redistributeRawVoid(const fmav_info &, const void *,
+  const fmav_info &, void *, size_t, size_t, type_index) const
+  { MR_fail("must not get here"); }
 
 #endif
 
