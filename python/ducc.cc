@@ -1,6 +1,7 @@
 #include "ducc0/infra/system.cc"
 #include "ducc0/infra/string_utils.cc"
 #include "ducc0/infra/threading.cc"
+#include "ducc0/infra/types.cc"
 #include "ducc0/infra/communication.cc"
 #include "ducc0/math/pointing.cc"
 #include "ducc0/math/geom_utils.cc"
