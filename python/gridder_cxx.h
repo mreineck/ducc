@@ -645,7 +645,8 @@ template<typename T> class Params
         for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
           bool on=false;
-          Uvwidx uvwlast;
+          Uvwidx uvwlast(0,0,0);
+          tmp2 *ptr=0;
           size_t chan0=0;
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
@@ -666,33 +667,51 @@ template<typename T> class Params
               if (!on) // new active region
                 {
                 on=true;
+                if ((!ptr) || (uvwlast!=uvwcur)) ptr=&mymap[uvwcur];
                 uvwlast = uvwcur;
                 chan0=ichan;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                auto &item(mymap[uvwlast]);
-                item.add(RowchanRange(irow, chan0, ichan), max_allowed);
-                uvwlast = uvwcur; chan0=ichan;
+//                auto &item(mymap[uvwlast]);
+                ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
+                uvwlast=uvwcur; chan0=ichan;
+                ptr=&mymap[uvwcur];
                 }
               }
             else if (on) // end of active region
               {
-              auto &item(mymap[uvwlast]);
-              item.add(RowchanRange(irow, chan0, ichan), max_allowed);
+//              auto &item(mymap[uvwlast]);
+              ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
               on=false;
               }
             }
           if (on) // end of active region at last channel
             {
-            auto &item(mymap[uvwlast]);
-            item.add(RowchanRange(irow, chan0, nchan), max_allowed);
+//            auto &item(mymap[uvwlast]);
+            ptr->add(RowchanRange(irow, chan0, nchan), max_allowed);
             }
           }
         });
 
       timers.poppush("range merging");
 
+#if 1
+      for (size_t i=1; i<nthreads; ++i)
+        {
+        auto &s1 = buf[0].m;
+        auto &s2 = buf[i].m;
+        for (auto &&v : s2)
+          {
+          auto loc = s1.find(v.first);
+          if (loc == s1.end())
+            s1[v.first] = move(v.second);
+          else
+            loc->second.add(move(v.second), max_allowed);
+          }
+        Vmap().swap(s2);
+        } 
+#else
       size_t nth = nthreads;
       while (nth>1)
         {
@@ -702,13 +721,13 @@ template<typename T> class Params
           auto tid = sched.thread_num();
           auto &s1 = buf[tid].m;
           auto &s2 = buf[nth-1-tid].m;
-          for (auto &v : s2)
+          for (auto &&v : s2)
             {
             if (s1.find(v.first) == s1.end())
               s1[v.first] = move(v.second);
             else
               {
-              auto &v1(s1[v.first]);
+              auto &&v1(s1[v.first]);
               v1.add(move(v.second), max_allowed);
               }
             }
@@ -716,6 +735,7 @@ template<typename T> class Params
           });
         nth-=nmerge;
         }
+#endif
       timers.poppush("building final range vector");
       size_t total=0;
       for (const auto &x: buf[0].m)
