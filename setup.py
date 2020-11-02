@@ -9,6 +9,9 @@ import pybind11
 pkgname = 'ducc0'
 version = '0.6.0'
 
+mpi_compile_args = os.popen("mpiCC --showme:compile").read().strip().split(' ')
+mpi_compile_args.append("-DDUCC0_USE_MPI")
+mpi_link_args    = os.popen("mpiCC --showme:link").read().strip().split(' ')
 
 def _get_files_by_suffix(directory, suffix):
     path = directory
@@ -52,6 +55,8 @@ else:
     python_module_link_args += ['-march=native',
                                 '-Wl,-rpath,$ORIGIN',
                                 '-s']
+extra_compile_args+=mpi_compile_args
+python_module_link_args+=mpi_link_args
 
 # if you want debugging info, remove the "-s" from python_module_link_args
 depfiles = (_get_files_by_suffix('.', 'h') +
