@@ -588,13 +588,17 @@ template<typename T> class Params
         wmin = 0;
         }
 
-      using Vmap = map<Uvwidx, pair<vector<RowchanRange>, size_t>>;
-      struct bufmap
+      using entry = pair<Uvwidx, RowchanRange>;
+      auto entrycomp = [](const entry &a, const entry &b)
+        { return a.first<b.first; };
+      using Vvec = vector<entry>;
+//      using Vmap = map<Uvwidx, pair<vector<RowchanRange>, size_t>>;
+      struct bufvec
         {
-        Vmap m;
+        Vvec v;
         uint64_t dummy[8]; // separator to keep every entry on a different cache line
         };
-      vector<bufmap> buf(nthreads);
+      vector<bufvec> buf(nthreads);
       bool have_wgt=wgt.size()!=0;
       if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
       bool have_ms=ms_in.size()!=0;
@@ -604,7 +608,7 @@ template<typename T> class Params
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
-        auto &mymap(buf[sched.thread_num()].m);
+        auto &myvec(buf[sched.thread_num()].v);
         while (auto rng=sched.getNext())
         for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
@@ -635,27 +639,20 @@ template<typename T> class Params
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                auto &item(mymap[uvwlast]);
-                item.first.emplace_back(RowchanRange(irow, chan0, ichan));
-                item.second += ichan-chan0;
+                myvec.emplace_back(uvwlast, RowchanRange(irow, chan0, ichan));
                 uvwlast = uvwcur; chan0=ichan;
                 }
               }
             else if (on) // end of active region
               {
-              auto &item(mymap[uvwlast]);
-              item.first.emplace_back(RowchanRange(irow, chan0, ichan));
-              item.second += ichan-chan0;
+              myvec.emplace_back(uvwlast, RowchanRange(irow, chan0, ichan));
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            {
-            auto &item(mymap[uvwlast]);
-            item.first.emplace_back(RowchanRange(irow, chan0, nchan));
-              item.second += nchan-chan0;
-            }
+            myvec.emplace_back(uvwlast, RowchanRange(irow, chan0, nchan));
           }
+        sort(myvec.begin(), myvec.end(), entrycomp);
         });
 
       timers.poppush("range merging");
@@ -666,55 +663,42 @@ template<typename T> class Params
         execParallel(nmerge, [&](Scheduler &sched)
           {
           auto tid = sched.thread_num();
-          auto &s1 = buf[tid].m;
-          auto &s2 = buf[nth-1-tid].m;
-          for (const auto &v : s2)
-            {
-            if (s1.find(v.first) == s1.end())
-              s1[v.first] = move(v.second);
-            else
-              {
-              auto &v1(s1[v.first]);
-              v1.first.reserve(v1.first.size()+v.second.first.size());
-              for (auto &xv: v.second.first)
-                v1.first.push_back(move(xv));
-              v1.second+=v.second.second;
-              }
-            }
-          Vmap().swap(s2);
+          auto &v1 = buf[tid].v;
+          auto &v2 = buf[nth-1-tid].v;
+          Vvec vnew;
+          vnew.reserve(v1.size()+v2.size());
+          merge(v1.begin(), v1.end(), v2.begin(), v2.end(), back_inserter(vnew), entrycomp);
+          v1.swap(vnew);
+          Vvec().swap(v2);
           });
         nth-=nmerge;
         }
       timers.poppush("building final range vector");
-      ranges.reserve(size_t(buf[0].m.size()*1.2));
+
+//      ranges.reserve(size_t(buf[0].m.size()*1.2));
+ranges.clear();
 
       //FIXME: this needs polishing and possibly parallelization
       size_t nbunch = do_wgridding ? supp : 1;
       // we want a maximum deviation of 1% in gridding time between threads
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
-      for (auto &v : buf[0].m)
+
+      Uvwidx lastuvw(0,0,0);
+      size_t cnt=0;
+      for (auto &item : buf[0].v)
         {
-        size_t sz=v.second.second;
-        if (sz<=max_allowed)
-          ranges.emplace_back(v.first, move(v.second.first));
-        else
+        if ((ranges.size()==0) || (item.first!=lastuvw) || (cnt>=max_allowed))
           {
-          size_t cursz=max_allowed+1;
-          for (const auto &x: v.second.first)
-            {
-            if (cursz>max_allowed)
-              {
-              ranges.emplace_back(v.first, vector<RowchanRange>());
-              cursz=0;
-              }
-            cursz += x.ch_end-x.ch_begin;
-            ranges.back().second.push_back(x);
-            }
+          ranges.emplace_back(item.first, vector<RowchanRange>());
+          lastuvw=item.first;
+          cnt=0;
           }
+        ranges.back().second.push_back(item.second);
+        cnt += item.second.ch_end-item.second.ch_begin;
         }
       timers.pop();
-cout << "ranges: " << buf[0].m.size() << " -> " << ranges.size() << endl;
+cout << "ranges: " << buf[0].v.size() << " -> " << ranges.size() << endl;
       }
 #if 0
     void countRanges2()
