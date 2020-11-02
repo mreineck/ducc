@@ -672,7 +672,9 @@ template<typename T> class Params
             {
             auto &v1(s1[v.first]);
             v1.first.reserve(v1.first.size()+v.second.first.size());
-            copy(v.second.first.begin(), v.second.first.end(), back_inserter(v1.first));
+            for (auto &xv: v.second.first)
+              v1.first.push_back(move(xv));
+ //           copy(v.second.first.begin(), v.second.first.end(), back_inserter(v1.first));
             v1.second+=v.second.second;
             }
           Vmap().swap(s2);
