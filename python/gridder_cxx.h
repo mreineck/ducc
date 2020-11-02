@@ -670,12 +670,16 @@ template<typename T> class Params
           auto &s2 = buf[nth-1-tid].m;
           for (const auto &v : s2)
             {
-            auto &v1(s1[v.first]);
-            v1.first.reserve(v1.first.size()+v.second.first.size());
-            for (auto &xv: v.second.first)
-              v1.first.push_back(move(xv));
- //           copy(v.second.first.begin(), v.second.first.end(), back_inserter(v1.first));
-            v1.second+=v.second.second;
+            if (s1.find(v.first) == s1.end())
+              s1[v.first] = move(v.second);
+            else
+              {
+              auto &v1(s1[v.first]);
+              v1.first.reserve(v1.first.size()+v.second.first.size());
+              for (auto &xv: v.second.first)
+                v1.first.push_back(move(xv));
+              v1.second+=v.second.second;
+              }
             }
           Vmap().swap(s2);
           });
@@ -693,10 +697,7 @@ template<typename T> class Params
         {
         size_t sz=v.second.second;
         if (sz<=max_allowed)
-          {
-          ranges.emplace_back(v.first, vector<RowchanRange>());
-          ranges.back().second.swap(v.second.first);
-          }
+          ranges.emplace_back(v.first, move(v.second.first));
         else
           {
           size_t cursz=max_allowed+1;
