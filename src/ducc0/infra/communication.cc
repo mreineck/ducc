@@ -186,15 +186,10 @@ void Communicator::all2allvRawVoid (const void *in, const int *numin,
 void Communicator::bcastRawVoid (void *data, type_index type, size_t num, int root) const
   { MPI_Bcast (data,num,ndt2mpi(type),root,comm_); }
 
-template<typename T1, typename T2> inline void rearrange(T1 &v, const T2 &idx)
+MPI_Datatype fmav2mpidt(const fmav_info &info, type_index type)
   {
-  T1 tmp(v);
-  for (size_t i=0; i<idx.size(); ++i)
-    v[i] = tmp[idx[i]];
-  }
-
-MPI_Datatype fmav2mpidt(const fmav_info &info, MPI_Datatype origtype)
-  {
+  size_t ndim = info.ndim();
+  auto origtype = ndt2mpi(type);
   if (info.size()==0)
     {
     MPI_Datatype res;
@@ -202,46 +197,20 @@ MPI_Datatype fmav2mpidt(const fmav_info &info, MPI_Datatype origtype)
     MPI_Type_commit(&res);
     return res;
     }
-  size_t ndim = info.ndim();
-  vector<int>shape(ndim), stride(ndim);
+  auto res=origtype;
+  bool free_type=false;
   for (size_t i=0; i<ndim; ++i)
     {
-    shape[i] = int(info.shape(i));
-    stride[i] = int(info.stride(i));
+    MPI_Datatype tmptype;
+    MPI_Type_vector(info.shape(i), 1, info.stride(i), res, &tmptype);
+    MPI_Type_commit(&tmptype);
+    if (free_type)
+      MPI_Type_free(&res);
+    free_type = true;
+    MPI_Type_create_resized(tmptype, 0, typesize(type), &res);
+    MPI_Type_commit(&res);
+    MPI_Type_free(&tmptype);
     }
-  vector<size_t> idx(shape.size());
-  iota(idx.begin(), idx.end(), 0);
-  sort (idx.begin(), idx.end(),
-    [&stride](size_t i1, size_t i2) {return stride[i1] > stride[i2];});
-  rearrange(shape, idx);
-  rearrange(stride, idx);
-  for (size_t i=0; i+1<stride.size(); ++i)
-    {
-    auto tmp = stride[i]/stride[i+1];
-    MR_assert(stride[i]==stride[i+1]*tmp, "weird strides");
-    stride[i] = tmp;
-    }
-  shape.push_back(1);
-  stride.insert(stride.begin(),shape[0]);
-  // reduce dimensions if possible
-  while ((shape.size()>1) && (shape.back()==stride.back()))
-    {
-    auto val = shape.back();
-    shape.pop_back();
-    stride.pop_back();
-    shape.back()*=val;
-    stride.back()*=val;
-    }
-  MPI_Datatype res;
-  vector<int> zeros(ndim+1,0);
-  MPI_Type_create_subarray(shape.size(),
-                           stride.data(),
-                           shape.data(),
-                           zeros.data(),
-                           MPI_ORDER_C,
-                           origtype,
-                           &res);
-  MPI_Type_commit(&res);
   return res;
   }
 
@@ -266,10 +235,10 @@ void Communicator::redistributeRawVoid(const fmav_info &iin, const void *in,
     {
     auto tmp = iin.shape();
     tmp[axout] = s_out[i];
-    v_in[i] = fmav2mpidt(fmav_info(tmp, iin.stride()), ndt2mpi(type));
+    v_in[i] = fmav2mpidt(fmav_info(tmp, iin.stride()), type);
     tmp = iout.shape();
     tmp[axin] = s_in[i];
-    v_out[i] = fmav2mpidt(fmav_info(tmp, iout.stride()), ndt2mpi(type));
+    v_out[i] = fmav2mpidt(fmav_info(tmp, iout.stride()), type);
     }
 
   vector<int> disp_in(nranks), disp_out(nranks);
