@@ -673,7 +673,6 @@ template<typename T> class Params
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-//                auto &item(mymap[uvwlast]);
                 ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
                 uvwlast=uvwcur; chan0=ichan;
                 ptr=&mymap[uvwcur];
@@ -681,16 +680,12 @@ template<typename T> class Params
               }
             else if (on) // end of active region
               {
-//              auto &item(mymap[uvwlast]);
               ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            {
-//            auto &item(mymap[uvwlast]);
             ptr->add(RowchanRange(irow, chan0, nchan), max_allowed);
-            }
           }
         });
 
@@ -730,121 +725,8 @@ template<typename T> class Params
           ranges.emplace_back(v.first, move(v2.v));
         }
       timers.pop();
-cout << "ranges: " << buf[0].m.size() << " -> " << ranges.size() << endl;
       }
-#if 0
-    void countRanges2()
-      {
-      timers.push("range count2");
-      size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
 
-      size_t nbunch = do_wgridding ? supp : 1;
-      // we want a maximum deviation of 1% in gridding time between threads
-      constexpr double max_asymm = 0.01;
-      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
-
-      if (do_wgridding)
-        {
-        dw = 0.5/ofactor/abs(nm1min);
-        nplanes = size_t((wmax_d-wmin_d)/dw+supp);
-        MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
-        wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
-        }
-      else
-        {
-        dw = 0;
-        nplanes = 0;
-        wmin = 0;
-        }
-      bool have_wgt=wgt.size()!=0;
-      if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
-      bool have_ms=ms_in.size()!=0;
-      if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
-      bool have_mask=mask.size()!=0;
-      if (have_mask) checkShape(mask.shape(), {nrow,nchan});
-      VVR myranges;
-      std::mutex mut;
-      execParallel(nrow, nthreads, [&](size_t tid, size_t lo, size_t hi)
-        {
-        vector<RowchanRange> vrcr;
-        size_t acc = 0;
-        for(auto irow=lo; irow<hi; ++irow)
-          {
-          bool on=false;
-          Uvwidx uvwlast;
-          size_t chan0=0;
-          for (size_t ichan=0; ichan<nchan; ++ichan)
-            {
-            if (((!have_ms ) || (norm(ms_in(irow,ichan))!=0)) &&
-                ((!have_wgt) || (wgt(irow,ichan)!=0)) &&
-                ((!have_mask) || (mask(irow,ichan)!=0)))
-              {
-              auto uvw = bl.effectiveCoord(irow, ichan);
-              if (uvw.w<0) uvw.Flip();
-              double u, v;
-              int iu0, iv0, iw;
-              getpix(uvw.u, uvw.v, u, v, iu0, iv0);
-              iu0 = (iu0+nsafe)>>logsquare;
-              iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ?
-                max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw)) : 0;
-              Uvwidx uvwcur(iu0, iv0, iw);
-              if (!on) // new active region
-                {
-                on=true;
-                uvwlast = uvwcur;
-                chan0=ichan;
-                }
-              else if (uvwlast!=uvwcur) // change of active region
-                {
-                vrcr.emplace_back(RowchanRange(irow, chan0, ichan));
-                acc += ichan-chan0;
-                if (acc>=max_allowed)
-                  {
-                  lock_guard<mutex> lock(mut);
-                  myranges.push_back(move(vrcr));
-                  vrcr.clear();
-                  acc=0;
-                  }
-                uvwlast = uvwcur; chan0=ichan;
-                }
-              }
-            else if (on) // end of active region
-              {
-              vrcr.emplace_back(RowchanRange(irow, chan0, ichan));
-              acc += ichan-chan0;
-              if (acc>=max_allowed)
-                {
-                lock_guard<mutex> lock(mut);
-                myranges.push_back(move(vrcr));
-                vrcr.clear();
-                acc=0;
-                }
-              on=false;
-              }
-            }
-          if (on) // end of active region at last channel
-            {
-            vrcr.emplace_back(RowchanRange(irow, chan0, nchan));
-            acc += nchan-chan0;
-            if (acc>=max_allowed)
-              {
-              lock_guard<mutex> lock(mut);
-              myranges.push_back(move(vrcr));
-              vrcr.clear();
-              acc=0;
-              }
-            }
-          }
-        });
-
-      timers.poppush("range sorting2");
-      sort(myranges.begin(), myranges.end()
-      timers.pop();
-cout << "ranges: " << " -> " << ranges.size() << endl;
-      }
-#endif
     template<size_t supp, bool wgrid> class HelperX2g2
       {
       public:
