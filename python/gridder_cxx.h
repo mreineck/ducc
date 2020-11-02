@@ -696,22 +696,6 @@ template<typename T> class Params
 
       timers.poppush("range merging");
 
-#if 1
-      for (size_t i=1; i<nthreads; ++i)
-        {
-        auto &s1 = buf[0].m;
-        auto &s2 = buf[i].m;
-        for (auto &&v : s2)
-          {
-          auto loc = s1.find(v.first);
-          if (loc == s1.end())
-            s1[v.first] = move(v.second);
-          else
-            loc->second.add(move(v.second), max_allowed);
-          }
-        Vmap().swap(s2);
-        } 
-#else
       size_t nth = nthreads;
       while (nth>1)
         {
@@ -723,19 +707,17 @@ template<typename T> class Params
           auto &s2 = buf[nth-1-tid].m;
           for (auto &&v : s2)
             {
-            if (s1.find(v.first) == s1.end())
+            auto loc = s1.find(v.first);
+            if (loc == s1.end())
               s1[v.first] = move(v.second);
             else
-              {
-              auto &&v1(s1[v.first]);
-              v1.add(move(v.second), max_allowed);
-              }
+              loc->second.add(move(v.second), max_allowed);
             }
           Vmap().swap(s2);
           });
         nth-=nmerge;
         }
-#endif
+
       timers.poppush("building final range vector");
       size_t total=0;
       for (const auto &x: buf[0].m)
