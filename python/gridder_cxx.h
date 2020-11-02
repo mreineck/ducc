@@ -601,10 +601,12 @@ template<typename T> class Params
       if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
       bool have_mask=mask.size()!=0;
       if (have_mask) checkShape(mask.shape(), {nrow,nchan});
-      execParallel(nrow, nthreads, [&](size_t tid, size_t lo, size_t hi)
+      auto chunk = max<size_t>(1, nrow/(20*nthreads));
+      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
-        auto &mymap(buf[tid].m);
-        for(auto irow=lo; irow<hi; ++irow)
+        auto &mymap(buf[sched.thread_num()].m);
+        while (auto rng=sched.getNext())
+        for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
           bool on=false;
           Uvwidx uvwlast;
