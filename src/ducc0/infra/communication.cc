@@ -222,6 +222,7 @@ void Communicator::redistributeRawVoid(const fmav_info &iin, const void *in,
   MR_assert(ndim==iout.ndim(), "array dimensions must be equal");
   MR_assert(axin<ndim, "invalid axin");
   MR_assert(axout<ndim, "invalid axout");
+  MR_assert(axin!=axout, "axin and axout muyst be different");
   for (size_t i=0; i<ndim; ++i)
     if ((i!=axin) && (i!=axout))
       MR_assert(iin.shape(i)==iout.shape(i), "shape mismatch");
