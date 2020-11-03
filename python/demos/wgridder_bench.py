@@ -46,6 +46,7 @@ def main():
     print('Done')
     t = time() - t0
     print("{} s".format(t))
+    print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
     t0 = time()
     _ = wgridder.dirty2ms(uvw, freq, dirty, wgt, pixsize,
                           pixsize, 0, 0, epsilon, do_wstacking, nthreads, verbosity=1, mask=flags)
