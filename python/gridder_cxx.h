@@ -596,6 +596,9 @@ template<typename T> class Params
         {
         vector<RowchanRange> v;
         size_t sz=0;
+        tmp1()
+          : sz(0)
+          { v.reserve(8); }
         void add(const RowchanRange &rng)
           {
           v.push_back(rng);
@@ -618,6 +621,7 @@ template<typename T> class Params
             { v=other.v; return; }
           auto backup = v.back();
           v.pop_back();
+          v.reserve(v.size()+other.v.size()+2);
           for (auto &&x: other.v)
             v.push_back(x);
           for (auto &&x: backup.v)
