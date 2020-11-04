@@ -63,8 +63,8 @@ def read_ms_i(name):
             tflags = tflags[..., ind]
             tflags = np.any(tflags.astype(np.bool), axis=-1)
             twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
-            twgt = 1/np.sum(1/twgt, axis=-1)
             tflags[twgt==0] = True
+            twgt = np.sum(twgt, axis=-1)
 
             active_rows[start:stop] = np.invert(np.all(tflags, axis=-1))
             active_channels = np.logical_or(active_channels, np.invert(np.all(tflags, axis=0)))
@@ -92,7 +92,7 @@ def read_ms_i(name):
                     tflags = tflags[active_rows[start:stop]]
                 tflags = tflags[:, active_channels]
                 twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
-                twgt = 1/np.sum(1/twgt, axis=-1)
+                twgt = np.sum(twgt, axis=-1)
                 if not allrows:
                     twgt = twgt[active_rows[start:stop]]
                 if fullwgt:
