@@ -38,7 +38,7 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   const py::array &freq_, const py::array &vis_, const py::object &wgt_, const py::object &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
-  bool flip_v, bool divide_by_n)
+  bool flip_v, bool divide_by_n, py::object &dirty_)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -47,7 +47,10 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   auto wgt2 = to_mav<T,2>(wgt, false);
   auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_mav<uint8_t,2>(mask, false);
-  auto dirty = make_Pyarr<T>({npix_x,npix_y});
+  // sizes must be either both zero or both nonzero
+  MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
+  auto dirty = (npix_x==0) ? get_Pyarr<T>(dirty_, 2)
+                           : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
@@ -60,16 +63,17 @@ py::array Pyvis2dirty(const py::array &uvw,
   const py::array &freq, const py::array &vis, const py::object &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n)
+  size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n,
+  py::object &dirty=None)
   {
   if (isPyarr<complex<float>>(vis))
     return vis2dirty2<float>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n);
+      flip_v, divide_by_n, dirty);
   if (isPyarr<complex<double>>(vis))
     return vis2dirty2<double>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n);
+      flip_v, divide_by_n, dirty);
   MR_fail("type matching failed: 'vis' has neither type 'c8' nor 'c16'");
   }
 constexpr auto vis2dirty_DS = R"""(
@@ -91,6 +95,9 @@ mask: numpy.ndarray((nrows, nchan), dtype=numpy.uint8), optional
     If present, only visibilities are processed for which mask!=0
 npix_x, npix_y: int
     dimensions of the dirty image (must both be even and at least 32)
+    If the `dirty` argument is provided, image dimensions will be inferred from
+    the passed array; in this case npix_x and npix_y must be either consistent
+    with these dimensions, or be zero.
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
 epsilon: float
@@ -108,6 +115,10 @@ nthreads: int
 verbosity: int
     0: no output
     1: some diagnostic output and timings
+dirty: numpy.ndarray((npix_x, npix_y), dtype=float of same precision as `vis`),
+    optional
+    If provided, the dirty image will be written to this array and a handle
+    to it will be returned.
 
 Returns
 -------
@@ -123,7 +134,8 @@ Other strides will work, but can degrade performance significantly.
 template<typename T> py::array dirty2vis2(const py::array &uvw_,
   const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
-  size_t nthreads, size_t verbosity, bool flip_v, bool divide_by_n)
+  size_t nthreads, size_t verbosity, bool flip_v, bool divide_by_n,
+  py::object &vis_)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -132,7 +144,7 @@ template<typename T> py::array dirty2vis2(const py::array &uvw_,
   auto wgt2 = to_mav<T,2>(wgt, false);
   auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_mav<uint8_t,2>(mask, false);
-  auto vis = make_Pyarr<complex<T>>({uvw.shape(0),freq.shape(0)});
+  auto vis = get_optional_Pyarr<complex<T>>(vis_, {uvw.shape(0),freq.shape(0)});
   auto vis2 = to_mav<complex<T>,2>(vis, true);
   {
   py::gil_scoped_release release;
@@ -145,16 +157,16 @@ py::array Pydirty2vis(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, const py::object &mask,
-  bool flip_v, bool divide_by_n)
+  bool flip_v, bool divide_by_n, py::object &vis=None)
   {
   if (isPyarr<float>(dirty))
     return dirty2vis2<float>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n);
+      flip_v, divide_by_n, vis);
   if (isPyarr<double>(dirty))
     return dirty2vis2<double>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n);
+      flip_v, divide_by_n, vis);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
 constexpr auto dirty2vis_DS = R"""(
@@ -192,6 +204,10 @@ nthreads: int
 verbosity: int
     0: no output
     1: some diagnostic output and timings
+vis: numpy.ndarray((nrows, nchan), dtype=complex of same precision as `dirty`),
+    optional
+    If provided, the computed visibilities will be stored in this array, and
+    a handle to it will be returned.
 
 Returns
 -------
@@ -318,13 +334,13 @@ void add_wgridder(py::module &msup)
   auto m = msup.def_submodule("wgridder");
 
   m.def("vis2dirty", &Pyvis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
-    "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a,
+    "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
-    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true);
+    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None);
   m.def("dirty2vis", &Pydirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "flip_v"_a=false, "divide_by_n"_a=true);
+    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None);
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,

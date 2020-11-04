@@ -92,6 +92,14 @@ template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(co
 template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims)
   { return py::array_t<T>(dims); }
 
+template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims)
+  {
+  MR_assert(isPyarr<T>(arr_), "incorrect data type");
+  auto tmp = toPyarr<T>(arr_);
+  MR_assert(ndims==size_t(tmp.ndim()), "dimension mismatch");
+  return tmp;
+  }
+
 template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   const shape_t &dims)
   {
@@ -140,6 +148,7 @@ template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool 
 
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
+using detail_pybind::get_Pyarr;
 using detail_pybind::get_optional_Pyarr;
 using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_fmav;
