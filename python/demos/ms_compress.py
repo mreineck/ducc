@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 
+
 def get_indices(name):
     from os.path import join
     from casacore.tables import table
@@ -63,8 +64,8 @@ def read_ms_i(name):
             tflags = tflags[..., ind]
             tflags = np.any(tflags.astype(np.bool), axis=-1)
             twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
-            tflags[twgt==0] = True
             twgt = np.sum(twgt, axis=-1)
+            tflags[twgt == 0] = True
 
             active_rows[start:stop] = np.invert(np.all(tflags, axis=-1))
             active_channels = np.logical_or(active_channels, np.invert(np.all(tflags, axis=0)))
@@ -118,7 +119,7 @@ def read_ms_i(name):
     if not fullwgt:
         wgt = np.broadcast_to(wgt.reshape((-1,1)), vis.shape)
 
-    vis[wgt==0] = 0.
+    vis[wgt == 0] = 0.
 
     return (np.ascontiguousarray(uvw),
             np.ascontiguousarray(freq),
@@ -130,10 +131,10 @@ def read_ms_i(name):
 def read_ms(name):
     tmp = read_ms_i(name)
     return dict(uvw=tmp[0],
-            freqs=tmp[1],
-            vis=tmp[2],
-            wgt=tmp[3],
-            mask=tmp[4])
+                freqs=tmp[1],
+                vis=tmp[2],
+                wgt=tmp[3],
+                mask=tmp[4])
 
 
 def main():
