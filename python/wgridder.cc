@@ -38,7 +38,8 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   const py::array &freq_, const py::array &vis_, const py::object &wgt_, const py::object &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
-  bool flip_v, bool divide_by_n, py::object &dirty_)
+  bool flip_v, bool divide_by_n, py::object &dirty_, double sigma_min,
+  double sigma_max)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -55,7 +56,8 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   {
   py::gil_scoped_release release;
   ms2dirty(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-    do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n);
+    do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+    sigma_max);
   }
   return move(dirty);
   }
@@ -64,16 +66,16 @@ py::array Pyvis2dirty(const py::array &uvw,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n,
-  py::object &dirty=None)
+  py::object &dirty=None, double sigma_min=1.1, double sigma_max=2.6)
   {
   if (isPyarr<complex<float>>(vis))
     return vis2dirty2<float>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, dirty);
+      flip_v, divide_by_n, dirty, sigma_min, sigma_max);
   if (isPyarr<complex<double>>(vis))
     return vis2dirty2<double>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, dirty);
+      flip_v, divide_by_n, dirty, sigma_min, sigma_max);
   MR_fail("type matching failed: 'vis' has neither type 'c8' nor 'c16'");
   }
 constexpr auto vis2dirty_DS = R"""(
@@ -110,6 +112,8 @@ flip_v: bool
     if True, all v coordinates in uvw are multiplied by -1
 divide_by_n: bool
     if True, the dirty image pixels are divided by n
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
 nthreads: int
     number of threads to use for the calculation
 verbosity: int
@@ -135,7 +139,7 @@ template<typename T> py::array dirty2vis2(const py::array &uvw_,
   const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_v, bool divide_by_n,
-  py::object &vis_)
+  py::object &vis_, double sigma_min, double sigma_max)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -149,7 +153,8 @@ template<typename T> py::array dirty2vis2(const py::array &uvw_,
   {
   py::gil_scoped_release release;
   dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-    do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n);
+    do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
+    sigma_max);
   }
   return move(vis);
   }
@@ -157,16 +162,17 @@ py::array Pydirty2vis(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, const py::object &mask,
-  bool flip_v, bool divide_by_n, py::object &vis=None)
+  bool flip_v, bool divide_by_n, py::object &vis=None, double sigma_min=1.1,
+  double sigma_max=2.6)
   {
   if (isPyarr<float>(dirty))
     return dirty2vis2<float>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, vis);
+      flip_v, divide_by_n, vis, sigma_min, sigma_max);
   if (isPyarr<double>(dirty))
     return dirty2vis2<double>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, vis);
+      flip_v, divide_by_n, vis, sigma_min, sigma_max);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
 constexpr auto dirty2vis_DS = R"""(
@@ -199,6 +205,8 @@ flip_v: bool
     if True, all v coordinates in uvw are multiplied by -1
 divide_by_n: bool
     if True, the dirty image pixels are divided by n
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
 nthreads: int
     number of threads to use for the calculation
 verbosity: int
@@ -336,11 +344,13 @@ void add_wgridder(py::module &msup)
   m.def("vis2dirty", &Pyvis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
-    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None);
+    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
+    "sigma_min"_a=1.1, "sigma_max"_a=2.6);
   m.def("dirty2vis", &Pydirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None);
+    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None,"sigma_min"_a=1.1,
+    "sigma_max"_a=2.6);
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,

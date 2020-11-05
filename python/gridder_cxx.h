@@ -305,6 +305,7 @@ template<typename T> class Params
     size_t nthreads;
     size_t verbosity;
     bool negate_v, divide_by_n;
+    double sigma_min, sigma_max;
 
     Baselines bl;
     VVR ranges;
@@ -1300,7 +1301,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-      auto idx = getAvailableKernels<T>(epsilon);
+      auto idx = getAvailableKernels<T>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1388,7 +1389,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
            const mav<T,2> &wgt_, const mav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
-           bool negate_v_, bool divide_by_n_)
+           bool negate_v_, bool divide_by_n_, double sigma_min_,
+           double sigma_max_)
       : gridding(ms_in_.size()>0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
@@ -1400,7 +1402,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         epsilon(epsilon_),
         do_wgridding(do_wgridding_),
         nthreads(nthreads_), verbosity(verbosity_),
-        negate_v(negate_v_), divide_by_n(divide_by_n_)
+        negate_v(negate_v_), divide_by_n(divide_by_n_),
+        sigma_min(sigma_min_), sigma_max(sigma_max_)
       {
       timers.push("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
@@ -1464,22 +1467,28 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true)
+  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
+  double sigma_max=2.6)
   {
   mav<complex<T>,2> ms_out(nullptr, {0,0}, false);
   mav<T,2> dirty_in(nullptr, {0,0}, false);
-  Params<T> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v, divide_by_n);
+  Params<T> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max);
   }
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
   const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, mav<complex<T>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true)
+  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
+  double sigma_min=1.1, double sigma_max=2.6)
   {
   mav<complex<T>,2> ms_in(nullptr, {0,0}, false);
   mav<T,2> dirty_out(nullptr, {0,0}, false);
-  Params<T> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v, divide_by_n);
+  Params<T> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max);
   }
 
 } // namespace detail_gridder

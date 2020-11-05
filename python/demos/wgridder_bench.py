@@ -40,16 +40,20 @@ def main():
     do_wstacking = True
 
     t0 = time()
-
-    dirty = wgridder.ms2dirty(uvw, freq, vis, wgt, npixdirty, npixdirty, pixsize,
-                              pixsize, 0, 0, epsilon, do_wstacking, nthreads, verbosity=1, mask=flags)
+    dirty = np.zeros((npixdirty, npixdirty), dtype=np.float32)
+    dirty = wgridder.vis2dirty(uvw=uvw, freq=freq, vis=vis, wgt=wgt,
+        npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
+        pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wstacking,
+        nthreads=nthreads, verbosity=1, mask=flags, flip_v=True, dirty=dirty)
     print('Done')
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
     t0 = time()
-    _ = wgridder.dirty2ms(uvw, freq, dirty, wgt, pixsize,
-                          pixsize, 0, 0, epsilon, do_wstacking, nthreads, verbosity=1, mask=flags)
+    vis = wgridder.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+        pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
+        do_wgridding=do_wstacking, nthreads=nthreads, verbosity=1, mask=flags,
+        flip_v=True, vis=vis)
     print('Done')
     t = time() - t0
     print("{} s".format(t))

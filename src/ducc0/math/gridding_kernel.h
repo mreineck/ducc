@@ -719,18 +719,20 @@ template<typename T> auto selectKernel(double ofactor, double epsilon, size_t id
     selectKernel<T>(idx) : selectKernel<T>(ofactor, epsilon);
   }
 
-template<typename T> auto getAvailableKernels(double epsilon)
+template<typename T> auto getAvailableKernels(double epsilon,
+  double ofactor_min=1.1, double ofactor_max=2.6)
   {
-  vector<double> ofc(20, 100.);
+  vector<double> ofc(20, ofactor_max);
   vector<size_t> idx(20, KernelDB.size());
   size_t Wlim = is_same<T, float>::value ? 8 : 16;
   for (size_t i=0; i<KernelDB.size(); ++i)
     {
+    auto ofactor = KernelDB[i].ofactor;
     size_t W = KernelDB[i].W;
     if ((W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
-     && (KernelDB[i].ofactor<ofc[W]))
+     && (ofactor<ofc[W]) && (ofactor>=ofactor_min))
       {
-      ofc[W] = KernelDB[i].ofactor;
+      ofc[W] = ofactor;
       idx[W] = i;
       }
     }
