@@ -75,25 +75,25 @@ Converts an MS object to dirty image.
 
 Parameters
 ----------
-uvw: np.array((nrows, 3), dtype=np.float64)
+uvw: numpy.ndarray((nrows, 3), dtype=numpy.float64)
     UVW coordinates from the measurement set
-freq: np.array((nchan,), dtype=np.float64)
+freq: numpy.ndarray((nchan,), dtype=numpy.float64)
     channel frequencies
-ms: np.array((nrows, nchan,), dtype=np.complex64 or np.complex128)
+ms: numpy.ndarray((nrows, nchan), dtype=numpy.complex64 or numpy.complex128)
     the input measurement set data.
     Its data type determines the precision in which the calculation is carried
     out.
-wgt: np.array((nrows, nchan), float with same precision as `ms`), optional
-    If present, its values are multiplied to the output
+wgt: numpy.ndarray((nrows, nchan), float with same precision as `ms`), optional
+    If present, its values are multiplied to the input before gridding
 npix_x, npix_y: int
-    dimensions of the dirty image
+    dimensions of the dirty image (must both be even and at least 32)
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
 nu, nv: int
     obsolete, ignored
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
-    If `ms` has type np.complex64, it must be larger than 1e-5.
+    If `ms` has type numpy.complex64, it must be larger than 1e-5.
 do_wstacking: bool
     if True, the full w-gridding algorithm is carried out, otherwise
     the w values are assumed to be zero.
@@ -103,12 +103,12 @@ verbosity: int
     0: no output
     1: some output
     2: detailed output
-mask: np.array((nrows, nchan), dtype=np.uint8), optional
+mask: numpy.ndarray((nrows, nchan), dtype=numpy.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
 -------
-np.array((nxdirty, nydirty), dtype=float of same precision as `ms`)
+numpy.ndarray((npix_x, npix_y), dtype=float of same precision as `ms`)
     the dirty image
 
 Notes
@@ -156,15 +156,16 @@ Converts a dirty image to an MS object.
 
 Parameters
 ----------
-uvw: np.array((nrows, 3), dtype=np.float64)
+uvw: numpy.ndarray((nrows, 3), dtype=numpy.float64)
     UVW coordinates from the measurement set
-freq: np.array((nchan,), dtype=np.float64)
+freq: numpy.ndarray((nchan,), dtype=numpy.float64)
     channel frequencies
-dirty: np.array((nxdirty, nydirty), dtype=np.float32 or np.float64)
+dirty: numpy.ndarray((npix_x, npix_y), dtype=numpy.float32 or numpy.float64)
     dirty image
     Its data type determines the precision in which the calculation is carried
     out.
-wgt: np.array((nrows, nchan), same dtype as `dirty`), optional
+    Both dimensions must be even and at least 32.
+wgt: numpy.ndarray((nrows, nchan), same dtype as `dirty`), optional
     If present, its values are multiplied to the output
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
@@ -172,7 +173,7 @@ nu, nv: int
     obsolete, ignored
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
-    If `dirty` has type np.float32, it must be larger than 1e-5.
+    If `dirty` has type numpy.float32, it must be larger than 1e-5.
 do_wstacking: bool
     if True, the full w-gridding algorithm is carried out, otherwise
     the w values are assumed to be zero.
@@ -182,12 +183,12 @@ verbosity: int
     0: no output
     1: some output
     2: detailed output
-mask: np.array((nrows, nchan), dtype=np.uint8), optional
+mask: numpy.ndarray((nrows, nchan), dtype=numpy.uint8), optional
     If present, only visibilities are processed for which mask!=0
 
 Returns
 -------
-np.array((nrows, nchan,), dtype=complex of same precision as `dirty`)
+numpy.ndarray((nrows, nchan), dtype=complex of same precision as `dirty`)
     the measurement set data.
 
 Notes

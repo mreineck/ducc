@@ -24,7 +24,7 @@
 #ifndef DUCC0_COMMUNICATION_H
 #define DUCC0_COMMUNICATION_H
 
-#define DUCC0_USE_MPI
+//#define DUCC0_USE_MPI
 
 #include <vector>
 #ifdef DUCC0_USE_MPI
@@ -32,6 +32,8 @@
 #endif
 
 #include "ducc0/infra/types.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/transpose.h"
 
 namespace ducc0 {
 
@@ -61,7 +63,6 @@ class Communicator
   private:
     CommType comm_;
     int rank_, num_ranks_;
-    Communicator(CommType comm);
 
     void sendrecvRawVoid (const void *sendbuf, size_t sendcnt,
       size_t dest, void *recvbuf, size_t recvcnt, size_t src, type_index type) const;
@@ -79,9 +80,13 @@ class Communicator
     void all2allvRawVoid (const void *in, const int *numin, const int *disin,
       void *out, const int *numout, const int *disout, type_index type) const;
     void bcastRawVoid (void *data, type_index type, size_t num, int root) const;
+    void redistributeRawVoid (const fmav_info &iin, const void *in,
+                              const fmav_info &iout, void *out,
+                              size_t axin, size_t axout, type_index type) const;
 
   public:
     Communicator();
+    Communicator(CommType comm);
     ~Communicator();
     Communicator(const Communicator &other) = default;
 
@@ -147,6 +152,15 @@ class Communicator
 
     template<typename T> void bcastRaw (T *data, size_t num, int root=0) const
       { bcastRawVoid (data, tidx<T>(), num, root); }
+
+    template<typename T> void redistribute (const fmav<T> &in, fmav<T> &out,
+      size_t axin, size_t axout) const
+      {
+      if (num_ranks()==1)
+        transpose(in, out);
+      else
+        redistributeRawVoid(in, &in[0], out, &out.vraw(0), axin, axout, tidx<T>());
+      }
   };
 
 }

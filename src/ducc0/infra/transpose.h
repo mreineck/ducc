@@ -47,7 +47,7 @@ template<typename T1, typename T2> inline void rearrange(T1 &v, const T2 &idx)
     v[i] = tmp[idx[i]];
   }
 
-auto prep(const fmav_info &in, const fmav_info &out)
+inline auto prep(const fmav_info &in, const fmav_info &out)
   {
   MR_assert(in.shape()==out.shape(), "shape mismatch");
   shape_t shp;
@@ -89,7 +89,7 @@ template<typename T, typename Func> void sthelper1(const T *in, T *out,
     func(*in, *out);
   }
 
-bool critical(ptrdiff_t s)
+inline bool critical(ptrdiff_t s)
   {
   s = (s>=0) ? s : -s;
   return (s>4096) && ((s&(s-1))==0);
@@ -173,6 +173,8 @@ template<typename T, typename Func> void transpose(const fmav<T> &in,
     }
   iter(in2, out2, 0, 0, 0, func);
   }
+template<typename T> void transpose(const fmav<T> &in, fmav<T> &out)
+  { transpose(in, out, [](const T &in, T&out) { out=in; }); }
 
 }
 

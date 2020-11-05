@@ -13,13 +13,18 @@
 #
 # Copyright(C) 2020 Max-Planck-Society
 
-
 import ducc0.wgridder as ng
+try:
+    import finufft
+    have_finufft = True
+except ImportError:
+    have_finufft = False
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
+SPEEDOFLIGHT = 299792458.
 
 
 # attempt to write a more accurate version of numpy.vdot()
@@ -40,7 +45,6 @@ def _l2error(a, b):
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                      apply_w, mask):
-    speedoflight = 299792458.
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
                        indexing='ij')
     x *= xpixsize
@@ -57,7 +61,7 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
         for chan in range(ms.shape[1]):
             if mask is not None and mask[row, chan] == 0:
                 continue
-            phase = (freq[chan]/speedoflight *
+            phase = (freq[chan]/SPEEDOFLIGHT *
                      (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
             if wgt is None:
                 res += (ms[row, chan]*np.exp(2j*np.pi*phase)).real
@@ -65,6 +69,25 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                 res += (ms[row, chan]*wgt[row, chan]
                         * np.exp(2j*np.pi*phase)).real
     return res/n
+
+
+def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask, epsilon):
+    u = np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT)*2*np.pi
+    v = np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT)*2*np.pi
+    if wgt is not None:
+        ms = ms*wgt
+    if mask is not None:
+        ms = ms*mask
+    eps = epsilon/10  # Apparently finufft measures epsilon differently
+    # Plan on the fly
+    res0 = finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty, nydirty), eps=eps).real
+    # Plan beforehand
+    plan = finufft.Plan(1, (nxdirty, nydirty), eps=eps)
+    plan.setpts(u.ravel(), v.ravel())
+    res1 = plan.execute(ms.ravel()).real
+    np.testing.assert_allclose(res0, res1)
+    return res0
+
 
 
 @pmp("nxdirty", (30, 128))
@@ -84,9 +107,9 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
     rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
-    speedoflight, f0 = 299792458., 1e9
+    f0 = 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/speedoflight)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
@@ -124,9 +147,9 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
     rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
-    speedoflight, f0 = 299792458., 1e9
+    f0 = 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
-    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
@@ -141,4 +164,10 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
                         0, mask).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask)
+    assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+
+    if wstacking or (not have_finufft):
+        return
+    dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                         pixsizey, mask, epsilon)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)

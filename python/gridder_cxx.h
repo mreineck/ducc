@@ -46,10 +46,37 @@ namespace detail_gridder {
 
 using namespace std;
 
+template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
+  {
+#if 0
+  arr.fill(T(0));
+#else
+  MR_assert((arr.stride(0)>0) && (arr.stride(1)>0), "bad memory ordering");
+  MR_assert(arr.stride(0)>=arr.stride(1), "bad memory ordering");
+  size_t s0=arr.shape(0), s1=arr.shape(1);
+  execParallel(s0, nthreads, [&](size_t lo, size_t hi)
+    {
+    if (arr.stride(1)==1)
+      {
+      if (size_t(arr.stride(0))==arr.shape(1))
+        memset(reinterpret_cast<char *>(&arr.v(lo,0)), 0, sizeof(T)*s1*(hi-lo));
+      else
+        for (auto i=lo; i<hi; ++i)
+          memset(reinterpret_cast<char *>(&arr.v(i,0)), 0, sizeof(T)*s1);
+      }
+    else
+      for (auto i=lo; i<hi; ++i)
+        for (size_t j=0; j<s1; ++j)
+          arr.v(i,j) = T(0);
+    });
+#endif
+  }
+
 template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
   { return complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
 
 #if (defined(__AVX__) && (!defined(__AVX512F__)))
+#if 1
 inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   {
   auto t1 = _mm256_hadd_ps(vr, vi);
@@ -57,6 +84,19 @@ inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
   return complex<float>(t2[0], t2[1]);
   }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return complex<float>(t5[0], t5[1]);
+  }
+#endif
 #endif
 
 template<size_t ndim> void checkShape
@@ -186,11 +226,11 @@ struct UVW
   UVW operator* (double fct) const
     { return UVW(u*fct, v*fct, w*fct); }
   void Flip() { u=-u; v=-v; w=-w; }
-  bool FixW()
+  double FixW()
     {
-    bool flip = w<0;
-    if (flip) Flip();
-    return flip;
+    double res=1.-2.*(w<0);
+    u*=res; v*=res; w*=res;
+    return res;
     }
   };
 
@@ -234,6 +274,10 @@ class Baselines
 
     UVW effectiveCoord(size_t row, size_t chan) const
       { return coord[row]*f_over_c[chan]; }
+    UVW baseCoord(size_t row) const
+      { return coord[row]; }
+    double ffact(size_t chan) const
+      { return f_over_c[chan];}
     size_t Nrows() const { return nrows; }
     size_t Nchannels() const { return nchan; }
     double Umax() const { return umax; }
@@ -406,19 +450,9 @@ template<typename T> class Params
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
-      MR_assert(grid.stride(1)==1, "bad stride");
-      execParallel(nu, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=0, hi2=nv;
-          if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
-            { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          T * DUCC0_RESTRICT ptr = &grid.v(i,0);
-          for (auto j=lo2; j<hi2; ++j)
-            ptr[j] = 0;
-          }
-        });
+      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
@@ -444,20 +478,9 @@ template<typename T> class Params
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      MR_assert(grid.stride(1)==1, "bad stride");
-      execParallel(nu, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          size_t lo2=0, hi2=nv;
-          if ((i<nxdirty/2) || (i>=nu-nxdirty/2))
-            { lo2=nydirty/2; hi2=nv-nydirty/2+1; }
-          complex<T> * DUCC0_RESTRICT ptr = &grid.v(i,0);
-          for (auto j=lo2; j<hi2; ++j)
-            ptr[j] = 0;
-          }
-        });
-
+      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = -0.5*nxdirty*pixsize_x,
              y0 = -0.5*nydirty*pixsize_y;
@@ -564,8 +587,48 @@ template<typename T> class Params
         nplanes = 0;
         wmin = 0;
         }
+      size_t nbunch = do_wgridding ? supp : 1;
+      // we want a maximum deviation of 1% in gridding time between threads
+      constexpr double max_asymm = 0.01;
+      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
-      using Vmap = map<Uvwidx, vector<RowchanRange>>;
+      struct tmp1
+        {
+        vector<RowchanRange> v;
+        size_t sz=0;
+        tmp1()
+          : sz(0)
+          { v.reserve(8); }
+        void add(const RowchanRange &rng)
+          {
+          v.push_back(rng);
+          sz += rng.ch_end-rng.ch_begin;
+          }
+        };
+      struct tmp2
+        {
+        vector<tmp1> v;
+        void add(const RowchanRange &rng, size_t max_allowed)
+          {
+          if (v.empty() || (v.back().sz>=max_allowed))
+            v.push_back(tmp1());
+          v.back().add(rng);
+          }
+        void add(tmp2 &&other, size_t max_allowed)
+          {
+          if (other.v.empty()) return;
+          if (v.empty())
+            { v=other.v; return; }
+          auto backup = v.back();
+          v.pop_back();
+          v.reserve(v.size()+other.v.size()+2);
+          for (auto &&x: other.v)
+            v.push_back(x);
+          for (auto &&x: backup.v)
+            add(x, max_allowed);
+          }
+        };
+      using Vmap = map<Uvwidx, tmp2>;
       struct bufmap
         {
         Vmap m;
@@ -578,13 +641,16 @@ template<typename T> class Params
       if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
       bool have_mask=mask.size()!=0;
       if (have_mask) checkShape(mask.shape(), {nrow,nchan});
-      execParallel(nrow, nthreads, [&](size_t tid, size_t lo, size_t hi)
+      auto chunk = max<size_t>(1, nrow/(20*nthreads));
+      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
-        auto &mymap(buf[tid].m);
-        for(auto irow=lo; irow<hi; ++irow)
+        auto &mymap(buf[sched.thread_num()].m);
+        while (auto rng=sched.getNext())
+        for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
           bool on=false;
-          Uvwidx uvwlast;
+          Uvwidx uvwlast(0,0,0);
+          tmp2 *ptr=0;
           size_t chan0=0;
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
@@ -605,28 +671,30 @@ template<typename T> class Params
               if (!on) // new active region
                 {
                 on=true;
+                if ((!ptr) || (uvwlast!=uvwcur)) ptr=&mymap[uvwcur];
                 uvwlast = uvwcur;
                 chan0=ichan;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
-                uvwlast = uvwcur; chan0=ichan;
+                ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
+                uvwlast=uvwcur; chan0=ichan;
+                ptr=&mymap[uvwcur];
                 }
               }
             else if (on) // end of active region
               {
-              mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, ichan));
+              ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            mymap[uvwlast].emplace_back(RowchanRange(irow, chan0, nchan));
+            ptr->add(RowchanRange(irow, chan0, nchan), max_allowed);
           }
         });
 
-      // free mask memory
       timers.poppush("range merging");
+
       size_t nth = nthreads;
       while (nth>1)
         {
@@ -636,21 +704,29 @@ template<typename T> class Params
           auto tid = sched.thread_num();
           auto &s1 = buf[tid].m;
           auto &s2 = buf[nth-1-tid].m;
-          for (const auto &v : s2)
+          for (auto &&v : s2)
             {
-            auto &v1(s1[v.first]);
-            v1.reserve(v1.size()+v.second.size());
-            copy(v.second.begin(), v.second.end(), back_inserter(v1));
+            auto loc = s1.find(v.first);
+            if (loc == s1.end())
+              s1[v.first] = move(v.second);
+            else
+              loc->second.add(move(v.second), max_allowed);
             }
           Vmap().swap(s2);
           });
         nth-=nmerge;
         }
-      ranges.reserve(buf[0].m.size());
+
+      timers.poppush("building final range vector");
+      size_t total=0;
+      for (const auto &x: buf[0].m)
+        total += x.second.v.size();
+
+      ranges.reserve(total);
       for (auto &v : buf[0].m)
         {
-        ranges.emplace_back(v.first, vector<RowchanRange>());
-        ranges.back().second.swap(v.second);
+        for (auto &v2:v.second.v)
+          ranges.emplace_back(v.first, move(v2.v));
         }
       timers.pop();
       }
@@ -847,7 +923,7 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
       vector<std::mutex> locks(nu);
 
-      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -856,8 +932,9 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
+auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
@@ -865,31 +942,35 @@ template<typename T> class Params
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
+              auto bcoord = bl.baseCoord(row);
+              T imflip = T(bcoord.FixW());
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                UVW coord = bl.effectiveCoord(row, ch);
-                auto flip = coord.FixW();
+                auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 
-                if (flip) v=conj(v);
                 if (have_wgt) v*=wgt(row, ch);
-                native_simd<T> vr(v.real()), vi(v.imag());
-                for (size_t cu=0; cu<SUPP; ++cu)
+
+                if constexpr (NVEC==1)
                   {
-                  if constexpr (NVEC==1)
+                  native_simd<T> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    auto fct = kv[0]*ku[cu];
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
                     auto tr = native_simd<T>::loadu(pxr);
                     auto ti = native_simd<T>::loadu(pxi);
-                    tr += vr*fct;
-                    ti += vi*fct;
+                    tr += vr*ku[cu];
+                    ti += vi*ku[cu];
                     tr.storeu(pxr);
                     ti.storeu(pxi);
                     }
-                  else
+                  }
+                else
+                  {
+                  native_simd<T> vr(v.real()), vi(v.imag()*imflip);
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
                     for (size_t cv=0; cv<NVEC; ++cv)
@@ -955,7 +1036,7 @@ template<typename T> class Params
       bool have_wgt = wgt.size()!=0;
 
       // Loop over sampling points
-      execGuided(ranges.size(), nthreads, 10, 0.2, [&](Scheduler &sched)
+      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=native_simd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -964,8 +1045,9 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
+auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
@@ -973,26 +1055,28 @@ template<typename T> class Params
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
+              auto bcoord = bl.baseCoord(row);
+              T imflip = T(bcoord.FixW());
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                UVW coord = bl.effectiveCoord(row, ch);
-                auto flip = coord.FixW();
+                auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 native_simd<T> rr=0, ri=0;
-                for (size_t cu=0; cu<SUPP; ++cu)
+                if constexpr (NVEC==1)
                   {
-#if 0
-// this doesn't appear to be beneficial, in contrast to the x2grid direction ...
-                  if constexpr(NVEC==1)
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    auto fct = kv[0]*ku[cu];
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += native_simd<T>::loadu(pxr)*fct;
-                    ri += native_simd<T>::loadu(pxi)*fct;
+                    rr += native_simd<T>::loadu(pxr)*ku[cu];
+                    ri += native_simd<T>::loadu(pxi)*ku[cu];
                     }
-                 else
-#endif
+                  rr *= kv[0];
+                  ri *= kv[0];
+                  }
+                else
+                  {
+                  for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     native_simd<T> tmpr(0), tmpi(0);
                     for (size_t cv=0; cv<NVEC; ++cv)
@@ -1006,8 +1090,8 @@ template<typename T> class Params
                     ri += ku[cu]*tmpi;
                     }
                   }
+                ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
-                if (flip) r=conj(r);
                 if (have_wgt) r*=wgt(row, ch);
                 ms_out.v(row, ch) += r;
                 }
@@ -1110,28 +1194,31 @@ template<typename T> class Params
     void report()
       {
       if (verbosity==0) return;
-      cout << (gridding ? "Gridding" : "Degridding")
-           << ": nthreads=" << nthreads << ", "
+      cout << (gridding ? "Gridding:" : "Degridding:") << endl
+           << "  nthreads=" << nthreads << ", "
            << "dirty=(" << nxdirty << "x" << nydirty << "), "
            << "grid=(" << nu << "x" << nv;
       if (do_wgridding) cout << "x" << nplanes;
-      cout << "), nvis=" << nvis
-           << ", supp=" << supp
+      cout << "), supp=" << supp
            << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
            << endl;
-      cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-           << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
-      size_t tmp = 0;
+      cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
+           << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      if (do_wgridding)
+        cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
+             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+      size_t ovh0 = 0;
       for (const auto &v : ranges)
-        tmp += v.second.size()*sizeof(RowchanRange);
-      tmp += ranges.size()*sizeof(VVR);
-      size_t overhead = nu*nv*sizeof(complex<T>)         // grid
-                      + tmp;                             // ranges
+        ovh0 += v.second.size()*sizeof(RowchanRange);
+      ovh0 += ranges.size()*sizeof(VVR);
+      size_t ovh1 = nu*nv*sizeof(complex<T>);            // grid
       if (!do_wgridding)
-        overhead += nu*nv*sizeof(T);                     // rgrid
+        ovh1 += nu*nv*sizeof(T);                         // rgrid
       if (!gridding)
-        overhead += nxdirty*nydirty*sizeof(T);           // tdirty
-      cout << "memory overhead: " << overhead/double(1<<30) << " GB" << endl;
+        ovh1 += nxdirty*nydirty*sizeof(T);               // tdirty
+      cout << "  memory overhead: "
+           << ovh0/double(1<<30) << "GB (index) + "
+           << ovh1/double(1<<30) << "GB (2D arrays)" << endl;
       }
 
     void x2dirty()
@@ -1147,21 +1234,7 @@ template<typename T> class Params
           {
           double w = wmin+pl*dw;
           timers.push("zeroing grid");
-#if 1
-          MR_assert(grid.stride(1)==1, "bad stride");
-          execParallel(nu, nthreads, [&](size_t lo, size_t hi)
-            {
-            for (auto i=lo; i<hi; ++i)
-              {
-              complex<T> * DUCC0_RESTRICT ptr = &grid.v(i,0);
-              for (size_t j=0; j<nv; ++j)
-                ptr[j] = 0;
-              }
-            });
-#else
-          // FIXME: speeding this up could be quite helpful.
-          grid.fill(0);
-#endif
+          quickzero(grid, nthreads);
           timers.pop();
           x2grid_c<true>(grid, pl, w);
           grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, T(w));
@@ -1339,7 +1412,7 @@ template<typename T> class Params
       if (!gridding)
         {
         timers.push("MS zeroing");
-        ms_out.fill(0);
+        quickzero(ms_out, nthreads);
         timers.pop();
         }
       scanData();

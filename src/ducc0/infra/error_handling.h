@@ -24,6 +24,7 @@
 
 #include <sstream>
 #include <exception>
+#include <stdexcept>
 
 #include "ducc0/infra/useful_macros.h"
 
