@@ -642,13 +642,30 @@ template<typename T> class Params
       if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
       bool have_mask=mask.size()!=0;
       if (have_mask) checkShape(mask.shape(), {nrow,nchan});
-      auto chunk = max<size_t>(1, nrow/(20*nthreads));
-      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+vector<size_t> sector(nrow);
+execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+  {
+  double xpi=1./pi;
+  for (size_t irow=lo; irow<hi; ++irow)
+    {
+    auto uvw = bl.effectiveCoord(irow, 0);
+    if (uvw.u<0) uvw.Flip();
+    sector[irow] = max(0, min<int>(nthreads-1, int(nthreads*(atan2(uvw.v, uvw.u)*xpi+0.5))));
+    }
+  });
+//      auto chunk = max<size_t>(1, nrow/(20*nthreads));
+//cout << "chunk: "<<chunk << endl;
+//      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+      execParallel(nthreads, [&](size_t tid)
         {
-        auto &mymap(buf[sched.thread_num()].m);
-        while (auto rng=sched.getNext())
-        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+//        auto &mymap(buf[sched.thread_num()].m);
+        auto &mymap(buf[tid].m);
+//        while (auto rng=sched.getNext())
+//        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+        for(size_t irow=0; irow<nrow; ++irow)
           {
+if (sector[irow]!=tid)
+  continue;
           bool on=false;
           Uvwidx uvwlast(0,0,0);
           tmp2 *ptr=0;
@@ -696,6 +713,9 @@ template<typename T> class Params
 
       timers.poppush("range merging");
 
+for (auto x: buf)
+  cout << x.m.size() << endl;
+
       size_t nth = nthreads;
       while (nth>1)
         {
@@ -717,6 +737,7 @@ template<typename T> class Params
           });
         nth-=nmerge;
         }
+  cout << "overall: " << buf[0].m.size() << endl;
 
       timers.poppush("building final range vector");
       size_t total=0;
