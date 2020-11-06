@@ -629,14 +629,14 @@ template<typename T> class Params
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-size_t ntiles_u = (nu>>logsquare) + 20,
-       ntiles_v = (nv>>logsquare) + 20;
+      size_t ntiles_u = (nu>>logsquare) + 20,
+             ntiles_v = (nv>>logsquare) + 20;
       vector<bufmap> buf(ntiles_u*ntiles_v);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
 
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
-vector<pair<uint16_t, uint16_t>> interbuf;
+        vector<pair<uint16_t, uint16_t>> interbuf;
         while (auto rng=sched.getNext())
         for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
@@ -899,7 +899,6 @@ vector<pair<uint16_t, uint16_t>> interbuf;
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
       (mav<complex<T>,2> &grid, size_t p0, double w0)
       {
-      bool have_wgt = wgt.size()!=0;
       vector<mutex> locks(nu);
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
@@ -929,7 +928,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 
-                if (have_wgt) v*=wgt(row, ch);
+                v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
                   {
@@ -1012,8 +1011,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
       (const mav<complex<T>,2> &grid, size_t p0, double w0)
       {
-      bool have_wgt = wgt.size()!=0;
-
       // Loop over sampling points
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
@@ -1071,7 +1068,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
-                if (have_wgt) r*=wgt(row, ch);
+                r*=wgt(row, ch);
                 ms_out.v(row, ch) += r;
                 }
               }

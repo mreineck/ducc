@@ -95,15 +95,6 @@ inline void execParallel(size_t nwork, size_t nthreads,
     });
   }
 
-inline void execParallel(size_t nthreads,
-  std::function<void(size_t)> func)
-  {
-  execParallel(nthreads, [&](Scheduler &sched)
-    {
-    func(sched.thread_num());
-    });
-  }
-
 } // end of namespace detail_threading
 
 using detail_threading::max_threads;

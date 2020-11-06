@@ -70,21 +70,6 @@ template<typename T> class membuf
     membuf(membuf &&other) = default;
 #endif
 
-    membuf &operator=(membuf &other)
-      {
-      d = other.d;
-      ptr = other.ptr;
-      rw = other.rw;
-      return *this;
-      }
-    membuf &operator=(const membuf &other)
-      {
-      d = other.d;
-      ptr = other.ptr;
-      rw = false;
-      return *this;
-      }
-
   public:
     // allocate own memory
     membuf(size_t sz)
@@ -550,18 +535,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     operator fmav<T>()
       {
       return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
-      }
-    mav &operator=(const mav &other)
-      {
-      *this = tinfo(other);
-      *this = tbuf(other);
-      return *this;
-      }
-    mav &operator=(mav &other)
-      {
-      *this = tinfo(other);
-      *this = tbuf(other);
-      return *this;
       }
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return operator[](idx(ns...)); }
