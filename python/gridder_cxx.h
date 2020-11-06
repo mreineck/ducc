@@ -573,7 +573,7 @@ template<typename T> class Params
 
     void countRanges()
       {
-      timers.push("range count");
+      timers.push("building index");
       size_t nrow=bl.Nrows(),
              nchan=bl.Nchannels();
 
@@ -688,7 +688,6 @@ template<typename T> class Params
           }
         });
 
-      timers.poppush("building final range vector");
       size_t total=0;
       for (const auto &x: buf)
         for (const auto &y: x.m)
