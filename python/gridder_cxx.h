@@ -595,27 +595,19 @@ template<typename T> class Params
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
-      struct tmp1
-        {
-        vector<RowchanRange> v;
-        size_t sz=0;
-        tmp1()
-          : sz(0)
-          { v.reserve(8); }
-        void add(const RowchanRange &rng)
-          {
-          v.push_back(rng);
-          sz += rng.ch_end-rng.ch_begin;
-          }
-        };
       struct tmp2
         {
-        vector<tmp1> v;
+        size_t sz=0;
+        vector<vector<RowchanRange>> v;
         void add(const RowchanRange &rng, size_t max_allowed)
           {
-          if (v.empty() || (v.back().sz>=max_allowed))
-            v.push_back(tmp1());
-          v.back().add(rng);
+          if (v.empty() || (sz>=max_allowed))
+            {
+            v.emplace_back();
+            sz=0;
+            }
+          v.back().push_back(rng);
+          sz += rng.ch_end-rng.ch_begin;
           }
         };
       using Vmap = map<Uvwidx, tmp2>;
@@ -675,8 +667,7 @@ template<typename T> class Params
                 {
                 on=true;
                 if (uvwlast!=uvwcur) flush();
-                uvwlast = uvwcur;
-                chan0=ichan;
+                uvwlast=uvwcur; chan0=ichan;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
@@ -704,9 +695,9 @@ template<typename T> class Params
           total += y.second.v.size();
       ranges.reserve(total);
       for (auto &x: buf)
-        for (auto &v: x.m)
-          for (auto &v2:v.second.v)
-            ranges.emplace_back(v.first, move(v2.v));
+        for (auto &y: x.m)
+          for (auto &z: y.second.v)
+            ranges.emplace_back(y.first, move(z));
       timers.pop();
       }
 
