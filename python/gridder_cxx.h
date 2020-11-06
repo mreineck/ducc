@@ -648,8 +648,9 @@ auto flush=[&]()
   if (interbuf.empty()) return;
   auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
   lock_guard<mutex> lock(buf[tileidx].mut);
+  auto &loc(buf[tileidx].m[uvwlast]);
   for (auto x: interbuf)
-    buf[tileidx].m[uvwlast].add(RowchanRange(irow, x.first, x.second), max_allowed);
+    loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
   interbuf.clear();
   };
 auto add=[&](uint16_t cb, uint16_t ce)
@@ -700,15 +701,13 @@ auto add=[&](uint16_t cb, uint16_t ce)
         for (const auto &y: x.m)
           total += y.second.v.size();
       timers.poppush("building final range vector 2");
-
+cout << "ranges.length() = " << total << endl;
       ranges.reserve(total);
       timers.poppush("building final range vector 3");
-      for (const auto &x: buf)
+      for (auto &x: buf)
         for (auto &v: x.m)
-          {
           for (auto &v2:v.second.v)
             ranges.emplace_back(v.first, move(v2.v));
-          }
       timers.pop();
       }
 
