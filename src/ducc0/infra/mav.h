@@ -54,9 +54,6 @@ template<typename T> class membuf
     // externally owned data pointer, nonmodifiable
     membuf(const T *d_)
       : d(d_), rw(false) {}
-    // allocate own memory
-    membuf(size_t sz)
-      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     // share another memory buffer, but read-only
     membuf(const membuf &other)
       : ptr(other.ptr), d(other.d), rw(false) {}
@@ -73,7 +70,25 @@ template<typename T> class membuf
     membuf(membuf &&other) = default;
 #endif
 
+    membuf &operator=(membuf &other)
+      {
+      d = other.d;
+      ptr = other.ptr;
+      rw = other.rw;
+      return *this;
+      }
+    membuf &operator=(const membuf &other)
+      {
+      d = other.d;
+      ptr = other.ptr;
+      rw = false;
+      return *this;
+      }
+
   public:
+    // allocate own memory
+    membuf(size_t sz)
+      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     // read/write access to element #i
     template<typename I> T &vraw(I i)
       {
@@ -424,8 +439,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
 
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
   {
-//  static_assert((ndim>0) && (ndim<4), "only supports 1D, 2D, and 3D arrays");
-
   protected:
     using tinfo = mav_info<ndim>;
     using tbuf = membuf<T>;
@@ -538,6 +551,18 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    mav &operator=(const mav &other)
+      {
+      *this = tinfo(other);
+      *this = tbuf(other);
+      return *this;
+      }
+    mav &operator=(mav &other)
+      {
+      *this = tinfo(other);
+      *this = tbuf(other);
+      return *this;
+      }
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return operator[](idx(ns...)); }
     template<typename... Ns> T &v(Ns... ns)
@@ -567,6 +592,22 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
       return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
+      }
+
+    static mav build_empty()
+      {
+      shape_t nshp;
+      nshp.fill(0);
+      return mav(static_cast<const T *>(nullptr), nshp);
+      }
+
+    static mav build_uniform(const shape_t &shape, const T &value)
+      {
+      membuf<T> buf(1);
+      buf.vraw(0) = value;
+      stride_t nstr;
+      nstr.fill(0);
+      return mav(shape, nstr, buf.data(), buf);
       }
 
     static mav build_noncritical(const shape_t &shape)
