@@ -633,7 +633,7 @@ size_t ntiles_u = (nu>>logsquare) + 20,
        ntiles_v = (nv>>logsquare) + 20;
       vector<bufmap> buf(ntiles_u*ntiles_v);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
-cout << "chunk: "<<chunk << endl;
+
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
 vector<pair<uint16_t, uint16_t>> interbuf;
@@ -647,16 +647,13 @@ auto flush=[&]()
   {
   if (interbuf.empty()) return;
   auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
-cout << "flushing with " << interbuf.size() << endl;
   lock_guard<mutex> lock(buf[tileidx].mut);
   for (auto x: interbuf)
     buf[tileidx].m[uvwlast].add(RowchanRange(irow, x.first, x.second), max_allowed);
   interbuf.clear();
   };
 auto add=[&](uint16_t cb, uint16_t ce)
-  {
-  interbuf.push_back(make_pair(cb, ce));
-  };
+  { interbuf.push_back(make_pair(cb, ce)); };
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
@@ -674,37 +671,26 @@ auto add=[&](uint16_t cb, uint16_t ce)
               if (!on) // new active region
                 {
                 on=true;
-if (uvwlast!=uvwcur) flush();
+                if (uvwlast!=uvwcur) flush();
                 uvwlast = uvwcur;
                 chan0=ichan;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-add(chan0, ichan);
-flush();
-//                auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
-//                lock_guard<mutex> lock(buf[tileidx].mut);
-//                buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
+                add(chan0, ichan);
+                flush();
                 uvwlast=uvwcur; chan0=ichan;
                 }
               }
             else if (on) // end of active region
               {
-add(chan0, ichan);
-//              auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
-//              lock_guard<mutex> lock(buf[tileidx].mut);
-//              buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
+              add(chan0, ichan);
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            {
-add(chan0, nchan);
-//            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
-//            lock_guard<mutex> lock(buf[tileidx].mut);
-//            buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, nchan), max_allowed);
-            }
-flush();
+            add(chan0, nchan);
+          flush();
           }
         });
 
@@ -713,8 +699,10 @@ flush();
       for (const auto &x: buf)
         for (const auto &y: x.m)
           total += y.second.v.size();
+      timers.poppush("building final range vector 2");
 
       ranges.reserve(total);
+      timers.poppush("building final range vector 3");
       for (const auto &x: buf)
         for (auto &v: x.m)
           {
