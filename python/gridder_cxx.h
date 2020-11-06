@@ -73,7 +73,7 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
   }
 
 template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
-  { return complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
+  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
 #if (defined(__AVX__) && (!defined(__AVX512F__)))
 #if 1
@@ -147,7 +147,7 @@ template<typename T> void hartley2complex
         size_t xv = (v==0) ? 0 : nv-v;
         T v1 = T(0.5)*grid( u, v);
         T v2 = T(0.5)*grid(xu,xv);
-        grid2.v(u,v) = std::complex<T>(v1+v2, v1-v2);
+        grid2.v(u,v) = complex<T>(v1+v2, v1-v2);
         }
       }
     });
@@ -629,10 +629,10 @@ template<typename T> class Params
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-size_t nbuf = (nv>>logsquare) + 20; // just to be sure
-vector<bufmap> buf(nbuf);
-cout <<"nbuf: " << nbuf << ", nv: " << nv << endl;
-auto chunk = max<size_t>(1, nrow/(20*nthreads));
+size_t ntiles_u = (nu>>logsquare) + 20,
+       ntiles_v = (nv>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u*ntiles_v);
+      auto chunk = max<size_t>(1, nrow/(20*nthreads));
 cout << "chunk: "<<chunk << endl;
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
@@ -664,22 +664,25 @@ cout << "chunk: "<<chunk << endl;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                lock_guard<mutex> lock(buf[uvwlast.tile_v].mut);
-                buf[uvwlast.tile_v].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
+                auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+                lock_guard<mutex> lock(buf[tileidx].mut);
+                buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
                 uvwlast=uvwcur; chan0=ichan;
                 }
               }
             else if (on) // end of active region
               {
-              lock_guard<mutex> lock(buf[uvwlast.tile_v].mut);
-              buf[uvwlast.tile_v].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
+              auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+              lock_guard<mutex> lock(buf[tileidx].mut);
+              buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, ichan), max_allowed);
               on=false;
               }
             }
           if (on) // end of active region at last channel
             {
-            lock_guard<mutex> lock(buf[uvwlast.tile_v].mut);
-            buf[uvwlast.tile_v].m[uvwlast].add(RowchanRange(irow, chan0, nchan), max_allowed);
+            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            lock_guard<mutex> lock(buf[tileidx].mut);
+            buf[tileidx].m[uvwlast].add(RowchanRange(irow, chan0, nchan), max_allowed);
             }
           }
         });
@@ -692,7 +695,7 @@ cout << "chunk: "<<chunk << endl;
 
       ranges.reserve(total);
       for (const auto &x: buf)
-        for (auto &v : x.m)
+        for (auto &v: x.m)
           {
           for (auto &v2:v.second.v)
             ranges.emplace_back(v.first, move(v2.v));
@@ -721,7 +724,7 @@ cout << "chunk: "<<chunk << endl;
         mav<T,2> bufr, bufi;
         T *px0r, *px0i;
         double w0, xdw;
-        vector<std::mutex> &locks;
+        vector<mutex> &locks;
 
         DUCC0_NOINLINE void dump()
           {
@@ -735,7 +738,7 @@ cout << "chunk: "<<chunk << endl;
             {
             int idxv = idxv0;
             {
-            std::lock_guard<std::mutex> lock(locks[idxu]);
+            lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
               grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
@@ -756,7 +759,7 @@ cout << "chunk: "<<chunk << endl;
         kbuf buf;
 
         HelperX2g2(const Params *parent_, mav<complex<T>,2> &grid_,
-          vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
+          vector<mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
@@ -890,7 +893,7 @@ cout << "chunk: "<<chunk << endl;
       (mav<complex<T>,2> &grid, size_t p0, double w0)
       {
       bool have_wgt = wgt.size()!=0;
-      vector<std::mutex> locks(nu);
+      vector<mutex> locks(nu);
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
