@@ -643,18 +643,20 @@ vector<pair<uint16_t, uint16_t>> interbuf;
           bool on=false;
           Uvwidx uvwlast(0,0,0);
           size_t chan0=0;
-auto flush=[&]()
-  {
-  if (interbuf.empty()) return;
-  auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
-  lock_guard<mutex> lock(buf[tileidx].mut);
-  auto &loc(buf[tileidx].m[uvwlast]);
-  for (auto x: interbuf)
-    loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
-  interbuf.clear();
-  };
-auto add=[&](uint16_t cb, uint16_t ce)
-  { interbuf.push_back(make_pair(cb, ce)); };
+
+          auto flush=[&]()
+            {
+            if (interbuf.empty()) return;
+            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            lock_guard<mutex> lock(buf[tileidx].mut);
+            auto &loc(buf[tileidx].m[uvwlast]);
+            for (auto x: interbuf)
+              loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
+            interbuf.clear();
+            };
+          auto add=[&](uint16_t cb, uint16_t ce)
+            { interbuf.push_back(make_pair(cb, ce)); };
+
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
@@ -700,10 +702,7 @@ auto add=[&](uint16_t cb, uint16_t ce)
       for (const auto &x: buf)
         for (const auto &y: x.m)
           total += y.second.v.size();
-      timers.poppush("building final range vector 2");
-cout << "ranges.length() = " << total << endl;
       ranges.reserve(total);
-      timers.poppush("building final range vector 3");
       for (auto &x: buf)
         for (auto &v: x.m)
           for (auto &v2:v.second.v)
