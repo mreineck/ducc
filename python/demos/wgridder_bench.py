@@ -36,25 +36,22 @@ def main():
     pixsize = fov_deg/npixdirty*DEG2RAD
     nthreads = 2
     epsilon = 1e-4
-    print('Start gridding...')
-    do_wstacking = True
+    do_wgridding = True
 
+    print('Start gridding...')
     t0 = time()
-    dirty = np.zeros((npixdirty, npixdirty), dtype=np.float32)
     dirty = wgridder.vis2dirty(uvw=uvw, freq=freq, vis=vis, wgt=wgt,
         npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
-        pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wstacking,
-        nthreads=nthreads, verbosity=1, mask=flags, flip_v=True, dirty=dirty)
-    print('Done')
+        pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
+        nthreads=nthreads, verbosity=1, mask=flags, flip_v=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
     t0 = time()
-    vis = wgridder.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+    wgridder.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
         pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
-        do_wgridding=do_wstacking, nthreads=nthreads, verbosity=1, mask=flags,
-        flip_v=True, vis=vis)
-    print('Done')
+        do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1, mask=flags,
+        flip_v=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
