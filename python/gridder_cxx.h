@@ -73,7 +73,7 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
   }
 
 template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
-  { return complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
+  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
 #if (defined(__AVX__) && (!defined(__AVX512F__)))
 #if 1
@@ -147,7 +147,7 @@ template<typename T> void hartley2complex
         size_t xv = (v==0) ? 0 : nv-v;
         T v1 = T(0.5)*grid( u, v);
         T v2 = T(0.5)*grid(xu,xv);
-        grid2.v(u,v) = std::complex<T>(v1+v2, v1-v2);
+        grid2.v(u,v) = complex<T>(v1+v2, v1-v2);
         }
       }
     });
@@ -274,6 +274,8 @@ class Baselines
 
     UVW effectiveCoord(size_t row, size_t chan) const
       { return coord[row]*f_over_c[chan]; }
+    double absEffectiveW(size_t row, size_t chan) const
+      { return abs(coord[row].w*f_over_c[chan]); }
     UVW baseCoord(size_t row) const
       { return coord[row]; }
     double ffact(size_t chan) const
@@ -615,49 +617,49 @@ template<typename T> class Params
             v.push_back(tmp1());
           v.back().add(rng);
           }
-        void add(tmp2 &&other, size_t max_allowed)
-          {
-          if (other.v.empty()) return;
-          if (v.empty())
-            { v=other.v; return; }
-          auto backup = v.back();
-          v.pop_back();
-          v.reserve(v.size()+other.v.size()+2);
-          for (auto &&x: other.v)
-            v.push_back(x);
-          for (auto &&x: backup.v)
-            add(x, max_allowed);
-          }
         };
       using Vmap = map<Uvwidx, tmp2>;
       struct bufmap
         {
         Vmap m;
+        mutex mut;
         uint64_t dummy[8]; // separator to keep every entry on a different cache line
         };
-      vector<bufmap> buf(nthreads);
-      bool have_wgt=wgt.size()!=0;
-      if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
-      bool have_ms=ms_in.size()!=0;
-      if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
-      bool have_mask=mask.size()!=0;
-      if (have_mask) checkShape(mask.shape(), {nrow,nchan});
+      checkShape(wgt.shape(),{nrow,nchan});
+      checkShape(ms_in.shape(), {nrow,nchan});
+      checkShape(mask.shape(), {nrow,nchan});
+
+      size_t ntiles_u = (nu>>logsquare) + 20,
+             ntiles_v = (nv>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u*ntiles_v);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
+
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
-        auto &mymap(buf[sched.thread_num()].m);
+        vector<pair<uint16_t, uint16_t>> interbuf;
         while (auto rng=sched.getNext())
         for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
           bool on=false;
           Uvwidx uvwlast(0,0,0);
-          tmp2 *ptr=0;
           size_t chan0=0;
+
+          auto flush=[&]()
+            {
+            if (interbuf.empty()) return;
+            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            lock_guard<mutex> lock(buf[tileidx].mut);
+            auto &loc(buf[tileidx].m[uvwlast]);
+            for (auto x: interbuf)
+              loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
+            interbuf.clear();
+            };
+          auto add=[&](uint16_t cb, uint16_t ce)
+            { interbuf.push_back(make_pair(cb, ce)); };
+
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
-            if (((!have_ms ) || (norm(ms_in(irow,ichan))!=0)) &&
-                ((!have_wgt) || (wgt(irow,ichan)!=0)) &&
-                ((!have_mask) || (mask(irow,ichan)!=0)))
+            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
               {
               auto uvw = bl.effectiveCoord(irow, ichan);
               if (uvw.w<0) uvw.Flip();
@@ -672,63 +674,39 @@ template<typename T> class Params
               if (!on) // new active region
                 {
                 on=true;
-                if ((!ptr) || (uvwlast!=uvwcur)) ptr=&mymap[uvwcur];
+                if (uvwlast!=uvwcur) flush();
                 uvwlast = uvwcur;
                 chan0=ichan;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
+                add(chan0, ichan);
+                flush();
                 uvwlast=uvwcur; chan0=ichan;
-                ptr=&mymap[uvwcur];
                 }
               }
             else if (on) // end of active region
               {
-              ptr->add(RowchanRange(irow, chan0, ichan), max_allowed);
+              add(chan0, ichan);
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            ptr->add(RowchanRange(irow, chan0, nchan), max_allowed);
+            add(chan0, nchan);
+          flush();
           }
         });
 
-      timers.poppush("range merging");
-
-      size_t nth = nthreads;
-      while (nth>1)
-        {
-        auto nmerge=nth/2;
-        execParallel(nmerge, [&](Scheduler &sched)
-          {
-          auto tid = sched.thread_num();
-          auto &s1 = buf[tid].m;
-          auto &s2 = buf[nth-1-tid].m;
-          for (auto &&v : s2)
-            {
-            auto loc = s1.find(v.first);
-            if (loc == s1.end())
-              s1[v.first] = move(v.second);
-            else
-              loc->second.add(move(v.second), max_allowed);
-            }
-          Vmap().swap(s2);
-          });
-        nth-=nmerge;
-        }
-
       timers.poppush("building final range vector");
       size_t total=0;
-      for (const auto &x: buf[0].m)
-        total += x.second.v.size();
-
+      for (const auto &x: buf)
+        for (const auto &y: x.m)
+          total += y.second.v.size();
       ranges.reserve(total);
-      for (auto &v : buf[0].m)
-        {
-        for (auto &v2:v.second.v)
-          ranges.emplace_back(v.first, move(v2.v));
-        }
+      for (auto &x: buf)
+        for (auto &v: x.m)
+          for (auto &v2:v.second.v)
+            ranges.emplace_back(v.first, move(v2.v));
       timers.pop();
       }
 
@@ -753,7 +731,7 @@ template<typename T> class Params
         mav<T,2> bufr, bufi;
         T *px0r, *px0i;
         double w0, xdw;
-        vector<std::mutex> &locks;
+        vector<mutex> &locks;
 
         DUCC0_NOINLINE void dump()
           {
@@ -767,7 +745,7 @@ template<typename T> class Params
             {
             int idxv = idxv0;
             {
-            std::lock_guard<std::mutex> lock(locks[idxu]);
+            lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
               grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
@@ -788,7 +766,7 @@ template<typename T> class Params
         kbuf buf;
 
         HelperX2g2(const Params *parent_, mav<complex<T>,2> &grid_,
-          vector<std::mutex> &locks_, double w0_=-1, double dw_=-1)
+          vector<mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
@@ -921,8 +899,7 @@ template<typename T> class Params
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
       (mav<complex<T>,2> &grid, size_t p0, double w0)
       {
-      bool have_wgt = wgt.size()!=0;
-      vector<std::mutex> locks(nu);
+      vector<mutex> locks(nu);
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
@@ -951,7 +928,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 
-                if (have_wgt) v*=wgt(row, ch);
+                v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
                   {
@@ -1034,8 +1011,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
       (const mav<complex<T>,2> &grid, size_t p0, double w0)
       {
-      bool have_wgt = wgt.size()!=0;
-
       // Loop over sampling points
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
@@ -1093,7 +1068,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
-                if (have_wgt) r*=wgt(row, ch);
+                r*=wgt(row, ch);
                 ms_out.v(row, ch) += r;
                 }
               }
@@ -1345,12 +1320,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       timers.push("Initial scan");
       size_t nrow=bl.Nrows(),
              nchan=bl.Nchannels();
-      bool have_wgt=wgt.size()!=0;
-      if (have_wgt) checkShape(wgt.shape(),{nrow,nchan});
-      bool have_ms=ms_in.size()!=0;
-      if (have_ms) checkShape(ms_in.shape(), {nrow,nchan});
-      bool have_mask=mask.size()!=0;
-      if (have_mask) checkShape(mask.shape(), {nrow,nchan});
+      checkShape(wgt.shape(),{nrow,nchan});
+      checkShape(ms_in.shape(), {nrow,nchan});
+      checkShape(mask.shape(), {nrow,nchan});
 
       nvis=0;
       wmin_d=1e300;
@@ -1362,13 +1334,10 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         size_t lnvis=0;
         for(auto irow=lo; irow<hi; ++irow)
           for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
-            if (((!have_ms ) || (norm(ms_in(irow,ichan))!=0)) &&
-                ((!have_wgt) || (wgt(irow,ichan)!=0)) &&
-                ((!have_mask) || (mask(irow,ichan)!=0)))
+            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
               {
               ++lnvis;
-              auto uvw = bl.effectiveCoord(irow,ichan);
-              double w = abs(uvw.w);
+              double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
               lwmax_d = max(lwmax_d, w);
               }
@@ -1391,7 +1360,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool negate_v_, bool divide_by_n_, double sigma_min_,
            double sigma_max_)
-      : gridding(ms_in_.size()>0),
+      : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
@@ -1461,17 +1430,17 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       }
   };
 
-// Note to self: divide_by_n should always be true when doing Bayesian imaging,
-// but wsclean needs it to be false, so this must be kept as a parameter.
 template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<T>,2> &ms,
-  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y, double epsilon,
+  const mav<T,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6)
   {
-  mav<complex<T>,2> ms_out(nullptr, {0,0}, false);
-  mav<T,2> dirty_in(nullptr, {0,0}, false);
+  auto ms_out(mav<complex<T>,2>::build_empty());
+  auto dirty_in(mav<T,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<T> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max);
@@ -1479,13 +1448,15 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
 
 template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<T,2> &dirty,
-  const mav<T,2> &wgt, const mav<uint8_t,2> &mask, double pixsize_x, double pixsize_y,
+  const mav<T,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6)
   {
-  mav<complex<T>,2> ms_in(nullptr, {0,0}, false);
-  mav<T,2> dirty_out(nullptr, {0,0}, false);
+  auto ms_in(mav<complex<T>,2>::build_uniform(ms.shape(),1.));
+  auto dirty_out(mav<T,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<T> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max);
