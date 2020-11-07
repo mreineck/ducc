@@ -1,3 +1,11 @@
+0.7.0:
+- wgridder:
+  - performance (especially scaling) improvements
+  - oversampling factors up to 2.5 supported
+  - new, more flexible interface in submodule `wgridder.experimental`
+    (subject to further changes!)
+
+
 0.6.0:
 - general:
   - multi-threading improvements contributed by Peter Bell
@@ -21,7 +29,6 @@
 
 
 0.2.0:
-
 - wgridder:
   - kernels are now evaluated via polynomial approximation, allowing much
     more freedom in the choice of kernel function

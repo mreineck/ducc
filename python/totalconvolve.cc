@@ -235,7 +235,7 @@ Notes
     - must be the last call to the object
 )""";
 
-void add_totalconvolve(py::module &msup)
+void add_totalconvolve(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("totalconvolve");
