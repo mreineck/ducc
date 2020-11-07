@@ -625,7 +625,8 @@ template<typename T> class Params
              ntiles_v = (nv>>logsquare) + 20;
       vector<bufmap> buf(ntiles_u*ntiles_v);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
-
+      auto xdw = 1./dw;
+      auto shift = dw-(0.5*supp*dw)-wmin;
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
         vector<pair<uint16_t, uint16_t>> interbuf;
@@ -642,26 +643,25 @@ template<typename T> class Params
             auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
             lock_guard<mutex> lock(buf[tileidx].mut);
             auto &loc(buf[tileidx].m[uvwlast]);
-            for (auto x: interbuf)
+            for (auto &x: interbuf)
               loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
             interbuf.clear();
             };
           auto add=[&](uint16_t cb, uint16_t ce)
-            { interbuf.push_back(make_pair(cb, ce)); };
+            { interbuf.emplace_back(cb, ce); };
 
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
               {
               auto uvw = bl.effectiveCoord(irow, ichan);
-              if (uvw.w<0) uvw.Flip();
+              uvw.FixW();
               double u, v;
               int iu0, iv0, iw;
               getpix(uvw.u, uvw.v, u, v, iu0, iv0);
               iu0 = (iu0+nsafe)>>logsquare;
               iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ?
-                max(0,int(1+(abs(uvw.w)-(0.5*supp*dw)-wmin)/dw)) : 0;
+              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
               Uvwidx uvwcur(iu0, iv0, iw);
               if (!on) // new active region
                 {
