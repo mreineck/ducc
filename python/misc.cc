@@ -208,7 +208,7 @@ const char *misc_DS = R"""(
 Various unsorted utilities
 )""";
 
-void add_misc(py::module &msup)
+void add_misc(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("misc");
