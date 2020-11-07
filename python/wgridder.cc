@@ -336,7 +336,7 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-void add_wgridder(py::module &msup)
+void add_wgridder(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("wgridder");

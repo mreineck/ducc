@@ -189,7 +189,7 @@ Python interface for some of the libsharp functionality
 Error conditions are reported by raising exceptions.
 )""";
 
-void add_sht(py::module &msup)
+void add_sht(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("sht");

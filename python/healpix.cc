@@ -346,7 +346,7 @@ that their last dimension is removed.
 The employed algorithm is highly accurate, even for angles close to 0 or pi.
 )""";
 
-void add_healpix(py::module &msup)
+void add_healpix(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("healpix");

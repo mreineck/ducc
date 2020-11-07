@@ -673,7 +673,7 @@ out : int
 
 } // unnamed namespace
 
-void add_fft(py::module &msup)
+void add_fft(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("fft");

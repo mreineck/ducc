@@ -203,7 +203,7 @@ numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
     This is identical to the provided "out" array.
 )""";
 
-void add_pointingprovider(py::module &msup)
+void add_pointingprovider(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("pointingprovider");
