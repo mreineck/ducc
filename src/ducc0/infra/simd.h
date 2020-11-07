@@ -315,9 +315,8 @@ template<> class helper_<float,16>
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
     static size_t maskbits(Tm v) { return v; }
   };
-
-template<typename T> using native_simd = vtp<T,vlen<T,64>>;
-#elif defined(__AVX__)
+#endif
+#if defined(__AVX__)
 template<> class helper_<double,4>
   {
   private:
@@ -366,9 +365,8 @@ template<> class helper_<float,8>
     static Tm mask_and (Tm v1, Tm v2) { return _mm256_and_ps(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm256_movemask_ps(v)); }
   };
-
-template<typename T> using native_simd = vtp<T,vlen<T,32>>;
-#elif defined(__SSE2__)
+#endif
+#if defined(__SSE2__)
 template<> class helper_<double,2>
   {
   private:
@@ -432,11 +430,19 @@ template<> class helper_<float,4>
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_ps(v)); }
   };
 
+#endif
+
+#if defined(__AVX512F__)
+template<typename T> using native_simd = vtp<T,vlen<T,64>>;
+#elif defined(__AVX__)
+template<typename T> using native_simd = vtp<T,vlen<T,32>>;
+#elif defined(__SSE2__)
 template<typename T> using native_simd = vtp<T,vlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
-#else
+
+#else // DUCC0_NO_SIMD is defined
 template<typename T> using native_simd = vtp<T,1>;
 #endif
 }
