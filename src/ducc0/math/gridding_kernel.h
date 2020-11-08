@@ -90,9 +90,11 @@ vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &fun
 /*! A GriddingKernel is considered to be a symmetric real-valued function
     defined on the interval [-1; 1].
     This range is subdivided into W equal-sized parts. */
-template<typename T> class GriddingKernel
+template<typename Tsimd> class GriddingKernel
   {
   public:
+    using T = typename Tsimd::Ts;
+
     virtual ~GriddingKernel() {}
 
     virtual size_t support() const = 0;
@@ -101,9 +103,9 @@ template<typename T> class GriddingKernel
         abscissas x, x+2./W, x+4./W, ..., x+(2.*W-2)/W.
         x must lie in [-1; -1+2./W].
         NOTE: res must point to memory large enough to hold
-        ((W+vlen-1)/vlen) objects of type native_simd<T>!
+        ((W+vlen-1)/vlen) objects of type Tsimd!
         */
-    virtual void eval(T x, native_simd<T> *res) const = 0;
+    virtual void eval(T x, Tsimd *res) const = 0;
     /*! Returns the function approximation at location x.
         x must lie in [-1; 1].  */
     virtual T eval_single(T x) const = 0;
@@ -162,23 +164,23 @@ class GLFullCorrection: public KernelCorrection
       }
   };
 
-template<typename T> class HornerKernel: public GriddingKernel<T>
+template<typename Tsimd> class HornerKernel: public GriddingKernel<Tsimd>
   {
   private:
     static constexpr size_t MAXW=16, MINDEG=0, MAXDEG=20;
-    using Tsimd = native_simd<T>;
+    using T = typename Tsimd::Ts;
     static constexpr auto vlen = Tsimd::size();
     size_t W, D, nvec;
 
     vector<Tsimd> coeff;
     const T *scoeff;
     size_t sstride;
-    void (HornerKernel<T>::* evalfunc) (T, native_simd<T> *) const;
-    T (HornerKernel<T>::* evalsinglefunc) (T) const;
+    void (HornerKernel<Tsimd>::* evalfunc) (T, Tsimd *) const;
+    T (HornerKernel<Tsimd>::* evalsinglefunc) (T) const;
 
     KernelCorrection corr;
 
-    template<size_t NV, size_t DEG> void eval_intern(T x, native_simd<T> *res) const
+    template<size_t NV, size_t DEG> void eval_intern(T x, Tsimd *res) const
       {
       x = (x+1)*W-1;
       for (size_t i=0; i<NV; ++i)
@@ -201,7 +203,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       return tval;
       }
 
-    void eval_intern_general(T x, native_simd<T> *res) const
+    void eval_intern_general(T x, Tsimd *res) const
       {
       x = (x+1)*W-1;
       for (size_t i=0; i<nvec; ++i)
@@ -267,9 +269,9 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
       }
 
   public:
-    using GriddingKernel<T>::eval;
-    using GriddingKernel<T>::eval_single;
-    using GriddingKernel<T>::corfunc;
+    using GriddingKernel<Tsimd>::eval;
+    using GriddingKernel<Tsimd>::eval_single;
+    using GriddingKernel<Tsimd>::corfunc;
 
     HornerKernel(size_t W_, size_t D_, const function<double(double)> &func,
       const KernelCorrection &corr_)
@@ -280,7 +282,7 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
 
     virtual size_t support() const { return W; }
 
-    virtual void eval(T x, native_simd<T> *res) const
+    virtual void eval(T x, Tsimd *res) const
       { (this->*evalfunc)(x, res); }
 
     virtual T eval_single(T x) const
@@ -297,11 +299,11 @@ template<typename T> class HornerKernel: public GriddingKernel<T>
     size_t degree() const { return D; }
   };
 
-template<size_t W, typename T> class TemplateKernel
+template<size_t W, typename Tsimd> class TemplateKernel
   {
   private:
     static constexpr auto D=W+3;
-    using Tsimd = native_simd<T>;
+    using T = typename Tsimd::Ts;
     static constexpr auto vlen = Tsimd::size();
     static constexpr auto nvec = (W+vlen-1)/vlen;
 
@@ -310,7 +312,7 @@ template<size_t W, typename T> class TemplateKernel
     static constexpr auto sstride = nvec*vlen;
 
   public:
-    TemplateKernel(const HornerKernel<T> &krn)
+    TemplateKernel(const HornerKernel<Tsimd> &krn)
       : scoeff(reinterpret_cast<T *>(&coeff[0]))
       {
       MR_assert(W==krn.support(), "support mismatch");
@@ -320,7 +322,7 @@ template<size_t W, typename T> class TemplateKernel
 
     constexpr size_t support() const { return W; }
 
-    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, native_simd<T> * DUCC0_RESTRICT res) const
+    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {
       z = (z-nth)*2+(W-1);
       if constexpr (nvec==1)
@@ -357,7 +359,7 @@ template<size_t W, typename T> class TemplateKernel
           }
         }
       }
-    [[gnu::always_inline]] void eval2(T x, T y, native_simd<T> * DUCC0_RESTRICT res) const
+    [[gnu::always_inline]] void eval2(T x, T y, Tsimd * DUCC0_RESTRICT res) const
       {
       if constexpr (nvec==1)
         {
@@ -689,21 +691,21 @@ template<typename T> T esknew (T v, T beta, T e0)
   return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
   }
 
-template<typename T> auto selectKernel(size_t idx)
+template<typename Tsimd> auto selectKernel(size_t idx)
   {
   MR_assert(idx<KernelDB.size(), "no appropriate kernel found");
   auto supp = KernelDB[idx].W;
   auto beta = KernelDB[idx].beta*supp;
   auto e0 = KernelDB[idx].e0;
   auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  return make_shared<HornerKernel<T>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  return make_shared<HornerKernel<Tsimd>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
 /*! Returns the best matching 2-parameter ES kernel for the given oversampling
     factor and error. */
-template<typename T> auto selectKernel(double ofactor, double epsilon)
+template<typename Tsimd> auto selectKernel(double ofactor, double epsilon)
   {
-  size_t Wmin = is_same<T, float>::value ? 8 : 1000;
+  size_t Wmin = is_same<typename Tsimd::Ts, float>::value ? 8 : 1000;
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
     if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon) && (KernelDB[i].W<=Wmin))
@@ -711,12 +713,12 @@ template<typename T> auto selectKernel(double ofactor, double epsilon)
       idx = i;
       Wmin = KernelDB[i].W;
       }
-  return selectKernel<T>(idx);
+  return selectKernel<Tsimd>(idx);
   }
-template<typename T> auto selectKernel(double ofactor, double epsilon, size_t idx)
+template<typename Tsimd> auto selectKernel(double ofactor, double epsilon, size_t idx)
   {
   return (idx<KernelDB.size()) ?
-    selectKernel<T>(idx) : selectKernel<T>(ofactor, epsilon);
+    selectKernel<Tsimd>(idx) : selectKernel<Tsimd>(ofactor, epsilon);
   }
 
 template<typename T> auto getAvailableKernels(double epsilon,

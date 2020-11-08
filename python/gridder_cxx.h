@@ -46,6 +46,11 @@ namespace detail_gridder {
 
 using namespace std;
 
+template<typename T> constexpr size_t simdlen()
+  { return min<size_t>(8, native_simd<T>::size()); }
+
+template<typename T> using mysimd = simd<T,simdlen<T>()>;
+
 template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
   {
 #if 0
@@ -72,12 +77,12 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
 #endif
   }
 
-template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
+template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
-#if (defined(__AVX__) && (!defined(__AVX512F__)))
+#if (defined(__AVX__))
 #if 1
-inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
+inline complex<float> hsum_cmplx(simd<float,8> vr, simd<float,8> vi)
   {
   auto t1 = _mm256_hadd_ps(vr, vi);
   auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
@@ -97,6 +102,14 @@ inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   return complex<float>(t5[0], t5[1]);
   }
 #endif
+#endif
+#if defined(__SSE3__)
+inline complex<float> hsum_cmplx(simd<float,4> vr, simd<float,4> vi)
+  {
+  auto t1 = _mm_hadd_ps(vr, vi);
+  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
+  return complex<float>(t1[0], t1[2]);
+  }
 #endif
 
 template<size_t ndim> void checkShape
@@ -320,7 +333,7 @@ template<typename T> class Params
     size_t nu, nv;
     double ofactor;
 
-    shared_ptr<HornerKernel<T>> krn;
+    shared_ptr<HornerKernel<mysimd<T>>> krn;
 
     size_t supp, nsafe;
     double ushift, vshift;
@@ -703,7 +716,7 @@ template<typename T> class Params
     template<size_t supp, bool wgrid> class HelperX2g2
       {
       public:
-        static constexpr size_t vlen = native_simd<T>::size();
+        static constexpr size_t vlen = mysimd<T>::size();
         static constexpr size_t nvec = (supp+vlen-1)/vlen;
 
       private:
@@ -713,7 +726,7 @@ template<typename T> class Params
         static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
         static constexpr double xsupp=2./supp;
         const Params *parent;
-        TemplateKernel<supp, T> tkrn;
+        TemplateKernel<supp, mysimd<T>> tkrn;
         mav<complex<T>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
@@ -751,7 +764,7 @@ template<typename T> class Params
         T * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
         union kbuf {
           T scalar[2*nvec*vlen];
-          native_simd<T> simd[2*nvec];
+          mysimd<T> simd[2*nvec];
           };
         kbuf buf;
 
@@ -800,7 +813,7 @@ template<typename T> class Params
     template<size_t supp, bool wgrid> class HelperG2x2
       {
       public:
-        static constexpr size_t vlen = native_simd<T>::size();
+        static constexpr size_t vlen = mysimd<T>::size();
         static constexpr size_t nvec = (supp+vlen-1)/vlen;
 
       private:
@@ -811,7 +824,7 @@ template<typename T> class Params
         static constexpr double xsupp=2./supp;
         const Params *parent;
 
-        TemplateKernel<supp, T> tkrn;
+        TemplateKernel<supp, mysimd<T>> tkrn;
         const mav<complex<T>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
@@ -843,7 +856,7 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
         union kbuf {
           T scalar[2*nvec*vlen];
-          native_simd<T> simd[2*nvec];
+          mysimd<T> simd[2*nvec];
           };
         kbuf buf;
 
@@ -893,7 +906,7 @@ template<typename T> class Params
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=native_simd<T>::size();
+        constexpr size_t vlen=mysimd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
         constexpr int jump = hlp.lineJump();
@@ -922,13 +935,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 
                 if constexpr (NVEC==1)
                   {
-                  native_simd<T> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+                  mysimd<T> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = native_simd<T>::loadu(pxr);
-                    auto ti = native_simd<T>::loadu(pxi);
+                    auto tr = mysimd<T>::loadu(pxr);
+                    auto ti = mysimd<T>::loadu(pxi);
                     tr += vr*ku[cu];
                     ti += vi*ku[cu];
                     tr.storeu(pxr);
@@ -937,18 +950,18 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 else
                   {
-                  native_simd<T> vr(v.real()), vi(v.imag()*imflip);
+                  mysimd<T> vr(v.real()), vi(v.imag()*imflip);
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    native_simd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+                    mysimd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
                     for (size_t cv=0; cv<NVEC; ++cv)
                       {
                       auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
                       auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = native_simd<T>::loadu(pxr);
+                      auto tr = mysimd<T>::loadu(pxr);
                       tr += tmpr*kv[cv];
                       tr.storeu(pxr);
-                      auto ti = native_simd<T>::loadu(pxi);
+                      auto ti = mysimd<T>::loadu(pxi);
                       ti += tmpi*kv[cv];
                       ti.storeu(pxi);
                       }
@@ -1004,7 +1017,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       // Loop over sampling points
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=native_simd<T>::size();
+        constexpr size_t vlen=mysimd<T>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperG2x2<SUPP,wgrid> hlp(this, grid, w0, dw);
         constexpr int jump = hlp.lineJump();
@@ -1027,15 +1040,15 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 {
                 auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
-                native_simd<T> rr=0, ri=0;
+                mysimd<T> rr=0, ri=0;
                 if constexpr (NVEC==1)
                   {
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += native_simd<T>::loadu(pxr)*ku[cu];
-                    ri += native_simd<T>::loadu(pxi)*ku[cu];
+                    rr += mysimd<T>::loadu(pxr)*ku[cu];
+                    ri += mysimd<T>::loadu(pxi)*ku[cu];
                     }
                   rr *= kv[0];
                   ri *= kv[0];
@@ -1044,13 +1057,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   {
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    native_simd<T> tmpr(0), tmpi(0);
+                    mysimd<T> tmpr(0), tmpi(0);
                     for (size_t cv=0; cv<NVEC; ++cv)
                       {
                       const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
                       const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                      tmpr += kv[cv]*native_simd<T>::loadu(pxr);
-                      tmpi += kv[cv]*native_simd<T>::loadu(pxi);
+                      tmpr += kv[cv]*mysimd<T>::loadu(pxr);
+                      tmpi += kv[cv]*mysimd<T>::loadu(pxi);
                       }
                     rr += ku[cu]*tmpr;
                     ri += ku[cu]*tmpi;
@@ -1271,7 +1284,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
       size_t minnu=0, minnv=0, minidx=KernelDB.size();
-      constexpr size_t vlen = native_simd<T>::size();
+      constexpr size_t vlen = mysimd<T>::size();
       for (size_t i=0; i<idx.size(); ++i)
         {
         const auto &krn(KernelDB[idx[i]]);
@@ -1387,7 +1400,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<T>(ofactor, epsilon,kidx);
+      krn = selectKernel<mysimd<T>>(ofactor, epsilon,kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

@@ -142,7 +142,7 @@ template<typename T> class Interpolator
     size_t lmax, kmax, nphi0, ntheta0, nphi, ntheta;
     int nthreads;
     T ofactor;
-    shared_ptr<GriddingKernel<T>> kernel;
+    shared_ptr<GriddingKernel<native_simd<T>>> kernel;
     size_t supp;
     size_t ncomp;
 #ifdef SIMD_INTERPOL
@@ -243,7 +243,7 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectKernel<T>(ofactor, 0.5*epsilon)),
+        kernel(selectKernel<native_simd<T>>(ofactor, 0.5*epsilon)),
         supp(kernel->support()),
         ncomp(separate ? slm.size() : 1),
 #ifdef SIMD_INTERPOL
@@ -359,7 +359,7 @@ template<typename T> class Interpolator
         ntheta(nphi/2+1),
         nthreads(nthreads_),
         ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectKernel<T>(ofactor, 0.5*epsilon)),
+        kernel(selectKernel<native_simd<T>>(ofactor, 0.5*epsilon)),
         supp(kernel->support()),
         ncomp(ncomp_),
 #ifdef SIMD_INTERPOL

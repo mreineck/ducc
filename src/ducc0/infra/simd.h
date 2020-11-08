@@ -91,6 +91,7 @@ template<typename T, size_t len> class vtp
     using hlp = helper_<T, len>;
 
   public:
+    using Ts = T;
     using Tv = typename hlp::Tv;
     using Tm = vmask_<T, len>;
     static constexpr size_t size() { return len; }
@@ -448,6 +449,7 @@ template<typename T> using native_simd = vtp<T,1>;
 }
 
 using detail_simd::native_simd;
+template<typename T, size_t len> using simd = detail_simd::vtp<T, len>;
 using detail_simd::reduce;
 using detail_simd::max;
 using detail_simd::abs;
