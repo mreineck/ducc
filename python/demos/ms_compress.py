@@ -2,30 +2,6 @@ import numpy as np
 import sys
 
 
-def get_indices(name):
-    from os.path import join
-    from casacore.tables import table
-    with table(join(name, 'POLARIZATION'), readonly=True, ack=False) as t:
-        pol = list(t.getcol('CORR_TYPE')[0])
-    if set(pol) <= set([5, 6, 7, 8]):
-        ind = [pol.index(5), pol.index(8)]
-    else:
-        ind = [pol.index(9), pol.index(12)]
-    return ind
-
-
-def determine_weighting(t):
-    fullwgt = False
-    weightcol = "WEIGHT"
-    try:
-        t.getcol("WEIGHT_SPECTRUM", startrow=0, nrow=1)
-        weightcol = "WEIGHT_SPECTRUM"
-        fullwgt = True
-    except:
-        pass
-    return fullwgt, weightcol
-
-
 def extra_checks(t):
     if len(set(t.getcol('FIELD_ID'))) != 1:
         raise RuntimeError
@@ -33,13 +9,39 @@ def extra_checks(t):
         raise RuntimeError
 
 
-def read_ms_i(name):
+def read_ms(name):
     # Assumptions:
     # - Only one field
     # - Only one spectral window
     # - Flag both LL and RR if one is flagged
     from os.path import join
     from casacore.tables import table
+
+    def get_indices(name):
+        with table(join(name, 'POLARIZATION'), readonly=True, ack=False) as t:
+            pol = list(t.getcol('CORR_TYPE')[0])
+        if set(pol) <= set([5, 6, 7, 8]):
+            ind = [pol.index(5), pol.index(8)]
+        else:
+            ind = [pol.index(9), pol.index(12)]
+        return ind
+
+    def determine_weighting(t):
+        fullwgt = False
+        weightcol = "WEIGHT"
+        try:
+            t.getcol("WEIGHT_SPECTRUM", startrow=0, nrow=1)
+            weightcol = "WEIGHT_SPECTRUM"
+            fullwgt = True
+        except:
+            pass
+        return fullwgt, weightcol
+
+    def extra_checks(t):
+        if len(set(t.getcol('FIELD_ID'))) != 1:
+            raise RuntimeError
+        if len(set(t.getcol('DATA_DESC_ID'))) != 1:
+            raise RuntimeError
 
     with table(join(name, 'SPECTRAL_WINDOW'), readonly=True, ack=False) as t:
         freq = t.getcol('CHAN_FREQ')[0]
@@ -111,30 +113,21 @@ def read_ms_i(name):
     print('# Channels: {} ({} fully flagged)'.format(nchan, nchan-vis.shape[1]))
     print('# Correlations: {}'.format(ncorr))
     print('Full weights' if fullwgt else 'Row-only weights')
-    nflagged = np.sum(flags) + (nrow-nrealrows)*nchan + (nchan-nrealchan)*nrow
+    nflagged = np.sum(flags) + (nrow-nrealrows)*nchan + (nchan-nrealchan)*nrow - (nrow-nrealrows)*(nchan-nrealchan)
     print("{} % flagged".format(nflagged/(nrow*nchan)*100))
     freq = freq[active_channels]
 
     # blow up wgt to the right dimensions if necessary
     if not fullwgt:
-        wgt = np.broadcast_to(wgt.reshape((-1,1)), vis.shape)
+        wgt = np.broadcast_to(wgt.reshape((-1, 1)), vis.shape)
 
+    uvw = np.ascontiguousarray(uvw)
+    freq = np.ascontiguousarray(freq)
+    vis = np.ascontiguousarray(vis)
+    wgt = np.ascontiguousarray(wgt)
+    wgt[flags] = 0.
     vis[wgt == 0] = 0.
-
-    return (np.ascontiguousarray(uvw),
-            np.ascontiguousarray(freq),
-            np.ascontiguousarray(vis),
-            np.ascontiguousarray(wgt) if fullwgt else wgt,
-            1-flags.astype(np.uint8))
-
-
-def read_ms(name):
-    tmp = read_ms_i(name)
-    return dict(uvw=tmp[0],
-                freqs=tmp[1],
-                vis=tmp[2],
-                wgt=tmp[3],
-                mask=tmp[4])
+    return dict(uvw=uvw, freqs=freq, vis=vis, wgt=wgt)
 
 
 def main():
