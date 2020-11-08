@@ -552,17 +552,19 @@ class rev_iter
   };
 
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
-  (const fmav_info &info, size_t axsize)
+  (const fmav_info &/*info*/, size_t axsize)
   {
-  auto othersize = info.size()/axsize;
+//  auto othersize = info.size()/axsize;
   constexpr auto vlen = native_simd<T0>::size();
-  auto tmpsize = axsize*((othersize>=vlen) ? vlen : 1);
+//  auto tmpsize = axsize*((othersize>=vlen) ? vlen : 1);
+  auto tmpsize = axsize*vlen;
   return aligned_array<T>(tmpsize);
   }
 
-template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_iter<vlen> &it,
-  const fmav<Cmplx<T>> &src, Cmplx<native_simd<T>> *DUCC0_RESTRICT dst)
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const fmav<Cmplx<typename Tsimd::Ts>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
   {
+  constexpr auto vlen=Tsimd::size();
   if (it.uniform_i())
     {
     auto ptr = &src[it.iofs_uni(0,0)];
@@ -571,7 +573,7 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     if (istr==1)
       for (size_t i=0; i<it.length_in(); ++i)
         {
-        Cmplx<native_simd<T>> stmp;
+        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)*jstr+ptrdiff_t(i)];
@@ -583,7 +585,7 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     else if (jstr==1)
       for (size_t i=0; i<it.length_in(); ++i)
         {
-        Cmplx<native_simd<T>> stmp;
+        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)+ptrdiff_t(i)*istr];
@@ -595,7 +597,7 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     else
       for (size_t i=0; i<it.length_in(); ++i)
         {
-        Cmplx<native_simd<T>> stmp;
+        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = src[it.iofs_uni(j,i)];
@@ -608,7 +610,7 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
   else
     for (size_t i=0; i<it.length_in(); ++i)
       {
-      Cmplx<native_simd<T>> stmp;
+      Cmplx<Tsimd> stmp;
       for (size_t j=0; j<vlen; ++j)
         {
         auto tmp = src[it.iofs(j,i)];
@@ -619,9 +621,10 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
       }
   }
 
-template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_iter<vlen> &it,
-  const fmav<T> &src, native_simd<T> *DUCC0_RESTRICT dst)
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const fmav<typename Tsimd::Ts> &src, Tsimd *DUCC0_RESTRICT dst)
   {
+  constexpr auto vlen=Tsimd::size();
   if (it.uniform_i())
     {
     auto ptr = &src[it.iofs_uni(0,0)];
@@ -654,9 +657,10 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     dst[i] = src[it.iofs(i)];
   }
 
-template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
-  const Cmplx<native_simd<T>> *DUCC0_RESTRICT src, fmav<Cmplx<T>> &dst)
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const Cmplx<Tsimd> *DUCC0_RESTRICT src, fmav<Cmplx<typename Tsimd::Ts>> &dst)
   {
+  constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
     {
     auto ptr = &dst.vraw(it.oofs_uni(0,0));
@@ -684,9 +688,10 @@ template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_it
     }
   }
 
-template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
-  const native_simd<T> *DUCC0_RESTRICT src, fmav<T> &dst)
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::Ts> &dst)
   {
+  constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
     {
     auto ptr = &dst.vraw(it.oofs_uni(0,0));
@@ -723,10 +728,10 @@ template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_it
     ptr[it.oofs(i)] = src[i];
   }
 
-template <typename T> struct add_vec { using type = native_simd<T>; };
-template <typename T> struct add_vec<Cmplx<T>>
-  { using type = Cmplx<native_simd<T>>; };
-template <typename T> using add_vec_t = typename add_vec<T>::type;
+template <typename T, size_t vlen> struct add_vec { using type = simd<T, vlen>; };
+template <typename T, size_t vlen> struct add_vec<Cmplx<T>, vlen>
+  { using type = Cmplx<simd<T, vlen>>; };
+template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
 DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
@@ -749,11 +754,25 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
-        if (vlen>1)
+        if constexpr (vlen>1)
           while (it.remaining()>=vlen)
             {
             it.advance(vlen);
-            auto tdatav = reinterpret_cast<add_vec_t<T> *>(storage.data());
+            auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
+            exec(it, tin, out, tdatav, *plan, fct);
+            }
+        if constexpr ((vlen>=4) && (sizeof(native_simd<T0>) >= 32))
+          if (it.remaining()>=vlen/2)
+            {
+            it.advance(vlen/2);
+            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
+            exec(it, tin, out, tdatav, *plan, fct);
+            }
+        if constexpr ((vlen>=8) && (sizeof(native_simd<T0>) >= 64))
+          if (it.remaining()>=vlen/4)
+            {
+            it.advance(vlen/4);
+            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
             exec(it, tin, out, tdatav, *plan, fct);
             }
 #endif
@@ -773,8 +792,8 @@ struct ExecC2C
   {
   bool forward;
 
-  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator() (
-    const multi_iter<vlen> &it, const fmav<Cmplx<T0>> &in,
+  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator() (
+    const Titer &it, const fmav<Cmplx<T0>> &in,
     fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -783,9 +802,10 @@ struct ExecC2C
     }
   };
 
-template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
-  const native_simd<T> *DUCC0_RESTRICT src, fmav<T> &dst)
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_hartley(const Titer &it,
+  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::Ts> &dst)
   {
+  constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
     {
     auto ptr = &dst.vraw(it.oofs_uni(0,0));
@@ -872,8 +892,8 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_
 
 struct ExecHartley
   {
-  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator () (
-    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
+  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -888,8 +908,8 @@ struct ExecDcst
   int type;
   bool cosine;
 
-  template <typename T0, typename T, typename Tplan, size_t vlen>
-  DUCC0_NOINLINE void operator () (const multi_iter<vlen> &it, const fmav<T0> &in,
+  template <typename T0, typename T, typename Tplan, typename Titer>
+  DUCC0_NOINLINE void operator () (const Titer &it, const fmav<T0> &in,
     fmav <T0> &out, T * buf, const Tplan &plan, T0 fct) const
     {
     copy_input(it, in, buf);
@@ -911,11 +931,11 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
     auto storage = alloc_tmp<T,T>(in, len);
     multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
-    if (vlen>1)
+    if constexpr (vlen>1)
       while (it.remaining()>=vlen)
         {
         it.advance(vlen);
-        auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
+        auto tdatav = reinterpret_cast<simd<T,vlen> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true);
         auto vout = out.vdata();
@@ -932,6 +952,52 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
               vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
         if (i<len)
           for (size_t j=0; j<vlen; ++j)
+            vout[it.oofs(j,ii)].Set(tdatav[i][j]);
+        }
+    if constexpr ((vlen>=4) && (sizeof(native_simd<T>) >= 32))
+      if (it.remaining()>=vlen/2)
+        {
+        it.advance(vlen/2);
+        auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
+        copy_input(it, in, tdatav);
+        plan->exec(tdatav, fct, true);
+        auto vout = out.vdata();
+        for (size_t j=0; j<vlen/2; ++j)
+          vout[it.oofs(j,0)].Set(tdatav[0][j]);
+        size_t i=1, ii=1;
+        if (forward)
+          for (; i<len-1; i+=2, ++ii)
+            for (size_t j=0; j<vlen/2; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
+        else
+          for (; i<len-1; i+=2, ++ii)
+            for (size_t j=0; j<vlen/2; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
+        if (i<len)
+          for (size_t j=0; j<vlen/2; ++j)
+            vout[it.oofs(j,ii)].Set(tdatav[i][j]);
+        }
+    if constexpr ((vlen>=8) && (sizeof(native_simd<T>) >= 64))
+      if (it.remaining()>=vlen/4)
+        {
+        it.advance(vlen);
+        auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
+        copy_input(it, in, tdatav);
+        plan->exec(tdatav, fct, true);
+        auto vout = out.vdata();
+        for (size_t j=0; j<vlen/4; ++j)
+          vout[it.oofs(j,0)].Set(tdatav[0][j]);
+        size_t i=1, ii=1;
+        if (forward)
+          for (; i<len-1; i+=2, ++ii)
+            for (size_t j=0; j<vlen/4; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
+        else
+          for (; i<len-1; i+=2, ++ii)
+            for (size_t j=0; j<vlen/4; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
+        if (i<len)
+          for (size_t j=0; j<vlen/4; ++j)
             vout[it.oofs(j,ii)].Set(tdatav[i][j]);
         }
 #endif
@@ -968,7 +1034,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
       auto storage = alloc_tmp<T,T>(out, len);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
-      if (vlen>1)
+      if constexpr (vlen>1)
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
@@ -1031,8 +1097,8 @@ struct ExecR2R
   {
   bool r2c, forward;
 
-  template <typename T0, typename T, size_t vlen> DUCC0_NOINLINE void operator () (
-    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out, T * buf,
+  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out, T * buf,
     const pocketfft_r<T0> &plan, T0 fct) const
     {
     copy_input(it, in, buf);

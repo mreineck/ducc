@@ -74,11 +74,25 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
       auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
-      if (vlen>1)
+      if constexpr (vlen>1)
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
-          auto tdatav = reinterpret_cast<add_vec_t<T> *>(storage.data());
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
+          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+          }
+      if constexpr ((vlen>=4) && (sizeof(native_simd<T0>) >= 32))
+        if (it.remaining()>=vlen/2)
+          {
+          it.advance(vlen/2);
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
+          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+          }
+      if constexpr ((vlen>=8) && (sizeof(native_simd<T0>) >= 64))
+        if (it.remaining()>=vlen/4)
+          {
+          it.advance(vlen/4);
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
           exec(it, in, out, tdatav, *plan1, *plan2, kernel);
           }
 #endif

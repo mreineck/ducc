@@ -430,7 +430,6 @@ template<> class helper_<float,4>
     static Tm mask_and (Tm v1, Tm v2) { return _mm_and_ps(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_ps(v)); }
   };
-
 #endif
 
 #if defined(__AVX512F__)
