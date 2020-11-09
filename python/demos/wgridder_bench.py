@@ -28,10 +28,9 @@ def main():
 #    ms, fov_deg, npixdirty = '/home/martin/ms/bigms.npz', 0.0005556*1800, 1800
 
     data = np.load(ms)
-    uvw, freq, vis, wgt, flags = data["uvw"], data["freqs"], data["vis"], data["wgt"], data["mask"]
+    uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
 
-    flags[vis==0] = False
-    flags[wgt==0] = False
+    wgt[vis==0] = 0
     DEG2RAD = np.pi/180
     pixsize = fov_deg/npixdirty*DEG2RAD
     nthreads = 2
@@ -43,14 +42,14 @@ def main():
     dirty = wgridder.vis2dirty(uvw=uvw, freq=freq, vis=vis, wgt=wgt,
         npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
         pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
-        nthreads=nthreads, verbosity=1, mask=flags, flip_v=True)
+        nthreads=nthreads, verbosity=1, flip_v=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
     t0 = time()
     wgridder.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
         pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
-        do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1, mask=flags,
+        do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1,
         flip_v=True)
     t = time() - t0
     print("{} s".format(t))
