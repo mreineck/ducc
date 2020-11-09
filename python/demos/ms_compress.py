@@ -14,6 +14,7 @@ def read_ms(name):
     # - Only one field
     # - Only one spectral window
     # - Flag both LL and RR if one is flagged
+    # - Visibilities in DATA column
     from os.path import join
     from casacore.tables import table
 
@@ -64,7 +65,8 @@ def read_ms(name):
             tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)
             ncorr = tflags.shape[2]
             tflags = tflags[..., ind]
-            tflags = np.any(tflags.astype(np.bool), axis=-1)
+            # Can also deal with partially flagged entry
+            tflags = np.all(tflags.astype(np.bool), axis=-1)
             twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
             twgt = np.sum(twgt, axis=-1)
             tflags[twgt == 0] = True
@@ -78,34 +80,42 @@ def read_ms(name):
         vis = np.empty((nrealrows, nrealchan), dtype=np.complex64)
         wgtshp = (nrealrows, nrealchan) if fullwgt else (nrealrows,)
         wgt = np.empty(wgtshp, dtype=np.float32)
-        flags = np.empty((nrealrows, nrealchan), dtype=np.bool)
         while start < nrow:
             stop = min(nrow, start+step)
             realstop = realstart+np.sum(active_rows[start:stop])
             if realstop > realstart:
                 allrows = stop-start == realstop-realstart
-                tvis = t.getcol("DATA", startrow=start, nrow=stop-start)[..., ind]
-                tvis = np.sum(tvis, axis=-1)
-                if not allrows:
-                    tvis = tvis[active_rows[start:stop]]
-                tvis = tvis[:, active_channels]
-                tflags = t.getcol('FLAG', startrow=start, nrow=stop-start)[..., ind]
-                tflags = np.any(tflags.astype(np.bool), axis=-1)
-                if not allrows:
-                    tflags = tflags[active_rows[start:stop]]
-                tflags = tflags[:, active_channels]
+
                 twgt = t.getcol(weightcol, startrow=start, nrow=stop-start)[..., ind]
-                twgt = np.sum(twgt, axis=-1)
+                assert twgt.dtype == np.float32
                 if not allrows:
                     twgt = twgt[active_rows[start:stop]]
                 if fullwgt:
                     twgt = twgt[:, active_channels]
-#                tflags[twgt==0] = True
+
+                tvis = t.getcol("DATA", startrow=start, nrow=stop-start)[..., ind]
+                assert tvis.dtype == np.complex64
+                if not allrows:
+                    tvis = tvis[active_rows[start:stop]]
+                tvis = tvis[:, active_channels]
+
+                tflags = t.getcol("FLAG", startrow=start, nrow=stop-start)[..., ind]
+                if not allrows:
+                    tflags = tflags[active_rows[start:stop]]
+                tflags = tflags[:, active_channels]
+
+                # Noise-weighted average
+                if not fullwgt:
+                    twgt = twgt[:, None]
+                assert tflags.dtype == np.bool
+                assert twgt.shape[2] == 2
+                twgt = twgt*(~tflags)
+                tvis = np.sum(twgt*tvis, axis=-1)[..., None]
+                twgt = np.sum(twgt, axis=-1)[..., None]
+                tvis /= twgt
 
                 vis[realstart:realstop] = tvis
                 wgt[realstart:realstop] = twgt
-                flags[realstart:realstop] = tflags
-
             start, realstart = stop, realstop
         uvw = t.getcol("UVW")[active_rows]
 
@@ -113,8 +123,7 @@ def read_ms(name):
     print('# Channels: {} ({} fully flagged)'.format(nchan, nchan-vis.shape[1]))
     print('# Correlations: {}'.format(ncorr))
     print('Full weights' if fullwgt else 'Row-only weights')
-    nflagged = np.sum(flags) + (nrow-nrealrows)*nchan + (nchan-nrealchan)*nrow - (nrow-nrealrows)*(nchan-nrealchan)
-    print("{} % flagged".format(nflagged/(nrow*nchan)*100))
+    print("{} % flagged".format(np.sum(wgt == 0)/wgt.size*100)
     freq = freq[active_channels]
 
     # blow up wgt to the right dimensions if necessary
@@ -125,7 +134,6 @@ def read_ms(name):
     freq = np.ascontiguousarray(freq)
     vis = np.ascontiguousarray(vis)
     wgt = np.ascontiguousarray(wgt)
-    wgt[flags] = 0.
     vis[wgt == 0] = 0.
     return dict(uvw=uvw, freqs=freq, vis=vis, wgt=wgt)
 
