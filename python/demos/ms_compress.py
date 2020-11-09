@@ -123,7 +123,7 @@ def read_ms(name):
     print('# Channels: {} ({} fully flagged)'.format(nchan, nchan-vis.shape[1]))
     print('# Correlations: {}'.format(ncorr))
     print('Full weights' if fullwgt else 'Row-only weights')
-    print("{} % flagged".format(np.sum(wgt == 0)/wgt.size*100)
+    print("{} % flagged".format(np.sum(wgt == 0)/nrow/nchan*100)
     freq = freq[active_channels]
 
     # blow up wgt to the right dimensions if necessary
