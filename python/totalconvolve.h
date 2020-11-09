@@ -107,8 +107,8 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
 
 struct ExecConvR1
   {
-  template <typename T0, typename T, size_t vlen> void operator() (
-    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
+  template <typename T0, typename T, typename Titer> void operator() (
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
     const vector<T0> &kernel) const
     {

@@ -552,13 +552,11 @@ class rev_iter
   };
 
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
-  (const fmav_info &/*info*/, size_t axsize)
+  (const fmav_info &info, size_t axsize)
   {
-//  auto othersize = info.size()/axsize;
+  auto othersize = info.size()/axsize;
   constexpr auto vlen = native_simd<T0>::size();
-//  auto tmpsize = axsize*((othersize>=vlen) ? vlen : 1);
-  auto tmpsize = axsize*vlen;
-  return aligned_array<T>(tmpsize);
+  return aligned_array<T>(axsize*min(vlen, othersize));
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -761,14 +759,14 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
             auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
             exec(it, tin, out, tdatav, *plan, fct);
             }
-        if constexpr ((vlen>=4) && (sizeof(native_simd<T0>) >= 32))
+        if constexpr ((vlen>=4) && (sizeof(native_simd<T0>)>=32))
           if (it.remaining()>=vlen/2)
             {
             it.advance(vlen/2);
             auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
             exec(it, tin, out, tdatav, *plan, fct);
             }
-        if constexpr ((vlen>=8) && (sizeof(native_simd<T0>) >= 64))
+        if constexpr ((vlen>=8) && (sizeof(native_simd<T0>)>=64))
           if (it.remaining()>=vlen/4)
             {
             it.advance(vlen/4);
@@ -954,7 +952,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           for (size_t j=0; j<vlen; ++j)
             vout[it.oofs(j,ii)].Set(tdatav[i][j]);
         }
-    if constexpr ((vlen>=4) && (sizeof(native_simd<T>) >= 32))
+    if constexpr ((vlen>=4) && (sizeof(native_simd<T>)>=32))
       if (it.remaining()>=vlen/2)
         {
         it.advance(vlen/2);
@@ -977,7 +975,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           for (size_t j=0; j<vlen/2; ++j)
             vout[it.oofs(j,ii)].Set(tdatav[i][j]);
         }
-    if constexpr ((vlen>=8) && (sizeof(native_simd<T>) >= 64))
+    if constexpr ((vlen>=8) && (sizeof(native_simd<T>)>=64))
       if (it.remaining()>=vlen/4)
         {
         it.advance(vlen);
@@ -1059,6 +1057,66 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
                 }
           if (i<len)
             for (size_t j=0; j<vlen; ++j)
+              tdatav[i][j] = in[it.iofs(j,ii)].r;
+          }
+          plan->exec(tdatav, fct, false);
+          copy_output(it, tdatav, out);
+          }
+      if constexpr ((vlen>=4) && (sizeof(native_simd<T>)>=32))
+        if (it.remaining()>=vlen/2)
+          {
+          it.advance(vlen/2);
+          auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
+          for (size_t j=0; j<vlen/2; ++j)
+            tdatav[0][j]=in[it.iofs(j,0)].r;
+          {
+          size_t i=1, ii=1;
+          if (forward)
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/2; ++j)
+                {
+                tdatav[i  ][j] =  in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = -in[it.iofs(j,ii)].i;
+                }
+          else
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/2; ++j)
+                {
+                tdatav[i  ][j] = in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = in[it.iofs(j,ii)].i;
+                }
+          if (i<len)
+            for (size_t j=0; j<vlen/2; ++j)
+              tdatav[i][j] = in[it.iofs(j,ii)].r;
+          }
+          plan->exec(tdatav, fct, false);
+          copy_output(it, tdatav, out);
+          }
+      if constexpr ((vlen>=8) && (sizeof(native_simd<T>)>=64))
+        if (it.remaining()>=vlen/4)
+          {
+          it.advance(vlen/4);
+          auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
+          for (size_t j=0; j<vlen/4; ++j)
+            tdatav[0][j]=in[it.iofs(j,0)].r;
+          {
+          size_t i=1, ii=1;
+          if (forward)
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/4; ++j)
+                {
+                tdatav[i  ][j] =  in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = -in[it.iofs(j,ii)].i;
+                }
+          else
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/4; ++j)
+                {
+                tdatav[i  ][j] = in[it.iofs(j,ii)].r;
+                tdatav[i+1][j] = in[it.iofs(j,ii)].i;
+                }
+          if (i<len)
+            for (size_t j=0; j<vlen/4; ++j)
               tdatav[i][j] = in[it.iofs(j,ii)].r;
           }
           plan->exec(tdatav, fct, false);
