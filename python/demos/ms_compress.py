@@ -78,8 +78,7 @@ def read_ms(name):
         nrealrows, nrealchan = np.sum(active_rows), np.sum(active_channels)
         start, realstart = 0, 0
         vis = np.empty((nrealrows, nrealchan), dtype=np.complex64)
-        wgtshp = (nrealrows, nrealchan) if fullwgt else (nrealrows,)
-        wgt = np.empty(wgtshp, dtype=np.float32)
+        wgt = np.empty((nrealrows, nrealchan), dtype=np.float32)
         while start < nrow:
             stop = min(nrow, start+step)
             realstop = realstart+np.sum(active_rows[start:stop])
@@ -110,8 +109,8 @@ def read_ms(name):
                 assert tflags.dtype == np.bool
                 assert twgt.shape[2] == 2
                 twgt = twgt*(~tflags)
-                tvis = np.sum(twgt*tvis, axis=-1)[..., None]
-                twgt = np.sum(twgt, axis=-1)[..., None]
+                tvis = np.sum(twgt*tvis, axis=-1)
+                twgt = np.sum(twgt, axis=-1)
                 tvis /= twgt
 
                 vis[realstart:realstop] = tvis
@@ -123,12 +122,8 @@ def read_ms(name):
     print('# Channels: {} ({} fully flagged)'.format(nchan, nchan-vis.shape[1]))
     print('# Correlations: {}'.format(ncorr))
     print('Full weights' if fullwgt else 'Row-only weights')
-    print("{} % flagged".format(np.sum(wgt == 0)/nrow/nchan*100)
+    print("{} % flagged".format((1.-np.sum(wgt != 0)/(nrow*nchan))*100))
     freq = freq[active_channels]
-
-    # blow up wgt to the right dimensions if necessary
-    if not fullwgt:
-        wgt = np.broadcast_to(wgt.reshape((-1, 1)), vis.shape)
 
     uvw = np.ascontiguousarray(uvw)
     freq = np.ascontiguousarray(freq)

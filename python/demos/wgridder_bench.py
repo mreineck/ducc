@@ -29,6 +29,7 @@ def main():
 
     data = np.load(ms)
     uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
+    mask = data["mask"] if "mask" in data else None
 
     wgt[vis==0] = 0
     DEG2RAD = np.pi/180
@@ -40,7 +41,7 @@ def main():
     print('Start gridding...')
     t0 = time()
     dirty = wgridder.vis2dirty(uvw=uvw, freq=freq, vis=vis, wgt=wgt,
-        npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
+        mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
         pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
         nthreads=nthreads, verbosity=1, flip_v=True)
     t = time() - t0
@@ -48,7 +49,7 @@ def main():
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
     t0 = time()
     wgridder.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
-        pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
+        mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
         do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1,
         flip_v=True)
     t = time() - t0
