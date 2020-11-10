@@ -65,6 +65,8 @@ template<> constexpr inline bool vectorizable<uint32_t> = true;
 template<> constexpr inline bool vectorizable<int64_t> = true;
 template<> constexpr inline bool vectorizable<uint64_t> = true;
 
+template<typename T, size_t len> constexpr inline bool simd_exists = false;
+
 template<typename T, size_t reglen> constexpr size_t vlen
   = vectorizable<T> ? reglen/sizeof(T) : 1;
 
@@ -268,6 +270,7 @@ template<typename T> class helper_<T,1>
 #ifndef DUCC0_NO_SIMD
 
 #if defined(__AVX512F__)
+template<> constexpr inline bool simd_exists<double,8> = true;
 template<> class helper_<double,8>
   {
   private:
@@ -292,6 +295,7 @@ template<> class helper_<double,8>
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
     static size_t maskbits(Tm v) { return v; }
   };
+template<> constexpr inline bool simd_exists<float,16> = true;
 template<> class helper_<float,16>
   {
   private:
@@ -318,6 +322,7 @@ template<> class helper_<float,16>
   };
 #endif
 #if defined(__AVX__)
+template<> constexpr inline bool simd_exists<double,4> = true;
 template<> class helper_<double,4>
   {
   private:
@@ -342,6 +347,7 @@ template<> class helper_<double,4>
     static Tm mask_and (Tm v1, Tm v2) { return _mm256_and_pd(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm256_movemask_pd(v)); }
   };
+template<> constexpr inline bool simd_exists<float,8> = true;
 template<> class helper_<float,8>
   {
   private:
@@ -368,6 +374,7 @@ template<> class helper_<float,8>
   };
 #endif
 #if defined(__SSE2__)
+template<> constexpr inline bool simd_exists<double,2> = true;
 template<> class helper_<double,2>
   {
   private:
@@ -399,6 +406,7 @@ template<> class helper_<double,2>
     static Tm mask_and (Tm v1, Tm v2) { return _mm_and_pd(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_pd(v)); }
   };
+template<> constexpr inline bool simd_exists<float,4> = true;
 template<> class helper_<float,4>
   {
   private:
@@ -449,6 +457,7 @@ template<typename T> using native_simd = vtp<T,1>;
 
 using detail_simd::native_simd;
 template<typename T, size_t len> using simd = detail_simd::vtp<T, len>;
+using detail_simd::simd_exists;
 using detail_simd::reduce;
 using detail_simd::max;
 using detail_simd::abs;

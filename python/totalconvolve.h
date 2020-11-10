@@ -81,14 +81,14 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
           auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
           exec(it, in, out, tdatav, *plan1, *plan2, kernel);
           }
-      if constexpr ((vlen>=4) && (sizeof(native_simd<T0>) >= 32))
+      if constexpr (simd_exists<T,vlen/2>)
         if (it.remaining()>=vlen/2)
           {
           it.advance(vlen/2);
           auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
           exec(it, in, out, tdatav, *plan1, *plan2, kernel);
           }
-      if constexpr ((vlen>=8) && (sizeof(native_simd<T0>) >= 64))
+      if constexpr (simd_exists<T,vlen/4>)
         if (it.remaining()>=vlen/4)
           {
           it.advance(vlen/4);
