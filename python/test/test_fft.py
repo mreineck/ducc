@@ -25,7 +25,9 @@ import platform
 pmp = pytest.mark.parametrize
 
 shapes1D = ((10,), (127,))
-shapes2D = ((128, 128), (128, 129), (1, 129), (129, 1), (2, 4000))
+shapes2D = ((128, 128), (128, 129),
+            (1, 129), (2, 127), (3, 127), (6, 127),
+            (129, 1), (127, 2), (127, 3), (127, 6))
 shapes3D = ((32, 17, 39),)
 shapes = shapes1D+shapes2D+shapes3D
 len1D = range(1, 2048)
