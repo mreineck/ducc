@@ -13,10 +13,9 @@ RUN apt-get update && apt-get install -qq \
       clang-11 \
       # Finufft dependencies
       libfftw3-dev python3-dotenv \
-      # Demo dependency
-      python3-numba \
       # Clean up
       && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 https://github.com/flatironinstitute/finufft \
       && cd finufft \
       && make -j 4 python
+RUN pip install numba   # demo dependency
