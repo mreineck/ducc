@@ -74,11 +74,25 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
       auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
-      if (vlen>1)
+      if constexpr (vlen>1)
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
-          auto tdatav = reinterpret_cast<add_vec_t<T> *>(storage.data());
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
+          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+          }
+      if constexpr (simd_exists<T,vlen/2>)
+        if (it.remaining()>=vlen/2)
+          {
+          it.advance(vlen/2);
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
+          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+          }
+      if constexpr (simd_exists<T,vlen/4>)
+        if (it.remaining()>=vlen/4)
+          {
+          it.advance(vlen/4);
+          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
           exec(it, in, out, tdatav, *plan1, *plan2, kernel);
           }
 #endif
@@ -93,8 +107,8 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
 
 struct ExecConvR1
   {
-  template <typename T0, typename T, size_t vlen> void operator() (
-    const multi_iter<vlen> &it, const fmav<T0> &in, fmav<T0> &out,
+  template <typename T0, typename T, typename Titer> void operator() (
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
     const vector<T0> &kernel) const
     {
