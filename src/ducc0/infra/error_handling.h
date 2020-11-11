@@ -61,23 +61,9 @@ class CodeLocation
 inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
   { return loc.print(os); }
 
-#if (__cplusplus>=201703L) // hyper-elegant C++2017 version
 template<typename ...Args>
 void streamDump__(::std::ostream &os, Args&&... args)
   { (os << ... << args); }
-#else
-template<typename T>
-void streamDump__(::std::ostream &os, const T& value)
-  { os << value; }
-
-template<typename T, typename ... Args>
-void streamDump__(::std::ostream &os, const T& value,
-  const Args& ... args)
-  {
-  os << value;
-  streamDump__(os, args...);
-  }
-#endif
 template<typename ...Args>
 [[noreturn]] DUCC0_NOINLINE void fail__(Args&&... args)
   {
