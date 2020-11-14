@@ -112,8 +112,8 @@ template<typename T> class ConvolverPlan
         dtheta(T(pi/(ntheta_b-1))),
         xdphi(T(1)/dphi),
         xdtheta(T(1)/dtheta),
-        phi0(-nborder*dphi),
-        theta0(-nborder*dtheta),
+        phi0(nborder*(-dphi)),
+        theta0(nborder*(-dtheta)),
         kernel(selectKernel<Tsimd>(T(nphi_b)/(2*lmax+1), 0.5*epsilon))
       {
       static_assert(is_same<T, float>::value, "only accepting floats for the moment");
@@ -124,14 +124,14 @@ template<typename T> class ConvolverPlan
 
     size_t Ntheta() const { return ntheta; }
     size_t Nphi() const { return nphi; }
-    double Theta0() const { return -nborder*Dtheta(); }
-    double Phi0() const { return -nborder*Dphi(); }
-    double Dtheta() const { return pi/(ntheta-1); }
-    double Dphi() const { return 2*pi/nphi; }
-    double Theta(size_t itheta) const { return Theta0()+itheta*Dtheta(); }
-    double Phi(size_t iphi) const { return Phi0()+iphi*Dphi(); }
+//     double Theta0() const { return -nborder*Dtheta(); }
+//     double Phi0() const { return -nborder*Dphi(); }
+//     double Dtheta() const { return pi/(ntheta-1); }
+//     double Dphi() const { return 2*pi/nphi; }
+//     double Theta(size_t itheta) const { return Theta0()+itheta*Dtheta(); }
+//     double Phi(size_t iphi) const { return Phi0()+iphi*Dphi(); }
 
-    size_t Nborder() const { return nborder; }
+//    size_t Nborder() const { return nborder; }
 
     void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
@@ -221,6 +221,7 @@ template<typename T> class ConvolverPlan
       public:
         static constexpr size_t vlen = Tsimd::size();
         static constexpr size_t nvec = (supp+vlen-1)/vlen;
+        const ConvolverPlan &plan;
         union kbuf {
           T scalar[2*nvec*vlen];
           Tsimd simd[2*nvec];
@@ -229,30 +230,45 @@ template<typename T> class ConvolverPlan
 
       private:
         TemplateKernel<supp, Tsimd> tkrn;
+        size_t beammmax;
+        T mytheta0, myphi0;
 
       public:
-        WeightHelper(const mav_info<3> &info, size_t itheta0, size_t iphi0)
-          : tkrn(kernel),
+        WeightHelper(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
+          : plan(plan_),
+            tkrn(*plan.kernel),
             jumptheta(info.stride(1)),
             jumppsi(info.stride(0)),
-            wpsi(info.shape(0))
+            wpsi(info.shape(0)),
+            wtheta(&buf.scalar[0]),
+            wphi(&buf.simd[nvec]),
+            beammmax(info.shape(0)/2),
+            mytheta0(plan.theta0+itheta0*plan.dtheta),
+            myphi0(plan.phi0+iphi0*plan.dphi)
           {
           MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
           MR_assert(info.shape(0)&1, "number of psi planes must be odd");
+          wpsi[0]=1.;
           }
-        void prep(double theta, double phi, double psi)
+        void prep(T theta, T phi, T psi)
           {
-          T ftheta = (theta-theta0-supp/2.)*xdtheta;
-          size_t itheta = size_t(ftheta+1.);
-          ftheta = itheta-(ftheta+supp/2);
-          T fphi = (phi-phi0-supp/2.)*xdphi;
-          size_t iphi = size_t(fphi+1.);
-          fphi = iphi-(fphi+supp/2);
+          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
+          itheta = size_t(ftheta+1.);
+          ftheta = -1+(itheta-ftheta)*2;
+          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
+          iphi = size_t(fphi+1.);
+          fphi = -1+(iphi-fphi)*2;
           tkrn.eval2(ftheta, fphi, &buf.simd[0]);
+          for (size_t i=1; i<=beammmax; ++i)
+            {
+            wpsi[2*i-1] = cos(i*psi);
+            wpsi[2*i] = sin(i*psi);
+            }
+//cout << itheta << " " << iphi << endl;
           }
-        ptrdiff_t offset;
-        array<T, supp> wtheta;
-        array<Tsimd, nvec> wphi;
+        size_t itheta, iphi;
+        const T *wtheta;
+        const Tsimd *wphi;
         vector<T> wpsi;
         ptrdiff_t jumptheta, jumppsi;
       };
@@ -262,24 +278,28 @@ template<typename T> class ConvolverPlan
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "aray shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "aray shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "aray shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       size_t npsi = cube.shape(0);
       auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
-        WeightHelper<supp> hlp(cube, itheta0, iphi0);
+        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
-          hlp.prep(theta[i], phi[i], psi[i]);
-          T * DUCC0_RESTRICT ptr = &cube[hlp.offset];
+          hlp.prep(theta(i), phi(i), psi(i));
+          const T * DUCC0_RESTRICT ptr = &cube(0,hlp.itheta,hlp.iphi);
+//cout << hlp.jumptheta << " " << hlp.jumppsi << endl;
           Tsimd res=0;
           for (size_t ipsi=0; ipsi<npsi; ++ipsi)
             {
+            const T * DUCC0_RESTRICT ptr2 = ptr;
             for (size_t itheta=0; itheta<supp; ++itheta)
               {
-              T * DUCC0_RESTRICT ptr2 = ptr;
               auto twgt=hlp.wpsi[ipsi]*hlp.wtheta[itheta];
               for (size_t iphi=0; iphi<nvec; ++iphi)
                 res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
@@ -287,7 +307,7 @@ template<typename T> class ConvolverPlan
               }
             ptr += hlp.jumppsi;
             }
-          signal[i] = reduce(res, std::plus<>());
+          signal.v(i) = reduce(res, std::plus<>());
           }
         });
       }
@@ -296,11 +316,14 @@ template<typename T> class ConvolverPlan
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
-      for (size_t i=0; i<psi.shape(0); ++i)
+      switch(kernel->support())
         {
-        size_t ind = idx[i];
-        
+        case 4: interpol2<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 5: interpol2<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 6: interpol2<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 7: interpol2<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 8: interpol2<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        default: MR_fail("must not happen");
         }
       }
 

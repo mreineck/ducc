@@ -49,6 +49,7 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::Ntheta;
     using ConvolverPlan<T>::Nphi;
     using ConvolverPlan<T>::getPlane;
+    using ConvolverPlan<T>::interpol;
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
       size_t mbeam, py::array &py_re, py::object &py_im) const
       {
@@ -57,6 +58,17 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       auto re = to_mav<T,2>(py_re, true);
       auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
       getPlane(slm, blm, mbeam, re, im);
+      }
+    void pyinterpol(const py::array &pycube, size_t itheta0, size_t iphi0,
+      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
+      const py::array &pysignal)
+      {
+      auto cube = to_mav<T,3>(pycube, false);
+      auto theta = to_mav<T,1>(pytheta, false);
+      auto phi = to_mav<T,1>(pyphi, false);
+      auto psi = to_mav<T,1>(pypsi, false);
+      auto signal = to_mav<T,1>(pysignal, true);
+      interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
   };
 
@@ -299,7 +311,8 @@ void add_totalconvolve(py::module_ &msup)
       "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta)
     .def("Nphi", &conv_f::Nphi)
-    .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
+    .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a);
   }
 
 }
