@@ -74,6 +74,15 @@ blm = random_alm(lmax, kmax, ncomp)
 t0 = time.time()
 # build interpolator object for slm and blm
 foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-4, nthreads=2)
+
+print("start")
+plan = totalconvolve.ConvolverPlan(lmax=lmax, sigma=1.5, epsilon=1e-4, nthreads=2)
+cube = np.empty((2*kmax+1, plan.Ntheta(), plan.Nphi()), dtype=np.float32)
+plan.getPlane(slm[:,0], blm[:,0], 0, cube[0])
+for mbeam in range(1,kmax+1):
+    plan.getPlane(slm[:,0], blm[:,0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
+print("end")
+
 print("setup time: ", time.time()-t0)
 nth = lmax+1
 nph = 2*lmax+1

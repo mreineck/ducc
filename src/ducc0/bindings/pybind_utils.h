@@ -41,7 +41,7 @@ template<typename T> bool isPyarr(const py::object &obj)
 template<typename T> py::array_t<T> toPyarr(const py::object &obj)
   {
   auto tmp = obj.cast<py::array_t<T>>();
-  MR_assert(tmp.is(obj), "error during array conversion");
+//  MR_assert(tmp.is(obj), "error during array conversion");
   return tmp;
   }
 

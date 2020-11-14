@@ -22,6 +22,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "python/totalconvolve.h"
+#include "python/totalconvolve2.h"
 
 namespace ducc0 {
 
@@ -30,6 +31,34 @@ namespace detail_pymodule_totalconvolve {
 using namespace std;
 
 namespace py = pybind11;
+auto None = py::none();
+
+template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
+  {
+  private:
+    using ConvolverPlan<T>::lmax;
+    Alm<complex<T>> getAlm(const py::array &inp) const
+      {
+      auto inp2 = to_mav<complex<T>,1>(inp);
+      int mmax = Alm_Base::Get_Mmax(inp2.shape(0), lmax);
+      return Alm<complex<T>>(inp2, lmax, mmax);
+      }
+
+  public:
+    using ConvolverPlan<T>::ConvolverPlan;
+    using ConvolverPlan<T>::Ntheta;
+    using ConvolverPlan<T>::Nphi;
+    using ConvolverPlan<T>::getPlane;
+    void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
+      size_t mbeam, py::array &py_re, py::object &py_im) const
+      {
+      auto slm = getAlm(py_slm);
+      auto blm = getAlm(py_blm);
+      auto re = to_mav<T,2>(py_re, true);
+      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
+      getPlane(slm, blm, mbeam, re, im);
+      }
+  };
 
 template<typename T> class PyInterpolator: public Interpolator<T>
   {
@@ -264,6 +293,13 @@ void add_totalconvolve(py::module_ &msup)
     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_f::support);
+  using conv_f = PyConvolverPlan<float>;
+  py::class_<conv_f> (m, "ConvolverPlan", py::module_local())
+    .def(py::init<size_t, double, double, size_t>(),
+      "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def("Ntheta", &conv_f::Ntheta)
+    .def("Nphi", &conv_f::Nphi)
+    .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   }
 
 }

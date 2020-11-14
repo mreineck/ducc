@@ -660,6 +660,7 @@ template<typename T, size_t ndim> class MavIter
 
 using detail_mav::fmav_info;
 using detail_mav::fmav;
+using detail_mav::mav_info;
 using detail_mav::mav;
 using detail_mav::FmavIter;
 using detail_mav::MavIter;

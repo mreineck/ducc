@@ -56,6 +56,12 @@ class Alm_Base
       MR_assert(m<=l,"mmax must not be larger than lmax");
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
       }
+    static size_t Get_Mmax (size_t num, size_t lm)
+      {
+      for (size_t m=0; m<=lm; ++m)
+        if (Num_Alms(lm, m)==num) return m;
+      MR_fail("bad number of a_lm");
+      }
 
     Alm_Base (size_t lmax_, const vector<size_t> &mval_,
               const vector<ptrdiff_t> &mstart_)
