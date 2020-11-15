@@ -37,19 +37,22 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
   {
   private:
     using ConvolverPlan<T>::lmax;
-    Alm<complex<T>> getAlm(const py::array &inp) const
+    Alm<complex<T>> getAlm(const py::array &inp, bool write=false) const
       {
-      auto inp2 = to_mav<complex<T>,1>(inp);
+      auto inp2 = to_mav<complex<T>,1>(inp, write);
       int mmax = Alm_Base::Get_Mmax(inp2.shape(0), lmax);
       return Alm<complex<T>>(inp2, lmax, mmax);
       }
 
-  public:
     using ConvolverPlan<T>::ConvolverPlan;
-    using ConvolverPlan<T>::Ntheta;
-    using ConvolverPlan<T>::Nphi;
     using ConvolverPlan<T>::getPlane;
     using ConvolverPlan<T>::interpol;
+    using ConvolverPlan<T>::deinterpol;
+    using ConvolverPlan<T>::updateSlm;
+
+  public:
+    using ConvolverPlan<T>::Ntheta;
+    using ConvolverPlan<T>::Nphi;
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
       size_t mbeam, py::array &py_re, py::object &py_im) const
       {
@@ -61,7 +64,7 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       }
     void pyinterpol(const py::array &pycube, size_t itheta0, size_t iphi0,
       const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
-      const py::array &pysignal)
+      py::array &pysignal)
       {
       auto cube = to_mav<T,3>(pycube, false);
       auto theta = to_mav<T,1>(pytheta, false);
@@ -69,6 +72,26 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       auto psi = to_mav<T,1>(pypsi, false);
       auto signal = to_mav<T,1>(pysignal, true);
       interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
+      }
+    void pydeinterpol(py::array &pycube, size_t itheta0, size_t iphi0,
+      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
+      const py::array &pysignal)
+      {
+      auto cube = to_mav<T,3>(pycube, true);
+      auto theta = to_mav<T,1>(pytheta, false);
+      auto phi = to_mav<T,1>(pyphi, false);
+      auto psi = to_mav<T,1>(pypsi, false);
+      auto signal = to_mav<T,1>(pysignal, false);
+      deinterpol(cube, itheta0, iphi0, theta, phi, psi, signal);
+      }
+    void pyUpdateSlm(py::array &py_slm, const py::array &py_blm,
+      size_t mbeam, py::array &py_re, py::object &py_im) const
+      {
+      auto slm = getAlm(py_slm, true);
+      auto blm = getAlm(py_blm);
+      auto re = to_mav<T,2>(py_re, true);
+      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
+      updateSlm(slm, blm, mbeam, re, im);
       }
   };
 
@@ -312,7 +335,9 @@ void add_totalconvolve(py::module_ &msup)
     .def("Ntheta", &conv_d::Ntheta)
     .def("Nphi", &conv_d::Nphi)
     .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
-    .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a);
+    .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   using conv_f = PyConvolverPlan<float>;
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
     .def(py::init<size_t, double, double, size_t>(),
@@ -320,7 +345,9 @@ void add_totalconvolve(py::module_ &msup)
     .def("Ntheta", &conv_f::Ntheta)
     .def("Nphi", &conv_f::Nphi)
     .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
-    .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a);
+    .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("updateSlm", &conv_f::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   }
 
 }

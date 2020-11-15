@@ -71,7 +71,7 @@ def myalmdot(a1, a2, lmax, mmax, spin):
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
 @pmp("ncomp", [1, 3])
 @pmp("separate", [True, False])
-def test_against_convolution(lkmax, ncomp, separate):
+def xtest_against_convolution(lkmax, ncomp, separate):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, ncomp)
@@ -102,9 +102,40 @@ def test_against_convolution(lkmax, ncomp, separate):
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
+def xtest_against_convolution_new(lkmax):
+    lmax, kmax = lkmax
+    rng = np.random.default_rng(42)
+    slm = random_alm(rng, lmax, lmax, 1)[:,0]
+    blm = random_alm(rng, lmax, kmax, 1)[:,0]
+
+    conv = totalconvolve.ConvolverPlan(lmax, sigma=1.8,
+                                       epsilon=1e-6, nthreads=2)
+    nptg = 50
+    ptg = np.zeros((nptg, 3))
+    ptg[:, 0] = rng.uniform(0, np.pi, nptg)
+    ptg[:, 1] = rng.uniform(0, 2*np.pi, nptg)
+    ptg[:, 2] = rng.uniform(-np.pi, np.pi, nptg)
+
+    cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))
+    conv.getPlane(slm, blm, 0, cube[0])
+    for mbeam in range(1,kmax+1):
+        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    res1 = np.empty(ptg.shape[0])
+    conv.interpol(cube, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], res1)
+
+    blm2 = np.zeros((nalm(lmax, lmax),))+0j
+    blm2[0:blm.shape[0]] = blm
+    res2 = np.zeros((nptg,))
+    for i in range(nptg):
+        rbeam = misc.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
+        res2[i] = convolve(slm, rbeam, lmax).real
+    _assert_close(res1, res2, 1e-4)
+
+
+@pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
 @pmp("ncomp", [1, 3])
 @pmp("separate", [True, False])
-def test_adjointness(lkmax, ncomp, separate):
+def xtest_adjointness(lkmax, ncomp, separate):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, ncomp)
@@ -123,4 +154,37 @@ def test_adjointness(lkmax, ncomp, separate):
     bla = foo2.getSlm(blm)
     v1 = np.sum([myalmdot(slm[:, c], bla[:, c], lmax, lmax, 0) for c in range(ncomp)])
     v2 = np.sum([np.vdot(fake[:, c], inter1[:, c]) for c in range(ncomp2)])
+    _assert_close(v1, v2, 1e-12)
+
+@pmp("lkmax", [(13, 13), (20, 0), (2, 1), (30, 15), (35, 2)])
+def test_adjointness_new(lkmax):
+    lmax, kmax = lkmax
+    rng = np.random.default_rng(42)
+    slm = random_alm(rng, lmax, lmax, 1)[:,0]
+    blm = random_alm(rng, lmax, kmax, 1)[:,0]
+    nptg = 100000
+    ptg = rng.uniform(0., 1., nptg*3).reshape(nptg, 3)
+    ptg[:, 0] *= np.pi
+    ptg[:, 1] *= 2*np.pi
+    ptg[:, 2] *= 2*np.pi
+    conv = totalconvolve.ConvolverPlan(lmax, sigma=2,
+                                       epsilon=1e-5, nthreads=1)
+
+    cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))
+    conv.getPlane(slm, blm, 0, cube[0])
+    for mbeam in range(1,kmax+1):
+        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    inter1 = np.empty(ptg.shape[0])
+    conv.interpol(cube, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], inter1)
+
+    fake = rng.uniform(0., 1., (ptg.shape[0],))
+    cube2=cube*0.
+    conv.deinterpol(cube2, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], fake)
+    bla=slm*0.
+    conv.updateSlm(bla, blm, 0, cube2[0])
+    for mbeam in range(1,kmax+1):
+        conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1], cube2[2*mbeam])
+
+    v1 = myalmdot(slm, bla, lmax, lmax, 0)
+    v2 = np.vdot(fake, inter1)
     _assert_close(v1, v2, 1e-12)

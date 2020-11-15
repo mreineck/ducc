@@ -64,6 +64,34 @@ template<typename T> class ConvolverPlan
       fmav<T> farr(arr);
       convolve_1d(ftmp2, farr, 1, k2, nthreads);
       }
+    void decorrect(mav<T,2> &arr, int spin) const
+      {
+      T sfct = (spin&1) ? -1 : 1;
+      mav<T,2> tmp({nphi_b,nphi_s});
+      auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
+      vector<T> k2(fct.size());
+      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
+      fmav<T> farr(arr);
+      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta_b, nphi_s}));
+      convolve_1d(farr, ftmp2, 1, k2, nthreads);
+      // extend to second half
+      for (size_t i=1, i2=nphi_b-1; i+1<ntheta_b; ++i,--i2)
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
+          {
+          if (j2>=nphi_s) j2-=nphi_s;
+          tmp.v(i2,j) = sfct*tmp(i,j2);
+          }
+      fmav<T> ftmp(tmp);
+      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi_s, nphi_s}));
+      convolve_1d(ftmp, ftmp0, 0, k2, nthreads);
+      for (size_t j=0; j<nphi_s; ++j)
+        arr.v(0,j) = T(0.5)*tmp(0,j);
+      for (size_t i=1; i+1<ntheta_s; ++i)
+        for (size_t j=0; j<nphi_s; ++j)
+          arr.v(i,j) = tmp(i,j);
+      for (size_t j=0; j<nphi_s; ++j)
+        arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
+      }
 
     vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0) const
@@ -157,7 +185,6 @@ template<typename T> class ConvolverPlan
             wpsi[2*i] = sin(i*psi);
             }
 #endif
-//cout << itheta << " " << iphi << endl;
           }
         size_t itheta, iphi;
         const T * DUCC0_RESTRICT wtheta;
@@ -171,9 +198,9 @@ template<typename T> class ConvolverPlan
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
-      MR_assert(phi.shape(0)==theta.shape(0), "aray shape mismatch");
-      MR_assert(psi.shape(0)==theta.shape(0), "aray shape mismatch");
-      MR_assert(signal.shape(0)==theta.shape(0), "aray shape mismatch");
+      MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "array shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       size_t npsi = cube.shape(0);
@@ -242,6 +269,86 @@ template<typename T> class ConvolverPlan
           }
         });
       }
+    template<size_t supp> void deinterpol2(mav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, const mav<T,1> &signal) const
+      {
+      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "array shape mismatch");
+      static constexpr size_t vlen = Tsimd::size();
+      static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      size_t npsi = cube.shape(0);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
+      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
+        {
+        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
+        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
+          {
+          size_t i=idx[ind];
+          hlp.prep(theta(i), phi(i), psi(i));
+          T * DUCC0_RESTRICT ptr = &cube.v(0,hlp.itheta,hlp.iphi);
+          if constexpr (nvec==1)
+            {
+            Tsimd tmp=hlp.wphi[0]*signal(i);
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              T * DUCC0_RESTRICT ptr2 = ptr;
+              Tsimd ttmp=tmp*hlp.wpsi[ipsi];
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                auto var=Tsimd::loadu(ptr2);
+                var += ttmp*hlp.wtheta[itheta];
+                var.storeu(ptr2);
+                ptr2 += hlp.jumptheta;
+                }
+              ptr += hlp.jumppsi;
+              }
+            }
+          else if constexpr (nvec==2)
+            {
+            Tsimd tmp0=hlp.wphi[0]*signal(i), tmp1=hlp.wphi[1]*signal(i);
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              T * DUCC0_RESTRICT ptr2 = ptr;
+              Tsimd ttmp0=tmp0*hlp.wpsi[ipsi], ttmp1=tmp1*hlp.wpsi[ipsi];
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                Tsimd var0=Tsimd::loadu(ptr2), var1=Tsimd::loadu(ptr2+vlen);
+                var0 += ttmp0*hlp.wtheta[itheta];
+                var1 += ttmp1*hlp.wtheta[itheta];
+                var0.storeu(ptr2);
+                var1.storeu(ptr2+vlen);
+                ptr2 += hlp.jumptheta;
+                }
+              ptr += hlp.jumppsi;
+              }
+            }
+          else
+            {
+            Tsimd tmp=signal(i);
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              auto ttmp=tmp*hlp.wpsi[ipsi];
+              T * DUCC0_RESTRICT ptr2 = ptr;
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                auto tttmp=ttmp*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  {
+                  Tsimd var=Tsimd::loadu(ptr2+iphi*vlen);
+                  var += tttmp*hlp.wphi[iphi];
+                  var.storeu(ptr2+iphi*vlen);
+                  }
+                ptr2 += hlp.jumptheta;
+                }
+              ptr += hlp.jumppsi;
+              }
+            }
+          }
+        });
+      }
 
   public:
     ConvolverPlan(size_t lmax_, double sigma, double epsilon,
@@ -263,7 +370,6 @@ template<typename T> class ConvolverPlan
         theta0(nborder*(-dtheta)),
         kernel(selectKernel<Tsimd>(T(nphi_b)/(2*lmax+1), 0.5*epsilon))
       {
-//      static_assert(is_same<T, float>::value, "only accepting floats for the moment");
       auto supp = kernel->support();
       MR_assert(supp<=8, "kernel support too large");
       MR_assert((supp<=ntheta) && (supp<=nphi_b), "kernel support too large!");
@@ -271,14 +377,6 @@ template<typename T> class ConvolverPlan
 
     size_t Ntheta() const { return ntheta; }
     size_t Nphi() const { return nphi; }
-//     double Theta0() const { return -nborder*Dtheta(); }
-//     double Phi0() const { return -nborder*Dphi(); }
-//     double Dtheta() const { return pi/(ntheta-1); }
-//     double Dphi() const { return 2*pi/nphi; }
-//     double Theta(size_t itheta) const { return Theta0()+itheta*Dtheta(); }
-//     double Phi(size_t iphi) const { return Phi0()+iphi*Dphi(); }
-
-//    size_t Nborder() const { return nborder; }
 
     void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
@@ -380,10 +478,119 @@ template<typename T> class ConvolverPlan
 
     void deinterpol(mav<T,3> &cube, size_t itheta0,
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
-      const mav<T,1> &psi, const mav<T,1> &signal) const;
+      const mav<T,1> &psi, const mav<T,1> &signal) const
+      {
+      switch(kernel->support())
+        {
+        case 4: deinterpol2<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 5: deinterpol2<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 6: deinterpol2<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 7: deinterpol2<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 8: deinterpol2<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        default: MR_fail("must not happen");
+        }
+      }
 
-    void extractFromPlane(Alm<T> &slm, const Alm<T> &blm,
-      size_t mbeam, const mav<T,2> &re, const mav<T,2> &im) const;
+    void updateSlm(Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      MR_assert(slm.Lmax()==lmax, "inconsistent Sky lmax");
+      MR_assert(slm.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
+      MR_assert(blm.Lmax()==lmax, "Sky and beam lmax must be equal");
+      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
+      if (mbeam>0)
+        {
+        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
+        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
+        }
+      MR_assert(mbeam <= blm.Mmax(), "mbeam too high");
+
+      auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
+      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
+
+      // move stuff from border regions onto the main grid
+      for (size_t i=0; i<ntheta_b+2*nborder; ++i)
+        for (size_t j=0; j<nborder; ++j)
+          {
+          re.v(i,j+nphi_b) += re(i,j);
+          re.v(i,j+nborder) += re(i,j+nphi_b+nborder);
+          if (mbeam>0)
+            {
+            im.v(i,j+nphi_b) += im(i,j);
+            im.v(i,j+nborder) += im(i,j+nphi_b+nborder);
+            }
+          }
+
+      for (size_t i=0; i<nborder; ++i)
+        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
+          {
+          T fct = (mbeam&1) ? -1 : 1;
+          if (j2>=nphi_b) j2-=nphi_b;
+          re.v(nborder+1+i,j+nborder) += fct*re(nborder-1-i,j2+nborder);
+          re.v(nborder+ntheta_b-2-i, j+nborder) += fct*re(nborder+ntheta_b+i,j2+nborder);
+          if (mbeam>0)
+            {
+            im.v(nborder+1+i,j+nborder) += fct*im(nborder-1-i,j2+nborder);
+            im.v(nborder+ntheta_b-2-i, j+nborder) += fct*im(nborder+ntheta_b+i,j2+nborder);
+            }
+          }
+
+      // special treatment for poles
+      for (size_t j=0,j2=nphi_b/2; j<nphi_b/2; ++j,++j2)
+        {
+        T fct = (mbeam&1) ? -1 : 1;
+        if (j2>=nphi_b) j2-=nphi_b;
+        T tval = (re(nborder,j+nborder) + fct*re(nborder,j2+nborder));
+        re.v(nborder,j+nborder) = tval;
+        re.v(nborder,j2+nborder) = fct*tval;
+        tval = (re(nborder+ntheta_b-1,j+nborder) + fct*re(nborder+ntheta_b-1,j2+nborder));
+        re.v(nborder+ntheta_b-1,j+nborder) = tval;
+        re.v(nborder+ntheta_b-1,j2+nborder) = fct*tval;
+        if (mbeam>0)
+          {
+          tval = (im(nborder,j+nborder) + fct*im(nborder,j2+nborder));
+          im.v(nborder,j+nborder) = tval;
+          im.v(nborder,j2+nborder) = fct*tval;
+          tval = (im(nborder+ntheta_b-1,j+nborder) + fct*im(nborder+ntheta_b-1,j2+nborder));
+          im.v(nborder+ntheta_b-1,j+nborder) = tval;
+          im.v(nborder+ntheta_b-1,j2+nborder) = fct*tval;
+          }
+        }
+
+      vector<T>lnorm(lmax+1);
+      for (size_t i=0; i<=lmax; ++i)
+        lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
+
+      if (mbeam==0)
+        {
+        Alm<complex<T>> a1(lmax, lmax);
+        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        decorrect(m1,0);
+        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+              slm(l,m) += conj(a1(l,m))*blm(l,0).real()*lnorm[l];
+        }
+      else
+        {
+        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        auto m2 = im.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        decorrect(m1,mbeam);
+        decorrect(m2,mbeam);
+
+        sharp_alm2map_spin_adjoint(mbeam, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
+          m2.data(), *ginfo, *ainfo, 0, nthreads);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+            if (l>=mbeam)
+              {
+              auto tmp = blm(l,mbeam)*(-2*lnorm[l]);
+              slm(l,m) += conj(a1(l,m))*tmp.real();
+              slm(l,m) += conj(a2(l,m))*tmp.imag();
+              }
+        }
+      }
   };
 
 }
