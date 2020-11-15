@@ -11,12 +11,6 @@ RUN apt-get update && apt-get install -qq \
       python3-scipy python3-pybind11 pybind11-dev python3-mpi4py mpi-default-dev mpi-default-bin \
       # Clang
       clang-11 \
-      # Finufft dependencies
-      libfftw3-dev \
-      && pip install dotenv \
       # Clean up
       && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/flatironinstitute/finufft \
-      && cd finufft \
-      && make -j 4 python
 RUN pip install numba   # demo dependency
