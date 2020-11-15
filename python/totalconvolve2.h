@@ -94,21 +94,30 @@ template<typename T> class ConvolverPlan
       }
 
     vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
-      size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0) const
+      size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       constexpr size_t cellsize=16;
-      size_t nct = (patch_ntheta-2*nborder)/cellsize+1,
-             ncp = (patch_nphi-2*nborder)/cellsize+1;
-      double theta0 = (itheta0-nborder)*dtheta,
-             phi0 = (iphi0-nborder)*dphi;
+      size_t nct = patch_ntheta/cellsize+1,
+             ncp = patch_nphi/cellsize+1;
+      double theta0 = (int(itheta0)-int(nborder))*dtheta,
+             phi0 = (int(iphi0)-int(nborder))*dphi;
       vector<vector<size_t>> mapper(nct*ncp);
       MR_assert(theta.conformable(phi), "theta/phi size mismatch");
 // FIXME: parallelize?
       for (size_t i=0; i<theta.shape(0); ++i)
         {
-        size_t itheta=min(nct-1,size_t((theta(i)-theta0)/pi*nct)),
-               iphi=min(ncp-1,size_t((phi(i)-phi0)/(2*pi)*ncp));
-//        MR_assert((itheta<nct)&&(iphi<ncp), "oops");
+        auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
+        auto itheta = size_t(ftheta+1);
+        auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
+        auto iphi = size_t(fphi+1);
+        itheta /= cellsize;
+        iphi /= cellsize;
+//if (itheta>=nct) cout << theta0 << " " << dtheta << " " << theta(i) << " " << itheta << " " << patch_ntheta << " " << nct << endl;
+//if (iphi>=ncp) cout << iphi << endl;
+        MR_assert(itheta<nct, "bad itheta");
+        MR_assert(iphi<ncp, "bad iphi");
+//        size_t itheta=min(nct-1,size_t((theta(i)-theta0)/pi*nct)),
+//               iphi=min(ncp-1,size_t((phi(i)-phi0)/(2*pi)*ncp));
         mapper[itheta*ncp+iphi].push_back(i);
         }
       vector<size_t> idx(theta.shape(0));
@@ -156,7 +165,7 @@ template<typename T> class ConvolverPlan
           MR_assert(info.shape(0)&1, "number of psi planes must be odd");
           wpsi[0]=1.;
           }
-        DUCC0_NOINLINE void prep(T theta, T phi, T psi)
+        void prep(T theta, T phi, T psi)
           {
           T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
           itheta = size_t(ftheta+1);
@@ -204,7 +213,7 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       size_t npsi = cube.shape(0);
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
@@ -280,15 +289,41 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       size_t npsi = cube.shape(0);
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+
+      constexpr size_t cellsize=16;
+      size_t nct = cube.shape(1)/cellsize+10,
+             ncp = cube.shape(2)/cellsize+10;
+      mav<std::mutex,2> locks({nct,ncp});
+
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
+        size_t b_theta=99999999999999, b_phi=9999999999999999;
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
           T * DUCC0_RESTRICT ptr = &cube.v(0,hlp.itheta,hlp.iphi);
+
+          size_t b_theta_new = hlp.itheta/cellsize,
+                 b_phi_new = hlp.iphi/cellsize;
+          if ((b_theta_new!=b_theta) || (b_phi_new!=b_phi))
+            {
+            if (b_theta<locks.shape(0))  // unlock
+              {
+              locks.v(b_theta,b_phi).unlock();
+              locks.v(b_theta,b_phi+1).unlock();
+              locks.v(b_theta+1,b_phi).unlock();
+              locks.v(b_theta+1,b_phi+1).unlock();
+              }
+            b_theta = b_theta_new;
+            b_phi = b_phi_new;
+            locks.v(b_theta,b_phi).lock();
+            locks.v(b_theta,b_phi+1).lock();
+            locks.v(b_theta+1,b_phi).lock();
+            locks.v(b_theta+1,b_phi+1).lock();
+            }
           if constexpr (nvec==1)
             {
             Tsimd tmp=hlp.wphi[0]*signal(i);
@@ -346,6 +381,13 @@ template<typename T> class ConvolverPlan
               ptr += hlp.jumppsi;
               }
             }
+          }
+        if (b_theta<locks.shape(0))  // unlock
+          {
+          locks.v(b_theta,b_phi).unlock();
+          locks.v(b_theta,b_phi+1).unlock();
+          locks.v(b_theta+1,b_phi).unlock();
+          locks.v(b_theta+1,b_phi+1).unlock();
           }
         });
       }

@@ -168,7 +168,7 @@ def test_adjointness_new(lkmax):
     ptg[:, 1] *= 2*np.pi
     ptg[:, 2] *= 2*np.pi
     conv = totalconvolve.ConvolverPlan(lmax, sigma=2,
-                                       epsilon=1e-5, nthreads=1)
+                                       epsilon=1e-5, nthreads=2)
 
     cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))
     conv.getPlane(slm, blm, 0, cube[0])
