@@ -73,8 +73,6 @@ template<typename T> class ConvolverPlan
              ncp = (patch_nphi-2*nborder)/cellsize+1;
       double theta0 = (itheta0-nborder)*dtheta,
              phi0 = (iphi0-nborder)*dphi;
-      double theta1 = (itheta0-nborder+patch_ntheta)*dtheta,
-             phi1 = (iphi0-nborder+patch_nphi)*dphi;
       vector<vector<size_t>> mapper(nct*ncp);
       MR_assert(theta.conformable(phi), "theta/phi size mismatch");
 // FIXME: parallelize?
@@ -94,6 +92,155 @@ template<typename T> class ConvolverPlan
         vector<size_t>().swap(vec); // cleanup
         }
       return idx;
+      }
+
+    template<size_t supp> class WeightHelper
+      {
+      public:
+        static constexpr size_t vlen = Tsimd::size();
+        static constexpr size_t nvec = (supp+vlen-1)/vlen;
+        const ConvolverPlan &plan;
+        union kbuf {
+          T scalar[2*nvec*vlen];
+          Tsimd simd[2*nvec];
+          };
+        kbuf buf;
+
+      private:
+        TemplateKernel<supp, Tsimd> tkrn;
+        size_t beammmax;
+        T mytheta0, myphi0;
+
+      public:
+        WeightHelper(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
+          : plan(plan_),
+            tkrn(*plan.kernel),
+            beammmax(info.shape(0)/2),
+            mytheta0(plan.theta0+itheta0*plan.dtheta),
+            myphi0(plan.phi0+iphi0*plan.dphi),
+            wtheta(&buf.scalar[0]),
+            wphi(&buf.simd[nvec]),
+            wpsi(info.shape(0)),
+            jumptheta(info.stride(1)),
+            jumppsi(info.stride(0))
+          {
+          MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
+          MR_assert(info.shape(0)&1, "number of psi planes must be odd");
+          wpsi[0]=1.;
+          }
+        DUCC0_NOINLINE void prep(T theta, T phi, T psi)
+          {
+          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
+          itheta = size_t(ftheta+1);
+          ftheta = -1+(itheta-ftheta)*2;
+          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
+          iphi = size_t(fphi+1);
+          fphi = -1+(iphi-fphi)*2;
+          tkrn.eval2(ftheta, fphi, &buf.simd[0]);
+#if 1
+          auto cpsi=cos(double(psi));
+          auto spsi=sin(double(psi));
+          auto cnpsi=cpsi;
+          auto snpsi=spsi;
+          for (size_t l=1; l<=beammmax; ++l)
+            {
+            wpsi[2*l-1]=T(cnpsi);
+            wpsi[2*l]=T(snpsi);
+            const double tmp = snpsi*cpsi + cnpsi*spsi;
+            cnpsi=cnpsi*cpsi - snpsi*spsi;
+            snpsi=tmp;
+            }
+#else
+          for (size_t i=1; i<=beammmax; ++i)
+            {
+            wpsi[2*i-1] = cos(i*psi);
+            wpsi[2*i] = sin(i*psi);
+            }
+#endif
+//cout << itheta << " " << iphi << endl;
+          }
+        size_t itheta, iphi;
+        const T * DUCC0_RESTRICT wtheta;
+        const Tsimd * DUCC0_RESTRICT wphi;
+        vector<T> wpsi;
+        ptrdiff_t jumptheta, jumppsi;
+      };
+
+    template<size_t supp> void interpol2(const mav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, mav<T,1> &signal) const
+      {
+      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "aray shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "aray shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "aray shape mismatch");
+      static constexpr size_t vlen = Tsimd::size();
+      static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      size_t npsi = cube.shape(0);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
+      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
+        {
+        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
+        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
+          {
+          size_t i=idx[ind];
+          hlp.prep(theta(i), phi(i), psi(i));
+          const T * DUCC0_RESTRICT ptr = &cube(0,hlp.itheta,hlp.iphi);
+          if constexpr (nvec==1)
+            {
+            Tsimd res=0;
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              Tsimd tres=0;
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                tres += Tsimd::loadu(ptr2)*hlp.wtheta[itheta];
+                ptr2 += hlp.jumptheta;
+                }
+              res += tres*hlp.wpsi[ipsi];
+              ptr += hlp.jumppsi;
+              }
+            signal.v(i) = reduce(res*hlp.wphi[0], std::plus<>());
+            }
+          else if constexpr (nvec==2)
+            {
+            Tsimd res0=0, res1=0;
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              Tsimd tres0=0, tres1=0;
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                tres0 += Tsimd::loadu(ptr2)*hlp.wtheta[itheta];
+                tres1 += Tsimd::loadu(ptr2+vlen)*hlp.wtheta[itheta];
+                ptr2 += hlp.jumptheta;
+                }
+              res0 += tres0*hlp.wpsi[ipsi];
+              res1 += tres1*hlp.wpsi[ipsi];
+              ptr += hlp.jumppsi;
+              }
+            signal.v(i) = reduce(res0*hlp.wphi[0]+res1*hlp.wphi[1], std::plus<>());
+            }
+          else
+            {
+            Tsimd res=0;
+            for (size_t ipsi=0; ipsi<npsi; ++ipsi)
+              {
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                auto twgt=hlp.wpsi[ipsi]*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
+                ptr2 += hlp.jumptheta;
+                }
+              ptr += hlp.jumppsi;
+              }
+            signal.v(i) = reduce(res, std::plus<>());
+            }
+          }
+        });
       }
 
   public:
@@ -116,7 +263,7 @@ template<typename T> class ConvolverPlan
         theta0(nborder*(-dtheta)),
         kernel(selectKernel<Tsimd>(T(nphi_b)/(2*lmax+1), 0.5*epsilon))
       {
-      static_assert(is_same<T, float>::value, "only accepting floats for the moment");
+//      static_assert(is_same<T, float>::value, "only accepting floats for the moment");
       auto supp = kernel->support();
       MR_assert(supp<=8, "kernel support too large");
       MR_assert((supp<=ntheta) && (supp<=nphi_b), "kernel support too large!");
@@ -150,7 +297,7 @@ template<typename T> class ConvolverPlan
       auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
-      vector<T>lnorm(lmax+1);
+      vector<T> lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
@@ -214,102 +361,6 @@ template<typename T> class ConvolverPlan
             im.v(i,j+nphi_b+nborder) = im(i,j+nborder);
             }
           }
-      }
-
-    template<size_t supp> class WeightHelper
-      {
-      public:
-        static constexpr size_t vlen = Tsimd::size();
-        static constexpr size_t nvec = (supp+vlen-1)/vlen;
-        const ConvolverPlan &plan;
-        union kbuf {
-          T scalar[2*nvec*vlen];
-          Tsimd simd[2*nvec];
-          };
-        kbuf buf;
-
-      private:
-        TemplateKernel<supp, Tsimd> tkrn;
-        size_t beammmax;
-        T mytheta0, myphi0;
-
-      public:
-        WeightHelper(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
-          : plan(plan_),
-            tkrn(*plan.kernel),
-            jumptheta(info.stride(1)),
-            jumppsi(info.stride(0)),
-            wpsi(info.shape(0)),
-            wtheta(&buf.scalar[0]),
-            wphi(&buf.simd[nvec]),
-            beammmax(info.shape(0)/2),
-            mytheta0(plan.theta0+itheta0*plan.dtheta),
-            myphi0(plan.phi0+iphi0*plan.dphi)
-          {
-          MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
-          MR_assert(info.shape(0)&1, "number of psi planes must be odd");
-          wpsi[0]=1.;
-          }
-        void prep(T theta, T phi, T psi)
-          {
-          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
-          itheta = size_t(ftheta+1.);
-          ftheta = -1+(itheta-ftheta)*2;
-          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
-          iphi = size_t(fphi+1.);
-          fphi = -1+(iphi-fphi)*2;
-          tkrn.eval2(ftheta, fphi, &buf.simd[0]);
-          for (size_t i=1; i<=beammmax; ++i)
-            {
-            wpsi[2*i-1] = cos(i*psi);
-            wpsi[2*i] = sin(i*psi);
-            }
-//cout << itheta << " " << iphi << endl;
-          }
-        size_t itheta, iphi;
-        const T *wtheta;
-        const Tsimd *wphi;
-        vector<T> wpsi;
-        ptrdiff_t jumptheta, jumppsi;
-      };
-
-    template<size_t supp> void interpol2(const mav<T,3> &cube,
-      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
-      const mav<T,1> &psi, mav<T,1> &signal) const
-      {
-      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
-      MR_assert(phi.shape(0)==theta.shape(0), "aray shape mismatch");
-      MR_assert(psi.shape(0)==theta.shape(0), "aray shape mismatch");
-      MR_assert(signal.shape(0)==theta.shape(0), "aray shape mismatch");
-      static constexpr size_t vlen = Tsimd::size();
-      static constexpr size_t nvec = (supp+vlen-1)/vlen;
-      size_t npsi = cube.shape(0);
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0);
-      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
-        {
-        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
-        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
-          {
-          size_t i=idx[ind];
-          hlp.prep(theta(i), phi(i), psi(i));
-          const T * DUCC0_RESTRICT ptr = &cube(0,hlp.itheta,hlp.iphi);
-//cout << hlp.jumptheta << " " << hlp.jumppsi << endl;
-          Tsimd res=0;
-          for (size_t ipsi=0; ipsi<npsi; ++ipsi)
-            {
-            const T * DUCC0_RESTRICT ptr2 = ptr;
-            for (size_t itheta=0; itheta<supp; ++itheta)
-              {
-              auto twgt=hlp.wpsi[ipsi]*hlp.wtheta[itheta];
-              for (size_t iphi=0; iphi<nvec; ++iphi)
-                res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
-              ptr2 += hlp.jumptheta;
-              }
-            ptr += hlp.jumppsi;
-            }
-          signal.v(i) = reduce(res, std::plus<>());
-          }
-        });
       }
 
     void interpol(const mav<T,3> &cube, size_t itheta0,

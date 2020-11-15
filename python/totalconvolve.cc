@@ -305,8 +305,16 @@ void add_totalconvolve(py::module_ &msup)
     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
     .def ("support", &inter_f::support);
+  using conv_d = PyConvolverPlan<double>;
+  py::class_<conv_d> (m, "ConvolverPlan", py::module_local())
+    .def(py::init<size_t, double, double, size_t>(),
+      "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def("Ntheta", &conv_d::Ntheta)
+    .def("Nphi", &conv_d::Nphi)
+    .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a);
   using conv_f = PyConvolverPlan<float>;
-  py::class_<conv_f> (m, "ConvolverPlan", py::module_local())
+  py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
     .def(py::init<size_t, double, double, size_t>(),
       "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta)

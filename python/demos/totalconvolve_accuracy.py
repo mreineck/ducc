@@ -57,7 +57,7 @@ def convolve(alm1, alm2, lmax):
     return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
 
-lmax = 60
+lmax = 600
 kmax = 13
 ncomp = 1
 separate = True
@@ -74,23 +74,25 @@ blm = random_alm(lmax, kmax, ncomp)
 t0 = time.time()
 # build interpolator object for slm and blm
 foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-4, nthreads=2)
+print("setup time: ", time.time()-t0)
+t0 = time.time()
 
 print("start")
-plan = totalconvolve.ConvolverPlan(lmax=lmax, sigma=1.5, epsilon=1e-4, nthreads=1)
-cube = np.empty((2*kmax+1, plan.Ntheta(), plan.Nphi()), dtype=np.float32)
-slmf = slm.astype(np.complex64)
-blmf = blm.astype(np.complex64)
+plan = totalconvolve.ConvolverPlan(lmax=lmax, sigma=1.5, epsilon=1e-4, nthreads=2)
+cube = np.empty((2*kmax+1, plan.Ntheta(), plan.Nphi()), dtype=np.float64)
+#slmf = slm.astype(np.complex64)
+#blmf = blm.astype(np.complex64)
 cube[()]=0
 print (np.sum(cube))
-plan.getPlane(slmf[:,0], blmf[:,0], 0, cube[0])
+plan.getPlane(slm[:,0], blm[:,0], 0, cube[0])
 for mbeam in range(1,kmax+1):
-    plan.getPlane(slmf[:,0], blmf[:,0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    plan.getPlane(slm[:,0], blm[:,0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
 print (np.sum(cube))
 print("end")
 
 print("setup time: ", time.time()-t0)
-nth = lmax+1
-nph = 2*lmax+1
+nth = 5*(lmax+1)
+nph = 5*(2*lmax+1)
 
 
 # compute a convolved map at a fixed psi and compare it to a map convolved
@@ -104,32 +106,33 @@ t0 = time.time()
 # do the actual interpolation
 bar = foo.interpol(ptg.reshape((-1, 3))).reshape((nth, nph, ncomp2))
 print("interpolation time: ", time.time()-t0)
-t0 = time.time()
-ptgbla = ptg.reshape((-1, 3)).astype(np.float32)
-res = np.empty(ptgbla.shape[0], dtype=np.float32)
+ptgbla = ptg.reshape((-1, 3)).astype(np.float64)
+res = np.empty(ptgbla.shape[0], dtype=np.float64)
 #ptgbla=ptgbla[0:1,:]
 #print(ptgbla)
-res = np.empty(ptgbla.shape[0], dtype=np.float32)
+res = np.empty(ptgbla.shape[0], dtype=np.float64)
+t0 = time.time()
 plan.interpol(cube, 0, 0, ptgbla[:,0], ptgbla[:,1], ptgbla[:,2], res)
+print("interpolation2 time: ", time.time()-t0)
 #print(res)
 #print(bar[0,0,0])
 res=res.reshape((nth, nph, 1))
-print("interpolation2 time: ", time.time()-t0)
 
 plt.subplot(2, 2, 1)
 plt.imshow(bar[:, :, 0])
-bar2 = np.zeros((nth, nph))
-blmfull = np.zeros(slm.shape)+0j
-blmfull[0:blm.shape[0], :] = blm
-for ith in range(nth):
-    rbeamth = misc.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0)
-    for iph in range(nph):
-        rbeam = misc.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1])
-        bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
-plt.subplot(2, 2, 2)
-plt.imshow(bar2)
+# bar2 = np.zeros((nth, nph))
+# blmfull = np.zeros(slm.shape)+0j
+# blmfull[0:blm.shape[0], :] = blm
+# for ith in range(nth):
+#     rbeamth = misc.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0)
+#     for iph in range(nph):
+#         rbeam = misc.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1])
+#         bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
+# plt.subplot(2, 2, 2)
+# plt.imshow(bar2)
 plt.subplot(2, 2, 3)
-plt.imshow(bar2-bar[:, :, 0])
-plt.subplot(2, 2, 4)
-plt.imshow(bar2-res[:, :, 0])
+plt.imshow(bar[:, :, 0]-res[:,:,0])
+print(np.max(np.abs(bar[:, :, 0]-res[:,:,0]))/np.max(np.abs(bar[:, :, 0])))
+#plt.subplot(2, 2, 4)
+#plt.imshow(bar2-res[:, :, 0])
 plt.show()
