@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -qq \
       # Clang
       clang-11 \
       # Finufft dependencies
-      libfftw3-dev python3-dotenv \
+      libfftw3-dev \
+      && pip install dotenv \
       # Clean up
       && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 https://github.com/flatironinstitute/finufft \
