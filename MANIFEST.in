@@ -65,7 +65,6 @@ include python/gridder_cxx.h
 include python/wgridder.cc
 include python/alm.h
 include python/totalconvolve.h
-include python/totalconvolve2.h
 include python/totalconvolve.cc
 include python/misc.cc
 include python/pointingprovider.cc
