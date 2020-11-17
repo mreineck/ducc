@@ -78,7 +78,7 @@ def xtest_against_convolution(lkmax, ncomp, separate):
     blm = random_alm(rng, lmax, kmax, ncomp)
 
     inter = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                       epsilon=1e-8, nthreads=2)
+                                       epsilon=1e-8, ofactor=1.8, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -145,11 +145,11 @@ def xtest_adjointness(lkmax, ncomp, separate):
     ptg[:, 0] *= np.pi
     ptg[:, 1] *= 2*np.pi
     ptg[:, 2] *= 2*np.pi
-    foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-6, nthreads=2)
+    foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-6, ofactor=1.8, nthreads=2)
     inter1 = foo.interpol(ptg)
     ncomp2 = inter1.shape[1]
     fake = rng.uniform(0., 1., (ptg.shape[0], ncomp2))
-    foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=1e-6, nthreads=2)
+    foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=1e-6, ofactor=1.8, nthreads=2)
     foo2.deinterpol(ptg.reshape((-1, 3)), fake)
     bla = foo2.getSlm(blm)
     v1 = np.sum([myalmdot(slm[:, c], bla[:, c], lmax, lmax, 0) for c in range(ncomp)])

@@ -94,7 +94,7 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask,
 @pmp("nydirty", (128, 250))
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 1e-5))
+@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
@@ -126,7 +126,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
                       wstacking, nthreads+1, 0, mask).astype("c16")
     ref = max(my_vdot(ms,ms).real, my_vdot(ms2,ms2).real,
               my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
-    tol = 1e-5*ref if singleprec else 1e-11*ref
+    tol = 3e-5*ref if singleprec else 2e-13*ref
     assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
 
 

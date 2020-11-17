@@ -701,6 +701,14 @@ template<typename Tsimd> auto selectKernel(size_t idx)
   return make_shared<HornerKernel<Tsimd>>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
+bool acceptable(size_t i)
+  {
+  auto krn = selectKernel<native_simd<double>>(i);
+  auto sigma = KernelDB[i].ofactor;
+  auto xlim = 0.5/sigma;
+  return krn->corfunc(xlim)/krn->corfunc(0.) < 10.;
+  }
+
 /*! Returns the best matching 2-parameter ES kernel for the given oversampling
     factor and error. */
 template<typename Tsimd> auto selectKernel(double ofactor, double epsilon)
@@ -708,7 +716,8 @@ template<typename Tsimd> auto selectKernel(double ofactor, double epsilon)
   size_t Wmin = is_same<typename Tsimd::Ts, float>::value ? 8 : 1000;
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
-    if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon) && (KernelDB[i].W<=Wmin))
+    if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon)
+      && (KernelDB[i].W<=Wmin) && acceptable(i))
       {
       idx = i;
       Wmin = KernelDB[i].W;
@@ -732,7 +741,7 @@ template<typename T> auto getAvailableKernels(double epsilon,
     auto ofactor = KernelDB[i].ofactor;
     size_t W = KernelDB[i].W;
     if ((W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
-     && (ofactor<ofc[W]) && (ofactor>=ofactor_min))
+      && (ofactor<ofc[W]) && (ofactor>=ofactor_min) && acceptable(i))
       {
       ofc[W] = ofactor;
       idx[W] = i;
