@@ -45,7 +45,9 @@ template<typename T> class aligned_array
     static T *ralloc(size_t num)
       {
       if (num==0) return nullptr;
-      void *res = aligned_alloc(64,num*sizeof(T));
+      // aligned_alloc requires the allocated size to be a multiple of the
+      // requested alignment, so increase size if necessary
+      void *res = aligned_alloc(64,((num*sizeof(T)+63)/64)*64);
       if (!res) throw bad_alloc();
       return reinterpret_cast<T *>(res);
       }
