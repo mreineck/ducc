@@ -157,12 +157,12 @@ template<typename T> class ConvolverPlan
 
     size_t nthreads;
     size_t nborder;
-    size_t lmax;
+    size_t lmax, kmax;
     // _s: small grid
     // _b: oversampled grid
     // no suffix: grid with borders
-    size_t nphi_s, ntheta_s, nphi_b, ntheta_b, nphi, ntheta;
-    T dphi, dtheta, xdphi, xdtheta, phi0, theta0;
+    size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b, nphi, ntheta;
+    T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi, phi0, theta0;
 
     shared_ptr<HornerKernel> kernel;
 
@@ -519,17 +519,25 @@ template<typename T> class ConvolverPlan
           }
         });
       }
+    T realsigma() const
+      {
+      return min(T(npsi_b)/(2*kmax+1),
+                 min(T(nphi_b)/(2*lmax+1), T(ntheta_b)/(lmax+1)));
+      }
 
   public:
-    ConvolverPlan(size_t lmax_, double sigma, double epsilon,
+    ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
       size_t nthreads_)
       : nthreads(nthreads_),
         nborder(8),
         lmax(lmax_),
+        kmax(kmax_),
         nphi_s(2*good_size_real(lmax+1)),
         ntheta_s(nphi_s/2+1),
+        npsi_s(kmax*2+1),
         nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*sigma/2.)))),
         ntheta_b(nphi_b/2+1),
+        npsi_b(size_t(npsi_s*sigma+0.99999)),
         nphi(nphi_b+2*nborder),
         ntheta(ntheta_b+2*nborder),
         dphi(T(2*pi/nphi_b)),
@@ -538,7 +546,7 @@ template<typename T> class ConvolverPlan
         xdtheta(T(1)/dtheta),
         phi0(nborder*(-dphi)),
         theta0(nborder*(-dtheta)),
-        kernel(selectKernel(T(nphi_b)/(2*lmax+1), 0.5*epsilon))
+        kernel(selectKernel(realsigma(), 0.5*epsilon))
       {
       auto supp = kernel->support();
       MR_assert(supp<=8, "kernel support too large");
@@ -547,6 +555,21 @@ template<typename T> class ConvolverPlan
 
     size_t Ntheta() const { return ntheta; }
     size_t Nphi() const { return nphi; }
+    size_t Npsi() const { return npsi_b; }
+
+    vector<size_t> getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi) const
+      {
+      vector<size_t> res(4);
+      auto tmp = (theta_lo-theta0)*xdtheta-nborder;
+      res[0] = min(size_t(max(T(0), tmp)), ntheta);
+      tmp = (theta_hi-theta0)*xdtheta+nborder+T(1);
+      res[1] = min(size_t(max(T(0), tmp)), ntheta);
+      tmp = (phi_lo-phi0)*xdphi-nborder;
+      res[2] = min(size_t(max(T(0), tmp)), nphi);
+      tmp = (phi_hi-phi0)*xdphi+nborder+T(1);
+      res[3] = min(size_t(max(T(0), tmp)), nphi);
+      return res;
+      }
 
     void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const

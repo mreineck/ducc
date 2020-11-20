@@ -75,7 +75,7 @@ def test_against_convolution(lkmax):
     slm = random_alm(rng, lmax, lmax, 1)[:,0]
     blm = random_alm(rng, lmax, kmax, 1)[:,0]
 
-    conv = totalconvolve.ConvolverPlan(lmax, sigma=1.8,
+    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=1.8,
                                        epsilon=1e-6, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
@@ -110,7 +110,7 @@ def test_adjointness(lkmax):
     ptg[:, 0] *= np.pi
     ptg[:, 1] *= 2*np.pi
     ptg[:, 2] *= 2*np.pi
-    conv = totalconvolve.ConvolverPlan(lmax, sigma=2,
+    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2,
                                        epsilon=1e-5, nthreads=2)
 
     cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))

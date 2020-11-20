@@ -48,10 +48,13 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::interpol;
     using ConvolverPlan<T>::deinterpol;
     using ConvolverPlan<T>::updateSlm;
+    using ConvolverPlan<T>::getPatchInfo;
 
   public:
     using ConvolverPlan<T>::Ntheta;
     using ConvolverPlan<T>::Nphi;
+    vector<size_t> pyGetPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
+      { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
       size_t mbeam, py::array &py_re, py::object &py_im) const
       {
@@ -119,20 +122,22 @@ void add_totalconvolve(py::module_ &msup)
 
   using conv_d = PyConvolverPlan<double>;
   py::class_<conv_d> (m, "ConvolverPlan", py::module_local())
-    .def(py::init<size_t, double, double, size_t>(),
-      "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_d::Ntheta)
     .def("Nphi", &conv_d::Nphi)
+    .def("getPatchInfo", &conv_d::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   using conv_f = PyConvolverPlan<float>;
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
-    .def(py::init<size_t, double, double, size_t>(),
-      "lmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta)
     .def("Nphi", &conv_f::Nphi)
+    .def("getPatchInfo", &conv_f::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
