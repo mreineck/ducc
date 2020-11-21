@@ -305,8 +305,8 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
         nofs+=i0[i]*str[i];
         if (extent[i]!=0)
           {
-          MR_assert(i0[i]+extent[i2]<=shp[i], "bad subset");
-          nshp[i2] = extent[i]; nstr[i2]=str[i];
+          MR_assert(i0[i]+extent[i]<=shp[i], "bad subset");
+          nshp[i2]=extent[i]; nstr[i2]=str[i];
           ++i2;
           }
         }
@@ -492,8 +492,8 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         nofs+=i0[i]*str[i];
         if (extent[i]!=0)
           {
-          MR_assert(i0[i]+extent[i2]<=shp[i], "bad subset");
-          nshp[i2] = extent[i]; nstr[i2]=str[i];
+          MR_assert(i0[i]+extent[i]<=shp[i], "bad subset");
+          nshp[i2]=extent[i]; nstr[i2]=str[i];
           ++i2;
           }
         }
