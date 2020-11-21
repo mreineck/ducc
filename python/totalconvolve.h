@@ -330,6 +330,57 @@ template<typename T> class ConvolverPlan
         ptrdiff_t jumptheta, jumppsi;
       };
 
+    template<size_t supp> class WeightHelper3
+      {
+      public:
+        static constexpr size_t vlen = Tsimd::size();
+        static constexpr size_t nvec = (supp+vlen-1)/vlen;
+        const ConvolverPlan &plan;
+        union kbuf {
+          T scalar[3*nvec*vlen];
+          Tsimd simd[3*nvec];
+          };
+        kbuf buf;
+
+      private:
+        TemplateKernel<supp, Tsimd> tkrn;
+        T mytheta0, myphi0;
+
+      public:
+        WeightHelper3(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
+          : plan(plan_),
+            tkrn(*plan.kernel),
+            mytheta0(plan.theta0+itheta0*plan.dtheta),
+            myphi0(plan.phi0+iphi0*plan.dphi),
+            wpsi(&buf.scalar[0]),
+            wtheta(&buf.scalar[nvec*vlen]),
+            wphi(&buf.simd[2*nvec]),
+            jumptheta(info.stride(1))
+          {
+          MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
+          }
+        void prep(T theta, T phi, T psi)
+          {
+          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
+          itheta = size_t(ftheta+1);
+          ftheta = -1+(itheta-ftheta)*2;
+          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
+          iphi = size_t(fphi+1);
+          fphi = -1+(iphi-fphi)*2;
+          T fpsi = psi*plan.xdpsi-supp/T(2)+plan.npsi_b;
+          ipsi = size_t(fpsi+1);
+          fpsi = -1+(ipsi-fpsi)*2;
+          if (ipsi>=plan.npsi_b) ipsi-=plan.npsi_b;
+// cout << ipsi << endl;
+          tkrn.eval3(fpsi, ftheta, fphi, &buf.simd[0]);
+          }
+        size_t itheta, iphi, ipsi;
+        const T * DUCC0_RESTRICT wpsi;
+        const T * DUCC0_RESTRICT wtheta;
+        const Tsimd * DUCC0_RESTRICT wphi;
+        ptrdiff_t jumptheta;
+      };
+
     template<size_t supp> void interpol2(const mav<T,3> &cube,
       size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
@@ -400,6 +451,47 @@ template<typename T> class ConvolverPlan
                 ptr2 += hlp.jumptheta;
                 }
               ptr += hlp.jumppsi;
+              }
+            signal.v(i) = reduce(res, std::plus<>());
+            }
+          }
+        });
+      }
+    template<size_t supp> void interpol3x(const mav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, mav<T,1> &signal) const
+      {
+      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "array shape mismatch");
+      static constexpr size_t vlen = Tsimd::size();
+      static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
+        {
+        WeightHelper3<supp> hlp(*this, cube, itheta0, iphi0);
+        while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
+          {
+          size_t i=idx[ind];
+          hlp.prep(theta(i), phi(i), psi(i));
+          auto ipsi = hlp.ipsi;
+          const T * DUCC0_RESTRICT ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
+            {
+            Tsimd res=0;
+            for (size_t ipsic=0; ipsic<supp; ++ipsic)
+              {
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              for (size_t itheta=0; itheta<supp; ++itheta)
+                {
+                auto twgt=hlp.wpsi[ipsic]*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
+                ptr2 += hlp.jumptheta;
+                }
+              if (++ipsi>=npsi_b) ipsi=0;
+              ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
               }
             signal.v(i) = reduce(res, std::plus<>());
             }
@@ -542,8 +634,10 @@ template<typename T> class ConvolverPlan
         ntheta(ntheta_b+2*nborder),
         dphi(T(2*pi/nphi_b)),
         dtheta(T(pi/(ntheta_b-1))),
+        dpsi(T(2*pi/npsi_b)),
         xdphi(T(1)/dphi),
         xdtheta(T(1)/dtheta),
+        xdpsi(T(1)/dpsi),
         phi0(nborder*(-dphi)),
         theta0(nborder*(-dtheta)),
         kernel(selectKernel(realsigma(), 0.5*epsilon))
@@ -668,6 +762,20 @@ template<typename T> class ConvolverPlan
         default: MR_fail("must not happen");
         }
       }
+    void interpol3(const mav<T,3> &cube, size_t itheta0,
+      size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, mav<T,1> &signal) const
+      {
+      switch(kernel->support())
+        {
+        case 4: interpol3x<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 5: interpol3x<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 6: interpol3x<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 7: interpol3x<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 8: interpol3x<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        default: MR_fail("must not happen");
+        }
+      }
 
     void deinterpol(mav<T,3> &cube, size_t itheta0,
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
@@ -783,6 +891,23 @@ template<typename T> class ConvolverPlan
               slm(l,m) += conj(a2(l,m))*tmp.imag();
               }
         }
+      }
+
+    void prepPsi(mav<T,3> &subcube) const
+      {
+      MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
+      auto newpart = subcube.template subarray<3>({npsi_s,0,0},{npsi_b-npsi_s,subcube.shape(1),subcube.shape(2)});
+      newpart.fill(T(0));
+      auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
+      for (size_t k=0; k<npsi_s; ++k)
+        {
+        auto factor = T(fct[(k+1)/2]);
+        for (size_t i=0; i<subcube.shape(1); ++i)
+          for (size_t j=0; j<subcube.shape(2); ++j)
+            subcube.v(k,i,j) *= factor;
+        }
+      fmav<T> fsubcube(subcube);
+      r2r_fftpack(fsubcube, fsubcube, {0}, false, false, T(1), nthreads);
       }
   };
 

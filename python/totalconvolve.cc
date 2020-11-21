@@ -46,13 +46,16 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::ConvolverPlan;
     using ConvolverPlan<T>::getPlane;
     using ConvolverPlan<T>::interpol;
+    using ConvolverPlan<T>::interpol3;
     using ConvolverPlan<T>::deinterpol;
     using ConvolverPlan<T>::updateSlm;
     using ConvolverPlan<T>::getPatchInfo;
+    using ConvolverPlan<T>::prepPsi;
 
   public:
     using ConvolverPlan<T>::Ntheta;
     using ConvolverPlan<T>::Nphi;
+    using ConvolverPlan<T>::Npsi;
     vector<size_t> pyGetPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
       { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
@@ -64,6 +67,11 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
       getPlane(slm, blm, mbeam, re, im);
       }
+    void pyPrepPsi(const py::array &py_subcube) const
+      {
+      auto subcube = to_mav<T,3>(py_subcube, true);
+      prepPsi(subcube);
+      }
     void pyinterpol(const py::array &pycube, size_t itheta0, size_t iphi0,
       const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
       py::array &pysignal)
@@ -74,6 +82,17 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       auto psi = to_mav<T,1>(pypsi, false);
       auto signal = to_mav<T,1>(pysignal, true);
       interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
+      }
+    void pyinterpol3(const py::array &pycube, size_t itheta0, size_t iphi0,
+      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
+      py::array &pysignal)
+      {
+      auto cube = to_mav<T,3>(pycube, false);
+      auto theta = to_mav<T,1>(pytheta, false);
+      auto phi = to_mav<T,1>(pyphi, false);
+      auto psi = to_mav<T,1>(pypsi, false);
+      auto signal = to_mav<T,1>(pysignal, true);
+      interpol3(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
     void pydeinterpol(py::array &pycube, size_t itheta0, size_t iphi0,
       const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
@@ -126,9 +145,12 @@ void add_totalconvolve(py::module_ &msup)
       "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_d::Ntheta)
     .def("Nphi", &conv_d::Nphi)
+    .def("Npsi", &conv_d::Npsi)
     .def("getPatchInfo", &conv_d::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_d::pyPrepPsi, "subcube"_a)
     .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("interpol3", &conv_d::pyinterpol3, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   using conv_f = PyConvolverPlan<float>;
@@ -137,9 +159,12 @@ void add_totalconvolve(py::module_ &msup)
       "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta)
     .def("Nphi", &conv_f::Nphi)
+    .def("Npsi", &conv_f::Npsi)
     .def("getPatchInfo", &conv_f::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_f::pyPrepPsi, "subcube"_a)
     .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("interpol3", &conv_f::pyinterpol3, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_f::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   }
