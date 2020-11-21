@@ -462,10 +462,11 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         kernel(selectKernel(realsigma(), 0.5*epsilon))
       {
       auto supp = kernel->support();
-      MR_assert(supp<=8, "kernel support too large");
       MR_assert((supp<=ntheta) && (supp<=nphi_b), "kernel support too large!");
       }
 
+    size_t Lmax() const { return lmax; }
+    size_t Kmax() const { return kmax; }
     size_t Ntheta() const { return ntheta; }
     size_t Nphi() const { return nphi; }
     size_t Npsi() const { return npsi_b; }
@@ -484,19 +485,25 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       return res;
       }
 
-    void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+    void getPlane(const vector<Alm<complex<T>>> &vslm, const vector<Alm<complex<T>>> &vblm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      MR_assert(slm.Lmax()==lmax, "inconsistent Sky lmax");
-      MR_assert(slm.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-      MR_assert(blm.Lmax()==lmax, "Sky and beam lmax must be equal");
+      auto ncomp = vslm.size();
+      MR_assert(ncomp>0, "need at least one component");
+      MR_assert(vblm.size()==ncomp, "inconsistent slm and blm vectors");
+      for (size_t comp=0; comp<ncomp; ++comp)
+        {
+        MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
+        MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
+        MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
+        }
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
       if (mbeam>0)
         {
         MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
         MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
         }
-      MR_assert(mbeam <= blm.Mmax(), "mbeam too high");
+      MR_assert(mbeam <= vblm[0].Mmax(), "mbeam too high");
 
       auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -510,7 +517,11 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         Alm<complex<T>> a1(lmax, lmax);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
-            a1(l,m) = slm(l,m)*blm(l,0).real()*lnorm[l];
+            {
+            a1(l,m) = vslm[0](l,m)*vblm[0](l,0).real()*lnorm[l];
+            for (size_t i=1; i<ncomp; ++i)
+              a1(l,m) += vslm[i](l,m)*vblm[i](l,0).real()*lnorm[l];
+            }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,0);
@@ -521,14 +532,14 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
-            if (l<mbeam)
-              a1(l,m)=a2(l,m)=0.;
-            else
-              {
-              auto tmp = blm(l,mbeam)*(-lnorm[l]);
-              a1(l,m) = slm(l,m)*tmp.real();
-              a2(l,m) = slm(l,m)*tmp.imag();
-              }
+            a1(l,m)=a2(l,m)=0.;
+            if (l>=mbeam)
+              for (size_t i=0; i<ncomp; ++i)
+                {
+                auto tmp = vblm[i](l,mbeam)*(-lnorm[l]);
+                a1(l,m) += vslm[i](l,m)*tmp.real();
+                a2(l,m) += vslm[i](l,m)*tmp.imag();
+                }
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         auto m2 = im.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
@@ -566,11 +577,31 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             }
           }
       }
+    void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      vector<Alm<complex<T>>> vslm, vblm;
+      vslm.push_back(slm);
+      vblm.push_back(blm);
+      getPlane(vslm, vblm, mbeam, re, im);
+      }
 
     void interpol(const mav<T,3> &cube, size_t itheta0,
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
+      if constexpr(is_same<T,double>::value)
+        switch(kernel->support())
+          {
+          case  9: interpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 10: interpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 11: interpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 12: interpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 13: interpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 14: interpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 15: interpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 16: interpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          }
       switch(kernel->support())
         {
         case 4: interpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
@@ -586,6 +617,18 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, const mav<T,1> &signal) const
       {
+      if constexpr(is_same<T,double>::value)
+        switch(kernel->support())
+          {
+          case  9: deinterpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 10: deinterpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 11: deinterpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 12: deinterpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 13: deinterpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 14: deinterpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 15: deinterpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 16: deinterpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          }
       switch(kernel->support())
         {
         case 4: deinterpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
@@ -597,19 +640,25 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         }
       }
 
-    void updateSlm(Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+    void updateSlm(vector<Alm<complex<T>>> &vslm, const vector<Alm<complex<T>>> &vblm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      MR_assert(slm.Lmax()==lmax, "inconsistent Sky lmax");
-      MR_assert(slm.Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-      MR_assert(blm.Lmax()==lmax, "Sky and beam lmax must be equal");
+      auto ncomp = vslm.size();
+      MR_assert(ncomp>0, "need at least one component");
+      MR_assert(vblm.size()==ncomp, "inconsistent slm and blm vectors");
+      for (size_t comp=0; comp<ncomp; ++comp)
+        {
+        MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
+        MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
+        MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
+        }
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
       if (mbeam>0)
         {
         MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
         MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
         }
-      MR_assert(mbeam <= blm.Mmax(), "mbeam too high");
+      MR_assert(mbeam <= vblm[0].Mmax(), "mbeam too high");
 
       auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -675,7 +724,8 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
-              slm(l,m) += conj(a1(l,m))*blm(l,0).real()*lnorm[l];
+            for (size_t i=0; i<ncomp; ++i)
+              vslm[i](l,m) += conj(a1(l,m))*vblm[i](l,0).real()*lnorm[l];
         }
       else
         {
@@ -690,12 +740,21 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)
-              {
-              auto tmp = blm(l,mbeam)*(-2*lnorm[l]);
-              slm(l,m) += conj(a1(l,m))*tmp.real();
-              slm(l,m) += conj(a2(l,m))*tmp.imag();
-              }
+              for (size_t i=0; i<ncomp; ++i)
+                {
+                auto tmp = vblm[i](l,mbeam)*(-2*lnorm[l]);
+                vslm[i](l,m) += conj(a1(l,m))*tmp.real();
+                vslm[i](l,m) += conj(a2(l,m))*tmp.imag();
+                }
         }
+      }
+    void updateSlm(Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      vector<Alm<complex<T>>> vslm, vblm;
+      vslm.emplace_back(slm);
+      vblm.push_back(blm);
+      updateSlm(vslm, vblm, mbeam, re, im);
       }
 
     void prepPsi(mav<T,3> &subcube) const

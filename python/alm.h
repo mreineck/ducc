@@ -161,6 +161,8 @@ template<typename T> class Alm: public Alm_Base
       { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
     Alm (size_t lmax_=0, size_t mmax_=0)
       : Alm_Base(lmax_,mmax_), alm ({Num_Alms(lmax,mmax_)}) {}
+    Alm (Alm<T> &other) = default;
+    Alm (const Alm<T> &other) = default;
 
     /*! Sets all coefficients to zero. */
     void SetToZero ()
