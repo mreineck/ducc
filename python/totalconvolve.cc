@@ -46,7 +46,6 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::ConvolverPlan;
     using ConvolverPlan<T>::getPlane;
     using ConvolverPlan<T>::interpol;
-    using ConvolverPlan<T>::interpol3;
     using ConvolverPlan<T>::deinterpol;
     using ConvolverPlan<T>::updateSlm;
     using ConvolverPlan<T>::getPatchInfo;
@@ -82,17 +81,6 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       auto psi = to_mav<T,1>(pypsi, false);
       auto signal = to_mav<T,1>(pysignal, true);
       interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
-      }
-    void pyinterpol3(const py::array &pycube, size_t itheta0, size_t iphi0,
-      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
-      py::array &pysignal)
-      {
-      auto cube = to_mav<T,3>(pycube, false);
-      auto theta = to_mav<T,1>(pytheta, false);
-      auto phi = to_mav<T,1>(pyphi, false);
-      auto psi = to_mav<T,1>(pypsi, false);
-      auto signal = to_mav<T,1>(pysignal, true);
-      interpol3(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
     void pydeinterpol(py::array &pycube, size_t itheta0, size_t iphi0,
       const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
@@ -150,7 +138,6 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("prepPsi", &conv_d::pyPrepPsi, "subcube"_a)
     .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
-    .def("interpol3", &conv_d::pyinterpol3, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   using conv_f = PyConvolverPlan<float>;
@@ -164,7 +151,6 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("prepPsi", &conv_f::pyPrepPsi, "subcube"_a)
     .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
-    .def("interpol3", &conv_f::pyinterpol3, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_f::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   }

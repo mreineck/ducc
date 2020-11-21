@@ -71,25 +71,13 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 
-print("start")
 plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=2)
-cube = np.empty((2*kmax+1, plan.Ntheta(), plan.Nphi()), dtype=np.float64)
-#slmf = slm.astype(np.complex64)
-#blmf = blm.astype(np.complex64)
+cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
 cube[()]=0
-print (np.sum(cube))
 plan.getPlane(slm[:,0], blm[:,0], 0, cube[0])
 for mbeam in range(1,kmax+1):
     plan.getPlane(slm[:,0], blm[:,0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
-print (np.sum(cube))
-cube2 = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
-print("beep")
-cube2[:2*kmax+1,:,:] = cube
-cube2[1:,:,:]*=0.5   # We still multiply these values by 2 for the old approach
-#cube2[2::2,:,:]*=-1
-print("beep")
-plan.prepPsi(cube2)
-print("end")
+plan.prepPsi(cube)
 
 print("setup time: ", time.time()-t0)
 nth = (lmax+1)
@@ -105,18 +93,8 @@ ptgbla = ptg.reshape((-1, 3)).astype(np.float64)
 res = np.empty(ptgbla.shape[0], dtype=np.float64)
 t0 = time.time()
 plan.interpol(cube, 0, 0, ptgbla[:,0], ptgbla[:,1], ptgbla[:,2], res)
-print("interpolation time: ", time.time()-t0)
-res=res.reshape((nth, nph, 1))
-print(np.min(res), np.max(res))
-
-res2 = np.zeros(ptgbla.shape[0], dtype=np.float64)
-t0 = time.time()
-print(np.min(cube2), np.max(cube2))
-plan.interpol3(cube2, 0, 0, ptgbla[:,0], ptgbla[:,1], ptgbla[:,2], res2)
 print("interpolation2 time: ", time.time()-t0)
-res2=res2.reshape((nth, nph, 1))
-print(np.min(res2/res), np.max(res2/res))
-print(2*kmax+1, cube2.shape[0])
+res=res.reshape((nth, nph, 1))
 
 plt.subplot(2, 2, 1)
 plt.imshow(res[:, :, 0])
@@ -130,11 +108,6 @@ for ith in range(nth):
         bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)
-plt.subplot(2, 2, 3)
-plt.imshow((res-res2)[:,:,0])
-# plt.subplot(2, 2, 3)
-# plt.imshow(bar[:, :, 0]-res[:,:,0])
-# print(np.max(np.abs(bar[:, :, 0]-res[:,:,0]))/np.max(np.abs(bar[:, :, 0])))
 plt.subplot(2, 2, 4)
 plt.imshow(bar2-res[:, :, 0])
 print(np.max(np.abs(bar2-res[:,:,0]))/np.max(np.abs(bar2)))
