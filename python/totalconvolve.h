@@ -300,6 +300,7 @@ template<typename T> class ConvolverPlan
           ipsi = size_t(fpsi+1);
           fpsi = -1+(ipsi-fpsi)*2;
           if (ipsi>=plan.npsi_b) ipsi-=plan.npsi_b;
+if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
           tkrn.eval3(fpsi, ftheta, fphi, &buf.simd[0]);
           }
         size_t itheta, iphi, ipsi;
@@ -711,7 +712,22 @@ template<typename T> class ConvolverPlan
             subcube.v(k,i,j) *= factor;
         }
       fmav<T> fsubcube(subcube);
-      r2r_fftpack(fsubcube, fsubcube, {0}, false, false, T(1), nthreads);
+      r2r_fftpack(fsubcube, fsubcube, {0}, false, true, T(1), nthreads);
+      }
+
+    void deprepPsi(mav<T,3> &subcube) const
+      {
+      MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
+      fmav<T> fsubcube(subcube);
+      r2r_fftpack(fsubcube, fsubcube, {0}, true, false, T(1), nthreads);
+      auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
+      for (size_t k=0; k<npsi_s; ++k)
+        {
+        auto factor = T(fct[(k+1)/2]);
+        for (size_t i=0; i<subcube.shape(1); ++i)
+          for (size_t j=0; j<subcube.shape(2); ++j)
+            subcube.v(k,i,j) *= factor;
+        }
       }
   };
 

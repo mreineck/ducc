@@ -87,7 +87,7 @@ nph = (2*lmax+1)
 ptg = np.zeros((nth, nph, 3))
 ptg[:, :, 0] = (np.pi*(0.5+np.arange(nth))/nth).reshape((-1, 1))
 ptg[:, :, 1] = (2*np.pi*(0.5+np.arange(nph))/nph).reshape((1, -1))
-ptg[:, :, 2] = np.pi*0.0
+ptg[:, :, 2] = np.pi*0.7
 ptgbla = ptg.reshape((-1, 3)).astype(np.float64)
 
 res = np.empty(ptgbla.shape[0], dtype=np.float64)

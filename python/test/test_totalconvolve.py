@@ -81,12 +81,13 @@ def test_against_convolution(lkmax):
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
     ptg[:, 1] = rng.uniform(0, 2*np.pi, nptg)
-    ptg[:, 2] = rng.uniform(-np.pi, np.pi, nptg)
+    ptg[:, 2] = rng.uniform(0, 2*np.pi, nptg)
 
-    cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))
+    cube=np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
     conv.getPlane(slm, blm, 0, cube[0])
     for mbeam in range(1,kmax+1):
         conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    conv.prepPsi(cube)
     res1 = np.empty(ptg.shape[0])
     conv.interpol(cube, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], res1)
 
@@ -113,10 +114,11 @@ def test_adjointness(lkmax):
     conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2,
                                        epsilon=1e-5, nthreads=2)
 
-    cube=np.empty((2*kmax+1, conv.Ntheta(), conv.Nphi()))
+    cube=np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
     conv.getPlane(slm, blm, 0, cube[0])
     for mbeam in range(1,kmax+1):
         conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    conv.prepPsi(cube)
     inter1 = np.empty(ptg.shape[0])
     conv.interpol(cube, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], inter1)
 
@@ -124,6 +126,8 @@ def test_adjointness(lkmax):
     cube2=cube*0.
     conv.deinterpol(cube2, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], fake)
     bla=slm*0.
+    conv.deprepPsi(cube2)
+    #cube2[2::2,:,:]*=-1
     conv.updateSlm(bla, blm, 0, cube2[0])
     for mbeam in range(1,kmax+1):
         conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1], cube2[2*mbeam])

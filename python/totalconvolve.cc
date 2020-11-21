@@ -50,6 +50,7 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::updateSlm;
     using ConvolverPlan<T>::getPatchInfo;
     using ConvolverPlan<T>::prepPsi;
+    using ConvolverPlan<T>::deprepPsi;
 
   public:
     using ConvolverPlan<T>::Ntheta;
@@ -70,6 +71,11 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       {
       auto subcube = to_mav<T,3>(py_subcube, true);
       prepPsi(subcube);
+      }
+    void pyDeprepPsi(const py::array &py_subcube) const
+      {
+      auto subcube = to_mav<T,3>(py_subcube, true);
+      deprepPsi(subcube);
       }
     void pyinterpol(const py::array &pycube, size_t itheta0, size_t iphi0,
       const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
@@ -137,6 +143,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPatchInfo", &conv_d::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("prepPsi", &conv_d::pyPrepPsi, "subcube"_a)
+    .def("deprepPsi", &conv_d::pyDeprepPsi, "subcube"_a)
     .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
@@ -150,6 +157,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPatchInfo", &conv_f::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
     .def("prepPsi", &conv_f::pyPrepPsi, "subcube"_a)
+    .def("deprepPsi", &conv_f::pyDeprepPsi, "subcube"_a)
     .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_f::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);

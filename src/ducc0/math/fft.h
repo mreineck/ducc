@@ -1163,7 +1163,9 @@ struct ExecR2R
     if ((!r2c) && forward)
       for (size_t i=2; i<it.length_out(); i+=2)
         buf[i] = -buf[i];
-    plan.exec(buf, fct, forward);
+    // FIXME: I wonder whether that should actually be "r2c" instead of
+    // "forward". More tests needed.
+    plan.exec(buf, fct, r2c);
     if (r2c && (!forward))
       for (size_t i=2; i<it.length_out(); i+=2)
         buf[i] = -buf[i];
