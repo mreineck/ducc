@@ -691,7 +691,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)
               {
-              auto tmp = blm(l,mbeam)*(-lnorm[l]);
+              auto tmp = blm(l,mbeam)*(-2*lnorm[l]);
               slm(l,m) += conj(a1(l,m))*tmp.real();
               slm(l,m) += conj(a2(l,m))*tmp.imag();
               }

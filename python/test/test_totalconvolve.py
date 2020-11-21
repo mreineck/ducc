@@ -127,7 +127,6 @@ def test_adjointness(lkmax):
     conv.deinterpol(cube2, 0, 0, ptg[:,0], ptg[:,1], ptg[:,2], fake)
     bla=slm*0.
     conv.deprepPsi(cube2)
-    #cube2[2::2,:,:]*=-1
     conv.updateSlm(bla, blm, 0, cube2[0])
     for mbeam in range(1,kmax+1):
         conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1], cube2[2*mbeam])
