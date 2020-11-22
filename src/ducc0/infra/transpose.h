@@ -153,7 +153,7 @@ template<typename T, typename Func> void iter(const fmav<T> &in,
   {
   size_t ndim = in.ndim();
   if (dim+2==ndim)
-    sthelper2(in.data()+idxin, out.vdata()+idxout, in.shape(ndim-2), in.shape(ndim-1),
+    sthelper2(in.cdata()+idxin, out.vdata()+idxout, in.shape(ndim-2), in.shape(ndim-1),
       in.stride(ndim-2), in.stride(ndim-1), out.stride(ndim-2),
       out.stride(ndim-1), func);
   else
@@ -168,7 +168,7 @@ template<typename T, typename Func> void transpose(const fmav<T> &in,
   fmav<T> in2(in, shp, si), out2(out, shp, so);
   if (in2.ndim()==1)  // 1D, just iterate
     {
-    sthelper1(in2.data(), out2.vdata(), in2.shape(0), in2.stride(0), out2.stride(0), func);
+    sthelper1(in2.cdata(), out2.vdata(), in2.shape(0), in2.stride(0), out2.stride(0), func);
     return;
     }
   iter(in2, out2, 0, 0, 0, func);

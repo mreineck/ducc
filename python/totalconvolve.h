@@ -129,7 +129,7 @@ template<typename T> void convolve_1d(const fmav<T> &in,
   {
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
-  if (in.data()==out.data())
+  if (in.cdata()==out.cdata())
     MR_assert(in.stride()==out.stride(), "strides mismatch");
   for (size_t i=0; i<in.ndim(); ++i)
     if (i!=axis)
@@ -533,7 +533,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
               a1(l,m) += vslm[i].c(l,m)*vblm[i].c(l,0).real()*lnorm[l];
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
-        sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
+        sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,0);
         }
       else
@@ -553,7 +553,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         auto m2 = im.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
-        sharp_alm2map_spin(mbeam, a1.Alms().data(), a2.Alms().data(),
+        sharp_alm2map_spin(mbeam, a1.Alms().cdata(), a2.Alms().cdata(),
           m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,mbeam);
         correct(m2,mbeam);
@@ -736,7 +736,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         Alm<complex<T>> a1(lmax, lmax);
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         decorrect(m1,0);
-        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
+        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.cdata(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             for (size_t i=0; i<ncomp; ++i)
@@ -750,8 +750,8 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
-        sharp_alm2map_spin_adjoint(mbeam, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
-          m2.data(), *ginfo, *ainfo, 0, nthreads);
+        sharp_alm2map_spin_adjoint(mbeam, a1.Alms().vdata(), a2.Alms().vdata(), m1.cdata(),
+          m2.cdata(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)

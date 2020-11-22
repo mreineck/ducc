@@ -867,7 +867,7 @@ template<typename T> class Params
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
+            px0r(bufr.cdata()), px0i(bufi.cdata()),
             w0(w0_),
             xdw(T(1)/dw_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
