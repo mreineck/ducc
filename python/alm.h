@@ -56,6 +56,8 @@ class Alm_Base
       MR_assert(m<=l,"mmax must not be larger than lmax");
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
       }
+    size_t Num_Alms() const
+      { return arrsize; }
 
     Alm_Base (size_t lmax_, const vector<size_t> &mval_,
               const vector<ptrdiff_t> &mstart_)

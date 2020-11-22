@@ -490,30 +490,22 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       return res;
       }
 
-    void getPlane(const mav<complex<T>,2> &vslm_, const mav<complex<T>,2> &vblm_,
+    void getPlane(const mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      auto ncomp = vslm_.shape(1);
+      auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm_.shape(1)==ncomp, "inconsistent slm and blm vectors");
-      vector<Alm<complex<T>>> vslm, vblm;
-      vslm.reserve(ncomp);
-      vblm.reserve(ncomp);
-      for (size_t comp=0; comp<ncomp; ++comp)
-        {
-        vslm.emplace_back(vslm_.template subarray<1>({0,comp}, {vslm_.shape(0),0}), lmax, lmax);
-        vblm.emplace_back(vblm_.template subarray<1>({0,comp}, {vblm_.shape(0),0}), lmax, kmax);
-        MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
-        MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-        MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
-        }
+      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
+      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
+      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
       if (mbeam>0)
         {
         MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
         MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
         }
-      MR_assert(mbeam <= vblm[0].Mmax(), "mbeam too high");
+      MR_assert(mbeam <= kmax, "mbeam too high");
 
       auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -528,9 +520,9 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
-            a1(l,m) = vslm[0].c(l,m)*vblm[0].c(l,0).real()*lnorm[l];
+            a1(l,m) = vslm(islm.index(l,m),0)*vblm(iblm.index(l,0),0).real()*lnorm[l];
             for (size_t i=1; i<ncomp; ++i)
-              a1(l,m) += vslm[i].c(l,m)*vblm[i].c(l,0).real()*lnorm[l];
+              a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
@@ -546,9 +538,9 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             if (l>=mbeam)
               for (size_t i=0; i<ncomp; ++i)
                 {
-                auto tmp = vblm[i].c(l,mbeam)*(-lnorm[l]);
-                a1(l,m) += vslm[i].c(l,m)*tmp.real();
-                a2(l,m) += vslm[i].c(l,m)*tmp.imag();
+                auto tmp = vblm(iblm.index(l,mbeam),i)*(-lnorm[l]);
+                a1(l,m) += vslm(islm.index(l,m),i)*tmp.real();
+                a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
                 }
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
@@ -587,11 +579,11 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             }
           }
       }
-    void getPlane(const mav<complex<T>,1> &slm_, const mav<complex<T>,1> &blm_,
+    void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      mav<complex<T>,2> vslm(&slm_(0), {slm_.shape(0),1}, {slm_.stride(0),0});
-      mav<complex<T>,2> vblm(&blm_(0), {blm_.shape(0),1}, {blm_.stride(0),0});
+      mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
+      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
       getPlane(vslm, vblm, mbeam, re, im);
       }
 
@@ -649,31 +641,22 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         }
       }
 
-     void updateSlm(mav<complex<T>,2> &vslm_, const mav<complex<T>,2> &vblm_,
+     void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      auto ncomp = vslm_.shape(1);
+      auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm_.shape(1)==ncomp, "inconsistent slm and blm vectors");
-      vector<Alm<complex<T>>> vslm, vblm;
-      vslm.reserve(ncomp);
-      vblm.reserve(ncomp);
-      for (size_t comp=0; comp<ncomp; ++comp)
-        {
-        auto tmp(vslm_.template subarray<1>({0,comp}, {vslm_.shape(0),0}));
-        vslm.emplace_back(tmp, lmax, lmax);
-        vblm.emplace_back(vblm_.template subarray<1>({0,comp}, {vblm_.shape(0),0}), lmax, kmax);
-        MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
-        MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-        MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
-        }
+      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
+      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
+      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
       if (mbeam>0)
         {
         MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
         MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
         }
-      MR_assert(mbeam <= vblm[0].Mmax(), "mbeam too high");
+      MR_assert(mbeam <= kmax, "mbeam too high");
 
       auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
@@ -740,7 +723,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             for (size_t i=0; i<ncomp; ++i)
-              vslm[i](l,m) += conj(a1(l,m))*vblm[i].c(l,0).real()*lnorm[l];
+              vslm.v(islm.index(l,m),i) += conj(a1(l,m))*vblm(iblm.index(l,0),i).real()*lnorm[l];
         }
       else
         {
@@ -757,17 +740,17 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             if (l>=mbeam)
               for (size_t i=0; i<ncomp; ++i)
                 {
-                auto tmp = vblm[i].c(l,mbeam)*(-2*lnorm[l]);
-                vslm[i](l,m) += conj(a1(l,m))*tmp.real();
-                vslm[i](l,m) += conj(a2(l,m))*tmp.imag();
+                auto tmp = vblm(iblm.index(l,mbeam),i)*(-2*lnorm[l]);
+                vslm.v(islm.index(l,m),i) += conj(a1(l,m))*tmp.real();
+                vslm.v(islm.index(l,m),i) += conj(a2(l,m))*tmp.imag();
                 }
         }
       }
-    void updateSlm(mav<complex<T>,1> &slm_, const mav<complex<T>,1> &blm_,
+    void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      mav<complex<T>,2> vslm(&slm_(0), {slm_.shape(0),1}, {slm_.stride(0),0});
-      mav<complex<T>,2> vblm(&blm_(0), {blm_.shape(0),1}, {blm_.stride(0),0});
+      mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
+      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
       updateSlm(vslm, vblm, mbeam, re, im);
       }
 
