@@ -221,7 +221,7 @@ template<typename T> class ConvolverPlan
         arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
+    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       constexpr size_t cellsize=16;
@@ -229,11 +229,16 @@ template<typename T> class ConvolverPlan
              ncp = patch_nphi/cellsize+1;
       double theta0 = (int(itheta0)-int(nborder))*dtheta,
              phi0 = (int(iphi0)-int(nborder))*dphi;
+      double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
+      double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
       vector<vector<size_t>> mapper(nct*ncp);
       MR_assert(theta.conformable(phi), "theta/phi size mismatch");
 // FIXME: parallelize?
       for (size_t i=0; i<theta.shape(0); ++i)
         {
+        MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
+        MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
+        MR_assert((psi(i)>=0) && (psi(i)<=2*pi+1e-4), "psi out of range [0;2pi]: ", psi(i));
         auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
         auto itheta = size_t(ftheta+1);
         auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
@@ -321,7 +326,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
@@ -362,7 +367,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
       constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
@@ -485,14 +490,19 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       return res;
       }
 
-    void getPlane(const vector<Alm<complex<T>>> &vslm, const vector<Alm<complex<T>>> &vblm,
+    void getPlane(const mav<complex<T>,2> &vslm_, const mav<complex<T>,2> &vblm_,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      auto ncomp = vslm.size();
+      auto ncomp = vslm_.shape(1);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm.size()==ncomp, "inconsistent slm and blm vectors");
+      MR_assert(vblm_.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      vector<Alm<complex<T>>> vslm, vblm;
+      vslm.reserve(ncomp);
+      vblm.reserve(ncomp);
       for (size_t comp=0; comp<ncomp; ++comp)
         {
+        vslm.emplace_back(vslm_.template subarray<1>({0,comp}, {vslm_.shape(0),0}), lmax, lmax);
+        vblm.emplace_back(vblm_.template subarray<1>({0,comp}, {vblm_.shape(0),0}), lmax, kmax);
         MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
         MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
         MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
@@ -518,9 +528,9 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
-            a1(l,m) = vslm[0](l,m)*vblm[0](l,0).real()*lnorm[l];
+            a1(l,m) = vslm[0].c(l,m)*vblm[0].c(l,0).real()*lnorm[l];
             for (size_t i=1; i<ncomp; ++i)
-              a1(l,m) += vslm[i](l,m)*vblm[i](l,0).real()*lnorm[l];
+              a1(l,m) += vslm[i].c(l,m)*vblm[i].c(l,0).real()*lnorm[l];
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
         sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
@@ -536,9 +546,9 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             if (l>=mbeam)
               for (size_t i=0; i<ncomp; ++i)
                 {
-                auto tmp = vblm[i](l,mbeam)*(-lnorm[l]);
-                a1(l,m) += vslm[i](l,m)*tmp.real();
-                a2(l,m) += vslm[i](l,m)*tmp.imag();
+                auto tmp = vblm[i].c(l,mbeam)*(-lnorm[l]);
+                a1(l,m) += vslm[i].c(l,m)*tmp.real();
+                a2(l,m) += vslm[i].c(l,m)*tmp.imag();
                 }
             }
         auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
@@ -577,12 +587,11 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             }
           }
       }
-    void getPlane(const Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+    void getPlane(const mav<complex<T>,1> &slm_, const mav<complex<T>,1> &blm_,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      vector<Alm<complex<T>>> vslm, vblm;
-      vslm.push_back(slm);
-      vblm.push_back(blm);
+      mav<complex<T>,2> vslm(&slm_(0), {slm_.shape(0),1}, {slm_.stride(0),0});
+      mav<complex<T>,2> vblm(&blm_(0), {blm_.shape(0),1}, {blm_.stride(0),0});
       getPlane(vslm, vblm, mbeam, re, im);
       }
 
@@ -640,14 +649,20 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         }
       }
 
-    void updateSlm(vector<Alm<complex<T>>> &vslm, const vector<Alm<complex<T>>> &vblm,
+     void updateSlm(mav<complex<T>,2> &vslm_, const mav<complex<T>,2> &vblm_,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      auto ncomp = vslm.size();
+      auto ncomp = vslm_.shape(1);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm.size()==ncomp, "inconsistent slm and blm vectors");
+      MR_assert(vblm_.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      vector<Alm<complex<T>>> vslm, vblm;
+      vslm.reserve(ncomp);
+      vblm.reserve(ncomp);
       for (size_t comp=0; comp<ncomp; ++comp)
         {
+        auto tmp(vslm_.template subarray<1>({0,comp}, {vslm_.shape(0),0}));
+        vslm.emplace_back(tmp, lmax, lmax);
+        vblm.emplace_back(vblm_.template subarray<1>({0,comp}, {vblm_.shape(0),0}), lmax, kmax);
         MR_assert(vslm[comp].Lmax()==lmax, "inconsistent Sky lmax");
         MR_assert(vslm[comp].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
         MR_assert(vblm[comp].Lmax()==lmax, "Sky and beam lmax must be equal");
@@ -725,7 +740,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             for (size_t i=0; i<ncomp; ++i)
-              vslm[i](l,m) += conj(a1(l,m))*vblm[i](l,0).real()*lnorm[l];
+              vslm[i](l,m) += conj(a1(l,m))*vblm[i].c(l,0).real()*lnorm[l];
         }
       else
         {
@@ -742,18 +757,17 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             if (l>=mbeam)
               for (size_t i=0; i<ncomp; ++i)
                 {
-                auto tmp = vblm[i](l,mbeam)*(-2*lnorm[l]);
+                auto tmp = vblm[i].c(l,mbeam)*(-2*lnorm[l]);
                 vslm[i](l,m) += conj(a1(l,m))*tmp.real();
                 vslm[i](l,m) += conj(a2(l,m))*tmp.imag();
                 }
         }
       }
-    void updateSlm(Alm<complex<T>> &slm, const Alm<complex<T>> &blm,
+    void updateSlm(mav<complex<T>,1> &slm_, const mav<complex<T>,1> &blm_,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      vector<Alm<complex<T>>> vslm, vblm;
-      vslm.emplace_back(slm);
-      vblm.push_back(blm);
+      mav<complex<T>,2> vslm(&slm_(0), {slm_.shape(0),1}, {slm_.stride(0),0});
+      mav<complex<T>,2> vblm(&blm_(0), {blm_.shape(0),1}, {blm_.stride(0),0});
       updateSlm(vslm, vblm, mbeam, re, im);
       }
 

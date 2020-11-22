@@ -36,13 +36,6 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
   {
   private:
     using ConvolverPlan<T>::lmax;
-    Alm<complex<T>> getAlm(const py::array &inp, bool write=false) const
-      {
-      auto inp2 = to_mav<complex<T>,1>(inp, write);
-      int mmax = Alm_Base::Get_Mmax(inp2.shape(0), lmax);
-      return Alm<complex<T>>(inp2, lmax, mmax);
-      }
-
     using ConvolverPlan<T>::ConvolverPlan;
     using ConvolverPlan<T>::getPlane;
     using ConvolverPlan<T>::interpol;
@@ -61,8 +54,8 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
       size_t mbeam, py::array &py_re, py::object &py_im) const
       {
-      auto slm = getAlm(py_slm);
-      auto blm = getAlm(py_blm);
+      auto slm = to_mav<complex<T>,1>(py_slm);
+      auto blm = to_mav<complex<T>,1>(py_blm);
       auto re = to_mav<T,2>(py_re, true);
       auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
       getPlane(slm, blm, mbeam, re, im);
@@ -102,8 +95,8 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     void pyUpdateSlm(py::array &py_slm, const py::array &py_blm,
       size_t mbeam, py::array &py_re, py::object &py_im) const
       {
-      auto slm = getAlm(py_slm, true);
-      auto blm = getAlm(py_blm);
+      auto slm = to_mav<complex<T>,1>(py_slm, true);
+      auto blm = to_mav<complex<T>,1>(py_blm);
       auto re = to_mav<T,2>(py_re, true);
       auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
       updateSlm(slm, blm, mbeam, re, im);
@@ -117,42 +110,26 @@ template<typename T> class PyInterpolator
     ConvolverPlan<T> conv;
     mav<T,4> cube;
 
-    vector<Alm<complex<T>>> makevec(const py::array &inp, size_t lmax, size_t kmax)
-      {
-      auto inp2 = to_mav<complex<T>,2>(inp);
-      vector<Alm<complex<T>>> res;
-      for (size_t i=0; i<inp2.shape(1); ++i)
-        res.push_back(Alm<complex<T>>(inp2.template subarray<1>({0,i},{inp2.shape(0),0}),lmax, kmax));
-      return res;
-      }
-    void makevec_v(py::array &inp, size_t lmax, size_t kmax, vector<Alm<complex<T>>> &res)
-      {
-      auto inp2 = to_mav<complex<T>,2>(inp, true);
-      for (size_t i=0; i<inp2.shape(1); ++i)
-        {
-        auto xtmp = inp2.template subarray<1>({0,i},{inp2.shape(0),0});
-        res.emplace_back(xtmp, lmax, kmax);
-        }
-      }
-
   public:
     PyInterpolator(const py::array &slm, const py::array &blm,
       bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
       : conv(lmax, kmax, ofactor, epsilon, nthreads),
         cube({(separate ? size_t(slm.shape(1)) : 1u), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
       {
-      auto vslm = makevec(slm, lmax, lmax);
-      auto vblm = makevec(blm, lmax, kmax);
+      auto vslm = to_mav<complex<T>,2>(slm);
+      auto vblm = to_mav<complex<T>,2>(blm);
       if (separate)
-        for (size_t i=0; i<vslm.size(); ++i)
+        for (size_t i=0; i<vslm.shape(1); ++i)
           {
           auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          conv.getPlane(vslm[i], vblm[i], 0, re, re);
+          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
+          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          conv.getPlane(vslmi, vblmi, 0, re, re);
           for (size_t k=1; k<kmax+1; ++k)
             {
             auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
             auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-            conv.getPlane(vslm[i], vblm[i], k, re, im);
+            conv.getPlane(vslmi, vblmi, k, re, im);
             }
           }
       else
@@ -214,8 +191,8 @@ template<typename T> class PyInterpolator
     py::array pygetSlm(const py::array &blm_)
       {
       size_t lmax=conv.Lmax(), kmax=conv.Kmax();
-      auto vblm = makevec(blm_, lmax, kmax);
-      size_t ncomp = vblm.size();
+      auto vblm = to_mav<complex<T>,2>(blm_);
+      size_t ncomp = vblm.shape(1);
       bool separate = cube.shape(0)>1;
       if (separate) MR_assert(ncomp==cube.shape(0), "dimension mismatch");
       for (size_t i=0; i<cube.shape(0); ++i)
@@ -224,21 +201,20 @@ template<typename T> class PyInterpolator
         conv.deprepPsi(subcube);
         }
       auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),ncomp});
-      vector<Alm<complex<T>>> vslm;
-      vslm.reserve(ncomp);
-      makevec_v(res, lmax, lmax, vslm);
-      for (size_t i=0; i<vslm.size(); ++i)
-        vslm[i].Alms().fill(0);
+      auto vslm = to_mav<complex<T>,2>(res, true);
+      vslm.fill(T(0));
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
           auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          conv.updateSlm(vslm[i], vblm[i], 0, re, re);
+          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
+          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          conv.updateSlm(vslmi, vblmi, 0, re, re);
           for (size_t k=1; k<kmax+1; ++k)
             {
             auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
             auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-            conv.updateSlm(vslm[i], vblm[i], k, re, im);
+            conv.updateSlm(vslmi, vblmi, k, re, im);
             }
           }
       else

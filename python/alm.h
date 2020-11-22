@@ -56,12 +56,6 @@ class Alm_Base
       MR_assert(m<=l,"mmax must not be larger than lmax");
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
       }
-    static size_t Get_Mmax (size_t num, size_t lm)
-      {
-      for (size_t m=0; m<=lm; ++m)
-        if (Num_Alms(lm, m)==num) return m;
-      MR_fail("bad number of a_lm");
-      }
 
     Alm_Base (size_t lmax_, const vector<size_t> &mval_,
               const vector<ptrdiff_t> &mstart_)
@@ -161,8 +155,6 @@ template<typename T> class Alm: public Alm_Base
       { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
     Alm (size_t lmax_=0, size_t mmax_=0)
       : Alm_Base(lmax_,mmax_), alm ({Num_Alms(lmax,mmax_)}) {}
-    Alm (Alm<T> &other) = default;
-    Alm (const Alm<T> &other) = default;
 
     /*! Sets all coefficients to zero. */
     void SetToZero ()
@@ -197,6 +189,9 @@ template<typename T> class Alm: public Alm_Base
       { return alm.v(index(l,m)); }
     /*! Returns a constant reference to the specified coefficient. */
     const T &operator() (size_t l, size_t m) const
+      { return alm(index(l,m)); }
+    /*! Returns a constant reference to the specified coefficient. */
+    const T &c(size_t l, size_t m) const
       { return alm(index(l,m)); }
 
     /*! Returns a pointer for a given m, from which the address of a_lm
