@@ -58,13 +58,14 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 @pmp('nydirty', [64])
 @pmp("nrow", (1, 100))
 @pmp("nchan", (1, 7))
-@pmp("epsilon", list(10.**np.linspace(-2.,-12.,100)))
+@pmp("epsilon", list(10.**np.linspace(-2., -12., 100)))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
 @pmp("use_wgt", (True,))
 @pmp("nthreads", (1, 10))
 @pmp("fov", (10.,))
-def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, fov, nthreads):
+def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
+                                singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         return
     rng = np.random.default_rng()
@@ -81,10 +82,12 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
         if wgt is not None:
             wgt = wgt.astype("f4")
     try:
-        dirty = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                            pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
+        dirty = ng.ms2dirty(
+            uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+            pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
     except:
         # no matching kernel was found
         pytest.skip()
-    ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex, pixsizey, wstacking)
+    ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                           pixsizey, wstacking)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)

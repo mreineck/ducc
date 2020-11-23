@@ -67,9 +67,9 @@ def testp2():
     quat4 = np.empty((size2, 4), dtype=np.float64)
     quat4 = prov.get_rotated_quaternions(t02, f2, rquat, rot_left=False,
                                          out=quat4)
-    assert_((quat2==quat3).all(), "problem")
-    quat2 *= np.sign(quat2[:,0]).reshape((-1,1))
-    quat4 *= np.sign(quat4[:,0]).reshape((-1,1))
+    assert_((quat2 == quat3).all(), "problem")
+    quat2 *= np.sign(quat2[:, 0]).reshape((-1, 1))
+    quat4 *= np.sign(quat4[:, 0]).reshape((-1, 1))
 
     try:
         from scipy.spatial.transform import Rotation as R
@@ -83,10 +83,9 @@ def testp2():
     times2 = t02 + 1./f2*np.arange(size2)
     r2 = rrquat*slerp(times2)
     squat2 = r2.as_quat()
-    squat2 *= np.sign(squat2[:,0]).reshape((-1,1))
+    squat2 *= np.sign(squat2[:, 0]).reshape((-1, 1))
     _assert_close(quat2, squat2, 1e-13)
     r3 = slerp(times2)*rrquat
     squat3 = r3.as_quat()
-    squat3 *= np.sign(squat3[:,0]).reshape((-1,1))
+    squat3 *= np.sign(squat3[:, 0]).reshape((-1, 1))
     _assert_close(quat4, squat3, 1e-13)
-

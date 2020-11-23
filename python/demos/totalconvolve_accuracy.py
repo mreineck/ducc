@@ -73,10 +73,10 @@ t0 = time.time()
 
 plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=2)
 cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
-cube[()]=0
-plan.getPlane(slm[:,0], blm[:,0], 0, cube[0])
-for mbeam in range(1,kmax+1):
-    plan.getPlane(slm[:,0], blm[:,0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
+cube[()] = 0
+plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0])
+for mbeam in range(1, kmax+1):
+    plan.getPlane(slm[:, 0], blm[:, 0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
 plan.prepPsi(cube)
 
 print("setup time: ", time.time()-t0)
@@ -92,9 +92,9 @@ ptgbla = ptg.reshape((-1, 3)).astype(np.float64)
 
 res = np.empty(ptgbla.shape[0], dtype=np.float64)
 t0 = time.time()
-plan.interpol(cube, 0, 0, ptgbla[:,0], ptgbla[:,1], ptgbla[:,2], res)
+plan.interpol(cube, 0, 0, ptgbla[:, 0], ptgbla[:, 1], ptgbla[:, 2], res)
 print("interpolation2 time: ", time.time()-t0)
-res=res.reshape((nth, nph, 1))
+res = res.reshape((nth, nph, 1))
 
 plt.subplot(2, 2, 1)
 plt.imshow(res[:, :, 0])
@@ -110,5 +110,5 @@ plt.subplot(2, 2, 2)
 plt.imshow(bar2)
 plt.subplot(2, 2, 4)
 plt.imshow(bar2-res[:, :, 0])
-print(np.max(np.abs(bar2-res[:,:,0]))/np.max(np.abs(bar2)))
+print(np.max(np.abs(bar2-res[:, :, 0]))/np.max(np.abs(bar2)))
 plt.show()

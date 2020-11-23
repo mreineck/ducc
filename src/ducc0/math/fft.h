@@ -556,7 +556,7 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   {
   auto othersize = info.size()/axsize;
   constexpr auto vlen = native_simd<T0>::size();
-  return aligned_array<T>(axsize*min(vlen, othersize));
+  return aligned_array<T>(axsize*std::min(vlen, othersize));
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
