@@ -571,6 +571,7 @@ template<typename T> class ConvolverPlan
             }
           }
       for (size_t i=0; i<ntheta; ++i)
+        {
         for (size_t j=0; j<nbphi; ++j)
           {
           re.v(i,j) = re(i,j+nphi_b);
@@ -581,6 +582,14 @@ template<typename T> class ConvolverPlan
             im.v(i,j+nphi_b+nbphi) = im(i,j+nbphi);
             }
           }
+        // SIMD buffer
+        for (size_t j=0; j<vlen; ++j)
+          {
+          re.v(i, nphi-vlen+j) = T(0);
+          if (mbeam>0)
+            im.v(i, nphi-vlen+j) = T(0);
+          }
+        }
       }
     void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
@@ -752,7 +761,7 @@ template<typename T> class ConvolverPlan
     void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
       {
-      mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
+      mav<complex<T>,2> vslm(&slm.v(0), {slm.shape(0),1}, {slm.stride(0),0}, true);
       mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
       updateSlm(vslm, vblm, mbeam, re, im);
       }

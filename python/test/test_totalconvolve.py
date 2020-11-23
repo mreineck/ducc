@@ -69,7 +69,7 @@ def myalmdot(a1, a2, lmax, mmax, spin):
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
-def xtest_against_convolution(lkmax):
+def test_against_convolution(lkmax):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, 1)[:, 0]
@@ -103,7 +103,7 @@ def xtest_against_convolution(lkmax):
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
 @pmp("ncomp", [1, 3])
 @pmp("separate", [True, False])
-def xtest_against_convolution_2(lkmax, ncomp, separate):
+def test_against_convolution_2(lkmax, ncomp, separate):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, ncomp)
@@ -115,7 +115,7 @@ def xtest_against_convolution_2(lkmax, ncomp, separate):
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
     ptg[:, 1] = rng.uniform(0, 2*np.pi, nptg)
-    ptg[:, 2] = rng.uniform(0., 2*np.pi, nptg)
+    ptg[:, 2] = rng.uniform(-np.pi, np.pi, nptg)
 
     res1 = inter.interpol(ptg)
 
@@ -134,7 +134,7 @@ def xtest_against_convolution_2(lkmax, ncomp, separate):
 
 
 @pmp("lkmax", [(13, 13), (20, 0), (2, 1), (30, 15), (35, 2)])
-def xtest_adjointness(lkmax):
+def test_adjointness(lkmax):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, 1)[:, 0]
