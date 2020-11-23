@@ -21,7 +21,7 @@ include_dirs = ['.', './src/',
                 pybind11.get_include(True),
                 pybind11.get_include(False)]
 
-extra_compile_args = ['-std=c++17', '-march=native', '-ffast-math', '-O3', '-fno-tree-vectorize', '-g']
+extra_compile_args = ['-std=c++17', '-march=native', '-ffast-math', '-O3', '-fno-tree-vectorize']
 
 python_module_link_args = []
 
@@ -51,7 +51,7 @@ else:
 
     python_module_link_args += ['-march=native',
                                 '-Wl,-rpath,$ORIGIN',
-                                ]
+                                '-s']
 
 # if you want debugging info, remove the "-s" from python_module_link_args
 depfiles = (_get_files_by_suffix('.', 'h') +

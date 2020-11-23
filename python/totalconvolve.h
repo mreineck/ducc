@@ -247,12 +247,8 @@ template<typename T> class ConvolverPlan
         auto iphi = size_t(fphi+1);
         itheta /= cellsize;
         iphi /= cellsize;
-//if (itheta>=nct) cout << theta0 << " " << dtheta << " " << theta(i) << " " << itheta << " " << patch_ntheta << " " << nct << endl;
-//if (iphi>=ncp) cout << iphi << endl;
         MR_assert(itheta<nct, "bad itheta");
         MR_assert(iphi<ncp, "bad iphi");
-//        size_t itheta=min(nct-1,size_t((theta(i)-theta0)/pi*nct)),
-//               iphi=min(ncp-1,size_t((phi(i)-phi0)/(2*pi)*ncp));
         mapper[itheta*ncp+iphi].push_back(i);
         }
       vector<size_t> idx(theta.shape(0));
