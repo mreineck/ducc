@@ -224,7 +224,7 @@ template<typename T> class ConvolverPlan
         arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
+    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       constexpr size_t cellsize=16;
@@ -241,7 +241,6 @@ template<typename T> class ConvolverPlan
         {
         MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
         MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
-        MR_assert((psi(i)>=0) && (psi(i)<=2*pi+1e-4), "psi out of range [0;2pi]: ", psi(i));
         auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
         auto itheta = size_t(ftheta+1);
         auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
@@ -329,7 +328,7 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
@@ -370,7 +369,7 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
       constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
