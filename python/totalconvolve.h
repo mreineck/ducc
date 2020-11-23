@@ -156,15 +156,17 @@ template<typename T> class ConvolverPlan
     using Tsimd = simd<T, vlen>;
 
     size_t nthreads;
-    size_t nborder;
     size_t lmax, kmax;
     // _s: small grid
     // _b: oversampled grid
     // no suffix: grid with borders
-    size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b, nphi, ntheta;
-    T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi, phi0, theta0;
+    size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
+    T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
 
     shared_ptr<HornerKernel> kernel;
+    size_t nbphi, nbtheta;
+    size_t nphi, ntheta;
+    T phi0, theta0;
 
     void correct(mav<T,2> &arr, int spin) const
       {
@@ -227,8 +229,8 @@ template<typename T> class ConvolverPlan
       constexpr size_t cellsize=16;
       size_t nct = patch_ntheta/cellsize+1,
              ncp = patch_nphi/cellsize+1;
-      double theta0 = (int(itheta0)-int(nborder))*dtheta,
-             phi0 = (int(iphi0)-int(nborder))*dphi;
+      double theta0 = (int(itheta0)-int(nbtheta))*dtheta,
+             phi0 = (int(iphi0)-int(nbphi))*dphi;
       double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
       double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
       vector<vector<size_t>> mapper(nct*ncp);
@@ -445,7 +447,6 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
     ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
       size_t nthreads_)
       : nthreads(nthreads_),
-        nborder(8),
         lmax(lmax_),
         kmax(kmax_),
         nphi_s(2*good_size_real(lmax+1)),
@@ -454,17 +455,19 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*sigma/2.)))),
         ntheta_b(nphi_b/2+1),
         npsi_b(size_t(npsi_s*sigma+0.99999)),
-        nphi(nphi_b+2*nborder),
-        ntheta(ntheta_b+2*nborder),
         dphi(T(2*pi/nphi_b)),
         dtheta(T(pi/(ntheta_b-1))),
         dpsi(T(2*pi/npsi_b)),
         xdphi(T(1)/dphi),
         xdtheta(T(1)/dtheta),
         xdpsi(T(1)/dpsi),
-        phi0(nborder*(-dphi)),
-        theta0(nborder*(-dtheta)),
-        kernel(selectKernel(realsigma(), 0.5*epsilon))
+        kernel(selectKernel(realsigma(), 0.5*epsilon)),
+        nbphi(8),
+        nbtheta(8),
+        nphi(nphi_b+2*nbphi),
+        ntheta(ntheta_b+2*nbtheta),
+        phi0(nbphi*(-dphi)),
+        theta0(nbtheta*(-dtheta))
       {
       auto supp = kernel->support();
       MR_assert((supp<=ntheta) && (supp<=nphi_b), "kernel support too large!");
@@ -479,13 +482,13 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
     vector<size_t> getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi) const
       {
       vector<size_t> res(4);
-      auto tmp = (theta_lo-theta0)*xdtheta-nborder;
+      auto tmp = (theta_lo-theta0)*xdtheta-nbtheta;
       res[0] = min(size_t(max(T(0), tmp)), ntheta);
-      tmp = (theta_hi-theta0)*xdtheta+nborder+T(1);
+      tmp = (theta_hi-theta0)*xdtheta+nbtheta+T(1);
       res[1] = min(size_t(max(T(0), tmp)), ntheta);
-      tmp = (phi_lo-phi0)*xdphi-nborder;
+      tmp = (phi_lo-phi0)*xdphi-nbphi;
       res[2] = min(size_t(max(T(0), tmp)), nphi);
-      tmp = (phi_hi-phi0)*xdphi+nborder+T(1);
+      tmp = (phi_hi-phi0)*xdphi+nbphi+T(1);
       res[3] = min(size_t(max(T(0), tmp)), nphi);
       return res;
       }
@@ -524,7 +527,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             for (size_t i=1; i<ncomp; ++i)
               a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
             }
-        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
         sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,0);
         }
@@ -543,8 +546,8 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
                 a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
                 }
             }
-        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
-        auto m2 = im.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
         sharp_alm2map_spin(mbeam, a1.Alms().cdata(), a2.Alms().cdata(),
           m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,mbeam);
@@ -552,30 +555,30 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         }
       // fill border regions
       T fct = (mbeam&1) ? -1 : 1;
-      for (size_t i=0; i<nborder; ++i)
+      for (size_t i=0; i<nbtheta; ++i)
         for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
           {
           if (j2>=nphi_b) j2-=nphi_b;
           for (size_t l=0; l<re.shape(1); ++l)
             {
-            re.v(nborder-1-i,j2+nborder) = fct*re(nborder+1+i,j+nborder);
-            re.v(nborder+ntheta_b+i,j2+nborder) = fct*re(nborder+ntheta_b-2-i,j+nborder);
+            re.v(nbtheta-1-i,j2+nbphi) = fct*re(nbtheta+1+i,j+nbphi);
+            re.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*re(nbtheta+ntheta_b-2-i,j+nbphi);
             }
           if (mbeam>0)
             {
-            im.v(nborder-1-i,j2+nborder) = fct*im(nborder+1+i,j+nborder);
-            im.v(nborder+ntheta_b+i,j2+nborder) = fct*im(nborder+ntheta_b-2-i,j+nborder);
+            im.v(nbtheta-1-i,j2+nbphi) = fct*im(nbtheta+1+i,j+nbphi);
+            im.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*im(nbtheta+ntheta_b-2-i,j+nbphi);
             }
           }
-      for (size_t i=0; i<ntheta_b+2*nborder; ++i)
-        for (size_t j=0; j<nborder; ++j)
+      for (size_t i=0; i<ntheta_b+2*nbtheta; ++i)
+        for (size_t j=0; j<nbphi; ++j)
           {
           re.v(i,j) = re(i,j+nphi_b);
-          re.v(i,j+nphi_b+nborder) = re(i,j+nborder);
+          re.v(i,j+nphi_b+nbphi) = re(i,j+nbphi);
           if (mbeam>0)
             {
             im.v(i,j) = im(i,j+nphi_b);
-            im.v(i,j+nphi_b+nborder) = im(i,j+nborder);
+            im.v(i,j+nphi_b+nbphi) = im(i,j+nbphi);
             }
           }
       }
@@ -662,29 +665,29 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<ntheta_b+2*nborder; ++i)
-        for (size_t j=0; j<nborder; ++j)
+      for (size_t i=0; i<ntheta_b+2*nbtheta; ++i)
+        for (size_t j=0; j<nbphi; ++j)
           {
           re.v(i,j+nphi_b) += re(i,j);
-          re.v(i,j+nborder) += re(i,j+nphi_b+nborder);
+          re.v(i,j+nbphi) += re(i,j+nphi_b+nbphi);
           if (mbeam>0)
             {
             im.v(i,j+nphi_b) += im(i,j);
-            im.v(i,j+nborder) += im(i,j+nphi_b+nborder);
+            im.v(i,j+nbphi) += im(i,j+nphi_b+nbphi);
             }
           }
 
-      for (size_t i=0; i<nborder; ++i)
+      for (size_t i=0; i<nbtheta; ++i)
         for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
           {
           T fct = (mbeam&1) ? -1 : 1;
           if (j2>=nphi_b) j2-=nphi_b;
-          re.v(nborder+1+i,j+nborder) += fct*re(nborder-1-i,j2+nborder);
-          re.v(nborder+ntheta_b-2-i, j+nborder) += fct*re(nborder+ntheta_b+i,j2+nborder);
+          re.v(nbtheta+1+i,j+nbphi) += fct*re(nbtheta-1-i,j2+nbphi);
+          re.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*re(nbtheta+ntheta_b+i,j2+nbphi);
           if (mbeam>0)
             {
-            im.v(nborder+1+i,j+nborder) += fct*im(nborder-1-i,j2+nborder);
-            im.v(nborder+ntheta_b-2-i, j+nborder) += fct*im(nborder+ntheta_b+i,j2+nborder);
+            im.v(nbtheta+1+i,j+nbphi) += fct*im(nbtheta-1-i,j2+nbphi);
+            im.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*im(nbtheta+ntheta_b+i,j2+nbphi);
             }
           }
 
@@ -693,20 +696,20 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         {
         T fct = (mbeam&1) ? -1 : 1;
         if (j2>=nphi_b) j2-=nphi_b;
-        T tval = (re(nborder,j+nborder) + fct*re(nborder,j2+nborder));
-        re.v(nborder,j+nborder) = tval;
-        re.v(nborder,j2+nborder) = fct*tval;
-        tval = (re(nborder+ntheta_b-1,j+nborder) + fct*re(nborder+ntheta_b-1,j2+nborder));
-        re.v(nborder+ntheta_b-1,j+nborder) = tval;
-        re.v(nborder+ntheta_b-1,j2+nborder) = fct*tval;
+        T tval = (re(nbtheta,j+nbphi) + fct*re(nbtheta,j2+nbphi));
+        re.v(nbtheta,j+nbphi) = tval;
+        re.v(nbtheta,j2+nbphi) = fct*tval;
+        tval = (re(nbtheta+ntheta_b-1,j+nbphi) + fct*re(nbtheta+ntheta_b-1,j2+nbphi));
+        re.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
+        re.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
         if (mbeam>0)
           {
-          tval = (im(nborder,j+nborder) + fct*im(nborder,j2+nborder));
-          im.v(nborder,j+nborder) = tval;
-          im.v(nborder,j2+nborder) = fct*tval;
-          tval = (im(nborder+ntheta_b-1,j+nborder) + fct*im(nborder+ntheta_b-1,j2+nborder));
-          im.v(nborder+ntheta_b-1,j+nborder) = tval;
-          im.v(nborder+ntheta_b-1,j2+nborder) = fct*tval;
+          tval = (im(nbtheta,j+nbphi) + fct*im(nbtheta,j2+nbphi));
+          im.v(nbtheta,j+nbphi) = tval;
+          im.v(nbtheta,j2+nbphi) = fct*tval;
+          tval = (im(nbtheta+ntheta_b-1,j+nbphi) + fct*im(nbtheta+ntheta_b-1,j2+nbphi));
+          im.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
+          im.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
           }
         }
 
@@ -717,7 +720,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       if (mbeam==0)
         {
         Alm<complex<T>> a1(lmax, lmax);
-        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,0);
         sharp_alm2map_adjoint(a1.Alms().vdata(), m1.cdata(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
@@ -728,8 +731,8 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       else
         {
         Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-        auto m1 = re.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
-        auto m2 = im.template subarray<2>({nborder,nborder},{ntheta_b,nphi_b});
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
