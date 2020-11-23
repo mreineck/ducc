@@ -152,7 +152,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   rev_iter iter(aout, axes);
   while(iter.remaining()>0)
     {
-    auto v = aout[iter.ofs()];
+    auto v = aout.craw(iter.ofs());
     aout.vraw(iter.rev_ofs()) = conj(v);
     iter.advance();
     }

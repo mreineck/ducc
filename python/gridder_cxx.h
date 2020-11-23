@@ -333,7 +333,7 @@ template<typename T> class Params
     size_t nu, nv;
     double ofactor;
 
-    shared_ptr<HornerKernel<mysimd<T>>> krn;
+    shared_ptr<HornerKernel> krn;
 
     size_t supp, nsafe;
     double ushift, vshift;
@@ -867,7 +867,7 @@ template<typename T> class Params
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
+            px0r(bufr.cdata()), px0i(bufi.cdata()),
             w0(w0_),
             xdw(T(1)/dw_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
@@ -1279,7 +1279,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-      auto idx = getAvailableKernels<T>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1401,7 +1401,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<mysimd<T>>(ofactor, epsilon,kidx);
+      krn = selectKernel(ofactor, epsilon, kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

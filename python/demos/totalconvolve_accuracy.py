@@ -57,11 +57,9 @@ def convolve(alm1, alm2, lmax):
     return job.map2alm(map)[0]*np.sqrt(4*np.pi)
 
 
-lmax = 60
+lmax = 50
 kmax = 13
 ncomp = 1
-separate = True
-ncomp2 = ncomp if separate else 1
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
@@ -72,26 +70,34 @@ blm = random_alm(lmax, kmax, ncomp)
 
 
 t0 = time.time()
-# build interpolator object for slm and blm
-foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax, epsilon=1e-4, nthreads=2)
+
+plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=2)
+cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
+cube[()] = 0
+plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0])
+for mbeam in range(1, kmax+1):
+    plan.getPlane(slm[:, 0], blm[:, 0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
+plan.prepPsi(cube)
+
 print("setup time: ", time.time()-t0)
-nth = lmax+1
-nph = 2*lmax+1
+nth = (lmax+1)
+nph = (2*lmax+1)
 
-
-# compute a convolved map at a fixed psi and compare it to a map convolved
-# "by hand"
 
 ptg = np.zeros((nth, nph, 3))
 ptg[:, :, 0] = (np.pi*(0.5+np.arange(nth))/nth).reshape((-1, 1))
 ptg[:, :, 1] = (2*np.pi*(0.5+np.arange(nph))/nph).reshape((1, -1))
-ptg[:, :, 2] = np.pi*0.2
+ptg[:, :, 2] = np.pi*0.7
+ptgbla = ptg.reshape((-1, 3)).astype(np.float64)
+
+res = np.empty(ptgbla.shape[0], dtype=np.float64)
 t0 = time.time()
-# do the actual interpolation
-bar = foo.interpol(ptg.reshape((-1, 3))).reshape((nth, nph, ncomp2))
-print("interpolation time: ", time.time()-t0)
+plan.interpol(cube, 0, 0, ptgbla[:, 0], ptgbla[:, 1], ptgbla[:, 2], res)
+print("interpolation2 time: ", time.time()-t0)
+res = res.reshape((nth, nph, 1))
+
 plt.subplot(2, 2, 1)
-plt.imshow(bar[:, :, 0])
+plt.imshow(res[:, :, 0])
 bar2 = np.zeros((nth, nph))
 blmfull = np.zeros(slm.shape)+0j
 blmfull[0:blm.shape[0], :] = blm
@@ -102,6 +108,7 @@ for ith in range(nth):
         bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)
-plt.subplot(2, 2, 3)
-plt.imshow(bar2-bar[:, :, 0])
+plt.subplot(2, 2, 4)
+plt.imshow(bar2-res[:, :, 0])
+print(np.max(np.abs(bar2-res[:, :, 0]))/np.max(np.abs(bar2)))
 plt.show()

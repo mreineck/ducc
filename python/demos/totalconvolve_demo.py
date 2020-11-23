@@ -74,8 +74,8 @@ t1 = time.time()-t0
 print("Convolving sky and beam with lmax=mmax={}, kmax={}".format(lmax, kmax))
 print("Interpolation taking place with a maximum error of {}\n"
       "and an oversampling factor of {}".format(epsilon, ofactor))
-supp = foo.support()
-print("(resulting in a kernel support size of {}x{})".format(supp, supp))
+# supp = foo.support()
+# print("(resulting in a kernel support size of {}x{})".format(supp, supp))
 if ncomp == 1:
     print("One component")
 else:

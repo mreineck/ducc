@@ -57,12 +57,12 @@ template<typename I, typename F> inline I nearest (F arg)
 /*! Returns the remainder of the division \a v1/v2.
     The result is non-negative.
     \a v1 can be positive or negative; \a v2 must be positive. */
-template<typename F> inline double fmodulo (F v1, F v2)
+template<typename F> inline F fmodulo (F v1, F v2)
   {
   using namespace std;
   if (v1>=0)
     return (v1<v2) ? v1 : std::fmod(v1,v2);
-  double tmp=std::fmod(v1,v2)+v2;
+  auto tmp=std::fmod(v1,v2)+v2;
   return (tmp==v2) ? F(0) : tmp;
   }
 

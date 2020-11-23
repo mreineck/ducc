@@ -30,7 +30,8 @@ SPEEDOFLIGHT = 299792458.
 # attempt to write a more accurate version of numpy.vdot()
 def my_vdot(a, b):
     import math
-    if np.issubdtype(a.dtype, np.complexfloating) or np.issubdtype(b.dtype, np.complexfloating):
+    if (np.issubdtype(a.dtype, np.complexfloating)
+            or np.issubdtype(b.dtype, np.complexfloating)):
         tmp = (np.conj(a)*b).reshape((-1,))
         return math.fsum(tmp.real)+1j*math.fsum(tmp.imag)
     else:
@@ -71,7 +72,8 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
     return res/n
 
 
-def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask, epsilon):
+def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
+                 mask, epsilon):
     u = np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT)*2*np.pi
     v = np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT)*2*np.pi
     if wgt is not None:
@@ -80,14 +82,14 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask,
         ms = ms*mask
     eps = epsilon/10  # Apparently finufft measures epsilon differently
     # Plan on the fly
-    res0 = finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty, nydirty), eps=eps).real
+    res0 = finufft.nufft2d1(u.ravel(), v.ravel(), ms.ravel(), (nxdirty,
+                            nydirty), eps=eps).real
     # Plan beforehand
     plan = finufft.Plan(1, (nxdirty, nydirty), eps=eps)
     plan.setpts(u.ravel(), v.ravel())
     res1 = plan.execute(ms.ravel()).real
     np.testing.assert_allclose(res0, res1)
     return res0
-
 
 
 @pmp("nxdirty", (30, 128))
@@ -101,7 +103,8 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize, mask,
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
 def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
-                              singleprec, wstacking, use_wgt, nthreads, use_mask):
+                              singleprec, wstacking, use_wgt, nthreads,
+                              use_mask):
     if singleprec and epsilon < 5e-5:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -112,7 +115,8 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
-    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
+    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
+        if use_mask else None
     dirty = rng.random((nxdirty, nydirty))-0.5
     nu = nv = 0
     if singleprec:
@@ -121,10 +125,11 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
         if wgt is not None:
             wgt = wgt.astype("f4")
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0, mask).astype("f8")
-    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv, epsilon,
-                      wstacking, nthreads+1, 0, mask).astype("c16")
-    ref = max(my_vdot(ms,ms).real, my_vdot(ms2,ms2).real,
+                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
+                         mask).astype("f8")
+    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
+                      epsilon, wstacking, nthreads+1, 0, mask).astype("c16")
+    ref = max(my_vdot(ms, ms).real, my_vdot(ms2, ms2).real,
               my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
     tol = 3e-5*ref if singleprec else 2e-13*ref
     assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
@@ -141,7 +146,9 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2, 7))
 @pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
-def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singleprec, wstacking, use_wgt, use_mask, fov, nthreads):
+def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
+                                singleprec, wstacking, use_wgt, use_mask, fov,
+                                nthreads):
     if singleprec and epsilon < 5e-5:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -152,7 +159,8 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon, singlepr
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
-    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) if use_mask else None
+    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
+        if use_mask else None
     wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
     nu = nv = 0
     if singleprec:

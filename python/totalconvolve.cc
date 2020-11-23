@@ -30,67 +30,204 @@ namespace detail_pymodule_totalconvolve {
 using namespace std;
 
 namespace py = pybind11;
+auto None = py::none();
 
-template<typename T> class PyInterpolator: public Interpolator<T>
+template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
   {
-  protected:
-    using Interpolator<T>::lmax;
-    using Interpolator<T>::kmax;
-    using Interpolator<T>::ncomp;
-    using Interpolator<T>::interpol;
-    using Interpolator<T>::deinterpol;
-    using Interpolator<T>::getSlm;
+  private:
+    using ConvolverPlan<T>::lmax;
+    using ConvolverPlan<T>::ConvolverPlan;
+    using ConvolverPlan<T>::getPlane;
+    using ConvolverPlan<T>::interpol;
+    using ConvolverPlan<T>::deinterpol;
+    using ConvolverPlan<T>::updateSlm;
+    using ConvolverPlan<T>::getPatchInfo;
+    using ConvolverPlan<T>::prepPsi;
+    using ConvolverPlan<T>::deprepPsi;
 
-vector<Alm<complex<T>>> makevec(const py::array &inp, int64_t lmax, int64_t kmax)
+  public:
+    using ConvolverPlan<T>::Ntheta;
+    using ConvolverPlan<T>::Nphi;
+    using ConvolverPlan<T>::Npsi;
+    vector<size_t> pyGetPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
+      { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
+    void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
+      size_t mbeam, py::array &py_re, py::object &py_im) const
+      {
+      auto slm = to_mav<complex<T>,1>(py_slm);
+      auto blm = to_mav<complex<T>,1>(py_blm);
+      auto re = to_mav<T,2>(py_re, true);
+      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
+      getPlane(slm, blm, mbeam, re, im);
+      }
+    void pyPrepPsi(const py::array &py_subcube) const
+      {
+      auto subcube = to_mav<T,3>(py_subcube, true);
+      prepPsi(subcube);
+      }
+    void pyDeprepPsi(const py::array &py_subcube) const
+      {
+      auto subcube = to_mav<T,3>(py_subcube, true);
+      deprepPsi(subcube);
+      }
+    void pyinterpol(const py::array &pycube, size_t itheta0, size_t iphi0,
+      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
+      py::array &pysignal)
+      {
+      auto cube = to_mav<T,3>(pycube, false);
+      auto theta = to_mav<T,1>(pytheta, false);
+      auto phi = to_mav<T,1>(pyphi, false);
+      auto psi = to_mav<T,1>(pypsi, false);
+      auto signal = to_mav<T,1>(pysignal, true);
+      interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
+      }
+    void pydeinterpol(py::array &pycube, size_t itheta0, size_t iphi0,
+      const py::array &pytheta, const py::array &pyphi, const py::array &pypsi,
+      const py::array &pysignal)
+      {
+      auto cube = to_mav<T,3>(pycube, true);
+      auto theta = to_mav<T,1>(pytheta, false);
+      auto phi = to_mav<T,1>(pyphi, false);
+      auto psi = to_mav<T,1>(pypsi, false);
+      auto signal = to_mav<T,1>(pysignal, false);
+      deinterpol(cube, itheta0, iphi0, theta, phi, psi, signal);
+      }
+    void pyUpdateSlm(py::array &py_slm, const py::array &py_blm,
+      size_t mbeam, py::array &py_re, py::object &py_im) const
+      {
+      auto slm = to_mav<complex<T>,1>(py_slm, true);
+      auto blm = to_mav<complex<T>,1>(py_blm);
+      auto re = to_mav<T,2>(py_re, true);
+      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
+      updateSlm(slm, blm, mbeam, re, im);
+      }
+  };
+
+
+template<typename T> class PyInterpolator
   {
-  auto inp2 = to_mav<complex<T>,2>(inp);
-  vector<Alm<complex<T>>> res;
-  for (size_t i=0; i<inp2.shape(1); ++i)
-    res.push_back(Alm<complex<T>>(inp2.template subarray<1>({0,i},{inp2.shape(0),0}),lmax, kmax));
-  return res;
-  }
-void makevec_v(py::array &inp, int64_t lmax, int64_t kmax, vector<Alm<complex<T>>> &res)
-  {
-  auto inp2 = to_mav<complex<T>,2>(inp, true);
-  for (size_t i=0; i<inp2.shape(1); ++i)
-    {
-    auto xtmp = inp2.template subarray<1>({0,i},{inp2.shape(0),0});
-    res.emplace_back(xtmp, lmax, kmax);
-    }
-  }
+  private:
+    ConvolverPlan<T> conv;
+    mav<T,4> cube;
+
   public:
     PyInterpolator(const py::array &slm, const py::array &blm,
-      bool separate, int64_t lmax, int64_t kmax, T epsilon, T ofactor, int nthreads)
-      : Interpolator<T>(makevec(slm, lmax, lmax),
-                        makevec(blm, lmax, kmax),
-                        separate, epsilon, ofactor, nthreads) {}
-    PyInterpolator(int64_t lmax, int64_t kmax, int64_t ncomp_, T epsilon, T ofactor, int nthreads)
-      : Interpolator<T>(lmax, kmax, ncomp_, epsilon, ofactor, nthreads) {}
-
-    using Interpolator<T>::support;
+      bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
+      : conv(lmax, kmax, ofactor, epsilon, nthreads),
+        cube({(separate ? size_t(slm.shape(1)) : 1u), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
+      {
+      auto vslm = to_mav<complex<T>,2>(slm);
+      auto vblm = to_mav<complex<T>,2>(blm);
+      if (separate)
+        for (size_t i=0; i<vslm.shape(1); ++i)
+          {
+          auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
+          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          conv.getPlane(vslmi, vblmi, 0, re, re);
+          for (size_t k=1; k<kmax+1; ++k)
+            {
+            auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            conv.getPlane(vslmi, vblmi, k, re, im);
+            }
+          }
+      else
+        {
+        auto re = cube.template subarray<2>({0,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+        conv.getPlane(vslm, vblm, 0, re, re);
+        for (size_t k=1; k<kmax+1; ++k)
+          {
+          auto re = cube.template subarray<2>({0,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto im = cube.template subarray<2>({0,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          conv.getPlane(vslm, vblm, k, re, im);
+          }
+        }
+      for (size_t i=0; i<cube.shape(0); ++i)
+        {
+        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        conv.prepPsi(subcube);
+        }
+      }
+    PyInterpolator(size_t lmax, size_t kmax, size_t ncomp_, T epsilon, T ofactor, int nthreads)
+      : conv(lmax, kmax, ofactor, epsilon, nthreads),
+        cube({size_t(ncomp_), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
+      {
+      }
 
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
+      auto ptheta = ptg2.template subarray<1>({0,0},{ptg2.shape(0),0});
+      auto pphi = ptg2.template subarray<1>({0,1},{ptg2.shape(0),0});
+      auto ppsi = ptg2.template subarray<1>({0,2},{ptg2.shape(0),0});
+      size_t ncomp = cube.shape(0);
       auto res = make_Pyarr<T>({ptg2.shape(0),ncomp});
       auto res2 = to_mav<T,2>(res,true);
-      interpol(ptg2, res2);
+      for (size_t i=0; i<ncomp; ++i)
+        {
+        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        auto subres = res2.template subarray<1>({0,i},{res2.shape(0),0});
+        conv.interpol(subcube, 0, 0, ptheta, pphi, ppsi, subres);
+        }
       return move(res);
       }
 
     void pydeinterpol(const py::array &ptg, const py::array &data)
       {
       auto ptg2 = to_mav<T,2>(ptg);
+      auto ptheta = ptg2.template subarray<1>({0,0},{ptg2.shape(0),0});
+      auto pphi = ptg2.template subarray<1>({0,1},{ptg2.shape(0),0});
+      auto ppsi = ptg2.template subarray<1>({0,2},{ptg2.shape(0),0});
+      size_t ncomp = cube.shape(0);
       auto data2 = to_mav<T,2>(data);
-      deinterpol(ptg2, data2);
+      for (size_t i=0; i<ncomp; ++i)
+        {
+        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        auto subdata = data2.template subarray<1>({0,i},{data2.shape(0),0});
+        conv.deinterpol(subcube, 0, 0, ptheta, pphi, ppsi, subdata);
+        }
       }
     py::array pygetSlm(const py::array &blm_)
       {
-      auto blm = makevec(blm_, lmax, kmax);
-      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),blm.size()});
-      vector<Alm<complex<T>>> slm;
-      makevec_v(res, lmax, lmax, slm);
-      getSlm(blm, slm);
+      size_t lmax=conv.Lmax(), kmax=conv.Kmax();
+      auto vblm = to_mav<complex<T>,2>(blm_);
+      size_t ncomp = vblm.shape(1);
+      bool separate = cube.shape(0)>1;
+      if (separate) MR_assert(ncomp==cube.shape(0), "dimension mismatch");
+      for (size_t i=0; i<cube.shape(0); ++i)
+        {
+        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        conv.deprepPsi(subcube);
+        }
+      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),ncomp});
+      auto vslm = to_mav<complex<T>,2>(res, true);
+      vslm.fill(T(0));
+      if (separate)
+        for (size_t i=0; i<ncomp; ++i)
+          {
+          auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
+          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          conv.updateSlm(vslmi, vblmi, 0, re, re);
+          for (size_t k=1; k<kmax+1; ++k)
+            {
+            auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            conv.updateSlm(vslmi, vblmi, k, re, im);
+            }
+          }
+      else
+        {
+        auto re = cube.template subarray<2>({0,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+        conv.updateSlm(vslm, vblm, 0, re, re);
+        for (size_t k=1; k<kmax+1; ++k)
+          {
+          auto re = cube.template subarray<2>({0,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto im = cube.template subarray<2>({0,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          conv.updateSlm(vslm, vblm, k, re, im);
+          }
+        }
       return move(res);
       }
   };
@@ -242,28 +379,55 @@ void add_totalconvolve(py::module_ &msup)
 
   m.doc() = totalconvolve_DS;
 
+  using conv_d = PyConvolverPlan<double>;
+  py::class_<conv_d> (m, "ConvolverPlan", py::module_local())
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def("Ntheta", &conv_d::Ntheta)
+    .def("Nphi", &conv_d::Nphi)
+    .def("Npsi", &conv_d::Npsi)
+    .def("getPatchInfo", &conv_d::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
+    .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_d::pyPrepPsi, "subcube"_a)
+    .def("deprepPsi", &conv_d::pyDeprepPsi, "subcube"_a)
+    .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
+  using conv_f = PyConvolverPlan<float>;
+  py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def("Ntheta", &conv_f::Ntheta)
+    .def("Nphi", &conv_f::Nphi)
+    .def("Npsi", &conv_f::Npsi)
+    .def("getPatchInfo", &conv_f::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
+    .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_f::pyPrepPsi, "subcube"_a)
+    .def("deprepPsi", &conv_f::pyDeprepPsi, "subcube"_a)
+    .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
+    .def("updateSlm", &conv_f::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
+
   using inter_d = PyInterpolator<double>;
   py::class_<inter_d> (m, "Interpolator", py::module_local(), pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, double, double, int>(),
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
       "nthreads"_a=0)
-    .def(py::init<int64_t, int64_t, int64_t, double, double, int>(), initadjoint_DS,
+    .def(py::init<size_t, size_t, size_t, double, double, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5, "nthreads"_a=0)
     .def ("interpol", &inter_d::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_d::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &inter_d::pygetSlm, getSlm_DS, "beam"_a)
-    .def ("support", &inter_d::support);
+    .def ("getSlm", &inter_d::pygetSlm, getSlm_DS, "beam"_a);
   using inter_f = PyInterpolator<float>;
   py::class_<inter_f> (m, "Interpolator_f", py::module_local(), pyinterpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, int64_t, int64_t, float, float, int>(),
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, float, float, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5f,
       "nthreads"_a=0)
-    .def(py::init<int64_t, int64_t, int64_t, float, float, int>(), initadjoint_DS,
+    .def(py::init<size_t, size_t, size_t, float, float, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5f, "nthreads"_a=0)
     .def ("interpol", &inter_f::pyinterpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_f::pydeinterpol, deinterpol_DS, "ptg"_a, "data"_a)
-    .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a)
-    .def ("support", &inter_f::support);
+    .def ("getSlm", &inter_f::pygetSlm, getSlm_DS, "beam"_a);
   }
 
 }

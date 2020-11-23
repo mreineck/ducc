@@ -56,6 +56,8 @@ class Alm_Base
       MR_assert(m<=l,"mmax must not be larger than lmax");
       return ((m+1)*(m+2))/2 + (m+1)*(l-m);
       }
+    size_t Num_Alms() const
+      { return arrsize; }
 
     Alm_Base (size_t lmax_, const vector<size_t> &mval_,
               const vector<ptrdiff_t> &mstart_)
@@ -189,6 +191,9 @@ template<typename T> class Alm: public Alm_Base
       { return alm.v(index(l,m)); }
     /*! Returns a constant reference to the specified coefficient. */
     const T &operator() (size_t l, size_t m) const
+      { return alm(index(l,m)); }
+    /*! Returns a constant reference to the specified coefficient. */
+    const T &c(size_t l, size_t m) const
       { return alm(index(l,m)); }
 
     /*! Returns a pointer for a given m, from which the address of a_lm

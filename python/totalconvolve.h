@@ -38,6 +38,7 @@
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "python/alm.h"
 #include "ducc0/math/fft.h"
+#include "ducc0/math/math_utils.h"
 
 namespace ducc0 {
 
@@ -129,7 +130,7 @@ template<typename T> void convolve_1d(const fmav<T> &in,
   {
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
-  if (in.data()==out.data())
+  if (in.cdata()==out.cdata())
     MR_assert(in.stride()==out.stride(), "strides mismatch");
   for (size_t i=0; i<in.ndim(); ++i)
     if (i!=axis)
@@ -149,545 +150,241 @@ namespace detail_totalconvolve {
 
 using namespace std;
 
-template<typename T> class Interpolator
+template<typename T> class ConvolverPlan
   {
   protected:
-    bool adjoint;
-    size_t lmax, kmax, nphi0, ntheta0, nphi, ntheta;
-    int nthreads;
-    T ofactor;
-    shared_ptr<GriddingKernel<native_simd<T>>> kernel;
-    size_t supp;
-    size_t ncomp;
-#ifdef SIMD_INTERPOL
-    mav<native_simd<T>,4> scube;
-#endif
-    mav<T,4> cube; // the data cube (theta, phi, 2*mbeam+1, TGC)
+    constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
+    using Tsimd = simd<T, vlen>;
 
-    void correct(mav<T,2> &arr, int spin)
+    size_t nthreads;
+    size_t lmax, kmax;
+    // _s: small grid
+    // _b: oversampled grid
+    // no suffix: grid with borders
+    size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
+    T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
+
+    shared_ptr<HornerKernel> kernel;
+    size_t nbphi, nbtheta;
+    size_t nphi, ntheta;
+    T phi0, theta0;
+
+    void correct(mav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      mav<T,2> tmp({nphi,nphi0});
+      mav<T,2> tmp({nphi_b,nphi_s});
       // copy and extend to second half
-      for (size_t j=0; j<nphi0; ++j)
+      for (size_t j=0; j<nphi_s; ++j)
         tmp.v(0,j) = arr(0,j);
-      for (size_t i=1, i2=nphi0-1; i+1<ntheta0; ++i,--i2)
-        for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
+      for (size_t i=1, i2=nphi_s-1; i+1<ntheta_s; ++i,--i2)
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
           {
-          if (j2>=nphi0) j2-=nphi0;
+          if (j2>=nphi_s) j2-=nphi_s;
           tmp.v(i,j2) = arr(i,j2);
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
-      for (size_t j=0; j<nphi0; ++j)
-        tmp.v(ntheta0-1,j) = arr(ntheta0-1,j);
-      auto fct = kernel->corfunc(nphi0/2+1, 1./nphi, nthreads);
+      for (size_t j=0; j<nphi_s; ++j)
+        tmp.v(ntheta_s-1,j) = arr(ntheta_s-1,j);
+      auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
       vector<T> k2(fct.size());
-      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi0);
+      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi0, nphi0}));
+      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi_s, nphi_s}));
       convolve_1d(ftmp0, ftmp, 0, k2, nthreads);
-      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta, nphi0}));
+      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta_b, nphi_s}));
       fmav<T> farr(arr);
       convolve_1d(ftmp2, farr, 1, k2, nthreads);
       }
-    void decorrect(mav<T,2> &arr, int spin)
+    void decorrect(mav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      mav<T,2> tmp({nphi,nphi0});
-      auto fct = kernel->corfunc(nphi0/2+1, 1./nphi, nthreads);
+      mav<T,2> tmp({nphi_b,nphi_s});
+      auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
       vector<T> k2(fct.size());
-      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi0);
+      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> farr(arr);
-      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta, nphi0}));
+      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta_b, nphi_s}));
       convolve_1d(farr, ftmp2, 1, k2, nthreads);
       // extend to second half
-      for (size_t i=1, i2=nphi-1; i+1<ntheta; ++i,--i2)
-        for (size_t j=0,j2=nphi0/2; j<nphi0; ++j,++j2)
+      for (size_t i=1, i2=nphi_b-1; i+1<ntheta_b; ++i,--i2)
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
           {
-          if (j2>=nphi0) j2-=nphi0;
+          if (j2>=nphi_s) j2-=nphi_s;
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi0, nphi0}));
+      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi_s, nphi_s}));
       convolve_1d(ftmp, ftmp0, 0, k2, nthreads);
-      for (size_t j=0; j<nphi0; ++j)
+      for (size_t j=0; j<nphi_s; ++j)
         arr.v(0,j) = T(0.5)*tmp(0,j);
-      for (size_t i=1; i+1<ntheta0; ++i)
-        for (size_t j=0; j<nphi0; ++j)
+      for (size_t i=1; i+1<ntheta_s; ++i)
+        for (size_t j=0; j<nphi_s; ++j)
           arr.v(i,j) = tmp(i,j);
-      for (size_t j=0; j<nphi0; ++j)
-        arr.v(ntheta0-1,j) = T(0.5)*tmp(ntheta0-1,j);
+      for (size_t j=0; j<nphi_s; ++j)
+        arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<size_t> getIdx(const mav<T,2> &ptg) const
+    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
+      size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+1,
-             ncp = nphi/cellsize+1;
+      size_t nct = patch_ntheta/cellsize+1,
+             ncp = patch_nphi/cellsize+1;
+      double theta0 = (int(itheta0)-int(nbtheta))*dtheta,
+             phi0 = (int(iphi0)-int(nbphi))*dphi;
+      double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
+      double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
       vector<vector<size_t>> mapper(nct*ncp);
-      for (size_t i=0; i<ptg.shape(0); ++i)
+      MR_assert(theta.conformable(phi), "theta/phi size mismatch");
+// FIXME: parallelize?
+      for (size_t i=0; i<theta.shape(0); ++i)
         {
-        size_t itheta=min(nct-1,size_t(ptg(i,0)/pi*nct)),
-               iphi=min(ncp-1,size_t(ptg(i,1)/(2*pi)*ncp));
-//        MR_assert((itheta<nct)&&(iphi<ncp), "oops");
+        MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
+        MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
+        auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
+        auto itheta = size_t(ftheta+1);
+        auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
+        auto iphi = size_t(fphi+1);
+        itheta /= cellsize;
+        iphi /= cellsize;
+        MR_assert(itheta<nct, "bad itheta");
+        MR_assert(iphi<ncp, "bad iphi");
         mapper[itheta*ncp+iphi].push_back(i);
         }
-      vector<size_t> idx(ptg.shape(0));
+      vector<size_t> idx(theta.shape(0));
       size_t cnt=0;
       for (auto &vec: mapper)
         {
         for (auto i:vec)
           idx[cnt++] = i;
-        vec.clear();
-        vec.shrink_to_fit();
+        vector<size_t>().swap(vec); // cleanup
         }
       return idx;
       }
 
-  public:
-    Interpolator(const vector<Alm<complex<T>>> &slm,
-                 const vector<Alm<complex<T>>> &blm,
-                 bool separate, T epsilon, T ofmin, int nthreads_)
-      : adjoint(false),
-        lmax(slm.at(0).Lmax()),
-        kmax(blm.at(0).Mmax()),
-        nphi0(2*good_size_real(lmax+1)),
-        ntheta0(nphi0/2+1),
-        nphi(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ofmin/2.)))),
-        ntheta(nphi/2+1),
-        nthreads(nthreads_),
-        ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectKernel<native_simd<T>>(ofactor, 0.5*epsilon)),
-        supp(kernel->support()),
-        ncomp(separate ? slm.size() : 1),
-#ifdef SIMD_INTERPOL
-        scube({ntheta+2*supp, nphi+2*supp, ncomp, (2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size()}),
-        cube(reinterpret_cast<T *>(scube.vdata()),{ntheta+2*supp, nphi+2*supp, ncomp, ((2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size())*native_simd<T>::size()},true)
-#else
-        cube({ntheta+2*supp, nphi+2*supp, ncomp, 2*kmax+1})
-#endif
+    template<size_t supp> class WeightHelper
       {
-      MR_assert((ncomp==1)||(ncomp==3), "currently only 1 or 3 components allowed");
-      MR_assert(slm.size()==blm.size(), "inconsistent slm and blm vectors");
-      for (size_t i=0; i<slm.size(); ++i)
-        {
-        MR_assert(slm[i].Lmax()==lmax, "inconsistent Sky lmax");
-        MR_assert(slm[i].Mmax()==lmax, "Sky lmax must be equal to Sky mmax");
-        MR_assert(blm[i].Lmax()==lmax, "Sky and beam lmax must be equal");
-        MR_assert(blm[i].Mmax()==kmax, "Inconcistent beam mmax");
-        }
+      public:
+        static constexpr size_t vlen = Tsimd::size();
+        static constexpr size_t nvec = (supp+vlen-1)/vlen;
+        const ConvolverPlan &plan;
+        union kbuf {
+          T scalar[3*nvec*vlen];
+          Tsimd simd[3*nvec];
+          };
+        kbuf buf;
 
-      MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
-      Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
-      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
+      private:
+        TemplateKernel<supp, Tsimd> tkrn;
+        T mytheta0, myphi0;
 
-      vector<T>lnorm(lmax+1);
-      for (size_t i=0; i<=lmax; ++i)
-        lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
-
-      for (size_t icomp=0; icomp<ncomp; ++icomp)
-        {
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
-            {
-            if (separate)
-              a1(l,m) = slm[icomp](l,m)*blm[icomp](l,0).real()*lnorm[l];
-            else
-              {
-              a1(l,m) = 0;
-              for (size_t j=0; j<slm.size(); ++j)
-                a1(l,m) += slm[j](l,m)*blm[j](l,0).real()*lnorm[l];
-              }
-            }
-        auto m1 = cube.template subarray<2>({supp,supp,icomp,0},{ntheta,nphi,0,0});
-        sharp_alm2map(a1.Alms().data(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
-        correct(m1,0);
-
-        for (size_t k=1; k<=kmax; ++k)
+      public:
+        WeightHelper(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
+          : plan(plan_),
+            tkrn(*plan.kernel),
+            mytheta0(plan.theta0+itheta0*plan.dtheta),
+            myphi0(plan.phi0+iphi0*plan.dphi),
+            wpsi(&buf.scalar[0]),
+            wtheta(&buf.scalar[nvec*vlen]),
+            wphi(&buf.simd[2*nvec]),
+            jumptheta(info.stride(1))
           {
-          for (size_t m=0; m<=lmax; ++m)
-            for (size_t l=m; l<=lmax; ++l)
-              {
-              if (l<k)
-                a1(l,m)=a2(l,m)=0.;
-              else
-                {
-                if (separate)
-                  {
-                  auto tmp = blm[icomp](l,k)*(-2*lnorm[l]);
-                  a1(l,m) = slm[icomp](l,m)*tmp.real();
-                  a2(l,m) = slm[icomp](l,m)*tmp.imag();
-                  }
-                else
-                  {
-                  a1(l,m) = a2(l,m) = 0;
-                  for (size_t j=0; j<slm.size(); ++j)
-                    {
-                    auto tmp = blm[j](l,k)*(-2*lnorm[l]);
-                    a1(l,m) += slm[j](l,m)*tmp.real();
-                    a2(l,m) += slm[j](l,m)*tmp.imag();
-                    }
-                  }
-                }
-              }
-          auto m1 = cube.template subarray<2>({supp,supp,icomp,2*k-1},{ntheta,nphi,0,0});
-          auto m2 = cube.template subarray<2>({supp,supp,icomp,2*k  },{ntheta,nphi,0,0});
-          sharp_alm2map_spin(k, a1.Alms().data(), a2.Alms().data(), m1.vdata(),
-            m2.vdata(), *ginfo, *ainfo, 0, nthreads);
-          correct(m1,k);
-          correct(m2,k);
+          MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
           }
-        }
-
-      // fill border regions
-      for (size_t i=0; i<supp; ++i)
-        for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
-          for (size_t k=0; k<cube.shape(3); ++k)
-            {
-            T fct = (((k+1)/2)&1) ? -1 : 1;
-            if (j2>=nphi) j2-=nphi;
-            for (size_t l=0; l<cube.shape(2); ++l)
-              {
-              cube.v(supp-1-i,j2+supp,l,k) = fct*cube(supp+1+i,j+supp,l,k);
-              cube.v(supp+ntheta+i,j2+supp,l,k) = fct*cube(supp+ntheta-2-i,j+supp,l,k);
-              }
-            }
-      for (size_t i=0; i<ntheta+2*supp; ++i)
-        for (size_t j=0; j<supp; ++j)
-          for (size_t k=0; k<cube.shape(3); ++k)
-            for (size_t l=0; l<cube.shape(2); ++l)
-            {
-            cube.v(i,j,l,k) = cube(i,j+nphi,l,k);
-            cube.v(i,j+nphi+supp,l,k) = cube(i,j+supp,l,k);
-            }
-      }
-
-    Interpolator(size_t lmax_, size_t kmax_, size_t ncomp_, T epsilon, T ofmin, int nthreads_)
-      : adjoint(true),
-        lmax(lmax_),
-        kmax(kmax_),
-        nphi0(2*good_size_real(lmax+1)),
-        ntheta0(nphi0/2+1),
-        nphi(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ofmin/2.)))),
-        ntheta(nphi/2+1),
-        nthreads(nthreads_),
-        ofactor(T(nphi)/(2*lmax+1)),
-        kernel(selectKernel<native_simd<T>>(ofactor, 0.5*epsilon)),
-        supp(kernel->support()),
-        ncomp(ncomp_),
-#ifdef SIMD_INTERPOL
-        scube({ntheta+2*supp, nphi+2*supp, ncomp, (2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size()}),
-        cube(reinterpret_cast<T *>(scube.vdata()),{ntheta+2*supp, nphi+2*supp, ncomp, ((2*kmax+1+native_simd<T>::size()-1)/native_simd<T>::size())*native_simd<T>::size()},true)
-#else
-        cube({ntheta+2*supp, nphi+2*supp, ncomp, 2*kmax+1})
-#endif
-      {
-      MR_assert((ncomp==1)||(ncomp==3), "currently only 1 or 3 components allowed");
-      MR_assert((supp<=ntheta) && (supp<=nphi), "support too large!");
-      cube.apply([](T &v){v=0.;});
-      }
-
-#ifdef SIMD_INTERPOL
-    template<size_t nv, size_t nc> void interpol_help0(const T * DUCC0_RESTRICT wt,
-      const T * DUCC0_RESTRICT wp, const native_simd<T> * DUCC0_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * DUCC0_RESTRICT psiarr2, mav<T,2> &res, size_t idx) const
-      {
-      array<native_simd<T>,nc> vv;
-      for (auto &vvv:vv) vvv=0;
-      for (size_t j=0; j<supp; ++j, p+=d0)
-        {
-        auto p1=p;
-        T wtj = wt[j];
-        for (size_t k=0; k<supp; ++k, p1+=d1)
+        void prep(T theta, T phi, T psi)
           {
-          array<native_simd<T>,nc> tvv;
-          for (auto &vvv:tvv) vvv=0;
-          for (size_t l=0; l<nv; ++l)
-            for (size_t c=0; c<nc; ++c)
-              tvv[c] += p1[l+nv*c]*psiarr2[l];
-          for (size_t c=0; c<nc; ++c)
-          vv[c] += (wtj*wp[k])*tvv[c];
+          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
+          itheta = size_t(ftheta+1);
+          ftheta = -1+(itheta-ftheta)*2;
+          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
+          iphi = size_t(fphi+1);
+          fphi = -1+(iphi-fphi)*2;
+          T fpsi = psi*plan.xdpsi-supp/T(2);
+          fpsi = fmodulo(fpsi, T(plan.npsi_b));
+          ipsi = size_t(fpsi+1);
+          fpsi = -1+(ipsi-fpsi)*2;
+          if (ipsi>=plan.npsi_b) ipsi-=plan.npsi_b;
+          tkrn.eval3(fpsi, ftheta, fphi, &buf.simd[0]);
           }
-        }
-      for (size_t c=0; c<nc; ++c)
-        res.v(idx,c) = reduce(vv[c], std::plus<>());
-      }
-    template<size_t nv, size_t nc> void deinterpol_help0(const T * DUCC0_RESTRICT wt,
-      const T * DUCC0_RESTRICT wp, native_simd<T> * DUCC0_RESTRICT p, size_t d0, size_t d1, const native_simd<T> * DUCC0_RESTRICT psiarr2, const mav<T,2> &data, size_t idx) const
-      {
-      array<native_simd<T>,nc> vv;
-      for (size_t i=0; i<nc; ++i) vv[i] = data(idx,i);
-      for (size_t j=0; j<supp; ++j, p+=d0)
-        {
-        auto p1=p;
-        T wtj = wt[j];
-        for (size_t k=0; k<supp; ++k, p1+=d1)
-          {
-          native_simd<T> wtjwpk = wtj*wp[k];
-          for (size_t l=0; l<nv; ++l)
-            {
-            auto tmp = wtjwpk*psiarr2[l];
-            for (size_t c=0; c<nc; ++c)
-              p1[l+nv*c] += vv[c]*tmp;
-            }
-          }
-        }
-      }
-#endif
+        size_t itheta, iphi, ipsi;
+        const T * DUCC0_RESTRICT wpsi;
+        const T * DUCC0_RESTRICT wtheta;
+        const Tsimd * DUCC0_RESTRICT wphi;
+        ptrdiff_t jumptheta;
+      };
 
-    void interpol (const mav<T,2> &ptg, mav<T,2> &res) const
+    template<size_t supp> void interpolx(const mav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, mav<T,1> &signal) const
       {
-#ifdef SIMD_INTERPOL
-      constexpr size_t vl=native_simd<T>::size();
-      MR_assert(scube.stride(3)==1, "bad stride");
-      size_t nv=scube.shape(3);
-#endif
-      MR_assert(!adjoint, "cannot be called in adjoint mode");
-      MR_assert(ptg.shape(0)==res.shape(0), "dimension mismatch");
-      MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
-      MR_assert(res.shape(1)==ncomp, "# of components mismatch");
-      T delta = T(2)/supp;
-      T xdtheta = T((ntheta-1)/pi),
-        xdphi = T(nphi/(2*pi));
-      auto idx = getIdx(ptg);
+      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "array shape mismatch");
+      static constexpr size_t vlen = Tsimd::size();
+      static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
-        union {
-          native_simd<T> simd[64/vl];
-          T scalar[64];
-          } tbuf, pbuf;
-        T *wt(tbuf.scalar), *wp(pbuf.scalar);
-        for (auto &v: tbuf.simd) v=0;
-        for (auto &v: pbuf.simd) v=0;
-        MR_assert(supp<=64, "support too large");
-        vector<T> psiarr(2*kmax+1);
-#ifdef SIMD_INTERPOL
-        vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
-        for (auto &v:psiarr2) v=0;
-#endif
+        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
-          T f0=T(0.5*supp+ptg(i,0)*xdtheta);
-          size_t i0 = size_t(f0+T(1));
-          kernel->eval((i0-f0)*delta-1, tbuf.simd);
-          T f1=T(0.5)*supp+ptg(i,1)*xdphi;
-          size_t i1 = size_t(f1+1.);
-          kernel->eval((i1-f1)*delta-1, pbuf.simd);
-          psiarr[0]=1.;
-          double psi=ptg(i,2);
-          double cpsi=cos(psi), spsi=sin(psi);
-          double cnpsi=cpsi, snpsi=spsi;
-          for (size_t l=1; l<=kmax; ++l)
+          hlp.prep(theta(i), phi(i), psi(i));
+          auto ipsi = hlp.ipsi;
+          const T * DUCC0_RESTRICT ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
             {
-            psiarr[2*l-1]=T(cnpsi);
-            psiarr[2*l]=T(snpsi);
-            const double tmp = snpsi*cpsi + cnpsi*spsi;
-            cnpsi=cnpsi*cpsi - snpsi*spsi;
-            snpsi=tmp;
-            }
-#ifdef SIMD_INTERPOL
-          memcpy(reinterpret_cast<T *>(psiarr2.data()), psiarr.data(),
-            (2*kmax+1)*sizeof(T));
-#endif
-          if (ncomp==1)
-            {
-#ifndef SIMD_INTERPOL
-            T vv=0;
-            for (size_t j=0; j<supp; ++j)
-              for (size_t k=0; k<supp; ++k)
-                for (size_t l=0; l<2*kmax+1; ++l)
-                  vv += cube(i0+j,i1+k,0,l)*wt[j]*wp[k]*psiarr[l];
-            res.v(i,0) = vv;
-#else
-            const native_simd<T> *p=&scube(i0,i1,0,0);
-            ptrdiff_t d0 = scube.stride(0);
-            ptrdiff_t d1 = scube.stride(1);
-            switch (nv)
+            Tsimd res=0;
+            for (size_t ipsic=0; ipsic<supp; ++ipsic)
               {
-#ifdef SPECIAL_CASING
-              case 1:
-                interpol_help0<1,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 2:
-                interpol_help0<2,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 3:
-                interpol_help0<3,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 4:
-                interpol_help0<4,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 5:
-                interpol_help0<5,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 6:
-                interpol_help0<6,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 7:
-                interpol_help0<7,1>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-#endif
-              default:
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              for (size_t itheta=0; itheta<supp; ++itheta)
                 {
-                native_simd<T> vv=0.;
-                for (size_t j=0; j<supp; ++j, p+=d0)
-                  {
-                  auto p1=p;
-                  T wtj = wt[j];
-                  for (size_t k=0; k<supp; ++k, p1+=d1)
-                    {
-                    native_simd<T> tvv=0;
-                    for (size_t l=0; l<nv; ++l)
-                      tvv += p1[l]*psiarr2[l];
-                    vv += wtj*wp[k]*tvv;
-                    }
-                  }
-                res.v(i,0) = reduce(vv, std::plus<>());
+                auto twgt=hlp.wpsi[ipsic]*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
+                ptr2 += hlp.jumptheta;
                 }
+              if (++ipsi>=npsi_b) ipsi=0;
+              ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
               }
-#endif
-            }
-          else // ncomp==3
-            {
-#ifndef SIMD_INTERPOL
-            T v0=0., v1=0., v2=0.;
-            for (size_t j=0; j<supp; ++j)
-              for (size_t k=0; k<supp; ++k)
-                for (size_t l=0; l<2*kmax+1; ++l)
-                  {
-                  auto tmp = wt[j]*wp[k]*psiarr[l];
-                  v0 += cube(i0+j,i1+k,0,l)*tmp;
-                  v1 += cube(i0+j,i1+k,1,l)*tmp;
-                  v2 += cube(i0+j,i1+k,2,l)*tmp;
-                  }
-            res.v(i,0) = v0;
-            res.v(i,1) = v1;
-            res.v(i,2) = v2;
-#else
-            const native_simd<T> *p=&scube(i0,i1,0,0);
-            ptrdiff_t d0 = scube.stride(0);
-            ptrdiff_t d1 = scube.stride(1);
-            switch (nv)
-              {
-#ifdef SPECIAL_CASING
-              case 1:
-                interpol_help0<1,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 2:
-                interpol_help0<2,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 3:
-                interpol_help0<3,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 4:
-                interpol_help0<4,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 5:
-                interpol_help0<5,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 6:
-                interpol_help0<6,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-              case 7:
-                interpol_help0<7,3>(wt, wp, p, d0, d1, psiarr2.data(), res, i);
-                break;
-#endif
-              default:
-                {
-                ptrdiff_t d2 = scube.stride(2);
-                native_simd<T> v0=0., v1=0., v2=0.;
-                for (size_t j=0; j<supp; ++j, p+=d0)
-                  {
-                  auto p1=p;
-                  T wtj = wt[j];
-                  for (size_t k=0; k<supp; ++k, p1+=d1)
-                    {
-                    native_simd<T> wtjwpk = wtj*wp[k];
-                    for (size_t l=0; l<nv; ++l)
-                      {
-                      auto tmp = wtjwpk*psiarr2[l];
-                      v0 += p1[l]*tmp;
-                      v1 += p1[l+d2]*tmp;
-                      v2 += p1[l+2*d2]*tmp;
-                      }
-                    }
-                  }
-                res.v(i,0) = reduce(v0, std::plus<>());
-                res.v(i,1) = reduce(v1, std::plus<>());
-                res.v(i,2) = reduce(v2, std::plus<>());
-                }
-              }
-#endif
+            signal.v(i) = reduce(res, std::plus<>());
             }
           }
         });
       }
-
-    size_t support() const
-      { return supp; }
-
-    void deinterpol (const mav<T,2> &ptg, const mav<T,2> &data)
+    template<size_t supp> void deinterpolx(mav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, const mav<T,1> &signal) const
       {
-#ifdef SIMD_INTERPOL
-      constexpr size_t vl=native_simd<T>::size();
-      MR_assert(scube.stride(3)==1, "bad stride");
-      MR_assert(scube.stride(2)==ptrdiff_t(scube.shape(3)), "bad stride");
-      size_t nv=scube.shape(3);
-#endif
-      MR_assert(adjoint, "can only be called in adjoint mode");
-      MR_assert(ptg.shape(0)==data.shape(0), "dimension mismatch");
-      MR_assert(ptg.shape(1)==3, "second dimension must have length 3");
-      MR_assert(data.shape(1)==ncomp, "# of components mismatch");
-      T delta = T(2)/supp;
-      T xdtheta = T((ntheta-1)/pi),
-        xdphi = T(nphi/(2*pi));
-      auto idx = getIdx(ptg);
+      MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
+      MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
+      MR_assert(signal.shape(0)==theta.shape(0), "array shape mismatch");
+      static constexpr size_t vlen = Tsimd::size();
+      static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
       constexpr size_t cellsize=16;
-      size_t nct = ntheta/cellsize+5,
-             ncp = nphi/cellsize+5;
+      size_t nct = cube.shape(1)/cellsize+10,
+             ncp = cube.shape(2)/cellsize+10;
       mav<std::mutex,2> locks({nct,ncp});
 
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         size_t b_theta=99999999999999, b_phi=9999999999999999;
-        union {
-          native_simd<T> simd[64/vl];
-          T scalar[64];
-          } tbuf, pbuf;
-        T *wt(tbuf.scalar), *wp(pbuf.scalar);
-        for (auto &v: tbuf.simd) v=0;
-        for (auto &v: pbuf.simd) v=0;
-        MR_assert(supp<=64, "support too large");
-        vector<T> psiarr(2*kmax+1);
-#ifdef SIMD_INTERPOL
-        vector<native_simd<T>> psiarr2((2*kmax+1+vl-1)/vl);
-        for (auto &v:psiarr2) v=0;
-#endif
+        WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
           size_t i=idx[ind];
-          T f0=T(0.5*supp+ptg(i,0)*xdtheta);
-          size_t i0 = size_t(f0+T(1));
-          kernel->eval((i0-f0)*delta-1, tbuf.simd);
-          T f1=T(0.5)*supp+ptg(i,1)*xdphi;
-          size_t i1 = size_t(f1+1.);
-          kernel->eval((i1-f1)*delta-1, pbuf.simd);
-          psiarr[0]=1.;
-          double psi=ptg(i,2);
-          double cpsi=cos(psi), spsi=sin(psi);
-          double cnpsi=cpsi, snpsi=spsi;
-          for (size_t l=1; l<=kmax; ++l)
-            {
-            psiarr[2*l-1]=T(cnpsi);
-            psiarr[2*l]=T(snpsi);
-            const double tmp = snpsi*cpsi + cnpsi*spsi;
-            cnpsi=cnpsi*cpsi - snpsi*spsi;
-            snpsi=tmp;
-            }
-          size_t b_theta_new = i0/cellsize,
-                 b_phi_new = i1/cellsize;
+          hlp.prep(theta(i), phi(i), psi(i));
+          auto ipsi = hlp.ipsi;
+          T * DUCC0_RESTRICT ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
+
+          size_t b_theta_new = hlp.itheta/cellsize,
+                 b_phi_new = hlp.iphi/cellsize;
           if ((b_theta_new!=b_theta) || (b_phi_new!=b_phi))
             {
             if (b_theta<locks.shape(0))  // unlock
@@ -704,133 +401,27 @@ template<typename T> class Interpolator
             locks.v(b_theta+1,b_phi).lock();
             locks.v(b_theta+1,b_phi+1).lock();
             }
-#ifdef SIMD_INTERPOL
-          memcpy(reinterpret_cast<T *>(psiarr2.data()), psiarr.data(),
-            (2*kmax+1)*sizeof(T));
-#endif
-          if (ncomp==1)
+
             {
-#ifndef SIMD_INTERPOL
-            T val = data(i,0);
-            for (size_t j=0; j<supp; ++j)
-              for (size_t k=0; k<supp; ++k)
-                for (size_t l=0; l<2*kmax+1; ++l)
-                  cube.v(i0+j,i1+k,0,l) += val*wt[j]*wp[k]*psiarr[l];
-#else
-            native_simd<T> *p=&scube.v(i0,i1,0,0);
-            ptrdiff_t d0 = scube.stride(0);
-            ptrdiff_t d1 = scube.stride(1);
-            switch (nv)
+            Tsimd tmp=signal(i);
+            for (size_t ipsic=0; ipsic<supp; ++ipsic)
               {
-#ifdef SPECIAL_CASING
-              case 1:
-                deinterpol_help0<1,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 2:
-                deinterpol_help0<2,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 3:
-                deinterpol_help0<3,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 4:
-                deinterpol_help0<4,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 5:
-                deinterpol_help0<5,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 6:
-                deinterpol_help0<6,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 7:
-                deinterpol_help0<7,1>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-#endif
-              default:
+              auto ttmp=tmp*hlp.wpsi[ipsic];
+              T * DUCC0_RESTRICT ptr2 = ptr;
+              for (size_t itheta=0; itheta<supp; ++itheta)
                 {
-                native_simd<T> val = data(i,0);
-                for (size_t j=0; j<supp; ++j, p+=d0)
+                auto tttmp=ttmp*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
                   {
-                  auto p1=p;
-                  T wtj = wt[j];
-                  for (size_t k=0; k<supp; ++k, p1+=d1)
-                    {
-                    native_simd<T> tv = wtj*wp[k]*val;
-                    for (size_t l=0; l<nv; ++l)
-                      p1[l] += tv*psiarr2[l];
-                    } 
+                  Tsimd var=Tsimd::loadu(ptr2+iphi*vlen);
+                  var += tttmp*hlp.wphi[iphi];
+                  var.storeu(ptr2+iphi*vlen);
                   }
+                ptr2 += hlp.jumptheta;
                 }
+              if (++ipsi>=npsi_b) ipsi=0;
+              ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
               }
-#endif
-            }
-          else // ncomp==3
-            {
-#ifndef SIMD_INTERPOL
-            T v0=data(i,0), v1=data(i,1), v2=data(i,2);
-            for (size_t j=0; j<supp; ++j)
-              for (size_t k=0; k<supp; ++k)
-                {
-                T t0 = wt[j]*wp[k];
-                for (size_t l=0; l<2*kmax+1; ++l)
-                  {
-                  T tmp = t0*psiarr[l];
-                  cube.v(i0+j,i1+k,0,l) += v0*tmp;
-                  cube.v(i0+j,i1+k,1,l) += v1*tmp;
-                  cube.v(i0+j,i1+k,2,l) += v2*tmp;
-                  }
-                }
-#else
-            native_simd<T> *p=&scube.v(i0,i1,0,0);
-            ptrdiff_t d0 = scube.stride(0);
-            ptrdiff_t d1 = scube.stride(1);
-            switch (nv)
-              {
-#ifdef SPECIAL_CASING
-              case 1:
-                deinterpol_help0<1,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 2:
-                deinterpol_help0<2,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 3:
-                deinterpol_help0<3,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 4:
-                deinterpol_help0<4,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 5:
-                deinterpol_help0<5,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 6:
-                deinterpol_help0<6,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-              case 7:
-                deinterpol_help0<7,3>(wt, wp, p, d0, d1, psiarr2.data(), data, i);
-                break;
-#endif
-              default:
-                {
-                native_simd<T> v0=data(i,0), v1=data(i,1), v2=data(i,2);
-                ptrdiff_t d2 = scube.stride(2);
-                for (size_t j=0; j<supp; ++j, p+=d0)
-                  {
-                  auto p1=p;
-                  T wtj = wt[j];
-                  for (size_t k=0; k<supp; ++k, p1+=d1)
-                    {
-                    native_simd<T> wtjwpk = wtj*wp[k];
-                    for (size_t l=0; l<nv; ++l)
-                      {
-                      auto tmp = wtjwpk*psiarr2[l];
-                      p1[l] += v0*tmp;
-                      p1[l+d2] += v1*tmp;
-                      p1[l+2*d2] += v2*tmp;
-                      }
-                    }
-                  }
-                }
-              }
-#endif
             }
           }
         if (b_theta<locks.shape(0))  // unlock
@@ -842,109 +433,372 @@ template<typename T> class Interpolator
           }
         });
       }
-    void getSlm (const vector<Alm<complex<T>>> &blm, vector<Alm<complex<T>>> &slm)
+    T realsigma() const
       {
-      MR_assert(adjoint, "can only be called in adjoint mode");
-      MR_assert((blm.size()==ncomp) || (ncomp==1), "incorrect number of beam a_lm sets");
-      MR_assert((slm.size()==ncomp) || (ncomp==1), "incorrect number of sky a_lm sets");
-      Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-      auto ginfo = sharp_make_cc_geom_info(ntheta0,nphi0,0.,cube.stride(1),cube.stride(0));
+      return min(T(npsi_b)/(2*kmax+1),
+                 min(T(nphi_b)/(2*lmax+1), T(ntheta_b)/(lmax+1)));
+      }
+
+  public:
+    ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
+      size_t nthreads_)
+      : nthreads(nthreads_),
+        lmax(lmax_),
+        kmax(kmax_),
+        nphi_s(2*good_size_real(lmax+1)),
+        ntheta_s(nphi_s/2+1),
+        npsi_s(kmax*2+1),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*sigma/2.)))),
+        ntheta_b(nphi_b/2+1),
+        npsi_b(size_t(npsi_s*sigma+0.99999)),
+        dphi(T(2*pi/nphi_b)),
+        dtheta(T(pi/(ntheta_b-1))),
+        dpsi(T(2*pi/npsi_b)),
+        xdphi(T(1)/dphi),
+        xdtheta(T(1)/dtheta),
+        xdpsi(T(1)/dpsi),
+        kernel(selectKernel(realsigma(), 0.5*epsilon)),
+        nbphi((kernel->support()+1)/2),
+        nbtheta((kernel->support()+1)/2),
+        nphi(nphi_b+2*nbphi+vlen),
+        ntheta(ntheta_b+2*nbtheta),
+        phi0(nbphi*(-dphi)),
+        theta0(nbtheta*(-dtheta))
+      {
+      auto supp = kernel->support();
+      MR_assert((supp<=ntheta) && (supp<=nphi_b), "kernel support too large!");
+      }
+
+    size_t Lmax() const { return lmax; }
+    size_t Kmax() const { return kmax; }
+    size_t Ntheta() const { return ntheta; }
+    size_t Nphi() const { return nphi; }
+    size_t Npsi() const { return npsi_b; }
+
+    vector<size_t> getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi) const
+      {
+      vector<size_t> res(4);
+      auto tmp = (theta_lo-theta0)*xdtheta-nbtheta;
+      res[0] = min(size_t(max(T(0), tmp)), ntheta);
+      tmp = (theta_hi-theta0)*xdtheta+nbtheta+T(1);
+      res[1] = min(size_t(max(T(0), tmp)), ntheta);
+      tmp = (phi_lo-phi0)*xdphi-nbphi;
+      res[2] = min(size_t(max(T(0), tmp)), nphi);
+      tmp = (phi_hi-phi0)*xdphi+nbphi+T(1)+vlen;
+      res[3] = min(size_t(max(T(0), tmp)), nphi);
+      return res;
+      }
+
+    void getPlane(const mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      auto ncomp = vslm.shape(1);
+      MR_assert(ncomp>0, "need at least one component");
+      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
+      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
+      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
+      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
+      if (mbeam>0)
+        {
+        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
+        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
+        }
+      MR_assert(mbeam <= kmax, "mbeam too high");
+
+      auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
+      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
+
+      vector<T> lnorm(lmax+1);
+      for (size_t i=0; i<=lmax; ++i)
+        lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
+
+      if (mbeam==0)
+        {
+        Alm<complex<T>> a1(lmax, lmax);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+            {
+            a1(l,m) = vslm(islm.index(l,m),0)*vblm(iblm.index(l,0),0).real()*lnorm[l];
+            for (size_t i=1; i<ncomp; ++i)
+              a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
+            }
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
+        correct(m1,0);
+        }
+      else
+        {
+        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+            {
+            a1(l,m)=a2(l,m)=0.;
+            if (l>=mbeam)
+              for (size_t i=0; i<ncomp; ++i)
+                {
+                auto tmp = vblm(iblm.index(l,mbeam),i)*(-lnorm[l]);
+                a1(l,m) += vslm(islm.index(l,m),i)*tmp.real();
+                a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
+                }
+            }
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        sharp_alm2map_spin(mbeam, a1.Alms().cdata(), a2.Alms().cdata(),
+          m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
+        correct(m1,mbeam);
+        correct(m2,mbeam);
+        }
+      // fill border regions
+      T fct = (mbeam&1) ? -1 : 1;
+      for (size_t i=0; i<nbtheta; ++i)
+        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
+          {
+          if (j2>=nphi_b) j2-=nphi_b;
+          for (size_t l=0; l<re.shape(1); ++l)
+            {
+            re.v(nbtheta-1-i,j2+nbphi) = fct*re(nbtheta+1+i,j+nbphi);
+            re.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*re(nbtheta+ntheta_b-2-i,j+nbphi);
+            }
+          if (mbeam>0)
+            {
+            im.v(nbtheta-1-i,j2+nbphi) = fct*im(nbtheta+1+i,j+nbphi);
+            im.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*im(nbtheta+ntheta_b-2-i,j+nbphi);
+            }
+          }
+      for (size_t i=0; i<ntheta; ++i)
+        {
+        for (size_t j=0; j<nbphi; ++j)
+          {
+          re.v(i,j) = re(i,j+nphi_b);
+          re.v(i,j+nphi_b+nbphi) = re(i,j+nbphi);
+          if (mbeam>0)
+            {
+            im.v(i,j) = im(i,j+nphi_b);
+            im.v(i,j+nphi_b+nbphi) = im(i,j+nbphi);
+            }
+          }
+        // SIMD buffer
+        for (size_t j=0; j<vlen; ++j)
+          {
+          re.v(i, nphi-vlen+j) = T(0);
+          if (mbeam>0)
+            im.v(i, nphi-vlen+j) = T(0);
+          }
+        }
+      }
+    void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
+      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
+      getPlane(vslm, vblm, mbeam, re, im);
+      }
+
+    void interpol(const mav<T,3> &cube, size_t itheta0,
+      size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, mav<T,1> &signal) const
+      {
+      if constexpr(is_same<T,double>::value)
+        switch(kernel->support())
+          {
+          case  9: interpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 10: interpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 11: interpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 12: interpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 13: interpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 14: interpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 15: interpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 16: interpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          }
+      switch(kernel->support())
+        {
+        case 4: interpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 5: interpolx<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 6: interpolx<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 7: interpolx<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 8: interpolx<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        default: MR_fail("must not happen");
+        }
+      }
+
+    void deinterpol(mav<T,3> &cube, size_t itheta0,
+      size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
+      const mav<T,1> &psi, const mav<T,1> &signal) const
+      {
+      if constexpr(is_same<T,double>::value)
+        switch(kernel->support())
+          {
+          case  9: deinterpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 10: deinterpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 11: deinterpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 12: deinterpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 13: deinterpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 14: deinterpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 15: deinterpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          case 16: deinterpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
+          }
+      switch(kernel->support())
+        {
+        case 4: deinterpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 5: deinterpolx<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 6: deinterpolx<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 7: deinterpolx<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        case 8: deinterpolx<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
+        default: MR_fail("must not happen");
+        }
+      }
+
+     void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      auto ncomp = vslm.shape(1);
+      MR_assert(ncomp>0, "need at least one component");
+      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
+      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
+      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
+      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
+      if (mbeam>0)
+        {
+        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
+        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
+        }
+      MR_assert(mbeam <= kmax, "mbeam too high");
+
+      auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<cube.shape(0); ++i)
-        for (size_t j=0; j<supp; ++j)
-          for (size_t k=0; k<cube.shape(3); ++k)
-            for (size_t l=0; l<cube.shape(2); ++l)
-              {
-              cube.v(i,j+nphi,l,k) += cube(i,j,l,k);
-              cube.v(i,j+supp,l,k) += cube(i,j+nphi+supp,l,k);
-              }
-      for (size_t i=0; i<supp; ++i)
-        for (size_t j=0, j2=nphi/2; j<nphi; ++j,++j2)
-          for (size_t k=0; k<cube.shape(3); ++k)
+      for (size_t i=0; i<ntheta; ++i)
+        for (size_t j=0; j<nbphi; ++j)
+          {
+          re.v(i,j+nphi_b) += re(i,j);
+          re.v(i,j+nbphi) += re(i,j+nphi_b+nbphi);
+          if (mbeam>0)
             {
-            T fct = (((k+1)/2)&1) ? -1 : 1;
-            if (j2>=nphi) j2-=nphi;
-            for (size_t l=0; l<cube.shape(2); ++l)
-              {
-              cube.v(supp+1+i,j+supp,l,k) += fct*cube(supp-1-i,j2+supp,l,k);
-              cube.v(supp+ntheta-2-i, j+supp,l,k) += fct*cube(supp+ntheta+i,j2+supp,l,k);
-              }
+            im.v(i,j+nphi_b) += im(i,j);
+            im.v(i,j+nbphi) += im(i,j+nphi_b+nbphi);
             }
+          }
+
+      for (size_t i=0; i<nbtheta; ++i)
+        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
+          {
+          T fct = (mbeam&1) ? -1 : 1;
+          if (j2>=nphi_b) j2-=nphi_b;
+          re.v(nbtheta+1+i,j+nbphi) += fct*re(nbtheta-1-i,j2+nbphi);
+          re.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*re(nbtheta+ntheta_b+i,j2+nbphi);
+          if (mbeam>0)
+            {
+            im.v(nbtheta+1+i,j+nbphi) += fct*im(nbtheta-1-i,j2+nbphi);
+            im.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*im(nbtheta+ntheta_b+i,j2+nbphi);
+            }
+          }
 
       // special treatment for poles
-      for (size_t j=0,j2=nphi/2; j<nphi/2; ++j,++j2)
-        for (size_t k=0; k<cube.shape(3); ++k)
-          for (size_t l=0; l<cube.shape(2); ++l)
-            {
-            T fct = (((k+1)/2)&1) ? -1 : 1;
-            if (j2>=nphi) j2-=nphi;
-            T tval = (cube(supp,j+supp,l,k) + fct*cube(supp,j2+supp,l,k));
-            cube.v(supp,j+supp,l,k) = tval;
-            cube.v(supp,j2+supp,l,k) = fct*tval;
-            tval = (cube(supp+ntheta-1,j+supp,l,k) + fct*cube(supp+ntheta-1,j2+supp,l,k));
-            cube.v(supp+ntheta-1,j+supp,l,k) = tval;
-            cube.v(supp+ntheta-1,j2+supp,l,k) = fct*tval;
-            }
+      for (size_t j=0,j2=nphi_b/2; j<nphi_b/2; ++j,++j2)
+        {
+        T fct = (mbeam&1) ? -1 : 1;
+        if (j2>=nphi_b) j2-=nphi_b;
+        T tval = (re(nbtheta,j+nbphi) + fct*re(nbtheta,j2+nbphi));
+        re.v(nbtheta,j+nbphi) = tval;
+        re.v(nbtheta,j2+nbphi) = fct*tval;
+        tval = (re(nbtheta+ntheta_b-1,j+nbphi) + fct*re(nbtheta+ntheta_b-1,j2+nbphi));
+        re.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
+        re.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
+        if (mbeam>0)
+          {
+          tval = (im(nbtheta,j+nbphi) + fct*im(nbtheta,j2+nbphi));
+          im.v(nbtheta,j+nbphi) = tval;
+          im.v(nbtheta,j2+nbphi) = fct*tval;
+          tval = (im(nbtheta+ntheta_b-1,j+nbphi) + fct*im(nbtheta+ntheta_b-1,j2+nbphi));
+          im.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
+          im.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
+          }
+        }
 
       vector<T>lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
-      for (size_t j=0; j<blm.size(); ++j)
-        slm[j].SetToZero();
-
-      for (size_t icomp=0; icomp<ncomp; ++icomp)
+      if (mbeam==0)
         {
-        bool separate = ncomp>1;
-        {
-        auto m1 = cube.template subarray<2>({supp,supp,icomp,0},{ntheta,nphi,0,0});
+        Alm<complex<T>> a1(lmax, lmax);
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,0);
-        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.data(), *ginfo, *ainfo, 0, nthreads);
+        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.cdata(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
-            if (separate)
-              slm[icomp](l,m) += conj(a1(l,m))*blm[icomp](l,0).real()*lnorm[l];
-            else
-              for (size_t j=0; j<blm.size(); ++j)
-                slm[j](l,m) += conj(a1(l,m))*blm[j](l,0).real()*lnorm[l];
+            for (size_t i=0; i<ncomp; ++i)
+              vslm.v(islm.index(l,m),i) += conj(a1(l,m))*vblm(iblm.index(l,0),i).real()*lnorm[l];
         }
-        for (size_t k=1; k<=kmax; ++k)
-          {
-          auto m1 = cube.template subarray<2>({supp,supp,icomp,2*k-1},{ntheta,nphi,0,0});
-          auto m2 = cube.template subarray<2>({supp,supp,icomp,2*k  },{ntheta,nphi,0,0});
-          decorrect(m1,k);
-          decorrect(m2,k);
+      else
+        {
+        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        decorrect(m1,mbeam);
+        decorrect(m2,mbeam);
 
-          sharp_alm2map_spin_adjoint(k, a1.Alms().vdata(), a2.Alms().vdata(), m1.data(),
-            m2.data(), *ginfo, *ainfo, 0, nthreads);
-          for (size_t m=0; m<=lmax; ++m)
-            for (size_t l=m; l<=lmax; ++l)
-              if (l>=k)
+        sharp_alm2map_spin_adjoint(mbeam, a1.Alms().vdata(), a2.Alms().vdata(), m1.cdata(),
+          m2.cdata(), *ginfo, *ainfo, 0, nthreads);
+        for (size_t m=0; m<=lmax; ++m)
+          for (size_t l=m; l<=lmax; ++l)
+            if (l>=mbeam)
+              for (size_t i=0; i<ncomp; ++i)
                 {
-                if (separate)
-                  {
-                  auto tmp = blm[icomp](l,k)*(-2*lnorm[l]);
-                  slm[icomp](l,m) += conj(a1(l,m))*tmp.real();
-                  slm[icomp](l,m) += conj(a2(l,m))*tmp.imag();
-                  }
-                else
-                  for (size_t j=0; j<blm.size(); ++j)
-                    {
-                    auto tmp = blm[j](l,k)*(-2*lnorm[l]);
-                    slm[j](l,m) += conj(a1(l,m))*tmp.real();
-                    slm[j](l,m) += conj(a2(l,m))*tmp.imag();
-                    }
+                auto tmp = vblm(iblm.index(l,mbeam),i)*(-2*lnorm[l]);
+                vslm.v(islm.index(l,m),i) += conj(a1(l,m))*tmp.real();
+                vslm.v(islm.index(l,m),i) += conj(a2(l,m))*tmp.imag();
                 }
-          }
+        }
+      }
+    void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
+      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      {
+      mav<complex<T>,2> vslm(&slm.v(0), {slm.shape(0),1}, {slm.stride(0),0}, true);
+      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
+      updateSlm(vslm, vblm, mbeam, re, im);
+      }
+
+    void prepPsi(mav<T,3> &subcube) const
+      {
+      MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
+      auto newpart = subcube.template subarray<3>({npsi_s,0,0},{npsi_b-npsi_s,subcube.shape(1),subcube.shape(2)});
+      newpart.fill(T(0));
+      auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
+      for (size_t k=0; k<npsi_s; ++k)
+        {
+        auto factor = T(fct[(k+1)/2]);
+        for (size_t i=0; i<subcube.shape(1); ++i)
+          for (size_t j=0; j<subcube.shape(2); ++j)
+            subcube.v(k,i,j) *= factor;
+        }
+      fmav<T> fsubcube(subcube);
+      r2r_fftpack(fsubcube, fsubcube, {0}, false, true, T(1), nthreads);
+      }
+
+    void deprepPsi(mav<T,3> &subcube) const
+      {
+      MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
+      fmav<T> fsubcube(subcube);
+      r2r_fftpack(fsubcube, fsubcube, {0}, true, false, T(1), nthreads);
+      auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
+      for (size_t k=0; k<npsi_s; ++k)
+        {
+        auto factor = T(fct[(k+1)/2]);
+        for (size_t i=0; i<subcube.shape(1); ++i)
+          for (size_t j=0; j<subcube.shape(2); ++j)
+            subcube.v(k,i,j) *= factor;
         }
       }
   };
 
 }
 
-using detail_totalconvolve::Interpolator;
+using detail_totalconvolve::ConvolverPlan;
+
 
 }
 
