@@ -38,6 +38,7 @@
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "python/alm.h"
 #include "ducc0/math/fft.h"
+#include "ducc0/math/math_utils.h"
 
 namespace ducc0 {
 
@@ -303,11 +304,11 @@ template<typename T> class ConvolverPlan
           T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
           iphi = size_t(fphi+1);
           fphi = -1+(iphi-fphi)*2;
-          T fpsi = psi*plan.xdpsi-supp/T(2)+plan.npsi_b;
+          T fpsi = psi*plan.xdpsi-supp/T(2);
+          fpsi = fmodulo(fpsi, T(plan.npsi_b));
           ipsi = size_t(fpsi+1);
           fpsi = -1+(ipsi-fpsi)*2;
           if (ipsi>=plan.npsi_b) ipsi-=plan.npsi_b;
-if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
           tkrn.eval3(fpsi, ftheta, fphi, &buf.simd[0]);
           }
         size_t itheta, iphi, ipsi;
@@ -462,9 +463,9 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
         xdtheta(T(1)/dtheta),
         xdpsi(T(1)/dpsi),
         kernel(selectKernel(realsigma(), 0.5*epsilon)),
-        nbphi(8),
-        nbtheta(8),
-        nphi(nphi_b+2*nbphi),
+        nbphi((kernel->support()+1)/2),
+        nbtheta((kernel->support()+1)/2),
+        nphi(nphi_b+2*nbphi+vlen),
         ntheta(ntheta_b+2*nbtheta),
         phi0(nbphi*(-dphi)),
         theta0(nbtheta*(-dtheta))
@@ -488,7 +489,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       res[1] = min(size_t(max(T(0), tmp)), ntheta);
       tmp = (phi_lo-phi0)*xdphi-nbphi;
       res[2] = min(size_t(max(T(0), tmp)), nphi);
-      tmp = (phi_hi-phi0)*xdphi+nbphi+T(1);
+      tmp = (phi_hi-phi0)*xdphi+nbphi+T(1)+vlen;
       res[3] = min(size_t(max(T(0), tmp)), nphi);
       return res;
       }
@@ -570,7 +571,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
             im.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*im(nbtheta+ntheta_b-2-i,j+nbphi);
             }
           }
-      for (size_t i=0; i<ntheta_b+2*nbtheta; ++i)
+      for (size_t i=0; i<ntheta; ++i)
         for (size_t j=0; j<nbphi; ++j)
           {
           re.v(i,j) = re(i,j+nphi_b);
@@ -665,7 +666,7 @@ if (ipsi>=plan.npsi_b) cout << "aargh " << ipsi << endl;
       auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<ntheta_b+2*nbtheta; ++i)
+      for (size_t i=0; i<ntheta; ++i)
         for (size_t j=0; j<nbphi; ++j)
           {
           re.v(i,j+nphi_b) += re(i,j);
