@@ -359,6 +359,8 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
 
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return craw(idx(ns...)); }
+    template<typename... Ns> const T &c(Ns... ns) const
+      { return craw(idx(ns...)); }
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
 
@@ -538,6 +540,8 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       }
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return craw(idx(ns...)); }
+    template<typename... Ns> const T &c(Ns... ns) const
+      { return craw(idx(ns...)); }
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
     template<typename Func> void apply(Func func)
@@ -651,6 +655,8 @@ template<typename T, size_t ndim> class MavIter
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
       { return idx_ + getIdx(0, ns...); }
     template<typename... Ns> const T &operator()(Ns... ns) const
+      { return mav.craw(idx(ns...)); }
+    template<typename... Ns> const T &c(Ns... ns) const
       { return mav.craw(idx(ns...)); }
     template<typename... Ns> T &v(Ns... ns)
       { return mav.vraw(idx(ns...)); }
