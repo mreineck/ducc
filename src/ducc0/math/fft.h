@@ -978,7 +978,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
     if constexpr (simd_exists<T,vlen/4>)
       if (it.remaining()>=vlen/4)
         {
-        it.advance(vlen);
+        it.advance(vlen/4);
         auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true);
