@@ -51,8 +51,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
   {
   auto othersize = info.size()/info.shape(axis);
   constexpr auto vlen = native_simd<T0>::size();
-  auto tmpsize = len*((othersize>=vlen) ? vlen : 1);
-  return aligned_array<T>(tmpsize);
+  return aligned_array<T>(len*std::min(vlen, othersize));
   }
 
 template<typename Tplan, typename T, typename T0, typename Exec>
