@@ -4,6 +4,11 @@
   - oversampling factors up to 2.5 supported
   - new, more flexible interface in submodule `wgridder.experimental`
     (subject to further changes!)
+- totalconvolver:
+  - now performs non-equidistant FFT interpolation also in psi direction,
+    making it much faster for large kmax.
+  - new low-level interface which allows flexible re-distribution of work
+    over MPI tasks (responsibility of the caller)
 
 
 0.6.0:
