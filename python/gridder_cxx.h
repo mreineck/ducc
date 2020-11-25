@@ -274,7 +274,7 @@ class Baselines
         }
       coord.resize(nrows);
       double vfac = negate_v ? -1 : 1;
-      vmax=0;
+      umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
         coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
