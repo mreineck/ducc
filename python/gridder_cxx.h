@@ -765,6 +765,9 @@ template<typename T> class Params
         union kbuf {
           T scalar[2*nvec*vlen];
           mysimd<T> simd[2*nvec];
+#if defined(_MSC_VER)
+          kbuf() {}
+#endif
           };
         kbuf buf;
 
@@ -857,6 +860,9 @@ template<typename T> class Params
         union kbuf {
           T scalar[2*nvec*vlen];
           mysimd<T> simd[2*nvec];
+#if defined(_MSC_VER)
+          kbuf() {}
+#endif
           };
         kbuf buf;
 
