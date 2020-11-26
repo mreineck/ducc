@@ -27,7 +27,9 @@ using namespace ducc0;
 
 PYBIND11_MODULE(PKGNAME, m)
   {
+#if (!defined(_MSC_VER)) // no idea why this doesn't work on Windows
   m.attr("__version__") = PKGVERSION;
+#endif
 
   add_fft(m);
   add_sht(m);

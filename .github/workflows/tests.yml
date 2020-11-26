@@ -1,0 +1,25 @@
+name: ducc-tests
+on: [push]
+jobs:
+  test-linux:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest
+      - run: python3 setup.py install --user --prefix=
+      - run: python3 -m pytest python/test -x
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest
+      - run: python3 setup.py install --user --prefix=
+      - run: python3 -m pytest python/test -x
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest pytest-timeout
+      - run: python setup.py install --user --prefix=
+      # SHT-related code seems to hang ... need to have a closer look
+      - run: python -m pytest python/test/test_fft.py python/test/test_healpix.py python/test/test_pointing.py python/test/test_wgridder.py python/test/test_wgridder_experiments.py -x --timeout=5

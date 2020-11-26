@@ -270,6 +270,9 @@ template<typename T> class ConvolverPlan
         union kbuf {
           T scalar[3*nvec*vlen];
           Tsimd simd[3*nvec];
+#if defined(_MSC_VER)
+          kbuf() {}
+#endif
           };
         kbuf buf;
 

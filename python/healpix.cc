@@ -231,7 +231,7 @@ py::array local_v_angle (const py::array &v1, const py::array &v2)
   {
   auto v12 = to_fmav<double>(v1);
   auto v22 = to_fmav<double>(v2);
-  MR_assert(v12.shape()==v22.shape());
+  MR_assert(v12.shape()==v22.shape(), "shape mismatch");
   auto angle = make_Pyarr<double>(repl_dim<1,0>(v12.shape(),{3},{}));
   auto angle2 = to_fmav<double>(angle,true);
   MavIter<double,2> ii1(v12), ii2(v22);

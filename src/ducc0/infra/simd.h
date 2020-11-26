@@ -79,8 +79,13 @@ template<typename T, size_t len> struct vmask_
     Tm v;
 
   public:
+#if defined(_MSC_VER)
+    vmask_() {}
+    vmask_(const vmask_ &other) : v(other.v) {}
+#else
     vmask_() = default;
     vmask_(const vmask_ &other) = default;
+#endif
     vmask_(Tm v_): v(v_) {}
     operator Tm() const  { return v; }
     size_t bits() const { return hlp::maskbits(v); }
@@ -102,10 +107,15 @@ template<typename T, size_t len> class vtp
     Tv v;
 
   public:
-    vtp () = default;
+#if defined(_MSC_VER)
+    vtp() {}
+    vtp(const vtp &other): v(other.v) {}
+#else
+    vtp() = default;
+    vtp(const vtp &other) = default;
+#endif
     vtp(T other): vtp(hlp::from_scalar(other)) {}
     vtp(const Tv &other) : v(other) {}
-    vtp(const vtp &other) = default;
     vtp &operator=(const T &other) { v=hlp::from_scalar(other); return *this; }
     operator Tv() const { return v; }
 
@@ -212,8 +222,13 @@ template<typename T> class pseudoscalar
     T v;
 
   public:
+#if defined(_MSC_VER)
+    pseudoscalar() {}
+    pseudoscalar(const pseudoscalar &other) :v(other.v) {}
+#else
     pseudoscalar() = default;
     pseudoscalar(const pseudoscalar &other) = default;
+#endif
     pseudoscalar(T v_):v(v_) {}
     pseudoscalar operator-() const { return pseudoscalar(-v); }
     pseudoscalar operator+(pseudoscalar other) const { return pseudoscalar(v+other.v); }
@@ -229,8 +244,6 @@ template<typename T> class pseudoscalar
     inline pseudoscalar sqrt() const { return std::sqrt(v); }
     pseudoscalar max(const pseudoscalar &other) const
       { return std::max(v, other.v); }
-
-    operator T() const { return v; }
 
     bool operator>(const pseudoscalar &other) const
       { return v>other.v; }
@@ -252,7 +265,7 @@ template<typename T> class helper_<T,1>
     using Tm = bool;
 
     static Tv loadu(const T *ptr) { return *ptr; }
-    static void storeu(T *ptr, Tv v) { *ptr = v; }
+    static void storeu(T *ptr, Tv v) { *ptr = v[0]; }
 
     static Tv from_scalar(T v) { return v; }
     static Tv abs(Tv v) { return v.abs(); }
