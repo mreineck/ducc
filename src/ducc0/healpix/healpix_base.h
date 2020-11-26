@@ -32,6 +32,8 @@
 #ifndef HEALPIX_BASE_H
 #define HEALPIX_BASE_H
 
+#include <array>
+#include <cmath>
 #include <vector>
 #include "ducc0/healpix/healpix_tables.h"
 #include "ducc0/math/pointing.h"
