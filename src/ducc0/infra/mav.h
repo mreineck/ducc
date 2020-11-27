@@ -340,7 +340,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : tinfo(info), tbuf(d_, rw_) {}
 #if defined(_MSC_VER)
     // MSVC is broken
-    fmav(const fmav &other) : tinfo(other), tbuf(other) {};
+    fmav(const fmav &other) : tinfo(other), tbuf(other) {}
     fmav(fmav &other) : tinfo(other), tbuf(other) {}
     fmav(fmav &&other) : tinfo(other), tbuf(other) {}
 #else
