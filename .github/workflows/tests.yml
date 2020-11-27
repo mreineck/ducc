@@ -21,5 +21,4 @@ jobs:
       - uses: actions/checkout@v2
       - run: pip3 install --user --upgrade setuptools pybind11 pytest pytest-timeout
       - run: python setup.py install --user --prefix=
-      # SHT-related code seems to hang ... need to have a closer look
-      - run: python -m pytest python/test/test_fft.py python/test/test_healpix.py python/test/test_pointing.py python/test/test_wgridder.py python/test/test_wgridder_experiments.py -x --timeout=5
+      - run: python -m pytest python/test -x

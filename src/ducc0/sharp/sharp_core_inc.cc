@@ -39,6 +39,7 @@
 #include <cmath>
 #include <cstring>
 #include <vector>
+#include <array>
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_internal.h"
 #include "ducc0/infra/error_handling.h"
@@ -64,15 +65,8 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
        tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
   tmp1=tmp3+tmp4;
-  union U
-    {
-    decltype(tmp1) v;
-    complex<double> c[2];
-    U() {}
-    };
-  U u;
-  u.v=tmp1;
-  cc[0]+=u.c[0]; cc[1]+=u.c[1];
+  cc[0]+=complex<double>(tmp1[0], tmp1[1]);
+  cc[1]+=complex<double>(tmp1[2], tmp1[3]);
   }
 #else
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
@@ -88,18 +82,14 @@ using dcmplx = complex<double>;
 constexpr size_t nv0 = 128/VLEN;
 constexpr size_t nvx = 64/VLEN;
 
-using Tbv0 = Tv[nv0];
-using Tbs0 = double[nv0*VLEN];
+using Tbv0 = std::array<Tv,nv0>;
+using Tbs0 = std::array<double,nv0*VLEN>;
 
 struct s0data_v
-  {
-  Tbv0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i;
-  };
+  { Tbv0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i; };
 
 struct s0data_s
-  {
-  Tbs0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i;
-  };
+  { Tbs0 sth, corfac, scale, lam1, lam2, csq, p1r, p1i, p2r, p2i; };
 
 union s0data_u
   {
@@ -110,8 +100,8 @@ union s0data_u
 #endif
   };
 
-using Tbvx = Tv[nvx];
-using Tbsx = double[nvx*VLEN];
+using Tbvx = std::array<Tv,nvx>;
+using Tbsx = std::array<double,nvx*VLEN>;
 
 struct sxdata_v
   {
@@ -134,6 +124,31 @@ union sxdata_u
 #endif
   };
 
+#if defined(_MSC_VER)  // Don't ask me ...
+static inline void Tvnormalize (Tv *val_, Tv *scale_, double maxval)
+  {
+  Tv val = *val_;
+  Tv scale = *scale_;
+  const Tv vfmin=sharp_fsmall*maxval, vfmax=maxval;
+  const Tv vfsmall=sharp_fsmall, vfbig=sharp_fbig;
+  auto mask = abs(val)>vfmax;
+  while (any_of(mask))
+    {
+    where(mask,val)*=vfsmall;
+    where(mask,scale)+=1;
+    mask = abs(val)>vfmax;
+    }
+  mask = (abs(val)<vfmin) & (val!=0);
+  while (any_of(mask))
+    {
+    where(mask,val)*=vfbig;
+    where(mask,scale)-=1;
+    mask = (abs(val)<vfmin) & (val!=0);
+    }
+  *val_ = val;
+  *scale_ = scale;
+  }
+#else
 static inline void Tvnormalize (Tv * DUCC0_RESTRICT val, Tv * DUCC0_RESTRICT scale,
   double maxval)
   {
@@ -154,6 +169,7 @@ static inline void Tvnormalize (Tv * DUCC0_RESTRICT val, Tv * DUCC0_RESTRICT sca
     mask = (abs(*val)<vfmin) & (*val!=0);
     }
   }
+#endif
 
 static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
   Tv * DUCC0_RESTRICT resd, Tv * DUCC0_RESTRICT ress)
@@ -201,7 +217,7 @@ static inline void getCorfac(Tv scale, Tv * DUCC0_RESTRICT corfac,
   union Tvu
     {
     Tv v;
-    double s[VLEN];
+    std::array<double,VLEN> s;
 #if defined(_MSC_VER)
     Tvu() {}
 #endif
@@ -978,9 +994,9 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
           alm[l+1] = gen.alpha[il]*al1;
           }
 
-        const size_t nval=nv0*VLEN;
+        constexpr size_t nval=nv0*VLEN;
         size_t ith=0;
-        size_t itgt[nval];
+        std::array<size_t,nval> itgt;
         while (ith<ulim-llim)
           {
           s0data_u d;
@@ -1036,9 +1052,9 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
           for (size_t i=0; i<nalm; ++i)
             job.almtmp[nalm*l+i]*=gen.alpha[l];
 
-        const size_t nval=nvx*VLEN;
+        constexpr size_t nval=nvx*VLEN;
         size_t ith=0;
-        size_t itgt[nval];
+        std::array<size_t,nval> itgt;
         while (ith<ulim-llim)
           {
           sxdata_u d;
@@ -1120,7 +1136,7 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
       {
       if (job.spin==0)
         {
-        const size_t nval=nv0*VLEN;
+        constexpr size_t nval=nv0*VLEN;
         size_t ith=0;
         while (ith<ulim-llim)
           {
@@ -1171,7 +1187,7 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
         }
       else
         {
-        const size_t nval=nvx*VLEN;
+        constexpr size_t nval=nvx*VLEN;
         size_t ith=0;
         while (ith<ulim-llim)
           {
