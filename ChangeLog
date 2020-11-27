@@ -1,4 +1,6 @@
 0.7.0:
+- general:
+  - compilation with MSVC on Windows is now possible
 - wgridder:
   - performance (especially scaling) improvements
   - oversampling factors up to 2.5 supported
