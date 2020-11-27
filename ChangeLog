@@ -1,11 +1,13 @@
 0.7.0:
 - general:
   - compilation with MSVC on Windows is now possible
+
 - wgridder:
   - performance (especially scaling) improvements
   - oversampling factors up to 2.5 supported
   - new, more flexible interface in submodule `wgridder.experimental`
     (subject to further changes!)
+
 - totalconvolver:
   - now performs non-equidistant FFT interpolation also in psi direction,
     making it much faster for large kmax.
@@ -16,6 +18,7 @@
 0.6.0:
 - general:
   - multi-threading improvements contributed by Peter Bell
+
 - wgridder:
   - new, smaller internal data structure
 
