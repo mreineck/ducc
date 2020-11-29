@@ -336,23 +336,36 @@ template<typename T> class ConvolverPlan
           hlp.prep(theta(i), phi(i), psi(i));
           auto ipsi = hlp.ipsi;
           const T * DUCC0_RESTRICT ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
+          Tsimd res=0;
+          if constexpr(nvec==1)
             {
-            Tsimd res=0;
             for (size_t ipsic=0; ipsic<supp; ++ipsic)
               {
               const T * DUCC0_RESTRICT ptr2 = ptr;
-              for (size_t itheta=0; itheta<supp; ++itheta)
-                {
-                auto twgt=hlp.wpsi[ipsic]*hlp.wtheta[itheta];
-                for (size_t iphi=0; iphi<nvec; ++iphi)
-                  res += twgt*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
-                ptr2 += hlp.jumptheta;
-                }
+              Tsimd tres=0;
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
+                tres += hlp.wtheta[itheta]*Tsimd::loadu(ptr2);
+              res += tres*hlp.wpsi[ipsic];
               if (++ipsi>=npsi_b) ipsi=0;
               ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
               }
-            signal.v(i) = reduce(res, std::plus<>());
+            res *= hlp.wphi[0];
             }
+          else
+            {
+            for (size_t ipsic=0; ipsic<supp; ++ipsic)
+              {
+              const T * DUCC0_RESTRICT ptr2 = ptr;
+              Tsimd tres=0;
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
+              res += tres*hlp.wpsi[ipsic];
+              if (++ipsi>=npsi_b) ipsi=0;
+              ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
+              }
+            }
+          signal.v(i) = reduce(res, std::plus<>());
           }
         });
       }
@@ -406,23 +419,43 @@ template<typename T> class ConvolverPlan
 
             {
             Tsimd tmp=signal(i);
-            for (size_t ipsic=0; ipsic<supp; ++ipsic)
+            if constexpr (nvec==1)
               {
-              auto ttmp=tmp*hlp.wpsi[ipsic];
-              T * DUCC0_RESTRICT ptr2 = ptr;
-              for (size_t itheta=0; itheta<supp; ++itheta)
+              tmp *= hlp.wphi[0];
+              for (size_t ipsic=0; ipsic<supp; ++ipsic)
                 {
-                auto tttmp=ttmp*hlp.wtheta[itheta];
-                for (size_t iphi=0; iphi<nvec; ++iphi)
+                auto ttmp=tmp*hlp.wpsi[ipsic];
+                T * DUCC0_RESTRICT ptr2 = ptr;
+                for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
                   {
-                  Tsimd var=Tsimd::loadu(ptr2+iphi*vlen);
-                  var += tttmp*hlp.wphi[iphi];
-                  var.storeu(ptr2+iphi*vlen);
+                  Tsimd var=Tsimd::loadu(ptr2);
+                  var += ttmp*hlp.wtheta[itheta];
+                  var.storeu(ptr2);
                   }
-                ptr2 += hlp.jumptheta;
+                if (++ipsi>=npsi_b) ipsi=0;
+                ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
                 }
-              if (++ipsi>=npsi_b) ipsi=0;
-              ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
+              }
+            else
+              {
+              for (size_t ipsic=0; ipsic<supp; ++ipsic)
+                {
+                auto ttmp=tmp*hlp.wpsi[ipsic];
+                T * DUCC0_RESTRICT ptr2 = ptr;
+                for (size_t itheta=0; itheta<supp; ++itheta)
+                  {
+                  auto tttmp=ttmp*hlp.wtheta[itheta];
+                  for (size_t iphi=0; iphi<nvec; ++iphi)
+                    {
+                    Tsimd var=Tsimd::loadu(ptr2+iphi*vlen);
+                    var += tttmp*hlp.wphi[iphi];
+                    var.storeu(ptr2+iphi*vlen);
+                    }
+                  ptr2 += hlp.jumptheta;
+                  }
+                if (++ipsi>=npsi_b) ipsi=0;
+                ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
+                }
               }
             }
           }
