@@ -234,14 +234,14 @@ uint32_t block2morton3D_32 (uint32_t v)
   uint32_t v2=v&0xfffff;
   uint64_t v3=spread3D_64(v2);
   v3=(v3|(v3>>29))&0x1fffffff;
-  return v3|(spread3D_32(v>>20)<<2);
+  return uint32_t(v3)|(spread3D_32(v>>20)<<2);
   }
 uint32_t coord2morton3D_32 (std::array<uint32_t,3> xyz)
   {
   uint32_t v2=(xyz[0]&0x3ff)|((xyz[1]&0x3ff)<<10);
   uint64_t v3=spread3D_64(v2);
   v3=(v3|(v3>>29))&0x1fffffff;
-  return v3|(spread3D_32(xyz[2]&0x3ff)<<2);
+  return uint32_t(v3)|(spread3D_32(xyz[2]&0x3ff)<<2);
   }
 uint32_t morton2block3D_32 (uint32_t v)
   {

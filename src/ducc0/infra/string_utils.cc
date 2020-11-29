@@ -221,7 +221,7 @@ void parse_cmdline_classic (int argc, const char **argv,
   MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
   for (size_t i=0; i<leading_args.size(); ++i)
     dict[leading_args[i]] = argv[i+1];
-  int curarg=leading_args.size()+1;
+  int curarg=int(leading_args.size())+1;
   while (curarg<argc)
     {
     string param=argv[curarg];
@@ -250,7 +250,7 @@ void parse_cmdline_equalsign (int argc, const char **argv,
   MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
   for (size_t i=0; i<leading_args.size(); ++i)
     dict[leading_args[i]] = argv[i+1];
-  for (int i=leading_args.size()+1; i<argc; ++i)
+  for (int i=int(leading_args.size()+1); i<argc; ++i)
     {
     string arg=trim(argv[i]);
     if (arg.size()>0)

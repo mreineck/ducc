@@ -75,7 +75,7 @@ DUCC0_NOINLINE size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, doub
   double discr = b*b-4*c;
   if (discr<=0) return lmax;
   double res=(-b+sqrt(discr))/2.;
-  if (res>lmax) res=lmax;
+  res = min(res, double(lmax));
   return size_t(res+0.5);
   }
 
