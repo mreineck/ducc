@@ -33,6 +33,7 @@
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
+#include "ducc0/infra/misc_utils.h"
 #endif
 
 namespace ducc0 {
@@ -468,6 +469,28 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
   Distribution dist;
   dist.execParallel(nthreads, move(func));
   }
+void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
+  std::function<void(size_t, size_t)> func)
+  {
+  nthreads = (nthreads==0) ? get_default_nthreads() : nthreads;
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    auto tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, work_lo, work_hi);
+    func(lo, hi);
+    });
+  }
+void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
+  std::function<void(size_t, size_t, size_t)> func)
+  {
+  nthreads = (nthreads==0) ? get_default_nthreads() : nthreads;
+  execParallel(nthreads, [&](Scheduler &sched)
+    {
+    auto tid = sched.thread_num();
+    auto [lo, hi] = calcShare(nthreads, tid, work_lo, work_hi);
+    func(tid, lo, hi);
+    });
+  }
 
 #else
 
@@ -520,6 +543,12 @@ void execParallel(size_t, std::function<void(Scheduler &)> func)
   MyScheduler sched(1);
   func(sched);
   }
+void execParallel(size_t work_lo, size_t work_hi, size_t,
+  std::function<void(size_t, size_t)> func)
+  { func(lo, hi); }
+void execParallel(size_t work_lo, size_t work_hi, size_t,
+  std::function<void(size_t, size_t, size_t)> func)
+  { func(0, lo, hi); }
 
 #endif
 

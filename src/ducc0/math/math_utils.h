@@ -38,17 +38,21 @@
 
 namespace ducc0 {
 
+namespace detail_math_utils {
+
+using namespace std;
+
 /*! Returns \e true if | \a a-b | <= \a epsilon * | \a b |, else \e false. */
 template<typename F> inline bool approx (F a, F b, F epsilon=F(1e-5L))
-  { return std::abs(a-b) <= (epsilon*std::abs(b)); }
+  { return abs(a-b) <= (epsilon*abs(b)); }
 
 /*! Returns \e true if | \a a-b | <= \a epsilon, else \e false. */
 template<typename F> inline bool abs_approx (F a, F b, F epsilon=F(1e-5L))
-  { return std::abs(a-b) <= epsilon; }
+  { return abs(a-b) <= epsilon; }
 
 /*! Returns the largest integer which is smaller than (or equal to) \a arg. */
 template<typename I, typename F> inline I ifloor (F arg)
-  { return I(std::floor(arg)); }
+  { return I(floor(arg)); }
 
 /*! Returns the integer which is nearest to \a arg. */
 template<typename I, typename F> inline I nearest (F arg)
@@ -59,10 +63,9 @@ template<typename I, typename F> inline I nearest (F arg)
     \a v1 can be positive or negative; \a v2 must be positive. */
 template<typename F> inline F fmodulo (F v1, F v2)
   {
-  using namespace std;
   if (v1>=0)
-    return (v1<v2) ? v1 : std::fmod(v1,v2);
-  auto tmp=std::fmod(v1,v2)+v2;
+    return (v1<v2) ? v1 : fmod(v1,v2);
+  auto tmp=fmod(v1,v2)+v2;
   return (tmp==v2) ? F(0) : tmp;
   }
 
@@ -80,50 +83,30 @@ template<typename T> inline T sign (const T& signvalue)
 template<typename T, typename I> inline T xpow (I m, T val)
   { return (m&1) ? -val : val; }
 
-namespace math_utils_detail {
-
-template<typename I, bool g4> struct isqrt_helper__
-  {};
-template<typename I> struct isqrt_helper__ <I, false>
-  {
-  static std::uint32_t isqrt (I arg)
-    {
-    using namespace std;
-    return std::uint32_t (sqrt(arg+0.5));
-    }
-  };
-template<typename I> struct isqrt_helper__ <I, true>
-  {
-  static std::uint32_t isqrt (I arg)
-    {
-    using namespace std;
-    I res = I(std::sqrt(double(arg)+0.5));
-    if (std::uint64_t(arg)<(std::uint64_t(1)<<50)) return std::uint32_t(res);
-    if (res*res>arg)
-      --res;
-    else if ((res+1)*(res+1)<=arg)
-      ++res;
-    return std::uint32_t(res);
-    }
-  };
-
 /*! Returns the integer \a n, which fulfills \a n*n<=arg<(n+1)*(n+1). */
-template<typename I> inline std::uint32_t isqrt (I arg)
-  { return isqrt_helper__<I,(sizeof(I)>4)>::isqrt(arg); }
-}
-
-using math_utils_detail::isqrt;
+template<typename I> inline uint32_t isqrt (I arg)
+  {
+  if constexpr (sizeof(I)<=4)
+    return uint32_t (sqrt(arg+0.5));
+  I res = I(sqrt(double(arg)+0.5));
+  if (uint64_t(arg)<(uint64_t(1)<<50)) return uint32_t(res);
+  if (res*res>arg)
+    --res;
+  else if ((res+1)*(res+1)<=arg)
+    ++res;
+  return uint32_t(res);
+  }
 
 /*! Returns the largest integer \a n that fulfills \a 2^n<=arg. */
 template<typename I> inline unsigned int ilog2 (I arg)
   {
 #ifdef __GNUC__
   if (arg==0) return 0;
-  if (sizeof(I)==sizeof(int))
+  if constexpr (sizeof(I)==sizeof(int))
     return 8*sizeof(int)-1-__builtin_clz(arg);
-  if (sizeof(I)==sizeof(long))
+  if constexpr (sizeof(I)==sizeof(long))
     return 8*sizeof(long)-1-__builtin_clzl(arg);
-  if (sizeof(I)==sizeof(long long))
+  if constexpr (sizeof(I)==sizeof(long long))
     return 8*sizeof(long long)-1-__builtin_clzll(arg);
 #endif
   unsigned int res=0;
@@ -138,11 +121,11 @@ template<typename I> inline unsigned int ilog2 (I arg)
 template<typename I> inline unsigned int ilog2_nonnull (I arg)
   {
 #ifdef __GNUC__
-  if (sizeof(I)<=sizeof(int))
+  if constexpr (sizeof(I)<=sizeof(int))
     return 8*sizeof(int)-1-__builtin_clz(arg);
-  if (sizeof(I)==sizeof(long))
+  if constexpr (sizeof(I)==sizeof(long))
     return 8*sizeof(long)-1-__builtin_clzl(arg);
-  if (sizeof(I)==sizeof(long long))
+  if constexpr (sizeof(I)==sizeof(long long))
     return 8*sizeof(long long)-1-__builtin_clzll(arg);
 #endif
   return ilog2 (arg);
@@ -152,11 +135,11 @@ template<typename I> inline int trailingZeros(I arg)
   {
   if (arg==0) return sizeof(I)<<3;
 #ifdef __GNUC__
-  if (sizeof(I)<=sizeof(int))
+  if constexpr (sizeof(I)<=sizeof(int))
     return __builtin_ctz(arg);
-  if (sizeof(I)==sizeof(long))
+  if constexpr (sizeof(I)==sizeof(long))
     return __builtin_ctzl(arg);
-  if (sizeof(I)==sizeof(long long))
+  if constexpr (sizeof(I)==sizeof(long long))
     return __builtin_ctzll(arg);
 #endif
   int res=0;
@@ -179,7 +162,7 @@ inline bool multiequal (const T1 &a, const T2 &b, Args... args)
 template<typename T> class tree_adder
   {
   private:
-    std::vector<T> state;
+    vector<T> state;
     size_t n;
 
   public:
@@ -209,7 +192,25 @@ template<typename T> class tree_adder
 
 /*! Returns \a atan2(y,x) if \a x!=0 or \a y!=0; else returns 0. */
 inline double safe_atan2 (double y, double x)
-  { return ((x==0.) && (y==0.)) ? 0.0 : std::atan2(y,x); }
+  { return ((x==0.) && (y==0.)) ? 0.0 : atan2(y,x); }
+
+}
+
+using detail_math_utils::approx;
+using detail_math_utils::abs_approx;
+using detail_math_utils::ifloor;
+using detail_math_utils::nearest;
+using detail_math_utils::fmodulo;
+using detail_math_utils::imodulo;
+using detail_math_utils::sign;
+using detail_math_utils::xpow;
+using detail_math_utils::isqrt;
+using detail_math_utils::ilog2;
+using detail_math_utils::ilog2_nonnull;
+using detail_math_utils::trailingZeros;
+using detail_math_utils::multiequal;
+using detail_math_utils::tree_adder;
+using detail_math_utils::safe_atan2;
 
 }
 
