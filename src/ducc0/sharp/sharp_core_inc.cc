@@ -349,7 +349,7 @@ DUCC0_NOINLINE static void calc_alm2map (sharp_job & DUCC0_RESTRICT job,
   job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp.cdata();
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -443,7 +443,7 @@ DUCC0_NOINLINE static void calc_map2alm (sharp_job & DUCC0_RESTRICT job,
   job.opcnt += (lmax+1-l) * 6*nth;
 
   auto &coef = gen.coef;
-  dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+  dcmplx * DUCC0_RESTRICT alm=job.almtmp.vdata();
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -622,7 +622,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin (sharp_job & DUCC0_RESTRICT job,
   job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp.cdata();
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -756,7 +756,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin (sharp_job & DUCC0_RESTRICT job,
   job.opcnt += (lmax+1-l) * 23*nth;
 
   const auto &fx = gen.coef;
-  dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+  dcmplx * DUCC0_RESTRICT alm=job.almtmp.vdata();
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -877,7 +877,7 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(sharp_job & DUCC0_RESTRICT job,
   job.opcnt += (lmax+1-l) * 15*nth;
 
   const auto &fx = gen.coef;
-  const dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+  const dcmplx * DUCC0_RESTRICT alm=job.almtmp.cdata();
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -962,7 +962,7 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
       if (job.spin==0)
         {
         //adjust the a_lm for the new algorithm
-        dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+        dcmplx * DUCC0_RESTRICT alm=job.almtmp.vdata();
         for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
           {
           dcmplx al = alm[l];
@@ -990,10 +990,7 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
               ++nth;
               }
             else
-              {
-              auto phas_idx = ith*job.s_th + mi*job.s_m;
-              job.phase[phas_idx] = job.phase[phas_idx+1] = 0;
-              }
+              job.phase.v(mi, ith, 0) = job.phase.v(mi, ith, 1) = 0;
             ++ith;
             }
           if (nth>0)
@@ -1012,12 +1009,11 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
               //adjust for new algorithm
               d.s.p2r[i]*=cth_[tgt];
               d.s.p2i[i]*=cth_[tgt];
-              auto phas_idx = tgt*job.s_th + mi*job.s_m;
               complex<double> r1(d.s.p1r[i], d.s.p1i[i]),
                               r2(d.s.p2r[i], d.s.p2i[i]);
-              job.phase[phas_idx] = r1+r2;
+              job.phase.v(mi, tgt, 0) = r1+r2;
               if (ispair[tgt])
-                job.phase[phas_idx+1] = r1-r2;
+                job.phase.v(mi, tgt, 1) = r1-r2;
               }
             }
           }
@@ -1028,7 +1024,7 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
         auto nalm = job.nalm();
         for (size_t l=gen.mhi; l<=gen.lmax+1; ++l)
           for (size_t i=0; i<nalm; ++i)
-            job.almtmp[nalm*l+i]*=gen.alpha[l];
+            job.almtmp.v(l,i)*=gen.alpha[l];
 
         constexpr size_t nval=nvx*VLEN;
         size_t ith=0;
@@ -1049,9 +1045,8 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
               }
             else
               {
-              auto phas_idx = ith*job.s_th + mi*job.s_m;
-              job.phase[phas_idx  ] = job.phase[phas_idx+1] = 0;
-              job.phase[phas_idx+2] = job.phase[phas_idx+3] = 0;
+              job.phase.v(mi, ith, 0) = job.phase.v(mi, ith, 1) = 0;
+              job.phase.v(mi, ith, 2) = job.phase.v(mi, ith, 3) = 0;
               }
             ++ith;
             }
@@ -1071,17 +1066,16 @@ DUCC0_NOINLINE static void inner_loop_a2m(sharp_job &job, const vector<bool> & i
             for (size_t i=0; i<nth; ++i)
               {
               auto tgt=itgt[i];
-              auto phas_idx = tgt*job.s_th + mi*job.s_m;
               complex<double> q1(d.s.p1pr[i], d.s.p1pi[i]),
                               q2(d.s.p2pr[i], d.s.p2pi[i]),
                               u1(d.s.p1mr[i], d.s.p1mi[i]),
                               u2(d.s.p2mr[i], d.s.p2mi[i]);
-              job.phase[phas_idx  ] = q1+q2;
-              job.phase[phas_idx+2] = u1+u2;
+              job.phase.v(mi, tgt, 0) = q1+q2;
+              job.phase.v(mi, tgt, 2) = u1+u2;
               if (ispair[tgt])
                 {
-                dcmplx *phQ = &(job.phase[phas_idx+1]),
-                       *phU = &(job.phase[phas_idx+3]);
+                dcmplx *phQ = &(job.phase.v(mi, tgt, 1)),
+                       *phU = &(job.phase.v(mi, tgt, 3));
                 *phQ = q1-q2;
                 *phU = u1-u2;
                 if ((gen.mhi-gen.m+gen.s)&1)
@@ -1125,9 +1119,8 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
             if (mlim[ith]>=m)
               {
               d.s.csq[nth]=cth_[ith]*cth_[ith]; d.s.sth[nth]=sth_[ith];
-              auto phas_idx = ith*job.s_th + mi*job.s_m;
-              dcmplx ph1=job.phase[phas_idx];
-              dcmplx ph2=ispair[ith] ? job.phase[phas_idx+1] : 0.;
+              dcmplx ph1=job.phase(ith, mi, 0);
+              dcmplx ph2=ispair[ith] ? job.phase(ith, mi, 1) : 0.;
               d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
               d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
               //adjust for new algorithm
@@ -1150,7 +1143,7 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
             }
           }
         //adjust the a_lm for the new algorithm
-        dcmplx * DUCC0_RESTRICT alm=job.almtmp;
+        dcmplx * DUCC0_RESTRICT alm=job.almtmp.vdata();
         dcmplx alm2 = 0.;
         double alold=0;
         for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
@@ -1176,11 +1169,10 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
             if (mlim[ith]>=m)
               {
               d.s.cth[nth]=cth_[ith]; d.s.sth[nth]=sth_[ith];
-              size_t phas_idx = ith*job.s_th + mi*job.s_m;
-              dcmplx p1Q=job.phase[phas_idx],
-                     p1U=job.phase[phas_idx+2],
-                     p2Q=ispair[ith] ? job.phase[phas_idx+1]:0.,
-                     p2U=ispair[ith] ? job.phase[phas_idx+3]:0.;
+              dcmplx p1Q=job.phase(ith, mi, 0),
+                     p1U=job.phase(ith, mi, 2),
+                     p2Q=ispair[ith] ? job.phase(ith, mi, 1):0.,
+                     p2U=ispair[ith] ? job.phase(ith, mi, 3):0.;
               if ((gen.mhi-gen.m+gen.s)&1)
                 { p2Q=-p2Q; p2U=-p2U; }
               d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
@@ -1207,8 +1199,8 @@ DUCC0_NOINLINE static void inner_loop_m2a(sharp_job &job, const vector<bool> &is
         //adjust the a_lm for the new algorithm
         for (size_t l=gen.mhi; l<=gen.lmax; ++l)
           {
-          job.almtmp[2*l  ]*=gen.alpha[l];
-          job.almtmp[2*l+1]*=gen.alpha[l];
+          job.almtmp.v(l,0)*=gen.alpha[l];
+          job.almtmp.v(l,1)*=gen.alpha[l];
           }
         }
       break;

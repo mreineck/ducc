@@ -111,29 +111,29 @@ void sharp_standard_geom_info::clear_map (const any &map) const
   else MR_fail("bad map data type");
   }
 
-template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t iring, const double *ringtmp, T *map) const
+template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t iring, const mav<double,1> &ringtmp, T *map) const
   {
   T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    p1[ptrdiff_t(m)*stride] += T(ringtmp[m]*wgt);
+    p1[ptrdiff_t(m)*stride] += T(ringtmp(m)*wgt);
   }
 //virtual
-void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const double *ringtmp, const any &map) const
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const mav<double,1> &ringtmp, const any &map) const
   {
   if (map.type()==typeid(double *)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
   else if (map.type()==typeid(float *)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
   else MR_fail("bad map data type");
   }
-template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, double *ringtmp) const
+template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, mav<double,1> &ringtmp) const
   {
   const T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
   double wgt = weighted ? ring[iring].weight : 1.;
   for (size_t m=0; m<ring[iring].nph; ++m)
-    ringtmp[m] = p1[ptrdiff_t(m)*stride]*wgt;
+    ringtmp.v(m) = p1[ptrdiff_t(m)*stride]*wgt;
   }
 //virtual
-void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, double *ringtmp) const
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, mav<double,1> &ringtmp) const
   {
   if (map.type()==typeid(const double *)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
   else if (map.type()==typeid(double *)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
