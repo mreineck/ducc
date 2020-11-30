@@ -265,7 +265,7 @@ template<typename T> class ConvolverPlan
       constexpr size_t cellsize=8;
       size_t nct = patch_ntheta/cellsize+1,
              ncp = patch_nphi/cellsize+1,
-             ncpsi = npsi_b/cellsize-1;
+             ncpsi = npsi_b/cellsize+1;
       double theta0 = (int(itheta0)-int(nbtheta))*dtheta,
              phi0 = (int(iphi0)-int(nbphi))*dphi;
       double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
