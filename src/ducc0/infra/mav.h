@@ -396,12 +396,12 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     void assign(fmav &other)
       {
       fmav_info::assign(other);
-      membuf<T>:: assign(other);
+      membuf<T>::assign(other);
       }
     void assign(const fmav &other)
       {
       fmav_info::assign(other);
-      membuf<T>:: assign(other);
+      membuf<T>::assign(other);
       }
 
     template<typename... Ns> const T &operator()(Ns... ns) const
@@ -589,12 +589,12 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     void assign(mav &other)
       {
       mav_info<ndim>::assign(other);
-      membuf<T>:: assign(other);
+      membuf<T>::assign(other);
       }
     void assign(const mav &other)
       {
       mav_info<ndim>::assign(other);
-      membuf<T>:: assign(other);
+      membuf<T>::assign(other);
       }
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &mb)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}

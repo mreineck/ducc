@@ -27,6 +27,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 #include <map>
 
 #include "ducc0/infra/error_handling.h"
