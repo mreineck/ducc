@@ -122,31 +122,31 @@ template<typename T> class PyInterpolator
       if (separate)
         for (size_t i=0; i<vslm.shape(1); ++i)
           {
-          auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
-          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          auto re = subarray<2>(cube, {i,0,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
+          auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
           conv.getPlane(vslmi, vblmi, 0, re, re);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-            auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            auto re = subarray<2>(cube, {i,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
+            auto im = subarray<2>(cube, {i,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
             conv.getPlane(vslmi, vblmi, k, re, im);
             }
           }
       else
         {
-        auto re = cube.template subarray<2>({0,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+        auto re = subarray<2>(cube, {0,0,0,0},{0, 0, MAXIDX, MAXIDX});
         conv.getPlane(vslm, vblm, 0, re, re);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto re = cube.template subarray<2>({0,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          auto im = cube.template subarray<2>({0,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto re = subarray<2>(cube, {0,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto im = subarray<2>(cube, {0,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
           conv.getPlane(vslm, vblm, k, re, im);
           }
         }
       for (size_t i=0; i<cube.shape(0); ++i)
         {
-        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
         conv.prepPsi(subcube);
         }
       }
@@ -159,16 +159,16 @@ template<typename T> class PyInterpolator
     py::array pyinterpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto ptheta = ptg2.template subarray<1>({0,0},{ptg2.shape(0),0});
-      auto pphi = ptg2.template subarray<1>({0,1},{ptg2.shape(0),0});
-      auto ppsi = ptg2.template subarray<1>({0,2},{ptg2.shape(0),0});
+      auto ptheta = subarray<1>(ptg2, {0,0},{MAXIDX,0});
+      auto pphi = subarray<1>(ptg2, {0,1},{MAXIDX,0});
+      auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
       size_t ncomp = cube.shape(0);
       auto res = make_Pyarr<T>({ptg2.shape(0),ncomp});
       auto res2 = to_mav<T,2>(res,true);
       for (size_t i=0; i<ncomp; ++i)
         {
-        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
-        auto subres = res2.template subarray<1>({0,i},{res2.shape(0),0});
+        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
+        auto subres = subarray<1>(res2, {0,i},{MAXIDX,0});
         conv.interpol(subcube, 0, 0, ptheta, pphi, ppsi, subres);
         }
       return move(res);
@@ -177,15 +177,15 @@ template<typename T> class PyInterpolator
     void pydeinterpol(const py::array &ptg, const py::array &data)
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto ptheta = ptg2.template subarray<1>({0,0},{ptg2.shape(0),0});
-      auto pphi = ptg2.template subarray<1>({0,1},{ptg2.shape(0),0});
-      auto ppsi = ptg2.template subarray<1>({0,2},{ptg2.shape(0),0});
+      auto ptheta = subarray<1>(ptg2, {0,0},{MAXIDX,0});
+      auto pphi = subarray<1>(ptg2, {0,1},{MAXIDX,0});
+      auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
       size_t ncomp = cube.shape(0);
       auto data2 = to_mav<T,2>(data);
       for (size_t i=0; i<ncomp; ++i)
         {
-        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
-        auto subdata = data2.template subarray<1>({0,i},{data2.shape(0),0});
+        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
+        auto subdata = subarray<1>(data2, {0,i},{MAXIDX,0});
         conv.deinterpol(subcube, 0, 0, ptheta, pphi, ppsi, subdata);
         }
       }
@@ -198,7 +198,7 @@ template<typename T> class PyInterpolator
       if (separate) MR_assert(ncomp==cube.shape(0), "dimension mismatch");
       for (size_t i=0; i<cube.shape(0); ++i)
         {
-        auto subcube = cube.template subarray<3>({i,0,0,0},{0, conv.Npsi(), conv.Ntheta(), conv.Nphi()});
+        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
         conv.deprepPsi(subcube);
         }
       auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),ncomp});
@@ -207,25 +207,25 @@ template<typename T> class PyInterpolator
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
-          auto re = cube.template subarray<2>({i,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          auto vslmi = vslm.template subarray<2>({0,i},{vslm.shape(0),1});
-          auto vblmi = vblm.template subarray<2>({0,i},{vblm.shape(0),1});
+          auto re = subarray<2>(cube, {i,0,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
+          auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
           conv.updateSlm(vslmi, vblmi, 0, re, re);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto re = cube.template subarray<2>({i,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-            auto im = cube.template subarray<2>({i,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+            auto re = subarray<2>(cube, {i,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
+            auto im = subarray<2>(cube, {i,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
             conv.updateSlm(vslmi, vblmi, k, re, im);
             }
           }
       else
         {
-        auto re = cube.template subarray<2>({0,0,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+        auto re = subarray<2>(cube, {0,0,0,0},{0, 0, MAXIDX, MAXIDX});
         conv.updateSlm(vslm, vblm, 0, re, re);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto re = cube.template subarray<2>({0,2*k-1,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
-          auto im = cube.template subarray<2>({0,2*k  ,0,0},{0, 0, conv.Ntheta(), conv.Nphi()});
+          auto re = subarray<2>(cube, {0,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto im = subarray<2>(cube, {0,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
           conv.updateSlm(vslm, vblm, k, re, im);
           }
         }

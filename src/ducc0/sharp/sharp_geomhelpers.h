@@ -49,8 +49,8 @@ class sharp_standard_geom_info: public sharp_geom_info
     ptrdiff_t stride;
     size_t nphmax_;
     template<typename T> void tclear (T *map) const;
-    template<typename T> void tget (bool weighted, size_t iring, const T *map, double *ringtmp) const;
-    template<typename T> void tadd (bool weighted, size_t iring, const double *ringtmp, T *map) const;
+    template<typename T> void tget (bool weighted, size_t iring, const T *map, mav<double,1> &ringtmp) const;
+    template<typename T> void tadd (bool weighted, size_t iring, const mav<double,1> &ringtmp, T *map) const;
 
   public:
 /*! Creates a geometry information from a set of ring descriptions.
@@ -77,8 +77,8 @@ class sharp_standard_geom_info: public sharp_geom_info
     virtual double phi0(size_t iring) const { return ring[iring].phi0; }
     virtual Tpair pair(size_t ipair) const { return pair_[ipair]; }
     virtual void clear_map(const std::any &map) const;
-    virtual void get_ring(bool weighted, size_t iring, const std::any &map, double *ringtmp) const;
-    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, const std::any &map) const;
+    virtual void get_ring(bool weighted, size_t iring, const std::any &map, mav<double,1> &ringtmp) const;
+    virtual void add_ring(bool weighted, size_t iring, const mav<double,1> &ringtmp, const std::any &map) const;
   };
 
 /*! Creates a geometry information describing a HEALPix map with an

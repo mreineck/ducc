@@ -188,9 +188,9 @@ template<typename T> class ConvolverPlan
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi_s, nphi_s}));
+      fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
       convolve_1d(ftmp0, ftmp, 0, k2, nthreads);
-      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta_b, nphi_s}));
+      fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
       fmav<T> farr(arr);
       convolve_1d(ftmp2, farr, 1, k2, nthreads);
       }
@@ -202,7 +202,7 @@ template<typename T> class ConvolverPlan
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> farr(arr);
-      fmav<T> ftmp2(tmp.template subarray<2>({0,0},{ntheta_b, nphi_s}));
+      fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
       convolve_1d(farr, ftmp2, 1, k2, nthreads);
       // extend to second half
       for (size_t i=1, i2=nphi_b-1; i+1<ntheta_b; ++i,--i2)
@@ -212,7 +212,7 @@ template<typename T> class ConvolverPlan
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(tmp.template subarray<2>({0,0},{nphi_s, nphi_s}));
+      fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
       convolve_1d(ftmp, ftmp0, 0, k2, nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr.v(0,j) = T(0.5)*tmp(0,j);
@@ -525,7 +525,7 @@ template<typename T> class ConvolverPlan
             for (size_t i=1; i<ncomp; ++i)
               a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
             }
-        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,0);
         }
@@ -544,8 +544,8 @@ template<typename T> class ConvolverPlan
                 a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
                 }
             }
-        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
         sharp_alm2map_spin(mbeam, a1.Alms().cdata(), a2.Alms().cdata(),
           m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
         correct(m1,mbeam);
@@ -727,7 +727,7 @@ template<typename T> class ConvolverPlan
       if (mbeam==0)
         {
         Alm<complex<T>> a1(lmax, lmax);
-        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,0);
         sharp_alm2map_adjoint(a1.Alms().vdata(), m1.cdata(), *ginfo, *ainfo, 0, nthreads);
         for (size_t m=0; m<=lmax; ++m)
@@ -738,8 +738,8 @@ template<typename T> class ConvolverPlan
       else
         {
         Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-        auto m1 = re.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m2 = im.template subarray<2>({nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
@@ -767,7 +767,7 @@ template<typename T> class ConvolverPlan
     void prepPsi(mav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
-      auto newpart = subcube.template subarray<3>({npsi_s,0,0},{npsi_b-npsi_s,subcube.shape(1),subcube.shape(2)});
+      auto newpart = subarray<3>(subcube, {npsi_s,0,0},{MAXIDX,MAXIDX,MAXIDX});
       newpart.fill(T(0));
       auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
       for (size_t k=0; k<npsi_s; ++k)

@@ -71,28 +71,28 @@ void sharp_standard_alm_info::clear_alm(const any &alm) const
   else if (alm.type()==typeid(fcmplx *)) tclear(any_cast<fcmplx *>(alm));
   else MR_fail("bad a_lm data type");
   }
-template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm, dcmplx *almtmp, size_t nalm) const
+template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm, mav<dcmplx,1> &almtmp) const
   {
   for (auto l=mval_[mi]; l<=lmax_; ++l)
-    almtmp[nalm*l] = alm[mvstart[mi]+ptrdiff_t(l)*stride];
+    almtmp.v(l) = alm[mvstart[mi]+ptrdiff_t(l)*stride];
   }
-void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, dcmplx *almtmp, size_t nalm) const
+void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, mav<dcmplx,1> &almtmp) const
   {
-  if (alm.type()==typeid(dcmplx *)) tget(mi, any_cast<dcmplx *>(alm), almtmp, nalm);
-  else if (alm.type()==typeid(const dcmplx *)) tget(mi, any_cast<const dcmplx *>(alm), almtmp, nalm);
-  else if (alm.type()==typeid(fcmplx *)) tget(mi, any_cast<fcmplx *>(alm), almtmp, nalm);
-  else if (alm.type()==typeid(const fcmplx *)) tget(mi, any_cast<const fcmplx *>(alm), almtmp, nalm);
+  if (alm.type()==typeid(dcmplx *)) tget(mi, any_cast<dcmplx *>(alm), almtmp);
+  else if (alm.type()==typeid(const dcmplx *)) tget(mi, any_cast<const dcmplx *>(alm), almtmp);
+  else if (alm.type()==typeid(fcmplx *)) tget(mi, any_cast<fcmplx *>(alm), almtmp);
+  else if (alm.type()==typeid(const fcmplx *)) tget(mi, any_cast<const fcmplx *>(alm), almtmp);
   else MR_fail("bad a_lm data type");
   }
-template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const dcmplx *almtmp, T *alm, size_t nalm) const
+template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const mav<dcmplx,1> &almtmp, T *alm) const
   {
   for (auto l=mval_[mi]; l<=lmax_; ++l)
-    alm[mvstart[mi]+ptrdiff_t(l)*stride] += T(almtmp[nalm*l]);
+    alm[mvstart[mi]+ptrdiff_t(l)*stride] += T(almtmp(l));
   }
-void sharp_standard_alm_info::add_alm(size_t mi, const dcmplx *almtmp, const any &alm, size_t nalm) const
+void sharp_standard_alm_info::add_alm(size_t mi, const mav<dcmplx,1> &almtmp, const any &alm) const
   {
-  if (alm.type()==typeid(dcmplx *)) tadd(mi, almtmp, any_cast<dcmplx *>(alm), nalm);
-  else if (alm.type()==typeid(fcmplx *)) tadd(mi, almtmp, any_cast<fcmplx *>(alm), nalm);
+  if (alm.type()==typeid(dcmplx *)) tadd(mi, almtmp, any_cast<dcmplx *>(alm));
+  else if (alm.type()==typeid(fcmplx *)) tadd(mi, almtmp, any_cast<fcmplx *>(alm));
   else MR_fail("bad a_lm data type");
   }
 
