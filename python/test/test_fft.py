@@ -97,10 +97,9 @@ ctype = {np.float32: np.complex64,
 on_windows = ("microsoft" in platform.uname()[3].lower() or
               platform.system() == "Windows")
 true_long_double = (np.longfloat != np.float64 and not on_windows)
-dtypes = [np.float32, np.float64,
-          pytest.param(np.longfloat, marks=pytest.mark.xfail(
-              not true_long_double,
-              reason="Long double doesn't offer more precision"))]
+dtypes = [np.float32, np.float64]
+if true_long_double:
+    dtypes += [np.longfloat]
 
 
 @pmp("len", len1D)
