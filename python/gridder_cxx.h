@@ -175,9 +175,9 @@ template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
     {
     if (!first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
-    auto flo = farr.subarray({0,0},{farr.shape(0),vlim});
+    auto flo = subarray(farr, {0,0},{MAXIDX,vlim});
     r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
-    auto fhi = farr.subarray({0,farr.shape(1)-vlim},{farr.shape(0),vlim});
+    auto fhi = subarray(farr, {0,farr.shape(1)-vlim},{MAXIDX,vlim});
     r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
     if (first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
@@ -444,9 +444,9 @@ template<typename T> class Params
         {
         if (!uv_side_fast)
           c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
-        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
+        auto inout_lo = inout.subarray({0,0},{MAXIDX,vlim});
         c2c(inout_lo, inout_lo, {0}, BACKWARD, T(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{MAXIDX,vlim});
         c2c(inout_hi, inout_hi, {0}, BACKWARD, T(1), nthreads);
         if (uv_side_fast)
           c2c(inout, inout, {1}, BACKWARD, T(1), nthreads);
@@ -466,9 +466,9 @@ template<typename T> class Params
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
-      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
-      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
@@ -494,9 +494,9 @@ template<typename T> class Params
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = grid.template subarray<2>({0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
-      { auto a0 = grid.template subarray<2>({nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
-      { auto a0 = grid.template subarray<2>({nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = -0.5*nxdirty*pixsize_x,
              y0 = -0.5*nydirty*pixsize_y;
@@ -564,9 +564,9 @@ template<typename T> class Params
         {
         if (uv_side_fast)
           c2c(inout, inout, {1}, FORWARD, T(1), nthreads);
-        auto inout_lo = inout.subarray({0,0},{inout.shape(0),vlim});
+        auto inout_lo = inout.subarray({0,0},{MAXIDX,vlim});
         c2c(inout_lo, inout_lo, {0}, FORWARD, T(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{inout.shape(0),vlim});
+        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{MAXIDX,vlim});
         c2c(inout_hi, inout_hi, {0}, FORWARD, T(1), nthreads);
         if (!uv_side_fast)
           c2c(inout, inout, {1}, FORWARD, T(1), nthreads);

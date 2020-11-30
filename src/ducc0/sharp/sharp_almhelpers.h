@@ -30,6 +30,7 @@
 
 #include <memory>
 #include "ducc0/sharp/sharp.h"
+#include "ducc0/infra/mav.h"
 
 namespace ducc0 {
 
@@ -50,8 +51,8 @@ class sharp_standard_alm_info: public sharp_alm_info
     /*! Stride between a_lm and a_(l+1),m */
     ptrdiff_t stride;
     template<typename T> void tclear (T *alm) const;
-    template<typename T> void tget (size_t mi, const T *alm, std::complex<double> *almtmp, size_t nalm) const;
-    template<typename T> void tadd (size_t mi, const std::complex<double> *almtmp, T *alm, size_t nalm) const;
+    template<typename T> void tget (size_t mi, const T *alm, mav<std::complex<double>,1> &almtmp) const;
+    template<typename T> void tadd (size_t mi, const mav<std::complex<double>,1> &almtmp, T *alm) const;
 
   public:
   /*! Creates an a_lm data structure from the following parameters:
@@ -87,8 +88,8 @@ class sharp_standard_alm_info: public sharp_alm_info
     virtual size_t nm() const { return mval_.size(); }
     virtual size_t mval(size_t i) const { return mval_[i]; }
     virtual void clear_alm(const std::any &alm) const;
-    virtual void get_alm(size_t mi, const std::any &alm, std::complex<double> *almtmp, size_t nalm) const;
-    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, const std::any &alm, size_t nalm) const;
+    virtual void get_alm(size_t mi, const std::any &alm, mav<std::complex<double>,1> &almtmp) const;
+    virtual void add_alm(size_t mi, const mav<std::complex<double>,1> &almtmp, const std::any &alm) const;
   };
 
 /*! Initialises an a_lm data structure according to the scheme used by

@@ -33,6 +33,7 @@
 #include <vector>
 #include <memory>
 #include <any>
+#include "ducc0/infra/mav.h"
 
 namespace ducc0 {
 
@@ -57,8 +58,8 @@ class sharp_geom_info
     virtual Tpair pair(size_t ipair) const = 0;
 
     virtual void clear_map(const std::any &map) const = 0;
-    virtual void get_ring(bool weighted, size_t iring, const std::any &map, double *ringtmp) const = 0;
-    virtual void add_ring(bool weighted, size_t iring, const double *ringtmp, const std::any &map) const = 0;
+    virtual void get_ring(bool weighted, size_t iring, const std::any &map, mav<double,1> &ringtmp) const = 0;
+    virtual void add_ring(bool weighted, size_t iring, const mav<double,1> &ringtmp, const std::any &map) const = 0;
   };
 
 /*! \defgroup almgroup Helpers for dealing with a_lm */
@@ -73,8 +74,8 @@ class sharp_alm_info
     virtual size_t nm() const = 0;
     virtual size_t mval(size_t i) const = 0;
     virtual void clear_alm(const std::any &alm) const = 0;
-    virtual void get_alm(size_t mi, const std::any &alm, std::complex<double> *almtmp, size_t nalm) const = 0;
-    virtual void add_alm(size_t mi, const std::complex<double> *almtmp, const std::any &alm, size_t nalm) const = 0;
+    virtual void get_alm(size_t mi, const std::any &alm, mav<std::complex<double>,1> &almtmp) const = 0;
+    virtual void add_alm(size_t mi, const mav<std::complex<double>,1> &almtmp, const std::any &alm) const = 0;
   };
 
 /*! \} */

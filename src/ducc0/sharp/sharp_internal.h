@@ -32,6 +32,7 @@
 #include <vector>
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/mav.h"
 
 namespace ducc0 {
 
@@ -99,20 +100,20 @@ class sharp_job
     void init_output();
     void alm2almtmp (size_t mi);
     void almtmp2alm (size_t mi);
-    void ring2ringtmp (size_t iring, std::vector<double> &ringtmp,
-      size_t rstride);
-    void ringtmp2ring (size_t iring, const std::vector<double> &ringtmp, size_t rstride);
+    void ring2ringtmp (size_t iring, mav<double,2> &ringtmp);
+    void ringtmp2ring (size_t iring, const mav<double,2> &ringtmp);
     void map2phase (size_t mmax, size_t llim, size_t ulim);
     void phase2map (size_t mmax, size_t llim, size_t ulim);
+    mav<std::complex<double>,3> alloc_phase (size_t nm, size_t ntheta) const;
+    void alloc_almtmp (size_t lmax);
 
   public:
     sharp_jobtype type;
     size_t spin;
     size_t flags;
-    size_t s_m, s_th; // strides in m and theta direction
-    complex<double> *phase;
+    mav<complex<double>,3> phase;
     std::vector<double> norm_l;
-    complex<double> *almtmp;
+    mav<complex<double>,2> almtmp;
     const sharp_geom_info &ginfo;
     const sharp_alm_info &ainfo;
     int nthreads;
@@ -124,8 +125,7 @@ class sharp_job
       const std::vector<std::any> &map, const sharp_geom_info &geom_info,
       const sharp_alm_info &alm_info, size_t flags, int nthreads_);
 
-    void alloc_phase (size_t nm, size_t ntheta, std::vector<complex<double>> &data);
-    void alloc_almtmp (size_t lmax, std::vector<complex<double>> &data);
+    void set_phase(mav<std::complex<double>,3> &phase_);
     size_t nmaps() const { return 1+(spin>0); }
     size_t nalm() const { return (type==SHARP_ALM2MAP_DERIV1) ? 1 : (1+(spin>0)); }
 
