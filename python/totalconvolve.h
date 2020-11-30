@@ -33,6 +33,7 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
+#include "ducc0/infra/useful_macros.h"
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
@@ -149,6 +150,40 @@ namespace detail_totalconvolve {
 
 using namespace std;
 
+template<typename Tidx, typename Tkey> vector<Tidx> bucketsort
+  (const vector<Tkey> &keys, size_t max_key, size_t nthreads)
+  {
+  struct vbuf
+    {
+    vector<Tkey> v;
+    array<uint64_t,8> dummy;
+    };
+  vector<vbuf> numbers(nthreads);
+  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
+    {
+    auto &mybuf(numbers[tid].v);
+    mybuf.resize(max_key+1,0);
+    for (size_t i=lo; i<hi; ++i)
+      ++mybuf[keys[i]];
+    });
+  size_t ofs=0;
+  for (size_t i=0; i<numbers[0].v.size(); ++i)
+    for (size_t t=0; t<nthreads; ++t)
+      {
+      auto tmp=numbers[t].v[i];
+      numbers[t].v[i]=ofs;
+      ofs+=tmp;
+      }
+  vector<Tidx> res(keys.size());
+  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
+    {
+    auto &mybuf(numbers[tid].v);
+    for (size_t i=lo; i<hi; ++i)
+      res[mybuf[keys[i]]++] = i;
+    });
+  return res;
+  }
+
 template<typename T> class ConvolverPlan
   {
   protected:
@@ -223,42 +258,42 @@ template<typename T> class ConvolverPlan
         arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi,
+    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
-      constexpr size_t cellsize=16;
+      size_t nptg = theta.shape(0);
+      constexpr size_t cellsize=8;
       size_t nct = patch_ntheta/cellsize+1,
-             ncp = patch_nphi/cellsize+1;
+             ncp = patch_nphi/cellsize+1,
+             ncpsi = npsi_b/cellsize-1;
       double theta0 = (int(itheta0)-int(nbtheta))*dtheta,
              phi0 = (int(iphi0)-int(nbphi))*dphi;
       double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
       double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
-      vector<vector<size_t>> mapper(nct*ncp);
-      MR_assert(theta.conformable(phi), "theta/phi size mismatch");
-// FIXME: parallelize?
-      for (size_t i=0; i<theta.shape(0); ++i)
+
+      vector<size_t> key(nptg);
+      execParallel(nptg, nthreads, [&](size_t lo, size_t hi)
         {
-        MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
-        MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
-        auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
-        auto itheta = size_t(ftheta+1);
-        auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
-        auto iphi = size_t(fphi+1);
-        itheta /= cellsize;
-        iphi /= cellsize;
-        MR_assert(itheta<nct, "bad itheta");
-        MR_assert(iphi<ncp, "bad iphi");
-        mapper[itheta*ncp+iphi].push_back(i);
-        }
-      vector<size_t> idx(theta.shape(0));
-      size_t cnt=0;
-      for (auto &vec: mapper)
-        {
-        for (auto i:vec)
-          idx[cnt++] = i;
-        vector<size_t>().swap(vec); // cleanup
-        }
-      return idx;
+        for (size_t i=lo; i<hi; ++i)
+          {
+          MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
+          MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
+          auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
+          auto itheta = size_t(ftheta+1);
+          auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
+          auto iphi = size_t(fphi+1);
+          T fpsi = psi(i)*xdpsi;
+          fpsi = fmodulo(fpsi, T(npsi_b));
+          size_t ipsi = size_t(fpsi);
+          ipsi /= cellsize;
+          itheta /= cellsize;
+          iphi /= cellsize;
+          MR_assert(itheta<nct, "bad itheta");
+          MR_assert(iphi<ncp, "bad iphi");
+          key[i] = (itheta*ncp+iphi)*ncpsi+ipsi;
+          }
+        });
+      return bucketsort<size_t>(key, ncp*nct*ncpsi, nthreads);
       }
 
     template<size_t supp> class WeightHelper
@@ -326,12 +361,21 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
+          if (ind+2<rng.hi)
+            {
+            size_t i=idx[ind+2];
+            DUCC0_PREFETCH_R(&theta(i));
+            DUCC0_PREFETCH_R(&phi(i))
+            DUCC0_PREFETCH_R(&psi(i));
+            DUCC0_PREFETCH_R(&signal.v(i));
+            DUCC0_PREFETCH_W(&signal.v(i));
+            }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
           auto ipsi = hlp.ipsi;
@@ -380,7 +424,7 @@ template<typename T> class ConvolverPlan
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
       constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
@@ -393,6 +437,14 @@ template<typename T> class ConvolverPlan
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
+          if (ind+2<rng.hi)
+            {
+            size_t i=idx[ind+2];
+            DUCC0_PREFETCH_R(&theta(i));
+            DUCC0_PREFETCH_R(&phi(i))
+            DUCC0_PREFETCH_R(&psi(i));
+            DUCC0_PREFETCH_R(&signal(i));
+            }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
           auto ipsi = hlp.ipsi;
