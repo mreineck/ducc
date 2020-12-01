@@ -4,6 +4,7 @@ include LICENSE
 include ChangeLog
 
 include src/ducc0/infra/aligned_array.h
+include src/ducc0/infra/bucket_sort.h
 include src/ducc0/infra/error_handling.h
 include src/ducc0/infra/mav.h
 include src/ducc0/infra/misc_utils.h
