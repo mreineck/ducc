@@ -34,6 +34,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/useful_macros.h"
+#include "ducc0/infra/bucket_sort.h"
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
@@ -150,40 +151,6 @@ namespace detail_totalconvolve {
 
 using namespace std;
 
-template<typename Tidx, typename Tkey> vector<Tidx> bucketsort
-  (const vector<Tkey> &keys, size_t max_key, size_t nthreads)
-  {
-  struct vbuf
-    {
-    vector<Tkey> v;
-    array<uint64_t,8> dummy;
-    };
-  vector<vbuf> numbers(nthreads);
-  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
-    {
-    auto &mybuf(numbers[tid].v);
-    mybuf.resize(max_key+1,0);
-    for (size_t i=lo; i<hi; ++i)
-      ++mybuf[keys[i]];
-    });
-  size_t ofs=0;
-  for (size_t i=0; i<numbers[0].v.size(); ++i)
-    for (size_t t=0; t<nthreads; ++t)
-      {
-      auto tmp=numbers[t].v[i];
-      numbers[t].v[i]=ofs;
-      ofs+=tmp;
-      }
-  vector<Tidx> res(keys.size());
-  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
-    {
-    auto &mybuf(numbers[tid].v);
-    for (size_t i=lo; i<hi; ++i)
-      res[mybuf[keys[i]]++] = i;
-    });
-  return res;
-  }
-
 template<typename T> class ConvolverPlan
   {
   protected:
@@ -258,7 +225,7 @@ template<typename T> class ConvolverPlan
         arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<size_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
+    vector<uint32_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       size_t nptg = theta.shape(0);
@@ -270,8 +237,9 @@ template<typename T> class ConvolverPlan
              phi0 = (int(iphi0)-int(nbphi))*dphi;
       double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
       double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
+      MR_assert(nct*ncp*ncpsi<(size_t(1)<<32), "key space too large");
 
-      vector<size_t> key(nptg);
+      vector<uint32_t> key(nptg);
       execParallel(nptg, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -293,7 +261,7 @@ template<typename T> class ConvolverPlan
           key[i] = (itheta*ncp+iphi)*ncpsi+ipsi;
           }
         });
-      return bucketsort<size_t>(key, ncp*nct*ncpsi, nthreads);
+      return bucket_sort<uint32_t>(key, ncp*nct*ncpsi, nthreads);
       }
 
     template<size_t supp> class WeightHelper
@@ -350,6 +318,9 @@ template<typename T> class ConvolverPlan
         ptrdiff_t jumptheta;
       };
 
+    // prefetching distance
+    static constexpr size_t pfdist=2;
+
     template<size_t supp> void interpolx(const mav<T,3> &cube,
       size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
@@ -362,14 +333,15 @@ template<typename T> class ConvolverPlan
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
       auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
-          if (ind+2<rng.hi)
+          if (ind+pfdist<rng.hi)
             {
-            size_t i=idx[ind+2];
+            size_t i=idx[ind+pfdist];
             DUCC0_PREFETCH_R(&theta(i));
             DUCC0_PREFETCH_R(&phi(i))
             DUCC0_PREFETCH_R(&psi(i));
@@ -437,9 +409,9 @@ template<typename T> class ConvolverPlan
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
-          if (ind+2<rng.hi)
+          if (ind+pfdist<rng.hi)
             {
-            size_t i=idx[ind+2];
+            size_t i=idx[ind+pfdist];
             DUCC0_PREFETCH_R(&theta(i));
             DUCC0_PREFETCH_R(&phi(i))
             DUCC0_PREFETCH_R(&psi(i));
@@ -529,7 +501,7 @@ template<typename T> class ConvolverPlan
   public:
     ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
       size_t nthreads_)
-      : nthreads(nthreads_),
+      : nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         lmax(lmax_),
         kmax(kmax_),
         nphi_s(2*good_size_real(lmax+1)),
