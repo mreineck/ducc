@@ -545,6 +545,7 @@ slm : numpy.ndarray((nalm_sky), dtype=numpy.complex128), or
       numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex128)
     The deinterpolated spherical harmonic coefficients will be added to this
     array.
+    Must be zeroed before the first call to `updateSlm`!
 blm : numpy.ndarray((nalm_beam), dtype=numpy.complex128), or
       numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex128)
     spherical harmonic coefficients of the beam.
@@ -572,6 +573,7 @@ slm : numpy.ndarray((nalm_sky), dtype=numpy.complex64), or
       numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex64)
     The deinterpolated spherical harmonic coefficients will be added to this
     array.
+    Must be zeroed before the first call to `updateSlm`!
 blm : numpy.ndarray((nalm_beam), dtype=numpy.complex64), or
       numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex64)
     spherical harmonic coefficients of the beam.
