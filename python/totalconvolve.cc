@@ -502,9 +502,9 @@ void add_totalconvolve(py::module_ &msup)
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
     .def(py::init<size_t, size_t, double, double, size_t>(), pyConvolverPlan_init_DS,
       "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
-    .def("Ntheta", &conv_f::Ntheta, pyConvolverPlan_Ntheta_DS))
-    .def("Nphi", &conv_f::Nphi, pyConvolverPlan_Nphi_DS))
-    .def("Npsi", &conv_f::Npsi, pyConvolverPlan_Npsi_DS))
+    .def("Ntheta", &conv_f::Ntheta, pyConvolverPlan_Ntheta_DS)
+    .def("Nphi", &conv_f::Nphi, pyConvolverPlan_Nphi_DS)
+    .def("Npsi", &conv_f::Npsi, pyConvolverPlan_Npsi_DS)
     .def("getPatchInfo", &conv_f::pyGetPatchInfo, pyConvolverPlan_getPatchInfo_DS,
       "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_f::pyGetPlane, pyConvolverPlan_getPlane_DS,
