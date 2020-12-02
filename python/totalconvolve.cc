@@ -249,6 +249,108 @@ following format:
 Error conditions are reported by raising exceptions.
 )""";
 
+constexpr const char *pyConvolverPlan_DS = R"""(
+Class encapsulating the low-level interface for convolution/interpolation.
+)""";
+
+constexpr const char *pyConvolverPlan_init_DS = R"""(
+ConvolverPlan constructor
+
+Parameters
+----------
+lmax : int, 0 <= lmax
+    maximum l for the sky and beam coefficients; maximum m for sky coefficients
+    In other words, the band limit of the involved functions
+kmax : int, 0 <= kmax <= lmax
+    maximum m (or azimuthal moment) for the beam coefficients
+sigma : float, 1.2 <= sigma <= 2.5
+    the (approximate) oversampling factor to use for the calculation.
+    Lower sigma lead to smaller data cubes, but slower interpolation, and only
+    work for relatively low accuracies.
+epsilon : float, 1e-12 <= epsilon <= 1e-1
+    the desired relative accuracy of the interpolation
+    For single precision calculations, this must be larger than 3e-5.
+    NOTE: epsilons near the accuracy limit can only be reached by choosing
+    a sufficiently high value for sigma!
+nthreads : int 0 <= nthreads
+    the number of threads to use for all computations
+    A value of 0 implies that the full number of hardware threads on the system
+    will be used.
+)""";
+
+constexpr const char *pyConvolverPlan_Ntheta_DS = R"""(
+Returns
+-------
+The full data cube dimension in theta direction (second axis)
+)""";
+
+constexpr const char *pyConvolverPlan_Nphi_DS = R"""(
+Returns
+-------
+The full data cube dimension in phi direction (third axis)
+)""";
+
+constexpr const char *pyConvolverPlan_Npsi_DS = R"""(
+Returns
+-------
+The full data cube dimension in psi direction (first axis)
+)""";
+
+constexpr const char *pyConvolverPlan_getPatchInfo_DS = R"""(
+Returns information necessary to extract a given sub-area from the data cube.
+
+Parameters
+----------
+theta_lo, theta_hi : float, 0 <= theta_lo < theta_hi <= pi
+    colatitude borders of the requested patch
+phi_lo, phi_hi : float, 0 <= phi_lo < phi_hi <= 2*pi
+    longitude borders of the requested patch
+
+Returns
+-------
+tuple(int) with 4 elements itheta_lo, itheta_hi, iphi_lo, iphi_hi
+    The sub-array [:, itheta_lo:itheta_hi, iphi_lo:iphi_hi] of a full data cube
+    will contain all information necessary to interpolate pointings within the
+    specified patch.
+)""";
+
+constexpr const char *pyConvolverPlan_getPlane_DS = R"""(
+Computes a single (real or complex) sub-plane in (theta, phi) of the data cube
+
+Parameters
+----------
+slm : numpy.ndarray((nalm_sky), dtype=numpy.complex), or
+      numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex)
+    spherical harmonic coefficients of the sky.
+blm : numpy.ndarray((nalm_beam), dtype=numpy.complex), or
+      numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex)
+    spherical harmonic coefficients of the beam.
+mbeam : int, 0 <= mbeam <= kmax
+    requested m moment of the beam
+re : numpy.ndarray((Ntheta(), Nphi()), dtype=np.float)
+    will be filled with the real part of the requested sub-plane on exit
+im : numpy.ndarray((Ntheta(), Nphi()), dtype=np.float) or None
+    if mbeam > 0,
+      will be filled with the imaginary part of the requested sub-plane on exit
+
+Notes
+-----
+If the `slm` and `blm` arrays have a second dimension, the contributions of all
+components will be added together in `re` and `im`.
+)""";
+
+constexpr const char *pyConvolverPlan_prepPsi_DS = R"""(
+Pepares a data cube for for actual interpolation.
+
+Parameters
+----------
+subcube : numpy.ndarray((Npsi(), :, :), dtype=numpy.float)
+    On entry the part [0:2*kmax+1, :, :] must be filled with results from
+    getPlane() calls.
+    On exit, the entire array will be filled in a form that can be used for
+    subsequent `interpol` calls.
+)""";
+
 constexpr const char *pyinterpolator_DS = R"""(
 Class encapsulating the convolution/interpolation functionality
 
@@ -381,29 +483,33 @@ void add_totalconvolve(py::module_ &msup)
   m.doc() = totalconvolve_DS;
 
   using conv_d = PyConvolverPlan<double>;
-  py::class_<conv_d> (m, "ConvolverPlan", py::module_local())
-    .def(py::init<size_t, size_t, double, double, size_t>(),
+  py::class_<conv_d> (m, "ConvolverPlan", py::module_local(), pyConvolverPlan_DS)
+    .def(py::init<size_t, size_t, double, double, size_t>(), pyConvolverPlan_init_DS,
       "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
-    .def("Ntheta", &conv_d::Ntheta)
-    .def("Nphi", &conv_d::Nphi)
-    .def("Npsi", &conv_d::Npsi)
-    .def("getPatchInfo", &conv_d::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
-    .def("getPlane", &conv_d::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
-    .def("prepPsi", &conv_d::pyPrepPsi, "subcube"_a)
+    .def("Ntheta", &conv_d::Ntheta, pyConvolverPlan_Ntheta_DS)
+    .def("Nphi", &conv_d::Nphi, pyConvolverPlan_Nphi_DS)
+    .def("Npsi", &conv_d::Npsi, pyConvolverPlan_Npsi_DS)
+    .def("getPatchInfo", &conv_d::pyGetPatchInfo, pyConvolverPlan_getPatchInfo_DS,
+      "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
+    .def("getPlane", &conv_d::pyGetPlane, pyConvolverPlan_getPlane_DS,
+      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_d::pyPrepPsi, pyConvolverPlan_prepPsi_DS, "subcube"_a)
     .def("deprepPsi", &conv_d::pyDeprepPsi, "subcube"_a)
     .def("interpol", &conv_d::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
   using conv_f = PyConvolverPlan<float>;
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local())
-    .def(py::init<size_t, size_t, double, double, size_t>(),
+    .def(py::init<size_t, size_t, double, double, size_t>(), pyConvolverPlan_init_DS,
       "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
-    .def("Ntheta", &conv_f::Ntheta)
-    .def("Nphi", &conv_f::Nphi)
-    .def("Npsi", &conv_f::Npsi)
-    .def("getPatchInfo", &conv_f::pyGetPatchInfo, "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
-    .def("getPlane", &conv_f::pyGetPlane, "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
-    .def("prepPsi", &conv_f::pyPrepPsi, "subcube"_a)
+    .def("Ntheta", &conv_f::Ntheta, pyConvolverPlan_Ntheta_DS))
+    .def("Nphi", &conv_f::Nphi, pyConvolverPlan_Nphi_DS))
+    .def("Npsi", &conv_f::Npsi, pyConvolverPlan_Npsi_DS))
+    .def("getPatchInfo", &conv_f::pyGetPatchInfo, pyConvolverPlan_getPatchInfo_DS,
+      "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
+    .def("getPlane", &conv_f::pyGetPlane, pyConvolverPlan_getPlane_DS,
+      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+    .def("prepPsi", &conv_f::pyPrepPsi, pyConvolverPlan_prepPsi_DS, "subcube"_a)
     .def("deprepPsi", &conv_f::pyDeprepPsi, "subcube"_a)
     .def("interpol", &conv_f::pyinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_f::pydeinterpol, "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
