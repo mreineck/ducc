@@ -19,17 +19,13 @@
  *  Author: Martin Reinecke
  */
 
-#ifndef DUCC0_INTERPOL_NG_H
-#define DUCC0_INTERPOL_NG_H
-
-#define SIMD_INTERPOL
-#define SPECIAL_CASING
+#ifndef DUCC0_TOTALCONVOLVE_H
+#define DUCC0_TOTALCONVOLVE_H
 
 #include <vector>
 #include <complex>
 #include <cmath>
 #include "ducc0/math/constants.h"
-#include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"

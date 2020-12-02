@@ -23,6 +23,7 @@
 #define DUCC0_BUCKET_SORT_H
 
 #include <vector>
+#include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/math_utils.h"
 
@@ -37,6 +38,7 @@ template<typename Tidx, typename Tkey> void subsort
    size_t hi, vector<Tidx> &numbers, vector<Tidx> &idxbak, vector<Tkey> &keybak)
   {
   auto nval = hi-lo;
+  if (nval<=1) return;
   size_t keyshift = (keybits<=8) ? 0 : keybits-8;
   size_t nkeys = min<size_t>(size_t(1)<<keybits, 256);
   size_t keymask = nkeys-1;
@@ -68,8 +70,8 @@ template<typename Tidx, typename Tkey> void subsort
   keybits -= 8;
   vector<Tidx> newnumbers;
   for (size_t i=0; i<nkeys; ++i)
-    subsort(idx, keys, keybits, lo+ ((i==0) ? 0 : numbers[i-1]), lo+numbers[i],
-      newnumbers, idxbak, keybak);
+    subsort(idx, keys, keybits, lo + ((i==0) ? 0 : numbers[i-1]),
+      lo+numbers[i], newnumbers, idxbak, keybak);
   }
 
 template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
@@ -77,20 +79,22 @@ template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
   {
   struct vbuf
     {
-    vector<Tkey> v;
+    vector<Tidx> v;
     array<uint64_t,8> dummy;
     };
   vector<vbuf> numbers(nthreads);
   auto keybits = ilog2(max_key)+1;
   size_t keyshift = (keybits<=8) ? 0 : keybits-8;
   size_t nkeys = min<size_t>(size_t(1)<<keybits, 256);
-  size_t keymask = nkeys-1;
   execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
     {
     auto &mybuf(numbers[tid].v);
     mybuf.resize(nkeys,0);
     for (size_t i=lo; i<hi; ++i)
-      ++mybuf[(keys[i]>>keyshift)&keymask];
+      {
+      MR_assert(keys[i]<=max_key, "key too large");
+      ++mybuf[(keys[i]>>keyshift)];
+      }
     });
   size_t ofs=0;
   for (size_t i=0; i<numbers[0].v.size(); ++i)
@@ -107,7 +111,7 @@ template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
     auto &mybuf(numbers[tid].v);
     for (size_t i=lo; i<hi; ++i)
       {
-      auto loc = (keys[i]>>keyshift)&keymask;
+      auto loc = (keys[i]>>keyshift);
       res[mybuf[loc]] = i;
       keys2[mybuf[loc]] = keys[i];
       ++mybuf[loc];
