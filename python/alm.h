@@ -287,7 +287,7 @@ class wigner_d_risbo_openmp
   };
 
 template<typename T> void rotate_alm (Alm<complex<T>> &alm,
-  double psi, double theta, double phi)
+  double psi, double theta, double phi, size_t nthreads)
   {
   auto lmax=alm.Lmax();
   MR_assert (alm.complete(), "rotate_alm: need complete A_lm set");
@@ -301,7 +301,6 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
       expphi[m] = polar(1.,-phi*m);
       }
     vector<complex<double> > almtmp(lmax+1);
-size_t nthreads=1;
     wigner_d_risbo_openmp rec(lmax,theta);
     for (size_t l=0; l<=lmax; ++l)
       {
