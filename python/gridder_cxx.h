@@ -983,38 +983,29 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
     template<bool wgrid> void x2grid_c(mav<complex<T>,2> &grid,
       size_t p0, double w0=-1)
       {
-      timers.push("gridding proper");
       checkShape(grid.shape(), {nu, nv});
 
-      if constexpr (is_same<T, float>::value)
+      if constexpr (is_same<T, double>::value)
         switch(supp)
           {
-          case  4: x2grid_c_helper< 4, wgrid>(grid, p0, w0); break;
-          case  5: x2grid_c_helper< 5, wgrid>(grid, p0, w0); break;
-          case  6: x2grid_c_helper< 6, wgrid>(grid, p0, w0); break;
-          case  7: x2grid_c_helper< 7, wgrid>(grid, p0, w0); break;
-          case  8: x2grid_c_helper< 8, wgrid>(grid, p0, w0); break;
-          default: MR_fail("must not happen");
+          case  9: x2grid_c_helper< 9, wgrid>(grid, p0, w0); return;
+          case 10: x2grid_c_helper<10, wgrid>(grid, p0, w0); return;
+          case 11: x2grid_c_helper<11, wgrid>(grid, p0, w0); return;
+          case 12: x2grid_c_helper<12, wgrid>(grid, p0, w0); return;
+          case 13: x2grid_c_helper<13, wgrid>(grid, p0, w0); return;
+          case 14: x2grid_c_helper<14, wgrid>(grid, p0, w0); return;
+          case 15: x2grid_c_helper<15, wgrid>(grid, p0, w0); return;
+          case 16: x2grid_c_helper<16, wgrid>(grid, p0, w0); return;
           }
-      else
-        switch(supp)
-          {
-          case  4: x2grid_c_helper< 4, wgrid>(grid, p0, w0); break;
-          case  5: x2grid_c_helper< 5, wgrid>(grid, p0, w0); break;
-          case  6: x2grid_c_helper< 6, wgrid>(grid, p0, w0); break;
-          case  7: x2grid_c_helper< 7, wgrid>(grid, p0, w0); break;
-          case  8: x2grid_c_helper< 8, wgrid>(grid, p0, w0); break;
-          case  9: x2grid_c_helper< 9, wgrid>(grid, p0, w0); break;
-          case 10: x2grid_c_helper<10, wgrid>(grid, p0, w0); break;
-          case 11: x2grid_c_helper<11, wgrid>(grid, p0, w0); break;
-          case 12: x2grid_c_helper<12, wgrid>(grid, p0, w0); break;
-          case 13: x2grid_c_helper<13, wgrid>(grid, p0, w0); break;
-          case 14: x2grid_c_helper<14, wgrid>(grid, p0, w0); break;
-          case 15: x2grid_c_helper<15, wgrid>(grid, p0, w0); break;
-          case 16: x2grid_c_helper<16, wgrid>(grid, p0, w0); break;
-          default: MR_fail("must not happen");
-          }
-      timers.pop();
+      switch(supp)
+        {
+        case  4: x2grid_c_helper< 4, wgrid>(grid, p0, w0); return;
+        case  5: x2grid_c_helper< 5, wgrid>(grid, p0, w0); return;
+        case  6: x2grid_c_helper< 6, wgrid>(grid, p0, w0); return;
+        case  7: x2grid_c_helper< 7, wgrid>(grid, p0, w0); return;
+        case  8: x2grid_c_helper< 8, wgrid>(grid, p0, w0); return;
+        default: MR_fail("must not happen");
+        }
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
@@ -1089,38 +1080,29 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
     template<bool wgrid> void grid2x_c(const mav<complex<T>,2> &grid,
       size_t p0, double w0=-1)
       {
-      timers.push("degridding proper");
       checkShape(grid.shape(), {nu, nv});
 
-      if constexpr (is_same<T, float>::value)
+      if constexpr (is_same<T, double>::value)
         switch(supp)
           {
-          case  4: grid2x_c_helper< 4, wgrid>(grid, p0, w0); break;
-          case  5: grid2x_c_helper< 5, wgrid>(grid, p0, w0); break;
-          case  6: grid2x_c_helper< 6, wgrid>(grid, p0, w0); break;
-          case  7: grid2x_c_helper< 7, wgrid>(grid, p0, w0); break;
-          case  8: grid2x_c_helper< 8, wgrid>(grid, p0, w0); break;
-          default: MR_fail("must not happen");
+          case  9: grid2x_c_helper< 9, wgrid>(grid, p0, w0); return;
+          case 10: grid2x_c_helper<10, wgrid>(grid, p0, w0); return;
+          case 11: grid2x_c_helper<11, wgrid>(grid, p0, w0); return;
+          case 12: grid2x_c_helper<12, wgrid>(grid, p0, w0); return;
+          case 13: grid2x_c_helper<13, wgrid>(grid, p0, w0); return;
+          case 14: grid2x_c_helper<14, wgrid>(grid, p0, w0); return;
+          case 15: grid2x_c_helper<15, wgrid>(grid, p0, w0); return;
+          case 16: grid2x_c_helper<16, wgrid>(grid, p0, w0); return;
           }
-      else
-        switch(supp)
-          {
-          case  4: grid2x_c_helper< 4, wgrid>(grid, p0, w0); break;
-          case  5: grid2x_c_helper< 5, wgrid>(grid, p0, w0); break;
-          case  6: grid2x_c_helper< 6, wgrid>(grid, p0, w0); break;
-          case  7: grid2x_c_helper< 7, wgrid>(grid, p0, w0); break;
-          case  8: grid2x_c_helper< 8, wgrid>(grid, p0, w0); break;
-          case  9: grid2x_c_helper< 9, wgrid>(grid, p0, w0); break;
-          case 10: grid2x_c_helper<10, wgrid>(grid, p0, w0); break;
-          case 11: grid2x_c_helper<11, wgrid>(grid, p0, w0); break;
-          case 12: grid2x_c_helper<12, wgrid>(grid, p0, w0); break;
-          case 13: grid2x_c_helper<13, wgrid>(grid, p0, w0); break;
-          case 14: grid2x_c_helper<14, wgrid>(grid, p0, w0); break;
-          case 15: grid2x_c_helper<15, wgrid>(grid, p0, w0); break;
-          case 16: grid2x_c_helper<16, wgrid>(grid, p0, w0); break;
-          default: MR_fail("must not happen");
-          }
-      timers.pop();
+      switch(supp)
+        {
+        case  4: grid2x_c_helper< 4, wgrid>(grid, p0, w0); return;
+        case  5: grid2x_c_helper< 5, wgrid>(grid, p0, w0); return;
+        case  6: grid2x_c_helper< 6, wgrid>(grid, p0, w0); return;
+        case  7: grid2x_c_helper< 7, wgrid>(grid, p0, w0); return;
+        case  8: grid2x_c_helper< 8, wgrid>(grid, p0, w0); return;
+        default: MR_fail("must not happen");
+        }
       }
 
     void apply_global_corrections(mav<T,2> &dirty)
@@ -1220,8 +1202,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           double w = wmin+pl*dw;
           timers.push("zeroing grid");
           quickzero(grid, nthreads);
-          timers.pop();
+          timers.poppush("gridding proper");
           x2grid_c<true>(grid, pl, w);
+          timers.pop();
           grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, T(w));
           }
         // correct for w gridding etc.
@@ -1231,9 +1214,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         {
         timers.push("allocating grid");
         auto grid = mav<complex<T>,2>::build_noncritical({nu,nv});
-        timers.pop();
+        timers.poppush("gridding proper");
         x2grid_c<false>(grid, 0);
-        timers.push("allocating rgrid");
+        timers.poppush("allocating rgrid");
         auto rgrid = mav<T,2>::build_noncritical(grid.shape());
         timers.poppush("complex2hartley");
         complex2hartley(grid, rgrid, nthreads);
@@ -1259,7 +1242,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           {
           double w = wmin+pl*dw;
           dirty2grid_c_wscreen(tdirty, grid, T(w));
+          timers.push("degridding proper");
           grid2x_c<true>(grid, pl, w);
+          timers.pop();
           }
         }
       else
@@ -1272,8 +1257,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         auto grid = mav<complex<T>,2>::build_noncritical(rgrid.shape());
         timers.poppush("hartley2complex");
         hartley2complex(rgrid, grid, nthreads);
-        timers.pop();
+        timers.poppush("degridding proper");
         grid2x_c<false>(grid, 0);
+        timers.pop();
         }
       }
 
