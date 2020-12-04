@@ -1874,7 +1874,6 @@ template<typename T0> class pocketfft_r
     size_t length() const { return len; }
   };
 
-
 }
 
 using detail_fft::pocketfft_c;

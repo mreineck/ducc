@@ -2,6 +2,7 @@ import sys
 import os.path
 import itertools
 from glob import iglob
+import os
 
 from setuptools import setup, Extension
 import pybind11
@@ -9,6 +10,10 @@ import pybind11
 pkgname = 'ducc0'
 version = '0.6.0'
 
+user_cflags = os.getenv("DUCC0_CFLAGS", "").split(" ")
+user_cflags = [x for x in user_cflags if x != ""]
+user_lflags = os.getenv("DUCC0_LFLAGS", "").split(" ")
+user_lflags = [x for x in user_lflags if x != ""]
 
 def _get_files_by_suffix(directory, suffix):
     path = directory
@@ -50,8 +55,10 @@ else:
                            '-Wpointer-arith']
 
     python_module_link_args += ['-march=native',
-                                '-Wl,-rpath,$ORIGIN',
-                                '-s']
+                                '-Wl,-rpath,$ORIGIN']
+
+extra_compile_args += user_cflags
+python_module_link_args += user_lflags
 
 # if you want debugging info, remove the "-s" from python_module_link_args
 depfiles = (_get_files_by_suffix('.', 'h') +
