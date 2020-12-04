@@ -67,14 +67,14 @@ py::array GL_thetas(size_t nlat)
   }
 
 template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
-  double psi, double theta, double phi)
+  double psi, double theta, double phi, size_t nthreads)
   {
   auto a1 = to_mav<complex<T>,1>(alm_);
   auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
   auto a2 = to_mav<complex<T>,1>(alm,true);
   for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
   auto tmp = Alm<complex<T>>(a2,lmax,lmax);
-  rotate_alm(tmp, psi, theta, phi);
+  rotate_alm(tmp, psi, theta, phi, nthreads);
   return move(alm);
   }
 
@@ -218,7 +218,7 @@ void add_misc(py::module_ &msup)
   m.def("GL_thetas",&GL_thetas, "nlat"_a);
 
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
-    "phi"_a);
+    "phi"_a, "nthreads"_a=1);
 
   m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "nrings_out"_a,
     "has_np"_a, "has_sp"_a, "out"_a=py::none());
