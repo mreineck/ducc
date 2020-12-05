@@ -24,10 +24,10 @@
 
 #include <cstdlib>
 #include <array>
-#include <vector>
 #include <memory>
 #include <numeric>
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/aligned_array.h"
 
 namespace ducc0 {
 
@@ -35,18 +35,21 @@ namespace detail_mav {
 
 using namespace std;
 
+struct uninitialized_dummy {};
+constexpr uninitialized_dummy RAW;
+
 template<typename T> class membuf
   {
   protected:
-    using Tsp = shared_ptr<vector<T>>;
-    Tsp ptr;
+    shared_ptr<T[]> ptr;
+    shared_ptr<aligned_array<T>> rawptr;
     const T *d;
     bool rw;
 
     membuf(const T *d_, membuf &other)
-      : ptr(other.ptr), d(d_), rw(other.rw) {}
+      : ptr(other.ptr), rawptr(other.rawptr), d(d_), rw(other.rw) {}
     membuf(const T *d_, const membuf &other)
-      : ptr(other.ptr), d(d_), rw(false) {}
+      : ptr(other.ptr), rawptr(other.rawptr), d(d_), rw(false) {}
 
     // externally owned data pointer
     membuf(T *d_, bool rw_=false)
@@ -74,16 +77,20 @@ template<typename T> class membuf
     // allocate own memory
     membuf() : d(nullptr), rw(false) {}
     membuf(size_t sz)
-      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
+      : ptr(new T[sz]()), d(&ptr[0]), rw(true) {}
+    membuf(size_t sz, uninitialized_dummy)
+      : rawptr(new aligned_array<T>(sz)), d(rawptr->data()), rw(true) {}
     void assign(membuf &other)
       {
       ptr = other.ptr;
+      rawptr = other.rawptr;
       d = other.d;
       rw = other.rw;
       }
     void assign(const membuf &other)
       {
       ptr = other.ptr;
+      rawptr = other.rawptr;
       d = other.d;
       rw = false;
       }
@@ -362,6 +369,16 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : tinfo(shp_), tbuf(d_,rw_) {}
     fmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
+    fmav(const shape_t &shp_, uninitialized_dummy)
+      : tinfo(shp_), tbuf(size(), RAW) {}
+    fmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
+      : tinfo(shp_, str_), tbuf(size(), RAW)
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
     fmav(const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(size())
       {
@@ -574,8 +591,10 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       : tinfo(shp_), tbuf(d_) {}
     mav(T *d_, const shape_t &shp_, bool rw_=false)
       : tinfo(shp_), tbuf(d_, rw_) {}
-    mav(const array<size_t,ndim> &shp_)
+    mav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
+    mav(const shape_t &shp_, uninitialized_dummy)
+      : tinfo(shp_), tbuf(size(), RAW) {}
 #if defined(_MSC_VER)
     // MSVC is broken
     mav(const mav &other) : tinfo(other), tbuf(other) {}
@@ -672,6 +691,21 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       mav tmp(shape2);
       return tmp.subarray<ndim>(shape_t(), shape);
       }
+    static mav build_noncritical(const shape_t &shape, uninitialized_dummy)
+      {
+      if (ndim==1) return mav(shape, RAW);
+      shape_t shape2(shape);
+      size_t stride = sizeof(T);
+      for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
+        {
+        size_t tstride = stride*shape[xi];
+        if ((tstride&4095)==0)
+          shape2[xi] += 3;
+        stride *= shape2[xi];
+        }
+      mav tmp(shape2, RAW);
+      return tmp.subarray<ndim>(shape_t(), shape);
+      }
   };
 
 template<size_t nd2, typename T, size_t ndim> mav<T,nd2> subarray
@@ -742,6 +776,7 @@ template<typename T, size_t ndim> class MavIter
 
 }
 
+using detail_mav::RAW;
 using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav_info;
