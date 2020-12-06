@@ -24,6 +24,7 @@
 
 #include <cstdlib>
 #include <array>
+#include <vector>
 #include <memory>
 #include <numeric>
 #include "ducc0/infra/error_handling.h"
@@ -41,7 +42,7 @@ constexpr uninitialized_dummy RAW;
 template<typename T> class membuf
   {
   protected:
-    shared_ptr<T[]> ptr;
+    shared_ptr<vector<T>> ptr;
     shared_ptr<aligned_array<T>> rawptr;
     const T *d;
     bool rw;
@@ -77,9 +78,9 @@ template<typename T> class membuf
     // allocate own memory
     membuf() : d(nullptr), rw(false) {}
     membuf(size_t sz)
-      : ptr(new T[sz]()), d(&ptr[0]), rw(true) {}
+      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
     membuf(size_t sz, uninitialized_dummy)
-      : rawptr(new aligned_array<T>(sz)), d(rawptr->data()), rw(true) {}
+      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()), rw(true) {}
     void assign(membuf &other)
       {
       ptr = other.ptr;
