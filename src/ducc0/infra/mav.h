@@ -37,7 +37,7 @@ namespace detail_mav {
 using namespace std;
 
 struct uninitialized_dummy {};
-constexpr uninitialized_dummy RAW;
+constexpr uninitialized_dummy UNINITIALIZED;
 
 template<typename T> class membuf
   {
@@ -371,9 +371,9 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     fmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     fmav(const shape_t &shp_, uninitialized_dummy)
-      : tinfo(shp_), tbuf(size(), RAW) {}
+      : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
     fmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
-      : tinfo(shp_, str_), tbuf(size(), RAW)
+      : tinfo(shp_, str_), tbuf(size(), UNINITIALIZED)
       {
       ptrdiff_t ofs=0;
       for (size_t i=0; i<ndim(); ++i)
@@ -595,7 +595,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     mav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     mav(const shape_t &shp_, uninitialized_dummy)
-      : tinfo(shp_), tbuf(size(), RAW) {}
+      : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
 #if defined(_MSC_VER)
     // MSVC is broken
     mav(const mav &other) : tinfo(other), tbuf(other) {}
@@ -694,7 +694,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       }
     static mav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
-      if (ndim==1) return mav(shape, RAW);
+      if (ndim==1) return mav(shape, UNINITIALIZED);
       shape_t shape2(shape);
       size_t stride = sizeof(T);
       for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
@@ -704,7 +704,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
           shape2[xi] += 3;
         stride *= shape2[xi];
         }
-      mav tmp(shape2, RAW);
+      mav tmp(shape2, UNINITIALIZED);
       return tmp.subarray<ndim>(shape_t(), shape);
       }
   };
@@ -777,7 +777,7 @@ template<typename T, size_t ndim> class MavIter
 
 }
 
-using detail_mav::RAW;
+using detail_mav::UNINITIALIZED;
 using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav_info;
