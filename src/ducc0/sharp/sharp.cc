@@ -213,8 +213,8 @@ void sharp_job::init_output()
 DUCC0_NOINLINE mav<dcmplx,3> sharp_job::alloc_phase (size_t nm, size_t ntheta) const
   {
   return (type==SHARP_MAP2ALM) ?
-    phase.build_noncritical({ntheta,nm,2*nmaps()}, UNINITIALIZED) :
-    phase.build_noncritical({nm,ntheta,2*nmaps()}, UNINITIALIZED);
+    phase.build_noncritical({ntheta,nm,2*nmaps()}) :
+    phase.build_noncritical({nm,ntheta,2*nmaps()});
   }
 
 void sharp_job::set_phase(mav<std::complex<double>,3> &phase_)
@@ -222,7 +222,7 @@ void sharp_job::set_phase(mav<std::complex<double>,3> &phase_)
 
 void sharp_job::alloc_almtmp (size_t lmax)
   {
-  auto tmp = mav<dcmplx,2>({lmax+2, nalm()}, UNINITIALIZED);
+  auto tmp = mav<dcmplx,2>({lmax+2, nalm()});
   almtmp.assign(tmp);
   }
 
@@ -295,7 +295,7 @@ DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
-    mav<double,2> ringtmp({nmaps(), rstride}, UNINITIALIZED);
+    mav<double,2> ringtmp({nmaps(), rstride});
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
@@ -327,7 +327,7 @@ DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
     {
     ringhelper helper;
     size_t rstride=ginfo.nphmax()+2;
-    mav<double,2> ringtmp({nmaps(), rstride}, UNINITIALIZED);
+    mav<double,2> ringtmp({nmaps(), rstride});
 
     while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
       {
