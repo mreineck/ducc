@@ -12,4 +12,4 @@ RUN apt-get update && apt-get install -qq \
       # Clang
       clang-11 \
       && rm -rf /var/lib/apt/lists/*
-RUN pip install numba   # demo dependency
+# RUN pip install numba   # demo dependency
