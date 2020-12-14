@@ -38,10 +38,11 @@ pmp = pytest.mark.parametrize
 @pmp("size", (2, 10, 37, 1000))
 @pmp("t0", (-45.3, 0, 10))
 @pmp("freq", (1, 1.3e-7, 3e10))
-def testp1(size, t0, freq):
+@pmp("nthreads", (1, 2))
+def testp1(size, t0, freq, nthreads):
     rng = np.random.default_rng(42)
     quat = rng.uniform(-.5, .5, (size, 4))
-    prov = pp.PointingProvider(t0, freq, quat)
+    prov = pp.PointingProvider(t0, freq, quat, nthreads)
     rquat = np.array([0., 0., 0., 1.])  # a non-rotating quaternion
     quat2 = prov.get_rotated_quaternions(t0, freq, rquat, size)
     quat3 = prov.get_rotated_quaternions(t0, freq, rquat, size, rot_left=False)
