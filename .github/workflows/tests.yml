@@ -1,13 +1,13 @@
 name: ducc-tests
 on: [push]
 jobs:
-#  test-linux:
-#    runs-on: ubuntu-20.04
-#    steps:
-#      - uses: actions/checkout@v2
-#      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-#      - run: python3 setup.py install --user --prefix=
-#      - run: python3 -m pytest python/test -x
+  test-linux:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest
+      - run: python3 setup.py install --user --prefix=
+      - run: python3 -m pytest python/test -x
   test-linuxold:
     runs-on: ubuntu-18.04
     steps:
@@ -18,24 +18,24 @@ jobs:
       - run: pip3 install --user --upgrade setuptools pybind11 pytest
       - run: python setup.py install --user --prefix=
       - run: python -m pytest python/test -x
-#  test-macos10:
-#    runs-on: macos-10.15
-#    steps:
-#      - uses: actions/checkout@v2
-#      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-#      - run: python3 setup.py install --user --prefix=
-#      - run: python3 -m pytest python/test -x
-#  test-macos11:
-#    runs-on: macos-11.0
-#    steps:
-#      - uses: actions/checkout@v2
-#      - run: pip3 install --user --upgrade setuptools pybind11 pytest numpy
-#      - run: python3 setup.py install --user --prefix=
-#      - run: python3 -m pytest python/test -x
-#  test-windows:
-#    runs-on: windows-latest
-#    steps:
-#      - uses: actions/checkout@v2
-#      - run: pip3 install --user --upgrade setuptools pybind11 pytest pytest-timeout
-#      - run: python setup.py install --user --prefix=
-#      - run: python -m pytest python/test -x
+  test-macos10:
+    runs-on: macos-10.15
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest
+      - run: python3 setup.py install --user --prefix=
+      - run: python3 -m pytest python/test -x
+  test-macos11:
+    runs-on: macos-11.0
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest numpy
+      - run: python3 setup.py install --user --prefix=
+      - run: python3 -m pytest python/test -x
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip3 install --user --upgrade setuptools pybind11 pytest pytest-timeout
+      - run: python setup.py install --user --prefix=
+      - run: python -m pytest python/test -x
