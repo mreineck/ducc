@@ -12,9 +12,12 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+             python-version: '3.7'
       - run: pip3 install --user --upgrade setuptools pybind11 pytest
-      - run: python3.7 setup.py install --user --prefix=
-      - run: python3.7 -m pytest python/test -x
+      - run: python setup.py install --user --prefix=
+      - run: python -m pytest python/test -x
 #  test-macos10:
 #    runs-on: macos-10.15
 #    steps:
