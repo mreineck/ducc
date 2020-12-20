@@ -591,11 +591,14 @@ auto selectKernel(size_t idx)
 bool acceptable(size_t i)
   { return KernelDB[i].corr_range < 10.; }
 
+template<typename T> constexpr inline size_t Wmax()
+  { return is_same<T,float>::value ? 8 : 16; }
+
 /*! Returns the best matching 2-parameter ES kernel for the given oversampling
     factor and error. */
-auto selectKernel(double ofactor, double epsilon)
+template<typename T> auto selectKernel(double ofactor, double epsilon)
   {
-  size_t Wmin = 1000;
+  size_t Wmin = Wmax<T>();
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
     if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon)
@@ -606,18 +609,18 @@ auto selectKernel(double ofactor, double epsilon)
       }
   return selectKernel(idx);
   }
-auto selectKernel(double ofactor, double epsilon, size_t idx)
+template<typename T> auto selectKernel(double ofactor, double epsilon, size_t idx)
   {
   return (idx<KernelDB.size()) ?
-    selectKernel(idx) : selectKernel(ofactor, epsilon);
+    selectKernel(idx) : selectKernel<T>(ofactor, epsilon);
   }
 
-auto getAvailableKernels(double epsilon,
+template<typename T> auto getAvailableKernels(double epsilon,
   double ofactor_min=1.1, double ofactor_max=2.6)
   {
   vector<double> ofc(20, ofactor_max);
   vector<size_t> idx(20, KernelDB.size());
-  size_t Wlim = 16;
+  size_t Wlim = Wmax<T>();
   for (size_t i=0; i<KernelDB.size(); ++i)
     {
     auto ofactor = KernelDB[i].ofactor;

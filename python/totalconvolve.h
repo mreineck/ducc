@@ -159,6 +159,7 @@ template<typename T> class ConvolverPlan
     // _b: oversampled grid
     // no suffix: grid with borders
     size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
+// FIXME: use double here?
     T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
 
     shared_ptr<HornerKernel> kernel;
@@ -294,6 +295,7 @@ template<typename T> class ConvolverPlan
           }
         void prep(T theta, T phi, T psi)
           {
+//FIXME: inaccurate
           T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
           itheta = size_t(ftheta+1);
           ftheta = -1+(itheta-ftheta)*2;
@@ -512,7 +514,7 @@ template<typename T> class ConvolverPlan
         xdphi(T(1)/dphi),
         xdtheta(T(1)/dtheta),
         xdpsi(T(1)/dpsi),
-        kernel(selectKernel(realsigma(), 0.5*epsilon)),
+        kernel(selectKernel<T>(realsigma(), 0.5*epsilon)),
         nbphi((kernel->support()+1)/2),
         nbtheta((kernel->support()+1)/2),
         nphi(nphi_b+2*nbphi+vlen),
