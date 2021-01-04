@@ -200,7 +200,7 @@ def test_adjointness(lkmax):
 
     v1 = myalmdot(slm, bla, lmax, lmax, 0)
     v2 = np.vdot(fake, inter1)
-    _assert_close(v1, v2, 1e-14)
+    _assert_close(v1, v2, 1e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
