@@ -21,6 +21,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include "ducc0/infra/threading.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/math/quaternion.h"
 
@@ -39,11 +40,12 @@ template<typename T> class PointingProvider
     vector<quaternion_t<T>> quat_;
     vector<T> rangle, rxsin;
     vector<bool> rotflip;
+    size_t nthreads;
 
   public:
-    PointingProvider(double t0, double freq, const mav<T,2> &quat)
+    PointingProvider(double t0, double freq, const mav<T,2> &quat, size_t nthreads_=1)
       : t0_(t0), freq_(freq), quat_(quat.shape(0)), rangle(quat.shape(0)),
-        rxsin(quat.shape(0)), rotflip(quat.shape(0))
+        rxsin(quat.shape(0)), rotflip(quat.shape(0)), nthreads(nthreads_)
       {
       MR_assert(quat.shape(0)>=2, "need at least 2 quaternions");
       MR_assert(quat.shape(1)==4, "need 4 entries in quaternion");
@@ -68,29 +70,33 @@ template<typename T> class PointingProvider
       auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
       double ofs = (t0-t0_)*freq_;
-      for (size_t i=0; i<out.shape(0); ++i)
+      double fratio = freq_/freq;
+      execParallel(out.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
-        double fi = ofs + (i/freq)*freq_;
-        MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
-        size_t idx = size_t(fi);
-        idx = min(idx, quat_.size()-2);
-        double frac = fi-idx;
-        double omega = rangle[idx];
-        double xsin = rxsin[idx];
-        double w1 = sin((1.-frac)*omega)*xsin,
-               w2 = sin(frac*omega)*xsin;
-        if (rotflip[idx]) w1=-w1;
-        const quaternion_t<T> &q1(quat_[idx]), &q2(quat_[idx+1]);
-        quaternion_t<T> q(w1*q1.x + w2*q2.x,
-                          w1*q1.y + w2*q2.y,
-                          w1*q1.z + w2*q2.z,
-                          w1*q1.w + w2*q2.w);
-        q = rot_left ? rot_*q : q*rot_;
-        out.v(i,0) = q.x;
-        out.v(i,1) = q.y;
-        out.v(i,2) = q.z;
-        out.v(i,3) = q.w;
-        }
+        for (size_t i=lo; i<hi; ++i)
+          {
+          double fi = ofs + i*fratio;
+          MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
+          size_t idx = size_t(fi);
+          idx = min(idx, quat_.size()-2);
+          double frac = fi-idx;
+          double omega = rangle[idx];
+          double xsin = rxsin[idx];
+          double w1 = sin((1.-frac)*omega)*xsin,
+                 w2 = sin(frac*omega)*xsin;
+          if (rotflip[idx]) w1=-w1;
+          const quaternion_t<T> &q1(quat_[idx]), &q2(quat_[idx+1]);
+          quaternion_t<T> q(w1*q1.x + w2*q2.x,
+                            w1*q1.y + w2*q2.y,
+                            w1*q1.z + w2*q2.z,
+                            w1*q1.w + w2*q2.w);
+          q = rot_left ? rot_*q : q*rot_;
+          out.v(i,0) = q.x;
+          out.v(i,1) = q.y;
+          out.v(i,2) = q.z;
+          out.v(i,3) = q.w;
+          }
+        });
       }
   };
 
@@ -100,8 +106,8 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
     using PointingProvider<T>::get_rotated_quaternions;
 
   public:
-    PyPointingProvider(double t0, double freq, const py::array &quat)
-      : PointingProvider<T>(t0, freq, to_mav<T,2>(quat)) {}
+    PyPointingProvider(double t0, double freq, const py::array &quat, size_t nthreads_=1)
+      : PointingProvider<T>(t0, freq, to_mav<T,2>(quat), nthreads_) {}
 
     py::array pyget_rotated_quaternions_out(double t0, double freq,
       const py::array &quat, bool rot_left, py::array &out)
@@ -139,10 +145,12 @@ freq : float
 quat : numpy.ndarray((nval, 4), dtype=numpy.float64)
     the satellite orientation quaternions. Components are expecetd in the order
     (x, y, z, w). The quaternions need not be normalized.
+nthreads : int
+    number of threads to use for the interpolation operations
 
 Returns
 -------
-PointongProvider : the constructed object
+PointingProvider : the constructed object
 )""";
 
 const char *get_rotated_quaternions_DS = R"""(
@@ -212,8 +220,8 @@ void add_pointingprovider(py::module_ &msup)
 
   using pp_d = PyPointingProvider<double>;
   py::class_<pp_d>(m, "PointingProvider")
-    .def(py::init<double, double, const py::array &>(),
-         PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a)
+    .def(py::init<double, double, const py::array &, size_t>(),
+         PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a, "nthreads"_a=1)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
        get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a,
        "rot_left"_a=true)
