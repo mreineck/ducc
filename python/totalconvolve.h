@@ -242,9 +242,9 @@ template<typename T> class ConvolverPlan
           {
           MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
           MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
-          auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
+          auto ftheta = (theta(i)-theta0)*xdtheta-supp*0.5;
           auto itheta = size_t(ftheta+1);
-          auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
+          auto fphi = (phi(i)-phi0)*xdphi-supp*0.5;
           auto iphi = size_t(fphi+1);
           auto fpsi = psi(i)*xdpsi;
           fpsi = fmodulo(fpsi, double(npsi_b));
@@ -292,7 +292,7 @@ template<typename T> class ConvolverPlan
           {
           MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
           }
-        void prep(T theta, T phi, T psi)
+        void prep(double theta, double phi, double psi)
           {
           auto ftheta = (theta-mytheta0)*plan.xdtheta-supp*0.5;
           itheta = size_t(ftheta+1);

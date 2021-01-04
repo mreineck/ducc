@@ -75,8 +75,8 @@ def test_against_convolution(lkmax):
     slm = random_alm(rng, lmax, lmax, 1)[:, 0]
     blm = random_alm(rng, lmax, kmax, 1)[:, 0]
 
-    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=1.8,
-                                       epsilon=1e-6, nthreads=2)
+    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2.,
+                                       epsilon=1e-13, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -97,7 +97,7 @@ def test_against_convolution(lkmax):
     for i in range(nptg):
         rbeam = misc.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
         res2[i] = convolve(slm, rbeam, lmax).real
-    _assert_close(res1, res2, 1e-4)
+    _assert_close(res1, res2, 1e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -110,7 +110,7 @@ def test_against_convolution_2(lkmax, ncomp, separate):
     blm = random_alm(rng, lmax, kmax, ncomp)
 
     inter = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                       epsilon=1e-12, ofactor=2., nthreads=2)
+                                       epsilon=1e-13, ofactor=2., nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -128,9 +128,9 @@ def test_against_convolution_2(lkmax, ncomp, separate):
                                     ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[i, c] = convolve(slm[:, c], rbeam, lmax).real
     if separate:
-        _assert_close(res1, res2, 1e-7)
+        _assert_close(res1, res2, 1e-13)
     else:
-        _assert_close(res1[:, 0], np.sum(res2, axis=1), 1e-12)
+        _assert_close(res1[:, 0], np.sum(res2, axis=1), 1e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -173,7 +173,7 @@ def test_adjointness(lkmax):
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, 1)[:, 0]
     blm = random_alm(rng, lmax, kmax, 1)[:, 0]
-    nptg = 100000
+    nptg = 50
     ptg = rng.uniform(0., 1., nptg*3).reshape(nptg, 3)
     ptg[:, 0] *= np.pi
     ptg[:, 1] *= 2*np.pi
@@ -189,7 +189,7 @@ def test_adjointness(lkmax):
     inter1 = np.empty(ptg.shape[0])
     conv.interpol(cube, 0, 0, ptg[:, 0], ptg[:, 1], ptg[:, 2], inter1)
 
-    fake = rng.uniform(0., 1., (ptg.shape[0],))
+    fake = rng.uniform(-0.5, 0.5, (ptg.shape[0],))
     cube2 = cube*0.
     conv.deinterpol(cube2, 0, 0, ptg[:, 0], ptg[:, 1], ptg[:, 2], fake)
     bla = slm*0.
@@ -212,7 +212,7 @@ def test_adjointness2(lkmax, ncomp, separate, single):
     rng = np.random.default_rng(42)
     slm = random_alm(rng, lmax, lmax, ncomp)
     blm = random_alm(rng, lmax, kmax, ncomp)
-    nptg = 100000
+    nptg = 50
     ptg = rng.uniform(0., 1., nptg*3).reshape(nptg, 3)
     ptg[:, 0] *= np.pi
     ptg[:, 1] *= 2*np.pi
