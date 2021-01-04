@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020 Max-Planck-Society
+ *  Copyright (C) 2020-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -488,10 +488,10 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    T realsigma() const
+    double realsigma() const
       {
-      return min(T(npsi_b)/(2*kmax+1),
-                 min(T(nphi_b)/(2*lmax+1), T(ntheta_b)/(lmax+1)));
+      return min(double(npsi_b)/(2*kmax+1),
+                 min(double(nphi_b)/(2*lmax+1), double(ntheta_b)/(lmax+1)));
       }
 
   public:
