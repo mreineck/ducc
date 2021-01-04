@@ -70,11 +70,12 @@ template<typename T> class PointingProvider
       auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
       double ofs = (t0-t0_)*freq_;
+      double fratio = freq_/freq;
       execParallel(out.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          double fi = ofs + (i/freq)*freq_;
+          double fi = ofs + i*fratio;
           MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
           size_t idx = size_t(fi);
           idx = min(idx, quat_.size()-2);

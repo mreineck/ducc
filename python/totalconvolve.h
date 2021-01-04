@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020 Max-Planck-Society
+ *  Copyright (C) 2020-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -159,12 +159,12 @@ template<typename T> class ConvolverPlan
     // _b: oversampled grid
     // no suffix: grid with borders
     size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
-    T dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
+    double dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
 
     shared_ptr<HornerKernel> kernel;
     size_t nbphi, nbtheta;
     size_t nphi, ntheta;
-    T phi0, theta0;
+    double phi0, theta0;
 
     void correct(mav<T,2> &arr, int spin) const
       {
@@ -242,12 +242,12 @@ template<typename T> class ConvolverPlan
           {
           MR_assert((theta(i)>=theta_lo) && (theta(i)<=theta_hi), "theta out of range: ", theta(i));
           MR_assert((phi(i)>=phi_lo) && (phi(i)<=phi_hi), "phi out of range: ", phi(i));
-          auto ftheta = (theta(i)-theta0)*xdtheta-supp/T(2);
+          auto ftheta = (theta(i)-theta0)*xdtheta-supp*0.5;
           auto itheta = size_t(ftheta+1);
-          auto fphi = (phi(i)-phi0)*xdphi-supp/T(2);
+          auto fphi = (phi(i)-phi0)*xdphi-supp*0.5;
           auto iphi = size_t(fphi+1);
-          T fpsi = psi(i)*xdpsi;
-          fpsi = fmodulo(fpsi, T(npsi_b));
+          auto fpsi = psi(i)*xdpsi;
+          fpsi = fmodulo(fpsi, double(npsi_b));
           size_t ipsi = size_t(fpsi);
           ipsi /= cellsize;
           itheta /= cellsize;
@@ -277,7 +277,7 @@ template<typename T> class ConvolverPlan
 
       private:
         TemplateKernel<supp, Tsimd> tkrn;
-        T mytheta0, myphi0;
+        double mytheta0, myphi0;
 
       public:
         WeightHelper(const ConvolverPlan &plan_, const mav_info<3> &info, size_t itheta0, size_t iphi0)
@@ -292,20 +292,20 @@ template<typename T> class ConvolverPlan
           {
           MR_assert(info.stride(2)==1, "last axis of cube must be contiguous");
           }
-        void prep(T theta, T phi, T psi)
+        void prep(double theta, double phi, double psi)
           {
-          T ftheta = (theta-mytheta0)*plan.xdtheta-supp/T(2);
+          auto ftheta = (theta-mytheta0)*plan.xdtheta-supp*0.5;
           itheta = size_t(ftheta+1);
           ftheta = -1+(itheta-ftheta)*2;
-          T fphi = (phi-myphi0)*plan.xdphi-supp/T(2);
+          auto fphi = (phi-myphi0)*plan.xdphi-supp*0.5;
           iphi = size_t(fphi+1);
           fphi = -1+(iphi-fphi)*2;
-          T fpsi = psi*plan.xdpsi-supp/T(2);
-          fpsi = fmodulo(fpsi, T(plan.npsi_b));
+          auto fpsi = psi*plan.xdpsi-supp*0.5;
+          fpsi = fmodulo(fpsi, double(plan.npsi_b));
           ipsi = size_t(fpsi+1);
           fpsi = -1+(ipsi-fpsi)*2;
           if (ipsi>=plan.npsi_b) ipsi-=plan.npsi_b;
-          tkrn.eval3(fpsi, ftheta, fphi, &buf.simd[0]);
+          tkrn.eval3(T(fpsi), T(ftheta), T(fphi), &buf.simd[0]);
           }
         size_t itheta, iphi, ipsi;
         const T * DUCC0_RESTRICT wpsi;
@@ -488,10 +488,10 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    T realsigma() const
+    double realsigma() const
       {
-      return min(T(npsi_b)/(2*kmax+1),
-                 min(T(nphi_b)/(2*lmax+1), T(ntheta_b)/(lmax+1)));
+      return min(double(npsi_b)/(2*kmax+1),
+                 min(double(nphi_b)/(2*lmax+1), double(ntheta_b)/(lmax+1)));
       }
 
   public:
@@ -506,13 +506,13 @@ template<typename T> class ConvolverPlan
         nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*sigma/2.)))),
         ntheta_b(nphi_b/2+1),
         npsi_b(size_t(npsi_s*sigma+0.99999)),
-        dphi(T(2*pi/nphi_b)),
-        dtheta(T(pi/(ntheta_b-1))),
-        dpsi(T(2*pi/npsi_b)),
-        xdphi(T(1)/dphi),
-        xdtheta(T(1)/dtheta),
-        xdpsi(T(1)/dpsi),
-        kernel(selectKernel(realsigma(), 0.5*epsilon)),
+        dphi(2*pi/nphi_b),
+        dtheta(pi/(ntheta_b-1)),
+        dpsi(2*pi/npsi_b),
+        xdphi(1./dphi),
+        xdtheta(1./dtheta),
+        xdpsi(1./dpsi),
+        kernel(selectKernel<T>(realsigma(), 0.5*epsilon)),
         nbphi((kernel->support()+1)/2),
         nbtheta((kernel->support()+1)/2),
         nphi(nphi_b+2*nbphi+vlen),
@@ -530,17 +530,17 @@ template<typename T> class ConvolverPlan
     size_t Nphi() const { return nphi; }
     size_t Npsi() const { return npsi_b; }
 
-    vector<size_t> getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi) const
+    vector<size_t> getPatchInfo(double theta_lo, double theta_hi, double phi_lo, double phi_hi) const
       {
       vector<size_t> res(4);
       auto tmp = (theta_lo-theta0)*xdtheta-nbtheta;
-      res[0] = min(size_t(max(T(0), tmp)), ntheta);
-      tmp = (theta_hi-theta0)*xdtheta+nbtheta+T(1);
-      res[1] = min(size_t(max(T(0), tmp)), ntheta);
+      res[0] = min(size_t(max(0., tmp)), ntheta);
+      tmp = (theta_hi-theta0)*xdtheta+nbtheta+1.;
+      res[1] = min(size_t(max(0., tmp)), ntheta);
       tmp = (phi_lo-phi0)*xdphi-nbphi;
-      res[2] = min(size_t(max(T(0), tmp)), nphi);
-      tmp = (phi_hi-phi0)*xdphi+nbphi+T(1)+vlen;
-      res[3] = min(size_t(max(T(0), tmp)), nphi);
+      res[2] = min(size_t(max(0., tmp)), nphi);
+      tmp = (phi_hi-phi0)*xdphi+nbphi+1.+vlen;
+      res[3] = min(size_t(max(0., tmp)), nphi);
       return res;
       }
 

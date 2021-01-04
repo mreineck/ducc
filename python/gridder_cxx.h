@@ -116,9 +116,6 @@ template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
   { MR_assert(shp1==shp2, "shape mismatch"); }
 
-template<typename T> inline T fmod1 (T v)
-  { return v-floor(v); }
-
 //
 // Start of real gridder functionality
 //
@@ -578,10 +575,16 @@ template<typename T> class Params
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
-      u=fmod1(u_in*pixsize_x)*nu;
-      iu0 = min(int(u+ushift)-int(nu), maxiu0);
-      v=fmod1(v_in*pixsize_y)*nv;
-      iv0 = min(int(v+vshift)-int(nv), maxiv0);
+      auto tmp = u_in*pixsize_x;
+      u = (tmp-round(tmp))*nu;
+      int ucorr = (u<0.)*nu;
+      iu0 = min(int(u+ucorr+ushift)-int(nu), maxiu0);
+      u -= iu0-ucorr;
+      tmp = v_in*pixsize_y;
+      v = (tmp-round(tmp))*nv;
+      int vcorr = (v<0.)*nv;
+      iv0 = min(int(v+vcorr+vshift)-int(nv), maxiv0);
+      v-=iv0-vcorr;
       }
 
     void countRanges()
@@ -669,9 +672,9 @@ template<typename T> class Params
               {
               auto uvw = bl.effectiveCoord(irow, ichan);
               uvw.FixW();
-              double u, v;
+              double udum, vdum;
               int iu0, iv0, iw;
-              getpix(uvw.u, uvw.v, u, v, iu0, iv0);
+              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
               iu0 = (iu0+nsafe)>>logsquare;
               iv0 = (iv0+nsafe)>>logsquare;
               iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
@@ -780,7 +783,7 @@ template<typename T> class Params
             bufi({size_t(su),size_t(svvec)}),
             px0r(bufr.vdata()), px0i(bufi.vdata()),
             w0(w0_),
-            xdw(T(1)/dw_),
+            xdw(1./dw_),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
         ~HelperX2g2() { dump(); }
@@ -789,16 +792,16 @@ template<typename T> class Params
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
           {
-          double u, v;
+          double ufrac, vfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
-          parent->getpix(in.u, in.v, u, v, iu0, iv0);
-          T x0 = (iu0-T(u))*2+(supp-1);
-          T y0 = (iv0-T(v))*2+(supp-1);
+          parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
+          auto x0 = -ufrac*2+(supp-1);
+          auto y0 = -vfrac*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), nth, &buf.simd[0]);
+            tkrn.eval2s(T(x0), T(y0), T(xdw*(w0-in.w)), nth, &buf.simd[0]);
           else
-            tkrn.eval2(x0, y0, &buf.simd[0]);
+            tkrn.eval2(T(x0), T(y0), &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
@@ -875,23 +878,23 @@ template<typename T> class Params
             bufi({size_t(su),size_t(svvec)}),
             px0r(bufr.cdata()), px0i(bufi.cdata()),
             w0(w0_),
-            xdw(T(1)/dw_)
+            xdw(1./dw_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
 
         constexpr int lineJump() const { return svvec; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
           {
-          double u, v;
+          double ufrac, vfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
-          parent->getpix(in.u, in.v, u, v, iu0, iv0);
-          T x0 = (iu0-T(u))*2+(supp-1);
-          T y0 = (iv0-T(v))*2+(supp-1);
+          parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
+          auto x0 = -ufrac*2+(supp-1);
+          auto y0 = -vfrac*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(x0, y0, T(xdw*(w0-in.w)), nth, &buf.simd[0]);
+            tkrn.eval2s(T(x0), T(y0), T(xdw*(w0-in.w)), nth, &buf.simd[0]);
           else
-            tkrn.eval2(x0, y0, &buf.simd[0]);
+            tkrn.eval2(T(x0), T(y0), &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
@@ -1271,7 +1274,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
-      auto idx = getAvailableKernels(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<T>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1394,7 +1397,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel(ofactor, epsilon, kidx);
+      krn = selectKernel<T>(ofactor, epsilon, kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
