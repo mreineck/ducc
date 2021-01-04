@@ -241,5 +241,5 @@ def test_adjointness2(lkmax, ncomp, separate, single):
     v1 = np.sum([myalmdot(slm[:, c], bla[:, c], lmax, lmax, 0)
                  for c in range(ncomp)])
     v2 = np.sum([np.vdot(fake[:, c], inter1[:, c]) for c in range(ncomp2)])
-    epsilon = 1e-5 if single else 1e-12
+    epsilon = 1e-4 if single else 1e-12
     _assert_close(v1, v2, epsilon)
