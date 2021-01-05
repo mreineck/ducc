@@ -1233,8 +1233,9 @@ template<typename T> void radfg(size_t ido, size_t ip, size_t l1,
     }
   }
 
+// FIXME: re-enable the DUCC0_RESTRICT specifications below once GCC 11 is fixed
 template<typename T> void radb2(size_t ido, size_t l1,
-  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T * /*DUCC0_RESTRICT*/ cc, T * /*DUCC0_RESTRICT*/ ch,
   const T0 * DUCC0_RESTRICT wa) const
   {
   auto WA = [wa,ido](size_t x, size_t i) { return wa[i+x*(ido-1)]; };
@@ -1264,7 +1265,7 @@ template<typename T> void radb2(size_t ido, size_t l1,
   }
 
 template<typename T> void radb3(size_t ido, size_t l1,
-  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T * /*DUCC0_RESTRICT*/ cc, T * /*DUCC0_RESTRICT*/ ch,
   const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 taur=-0.5, taui=T0(0.8660254037844386467637231707529362L);
@@ -1304,7 +1305,7 @@ template<typename T> void radb3(size_t ido, size_t l1,
   }
 
 template<typename T> void radb4(size_t ido, size_t l1,
-  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T * /*DUCC0_RESTRICT*/ cc, T * /*DUCC0_RESTRICT*/ ch,
   const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -1356,7 +1357,7 @@ template<typename T> void radb4(size_t ido, size_t l1,
   }
 
 template<typename T> void radb5(size_t ido, size_t l1,
-  const T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  const T * /*DUCC0_RESTRICT*/ cc, T * /*DUCC0_RESTRICT*/ ch,
   const T0 * DUCC0_RESTRICT wa) const
   {
   constexpr T0 tr11= T0(0.3090169943749474241022934171828191L),
@@ -1415,7 +1416,7 @@ template<typename T> void radb5(size_t ido, size_t l1,
   }
 
 template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
-  T * DUCC0_RESTRICT cc, T * DUCC0_RESTRICT ch,
+  T * /*DUCC0_RESTRICT*/ cc, T * /*DUCC0_RESTRICT*/ ch,
   const T0 * DUCC0_RESTRICT wa, const T0 * DUCC0_RESTRICT csarr) const
   {
   const size_t cdim=ip;

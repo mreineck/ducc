@@ -26,7 +26,7 @@ include_dirs = ['.', './src/',
                 pybind11.get_include(True),
                 pybind11.get_include(False)]
 
-extra_compile_args = ['-std=c++17', '-march=native', '-ffast-math', '-O3', '-fno-tree-vectorize']
+extra_compile_args = ['-std=c++17', '-march=native', '-ffast-math', '-O3']
 
 python_module_link_args = []
 
