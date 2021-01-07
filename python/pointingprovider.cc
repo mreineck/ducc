@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020 Max-Planck-Society
+ *  Copyright (C) 2020-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -81,7 +81,7 @@ template<typename T> class PointingProvider
         for (; i+vlen-1<hi; i+=vlen)
           {
           Tsimd fi, frac, omega, xsin, w1, w2;
-          array<size_t,vlen> idx;
+          size_t idx[vlen];
           for (size_t ii = 0; ii<vlen; ++ii)
             {
             fi[ii] = ofs + (i+ii)*fratio;
