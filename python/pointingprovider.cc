@@ -78,10 +78,14 @@ template<typename T> class PointingProvider
         {
         size_t i=lo;
         quaternion_t<Tsimd> q1s(0,0,0,0), q2s(0,0,0,0);
+#if defined (_MSC_VER) // no comment
+        vector<size_t> idx(vlen);
+#else
+        array<size_t,vlen> idx;
+#endif
         for (; i+vlen-1<hi; i+=vlen)
           {
           Tsimd fi, frac, omega, xsin, w1, w2;
-          size_t idx[vlen];
           for (size_t ii = 0; ii<vlen; ++ii)
             {
             fi[ii] = ofs + (i+ii)*fratio;
