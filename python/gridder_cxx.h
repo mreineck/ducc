@@ -326,6 +326,7 @@ template<typename T> class Params
     double wmin, dw;
     size_t nplanes;
     double nm1min;
+double nshift;
 
     size_t nu, nv;
     double ofactor;
@@ -338,13 +339,14 @@ template<typename T> class Params
     size_t vlim;
     bool uv_side_fast;
 
-    static T phase (T x, T y, T w, bool adjoint)
+    static T phase (T x, T y, T w, bool adjoint, double nshift)
       {
       constexpr T pi = T(3.141592653589793238462643383279502884197);
       T tmp = 1-x-y;
       if (tmp<=0) return 0; // no phase factor beyond the horizon
       T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-      T phs = 2*pi*w*nm1;
+//      T phs = 2*pi*w*nm1;
+T phs = 2*pi*w*(nm1+T(nshift));
       if (adjoint) phs *= -1;
       return phs;
       }
@@ -394,7 +396,7 @@ template<typename T> class Params
           for (size_t j=0; j<=nydirty/2; ++j)
             {
             T fy = T(y0+j*pixsize_y);
-            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, true);
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, true, nshift);
             }
           for (size_t j=0; j<nvec; ++j)
             for (size_t k=0; k<vlen; ++k)
@@ -515,7 +517,7 @@ template<typename T> class Params
           for (size_t j=0; j<=nydirty/2; ++j)
             {
             T fy = T(y0+j*pixsize_y);
-            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, false);
+            ph[j/vlen][j%vlen] = phase(fx, fy*fy, w, false, nshift);
             }
           for (size_t j=0; j<nvec; ++j)
             for (size_t k=0; k<vlen; ++k)
@@ -595,7 +597,8 @@ template<typename T> class Params
 
       if (do_wgridding)
         {
-        dw = 0.5/ofactor/abs(nm1min);
+double maxnm1 = max(abs(nshift), abs(nm1min+nshift));
+        dw = 0.5/ofactor/maxnm1;
         nplanes = size_t((wmax_d-wmin_d)/dw+supp);
         MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
         wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
@@ -939,7 +942,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
-
+if constexpr(wgrid)
+  v*=polar(T(1), T(imflip*2*pi*coord.w*nshift));
                 v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
@@ -1072,6 +1076,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
                 r*=wgt(row, ch);
+if constexpr(wgrid)
+  r*=polar(T(1), T(-imflip*2*pi*coord.w*nshift));
                 ms_out.v(row, ch) += r;
                 }
               }
@@ -1130,7 +1136,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             if (tmp>=0)
               {
               auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-              fct = T(krn->corfunc(nm1*dw));
+//              fct = T(krn->corfunc(nm1*dw));
+fct = T(krn->corfunc((nm1+nshift)*dw));
               if (divide_by_n)
                 fct /= nm1+1;
               }
@@ -1274,6 +1281,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+nshift = -0.5*nm1min;
       auto idx = getAvailableKernels<T>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
@@ -1293,7 +1301,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
         if (do_wgridding)
           {
-          double dw = 0.5/ofactor/abs(nm1min);
+double maxnm1 = max(abs(nshift), abs(nm1min+nshift));
+cout << nm1min << " " << nshift << " " << maxnm1 << endl;
+          double dw = 0.5/ofactor/maxnm1;
           size_t nplanes = size_t((wmax_d-wmin_d)/dw+supp);
           fftcost *= nplanes;
           gridcost *= supp;
