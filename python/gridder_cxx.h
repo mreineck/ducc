@@ -326,7 +326,7 @@ template<typename T> class Params
     double wmin, dw;
     size_t nplanes;
     double nm1min;
-double nshift;
+double lshift, mshift, nshift;
 
     size_t nu, nv;
     double ofactor;
@@ -911,6 +911,36 @@ double maxnm1 = max(abs(nshift), abs(nm1min+nshift));
           }
       };
 
+
+    void compute_phases(vector<complex<T>> &phases,
+      T imflip, const UVW &bcoord, const RowchanRange &rcr)
+      {
+      phases.resize(rcr.ch_end-rcr.ch_begin);
+      using Tsimd = native_simd<T>;
+      constexpr auto vlen = Tsimd::size();
+      size_t ch=rcr.ch_begin;
+      double fct = imflip*2*pi;
+      for (; ch+vlen-1<rcr.ch_end; ch+=vlen)
+        {
+        Tsimd ang, s, c;
+        for (size_t i=0; i<vlen; ++i)
+          {
+          auto coord = bcoord*bl.ffact(ch+i);
+          ang[i] = T(fct*(coord.u*lshift + coord.v*mshift + coord.w*nshift));
+          }
+        c = ang.apply([](T arg) { return cos(arg); });
+        s = ang.apply([](T arg) { return sin(arg); });
+        for (size_t i=0; i<vlen; ++i)
+          phases[ch-rcr.ch_begin+i]=complex<T>(c[i], s[i]);
+        }
+      for (; ch<rcr.ch_end; ++ch)
+        {
+        auto coord = bcoord*bl.ffact(ch);
+        T ang = T(fct*(coord.u*lshift + coord.v*mshift + coord.w*nshift));
+        phases[ch-rcr.ch_begin] = complex<T>(cos(ang), sin(ang));
+        }
+      }
+
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
       (mav<complex<T>,2> &grid, size_t p0, double w0)
       {
@@ -924,6 +954,7 @@ double maxnm1 = max(abs(nshift), abs(nm1min+nshift));
         constexpr int jump = hlp.lineJump();
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+vector<complex<T>> phases;
 
         while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
@@ -937,13 +968,15 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               T imflip = T(bcoord.FixW());
+if constexpr(wgrid)
+  compute_phases(phases, imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
                 hlp.prep(coord, nth);
                 auto v(ms_in(row, ch));
 if constexpr(wgrid)
-  v*=polar(T(1), T(imflip*2*pi*coord.w*nshift));
+  v*=phases[ch-rcr.ch_begin];
                 v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
@@ -1027,6 +1060,7 @@ if constexpr(wgrid)
         constexpr int jump = hlp.lineJump();
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+vector<complex<T>> phases;
 
         while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
@@ -1040,6 +1074,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               T imflip = T(bcoord.FixW());
+if constexpr(wgrid)
+  compute_phases(phases, -imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
@@ -1077,7 +1113,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 auto r = hsum_cmplx(rr,ri);
                 r*=wgt(row, ch);
 if constexpr(wgrid)
-  r*=polar(T(1), T(-imflip*2*pi*coord.w*nshift));
+  r*=phases[ch-rcr.ch_begin];
                 ms_out.v(row, ch) += r;
                 }
               }
@@ -1164,6 +1200,27 @@ fct = T(krn->corfunc((nm1+nshift)*dw));
               dirty.v(i,j2)*=fct;
             }
           }
+        });
+      timers.pop();
+      }
+
+    void applyShift_visout()
+      {
+      if (!do_wgridding) return;
+      if ((lshift==0) && (mshift==0) && (nshift==0)) return;
+      timers.push("visibility shift");
+      size_t nrow=bl.Nrows(),
+             nchan=bl.Nchannels();
+
+      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+        {
+        for(auto irow=lo; irow<hi; ++irow)
+          for (size_t ichan=0; ichan<nchan; ++ichan)
+            if (norm(ms_out(irow, ichan)) != 0)
+              {
+              auto coord = bl.effectiveCoord(irow, ichan);
+              ms_out.v(irow, ichan) *= polar(T(1), T(-2*pi*(coord.u*lshift+coord.v*mshift+coord.w*nshift)));
+              }
         });
       timers.pop();
       }
@@ -1256,6 +1313,7 @@ fct = T(krn->corfunc((nm1+nshift)*dw));
           grid2x_c<true>(grid, pl, w);
           timers.pop();
           }
+//        applyShift_visout();
         }
       else
         {
@@ -1281,6 +1339,7 @@ fct = T(krn->corfunc((nm1+nshift)*dw));
       nm1min = sqrt(max(1.-x0*x0-y0*y0,0.))-1.;
       if (x0*x0+y0*y0>1.)
         nm1min = -sqrt(abs(1.-x0*x0-y0*y0))-1.;
+lshift = mshift = 0;
 nshift = -0.5*nm1min;
       auto idx = getAvailableKernels<T>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
@@ -1302,7 +1361,6 @@ nshift = -0.5*nm1min;
         if (do_wgridding)
           {
 double maxnm1 = max(abs(nshift), abs(nm1min+nshift));
-cout << nm1min << " " << nshift << " " << maxnm1 << endl;
           double dw = 0.5/ofactor/maxnm1;
           size_t nplanes = size_t((wmax_d-wmin_d)/dw+supp);
           fftcost *= nplanes;
