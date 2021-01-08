@@ -341,12 +341,11 @@ double lshift, mshift, nshift;
 
     static T phase (T x, T y, T w, bool adjoint, double nshift)
       {
-      constexpr T pi = T(3.141592653589793238462643383279502884197);
-      T tmp = 1-x-y;
+      constexpr double pi = 3.141592653589793238462643383279502884197;
+      double tmp = 1.-x-y;
       if (tmp<=0) return 0; // no phase factor beyond the horizon
-      T nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-//      T phs = 2*pi*w*nm1;
-T phs = 2*pi*w*(nm1+T(nshift));
+      double nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
+      T phs = T(2*pi*w*(nm1+nshift));
       if (adjoint) phs *= -1;
       return phs;
       }
@@ -1172,7 +1171,6 @@ if constexpr(wgrid)
             if (tmp>=0)
               {
               auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-//              fct = T(krn->corfunc(nm1*dw));
 fct = T(krn->corfunc((nm1+nshift)*dw));
               if (divide_by_n)
                 fct /= nm1+1;
@@ -1200,27 +1198,6 @@ fct = T(krn->corfunc((nm1+nshift)*dw));
               dirty.v(i,j2)*=fct;
             }
           }
-        });
-      timers.pop();
-      }
-
-    void applyShift_visout()
-      {
-      if (!do_wgridding) return;
-      if ((lshift==0) && (mshift==0) && (nshift==0)) return;
-      timers.push("visibility shift");
-      size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
-
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
-        {
-        for(auto irow=lo; irow<hi; ++irow)
-          for (size_t ichan=0; ichan<nchan; ++ichan)
-            if (norm(ms_out(irow, ichan)) != 0)
-              {
-              auto coord = bl.effectiveCoord(irow, ichan);
-              ms_out.v(irow, ichan) *= polar(T(1), T(-2*pi*(coord.u*lshift+coord.v*mshift+coord.w*nshift)));
-              }
         });
       timers.pop();
       }
@@ -1313,7 +1290,6 @@ fct = T(krn->corfunc((nm1+nshift)*dw));
           grid2x_c<true>(grid, pl, w);
           timers.pop();
           }
-//        applyShift_visout();
         }
       else
         {
