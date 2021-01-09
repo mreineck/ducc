@@ -609,7 +609,7 @@ template<typename T> class Params
 
       if (do_wgridding)
         {
-        double maxnm1 = max(abs(nshift+nm1max), abs(nm1min+nshift));
+        double maxnm1 = max(abs(nm1max+nshift), abs(nm1min+nshift));
         dw = 0.5/ofactor/maxnm1;
         nplanes = size_t((wmax_d-wmin_d)/dw+supp);
         MR_assert(nplanes<(size_t(1)<<16), "too many w planes");

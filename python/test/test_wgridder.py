@@ -105,7 +105,7 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask):
-    if singleprec and epsilon < 5e-5:
+    if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
@@ -149,7 +149,7 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
                                 nthreads):
-    if singleprec and epsilon < 5e-5:
+    if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
