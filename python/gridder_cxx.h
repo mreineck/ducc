@@ -442,57 +442,6 @@ template<typename T> class Params
             }
           }
         });
-// if (!lmshift)
-//   {
-//       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         vector<complex<T>> phases(nydirty/2+1); 
-//         for (auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           size_t ix = nu-nxdirty/2+i;
-//           if (ix>=nu) ix-=nu;
-//           size_t i2 = nxdirty-i;
-//           size_t ix2 = nu-nxdirty/2+i2;
-//           if (ix2>=nu) ix2-=nu;
-//           expi(phases, [&](size_t i)
-//             { return T(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
-//           if ((i>0)&&(i<i2))
-//             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//               {
-//               size_t j2 = min(j, nydirty-j);
-//               T re = phases[j2].real(), im = phases[j2].imag();
-//               dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im;
-//               dirty.v(i2,j) += tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im;
-//               }
-//           else
-//             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//               {
-//               size_t j2 = min(j, nydirty-j);
-//               T re = phases[j2].real(), im = phases[j2].imag();
-//               dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im; // lower left
-//               }
-//           }
-//         });
-//   }
-// else
-//   {
-//       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         vector<complex<T>> phases(nydirty); 
-//         for (auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           size_t ix = nu-nxdirty/2+i;
-//           if (ix>=nu) ix-=nu;
-//           expi(phases, [&](size_t i)
-//                 { return T(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
-//           for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//             dirty.v(i,j) += tmav(ix,jx).real()*phases[j].real()
-//                           - tmav(ix,jx).imag()*phases[j].imag();
-//           }
-//         });
-//   }
       }
 
     void grid2dirty_overwrite(mav<T,2> &grid, mav<T,2> &dirty)
@@ -605,51 +554,6 @@ template<typename T> class Params
             }
           }
         });
-// if (!lmshift)
-//   {
-//       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         vector<complex<T>> phases(nydirty/2+1); 
-//         for(auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           size_t ix = nu-nxdirty/2+i;
-//           if (ix>=nu) ix-=nu;
-//           size_t i2 = nxdirty-i;
-//           size_t ix2 = nu-nxdirty/2+i2;
-//           if (ix2>=nu) ix2-=nu;
-//           expi(phases, [&](size_t i)
-//             { return T(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
-//           if ((i>0)&&(i<i2))
-//             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//               {
-//               size_t j2 = min(j, nydirty-j);
-//               grid.v(ix,jx) = dirty(i,j)*phases[j2]; // lower left
-//               grid.v(ix2,jx) = dirty(i2,j)*phases[j2]; // lower right
-//               }
-//           else
-//             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//               grid.v(ix,jx) = dirty(i,j)*phases[min(j, nydirty-j)]; // lower left
-//           }
-//         });
-//   }
-// else
-//   {
-//       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         vector<complex<T>> phases(nydirty); 
-//         for(auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           size_t ix = nu-nxdirty/2+i;
-//           if (ix>=nu) ix-=nu;
-//           expi(phases, [&](size_t i)
-//             { return T(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
-//           for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-//             grid.v(ix,jx) = dirty(i,j)*phases[j];
-//           }
-//         });
-//   }
       timers.pop();
       }
 
@@ -1291,70 +1195,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             }
           }
         });
-// if (!lmshift)
-//   {
-//       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         for(auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           for (size_t j=0; j<=nydirty/2; ++j)
-//             {
-//             double fy = sqr(y0+j*pixsize_y);
-//             double fct = 0;
-//             auto tmp = 1-fx-fy;
-//             if (tmp>=0)
-//               {
-//               auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-//               fct = krn->corfunc((nm1+nshift)*dw);
-//               if (divide_by_n)
-//                 fct /= nm1+1;
-//               }
-//             else // beyond the horizon, don't really know what to do here
-//               fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
-//             fct *= cfu[nxdirty/2-i]*cfv[nydirty/2-j];
-//             size_t i2 = nxdirty-i, j2 = nydirty-j;
-//             dirty.v(i,j)*=T(fct);
-//             if ((i>0)&&(i<i2))
-//               {
-//               dirty.v(i2,j)*=T(fct);
-//               if ((j>0)&&(j<j2))
-//                 dirty.v(i2,j2)*=T(fct);
-//               }
-//             if ((j>0)&&(j<j2))
-//               dirty.v(i,j2)*=T(fct);
-//             }
-//           }
-//         });
-//   }
-// else
-//   {
-//       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
-//         {
-//         for(auto i=lo; i<hi; ++i)
-//           {
-//           double fx = sqr(x0+i*pixsize_x);
-//           for (size_t j=0; j<nydirty; ++j)
-//             {
-//             double fy = sqr(y0+j*pixsize_y);
-//             double fct = 0;
-//             auto tmp = 1-fx-fy;
-//             if (tmp>=0)
-//               {
-//               auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-//               fct = krn->corfunc((nm1+nshift)*dw);
-//               if (divide_by_n)
-//                 fct /= nm1+1;
-//               }
-//             else // beyond the horizon, don't really know what to do here
-//               fct = divide_by_n ? 0 : krn->corfunc((nshift+sqrt(-tmp)-1)*dw);
-//             auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
-//             fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
-//             dirty.v(i,j)*=T(fct);
-//             }
-//           }
-//         });
-//   }
       timers.pop();
       }
 
