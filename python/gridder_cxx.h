@@ -77,6 +77,24 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
 #endif
   }
 
+template<typename T> void expi(size_t n, const T * DUCC0_RESTRICT ang,
+  complex<T> * DUCC0_RESTRICT res)
+  {
+  using Tsimd = native_simd<T>;
+  static constexpr auto vlen = Tsimd::size();
+  size_t i=0;
+  for (; i+vlen-1<n; i+=vlen)
+    {
+    auto vang = Tsimd::loadu(&ang[i]);
+    auto vcos = vang.apply([](T arg) { return cos(arg); });
+    auto vsin = vang.apply([](T arg) { return sin(arg); });
+    for (size_t ii=0; ii<vlen; ++ii)
+      res[i+ii] = complex<T>(vcos[ii], vsin[ii]);
+    }
+  for (; i<n; ++i)
+    res[i] = complex<T>(cos(ang[i]), sin(ang[i]));
+  }
+
 template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
@@ -376,16 +394,14 @@ template<typename T> class Params
     void grid2dirty_post2(mav<complex<T>,2> &tmav, mav<T,2> &dirty, double w) const
       {
       checkShape(dirty.shape(), {nxdirty,nydirty});
+      double x0 = lshift-0.5*nxdirty*pixsize_x,
+             y0 = mshift-0.5*nydirty*pixsize_y;
 if (!lmshift)
   {
-      double x0 = -0.5*nxdirty*pixsize_x,
-             y0 = -0.5*nydirty*pixsize_y;
       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
         {
-        using vtype = native_simd<T>;
-        constexpr size_t vlen=vtype::size();
-        size_t nvec = (nydirty/2+1+(vlen-1))/vlen;
-        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
+        vector<T> ang(nydirty/2+1);
+        vector<complex<T>> phases(nydirty/2+1); 
         for (auto i=lo; i<hi; ++i)
           {
           double fx = x0+i*pixsize_x;
@@ -398,19 +414,14 @@ if (!lmshift)
           for (size_t j=0; j<=nydirty/2; ++j)
             {
             double fy = y0+j*pixsize_y;
-            ph[j/vlen][j%vlen] = T(phase(fx, fy*fy, w, true, nshift));
+            ang[j] = T(phase(fx, fy*fy, w, true, nshift));
             }
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-               sp[j][k]=sin(ph[j][k]);
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-              cp[j][k]=cos(ph[j][k]);
+          expi(ang.size(), ang.data(), phases.data());
           if ((i>0)&&(i<i2))
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, nydirty-j);
-              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              T re = phases[j2].real(), im = phases[j2].imag();
               dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im;
               dirty.v(i2,j) += tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im;
               }
@@ -418,7 +429,7 @@ if (!lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, nydirty-j);
-              T re = cp[j2/vlen][j2%vlen], im = sp[j2/vlen][j2%vlen];
+              T re = phases[j2].real(), im = phases[j2].imag();
               dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im; // lower left
               }
           }
@@ -426,14 +437,10 @@ if (!lmshift)
   }
 else
   {
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
-        using vtype = native_simd<T>;
-        constexpr size_t vlen=vtype::size();
-        size_t nvec = (nydirty+vlen-1)/vlen;
-        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
+        vector<T> ang(nydirty);
+        vector<complex<T>> phases(nydirty); 
         for (auto i=lo; i<hi; ++i)
           {
           double fx = x0+i*pixsize_x;
@@ -443,19 +450,12 @@ else
           for (size_t j=0; j<nydirty; ++j)
             {
             double fy = y0+j*pixsize_y;
-            ph[j/vlen][j%vlen] = T(phase(fx, fy*fy, w, true, nshift));
+            ang[j] = T(phase(fx, fy*fy, w, true, nshift));
             }
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-               sp[j][k]=sin(ph[j][k]);
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-              cp[j][k]=cos(ph[j][k]);
+          expi(ang.size(), ang.data(), phases.data());
           for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-            {
-            T re = cp[j/vlen][j%vlen], im = sp[j/vlen][j%vlen];
-            dirty.v(i,j) += tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im;
-            }
+            dirty.v(i,j) += tmav(ix,jx).real()*phases[j].real()
+                          - tmav(ix,jx).imag()*phases[j].imag();
           }
         });
   }
@@ -535,16 +535,14 @@ else
       { auto a0 = subarray<2>(grid, {nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
+      double x0 = lshift-0.5*nxdirty*pixsize_x,
+             y0 = mshift-0.5*nydirty*pixsize_y;
 if (!lmshift)
   {
-      double x0 = -0.5*nxdirty*pixsize_x,
-             y0 = -0.5*nydirty*pixsize_y;
       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
         {
-        using vtype = native_simd<T>;
-        constexpr size_t vlen=vtype::size();
-        size_t nvec = (nydirty/2+1+(vlen-1))/vlen;
-        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
+        vector<T> ang(nydirty/2+1);
+        vector<complex<T>> phases(nydirty/2+1); 
         for(auto i=lo; i<hi; ++i)
           {
           double fx = x0+i*pixsize_x;
@@ -557,42 +555,31 @@ if (!lmshift)
           for (size_t j=0; j<=nydirty/2; ++j)
             {
             double fy = y0+j*pixsize_y;
-            ph[j/vlen][j%vlen] = T(phase(fx, fy*fy, w, false, nshift));
+            ang[j] = T(phase(fx, fy*fy, w, false, nshift));
             }
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-               sp[j][k]=sin(ph[j][k]);
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-              cp[j][k]=cos(ph[j][k]);
+          expi(ang.size(), ang.data(), phases.data());
           if ((i>0)&&(i<i2))
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, nydirty-j);
-              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
-              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
-              grid.v(ix2,jx) = dirty(i2,j)*ws; // lower right
+              grid.v(ix,jx) = dirty(i,j)*phases[j2]; // lower left
+              grid.v(ix2,jx) = dirty(i2,j)*phases[j2]; // lower right
               }
           else
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
               size_t j2 = min(j, nydirty-j);
-              auto ws = complex<T>(cp[j2/vlen][j2%vlen],sp[j2/vlen][j2%vlen]);
-              grid.v(ix,jx) = dirty(i,j)*ws; // lower left
+              grid.v(ix,jx) = dirty(i,j)*phases[j2]; // lower left
               }
           }
         });
   }
 else
   {
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
-        using vtype = native_simd<T>;
-        constexpr size_t vlen=vtype::size();
-        size_t nvec = (nydirty+vlen-1)/vlen;
-        vector<vtype> ph(nvec), sp(nvec), cp(nvec);
+        vector<T> ang(nydirty);
+        vector<complex<T>> phases(nydirty); 
         for(auto i=lo; i<hi; ++i)
           {
           double fx = x0+i*pixsize_x;
@@ -602,19 +589,11 @@ else
           for (size_t j=0; j<nydirty; ++j)
             {
             double fy = y0+j*pixsize_y;
-            ph[j/vlen][j%vlen] = T(phase(fx, fy*fy, w, false, nshift));
+            ang[j] = T(phase(fx, fy*fy, w, false, nshift));
             }
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-               sp[j][k]=sin(ph[j][k]);
-          for (size_t j=0; j<nvec; ++j)
-            for (size_t k=0; k<vlen; ++k)
-              cp[j][k]=cos(ph[j][k]);
+          expi(ang.size(), ang.data(), phases.data());
           for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-            {
-            auto ws = complex<T>(cp[j/vlen][j%vlen],sp[j/vlen][j%vlen]);
-            grid.v(ix,jx) = dirty(i,j)*ws; // lower left
-            }
+            grid.v(ix,jx) = dirty(i,j)*phases[j];
           }
         });
   }
@@ -1230,10 +1209,10 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
     void apply_global_corrections(mav<T,2> &dirty)
       {
       timers.push("global corrections");
+      double x0 = lshift-0.5*nxdirty*pixsize_x,
+             y0 = mshift-0.5*nydirty*pixsize_y;
 if (!lmshift)
   {
-      double x0 = -0.5*nxdirty*pixsize_x,
-             y0 = -0.5*nydirty*pixsize_y;
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       execParallel(nxdirty/2+1, nthreads, [&](size_t lo, size_t hi)
@@ -1256,15 +1235,7 @@ if (!lmshift)
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-              {
-              if (divide_by_n)
-                fct=0;
-              else
-                {
-                auto nm1 = sqrt(-tmp)-1;
-                fct = krn->corfunc(nm1*dw);
-                }
-              }
+              fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
             fct *= cfu[nxdirty/2-i]*cfv[nydirty/2-j];
             size_t i2 = nxdirty-i, j2 = nydirty-j;
             dirty.v(i,j)*=T(fct);
@@ -1282,8 +1253,6 @@ if (!lmshift)
   }
 else
   {
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
@@ -1306,15 +1275,7 @@ else
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-              {
-              if (divide_by_n)
-                fct=0;
-              else
-                {
-                auto nm1 = sqrt(-tmp)-1;
-                fct = krn->corfunc((nm1+nshift)*dw);
-                }
-              }
+              fct = divide_by_n ? 0 : krn->corfunc((nshift+sqrt(-tmp)-1)*dw);
             auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
             fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
             dirty.v(i,j)*=T(fct);
