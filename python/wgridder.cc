@@ -67,7 +67,7 @@ py::array Pyvis2dirty(const py::array &uvw,
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n,
   py::object &dirty=None, double sigma_min=1.1, double sigma_max=2.6,
-  double center_x=0., double center_y=0., bool allow_nshift=false)
+  double center_x=0., double center_y=0., bool allow_nshift=true)
   {
   if (isPyarr<complex<float>>(vis))
     return vis2dirty2<float>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
@@ -164,7 +164,7 @@ py::array Pydirty2vis(const py::array &uvw,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, const py::object &mask,
   bool flip_v, bool divide_by_n, py::object &vis=None, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0., double center_y=0., bool allow_nshift=false)
+  double sigma_max=2.6, double center_x=0., double center_y=0., bool allow_nshift=true)
   {
   if (isPyarr<float>(dirty))
     return dirty2vis2<float>(uvw, freq, dirty, wgt, mask,
@@ -310,6 +310,8 @@ wgt: numpy.ndarray((nrows, nchan), same dtype as `dirty`), optional
     If present, its values are multiplied to the output
 pixsize_x, pixsize_y: float
     angular pixel size (in radians) of the dirty image
+center_x, center_y: float
+    center of the dirty image
 nu, nv: int
     obsolete, ignored
 epsilon: float
@@ -347,12 +349,12 @@ void add_wgridder(py::module_ &msup)
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
     "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
-    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=false);
+    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true);
   m2.def("dirty2vis", &Pydirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
     "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None,"sigma_min"_a=1.1,
-    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=false);
+    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true);
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,

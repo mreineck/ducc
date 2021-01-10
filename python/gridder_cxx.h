@@ -927,10 +927,9 @@ template<typename T> class Params
       T imflip, const UVW &bcoord, const RowchanRange &rcr)
       {
       phases.resize(rcr.ch_end-rcr.ch_begin);
-      double fct = imflip;
+      double fct = imflip*(bcoord.u*lshift + bcoord.v*mshift + bcoord.w*nshift);
       expi(phases, [&](size_t i) {
-                      auto coord = bcoord*bl.ffact(rcr.ch_begin+i);
-                      auto tmp = fct*(coord.u*lshift + coord.v*mshift + coord.w*nshift);
+                      auto tmp = fct*bl.ffact(rcr.ch_begin+i);
                       return T(twopi*(tmp-floor(tmp)));
                       });
       }
@@ -1499,7 +1498,7 @@ template<typename T> void ms2dirty(const mav<double,2> &uvw,
   const mav<T,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, mav<T,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=false)
+  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   auto ms_out(mav<complex<T>,2>::build_empty());
   auto dirty_in(mav<T,2>::build_empty());
@@ -1515,7 +1514,7 @@ template<typename T> void dirty2ms(const mav<double,2> &uvw,
   const mav<T,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, mav<complex<T>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=false)
+  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   auto ms_in(mav<complex<T>,2>::build_uniform(ms.shape(),1.));
   auto dirty_out(mav<T,2>::build_empty());
