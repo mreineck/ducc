@@ -956,6 +956,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
+//bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
             for (const auto rcr: ranges[ix].second)
               {
@@ -1062,13 +1063,14 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(ranges[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
+            bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
             for (const auto rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               T imflip = T(bcoord.FixW());
-              if (shifting)
+              if (shifting&&lastplane)
                 compute_phases(phases, -imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
@@ -1105,10 +1107,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx(rr,ri);
-                r*=wgt(row, ch);
-                if (shifting)
-                  r*=phases[ch-rcr.ch_begin];
                 ms_out.v(row, ch) += r;
+                if (lastplane)
+                  ms_out.v(row, ch) *= shifting ?
+                    (phases[ch-rcr.ch_begin]*wgt(row, ch)) :
+                    wgt(row, ch);
                 }
               }
             }
