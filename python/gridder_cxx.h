@@ -589,6 +589,16 @@ template<typename T> class Params
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
+#if 1
+      u = u_in*pixsize_x;
+      u = (u-floor(u))*nu;
+      iu0 = min(int(u+ushift)-int(nu), maxiu0);
+      u -= iu0;
+      v = v_in*pixsize_y;
+      v = (v-floor(v))*nv;
+      iv0 = min(int(v+vshift)-int(nv), maxiv0);
+      v -= iv0;
+#else
       auto tmp = u_in*pixsize_x;
       u = (tmp-round(tmp))*nu;
       int ucorr = (u<0.)*nu;
@@ -599,6 +609,7 @@ template<typename T> class Params
       int vcorr = (v<0.)*nv;
       iv0 = min(int(v+vcorr+vshift)-int(nv), maxiv0);
       v-=iv0-vcorr;
+#endif
       }
 
     void countRanges()
