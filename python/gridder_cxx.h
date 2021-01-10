@@ -79,26 +79,24 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
 #endif
   }
 
-template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res, F getang)
+template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res, vector<T> &buf, F getang)
   {
   using Tsimd = native_simd<T>;
   static constexpr auto vlen = Tsimd::size();
-  size_t i=0, n=res.size();
-  Tsimd vang(0);
+  size_t n=res.size();
+  for (size_t j=0; j<n; ++j)
+    buf[j] = getang(j);
+  size_t i=0;
   for (; i+vlen-1<n; i+=vlen)
     {
-    for (size_t ii=0; ii<vlen; ++ii)
-      vang[ii] = getang(i+ii);
+    auto vang = Tsimd::loadu(&buf[i]);
     auto vcos = vang.apply([](T arg) { return cos(arg); });
     auto vsin = vang.apply([](T arg) { return sin(arg); });
     for (size_t ii=0; ii<vlen; ++ii)
       res[i+ii] = complex<T>(vcos[ii], vsin[ii]);
     }
   for (; i<n; ++i)
-    {
-    T ang = getang(i);
-    res[i] = complex<T>(cos(ang), sin(ang));
-    }
+    res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
 
 template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
@@ -405,13 +403,14 @@ template<typename T> class Params
       size_t nxd = lmshift ? nxdirty : (nxdirty/2+1);
       execParallel(nxd, nthreads, [&](size_t lo, size_t hi)
         {
-        vector<complex<T>> phases(lmshift ? nydirty : (nydirty/2+1)); 
+        vector<complex<T>> phases(lmshift ? nydirty : (nydirty/2+1));
+        vector<T> buf(lmshift ? nydirty : (nydirty/2+1));
         for (auto i=lo; i<hi; ++i)
           {
           double fx = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
-          expi(phases, [&](size_t i)
+          expi(phases, buf, [&](size_t i)
             { return T(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
           if (lmshift)
             {
@@ -524,12 +523,13 @@ template<typename T> class Params
       execParallel(nxd, nthreads, [&](size_t lo, size_t hi)
         {
         vector<complex<T>> phases(lmshift ? nydirty : (nydirty/2+1)); 
+        vector<T> buf(lmshift ? nydirty : (nydirty/2+1)); 
         for(auto i=lo; i<hi; ++i)
           {
           double fx = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
-          expi(phases, [&](size_t i)
+          expi(phases, buf, [&](size_t i)
             { return T(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
           if (lmshift)
             {
@@ -923,12 +923,13 @@ template<typename T> class Params
           }
       };
 
-    void compute_phases(vector<complex<T>> &phases,
+    void compute_phases(vector<complex<T>> &phases, vector<T> &buf,
       T imflip, const UVW &bcoord, const RowchanRange &rcr)
       {
       phases.resize(rcr.ch_end-rcr.ch_begin);
+      buf.resize(rcr.ch_end-rcr.ch_begin);
       double fct = imflip*(bcoord.u*lshift + bcoord.v*mshift + bcoord.w*nshift);
-      expi(phases, [&](size_t i) {
+      expi(phases, buf, [&](size_t i) {
                       auto tmp = fct*bl.ffact(rcr.ch_begin+i);
                       return T(twopi*(tmp-floor(tmp)));
                       });
@@ -948,6 +949,7 @@ template<typename T> class Params
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
         vector<complex<T>> phases;
+        vector<T> buf;
 
         while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
@@ -963,7 +965,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               auto bcoord = bl.baseCoord(row);
               T imflip = T(bcoord.FixW());
               if (shifting)
-                compute_phases(phases, imflip, bcoord, rcr);
+                compute_phases(phases, buf, imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
@@ -1055,6 +1057,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
         vector<complex<T>> phases;
+        vector<T> buf;
 
         while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
           {
@@ -1070,7 +1073,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               auto bcoord = bl.baseCoord(row);
               T imflip = T(bcoord.FixW());
               if (shifting&&lastplane)
-                compute_phases(phases, -imflip, bcoord, rcr);
+                compute_phases(phases, buf, -imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
