@@ -745,7 +745,7 @@ template<typename T> class Params
     template<size_t supp, bool wgrid> class HelperX2g2
       {
       public:
-        static constexpr size_t vlen = mysimd<T>::size();
+        static constexpr size_t vlen = mysimd<double>::size();
         static constexpr size_t nvec = (supp+vlen-1)/vlen;
 
       private:
@@ -755,13 +755,13 @@ template<typename T> class Params
         static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
         static constexpr double xsupp=2./supp;
         const Params *parent;
-        TemplateKernel<supp, mysimd<T>> tkrn;
+        TemplateKernel<supp, mysimd<double>> tkrn;
         mav<complex<T>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
 
-        mav<T,2> bufr, bufi;
-        T *px0r, *px0i;
+        mav<double,2> bufr, bufi;
+        double *px0r, *px0i;
         double w0, xdw;
         vector<mutex> &locks;
 
@@ -780,7 +780,7 @@ template<typename T> class Params
             lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
-              grid.v(idxu,idxv) += complex<T>(bufr(iu,iv), bufi(iu,iv));
+              grid.v(idxu,idxv) += complex<T>(T(bufr(iu,iv)), T(bufi(iu,iv)));
               bufr.v(iu,iv) = bufi.v(iu,iv) = 0;
               if (++idxv>=inv) idxv=0;
               }
@@ -790,10 +790,10 @@ template<typename T> class Params
           }
 
       public:
-        T * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
+        double * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
         union kbuf {
-          T scalar[2*nvec*vlen];
-          mysimd<T> simd[2*nvec];
+          double scalar[2*nvec*vlen];
+          mysimd<double> simd[2*nvec];
 #if defined(_MSC_VER)
           kbuf() {}
 #endif
@@ -825,9 +825,9 @@ template<typename T> class Params
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(T(x0), T(y0), T(xdw*(w0-in.w)), nth, &buf.simd[0]);
+            tkrn.eval2s(x0, y0, xdw*(w0-in.w), nth, &buf.simd[0]);
           else
-            tkrn.eval2(T(x0), T(y0), &buf.simd[0]);
+            tkrn.eval2(x0, y0, &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
@@ -953,11 +953,11 @@ template<typename T> class Params
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<T>::size();
+        constexpr size_t vlen=mysimd<double>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
         constexpr int jump = hlp.lineJump();
-        const T * DUCC0_RESTRICT ku = hlp.buf.scalar;
+        const double * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
         vector<complex<T>> phases;
         vector<T> buf;
@@ -974,9 +974,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               {
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
-              T imflip = T(bcoord.FixW());
+              double imflip = bcoord.FixW();
               if (shifting)
-                compute_phases(phases, buf, imflip, bcoord, rcr);
+                compute_phases(phases, buf, T(imflip), bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
@@ -988,13 +988,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 
                 if constexpr (NVEC==1)
                   {
-                  mysimd<T> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+                  mysimd<double> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = mysimd<T>::loadu(pxr);
-                    auto ti = mysimd<T>::loadu(pxi);
+                    auto tr = mysimd<double>::loadu(pxr);
+                    auto ti = mysimd<double>::loadu(pxi);
                     tr += vr*ku[cu];
                     ti += vi*ku[cu];
                     tr.storeu(pxr);
@@ -1003,18 +1003,18 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 else
                   {
-                  mysimd<T> vr(v.real()), vi(v.imag()*imflip);
+                  mysimd<double> vr(v.real()), vi(v.imag()*imflip);
                   for (size_t cu=0; cu<SUPP; ++cu)
                     {
-                    mysimd<T> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+                    mysimd<double> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
                     for (size_t cv=0; cv<NVEC; ++cv)
                       {
                       auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
                       auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = mysimd<T>::loadu(pxr);
+                      auto tr = mysimd<double>::loadu(pxr);
                       tr += tmpr*kv[cv];
                       tr.storeu(pxr);
-                      auto ti = mysimd<T>::loadu(pxi);
+                      auto ti = mysimd<double>::loadu(pxi);
                       ti += tmpi*kv[cv];
                       ti.storeu(pxi);
                       }
@@ -1352,7 +1352,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
       size_t minnu=0, minnv=0, minidx=KernelDB.size();
-      constexpr size_t vlen = mysimd<T>::size();
+      size_t vlen = gridding ? mysimd<double>::size() : mysimd<T>::size();
       for (size_t i=0; i<idx.size(); ++i)
         {
         const auto &krn(KernelDB[idx[i]]);
@@ -1364,6 +1364,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
+        if (gridding && (!is_same<T,double>::value)) gridcost *= 2;
         if (do_wgridding)
           {
           double maxnm1 = max(abs(nm1max+nshift), abs(nm1min+nshift));
