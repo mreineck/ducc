@@ -1225,7 +1225,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         timers.push("zeroing dirty image");
         dirty_out.fill(0);
         timers.poppush("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv});
+        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -1247,7 +1247,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         timers.poppush("gridding proper");
         x2grid_c<false>(grid, 0);
         timers.poppush("allocating rgrid");
-        auto rgrid = mav<Tcalc,2>::build_noncritical(grid.shape());
+        auto rgrid = mav<Tcalc,2>::build_noncritical(grid.shape(), UNINITIALIZED);
         timers.poppush("complex2hartley");
         complex2hartley(grid, rgrid, nthreads);
         timers.pop();
@@ -1260,13 +1260,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (do_wgridding)
         {
         timers.push("copying dirty image");
-        mav<Timg,2> tdirty({nxdirty,nydirty});
+        mav<Timg,2> tdirty({nxdirty,nydirty}, UNINITIALIZED);
         tdirty.apply(dirty_in, [](Timg &a, Timg b) {a=b;});
         timers.pop();
         // correct for w gridding etc.
         apply_global_corrections(tdirty);
         timers.push("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv});
+        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -1280,7 +1280,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
         timers.push("allocating grid");
-        auto rgrid = mav<Tcalc,2>::build_noncritical({nu,nv});
+        auto rgrid = mav<Tcalc,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         dirty2grid(dirty_in, rgrid);
         timers.push("allocating grid");

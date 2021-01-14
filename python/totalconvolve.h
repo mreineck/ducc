@@ -29,6 +29,7 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
+#include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/sharp/sharp.h"
@@ -221,7 +222,7 @@ template<typename T> class ConvolverPlan
         arr.v(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    vector<uint32_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
+    aligned_array<uint32_t> getIdx(const mav<T,1> &theta, const mav<T,1> &phi, const mav<T,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       size_t nptg = theta.shape(0);
@@ -235,7 +236,7 @@ template<typename T> class ConvolverPlan
       double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
       MR_assert(nct*ncp*ncpsi<(size_t(1)<<32), "key space too large");
 
-      vector<uint32_t> key(nptg);
+      aligned_array<uint32_t> key(nptg);
       execParallel(nptg, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -257,7 +258,9 @@ template<typename T> class ConvolverPlan
           key[i] = (itheta*ncp+iphi)*ncpsi+ipsi;
           }
         });
-      return bucket_sort<uint32_t>(key, ncp*nct*ncpsi, nthreads);
+      aligned_array<uint32_t> res(key.size());
+      bucket_sort(&key[0], &res[0], key.size(), ncp*nct*ncpsi, nthreads);
+      return res;
       }
 
     template<size_t supp> class WeightHelper
@@ -512,7 +515,7 @@ template<typename T> class ConvolverPlan
         xdphi(1./dphi),
         xdtheta(1./dtheta),
         xdpsi(1./dpsi),
-        kernel(selectKernel<T>(realsigma(), 0.5*epsilon)),
+        kernel(selectKernel<T>(realsigma(), epsilon/3.)),
         nbphi((kernel->support()+1)/2),
         nbtheta((kernel->support()+1)/2),
         nphi(nphi_b+2*nbphi+vlen),

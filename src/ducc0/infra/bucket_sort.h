@@ -25,6 +25,7 @@
 #include <vector>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/math_utils.h"
 
 namespace ducc0 {
@@ -33,9 +34,10 @@ namespace detail_bucket_sort {
 
 using namespace std;
 
-template<typename Tidx, typename Tkey> void subsort
-  (vector<Tidx> &idx, vector<Tkey> &keys, size_t keybits, size_t lo,
-   size_t hi, vector<Tidx> &numbers, vector<Tidx> &idxbak, vector<Tkey> &keybak)
+template<typename RAidx, typename Tkey, typename Tidx> void subsort
+  (RAidx idx, aligned_array<Tkey> &keys, size_t keybits, size_t lo,
+   size_t hi, vector<Tidx> &numbers, aligned_array<Tidx> &idxbak,
+   aligned_array<Tkey> &keybak)
   {
   auto nval = hi-lo;
   if (nval<=1) return;
@@ -74,9 +76,11 @@ template<typename Tidx, typename Tkey> void subsort
       lo+numbers[i], newnumbers, idxbak, keybak);
   }
 
-template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
-  (const vector<Tkey> &keys, size_t max_key, size_t nthreads)
+template<typename RAidx, typename RAkey> void bucket_sort
+  (RAkey keys, RAidx res, size_t nval, size_t max_key, size_t nthreads)
   {
+  using Tidx = typename remove_reference<decltype(*res)>::type;
+  using Tkey = typename remove_reference<decltype(*keys)>::type;
   struct vbuf
     {
     vector<Tidx> v;
@@ -86,7 +90,7 @@ template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
   auto keybits = ilog2(max_key)+1;
   size_t keyshift = (keybits<=8) ? 0 : keybits-8;
   size_t nkeys = min<size_t>(size_t(1)<<keybits, 256);
-  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
+  execParallel(nval, nthreads, [&](size_t tid, size_t lo, size_t hi)
     {
     auto &mybuf(numbers[tid].v);
     mybuf.resize(nkeys,0);
@@ -104,9 +108,8 @@ template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
       numbers[t].v[i]=ofs;
       ofs+=tmp;
       }
-  vector<Tidx> res(keys.size());
-  vector<Tkey> keys2(keys.size());
-  execParallel(keys.size(), nthreads, [&](size_t tid, size_t lo, size_t hi)
+  aligned_array<Tkey> keys2(nval);
+  execParallel(nval, nthreads, [&](size_t tid, size_t lo, size_t hi)
     {
     auto &mybuf(numbers[tid].v);
     for (size_t i=lo; i<hi; ++i)
@@ -117,20 +120,18 @@ template<typename Tidx, typename Tkey> vector<Tidx> bucket_sort
       ++mybuf[loc];
       }
     });
-  if (keyshift==0) return res;
+  if (keyshift==0) return;
   keybits -= 8;
   execDynamic(nkeys, nthreads, 1, [&](Scheduler &sched)
     {
     vector<Tidx> newnumbers;
-    vector<Tkey> keybak;
-    vector<Tidx> idxbak;
+    aligned_array<Tkey> keybak;
+    aligned_array<Tidx> idxbak;
     while (auto rng=sched.getNext())
       for(auto i=rng.lo; i<rng.hi; ++i)
-        subsort(res, keys2, keybits, (i==0) ? 0 : numbers[nthreads-1].v[i-1], numbers[nthreads-1].v[i],
-          newnumbers, idxbak, keybak);
+        subsort(res, keys2, keybits, (i==0) ? 0 : numbers[nthreads-1].v[i-1],
+          numbers[nthreads-1].v[i], newnumbers, idxbak, keybak);
     });
-
-  return res;
   }
 
 }

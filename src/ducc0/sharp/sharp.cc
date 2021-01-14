@@ -212,8 +212,9 @@ void sharp_job::init_output()
 
 DUCC0_NOINLINE mav<dcmplx,3> sharp_job::alloc_phase (size_t nm, size_t ntheta) const
   {
-  return (type==SHARP_MAP2ALM) ? phase.build_noncritical({ntheta,nm,2*nmaps()})
-                               : phase.build_noncritical({nm,ntheta,2*nmaps()});
+  return (type==SHARP_MAP2ALM) ?
+    phase.build_noncritical({ntheta,nm,2*nmaps()}) :
+    phase.build_noncritical({nm,ntheta,2*nmaps()});
   }
 
 void sharp_job::set_phase(mav<std::complex<double>,3> &phase_)
