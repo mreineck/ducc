@@ -31,6 +31,7 @@
 #include <memory>
 
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/math/constants.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/misc_utils.h"
@@ -167,10 +168,8 @@ template<typename T> void hartley2complex
     {
     for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
-        {
-        T v1 = T(0.5)*grid(u,v), v2 = T(0.5)*grid(xu,xv);
-        grid2.v(u,v) = complex<T>(v1+v2, v1-v2);
-        }
+        grid2.v(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
+                                  T(.5)*(grid(u,v)-grid(xu,xv)));
     });
   }
 
@@ -599,8 +598,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
       if (do_wgridding)
         {
-        double maxnm1 = max(abs(nm1max+nshift), abs(nm1min+nshift));
-        dw = 0.5/ofactor/maxnm1;
+        dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
         nplanes = size_t((wmax_d-wmin_d)/dw+supp);
         MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
         wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
@@ -1343,8 +1341,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         if (do_wgridding)
           {
-          double maxnm1 = max(abs(nm1max+nshift), abs(nm1min+nshift));
-          double dw = 0.5/ofactor/maxnm1;
+          double dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
           size_t nplanes = size_t((wmax_d-wmin_d)/dw+supp);
           fftcost *= nplanes;
           gridcost *= supp;
