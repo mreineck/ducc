@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
+/* Copyright (C) 2019-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <pybind11/pybind11.h>
@@ -102,7 +102,10 @@ npix_x, npix_y: int
     the passed array; in this case npix_x and npix_y must be either consistent
     with these dimensions, or be zero.
 pixsize_x, pixsize_y: float
-    angular pixel size (in radians) of the dirty image
+    angular pixel size (in projected radians) of the dirty image
+center_x, center_y: float
+    center of the dirty image relative to the phase center
+    (in projected radians)
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `vis` has type numpy.complex64, it must be larger than 1e-5.
@@ -195,7 +198,10 @@ wgt: numpy.ndarray((nrows, nchan), same dtype as `dirty`), optional
 mask: numpy.ndarray((nrows, nchan), dtype=numpy.uint8), optional
     If present, only visibilities are processed for which mask!=0
 pixsize_x, pixsize_y: float
-    angular pixel size (in radians) of the dirty image
+    angular pixel size (in projected radians) of the dirty image
+center_x, center_y: float
+    center of the dirty image relative to the phase center
+    (in projected radians)
 epsilon: float
     accuracy at which the computation should be done. Must be larger than 2e-13.
     If `dirty` has type numpy.float32, it must be larger than 1e-5.
@@ -256,7 +262,7 @@ wgt: numpy.ndarray((nrows, nchan), float with same precision as `ms`), optional
 npix_x, npix_y: int
     dimensions of the dirty image (must both be even and at least 32)
 pixsize_x, pixsize_y: float
-    angular pixel size (in radians) of the dirty image
+    angular pixel size (in projected radians) of the dirty image
 nu, nv: int
     obsolete, ignored
 epsilon: float
@@ -309,9 +315,7 @@ dirty: numpy.ndarray((npix_x, npix_y), dtype=numpy.float32 or numpy.float64)
 wgt: numpy.ndarray((nrows, nchan), same dtype as `dirty`), optional
     If present, its values are multiplied to the output
 pixsize_x, pixsize_y: float
-    angular pixel size (in radians) of the dirty image
-center_x, center_y: float
-    center of the dirty image
+    angular pixel size (in projected radians) of the dirty image
 nu, nv: int
     obsolete, ignored
 epsilon: float
