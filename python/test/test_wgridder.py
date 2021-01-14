@@ -92,6 +92,37 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
     return res0
 
 
+def vis2dirty_with_faceting(nfacets_x, nfacets_y, **kwargs):
+    npix_x, npix_y = kwargs["npix_x"], kwargs["npix_y"]
+    pixsize_x, pixsize_y = kwargs["pixsize_x"], kwargs["pixsize_y"]
+    if npix_x % nfacets_x != 0:
+        raise ValueError("nfacets_x needs to be divisor of npix_x.")
+    if npix_y % nfacets_y != 0:
+        raise ValueError("nfacets_y needs to be divisor of npix_y.")
+
+    fov_x = pixsize_x*npix_x
+    smallfov_x = fov_x/nfacets_x
+    center_x = np.arange(0, fov_x, smallfov_x) - (fov_x-smallfov_x)/2
+    nxmini = npix_x // nfacets_x
+
+    fov_y = pixsize_y*npix_y
+    smallfov_y = fov_y/nfacets_y
+    center_y = np.arange(0, fov_y, smallfov_y) - (fov_y-smallfov_y)/2
+    nymini = npix_y // nfacets_y
+
+    kwargs["npix_x"] = nxmini
+    kwargs["npix_y"] = nymini
+
+    dtype = np.float32 if kwargs["vis"].dtype == np.complex64 else np.float64
+    res = np.zeros((npix_x, npix_y), dtype)
+    for xx in range(nfacets_x):
+        for yy in range(nfacets_y):
+            im = ng.experimental.vis2dirty(**kwargs, center_x=center_x[xx],
+                                           center_y=center_y[yy])
+            res[xx*nxmini:(xx+1)*nxmini, yy*nymini:(yy+1)*nymini] = im
+    return res
+
+
 @pmp("nxdirty", (30, 128))
 @pmp("nydirty", (128, 250))
 @pmp("nrow", (1, 2, 27))
@@ -135,8 +166,8 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
     assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
 
 
-@pmp('nxdirty', [16, 64])
-@pmp('nydirty', [64])
+@pmp('nx', [(16, 1), (64, 4)])
+@pmp('ny', [(64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
@@ -146,9 +177,10 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2, 7))
 @pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
-def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
+def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
                                 nthreads):
+    (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -173,6 +205,14 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask)
     assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+
+    dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+                                     vis=ms, wgt=wgt, npix_x=nxdirty,
+                                     npix_y=nydirty, pixsize_x=pixsizex,
+                                     pixsize_y=pixsizey, epsilon=epsilon,
+                                     do_wgridding=wstacking, nthreads=nthreads,
+                                     mask=mask).astype("f8")
+    assert_allclose(_l2error(dirty2, ref), 0, atol=epsilon)
 
     if wstacking or (not have_finufft):
         return
