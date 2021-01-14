@@ -1319,7 +1319,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           nm1max = max(nm1max, nval);
           }
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
-      shifting = lmshift | (nshift!=0);
+      shifting = lmshift || (nshift!=0);
 
       auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
