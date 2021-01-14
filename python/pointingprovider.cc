@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020 Max-Planck-Society
+ *  Copyright (C) 2020-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -66,14 +66,65 @@ template<typename T> class PointingProvider
     void get_rotated_quaternions(double t0, double freq, const mav<T,1> &rot,
       mav<T,2> &out, bool rot_left)
       {
+      using Tsimd = native_simd<T>;
+      constexpr size_t vlen = Tsimd::size();
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
       auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
+      auto rots_ = quaternion_t<Tsimd>(rot_.x, rot_.y, rot_.z, rot_.w);
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
       double ofs = (t0-t0_)*freq_;
       double fratio = freq_/freq;
       execParallel(out.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
-        for (size_t i=lo; i<hi; ++i)
+        size_t i=lo;
+        quaternion_t<Tsimd> q1s(0,0,0,0), q2s(0,0,0,0);
+#if defined (_MSC_VER) // no comment
+        vector<size_t> idx(vlen);
+#else
+        array<size_t,vlen> idx;
+#endif
+        for (; i+vlen-1<hi; i+=vlen)
+          {
+          Tsimd fi, frac, omega, xsin, w1, w2;
+          for (size_t ii = 0; ii<vlen; ++ii)
+            {
+            fi[ii] = ofs + (i+ii)*fratio;
+            MR_assert((fi[ii]>=0) && fi[ii]<=(quat_.size()-1+1e-7), "time outside available range");
+            idx[ii] = size_t(fi[ii]);
+            idx[ii] = min(idx[ii], quat_.size()-2);
+            frac[ii] = fi[ii]-idx[ii];
+            omega[ii] = rangle[idx[ii]];
+            xsin[ii] = rxsin[idx[ii]];
+            }
+          auto mysin = [](double arg) { return sin(arg); };
+          w1 = ((1.-frac)*omega).apply(mysin)*xsin;
+          w2 = (frac*omega).apply(mysin)*xsin;
+          for (size_t ii=0; ii<vlen; ++ii)
+            {
+            if (rotflip[idx[ii]]) w1[ii]=-w1[ii];
+            q1s.x[ii] = quat_[idx[ii]].x;
+            q1s.y[ii] = quat_[idx[ii]].y;
+            q1s.z[ii] = quat_[idx[ii]].z;
+            q1s.w[ii] = quat_[idx[ii]].w;
+            q2s.x[ii] = quat_[idx[ii]+1].x;
+            q2s.y[ii] = quat_[idx[ii]+1].y;
+            q2s.z[ii] = quat_[idx[ii]+1].z;
+            q2s.w[ii] = quat_[idx[ii]+1].w;
+            }
+          quaternion_t<Tsimd> q(w1*q1s.x + w2*q2s.x,
+                                w1*q1s.y + w2*q2s.y,
+                                w1*q1s.z + w2*q2s.z,
+                                w1*q1s.w + w2*q2s.w);
+          q = rot_left ? rots_*q : q*rots_;
+          for (size_t ii=0; ii<vlen; ++ii)
+            {
+            out.v(i+ii,0) = q.x[ii];
+            out.v(i+ii,1) = q.y[ii];
+            out.v(i+ii,2) = q.z[ii];
+            out.v(i+ii,3) = q.w[ii];
+            }
+          }
+        for (; i<hi; ++i)
           {
           double fi = ofs + i*fratio;
           MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
