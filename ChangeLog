@@ -1,3 +1,34 @@
+0.8.0:
+- general:
+  - compiles and runs on MacOS 11
+  - choice of various optimization and debugging levels by setting
+    the DUCC0_OPTIMIZATION variable before compilation.
+    Valid choices are
+    "none":
+      no optimization or debugging, fast compilation
+    "portable":
+      Optimizations which are portable to all CPUs of a given family
+    "portable-debug":
+      same as above, with debugging information
+    "native":
+      Optimizations which are specific to the host CPU, non-portable library
+    "native-debug":
+      same as above, with debugging information
+    Default is "native".
+
+- wgridder:
+  - more careful treatment of u,v,w-coordinates and phase angles, leading to
+    better achievable accuracies for single-precision runs
+  - performance improvements by making the computed interval in "n-1" symmetric
+    around 0. This reduces the number of required w planed significantly.
+    Speedups are bigger for large FOVs and when FFT is dominating.
+  - allow working with dirty images that are shifted with respect to the phase
+    center. This allows faceting.
+
+- pointingprovider:
+  - improved performance via vectorized trigonometric functions
+
+
 0.7.0:
 - general:
   - compilation with MSVC on Windows is now possible
