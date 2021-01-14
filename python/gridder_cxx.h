@@ -944,7 +944,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             {
 //bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (const auto rcr: ranges[ix].second)
+            for (const auto &rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
@@ -1052,7 +1052,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             {
             bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (const auto rcr: ranges[ix].second)
+            for (const auto &rcr: ranges[ix].second)
               {
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
