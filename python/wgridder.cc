@@ -55,7 +55,7 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
-  ms2dirty(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+  ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
     do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
     sigma_max, center_x, center_y, allow_nshift);
   }
@@ -153,7 +153,7 @@ template<typename T> py::array dirty2vis2(const py::array &uvw_,
   auto vis2 = to_mav<complex<T>,2>(vis, true);
   {
   py::gil_scoped_release release;
-  dirty2ms(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+  dirty2ms<T,double>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
     do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
     sigma_max, center_x, center_y, allow_nshift);
   }

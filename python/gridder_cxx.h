@@ -83,7 +83,7 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   {
   using Tsimd = native_simd<T>;
   static constexpr auto vlen = Tsimd::size();
-  size_t n=res.size();
+  auto n=res.size();
   for (size_t j=0; j<n; ++j)
     buf[j] = getang(j);
   size_t i=0;
@@ -150,16 +150,10 @@ template<typename T> void complex2hartley
 
   execParallel(nu, nthreads, [&](size_t lo, size_t hi)
     {
-    for(auto u=lo; u<hi; ++u)
-      {
-      size_t xu = (u==0) ? 0 : nu-u;
-      for (size_t v=0; v<nv; ++v)
-        {
-        size_t xv = (v==0) ? 0 : nv-v;
+    for(auto u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
+      for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
         grid2.v(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
                                grid(xu,xv).real()-grid(xu,xv).imag());
-        }
-      }
     });
   }
 
@@ -171,17 +165,12 @@ template<typename T> void hartley2complex
 
   execParallel(nu, nthreads, [&](size_t lo, size_t hi)
     {
-    for(auto u=lo; u<hi; ++u)
-      {
-      size_t xu = (u==0) ? 0 : nu-u;
-      for (size_t v=0; v<nv; ++v)
+    for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
+      for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
         {
-        size_t xv = (v==0) ? 0 : nv-v;
-        T v1 = T(0.5)*grid( u, v);
-        T v2 = T(0.5)*grid(xu,xv);
+        T v1 = T(0.5)*grid(u,v), v2 = T(0.5)*grid(xu,xv);
         grid2.v(u,v) = complex<T>(v1+v2, v1-v2);
         }
-      }
     });
   }
 
@@ -363,6 +352,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t vlim;
     bool uv_side_fast;
 
+    static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
+    static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
+    static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
+
     static double phase(double x, double y, double w, bool adjoint, double nshift)
       {
       double tmp = 1.-x-y;
@@ -372,6 +365,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
         return twopi*phs;
+      // we are reducing accuracy, so let's better do range reduction first
       return twopi*(phs-floor(phs));
       }
 
@@ -415,11 +409,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           expi(phases, buf, [&](size_t i)
             { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
           if (lmshift)
-            {
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               dirty.v(i,j) += Timg(tmav(ix,jx).real()*phases[j].real()
                                  - tmav(ix,jx).imag()*phases[j].imag());
-            }
           else
             {
             size_t i2 = nxdirty-i;
@@ -430,7 +422,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
                 {
                 size_t j2 = min(j, nydirty-j);
                 Tcalc re = phases[j2].real(), im = phases[j2].imag();
-                dirty.v(i,j) += Timg(tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im);
+                dirty.v(i ,j) += Timg(tmav(ix ,jx).real()*re - tmav(ix ,jx).imag()*im);
                 dirty.v(i2,j) += Timg(tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im);
                 }
             else
@@ -534,10 +526,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           expi(phases, buf, [&](size_t i)
             { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
           if (lmshift)
-            {
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               grid.v(ix,jx) = Tcalc(dirty(i,j))*phases[j];
-            }
           else
             {
             size_t i2 = nxdirty-i;
@@ -547,7 +537,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
               for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
                 {
                 size_t j2 = min(j, nydirty-j);
-                grid.v(ix,jx) = Tcalc(dirty(i,j))*phases[j2]; // lower left
+                grid.v(ix ,jx) = Tcalc(dirty(i ,j))*phases[j2]; // lower left
                 grid.v(ix2,jx) = Tcalc(dirty(i2,j))*phases[j2]; // lower right
                 }
             else
@@ -616,11 +606,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
         }
       else
-        {
-        dw = 0;
-        nplanes = 0;
-        wmin = 0;
-        }
+        dw = wmin = nplanes = 0;
       size_t nbunch = do_wgridding ? supp : 1;
       // we want a maximum deviation of 1% in gridding time between threads
       constexpr double max_asymm = 0.01;
@@ -633,10 +619,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         void add(const RowchanRange &rng, size_t max_allowed)
           {
           if (v.empty() || (sz>=max_allowed))
-            {
-            v.emplace_back();
-            sz=0;
-            }
+            { v.emplace_back(); sz=0; }
           v.back().push_back(rng);
           sz += rng.ch_end-rng.ch_begin;
           }
@@ -745,7 +728,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         static constexpr double xsupp=2./supp;
         const Params *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
-        mav<complex<Tacc>,2> &grid;
+        mav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
 
@@ -907,7 +890,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
           if constexpr(wgrid)
-            tkrn.eval2s(Tcalc(x0), Tcalc(y0), Tacc(xdw*(w0-in.w)), nth, &buf.simd[0]);
+            tkrn.eval2s(Tcalc(x0), Tcalc(y0), Tcalc(xdw*(w0-in.w)), nth, &buf.simd[0]);
           else
             tkrn.eval2(Tcalc(x0), Tcalc(y0), &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
@@ -933,6 +916,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
                       auto tmp = fct*bl.ffact(rcr.ch_begin+i);
                       if constexpr (is_same<double, Tcalc>::value)
                         return Tcalc(twopi*tmp);
+                      // we are reducing accuracy,
+                      // so let's better do range reduction first
                       return Tcalc(twopi*(tmp-floor(tmp)));
                       });
       }
@@ -944,10 +929,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tacc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
+        constexpr auto vlen=mysimd<Tacc>::size();
+        constexpr auto NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
-        constexpr int jump = hlp.lineJump();
+        constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
         vector<complex<Tcalc>> phases;
@@ -967,7 +952,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               auto bcoord = bl.baseCoord(row);
               auto imflip = Tcalc(bcoord.FixW());
               if (shifting)
-                compute_phases(phases, buf, Tcalc(imflip), bcoord, rcr);
+                compute_phases(phases, buf, imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
@@ -1499,15 +1484,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       }
   };
 
-template<typename A, typename B, bool val> struct Tselect;
-template<typename A, typename B> struct Tselect<A,B,true>
-  { using type = A; };
-template<typename A, typename B> struct Tselect<A,B,false>
-  { using type = B; };
-template<typename A, typename B> struct maxtype
-  { using type = typename Tselect<A,B,(sizeof(A)>=sizeof(B))>::type; };
-
-template<typename Tms, typename Timg> void ms2dirty(const mav<double,2> &uvw,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<complex<Tms>,2> &ms,
   const mav<Tms,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, mav<Timg,2> &dirty, size_t verbosity,
@@ -1518,13 +1495,12 @@ template<typename Tms, typename Timg> void ms2dirty(const mav<double,2> &uvw,
   auto dirty_in(dirty.build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  using Tcalc = typename maxtype<Tms, Timg>::type;
-  Params<Tcalc, Tcalc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
+  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tms, typename Timg> void dirty2ms(const mav<double,2> &uvw,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const mav<double,2> &uvw,
   const mav<double,1> &freq, const mav<Timg,2> &dirty,
   const mav<Tms,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, mav<complex<Tms>,2> &ms,
@@ -1535,8 +1511,7 @@ template<typename Tms, typename Timg> void dirty2ms(const mav<double,2> &uvw,
   auto dirty_out(dirty.build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  using Tcalc = typename maxtype<Tms, Timg>::type;
-  Params<Tcalc, Tcalc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
