@@ -113,8 +113,30 @@ def vis2dirty_with_faceting(nfacets_x, nfacets_y, npix_x, npix_y, **kwargs):
     return res
 
 
-@pmp("nxdirty", (30, 128))
-@pmp("nydirty", (128, 250))
+def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
+    npix_x, npix_y = dirty.shape
+    if npix_x % nfacets_x != 0:
+        raise ValueError("nfacets_x needs to be divisor of npix_x.")
+    if npix_y % nfacets_y != 0:
+        raise ValueError("nfacets_y needs to be divisor of npix_y.")
+    nx = npix_x // nfacets_x
+    ny = npix_y // nfacets_y
+    vis = None
+    for xx, yy in product(range(nfacets_x), range(nfacets_y)):
+        cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
+        cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
+        facet = dirty[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)]
+        foo = ng.experimental.dirty2vis(**kwargs, dirty=facet,
+                                        center_x=cx, center_y=cy)
+        if vis is None:
+            vis = foo
+        else:
+            vis += foo
+    return vis
+
+
+@pmp('nx', [(30, 3), (128, 2)])
+@pmp('ny', [(128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
@@ -123,9 +145,10 @@ def vis2dirty_with_faceting(nfacets_x, nfacets_y, npix_x, npix_y, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
+def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask):
+    (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -145,18 +168,36 @@ def test_adjointness_ms2dirty(nxdirty, nydirty, nrow, nchan, epsilon,
         dirty = dirty.astype("f4")
         if wgt is not None:
             wgt = wgt.astype("f4")
+
+    def check(d2, m2):
+        ref = max(my_vdot(ms, ms).real, my_vdot(m2, m2).real,
+                  my_vdot(dirty, dirty).real, my_vdot(d2, d2).real)
+        tol = 3e-5*ref if singleprec else 2e-13*ref
+        assert_allclose(my_vdot(ms, m2).real, my_vdot(d2, dirty), rtol=tol)
+
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
                          mask).astype("f8")
     ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
                       epsilon, wstacking, nthreads+1, 0, mask).astype("c16")
-    ref = max(my_vdot(ms, ms).real, my_vdot(ms2, ms2).real,
-              my_vdot(dirty, dirty).real, my_vdot(dirty2, dirty2).real)
-    tol = 3e-5*ref if singleprec else 2e-13*ref
-    assert_allclose(my_vdot(ms, ms2).real, my_vdot(dirty2, dirty), rtol=tol)
+    check(dirty2, ms2)
 
 
-@pmp('nx', [(16, 1), (64, 4)])
+    dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+                                     vis=ms, wgt=wgt, npix_x=nxdirty,
+                                     npix_y=nydirty, pixsize_x=pixsizex,
+                                     pixsize_y=pixsizey, epsilon=epsilon,
+                                     do_wgridding=wstacking, nthreads=nthreads,
+                                     mask=mask).astype("f8")
+    ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+                                  dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
+                                  pixsize_y=pixsizey, epsilon=epsilon,
+                                  do_wgridding=wstacking, nthreads=nthreads+1,
+                                  mask=mask).astype("c16")
+    check(dirty2, ms2)
+
+
+@pmp('nx', [(16, 2), (64, 4)])
 @pmp('ny', [(64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
