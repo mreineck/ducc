@@ -39,7 +39,8 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
   bool flip_v, bool divide_by_n, py::object &dirty_, double sigma_min,
-  double sigma_max, double center_x, double center_y, bool allow_nshift)
+  double sigma_max, double center_x, double center_y, bool allow_nshift,
+  bool double_precision_accumulation)
   {
   auto uvw = to_mav<double,2>(uvw_, false);
   auto freq = to_mav<double,1>(freq_, false);
@@ -55,9 +56,13 @@ template<typename T> py::array vis2dirty2(const py::array &uvw_,
   auto dirty2 = to_mav<T,2>(dirty, true);
   {
   py::gil_scoped_release release;
-  ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-    do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
-    sigma_max, center_x, center_y, allow_nshift);
+  double_precision_accumulation ?
+    ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift) :
+    ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift);
   }
   return move(dirty);
   }
@@ -67,16 +72,19 @@ py::array Pyvis2dirty(const py::array &uvw,
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n,
   py::object &dirty=None, double sigma_min=1.1, double sigma_max=2.6,
-  double center_x=0., double center_y=0., bool allow_nshift=true)
+  double center_x=0., double center_y=0., bool allow_nshift=true,
+  bool double_precision_accumulation=false)
   {
   if (isPyarr<complex<float>>(vis))
     return vis2dirty2<float>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+      flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y,
+      allow_nshift, double_precision_accumulation);
   if (isPyarr<complex<double>>(vis))
     return vis2dirty2<double>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+      flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y,
+      allow_nshift, double_precision_accumulation);
   MR_fail("type matching failed: 'vis' has neither type 'c8' nor 'c16'");
   }
 constexpr auto vis2dirty_DS = R"""(
@@ -127,6 +135,9 @@ dirty: numpy.ndarray((npix_x, npix_y), dtype=float of same precision as `vis`),
     optional
     If provided, the dirty image will be written to this array and a handle
     to it will be returned.
+double_precision_accumulation: bool
+    If True, always use double precision for accumulating operations onto the
+    uv grid. This is necessary to reduce numerical errors in special cases.
 
 Returns
 -------
@@ -239,9 +250,12 @@ py::array Pyms2dirty(const py::array &uvw,
   const py::array &freq, const py::array &ms, const py::object &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t /*nu*/,
   size_t /*nv*/, double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, const py::object &mask)
+  size_t verbosity, const py::object &mask,
+  bool double_precision_accumulation=false)
   {
-  return Pyvis2dirty(uvw, freq, ms, wgt, npix_x, npix_y, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, true);
+  return Pyvis2dirty(uvw, freq, ms, wgt, npix_x, npix_y, pixsize_x, pixsize_y,
+    epsilon, do_wgridding, nthreads, verbosity, mask, false, true, None, 1.1,
+    2.6, 0., 0., true, double_precision_accumulation);
   }
 
 constexpr auto ms2dirty_DS = R"""(
@@ -278,6 +292,9 @@ verbosity: int
     1: some output
 mask: numpy.ndarray((nrows, nchan), dtype=numpy.uint8), optional
     If present, only visibilities are processed for which mask!=0
+double_precision_accumulation: bool
+    If True, always use double precision for accumulating operations onto the
+    uv grid. This is necessary to reduce numerical errors in special cases.
 
 Returns
 -------
@@ -353,7 +370,8 @@ void add_wgridder(py::module_ &msup)
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
     "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
-    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true);
+    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0.,
+    "allow_nshift"_a=true, "double_precision_accumulation"_a=false);
   m2.def("dirty2vis", &Pydirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
@@ -362,7 +380,8 @@ void add_wgridder(py::module_ &msup)
 
   m.def("ms2dirty", &Pyms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,
-    "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
+    "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
+    "double_precision_accumulation"_a=false);
   m.def("dirty2ms", &Pydirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0, "epsilon"_a,
     "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
