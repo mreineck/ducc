@@ -23,7 +23,11 @@
     around 0. This reduces the number of required w planed significantly.
     Speedups are bigger for large FOVs and when FFT is dominating.
   - allow working with dirty images that are shifted with respect to the phase
-    center. This allows faceting.
+    center. This can be used for faceting and incorporating DDEs.
+  - new optional flag "double_precision_accumulation" for gridding routines,
+    which causes accumulation onto the uv grid to be done in double precision,
+    regardless of input and output precision. This can be helpful to avoid
+    accumulation errors in speciel circumstances.
 
 - pointingprovider:
   - improved performance via vectorized trigonometric functions
