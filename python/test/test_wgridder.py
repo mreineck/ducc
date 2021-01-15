@@ -13,6 +13,8 @@
 #
 # Copyright(C) 2020 Max-Planck-Society
 
+from itertools import product
+
 import ducc0.wgridder as ng
 try:
     import finufft
@@ -92,34 +94,22 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
     return res0
 
 
-def vis2dirty_with_faceting(nfacets_x, nfacets_y, **kwargs):
-    npix_x, npix_y = kwargs["npix_x"], kwargs["npix_y"]
-    pixsize_x, pixsize_y = kwargs["pixsize_x"], kwargs["pixsize_y"]
+def vis2dirty_with_faceting(nfacets_x, nfacets_y, npix_x, npix_y, **kwargs):
     if npix_x % nfacets_x != 0:
         raise ValueError("nfacets_x needs to be divisor of npix_x.")
     if npix_y % nfacets_y != 0:
         raise ValueError("nfacets_y needs to be divisor of npix_y.")
-
-    fov_x = pixsize_x*npix_x
-    smallfov_x = fov_x/nfacets_x
-    center_x = np.arange(0, fov_x, smallfov_x) - (fov_x-smallfov_x)/2
-    nxmini = npix_x // nfacets_x
-
-    fov_y = pixsize_y*npix_y
-    smallfov_y = fov_y/nfacets_y
-    center_y = np.arange(0, fov_y, smallfov_y) - (fov_y-smallfov_y)/2
-    nymini = npix_y // nfacets_y
-
-    kwargs["npix_x"] = nxmini
-    kwargs["npix_y"] = nymini
-
+    nx = npix_x // nfacets_x
+    ny = npix_y // nfacets_y
     dtype = np.float32 if kwargs["vis"].dtype == np.complex64 else np.float64
     res = np.zeros((npix_x, npix_y), dtype)
-    for xx in range(nfacets_x):
-        for yy in range(nfacets_y):
-            im = ng.experimental.vis2dirty(**kwargs, center_x=center_x[xx],
-                                           center_y=center_y[yy])
-            res[xx*nxmini:(xx+1)*nxmini, yy*nymini:(yy+1)*nymini] = im
+    for xx, yy in product(range(nfacets_x), range(nfacets_y)):
+        cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
+        cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
+        im = ng.experimental.vis2dirty(**kwargs,
+                                       center_x=cx, center_y=cy,
+                                       npix_x=nx, npix_y=ny)
+        res[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)] = im
     return res
 
 
