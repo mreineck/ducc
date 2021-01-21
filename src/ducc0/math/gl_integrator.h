@@ -38,7 +38,7 @@ template<typename T> inline T one_minus_x2 (T x)
 
 pair<double, double> calc_gl_iterative(size_t n, size_t i)
   {
-  using Tfloat = double;
+  using Tfloat = long double;
   constexpr Tfloat eps=Tfloat(3e-14L);
   const Tfloat dn = Tfloat(n);
   const Tfloat t0 = Tfloat(1) - (1-Tfloat(1)/dn) / (Tfloat(8)*dn*dn);
@@ -234,7 +234,7 @@ class GL_Integrator
     vector<double> x, w;
 
   public:
-    GL_Integrator(size_t n, size_t nthreads=1)
+    GL_Integrator(size_t n, size_t /*nthreads*/=1)
       : n_(n)
       {
       MR_assert(n>=1, "number of points must be at least 1");

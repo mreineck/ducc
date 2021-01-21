@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020 Max-Planck-Society
+/* Copyright (C) 2020-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_GRIDDING_KERNEL_H
@@ -143,7 +143,7 @@ class GLFullCorrection: public KernelCorrection
       {
       supp = W;
       size_t p = size_t(1.5*W)+2;
-      GL_Integrator integ(2*p,1);
+      GL_Integrator integ(2*p);
       x = integ.coordsSymmetric();
       wgtpsi = integ.weightsSymmetric();
       for (size_t i=0; i<x.size(); ++i)
