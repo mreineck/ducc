@@ -822,10 +822,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
         while (it.remaining()>0)
           {
           it.advance(1);
-//          auto buf = allow_inplace && it.stride_out() == 1 ?
-//            &out.vraw(it.oofs(0)) : reinterpret_cast<T *>(storage.data());
-          auto tdatav = storage.data();
-          exec(it, tin, out, tdatav, *plan, fct);
+          exec(it, tin, out, storage.data(), *plan, fct);
           }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
@@ -975,7 +972,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
     util::thread_count(nthreads, in, axis, native_simd<T>::size()),
     [&](Scheduler &sched) {
     constexpr auto vlen = native_simd<T>::size();
-    auto storage = alloc_tmp<T,T>(in, len);
+    auto storage = alloc_tmp<T,T>(in, len, plan->bufsize());
     multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
     if constexpr (vlen>1)
@@ -1078,7 +1075,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
     util::thread_count(nthreads, in, axis, native_simd<T>::size()),
     [&](Scheduler &sched) {
       constexpr auto vlen = native_simd<T>::size();
-      auto storage = alloc_tmp<T,T>(out, len);
+      auto storage = alloc_tmp<T,T>(out, len, plan->bufsize());
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
@@ -1205,18 +1202,19 @@ struct ExecR2R
   bool r2c, forward;
 
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
-    const Titer &it, const fmav<T0> &in, fmav<T0> &out, T * buf,
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out, T *buf,
     const pocketfft_r<T0> &plan, T0 fct) const
     {
-    copy_input(it, in, buf);
+    T *buf1=buf, *buf2=buf+plan.bufsize();
+    copy_input(it, in, buf2);
     if ((!r2c) && forward)
       for (size_t i=2; i<it.length_out(); i+=2)
-        buf[i] = -buf[i];
-    plan.exec(buf, fct, r2c);
+        buf2[i] = -buf2[i];
+    auto res = plan.exec(buf2, buf1, fct, r2c);
     if (r2c && (!forward))
       for (size_t i=2; i<it.length_out(); i+=2)
-        buf[i] = -buf[i];
-    copy_output(it, buf, out);
+        res[i] = -res[i];
+    copy_output(it, res, out);
     }
   };
 
