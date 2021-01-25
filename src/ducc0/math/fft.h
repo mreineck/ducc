@@ -274,7 +274,7 @@ template<typename T0> class T_dcst23
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine) const
       {
-      aligned_array<T> buf(bufsize);
+      aligned_array<T> buf(bufsize());
       exec(c, &buf[0], fct, ortho, type, cosine);
       }
 
