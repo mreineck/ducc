@@ -1807,7 +1807,7 @@ template<typename T0> class fftblue
       return c;
       }
 
-    template<typename T> void exec_r(T c[], T buf[], T0 fct, bool fwd)
+    template<typename T> T *exec_r(T c[], T buf[], T0 fct, bool fwd)
       {
       auto tmp = reinterpret_cast<Cmplx<T> *>(&buf[2*n2]);
       auto buf2 = reinterpret_cast<Cmplx<T> *>(&buf[0]);
@@ -1833,6 +1833,7 @@ template<typename T0> class fftblue
         for (size_t m=0; m<n; ++m)
           c[m] = tmp[m].r;
         }
+      return c;
       }
     template<typename T> void exec_r(T c[], T0 fct, bool fwd)
       {
@@ -1874,8 +1875,8 @@ template<typename T0> class pocketfft_c
 
     template<typename T> DUCC0_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec(c,fct,fwd); }
-    template<typename T> DUCC0_NOINLINE Cmplx<T> *exec(Cmplx<T> c[], Cmplx<T> buf[], bool fwd) const
-      { return packplan ? packplan->exec(c,buf,fwd) : blueplan->exec(c,buf,fwd); }
+    template<typename T> DUCC0_NOINLINE Cmplx<T> *exec(Cmplx<T> c[], Cmplx<T> buf[], T0 fct, bool fwd) const
+      { return packplan ? packplan->exec(c,buf,fct,fwd) : blueplan->exec(c,buf,fct,fwd); }
 
     size_t length() const { return len; }
     size_t bufsize() const
@@ -1915,8 +1916,8 @@ template<typename T0> class pocketfft_r
 
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec_r(c,fct,fwd); }
-    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], bool fwd) const
-      { return packplan ? packplan->exec(c,buf,fwd) : blueplan->exec_r(c,buf,fwd); }
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool fwd) const
+      { return packplan ? packplan->exec(c,buf,fct,fwd) : blueplan->exec_r(c,buf,fct,fwd); }
 
     size_t length() const { return len; }
     size_t bufsize() const

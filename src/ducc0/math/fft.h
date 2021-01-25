@@ -1,7 +1,7 @@
 /*
 This file is part of pocketfft.
 
-Copyright (C) 2010-2020 Max-Planck-Society
+Copyright (C) 2010-2021 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
@@ -138,26 +138,34 @@ template<typename T0> class T_dct1
     DUCC0_NOINLINE T_dct1(size_t length)
       : fftplan(2*(length-1)) {}
 
-    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
       size_t N=fftplan.length(), n=N/2+1;
       if (ortho)
         { c[0]*=sqrt2; c[n-1]*=sqrt2; }
-      aligned_array<T> tmp(N);
+      auto tmp=&buf[0];
       tmp[0] = c[0];
       for (size_t i=1; i<n; ++i)
         tmp[i] = tmp[N-i] = c[i];
-      fftplan.exec(tmp.data(), fct, true);
-      c[0] = tmp[0];
+      auto res = fftplan.exec(tmp, &buf[N], fct, true);
+      c[0] = res[0];
       for (size_t i=1; i<n; ++i)
-        c[i] = tmp[2*i-1];
+        c[i] = res[2*i-1];
       if (ortho)
         { c[0]*=sqrt2*T0(0.5); c[n-1]*=sqrt2*T0(0.5); }
+      return c;
+      }
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
+      int /*type*/, bool /*cosine*/) const
+      {
+      aligned_array<T> buf(bufsize());
+      exec(c, buf.data(), fct, ortho, 1, true);
       }
 
     size_t length() const { return fftplan.length()/2+1; }
+    size_t bufsize() const { return fftplan.length()+fftplan.bufsize(); }
   };
 
 template<typename T0> class T_dst1
@@ -169,20 +177,28 @@ template<typename T0> class T_dst1
     DUCC0_NOINLINE T_dst1(size_t length)
       : fftplan(2*(length+1)) {}
 
-    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/) const
       {
       size_t N=fftplan.length(), n=N/2-1;
-      aligned_array<T> tmp(N);
+      auto tmp = &buf[0];
       tmp[0] = tmp[n+1] = c[0]*0;
       for (size_t i=0; i<n; ++i)
         { tmp[i+1]=c[i]; tmp[N-1-i]=-c[i]; }
-      fftplan.exec(tmp.data(), fct, true);
+      auto res = fftplan.exec(tmp, buf+N, fct, true);
       for (size_t i=0; i<n; ++i)
-        c[i] = -tmp[2*i+2];
+        c[i] = -res[2*i+2];
+      return c;
+      }
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
+      bool /*ortho*/, int /*type*/, bool /*cosine*/) const
+      {
+      aligned_array<T> buf(bufsize());
+      exec(c, buf.data(), fct, true, 1, false);
       }
 
     size_t length() const { return fftplan.length()/2-1; }
+    size_t bufsize() const { return fftplan.length()+fftplan.bufsize(); }
   };
 
 template<typename T0> class T_dcst23
@@ -200,7 +216,7 @@ template<typename T0> class T_dcst23
         twiddle[i] = tw[i+1].r;
       }
 
-    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int type, bool cosine) const
       {
       constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
@@ -215,15 +231,16 @@ template<typename T0> class T_dcst23
         if ((N&1)==0) c[N-1]*=2;
         for (size_t k=1; k<N-1; k+=2)
           MPINPLACE(c[k+1], c[k]);
-        fftplan.exec(c, fct, false);
+        auto res = fftplan.exec(c, buf, fct, false);
+        c[0] = res[0];
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
           {
-          T t1 = twiddle[k-1]*c[kc]+twiddle[kc-1]*c[k];
-          T t2 = twiddle[k-1]*c[k]-twiddle[kc-1]*c[kc];
+          T t1 = twiddle[k-1]*res[kc]+twiddle[kc-1]*res[k];
+          T t2 = twiddle[k-1]*res[k]-twiddle[kc-1]*res[kc];
           c[k] = T0(0.5)*(t1+t2); c[kc]=T0(0.5)*(t1-t2);
           }
         if ((N&1)==0)
-          c[NS2] *= twiddle[NS2-1];
+          c[NS2] = res[NS2]*twiddle[NS2-1];
         if (!cosine)
           for (size_t k=0, kc=N-1; k<kc; ++k, --kc)
             std::swap(c[k], c[kc]);
@@ -243,16 +260,26 @@ template<typename T0> class T_dcst23
           }
         if ((N&1)==0)
           c[NS2] *= 2*twiddle[NS2-1];
-        fftplan.exec(c, fct, true);
+        auto res = fftplan.exec(c, buf, fct, true);
+        if (res != c) // FIXME: not yet optimal
+          memcpy(c, res, N*sizeof(T));
         for (size_t k=1; k<N-1; k+=2)
           MPINPLACE(c[k], c[k+1]);
         if (!cosine)
           for (size_t k=1; k<N; k+=2)
             c[k] = -c[k];
         }
+      return c;
+      }
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
+      int type, bool cosine) const
+      {
+      aligned_array<T> buf(bufsize);
+      exec(c, &buf[0], fct, ortho, type, cosine);
       }
 
     size_t length() const { return fftplan.length(); }
+    size_t bufsize() const { return fftplan.bufsize(); }
   };
 
 template<typename T0> class T_dcst4
@@ -278,7 +305,7 @@ template<typename T0> class T_dcst4
         }
       }
 
-    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T /*buf*/[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine) const
       {
       size_t n2 = N/2;
@@ -350,9 +377,17 @@ template<typename T0> class T_dcst4
       if (!cosine)
         for (size_t k=1; k<N; k+=2)
           c[k] = -c[k];
+      return c;
+      }
+
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T0 fct,
+      bool /*ortho*/, int /*type*/, bool cosine) const
+      {
+      exec(c, nullptr, fct, true, 4, cosine);
       }
 
     size_t length() const { return N; }
+    size_t bufsize() const { return 0; }
   };
 
 
@@ -556,7 +591,17 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   {
   auto othersize = info.size()/axsize;
   constexpr auto vlen = native_simd<T0>::size();
+  // FIXME: when switching to C++20, use bit_floor(othersize)
   return aligned_array<T>(axsize*std::min(vlen, othersize));
+  }
+
+template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
+  (const fmav_info &info, size_t axsize, size_t bufsize)
+  {
+  auto othersize = info.size()/axsize;
+  constexpr auto vlen = native_simd<T0>::size();
+  // FIXME: when switching to C++20, use bit_floor(othersize)
+  return aligned_array<T>((axsize+bufsize)*std::min(vlen, othersize));
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -733,8 +778,8 @@ template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::
 
 template<typename Tplan, typename T, typename T0, typename Exec>
 DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
-  const shape_t &axes, T0 fct, size_t nthreads, const Exec & exec,
-  const bool allow_inplace=true)
+  const shape_t &axes, T0 fct, size_t nthreads, const Exec &exec,
+  const bool /*allow_inplace*/=true)
   {
   std::unique_ptr<Tplan> plan;
 
@@ -748,7 +793,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
       util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
       [&](Scheduler &sched) {
         constexpr auto vlen = native_simd<T0>::size();
-        auto storage = alloc_tmp<T,T0>(in, len);
+        auto storage = alloc_tmp<T,T0>(in, len, plan->bufsize());
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
@@ -777,9 +822,10 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
         while (it.remaining()>0)
           {
           it.advance(1);
-          auto buf = allow_inplace && it.stride_out() == 1 ?
-            &out.vraw(it.oofs(0)) : reinterpret_cast<T *>(storage.data());
-          exec(it, tin, out, buf, *plan, fct);
+//          auto buf = allow_inplace && it.stride_out() == 1 ?
+//            &out.vraw(it.oofs(0)) : reinterpret_cast<T *>(storage.data());
+          auto tdatav = storage.data();
+          exec(it, tin, out, tdatav, *plan, fct);
           }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
@@ -794,9 +840,10 @@ struct ExecC2C
     const Titer &it, const fmav<Cmplx<T0>> &in,
     fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct) const
     {
-    copy_input(it, in, buf);
-    plan.exec(buf, fct, forward);
-    copy_output(it, buf, out);
+    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, forward);
+    copy_output(it, res, out);
     }
   };
 
@@ -892,11 +939,12 @@ struct ExecHartley
   {
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
     const Titer &it, const fmav<T0> &in, fmav<T0> &out,
-    T * buf, const pocketfft_r<T0> &plan, T0 fct) const
+    T *buf, const pocketfft_r<T0> &plan, T0 fct) const
     {
-    copy_input(it, in, buf);
-    plan.exec(buf, fct, true);
-    copy_hartley(it, buf, out);
+    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, true);
+    copy_hartley(it, res, out);
     }
   };
 
@@ -910,9 +958,10 @@ struct ExecDcst
   DUCC0_NOINLINE void operator () (const Titer &it, const fmav<T0> &in,
     fmav <T0> &out, T * buf, const Tplan &plan, T0 fct) const
     {
-    copy_input(it, in, buf);
-    plan.exec(buf, fct, ortho, type, cosine);
-    copy_output(it, buf, out);
+    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine);
+    copy_output(it, res, out);
     }
   };
 
