@@ -1,7 +1,7 @@
 /*
 This file is part of pocketfft.
 
-Copyright (C) 2010-2020 Max-Planck-Society
+Copyright (C) 2010-2021 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -672,11 +672,6 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
   auto CH2 = [ch, idl1](size_t a, size_t b) -> const T&
     { return ch[a+idl1*b]; };
 
-  aligned_array<Cmplx<T0>> wal(ip);
-  wal[0] = Cmplx<T0>(1., 0.);
-  for (size_t i=1; i<ip; ++i)
-    wal[i]=Cmplx<T0>(csarr[i].r,fwd ? -csarr[i].i : csarr[i].i);
-
   for (size_t k=0; k<l1; ++k)
     for (size_t i=0; i<ido; ++i)
       CH(i,k,0) = CC(i,0,k);
@@ -697,10 +692,12 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
     // j=0
     for (size_t ik=0; ik<idl1; ++ik)
       {
-      CX2(ik,l).r = CH2(ik,0).r+wal[l].r*CH2(ik,1).r+wal[2*l].r*CH2(ik,2).r;
-      CX2(ik,l).i = CH2(ik,0).i+wal[l].r*CH2(ik,1).i+wal[2*l].r*CH2(ik,2).i;
-      CX2(ik,lc).r=-wal[l].i*CH2(ik,ip-1).i-wal[2*l].i*CH2(ik,ip-2).i;
-      CX2(ik,lc).i=wal[l].i*CH2(ik,ip-1).r+wal[2*l].i*CH2(ik,ip-2).r;
+      auto wal  = fwd ? csarr[  l].conj() : csarr[  l];
+      auto wal2 = fwd ? csarr[2*l].conj() : csarr[2*l];
+      CX2(ik,l ).r = CH2(ik,0).r+wal.r*CH2(ik,1).r+wal2.r*CH2(ik,2).r;
+      CX2(ik,l ).i = CH2(ik,0).i+wal.r*CH2(ik,1).i+wal2.r*CH2(ik,2).i;
+      CX2(ik,lc).r =-wal.i*CH2(ik,ip-1).i-wal2.i*CH2(ik,ip-2).i;
+      CX2(ik,lc).i = wal.i*CH2(ik,ip-1).r+wal2.i*CH2(ik,ip-2).r;
       }
 
     size_t iwal=2*l;
@@ -708,9 +705,9 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
     for (; j<ipph-1; j+=2, jc-=2)
       {
       iwal+=l; if (iwal>ip) iwal-=ip;
-      Cmplx<T0> xwal=wal[iwal];
+      Cmplx<T0> xwal=fwd ? csarr[iwal].conj() : csarr[iwal];
       iwal+=l; if (iwal>ip) iwal-=ip;
-      Cmplx<T0> xwal2=wal[iwal];
+      Cmplx<T0> xwal2=fwd ? csarr[iwal].conj() : csarr[iwal];
       for (size_t ik=0; ik<idl1; ++ik)
         {
         CX2(ik,l).r += CH2(ik,j).r*xwal.r+CH2(ik,j+1).r*xwal2.r;
@@ -722,7 +719,7 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
     for (; j<ipph; ++j, --jc)
       {
       iwal+=l; if (iwal>ip) iwal-=ip;
-      Cmplx<T0> xwal=wal[iwal];
+      Cmplx<T0> xwal=fwd ? csarr[iwal].conj() : csarr[iwal];
       for (size_t ik=0; ik<idl1; ++ik)
         {
         CX2(ik,l).r += CH2(ik,j).r*xwal.r;
@@ -761,12 +758,11 @@ template<bool fwd, typename T> void passg (size_t ido, size_t ip,
     }
   }
 
-template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
+template<bool fwd, typename T> T *pass_all(T c[], T ch[], T0 fct) const
   {
-  if (length==1) { c[0]*=fct; return; }
+  if (length==1) { c[0]*=fct; return c; }
   size_t l1=1;
-  aligned_array<T> ch(length);
-  T *p1=c, *p2=ch.data();
+  T *p1=c, *p2=ch;
 
   for(size_t k1=0; k1<fact.size(); k1++)
     {
@@ -795,6 +791,17 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
     std::swap(p1,p2);
     l1=l2;
     }
+  if (fct!=1.)
+    for (size_t i=0; i<length; ++i)
+      p1[i] *= fct;
+  return p1;
+  }
+
+template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
+  {
+  if (length==1) { c[0]*=fct; return; }
+  aligned_array<T> ch(length);
+  auto p1 = pass_all<fwd>(c, ch.data(), T0(1));
   if (p1!=c)
     {
     if (fct!=1.)
@@ -812,6 +819,8 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
   public:
     template<typename T> void exec(T c[], T0 fct, bool fwd) const
       { fwd ? pass_all<true>(c, fct) : pass_all<false>(c, fct); }
+    template<typename T> T *exec(T c[], T ch[], T0 fct, bool fwd) const
+      { return fwd ? pass_all<true>(c, ch, fct) : pass_all<false>(c, ch, fct); }
 
   private:
     DUCC0_NOINLINE void factorize()
@@ -885,6 +894,8 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       mem.resize(twsize());
       comp_twiddle();
       }
+
+    size_t bufsize() const { return length; }
   };
 
 //
@@ -1566,12 +1577,11 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       }
 
   public:
-    template<typename T> void exec(T c[], T0 fct, bool r2hc) const
+    template<typename T> T *exec(T c[], T ch[], T0 fct, bool r2hc) const
       {
-      if (length==1) { c[0]*=fct; return; }
+      if (length==1) { c[0]*=fct; return c; }
       size_t n=length, nf=fact.size();
-      aligned_array<T> ch(n);
-      T *p1=c, *p2=ch.data();
+      T *p1=c, *p2=ch;
 
       if (r2hc)
         for(size_t k1=0, l1=n; k1<nf;++k1)
@@ -1610,8 +1620,16 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           std::swap (p1,p2);
           l1*=ip;
           }
+      copy_and_norm(p1, p1, length, fct);
+      return p1;
+      }
 
-      copy_and_norm(c,p1,n,fct);
+    template<typename T> void exec(T c[], T0 fct, bool r2hc) const
+      {
+      if (length==1) { c[0]*=fct; return; }
+      aligned_array<T> ch(length);
+      auto p1 = exec(c, ch.data(), T0(1), r2hc);
+      copy_and_norm(c,p1,length,fct);
       }
 
   private:
@@ -1694,6 +1712,8 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       mem.resize(twsize());
       comp_twiddle();
       }
+
+    size_t bufsize() const { return length; }
 };
 
 //
@@ -1708,9 +1728,10 @@ template<typename T0> class fftblue
     aligned_array<Cmplx<T0>> mem;
     Cmplx<T0> *bk, *bkf;
 
-    template<bool fwd, typename T> void fft(Cmplx<T> c[], T0 fct) const
+    template<bool fwd, typename T> void fft(Cmplx<T> c[], Cmplx<T> buf[], T0 fct) const
       {
-      aligned_array<Cmplx<T>> akf(n2);
+      auto akf = &buf[0];
+      auto akf2 = &buf[n2];
 
       /* initialize a_k and FFT it */
       for (size_t m=0; m<n; ++m)
@@ -1719,24 +1740,30 @@ template<typename T0> class fftblue
       for (size_t m=n; m<n2; ++m)
         akf[m]=zero;
 
-      plan.exec (akf.data(),1.,true);
+      auto res = plan.exec (akf,akf2,T0(1),true);
 
       /* do the convolution */
-      akf[0] = akf[0].template special_mul<!fwd>(bkf[0]);
+      res[0] = res[0].template special_mul<!fwd>(bkf[0]);
       for (size_t m=1; m<(n2+1)/2; ++m)
         {
-        akf[m] = akf[m].template special_mul<!fwd>(bkf[m]);
-        akf[n2-m] = akf[n2-m].template special_mul<!fwd>(bkf[m]);
+        res[m] = res[m].template special_mul<!fwd>(bkf[m]);
+        res[n2-m] = res[n2-m].template special_mul<!fwd>(bkf[m]);
         }
       if ((n2&1)==0)
-        akf[n2/2] = akf[n2/2].template special_mul<!fwd>(bkf[n2/2]);
+        res[n2/2] = res[n2/2].template special_mul<!fwd>(bkf[n2/2]);
 
       /* inverse FFT */
-      plan.exec (akf.data(),1.,false);
+      res = plan.exec (res, (res==akf) ? akf2 : akf, T0(1), false);
 
       /* multiply by b_k */
       for (size_t m=0; m<n; ++m)
-        c[m] = akf[m].template special_mul<fwd>(bk[m])*fct;
+        c[m] = res[m].template special_mul<fwd>(bk[m])*fct;
+      }
+
+    template<bool fwd, typename T> void fft(Cmplx<T> c[], T0 fct) const
+      {
+      aligned_array<Cmplx<T>> buf(2*n2);
+      fft<fwd>(c, buf.data(), fct);
       }
 
   public:
@@ -1769,34 +1796,48 @@ template<typename T0> class fftblue
         bkf[i] = tbkf[i];
       }
 
+    size_t bufsize_c() const { return 2*n2; }
+    size_t bufsize_r() const { return 2*bufsize_c(); }
+
     template<typename T> void exec(Cmplx<T> c[], T0 fct, bool fwd) const
       { fwd ? fft<true>(c,fct) : fft<false>(c,fct); }
-
-    template<typename T> void exec_r(T c[], T0 fct, bool fwd)
+    template<typename T> Cmplx<T> *exec(Cmplx<T> c[], Cmplx<T> *buf, T0 fct, bool fwd) const
       {
-      aligned_array<Cmplx<T>> tmp(n);
+      fwd ? fft<true>(c,buf,fct) : fft<false>(c,buf,fct);
+      return c;
+      }
+
+    template<typename T> void exec_r(T c[], T buf[], T0 fct, bool fwd)
+      {
+      auto tmp = reinterpret_cast<Cmplx<T> *>(&buf[2*n2]);
+      auto buf2 = reinterpret_cast<Cmplx<T> *>(&buf[0]);
       if (fwd)
         {
         auto zero = T0(0)*c[0];
         for (size_t m=0; m<n; ++m)
           tmp[m].Set(c[m], zero);
-        fft<true>(tmp.data(),fct);
+        fft<true>(tmp,buf2,fct);
         c[0] = tmp[0].r;
-        memcpy (reinterpret_cast<void *>(c+1),
-                reinterpret_cast<void *>(tmp.data()+1), (n-1)*sizeof(T));
+        memcpy (reinterpret_cast<void *>(&c[1]),
+                reinterpret_cast<void *>(&tmp[1]), (n-1)*sizeof(T));
         }
       else
         {
         tmp[0].Set(c[0],c[0]*0);
-        memcpy (reinterpret_cast<void *>(tmp.data()+1),
+        memcpy (reinterpret_cast<void *>(&tmp[1]),
                 reinterpret_cast<void *>(c+1), (n-1)*sizeof(T));
         if ((n&1)==0) tmp[n/2].i=T0(0)*c[0];
         for (size_t m=1; 2*m<n; ++m)
           tmp[n-m].Set(tmp[m].r, -tmp[m].i);
-        fft<false>(tmp.data(),fct);
+        fft<false>(tmp,buf2,fct);
         for (size_t m=0; m<n; ++m)
           c[m] = tmp[m].r;
         }
+      }
+    template<typename T> void exec_r(T c[], T0 fct, bool fwd)
+      {
+      aligned_array<T> buf(4*n2);
+      exec_r(c, buf.data(), fct, fwd);
       }
   };
 
@@ -1833,8 +1874,12 @@ template<typename T0> class pocketfft_c
 
     template<typename T> DUCC0_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec(c,fct,fwd); }
+    template<typename T> DUCC0_NOINLINE Cmplx<T> *exec(Cmplx<T> c[], Cmplx<T> buf[], bool fwd) const
+      { return packplan ? packplan->exec(c,buf,fwd) : blueplan->exec(c,buf,fwd); }
 
     size_t length() const { return len; }
+    size_t bufsize() const
+      { return packplan ? packplan->bufsize() : blueplan->bufsize_c(); }
   };
 
 //
@@ -1870,8 +1915,12 @@ template<typename T0> class pocketfft_r
 
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool fwd) const
       { packplan ? packplan->exec(c,fct,fwd) : blueplan->exec_r(c,fct,fwd); }
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], bool fwd) const
+      { return packplan ? packplan->exec(c,buf,fwd) : blueplan->exec_r(c,buf,fwd); }
 
     size_t length() const { return len; }
+    size_t bufsize() const
+      { return packplan ? packplan->bufsize() : blueplan->bufsize_r(); }
   };
 
 }
