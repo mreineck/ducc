@@ -94,6 +94,8 @@ template<typename T, typename Tc> class UnityRoots
         v2[i]=calc(i*(mask+1),n,ang);
       }
 
+    size_t size() const { return N; }
+
     Tc operator[](size_t idx) const
       {
       if (2*idx<=N)
