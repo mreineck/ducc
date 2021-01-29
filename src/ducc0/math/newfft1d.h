@@ -106,6 +106,31 @@ struct util1d // hack to avoid duplicate symbols
     }
   };
 
+vector<size_t> factorize(size_t N)
+  {
+  MR_assert(N>0, "need a positive number");
+  vector<size_t> factors;
+  while ((N&7)==0)
+    { factors.push_back(8); N>>=3; }
+  while ((N&3)==0)
+    { factors.push_back(4); N>>=2; }
+  if ((N&1)==0)
+    {
+    N>>=1;
+    // factor 2 should be at the front of the factor list
+    factors.push_back(2);
+    swap(factors[0], factors.back());
+    }
+  for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
+  while ((N%divisor)==0)
+    {
+    factors.push_back(divisor);
+    N/=divisor;
+    }
+  if (N>1) factors.push_back(N);
+  return factors;
+  }
+
 template<typename T> inline void PM(T &a, T &b, T c, T d)
   { a=c+d; b=c-d; }
 template<typename T> inline void PMINPLACE(T &a, T &b)
@@ -147,7 +172,9 @@ template <typename Tfs> class cfftpass
 //     virtual Tcv16 *exec(Tcv16 *in, Tcv16 *copy, Tcv16 *buf, bool fwd) = 0;
   };
 template<typename T> using Tpass = shared_ptr<cfftpass<T>>;
-template<typename Tfs> Tpass<Tfs> make_plan(size_t N);
+template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots);
+template<typename Tfs> Tpass<Tfs> make_pass(size_t ip)
+  { return make_pass<Tfs> (1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip)); }
 
 template <typename Tfs> class cfftp1: public cfftpass<Tfs>
   {
@@ -1043,7 +1070,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
   public:
     bluepass(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
       : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
-        subplan(make_plan<Tfs>(ip2)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+        subplan(make_pass<Tfs>(ip2)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
       {
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
@@ -1151,48 +1178,58 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       }
 
   public:
-    cfft_multipass(size_t l1_, size_t ido_, const vector<size_t> &factors,
+    cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
       const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), bufsz(0), need_cpy(false)
+      : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false)
       {
-      ip=1;
-      for (auto fct: factors) ip*=fct;
-      MR_assert((roots->size()/ip)*ip==roots->size(), "mismatch");
+ //     MR_assert((roots->size()/ip)*ip==roots->size(), "mismatch");
       wa.resize((ip-1)*(ido-1));
-      size_t l1=1;
-      for (auto fct: factors)
+      size_t N=ip*l1*ido;
+      size_t rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      for (size_t j=1; j<ip; ++j)
+        for (size_t i=1; i<ido; ++i)
+          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+
+      auto factors = factorize(ip);
+MR_assert(factors.size()>1, "uuups");
+constexpr size_t lim=1024;
+      if (ip<=lim)
         {
-        switch(fct)
+        size_t l1l=1;
+        for (auto fct: factors)
           {
-          case 2:
-            passes.push_back(make_shared<cfftp2<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 3:
-            passes.push_back(make_shared<cfftp3<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 4:
-            passes.push_back(make_shared<cfftp4<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 5:
-            passes.push_back(make_shared<cfftp5<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 7:
-            passes.push_back(make_shared<cfftp7<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 8:
-            passes.push_back(make_shared<cfftp8<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          case 11:
-            passes.push_back(make_shared<cfftp11<Tfs>>(l1, ip/(fct*l1), roots));
-            break;
-          default:
-            if (fct<30)
-              passes.push_back(make_shared<cfftpg<Tfs>>(l1, ip/(fct*l1), fct, roots));
-            else
-              passes.push_back(make_shared<bluepass<Tfs>>(l1, ip/(fct*l1), fct, roots));
-            break;
+          passes.push_back(make_pass<Tfs>(l1l, ip/(fct*l1l), fct, roots));
+          l1l*=fct;
           }
-        l1*=fct;
+        }
+      else
+        {
+        vector<size_t> packets;
+        size_t acc=1;
+        for (auto fct: factors)
+          {
+          if (fct>lim) // large prime factor, needs isolated Bluestein pass
+            packets.push_back(fct);
+          else if (acc*fct>lim)
+            {
+            packets.push_back(acc);
+            acc=fct;
+            }
+          else
+            acc*=fct;
+          }
+        if (acc>1) packets.push_back(acc);
+//cout << "subdividing into: ";
+//for (auto pkt: packets)
+//  cout << pkt << " ";
+//cout << endl;
+        size_t l1l=1;
+        for (auto pkt: packets)
+          {
+          passes.push_back(make_pass<Tfs>(l1l, ip/(pkt*l1l), pkt, roots));
+          l1l*=pkt;
+          }
         }
       for (const auto &pass: passes)
         {
@@ -1213,33 +1250,38 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       { return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); }
   };
 
-template<typename Tfs> Tpass<Tfs> make_plan(size_t N)
+template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots)
   {
-  MR_assert(N>=1, "no zero-sized FFTs");
-  if (N==1) return make_shared<cfftp1<Tfs>>();
-  vector<size_t> factors;
-  size_t N2=N;
-  auto roots = make_shared<const UnityRoots<Tfs,Cmplx<Tfs>>>(N);
-  while ((N2&7)==0)
-    { factors.push_back(8); N2>>=3; }
-  while ((N2&3)==0)
-    { factors.push_back(4); N2>>=2; }
-  if ((N2&1)==0)
+  MR_assert(ip>=1, "no zero-sized FFTs");
+  if (ip==1) return make_shared<cfftp1<Tfs>>();
+  auto factors=factorize(ip);
+  if (factors.size()==1)
     {
-    N2>>=1;
-    // factor 2 should be at the front of the factor list
-    factors.push_back(2);
-    swap(factors[0], factors.back());
+    switch(ip)
+      {
+      case 2:
+        return make_shared<cfftp2<Tfs>>(l1, ido, roots);
+      case 3:
+        return make_shared<cfftp3<Tfs>>(l1, ido, roots);
+      case 4:
+        return make_shared<cfftp4<Tfs>>(l1, ido, roots);
+      case 5:
+        return make_shared<cfftp5<Tfs>>(l1, ido, roots);
+      case 7:
+        return make_shared<cfftp7<Tfs>>(l1, ido, roots);
+      case 8:
+        return make_shared<cfftp8<Tfs>>(l1, ido, roots);
+      case 11:
+        return make_shared<cfftp11<Tfs>>(l1, ido, roots);
+      default:
+        if (ip<90)
+          return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
+        else
+          return make_shared<bluepass<Tfs>>(l1, ido, ip, roots);
+      }
     }
-  for (size_t divisor=3; divisor*divisor<=N2; divisor+=2)
-  while ((N2%divisor)==0)
-    {
-    factors.push_back(divisor);
-    N2/=divisor;
-    }
-  if (N2>1) factors.push_back(N2);
-  swap(factors.back(),factors[0]);
-  return make_shared<cfft_multipass<Tfs>>(1, 1, factors, roots);
+  else // more than one factor, need a multipass
+    return make_shared<cfft_multipass<Tfs>>(l1, ido, ip, roots);
   }
 
 template<typename Tfs> class newcfft1d
@@ -1250,7 +1292,7 @@ template<typename Tfs> class newcfft1d
     Tpass<Tfs> plan;
 
   public:
-    newcfft1d(size_t n) : N(n), plan(make_plan<Tfs>(n)) {}
+    newcfft1d(size_t n) : N(n), plan(make_pass<Tfs>(n)) {}
 
     void exec(complex<Tfs> *data, Tfs fct, bool fwd) const
       {
