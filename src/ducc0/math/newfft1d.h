@@ -1009,6 +1009,9 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
     const size_t ip2;
     const Tpass<Tfs> subplan;
     aligned_array<Tcs> wa, bk, bkf;
+    size_t bufsz;
+    bool need_cpy;
+
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
@@ -1024,7 +1027,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
 
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
         { return cc[a+ido*(b+ip*c)]; };
 
       for (size_t k=0; k<l1; ++k)
@@ -1052,19 +1055,34 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
           /* inverse FFT */
           res = subplan->exec (res, (res==akf) ? akf2 : akf, &buf[2*ip2], false);
 
-          /* multiply by b_k */
-          if (i==0)
-            for (size_t m=0; m<ip; ++m)
-              CH(0,k,m) = res[m].template special_mul<fwd>(bk[m]);
+          /* multiply by b_k and write to output buffer */
+          if (l1>1)
+            {
+            if (i==0)
+              for (size_t m=0; m<ip; ++m)
+                CH(0,k,m) = res[m].template special_mul<fwd>(bk[m]);
+            else
+              {
+              CH(i,k,0) = res[0].template special_mul<fwd>(bk[0]);
+              for (size_t m=1; m<ip; ++m)
+                CH(i,k,m) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
+              }
+            }
           else
             {
-            CH(i,k,0) = res[0].template special_mul<fwd>(bk[0]);
-            for (size_t m=1; m<ip; ++m)
-              CH(i,k,m) = res[m].template special_mul<fwd>(bk[m] *WA(m-1,i));
+            if (i==0)
+              for (size_t m=0; m<ip; ++m)
+                CC(0,m,0) = res[m].template special_mul<fwd>(bk[m]);
+            else
+              {
+              CC(i,0,0) = res[0].template special_mul<fwd>(bk[0]);
+              for (size_t m=1; m<ip; ++m)
+                CC(i,m,0) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
+              }
             }
           }
 
-      return ch;
+      return (l1>1) ? ch : cc;
       }
 
   public:
@@ -1103,10 +1121,13 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
       auto res = subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true);
       for (size_t i=0; i<ip2/2+1; ++i)
         bkf[i] = res[i];
+
+      need_cpy = l1>1;
+      bufsz = ip2*(1+subplan->needs_copy()) + subplan->bufsize();
       }
 
-    virtual size_t bufsize() const { return 2*ip2+subplan->bufsize(); } // FIXME: might be able to save some more
-    virtual bool needs_copy() const { return true; }
+    virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
+    virtual bool needs_copy() const { return need_cpy; }
 
     virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd)
       { return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); }
@@ -1118,13 +1139,14 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     using Tcs = Cmplx<Tfs>;
     const size_t l1, ido;
     size_t ip;
+    Troots<Tfs> roots;
     vector<Tpass<Tfs>> passes;
     size_t bufsz;
     bool need_cpy;
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[(i-1)*(ip-1)+x]; }
 
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch, Cmplx<T> *buf)
       {
@@ -1141,17 +1163,23 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
+  size_t step = roots->size()/(ip*ido);
+  aligned_array<Tcs> twid(ip-1);
         auto cc2 = &buf[0];
         auto ch2 = &buf[ip];
         auto buf2 = &buf[2*ip];
 
         auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
           { return ch[a+ido*(b+l1*c)]; };
-        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
           { return cc[a+ido*(b+ip*c)]; };
 
-        for (size_t k=0; k<l1; ++k)
+//        for (size_t k=0; k<l1; ++k)
           for (size_t i=0; i<ido; ++i)
+   {
+   for (size_t m=1; m<ip; ++m)
+     twid[m-1]=(*roots)[step*m*i];
+        for (size_t k=0; k<l1; ++k)
             {
             for (size_t m=0; m<ip; ++m)
               cc2[m] = CC(i,m,k);
@@ -1163,24 +1191,42 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               if (res==p2) swap (p1,p2);
               }
 
-            if (i==0)
-              for (size_t m=0; m<ip; ++m)
-                CH(0,k,m) = p1[m];
+            if (l1>1)
+              {
+              if (i==0)
+                for (size_t m=0; m<ip; ++m)
+                  CH(0,k,m) = p1[m];
+              else
+                {
+                CH(i,k,0) = p1[0];
+                for (size_t m=1; m<ip; ++m)
+//                  CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
+                  CH(i,k,m) = p1[m].template special_mul<fwd>(twid[m-1]);
+                }
+              }
             else
               {
-              CH(i,k,0) = p1[0];
-              for (size_t m=1; m<ip; ++m)
-                CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
+              if (i==0)
+                for (size_t m=0; m<ip; ++m)
+                  CC(0,m,0) = p1[m];
+              else
+                {
+                CC(i,0,0) = p1[0];
+                for (size_t m=1; m<ip; ++m)
+//                  CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
+                  CC(i,m,0) = p1[m].template special_mul<fwd>(twid[m-1]);
+                }
               }
             }
-        return ch;
+      }
+        return (l1>1) ? ch : cc;
         }
       }
 
   public:
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
-      const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false)
+      const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), ip(ip_), roots(roots_), bufsz(0), need_cpy(false)
       {
  //     MR_assert((roots->size()/ip)*ip==roots->size(), "mismatch");
       wa.resize((ip-1)*(ido-1));
@@ -1189,11 +1235,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
       auto factors = factorize(ip);
 MR_assert(factors.size()>1, "uuups");
-constexpr size_t lim=1024;
+constexpr size_t lim=2048;
       if (ip<=lim)
         {
         size_t l1l=1;
@@ -1238,8 +1284,8 @@ constexpr size_t lim=1024;
         }
       if ((l1!=1)||(ido!=1))
         {
+        need_cpy=true;
         bufsz += 2*ip;
-        need_cpy = true;
         }
       }
 
@@ -1274,7 +1320,7 @@ template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, co
       case 11:
         return make_shared<cfftp11<Tfs>>(l1, ido, roots);
       default:
-        if (ip<90)
+        if (ip<110)
           return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
         else
           return make_shared<bluepass<Tfs>>(l1, ido, ip, roots);
