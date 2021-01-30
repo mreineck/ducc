@@ -6,6 +6,7 @@
 #include <cstring>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/simd.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/unity_roots.h"
@@ -151,68 +152,79 @@ template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
 
 template<typename T> using Troots = shared_ptr<const UnityRoots<T,Cmplx<T>>>;
 
-template <typename Tfs> class cfftpass
+// T: "type", f/c: "float/complex", s/d: "scalar/data"
+template <typename Tfd> class cfftpass
   {
   public:
-//     using Tfv2 = simd<Tfs, 2>;
-//     using Tfv4 = simd<Tfs, 4>;
-//     using Tfv8 = simd<Tfs, 8>;
-//     using Tfv16= simd<Tfs,16>;
+    using Tfs = typename remove_simd<Tfd>::type;
     using Tcs = Cmplx<Tfs>;
-//     using Tcv2  = Cmplx<Tfv2>;
-//     using Tcv4  = Cmplx<Tfv4>;
-//     using Tcv8  = Cmplx<Tfv8>;
-//     using Tcv16 = Cmplx<Tfv16>;
+    using Tcd = Cmplx<Tfd>;
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd) = 0;
-//     virtual Tcv2 *exec(Tcv2 *in, Tcv2 *copy, Tcv2 *buf, bool fwd) = 0;
-//     virtual Tcv4 *exec(Tcv4 *in, Tcv4 *copy, Tcv4 *buf, bool fwd) = 0;
-//     virtual Tcv8 *exec(Tcv8 *in, Tcv8 *copy, Tcv8 *buf, bool fwd) = 0;
-//     virtual Tcv16 *exec(Tcv16 *in, Tcv16 *copy, Tcv16 *buf, bool fwd) = 0;
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd *buf, bool fwd) = 0;
   };
 template<typename T> using Tpass = shared_ptr<cfftpass<T>>;
 template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots);
 template<typename Tfs> Tpass<Tfs> make_pass(size_t ip)
   { return make_pass<Tfs> (1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip)); }
 
-template <typename Tfs> class cfftp1: public cfftpass<Tfs>
+
+template <typename Tfd> class cfftp1: public cfftpass<Tfd>
   {
   public:
+    using Tfs = typename remove_simd<Tfd>::type;
     using Tcs = Cmplx<Tfs>;
+    using Tcd = Cmplx<Tfd>;
     cfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
-    virtual Tcs *exec(Tcs *in, Tcs * /*copy*/, Tcs * /*buf*/, bool /*fwd*/)
+    virtual Tcd *exec(Tcd *in, Tcd * /*copy*/, Tcd * /*buf*/, bool /*fwd*/)
       { return in; }
   };
 
-template <typename Tfs> class cfftp2: public cfftpass<Tfs>
+template <typename Tfd> class cfftp2: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=2;
     aligned_array<Tcs> wa;
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_ (Tcd * DUCC0_RESTRICT cc,
+      Tcd * DUCC0_RESTRICT ch)
       {
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Cmplx<T>&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Cmplx<T>&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
+      if (l1==1)
+        {
+        PMINPLACE(CC(0,0,0),CC(0,1,0));
+        for (size_t i=1; i<ido; ++i)
+          {
+          Tcd t1=CC(i,0,0), t2=CC(i,1,0);
+          CC(i,0,0) = t1+t2;
+          special_mul<fwd>(t1-t2,WA(0,i),CC(i,1,0));
+          }
+        return cc;
+        }
       if (ido==1)
+        {
         for (size_t k=0; k<l1; ++k)
           {
           CH(0,k,0) = CC(0,0,k)+CC(0,1,k);
           CH(0,k,1) = CC(0,0,k)-CC(0,1,k);
           }
+        return ch;
+        }
       else
+        {
         for (size_t k=0; k<l1; ++k)
           {
           CH(0,k,0) = CC(0,0,k)+CC(0,1,k);
@@ -223,7 +235,8 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
             special_mul<fwd>(CC(i,0,k)-CC(i,1,k),WA(0,i),CH(i,k,1));
             }
           }
-      return ch;
+        return ch;
+        }
       }
 
   public:
@@ -239,49 +252,50 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
       }
 
     virtual size_t bufsize() const { return 0; }
-    virtual bool needs_copy() const { return true; }
+    virtual bool needs_copy() const { return l1>1; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcs *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
 
-template <typename Tfs> class cfftp3: public cfftpass<Tfs>
+template <typename Tfd> class cfftp3: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=3;
     aligned_array<Tcs> wa;
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
       constexpr Tfs tw1r=-0.5,
                     tw1i= (fwd ? -1: 1) * Tfs(0.8660254037844386467637231707529362L);
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
 #define POCKETFFT_PREP3(idx) \
-        Tc t0 = CC(idx,0,k), t1, t2; \
+        Tcd t0 = CC(idx,0,k), t1, t2; \
         PM (t1,t2,CC(idx,1,k),CC(idx,2,k)); \
         CH(idx,k,0)=t0+t1;
 #define POCKETFFT_PARTSTEP3a(u1,u2,twr,twi) \
         { \
-        Tc ca=t0+t1*twr; \
-        Tc cb{-t2.i*twi, t2.r*twi}; \
+        Tcd ca=t0+t1*twr; \
+        Tcd cb{-t2.i*twi, t2.r*twi}; \
         PM(CH(0,k,u1),CH(0,k,u2),ca,cb) ;\
         }
 #define POCKETFFT_PARTSTEP3b(u1,u2,twr,twi) \
         { \
-        Tc ca=t0+t1*twr; \
-        Tc cb{-t2.i*twi, t2.r*twi}; \
+        Tcd ca=t0+t1*twr; \
+        Tcd cb{-t2.i*twi, t2.r*twi}; \
         special_mul<fwd>(ca+cb,WA(u1-1,i),CH(i,k,u1)); \
         special_mul<fwd>(ca-cb,WA(u2-1,i),CH(i,k,u2)); \
         }
@@ -328,34 +342,35 @@ template <typename Tfs> class cfftp3: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
 
-template <typename Tfs> class cfftp4: public cfftpass<Tfs>
+template <typename Tfd> class cfftp4: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=4;
     aligned_array<Tcs> wa;
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
       if (ido==1)
         for (size_t k=0; k<l1; ++k)
           {
-          Tc t1, t2, t3, t4;
+          Tcd t1, t2, t3, t4;
           PM(t2,t1,CC(0,0,k),CC(0,2,k));
           PM(t3,t4,CC(0,1,k),CC(0,3,k));
           ROTX90<fwd>(t4);
@@ -366,7 +381,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
         for (size_t k=0; k<l1; ++k)
           {
           {
-          Tc t1, t2, t3, t4;
+          Tcd t1, t2, t3, t4;
           PM(t2,t1,CC(0,0,k),CC(0,2,k));
           PM(t3,t4,CC(0,1,k),CC(0,3,k));
           ROTX90<fwd>(t4);
@@ -375,8 +390,8 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
           }
           for (size_t i=1; i<ido; ++i)
             {
-            Tc t1, t2, t3, t4;
-            Tc cc0=CC(i,0,k), cc1=CC(i,1,k),cc2=CC(i,2,k),cc3=CC(i,3,k);
+            Tcd t1, t2, t3, t4;
+            Tcd cc0=CC(i,0,k), cc1=CC(i,1,k),cc2=CC(i,2,k),cc3=CC(i,3,k);
             PM(t2,t1,cc0,cc2);
             PM(t3,t4,cc1,cc3);
             ROTX90<fwd>(t4);
@@ -404,37 +419,46 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
 
-template <typename Tfs> class cfftp5: public cfftpass<Tfs>
+template <typename Tfd> class cfftp5: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=5;
     aligned_array<Tcs> wa;
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
       constexpr Tfs tw1r= Tfs(0.3090169943749474241022934171828191L),
                     tw1i= (fwd ? -1: 1) * Tfs(0.9510565162951535721164393333793821L),
                     tw2r= Tfs(-0.8090169943749474241022934171828191L),
                     tw2i= (fwd ? -1: 1) * Tfs(0.5877852522924731291687059546390728L);
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
 #define POCKETFFT_PREP5(idx) \
-        Tc t0 = CC(idx,0,k), t1, t2, t3, t4; \
+        Tcd t0 = CC(idx,0,k), t1, t2, t3, t4; \
         PM (t1,t4,CC(idx,1,k),CC(idx,4,k)); \
         PM (t2,t3,CC(idx,2,k),CC(idx,3,k)); \
         CH(idx,k,0).r=t0.r+t1.r+t2.r; \
@@ -442,7 +466,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP5a(u1,u2,twar,twbr,twai,twbi) \
         { \
-        Tc ca,cb; \
+        Tcd ca,cb; \
         ca.r=t0.r+twar*t1.r+twbr*t2.r; \
         ca.i=t0.i+twar*t1.i+twbr*t2.i; \
         cb.i=twai*t4.r twbi*t3.r; \
@@ -452,7 +476,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP5b(u1,u2,twar,twbr,twai,twbi) \
         { \
-        Tc ca,cb,da,db; \
+        Tcd ca,cb,da,db; \
         ca.r=t0.r+twar*t1.r+twbr*t2.r; \
         ca.i=t0.i+twar*t1.i+twbr*t2.i; \
         cb.i=twai*t4.r twbi*t3.r; \
@@ -492,11 +516,11 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
       }
 
   public:
-    cfftp5(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
+    cfftp5(size_t l1_, size_t ido_, const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1)), roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -506,24 +530,34 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
-template <typename Tfs> class cfftp7: public cfftpass<Tfs>
+
+template <typename Tfd> class cfftp7: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=7;
     aligned_array<Tcs> wa;
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd  *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
       constexpr Tfs tw1r= Tfs(0.6234898018587335305250048840042398L),
                     tw1i= (fwd ? -1 : 1) * Tfs(0.7818314824680298087084445266740578L),
                     tw2r= Tfs(-0.2225209339563144042889025644967948L),
@@ -531,13 +565,13 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
                     tw3r= Tfs(-0.9009688679024191262361023195074451L),
                     tw3i= (fwd ? -1 : 1) * Tfs(0.433883739117558120475768332848359L);
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
 #define POCKETFFT_PREP7(idx) \
-        Tc t1 = CC(idx,0,k), t2, t3, t4, t5, t6, t7; \
+        Tcd t1 = CC(idx,0,k), t2, t3, t4, t5, t6, t7; \
         PM (t2,t7,CC(idx,1,k),CC(idx,6,k)); \
         PM (t3,t6,CC(idx,2,k),CC(idx,5,k)); \
         PM (t4,t5,CC(idx,3,k),CC(idx,4,k)); \
@@ -546,7 +580,7 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP7a0(u1,u2,x1,x2,x3,y1,y2,y3,out1,out2) \
         { \
-        Tc ca,cb; \
+        Tcd ca,cb; \
         ca.r=t1.r+x1*t2.r+x2*t3.r+x3*t4.r; \
         ca.i=t1.i+x1*t2.i+x2*t3.i+x3*t4.i; \
         cb.i=y1*t7.r y2*t6.r y3*t5.r; \
@@ -557,7 +591,7 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
         POCKETFFT_PARTSTEP7a0(u1,u2,x1,x2,x3,y1,y2,y3,CH(0,k,u1),CH(0,k,u2))
 #define POCKETFFT_PARTSTEP7(u1,u2,x1,x2,x3,y1,y2,y3) \
         { \
-        Tc da,db; \
+        Tcd da,db; \
         POCKETFFT_PARTSTEP7a0(u1,u2,x1,x2,x3,y1,y2,y3,da,db) \
         special_mul<fwd>(da,WA(u1-1,i),CH(i,k,u1)); \
         special_mul<fwd>(db,WA(u2-1,i),CH(i,k,u2)); \
@@ -598,11 +632,11 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
       }
 
   public:
-    cfftp7(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
+    cfftp7(size_t l1_, size_t ido_, const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1)), roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -612,18 +646,30 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
-template <typename Tfs> class cfftp8: public cfftpass<Tfs>
+
+template <typename Tfd> class cfftp8: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=8;
     aligned_array<Tcs> wa;
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
     template <bool fwd, typename T> void ROTX45(T &a) const
       {
@@ -642,21 +688,18 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
         { auto tmp_=a.r; a.r=hsqt2*(-a.r-a.i); a.i=hsqt2*(tmp_-a.i); }
       }
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
-
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
       if (ido==1)
         for (size_t k=0; k<l1; ++k)
           {
-          Tc a0, a1, a2, a3, a4, a5, a6, a7;
+          Tcd a0, a1, a2, a3, a4, a5, a6, a7;
           PM(a1,a5,CC(0,1,k),CC(0,5,k));
           PM(a3,a7,CC(0,3,k),CC(0,7,k));
           PMINPLACE(a1,a3);
@@ -679,7 +722,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
         for (size_t k=0; k<l1; ++k)
           {
           {
-          Tc a0, a1, a2, a3, a4, a5, a6, a7;
+          Tcd a0, a1, a2, a3, a4, a5, a6, a7;
           PM(a1,a5,CC(0,1,k),CC(0,5,k));
           PM(a3,a7,CC(0,3,k),CC(0,7,k));
           PMINPLACE(a1,a3);
@@ -700,7 +743,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           }
           for (size_t i=1; i<ido; ++i)
             {
-            Tc a0, a1, a2, a3, a4, a5, a6, a7;
+            Tcd a0, a1, a2, a3, a4, a5, a6, a7;
             PM(a1,a5,CC(i,1,k),CC(i,5,k));
             PM(a3,a7,CC(i,3,k),CC(i,7,k));
             ROTX90<fwd>(a7);
@@ -728,11 +771,11 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
       }
 
   public:
-    cfftp8(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
+    cfftp8(size_t l1_, size_t ido_, const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1)), roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+  rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -742,25 +785,34 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
 
-template <typename Tfs> class cfftp11: public cfftpass<Tfs>
+template <typename Tfd> class cfftp11: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     static constexpr size_t ip=11;
     aligned_array<Tcs> wa;
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
       constexpr Tfs tw1r= Tfs(0.8412535328311811688618116489193677L),
                     tw1i= (fwd ? -1 : 1) * Tfs(0.5406408174555975821076359543186917L),
                     tw2r= Tfs(0.4154150130018864255292741492296232L),
@@ -772,13 +824,13 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
                     tw5r= Tfs(-0.9594929736144973898903680570663277L),
                     tw5i= (fwd ? -1 : 1) * Tfs(0.2817325568414296977114179153466169L);
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
 #define POCKETFFT_PREP11(idx) \
-        Tc t1 = CC(idx,0,k), t2, t3, t4, t5, t6, t7, t8, t9, t10, t11; \
+        Tcd t1 = CC(idx,0,k), t2, t3, t4, t5, t6, t7, t8, t9, t10, t11; \
         PM (t2,t11,CC(idx,1,k),CC(idx,10,k)); \
         PM (t3,t10,CC(idx,2,k),CC(idx, 9,k)); \
         PM (t4,t9 ,CC(idx,3,k),CC(idx, 8,k)); \
@@ -789,8 +841,8 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP11a0(u1,u2,x1,x2,x3,x4,x5,y1,y2,y3,y4,y5,out1,out2) \
         { \
-        Tc ca = t1 + t2*x1 + t3*x2 + t4*x3 + t5*x4 +t6*x5, \
-           cb; \
+        Tcd ca = t1 + t2*x1 + t3*x2 + t4*x3 + t5*x4 +t6*x5, \
+            cb; \
         cb.i=y1*t11.r y2*t10.r y3*t9.r y4*t8.r y5*t7.r; \
         cb.r=-(y1*t11.i y2*t10.i y3*t9.i y4*t8.i y5*t7.i ); \
         PM(out1,out2,ca,cb); \
@@ -799,7 +851,7 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
         POCKETFFT_PARTSTEP11a0(u1,u2,x1,x2,x3,x4,x5,y1,y2,y3,y4,y5,CH(0,k,u1),CH(0,k,u2))
 #define POCKETFFT_PARTSTEP11(u1,u2,x1,x2,x3,x4,x5,y1,y2,y3,y4,y5) \
         { \
-        Tc da,db; \
+        Tcd da,db; \
         POCKETFFT_PARTSTEP11a0(u1,u2,x1,x2,x3,x4,x5,y1,y2,y3,y4,y5,da,db) \
         special_mul<fwd>(da,WA(u1-1,i),CH(i,k,u1)); \
         special_mul<fwd>(db,WA(u2-1,i),CH(i,k,u2)); \
@@ -845,11 +897,11 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
       }
 
   public:
-    cfftp11(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
+    cfftp11(size_t l1_, size_t ido_, const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), wa((ip-1)*(ido-1)), roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -859,38 +911,48 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
+//#define DYNAMIC_TWIDDLE
 
-template <typename Tfs> class cfftpg: public cfftpass<Tfs>
+template <typename Tfd> class cfftpg: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     size_t l1, ido;
     size_t ip;
     aligned_array<Tcs> wa;
     aligned_array<Tcs> csarr;
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
       {
-      using Tc = Cmplx<T>;
       size_t ipph = (ip+1)/2;
       size_t idl1 = ido*l1;
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
         { return cc[a+ido*(b+ip*c)]; };
-      auto CX = [cc,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CX = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
         { return cc[a+ido*(b+l1*c)]; };
-      auto CX2 = [cc, idl1](size_t a, size_t b) -> Tc&
+      auto CX2 = [cc, idl1](size_t a, size_t b) -> Tcd&
         { return cc[a+idl1*b]; };
-      auto CH2 = [ch, idl1](size_t a, size_t b) -> const Tc&
+      auto CH2 = [ch, idl1](size_t a, size_t b) -> const Tcd&
         { return ch[a+idl1*b]; };
 
       for (size_t k=0; k<l1; ++k)
@@ -903,7 +965,7 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
       for (size_t k=0; k<l1; ++k)
         for (size_t i=0; i<ido; ++i)
           {
-          Tc tmp = CH(i,k,0);
+          Tcd tmp = CH(i,k,0);
           for (size_t j=1; j<ipph; ++j)
             tmp+=CH(i,k,j);
           CX(i,k,0) = tmp;
@@ -956,7 +1018,7 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
         for (size_t j=1, jc=ip-1; j<ipph; ++j, --jc)
           for (size_t ik=0; ik<idl1; ++ik)
             {
-            Tc t1=CX2(ik,j), t2=CX2(ik,jc);
+            Tcd t1=CX2(ik,j), t2=CX2(ik,jc);
             PM(CX2(ik,j),CX2(ik,jc),t1,t2);
             }
       else
@@ -964,11 +1026,11 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
         for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)
           for (size_t k=0; k<l1; ++k)
             {
-            Tc t1=CX(0,k,j), t2=CX(0,k,jc);
+            Tcd t1=CX(0,k,j), t2=CX(0,k,jc);
             PM(CX(0,k,j),CX(0,k,jc),t1,t2);
             for (size_t i=1; i<ido; ++i)
               {
-              Tc x1, x2;
+              Tcd x1, x2;
               PM(x1,x2,CX(i,k,j),CX(i,k,jc));
               size_t idij=(j-1)*(ido-1)+i-1;
               special_mul<fwd>(x1,wa[idij],CX(i,k,j));
@@ -981,11 +1043,11 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
       }
 
   public:
-    cfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(ip)
+    cfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots_)
+      : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(ip), roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -997,37 +1059,44 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs * /*buf*/, bool fwd)
+    virtual Tcd *exec(Tcs *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
       { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
   };
 
-template <typename Tfs> class bluepass: public cfftpass<Tfs>
+template <typename Tfd> class bluepass: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     const size_t l1, ido, ip;
     const size_t ip2;
     const Tpass<Tfs> subplan;
     aligned_array<Tcs> wa, bk, bkf;
     size_t bufsz;
     bool need_cpy;
+    Troots<Tfs> roots;
+    size_t rfct;
 
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
+#endif
 
-    template<bool fwd, typename T> Cmplx<T> *exec_
-      (Cmplx<T> * DUCC0_RESTRICT cc,
-       Cmplx<T> * DUCC0_RESTRICT ch,
-       Cmplx<T> * DUCC0_RESTRICT buf)
+    template<bool fwd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch,
+       Tcd * DUCC0_RESTRICT buf)
       {
-      using Tc = Cmplx<T>;
-
       auto akf = &buf[0];
       auto akf2 = &buf[ip2];
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
       for (size_t k=0; k<l1; ++k)
@@ -1086,12 +1155,13 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
       }
 
   public:
-    bluepass(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
+    bluepass(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots_)
       : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
-        subplan(make_pass<Tfs>(ip2)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+        subplan(make_pass<Tfs>(ip2)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1),
+        roots(roots_)
       {
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
@@ -1100,13 +1170,15 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
       /* initialize b_k */
       bk[0].Set(1, 0);
       size_t coeff=0;
-      // FIXME: reuse "roots" if possible
-      auto roots2 = make_shared<const UnityRoots<Tfs,Tcs>>(2*ip);
+      auto roots2 = ((roots->size()/(2*ip))*2*ip==roots->size()) ?
+                    roots : make_shared<const UnityRoots<Tfs,Tcs>>(2*ip);
+      size_t rfct2 = roots2->size()/(2*ip);
+//cout << ((roots==roots2) ? "true" : "false") << endl;
       for (size_t m=1; m<ip; ++m)
         {
         coeff+=2*m-1;
         if (coeff>=2*ip) coeff-=2*ip;
-        bk[m] = (*roots2)[coeff];
+        bk[m] = (*roots2)[coeff*rfct2];
         }
 
       /* initialize the zero-padded, Fourier transformed b_k. Add normalisation. */
@@ -1129,24 +1201,34 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
     virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
     virtual bool needs_copy() const { return need_cpy; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd)
+    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd *buf, bool fwd)
       { return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); }
   };
 
-template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
+template <typename Tfd> class cfft_multipass: public cfftpass<Tfd>
   {
   private:
-    using Tcs = Cmplx<Tfs>;
+    using typename cfftpass<Tfd>::Tfs;
+    using typename cfftpass<Tfd>::Tcs;
+    using typename cfftpass<Tfd>::Tcd;
+
     const size_t l1, ido;
     size_t ip;
-    Troots<Tfs> roots;
     vector<Tpass<Tfs>> passes;
     size_t bufsz;
     bool need_cpy;
     aligned_array<Tcs> wa;
 
+    Troots<Tfs> roots;
+    size_t rfct;
+
+#ifdef DYNAMIC_TWIDDLE
+    auto WA(size_t x, size_t i) const
+      { return (*roots)[rfct*l1*i*(x+1)]; }
+#else
     auto WA(size_t x, size_t i) const
       { return wa[(i-1)*(ip-1)+x]; }
+#endif
 
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch, Cmplx<T> *buf)
       {
@@ -1163,8 +1245,6 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-  size_t step = roots->size()/(ip*ido);
-  aligned_array<Tcs> twid(ip-1);
         auto cc2 = &buf[0];
         auto ch2 = &buf[ip];
         auto buf2 = &buf[2*ip];
@@ -1174,12 +1254,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
           { return cc[a+ido*(b+ip*c)]; };
 
-//        for (size_t k=0; k<l1; ++k)
-          for (size_t i=0; i<ido; ++i)
-   {
-   for (size_t m=1; m<ip; ++m)
-     twid[m-1]=(*roots)[step*m*i];
         for (size_t k=0; k<l1; ++k)
+          for (size_t i=0; i<ido; ++i)
             {
             for (size_t m=0; m<ip; ++m)
               cc2[m] = CC(i,m,k);
@@ -1200,8 +1276,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 {
                 CH(i,k,0) = p1[0];
                 for (size_t m=1; m<ip; ++m)
-//                  CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
-                  CH(i,k,m) = p1[m].template special_mul<fwd>(twid[m-1]);
+                  CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
+//                  CH(i,k,m) = p1[m].template special_mul<fwd>(twid[m-1]);
                 }
               }
             else
@@ -1213,12 +1289,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 {
                 CC(i,0,0) = p1[0];
                 for (size_t m=1; m<ip; ++m)
-//                  CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
-                  CC(i,m,0) = p1[m].template special_mul<fwd>(twid[m-1]);
+                  CC(i,m,0) = p1[m].template special_mul<fwd>(WA(m-1,i));
+//                  CC(i,m,0) = p1[m].template special_mul<fwd>(twid[m-1]);
                 }
               }
             }
-      }
         return (l1>1) ? ch : cc;
         }
       }
@@ -1226,12 +1301,12 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
   public:
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
       const Troots<Tfs> &roots_)
-      : l1(l1_), ido(ido_), ip(ip_), roots(roots_), bufsz(0), need_cpy(false)
+      : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false), roots(roots_)
       {
  //     MR_assert((roots->size()/ip)*ip==roots->size(), "mismatch");
       wa.resize((ip-1)*(ido-1));
       size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
         for (size_t i=1; i<ido; ++i)
