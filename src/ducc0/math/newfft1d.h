@@ -2,6 +2,7 @@
 #define DUCC0_NEWFFT1D_H
 
 #include <memory>
+#include <any>
 #include <complex>
 #include <cstring>
 #include "ducc0/infra/useful_macros.h"
@@ -105,20 +106,26 @@ template <typename Tfs> class cfftpass
 
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd, size_t vlen) = 0;
+    virtual any exec(any in, any copy, any buf, bool fwd, size_t vlen) = 0;
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd, size_t vlen) \
+    virtual any exec(any in, any copy, any buf, bool fwd, size_t vlen) \
       { \
       if (vlen==1) \
-        return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); \
+        { \
+        auto in1 = any_cast<Tcs *>(in); \
+        auto copy1 = any_cast<Tcs *>(copy); \
+        auto buf1 = any_cast<Tcs *>(buf); \
+        return fwd ? \
+          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1); \
+        } \
       if (vlen==native_simd<Tfs>::size()) \
         {  \
         using Tcv = Cmplx<native_simd<Tfs>>; \
-        auto in1 = reinterpret_cast<Tcv *>(in); \
-        auto copy1 = reinterpret_cast<Tcv *>(copy); \
-        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        auto in1 = any_cast<Tcv *>(in); \
+        auto copy1 = any_cast<Tcv *>(copy); \
+        auto buf1 = any_cast<Tcv *>(buf); \
         return reinterpret_cast<Tcs *>(fwd ? \
           exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
         } \
@@ -126,9 +133,9 @@ template <typename Tfs> class cfftpass
         if (vlen==8) \
         { \
         using Tcv = Cmplx<simd<Tfs,8>>; \
-        auto in1 = reinterpret_cast<Tcv *>(in); \
-        auto copy1 = reinterpret_cast<Tcv *>(copy); \
-        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        auto in1 = any_cast<Tcv *>(in); \
+        auto copy1 = any_cast<Tcv *>(copy); \
+        auto buf1 = any_cast<Tcv *>(buf); \
         return reinterpret_cast<Tcs *>(fwd ? \
           exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
         } \
@@ -136,9 +143,9 @@ template <typename Tfs> class cfftpass
         if (vlen==4) \
         { \
         using Tcv = Cmplx<simd<Tfs,4>>; \
-        auto in1 = reinterpret_cast<Tcv *>(in); \
-        auto copy1 = reinterpret_cast<Tcv *>(copy); \
-        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        auto in1 = any_cast<Tcv *>(in); \
+        auto copy1 = any_cast<Tcv *>(copy); \
+        auto buf1 = any_cast<Tcv *>(buf); \
         return reinterpret_cast<Tcs *>(fwd ? \
           exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
         } \
@@ -146,9 +153,9 @@ template <typename Tfs> class cfftpass
         if (vlen==2) \
         { \
         using Tcv = Cmplx<simd<Tfs,2>>; \
-        auto in1 = reinterpret_cast<Tcv *>(in); \
-        auto copy1 = reinterpret_cast<Tcv *>(copy); \
-        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        auto in1 = any_cast<Tcv *>(in); \
+        auto copy1 = any_cast<Tcv *>(copy); \
+        auto buf1 = any_cast<Tcv *>(buf); \
         return reinterpret_cast<Tcs *>(fwd ? \
           exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
         } \
@@ -171,7 +178,7 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
     cfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
-    virtual Tcs *exec(Tcs *in, Tcs * /*copy*/, Tcs * /*buf*/, bool /*fwd*/, size_t /*vlen*/)
+    virtual any exec(any in, any /*copy*/, any /*buf*/, bool /*fwd*/, size_t /*vlen*/)
       { return in; }
   };
 
@@ -1076,7 +1083,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = (Tcd *)subplan->exec ((Tcs *)akf,(Tcs *)akf2,(Tcs *)&buf[2*ip2],true, simdlen<decltype(Tcd::r)>);
+          auto res = any_cast<Tcd *>(subplan->exec ((Tcs *)akf,(Tcs *)akf2,(Tcs *)&buf[2*ip2],true, simdlen<decltype(Tcd::r)>));
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1089,7 +1096,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
             res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
 
           /* inverse FFT */
-          res = (Tcd *)subplan->exec ((Tcs *)res,(Tcs *) ((res==akf) ? akf2 : akf), (Tcs *)&buf[2*ip2], false, simdlen<decltype(Tcd::r)>);
+          res = any_cast<Tcd *>(subplan->exec ((Tcs *)res,(Tcs *) ((res==akf) ? akf2 : akf), (Tcs *)&buf[2*ip2], false, simdlen<decltype(Tcd::r)>));
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -1157,7 +1164,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
       for (size_t m=ip;m<=(ip2-ip);++m)
         tbkf[m].Set(0.,0.);
       aligned_array<Tcs> buf(subplan->bufsize());
-      auto res = subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1);
+      auto res = any_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1));
       for (size_t i=0; i<ip2/2+1; ++i)
         bkf[i] = res[i];
 
@@ -1199,10 +1206,10 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       using Tc = Cmplx<T>;
       if ((l1==1) && (ido==1)) // no chance at vectorizing
         {
-        Cmplx<T> *p1=cc, *p2=ch;
+        Tc *p1=cc, *p2=ch;
         for(const auto &pass: passes)
           {
-          auto res = (Cmplx<T>*)pass->exec((Tcs*)p1, (Tcs *)p2, (Tcs *)buf, fwd, simdlen<T>);
+          auto res = any_cast<Tc *>(pass->exec((Tcs*)p1, (Tcs *)p2, (Tcs *)buf, fwd, simdlen<T>));
           if (res==p2) swap (p1,p2);
           }
         return p1;
@@ -1254,7 +1261,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             Tcv *p1=cc2, *p2=ch2;
             for(const auto &pass: passes)
               {
-              auto res = (Tcv *)pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, vlen);
+              auto res = any_cast<Tcv *>(pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, vlen));
               if (res==p2) swap (p1,p2);
               }
             if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
@@ -1325,7 +1332,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               Cmplx<T> *p1=cc2, *p2=ch2;
               for(const auto &pass: passes)
                 {
-                auto res = (Cmplx<T> *)pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, simdlen<T>);
+                auto res = any_cast<Cmplx<T> *>(pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, simdlen<T>));
                 if (res==p2) swap (p1,p2);
                 }
 
@@ -1484,9 +1491,9 @@ template<typename Tfs> class pocketfft_c
         Tv dummy;
         vlen = dummy.r.size();
         }
-      auto res = reinterpret_cast<Tv *>(plan->exec(reinterpret_cast<Tcs *>(in),
-                            reinterpret_cast<Tcs *>(buf),
-                            reinterpret_cast<Tcs *>(buf+N*plan->needs_copy()),
+      auto res = any_cast<Tv *>(plan->exec(in,
+                            buf,
+                            buf+N*plan->needs_copy(),
                             fwd, vlen));
       if (res==in)
         {
