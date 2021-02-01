@@ -100,6 +100,7 @@ template<typename T> using Troots = shared_ptr<const UnityRoots<T,Cmplx<T>>>;
 template <typename Tfs> class cfftpass
   {
   public:
+    virtual ~cfftpass(){}
     using Tcs = Cmplx<Tfs>;
 
     virtual size_t bufsize() const = 0;
