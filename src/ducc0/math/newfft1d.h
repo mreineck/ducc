@@ -21,35 +21,6 @@ using namespace std;
 
 struct util1d // hack to avoid duplicate symbols
   {
-  DUCC0_NOINLINE static size_t largest_prime_factor (size_t n)
-    {
-    size_t res=1;
-    while ((n&1)==0)
-      { res=2; n>>=1; }
-    for (size_t x=3; x*x<=n; x+=2)
-      while ((n%x)==0)
-        { res=x; n/=x; }
-    if (n>1) res=n;
-    return res;
-    }
-
-  DUCC0_NOINLINE static double cost_guess (size_t n)
-    {
-    constexpr double lfp=1.1; // penalty for non-hardcoded larger factors
-    size_t ni=n;
-    double result=0.;
-    while ((n&1)==0)
-      { result+=2; n>>=1; }
-    for (size_t x=3; x*x<=n; x+=2)
-      while ((n%x)==0)
-        {
-        result+= (x<=5) ? double(x) : lfp*double(x); // penalize larger prime factors
-        n/=x;
-        }
-    if (n>1) result+=(n<=5) ? double(n) : lfp*double(n);
-    return result*double(ni);
-    }
-
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
   DUCC0_NOINLINE static size_t good_size_cmplx(size_t n)
     {
@@ -76,33 +47,6 @@ struct util1d // hack to avoid duplicate symbols
               return n;
             }
           }
-    return bestfac;
-    }
-
-  /* returns the smallest composite of 2, 3, 5 which is >= n */
-  DUCC0_NOINLINE static size_t good_size_real(size_t n)
-    {
-    if (n<=6) return n;
-
-    size_t bestfac=2*n;
-    for (size_t f5=1; f5<bestfac; f5*=5)
-      {
-      size_t x = f5;
-      while (x<n) x *= 2;
-      for (;;)
-        {
-        if (x<n)
-          x*=3;
-        else if (x>n)
-          {
-          if (x<bestfac) bestfac=x;
-          if (x&1) break;
-          x>>=1;
-          }
-        else
-          return n;
-        }
-      }
     return bestfac;
     }
   };
@@ -152,42 +96,88 @@ template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
 
 template<typename T> using Troots = shared_ptr<const UnityRoots<T,Cmplx<T>>>;
 
-// T: "type", f/c: "float/complex", s/d: "scalar/data"
-template <typename Tfd> class cfftpass
+// T: "type", f/c: "float/complex", s/v: "scalar/vector"
+template <typename Tfs> class cfftpass
   {
   public:
-    using Tfs = typename remove_simd<Tfd>::type;
     using Tcs = Cmplx<Tfs>;
-    using Tcd = Cmplx<Tfd>;
+
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd *buf, bool fwd) = 0;
+    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd, size_t vlen) = 0;
   };
+
+#define POCKETFFT_EXEC_DISPATCH \
+    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd, size_t vlen) \
+      { \
+      if (vlen==1) \
+        return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); \
+      if (vlen==native_simd<Tfs>::size()) \
+        {  \
+        using Tcv = Cmplx<native_simd<Tfs>>; \
+        auto in1 = reinterpret_cast<Tcv *>(in); \
+        auto copy1 = reinterpret_cast<Tcv *>(copy); \
+        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        return reinterpret_cast<Tcs *>(fwd ? \
+          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
+        } \
+      if constexpr (simd_exists<Tfs,8>) \
+        if (vlen==8) \
+        { \
+        using Tcv = Cmplx<simd<Tfs,8>>; \
+        auto in1 = reinterpret_cast<Tcv *>(in); \
+        auto copy1 = reinterpret_cast<Tcv *>(copy); \
+        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        return reinterpret_cast<Tcs *>(fwd ? \
+          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
+        } \
+      if constexpr (simd_exists<Tfs,4>) \
+        if (vlen==4) \
+        { \
+        using Tcv = Cmplx<simd<Tfs,4>>; \
+        auto in1 = reinterpret_cast<Tcv *>(in); \
+        auto copy1 = reinterpret_cast<Tcv *>(copy); \
+        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        return reinterpret_cast<Tcs *>(fwd ? \
+          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
+        } \
+      if constexpr (simd_exists<Tfs,2>) \
+        if (vlen==2) \
+        { \
+        using Tcv = Cmplx<simd<Tfs,2>>; \
+        auto in1 = reinterpret_cast<Tcv *>(in); \
+        auto copy1 = reinterpret_cast<Tcv *>(copy); \
+        auto buf1 = reinterpret_cast<Tcv *>(buf); \
+        return reinterpret_cast<Tcs *>(fwd ? \
+          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
+        } \
+      MR_fail("impossible vector length requested"); \
+      }
+
+
 template<typename T> using Tpass = shared_ptr<cfftpass<T>>;
 template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots);
 template<typename Tfs> Tpass<Tfs> make_pass(size_t ip)
   { return make_pass<Tfs> (1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip)); }
 
 
-template <typename Tfd> class cfftp1: public cfftpass<Tfd>
+template <typename Tfs> class cfftp1: public cfftpass<Tfs>
   {
+  private:
+    using typename cfftpass<Tfs>::Tcs;
+
   public:
-    using Tfs = typename remove_simd<Tfd>::type;
-    using Tcs = Cmplx<Tfs>;
-    using Tcd = Cmplx<Tfd>;
     cfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
-    virtual Tcd *exec(Tcd *in, Tcd * /*copy*/, Tcd * /*buf*/, bool /*fwd*/)
+    virtual Tcs *exec(Tcs *in, Tcs * /*copy*/, Tcs * /*buf*/, bool /*fwd*/, size_t /*vlen*/)
       { return in; }
   };
 
-template <typename Tfd> class cfftp2: public cfftpass<Tfd>
+template <typename Tfs> class cfftp2: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=2;
@@ -195,8 +185,8 @@ template <typename Tfd> class cfftp2: public cfftpass<Tfd>
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd> Tcd *exec_ (Tcd * DUCC0_RESTRICT cc,
-      Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_ (Tcd * DUCC0_RESTRICT cc,
+      Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
@@ -254,16 +244,13 @@ template <typename Tfd> class cfftp2: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return l1>1; }
 
-    virtual Tcs *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp3: public cfftpass<Tfd>
+template <typename Tfs> class cfftp3: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=3;
@@ -271,8 +258,8 @@ template <typename Tfd> class cfftp3: public cfftpass<Tfd>
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       constexpr Tfs tw1r=-0.5,
                     tw1i= (fwd ? -1: 1) * Tfs(0.8660254037844386467637231707529362L);
@@ -342,16 +329,13 @@ template <typename Tfd> class cfftp3: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp4: public cfftpass<Tfd>
+template <typename Tfs> class cfftp4: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=4;
@@ -359,8 +343,8 @@ template <typename Tfd> class cfftp4: public cfftpass<Tfd>
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
@@ -419,16 +403,13 @@ template <typename Tfd> class cfftp4: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp5: public cfftpass<Tfd>
+template <typename Tfs> class cfftp5: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=5;
@@ -444,8 +425,8 @@ template <typename Tfd> class cfftp5: public cfftpass<Tfd>
       { return wa[i-1+x*(ido-1)]; }
 #endif
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       constexpr Tfs tw1r= Tfs(0.3090169943749474241022934171828191L),
                     tw1i= (fwd ? -1: 1) * Tfs(0.9510565162951535721164393333793821L),
@@ -530,16 +511,13 @@ template <typename Tfd> class cfftp5: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp7: public cfftpass<Tfd>
+template <typename Tfs> class cfftp7: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=7;
@@ -555,8 +533,8 @@ template <typename Tfd> class cfftp7: public cfftpass<Tfd>
       { return wa[i-1+x*(ido-1)]; }
 #endif
 
-    template<bool fwd> Tcd  *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd  *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       constexpr Tfs tw1r= Tfs(0.6234898018587335305250048840042398L),
                     tw1i= (fwd ? -1 : 1) * Tfs(0.7818314824680298087084445266740578L),
@@ -646,16 +624,13 @@ template <typename Tfd> class cfftp7: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp8: public cfftpass<Tfd>
+template <typename Tfs> class cfftp8: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=8;
@@ -688,8 +663,8 @@ template <typename Tfd> class cfftp8: public cfftpass<Tfd>
         { auto tmp_=a.r; a.r=hsqt2*(-a.r-a.i); a.i=hsqt2*(tmp_-a.i); }
       }
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
@@ -785,16 +760,13 @@ template <typename Tfd> class cfftp8: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfftp11: public cfftpass<Tfd>
+template <typename Tfs> class cfftp11: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     static constexpr size_t ip=11;
@@ -810,8 +782,8 @@ template <typename Tfd> class cfftp11: public cfftpass<Tfd>
       { return wa[i-1+x*(ido-1)]; }
 #endif
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       constexpr Tfs tw1r= Tfs(0.8412535328311811688618116489193677L),
                     tw1i= (fwd ? -1 : 1) * Tfs(0.5406408174555975821076359543186917L),
@@ -911,17 +883,14 @@ template <typename Tfd> class cfftp11: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 //#define DYNAMIC_TWIDDLE
 
-template <typename Tfd> class cfftpg: public cfftpass<Tfd>
+template <typename Tfs> class cfftpg: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     size_t l1, ido;
     size_t ip;
@@ -938,8 +907,8 @@ template <typename Tfd> class cfftpg: public cfftpass<Tfd>
       { return wa[i-1+x*(ido-1)]; }
 #endif
 
-    template<bool fwd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch)
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       size_t ipph = (ip+1)/2;
       size_t idl1 = ido*l1;
@@ -1059,16 +1028,13 @@ template <typename Tfd> class cfftpg: public cfftpass<Tfd>
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
 
-    virtual Tcd *exec(Tcs *in, Tcd *copy, Tcd * /*buf*/, bool fwd)
-      { return fwd ? exec_<true>(in, copy) : exec_<false>(in, copy); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class bluepass: public cfftpass<Tfd>
+template <typename Tfs> class bluepass: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     const size_t l1, ido, ip;
     const size_t ip2;
@@ -1087,7 +1053,7 @@ template <typename Tfd> class bluepass: public cfftpass<Tfd>
       { return wa[i-1+x*(ido-1)]; }
 #endif
 
-    template<bool fwd> Tcd *exec_
+    template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch,
        Tcd * DUCC0_RESTRICT buf)
       {
@@ -1109,7 +1075,7 @@ template <typename Tfd> class bluepass: public cfftpass<Tfd>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = subplan->exec (akf,akf2,&buf[2*ip2],true);
+          auto res = (Tcd *)subplan->exec ((Tcs *)akf,(Tcs *)akf2,(Tcs *)&buf[2*ip2],true, simdlen<decltype(Tcd::r)>);
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1122,7 +1088,7 @@ template <typename Tfd> class bluepass: public cfftpass<Tfd>
             res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
 
           /* inverse FFT */
-          res = subplan->exec (res, (res==akf) ? akf2 : akf, &buf[2*ip2], false);
+          res = (Tcd *)subplan->exec ((Tcs *)res,(Tcs *) ((res==akf) ? akf2 : akf), (Tcs *)&buf[2*ip2], false, simdlen<decltype(Tcd::r)>);
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -1190,7 +1156,7 @@ template <typename Tfd> class bluepass: public cfftpass<Tfd>
       for (size_t m=ip;m<=(ip2-ip);++m)
         tbkf[m].Set(0.,0.);
       aligned_array<Tcs> buf(subplan->bufsize());
-      auto res = subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true);
+      auto res = subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1);
       for (size_t i=0; i<ip2/2+1; ++i)
         bkf[i] = res[i];
 
@@ -1201,16 +1167,13 @@ template <typename Tfd> class bluepass: public cfftpass<Tfd>
     virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
     virtual bool needs_copy() const { return need_cpy; }
 
-    virtual Tcd *exec(Tcd *in, Tcd *copy, Tcd *buf, bool fwd)
-      { return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfd> class cfft_multipass: public cfftpass<Tfd>
+template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
   {
   private:
-    using typename cfftpass<Tfd>::Tfs;
-    using typename cfftpass<Tfd>::Tcs;
-    using typename cfftpass<Tfd>::Tcd;
+    using typename cfftpass<Tfs>::Tcs;
 
     const size_t l1, ido;
     size_t ip;
@@ -1238,7 +1201,7 @@ template <typename Tfd> class cfft_multipass: public cfftpass<Tfd>
         Cmplx<T> *p1=cc, *p2=ch;
         for(const auto &pass: passes)
           {
-          auto res = pass->exec(p1, p2, buf, fwd);
+          auto res = (Cmplx<T>*)pass->exec((Tcs*)p1, (Tcs *)p2, (Tcs *)buf, fwd, simdlen<T>);
           if (res==p2) swap (p1,p2);
           }
         return p1;
@@ -1263,7 +1226,7 @@ template <typename Tfd> class cfft_multipass: public cfftpass<Tfd>
             Cmplx<T> *p1=cc2, *p2=ch2;
             for(const auto &pass: passes)
               {
-              auto res = pass->exec(p1, p2, buf2, fwd);
+              auto res = (Cmplx<T> *)pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, simdlen<T>);
               if (res==p2) swap (p1,p2);
               }
 
@@ -1314,7 +1277,7 @@ template <typename Tfd> class cfft_multipass: public cfftpass<Tfd>
 
       auto factors = factorize(ip);
 MR_assert(factors.size()>1, "uuups");
-constexpr size_t lim=2048;
+constexpr size_t lim=16384;
       if (ip<=lim)
         {
         size_t l1l=1;
@@ -1326,6 +1289,7 @@ constexpr size_t lim=2048;
         }
       else
         {
+#if 0
         vector<size_t> packets;
         size_t acc=1;
         for (auto fct: factors)
@@ -1341,6 +1305,17 @@ constexpr size_t lim=2048;
             acc*=fct;
           }
         if (acc>1) packets.push_back(acc);
+#else
+        vector<size_t> packets(2,1);
+        sort(factors.begin(), factors.end(), std::greater<size_t>());
+        for (auto fct: factors)
+          {
+          if (packets[0]>packets[1])
+            packets[1]*=fct;
+          else
+            packets[0]*=fct;
+          }
+#endif
 //cout << "subdividing into: ";
 //for (auto pkt: packets)
 //  cout << pkt << " ";
@@ -1367,8 +1342,7 @@ constexpr size_t lim=2048;
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return need_cpy; }
 
-    virtual Tcs *exec(Tcs *in, Tcs *copy, Tcs *buf, bool fwd)
-      { return fwd ? exec_<true>(in, copy, buf) : exec_<false>(in, copy, buf); }
+    POCKETFFT_EXEC_DISPATCH
   };
 
 template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots)
@@ -1405,21 +1379,30 @@ template<typename Tfs> Tpass<Tfs> make_pass(size_t l1, size_t ido, size_t ip, co
     return make_shared<cfft_multipass<Tfs>>(l1, ido, ip, roots);
   }
 
-template<typename Tfs> class newcfft1d
+template<typename Tfs> class pocketfft_c
   {
   private:
     using Tcs = Cmplx<Tfs>;
+    using Tcv = Cmplx<native_simd<Tfs>>;
     size_t N;
     Tpass<Tfs> plan;
 
   public:
-    newcfft1d(size_t n) : N(n), plan(make_pass<Tfs>(n)) {}
-
-    void exec(complex<Tfs> *data, Tfs fct, bool fwd) const
+    pocketfft_c(size_t n) : N(n), plan(make_pass<Tfs>(n)) {}
+    size_t length() const { return N; }
+    size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
+    template<typename Tv> Tv *exec(Tv *in, Tv *buf, Tfs fct, bool fwd) const
       {
-      auto in = reinterpret_cast<Tcs *>(data);
-      aligned_array<Tcs> buf(N*plan->needs_copy()+plan->bufsize());
-      auto res = plan->exec(in, buf.data(), buf.data()+N*plan->needs_copy(), fwd);
+      size_t vlen=1;
+      if constexpr (!is_same<Tv, Tcs>::value)
+        {
+        Tv dummy;
+        vlen = dummy.r.size();
+        }
+      auto res = reinterpret_cast<Tv *>(plan->exec(reinterpret_cast<Tcs *>(in),
+                            reinterpret_cast<Tcs *>(buf),
+                            reinterpret_cast<Tcs *>(buf+N*plan->needs_copy()),
+                            fwd, vlen));
       if (res==in)
         {
         if (fct!=Tfs(1))
@@ -1430,14 +1413,22 @@ template<typename Tfs> class newcfft1d
         if (fct!=Tfs(1))
           for (size_t i=0; i<N; ++i) in[i]=res[i]*fct;
         else
-          memcpy(in, res, N*sizeof(Tcs));
+          memcpy(in, res, N*sizeof(Tv));
         }
+      return in;
+      }
+    template<typename Tv> void exec(Tv *in, Tfs fct, bool fwd) const
+      {
+      aligned_array<Tv> buf(N*plan->needs_copy()+plan->bufsize());
+      exec(in, buf.data(), fct, fwd);
       }
   };
 
+#undef POCKETFFT_EXEC_DISPATCH
+
 }
 
-using detail_newfft::newcfft1d;
+using detail_newfft::pocketfft_c;
 
 }
 

@@ -41,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/unity_roots.h"
+#include "ducc0/math/newfft1d.h"
 
 namespace ducc0 {
 
@@ -647,9 +648,9 @@ template<bool fwd, typename T> void pass11 (size_t ido, size_t l1,
       }
   }
 
-#undef PARTSTEP11
-#undef PARTSTEP11a0
-#undef PARTSTEP11a
+#undef POCKETFFT_PARTSTEP11
+#undef POCKETFFT_PARTSTEP11a0
+#undef POCKETFFT_PARTSTEP11a
 #undef POCKETFFT_PREP11
 
 template<bool fwd, typename T> void passg (size_t ido, size_t ip,
@@ -1846,7 +1847,7 @@ template<typename T0> class fftblue
 // flexible (FFTPACK/Bluestein) complex 1D transform
 //
 
-template<typename T0> class pocketfft_c
+template<typename T0> class pocketfft_c_old
   {
   private:
     std::unique_ptr<cfftp<T0>> packplan;
@@ -1854,7 +1855,7 @@ template<typename T0> class pocketfft_c
     size_t len;
 
   public:
-    DUCC0_NOINLINE pocketfft_c(size_t length)
+    DUCC0_NOINLINE pocketfft_c_old(size_t length)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -1926,7 +1927,7 @@ template<typename T0> class pocketfft_r
 
 }
 
-using detail_fft::pocketfft_c;
+using detail_fft::pocketfft_c_old;
 using detail_fft::pocketfft_r;
 inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }

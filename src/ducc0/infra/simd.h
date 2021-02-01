@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
+/* Copyright (C) 2019-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_SIMD_H
@@ -466,6 +466,9 @@ template<typename T> using native_simd = vtp<T,1>;
 #else // DUCC0_NO_SIMD is defined
 template<typename T> using native_simd = vtp<T,1>;
 #endif
+
+template<typename T> size_t simdlen = 1;
+template<typename T, size_t vlen> size_t simdlen<vtp<T,vlen>> = vlen;
 }
 
 using detail_simd::native_simd;
@@ -478,6 +481,7 @@ using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
+using detail_simd::simdlen;
 
 // since we are explicitly introducing a few names that are also available in
 // std::, we need to import them from std::as well, otherwise name resolution
