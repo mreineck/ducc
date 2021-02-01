@@ -1892,11 +1892,77 @@ template<typename T0> class pocketfft_r
   {
   private:
     std::unique_ptr<rfftp<T0>> packplan;
-    std::unique_ptr<fftblue<T0>> blueplan;
+    std::unique_ptr<pocketfft_c<T0>> blueplan;
     size_t len;
 
   public:
     DUCC0_NOINLINE pocketfft_r(size_t length)
+      : len(length)
+      {
+      if (length==0) throw std::runtime_error("zero-length FFT requested");
+      size_t tmp = (length<50) ? 0 : util1d::largest_prime_factor(length);
+      if (tmp<230)
+        packplan=std::make_unique<rfftp<T0>>(length);
+      else
+        blueplan=std::make_unique<pocketfft_c<T0>>(length);
+      }
+
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool fwd) const
+      {
+      if (packplan)
+        return packplan->exec(c,buf,fct,fwd);
+
+      auto tmp = reinterpret_cast<Cmplx<T> *>(&buf[0]);
+      auto buf2 = reinterpret_cast<Cmplx<T> *>(&buf[2*len]);
+      if (fwd)
+        {
+        auto zero = T0(0)*c[0];
+        for (size_t m=0; m<len; ++m)
+          tmp[m].Set(c[m], zero);
+        auto res = blueplan->exec(tmp,buf2,fct,true);
+        c[0] = res[0].r;
+        memcpy (reinterpret_cast<void *>(&c[1]),
+                reinterpret_cast<void *>(&tmp[1]), (len-1)*sizeof(T));
+        }
+      else
+        {
+        tmp[0].Set(c[0],c[0]*0);
+        memcpy (reinterpret_cast<void *>(&tmp[1]),
+                reinterpret_cast<void *>(c+1), (len-1)*sizeof(T));
+        if ((len&1)==0) tmp[len/2].i=T0(0)*c[0];
+        for (size_t m=1; 2*m<len; ++m)
+          tmp[len-m].Set(tmp[m].r, -tmp[m].i);
+        auto res = blueplan->exec(tmp,buf2,fct,false);
+        for (size_t m=0; m<len; ++m)
+          c[m] = res[m].r;
+        }
+      return c;
+      }
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool fwd) const
+      {
+      if (packplan)
+        {
+        packplan->exec(c,fct,fwd);
+        return;
+        }
+      aligned_array<T> buf(2*len+2*blueplan->bufsize());
+      exec(c,buf.data(),fct,fwd);
+      }
+
+    size_t length() const { return len; }
+    size_t bufsize() const
+      { return packplan ? packplan->bufsize() : 2*len+2*blueplan->bufsize(); }
+  };
+
+template<typename T0> class pocketfft_r_old
+  {
+  private:
+    std::unique_ptr<rfftp<T0>> packplan;
+    std::unique_ptr<fftblue<T0>> blueplan;
+    size_t len;
+
+  public:
+    DUCC0_NOINLINE pocketfft_r_old(size_t length)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -1928,6 +1994,7 @@ template<typename T0> class pocketfft_r
 }
 
 using detail_fft::pocketfft_c_old;
+using detail_fft::pocketfft_r_old;
 using detail_fft::pocketfft_r;
 inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }
