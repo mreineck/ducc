@@ -885,7 +885,7 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
 
     POCKETFFT_EXEC_DISPATCH
   };
-//#define DYNAMIC_TWIDDLE
+#define DYNAMIC_TWIDDLE
 
 template <typename Tfs> class cfftpg: public cfftpass<Tfs>
   {
@@ -1226,14 +1226,28 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
           for (size_t itrans=0; itrans<nvtrans; ++itrans)
             {
-            for (size_t n=0; n<vlen; ++n)
+            size_t k0=(itrans*vlen)/ido;
+            if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
               {
-              auto i = (itrans*vlen+n)%ido;
-              auto k = min(l1-1,(itrans*vlen+n)/ido);
+              size_t i0 = (itrans*vlen)%ido;
               for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<vlen; ++n)
+                  {
+                  cc2[m].r[n] = CC(i0+n,m,k0).r;
+                  cc2[m].i[n] = CC(i0+n,m,k0).i;
+                  }
+              }
+            else
+              {
+              for (size_t n=0; n<vlen; ++n)
                 {
-                cc2[m].r[n] = CC(i,m,k).r;
-                cc2[m].i[n] = CC(i,m,k).i;
+                auto i = (itrans*vlen+n)%ido;
+                auto k = min(l1-1,(itrans*vlen+n)/ido);
+                for (size_t m=0; m<ip; ++m)
+                  {
+                  cc2[m].r[n] = CC(i,m,k).r;
+                  cc2[m].i[n] = CC(i,m,k).i;
+                  }
                 }
               }
             Tcv *p1=cc2, *p2=ch2;
@@ -1242,34 +1256,48 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               auto res = (Tcv *)pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, vlen);
               if (res==p2) swap (p1,p2);
               }
-            for (size_t n=0; n<vlen; ++n)
+            if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
               {
-              auto i = (itrans*vlen+n)%ido;
-//              auto k = min(l1-1,(itrans*vlen+n)/ido);
-              auto k = (itrans*vlen+n)/ido;
-              if (k>=l1) break;
+              auto i0 = (itrans*vlen)%ido;
               if (l1>1)
-                {
-                if (i==0)
-                  for (size_t m=0; m<ip; ++m)
-                    CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
-                else
-                  {
-                  CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
-                  for (size_t m=1; m<ip; ++m)
-                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
-                  }
-                }
+                for (size_t m=0; m<ip; ++m)
+                   for (size_t n=0; n<vlen; ++n)
+                     CC(i0+n,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
               else
+                for (size_t m=0; m<ip; ++m)
+                  for (size_t n=0; n<vlen; ++n)
+                    CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
+              }
+            else
+              {
+              for (size_t n=0; n<vlen; ++n)
                 {
-                if (i==0)
-                  for (size_t m=0; m<ip; ++m)
-                    CC(0,m,0) = {p1[m].r[n], p1[m].i[n]};
+                auto i = (itrans*vlen+n)%ido;
+                auto k = (itrans*vlen+n)/ido;
+                if (k>=l1) break;
+                if (l1>1)
+                  {
+                  if (i==0)
+                    for (size_t m=0; m<ip; ++m)
+                      CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
+                  else
+                    {
+                    CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
+                    for (size_t m=1; m<ip; ++m)
+                      CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                    }
+                  }
                 else
                   {
-                  CC(i,0,0) = Tcs(p1[0].r[n], p1[0].i[n]);
-                  for (size_t m=1; m<ip; ++m)
-                    CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                  if (i==0)
+                    for (size_t m=0; m<ip; ++m)
+                      CC(0,m,0) = {p1[m].r[n], p1[m].i[n]};
+                  else
+                    {
+                    CC(i,0,0) = Tcs(p1[0].r[n], p1[0].i[n]);
+                    for (size_t m=1; m<ip; ++m)
+                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                    }
                   }
                 }
               }
@@ -1351,6 +1379,7 @@ size_t lim=vectorize ? 1024 : 10240000;
       if (ip<=lim)
         {
         size_t l1l=1;
+  //      sort(factors.begin(), factors.end(), std::greater<size_t>());
         for (auto fct: factors)
           {
           passes.push_back(make_pass<Tfs>(l1l, ip/(fct*l1l), fct, roots));

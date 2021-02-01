@@ -1862,16 +1862,16 @@ template<typename T0> class pocketfft_c_old
       size_t tmp = (length<50) ? 0 : util1d::largest_prime_factor(length);
       if (tmp*tmp <= length)
         {
-        packplan=std::unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
+        packplan=std::make_unique<cfftp<T0>>(length);
         return;
         }
       double comp1 = util1d::cost_guess(length);
       double comp2 = 2*util1d::cost_guess(util1d::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
-        blueplan=std::unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
+        blueplan=std::make_unique<fftblue<T0>>(length);
       else
-        packplan=std::unique_ptr<cfftp<T0>>(new cfftp<T0>(length));
+        packplan=std::make_unique<cfftp<T0>>(length);
       }
 
     template<typename T> DUCC0_NOINLINE void exec(Cmplx<T> c[], T0 fct, bool fwd) const
@@ -1969,16 +1969,16 @@ template<typename T0> class pocketfft_r_old
       size_t tmp = (length<50) ? 0 : util1d::largest_prime_factor(length);
       if (tmp*tmp <= length)
         {
-        packplan=std::unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
+        packplan=std::make_unique<rfftp<T0>>(length);
         return;
         }
       double comp1 = 0.5*util1d::cost_guess(length);
       double comp2 = 2*util1d::cost_guess(util1d::good_size_cmplx(2*length-1));
       comp2*=1.5; /* fudge factor that appears to give good overall performance */
       if (comp2<comp1) // use Bluestein
-        blueplan=std::unique_ptr<fftblue<T0>>(new fftblue<T0>(length));
+        blueplan=std::make_unique<fftblue<T0>>(length);
       else
-        packplan=std::unique_ptr<rfftp<T0>>(new rfftp<T0>(length));
+        packplan=std::make_unique<rfftp<T0>>(length);
       }
 
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool fwd) const

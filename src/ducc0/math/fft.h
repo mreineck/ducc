@@ -293,8 +293,8 @@ template<typename T0> class T_dcst4
   public:
     DUCC0_NOINLINE T_dcst4(size_t length)
       : N(length),
-        fft((N&1) ? nullptr : new pocketfft_c<T0>(N/2)),
-        rfft((N&1)? new pocketfft_r<T0>(N) : nullptr),
+        fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
+        rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),
         C2((N&1) ? 0 : N/2)
       {
       if ((N&1)==0)
