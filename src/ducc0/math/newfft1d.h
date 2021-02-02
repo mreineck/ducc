@@ -1270,11 +1270,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               if (l1>1)
                 for (size_t m=0; m<ip; ++m)
                    for (size_t n=0; n<vlen; ++n)
-                     CC(i0+n,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
+                     CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
               else
                 for (size_t m=0; m<ip; ++m)
                   for (size_t n=0; n<vlen; ++n)
-                    CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
+                    CC(i0+n,m,k0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
               }
             else
               {
