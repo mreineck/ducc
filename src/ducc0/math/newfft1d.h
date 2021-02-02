@@ -117,8 +117,8 @@ template <typename Tfs> class cfftpass
         auto in1 = any_cast<Tcs *>(in); \
         auto copy1 = any_cast<Tcs *>(copy); \
         auto buf1 = any_cast<Tcs *>(buf); \
-        return fwd ? \
-          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1); \
+        return fwd ? exec_<true>(in1, copy1, buf1) \
+                   : exec_<false>(in1, copy1, buf1); \
         } \
       if (vlen==native_simd<Tfs>::size()) \
         {  \
@@ -126,39 +126,39 @@ template <typename Tfs> class cfftpass
         auto in1 = any_cast<Tcv *>(in); \
         auto copy1 = any_cast<Tcv *>(copy); \
         auto buf1 = any_cast<Tcv *>(buf); \
-        return reinterpret_cast<Tcs *>(fwd ? \
-          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
+        return fwd ? exec_<true>(in1, copy1, buf1) \
+                   : exec_<false>(in1, copy1, buf1); \
         } \
       if constexpr (simd_exists<Tfs,8>) \
         if (vlen==8) \
-        { \
-        using Tcv = Cmplx<simd<Tfs,8>>; \
-        auto in1 = any_cast<Tcv *>(in); \
-        auto copy1 = any_cast<Tcv *>(copy); \
-        auto buf1 = any_cast<Tcv *>(buf); \
-        return reinterpret_cast<Tcs *>(fwd ? \
-          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
-        } \
+          { \
+          using Tcv = Cmplx<simd<Tfs,8>>; \
+          auto in1 = any_cast<Tcv *>(in); \
+          auto copy1 = any_cast<Tcv *>(copy); \
+          auto buf1 = any_cast<Tcv *>(buf); \
+          return fwd ? exec_<true>(in1, copy1, buf1) \
+                     : exec_<false>(in1, copy1, buf1); \
+          } \
       if constexpr (simd_exists<Tfs,4>) \
         if (vlen==4) \
-        { \
-        using Tcv = Cmplx<simd<Tfs,4>>; \
-        auto in1 = any_cast<Tcv *>(in); \
-        auto copy1 = any_cast<Tcv *>(copy); \
-        auto buf1 = any_cast<Tcv *>(buf); \
-        return reinterpret_cast<Tcs *>(fwd ? \
-          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
-        } \
+          { \
+          using Tcv = Cmplx<simd<Tfs,4>>; \
+          auto in1 = any_cast<Tcv *>(in); \
+          auto copy1 = any_cast<Tcv *>(copy); \
+          auto buf1 = any_cast<Tcv *>(buf); \
+          return fwd ? exec_<true>(in1, copy1, buf1) \
+                     : exec_<false>(in1, copy1, buf1); \
+          } \
       if constexpr (simd_exists<Tfs,2>) \
         if (vlen==2) \
-        { \
-        using Tcv = Cmplx<simd<Tfs,2>>; \
-        auto in1 = any_cast<Tcv *>(in); \
-        auto copy1 = any_cast<Tcv *>(copy); \
-        auto buf1 = any_cast<Tcv *>(buf); \
-        return reinterpret_cast<Tcs *>(fwd ? \
-          exec_<true>(in1, copy1, buf1) : exec_<false>(in1, copy1, buf1)); \
-        } \
+          { \
+          using Tcv = Cmplx<simd<Tfs,2>>; \
+          auto in1 = any_cast<Tcv *>(in); \
+          auto copy1 = any_cast<Tcv *>(copy); \
+          auto buf1 = any_cast<Tcv *>(buf); \
+          return fwd ? exec_<true>(in1, copy1, buf1) \
+                     : exec_<false>(in1, copy1, buf1); \
+          } \
       MR_fail("impossible vector length requested"); \
       }
 
@@ -1083,7 +1083,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = any_cast<Tcd *>(subplan->exec ((Tcs *)akf,(Tcs *)akf2,(Tcs *)&buf[2*ip2],true, simdlen<decltype(Tcd::r)>));
+          auto res = any_cast<Tcd *>(subplan->exec((Tcd *)akf,(Tcd *)akf2,(Tcd *)&buf[2*ip2], true, simdlen<decltype(Tcd::r)>));
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1096,7 +1096,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
             res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
 
           /* inverse FFT */
-          res = any_cast<Tcd *>(subplan->exec ((Tcs *)res,(Tcs *) ((res==akf) ? akf2 : akf), (Tcs *)&buf[2*ip2], false, simdlen<decltype(Tcd::r)>));
+          res = any_cast<Tcd *>(subplan->exec(res,(Tcd *)((res==akf) ? akf2 : akf),(Tcd *)&buf[2*ip2], false, simdlen<decltype(Tcd::r)>));
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -1209,7 +1209,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         Tc *p1=cc, *p2=ch;
         for(const auto &pass: passes)
           {
-          auto res = any_cast<Tc *>(pass->exec((Tcs*)p1, (Tcs *)p2, (Tcs *)buf, fwd, simdlen<T>));
+          auto res = any_cast<Tc *>(pass->exec(p1, p2, buf, fwd, simdlen<T>));
           if (res==p2) swap (p1,p2);
           }
         return p1;
@@ -1261,7 +1261,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             Tcv *p1=cc2, *p2=ch2;
             for(const auto &pass: passes)
               {
-              auto res = any_cast<Tcv *>(pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, vlen));
+              auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd, vlen));
               if (res==p2) swap (p1,p2);
               }
             if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
@@ -1332,7 +1332,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               Cmplx<T> *p1=cc2, *p2=ch2;
               for(const auto &pass: passes)
                 {
-                auto res = any_cast<Cmplx<T> *>(pass->exec((Tcs *)p1, (Tcs *)p2, (Tcs *)buf2, fwd, simdlen<T>));
+                auto res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd, simdlen<T>));
                 if (res==p2) swap (p1,p2);
                 }
 
