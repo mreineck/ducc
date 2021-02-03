@@ -1573,7 +1573,7 @@ template <typename Tfs> class rfftp2: public rfftpass<Tfs>
     aligned_array<Tfs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[i+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/)
@@ -1598,7 +1598,7 @@ template <typename Tfs> class rfftp2: public rfftpass<Tfs>
             {
             size_t ic=ido-i;
             Tfd tr2, ti2;
-            MULPM (tr2,ti2,WA(1,i-2),WA(1,i-1),CC(i-1,k,1),CC(i,k,1));
+            MULPM (tr2,ti2,WA(0,i-2),WA(0,i-1),CC(i-1,k,1),CC(i,k,1));
             PM (CH(i-1,0,k),CH(ic-1,1,k),CC(i-1,k,0),tr2);
             PM (CH(i  ,0,k),CH(ic  ,1,k),ti2,CC(i  ,k,0));
             }
@@ -1626,7 +1626,7 @@ template <typename Tfs> class rfftp2: public rfftpass<Tfs>
             Tfd ti2, tr2;
             PM (CH(i-1,k,0),tr2,CC(i-1,0,k),CC(ic-1,1,k));
             PM (ti2,CH(i  ,k,0),CC(i  ,0,k),CC(ic  ,1,k));
-            MULPM (CH(i,k,1),CH(i-1,k,1),WA(1,i-2),WA(1,i-1),ti2,tr2);
+            MULPM (CH(i,k,1),CH(i-1,k,1),WA(0,i-2),WA(0,i-1),ti2,tr2);
             }
         }
       return ch;
@@ -1668,7 +1668,7 @@ template <typename Tfs> class rfftp3: public rfftpass<Tfs>
     aligned_array<Tfs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[i+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/)
@@ -1774,7 +1774,7 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
     aligned_array<Tfs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[i+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/)
@@ -1901,7 +1901,7 @@ template <typename Tfs> class rfftp5: public rfftpass<Tfs>
     aligned_array<Tfs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[i+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/)
@@ -2037,9 +2037,6 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
     size_t l1, ido;
     size_t ip;
     aligned_array<Tfs> wa, csarr;
-
-    auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/)
@@ -2348,6 +2345,144 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
 
     POCKETFFT_EXEC_DISPATCH
   };
+#if 0
+template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
+  {
+  private:
+    const size_t l1, ido, ip;
+    const size_t ip2;
+    const Tcpass<Tfs> subplan;
+    aligned_array<Tcs> wa, bk, bkf;
+    size_t bufsz;
+    bool need_cpy;
+
+    auto WA(size_t x, size_t i) const
+      { return wa[i-1+x*(ido-1)]; }
+
+    template<bool fwd, typename Tfd> Tfd *exec_
+      (Tfd * DUCC0_RESTRICT cc, Tfd * DUCC0_RESTRICT ch,
+       Tfd * DUCC0_RESTRICT buf_)
+      {
+      using Tcd = Cmplx<Tfd>;
+      auto buf = reinterpret_cast<Tcd *>(buf_);
+      Tcd *akf = &buf[0]);
+      Tcd *akf2 = &buf[ip2];
+      Tcd *subbuf = &buf[2*ip2];
+
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return ch[a+ido*(b+l1*c)]; };
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return cc[a+ido*(b+ip*c)]; };
+
+      for (size_t k=0; k<l1; ++k)
+        for (size_t i=0; i<ido; ++i)
+          {
+          akf[0] = CC(i,0,k);
+          for (size_t m=1; m<ip/2; ++m)
+            {
+            akf[m] = Tcd(CC(i,2*m-1,k), CC(i,2*m,k));
+            akf[ip-m] = Tcd(CC(i,2*m-1,k), -CC(i,2*m,k));
+            }
+          /* initialize a_k and FFT it */
+          for (size_t m=0; m<ip; ++m)
+            special_mul<fwd>(akf[m],bk[m],akf[m]);
+          auto zero = akf[0]*Tfs(0);
+          for (size_t m=ip; m<ip2; ++m)
+            akf[m]=zero;
+
+          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true, simdlen<decltype(Tcd::r)>));
+
+          /* do the convolution */
+          res[0] = res[0].template special_mul<!fwd>(bkf[0]);
+          for (size_t m=1; m<(ip2+1)/2; ++m)
+            {
+            res[m] = res[m].template special_mul<!fwd>(bkf[m]);
+            res[ip2-m] = res[ip2-m].template special_mul<!fwd>(bkf[m]);
+            }
+          if ((ip2&1)==0)
+            res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
+
+          /* inverse FFT */
+          res = any_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf, subbuf, false, simdlen<decltype(Tcd::r)>));
+
+          /* multiply by b_k and write to output buffer */
+          if (l1>1)
+            {
+            if (i==0)
+              for (size_t m=0; m<ip; ++m)
+                CH(0,k,m) = res[m].template special_mul<fwd>(bk[m]);
+            else
+              {
+              CH(i,k,0) = res[0].template special_mul<fwd>(bk[0]);
+              for (size_t m=1; m<ip; ++m)
+                CH(i,k,m) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
+              }
+            }
+          else
+            {
+            if (i==0)
+              for (size_t m=0; m<ip; ++m)
+                CC(0,m,0) = res[m].template special_mul<fwd>(bk[m]);
+            else
+              {
+              CC(i,0,0) = res[0].template special_mul<fwd>(bk[0]);
+              for (size_t m=1; m<ip; ++m)
+                CC(i,m,0) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
+              }
+            }
+          }
+
+      return (l1>1) ? ch : cc;
+      }
+
+  public:
+    rfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
+      : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
+        subplan(make_cpass<Tfs>(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+      {
+      size_t N=ip*l1*ido;
+      auto rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      for (size_t j=1; j<ip; ++j)
+        for (size_t i=1; i<ido; ++i)
+          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+
+      /* initialize b_k */
+      bk[0].Set(1, 0);
+      size_t coeff=0;
+      auto roots2 = ((roots->size()/(2*ip))*2*ip==roots->size()) ?
+                    roots : make_shared<const UnityRoots<Tfs,Tcs>>(2*ip);
+      size_t rfct2 = roots2->size()/(2*ip);
+      for (size_t m=1; m<ip; ++m)
+        {
+        coeff+=2*m-1;
+        if (coeff>=2*ip) coeff-=2*ip;
+        bk[m] = (*roots2)[coeff*rfct2];
+        }
+
+      /* initialize the zero-padded, Fourier transformed b_k. Add normalisation. */
+      aligned_array<Tcs> tbkf(ip2), tbkf2(ip2);
+      Tfs xn2 = Tfs(1)/Tfs(ip2);
+      tbkf[0] = bk[0]*xn2;
+      for (size_t m=1; m<ip; ++m)
+        tbkf[m] = tbkf[ip2-m] = bk[m]*xn2;
+      for (size_t m=ip;m<=(ip2-ip);++m)
+        tbkf[m].Set(0.,0.);
+      aligned_array<Tcs> buf(subplan->bufsize());
+      auto res = any_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1));
+      for (size_t i=0; i<ip2/2+1; ++i)
+        bkf[i] = res[i];
+
+      need_cpy = l1>1;
+      bufsz = ip2*(1+subplan->needs_copy()) + subplan->bufsize();
+      }
+
+    virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
+    virtual bool needs_copy() const { return need_cpy; }
+
+    POCKETFFT_EXEC_DISPATCH
+  };
+#endif
 
 template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
   {
@@ -2368,11 +2503,17 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
         {
         Tfd *p1=cc, *p2=ch;
         if constexpr (fwd)
-        for (auto it=passes.rbegin(); it!=passes.rend(); ++it)
-          {
-          auto res = any_cast<Tfd *>((*it)->exec(p1,p2,buf,fwd,simdlen<Tfd>));
-          if (res==p2) swap(p1,p2);
-          }
+          for (auto it=passes.rbegin(); it!=passes.rend(); ++it)
+            {
+            auto res = any_cast<Tfd *>((*it)->exec(p1,p2,buf,fwd,simdlen<Tfd>));
+            if (res==p2) swap(p1,p2);
+            }
+        else
+          for (const auto &pass: passes)
+            {
+            auto res = any_cast<Tfd *>(pass->exec(p1,p2,buf,fwd,simdlen<Tfd>));
+            if (res==p2) swap(p1,p2);
+            }
         return p1;
         }
       else
