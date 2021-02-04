@@ -1034,7 +1034,7 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-template <typename Tfs> class bluepass: public cfftpass<Tfs>
+template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -1118,7 +1118,7 @@ template <typename Tfs> class bluepass: public cfftpass<Tfs>
       }
 
   public:
-    bluepass(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
+    cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
         subplan(make_cpass<Tfs>(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
       {
@@ -1432,7 +1432,7 @@ template<typename Tfs> Tcpass<Tfs> make_cpass(size_t l1, size_t ido, size_t ip, 
         if (ip<110)
           return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
         else
-          return make_shared<bluepass<Tfs>>(l1, ido, ip, roots, vectorize);
+          return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
       }
     }
   else // more than one factor, need a multipass
@@ -2345,19 +2345,18 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
 
     POCKETFFT_EXEC_DISPATCH
   };
-#if 0
+
 template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
   {
   private:
     const size_t l1, ido, ip;
-    const size_t ip2;
-    const Tcpass<Tfs> subplan;
-    aligned_array<Tcs> wa, bk, bkf;
+    aligned_array<Tfs> wa;
+    const Tcpass<Tfs> blueplan;
     size_t bufsz;
     bool need_cpy;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[i+x*(ido-1)]; }
 
     template<bool fwd, typename Tfd> Tfd *exec_
       (Tfd * DUCC0_RESTRICT cc, Tfd * DUCC0_RESTRICT ch,
@@ -2365,124 +2364,120 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
       {
       using Tcd = Cmplx<Tfd>;
       auto buf = reinterpret_cast<Tcd *>(buf_);
-      Tcd *akf = &buf[0]);
-      Tcd *akf2 = &buf[ip2];
-      Tcd *subbuf = &buf[2*ip2];
+      Tcd *cc2 = &buf[0];
+      Tcd *ch2 = &buf[ip];
+      Tcd *subbuf = &buf[2*ip];
 
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return cc[a+ido*(b+ip*c)]; };
+      if constexpr(fwd)
+        {
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
+          { return cc[a+ido*(b+l1*c)]; };
+        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&
+          { return ch[a+ido*(b+ip*c)]; };
 
-      for (size_t k=0; k<l1; ++k)
-        for (size_t i=0; i<ido; ++i)
+        for (size_t k=0; k<l1; ++k)
           {
-          akf[0] = CC(i,0,k);
-          for (size_t m=1; m<ip/2; ++m)
-            {
-            akf[m] = Tcd(CC(i,2*m-1,k), CC(i,2*m,k));
-            akf[ip-m] = Tcd(CC(i,2*m-1,k), -CC(i,2*m,k));
-            }
-          /* initialize a_k and FFT it */
+          // copy in
           for (size_t m=0; m<ip; ++m)
-            special_mul<fwd>(akf[m],bk[m],akf[m]);
-          auto zero = akf[0]*Tfs(0);
-          for (size_t m=ip; m<ip2; ++m)
-            akf[m]=zero;
-
-          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true, simdlen<decltype(Tcd::r)>));
-
-          /* do the convolution */
-          res[0] = res[0].template special_mul<!fwd>(bkf[0]);
-          for (size_t m=1; m<(ip2+1)/2; ++m)
+            cc2[m] = {CC(0,k,m),Tfd(0)};
+          auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+          // copy out
+          CH(0,0,k) = res[0].r; 
+          for (size_t m=1; m<=ip/2; ++m)
             {
-            res[m] = res[m].template special_mul<!fwd>(bkf[m]);
-            res[ip2-m] = res[ip2-m].template special_mul<!fwd>(bkf[m]);
-            }
-          if ((ip2&1)==0)
-            res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
-
-          /* inverse FFT */
-          res = any_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf, subbuf, false, simdlen<decltype(Tcd::r)>));
-
-          /* multiply by b_k and write to output buffer */
-          if (l1>1)
-            {
-            if (i==0)
-              for (size_t m=0; m<ip; ++m)
-                CH(0,k,m) = res[m].template special_mul<fwd>(bk[m]);
-            else
-              {
-              CH(i,k,0) = res[0].template special_mul<fwd>(bk[0]);
-              for (size_t m=1; m<ip; ++m)
-                CH(i,k,m) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
-              }
-            }
-          else
-            {
-            if (i==0)
-              for (size_t m=0; m<ip; ++m)
-                CC(0,m,0) = res[m].template special_mul<fwd>(bk[m]);
-            else
-              {
-              CC(i,0,0) = res[0].template special_mul<fwd>(bk[0]);
-              for (size_t m=1; m<ip; ++m)
-                CC(i,m,0) = res[m].template special_mul<fwd>(bk[m]*WA(m-1,i));
-              }
+            CH(ido-1,2*m-1,k)=res[m].r;
+            CH(0,2*m,k)=res[m].i;
             }
           }
+        if (ido==1) return ch;
+        for (size_t k=0; k<l1; ++k)
+          for (size_t i=2, ic=ido-2; i<ido; i+=2, ic-=2)
+            {
+            // copy in
+            cc2[0] = {CC(i-1,k,0),CC(i,k,0)};
+            for (size_t m=1; m<ip; ++m)
+              {
+              cc2[m] = Tcd(CC(i-1,k,m),CC(i,k,m)).template special_mul<fwd>(Tcd(WA(m-1,i-2),WA(m-1,i-1)));
+              }
+            auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+            CH(i-1,0,k) = res[0].r; 
+            CH(i,0,k) = res[0].i; 
+            for (size_t m=1; m<=ip/2; ++m)
+              {
+              CH(ic-1,2*m-1,k)=res[m].r;
+              CH(ic,2*m-1,k)=res[m].i;
+              CH(i-1,2*m,k)=res[ip-m].r;
+              CH(i,2*m,k)=res[ip-m].i;
+              }
+            }
+        }
+      else
+        {
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tfd&
+          { return cc[a+ido*(b+ip*c)]; };
+        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&
+          { return ch[a+ido*(b+l1*c)]; };
 
-      return (l1>1) ? ch : cc;
+        for (size_t k=0; k<l1; k++)
+          {
+          cc2[0] = {CC(0,0,k), Tfd(0)};
+          for (size_t m=1; m<=ip/2; ++m)
+            {
+            cc2[m] = {CC(ido-1,2*m-1,k),CC(0,2*m,k)};
+            cc2[ip-m] = {CC(ido-1,2*m-1,k),-CC(0,2*m,k)};
+            }
+          auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+          for (size_t m=0; m<ip; ++m)
+            CH(0,k,m) = res[m].r;
+          }
+        if (ido==1) return ch;
+        for (size_t k=0; k<l1; ++k)
+          for (size_t i=2, ic=ido-2; i<ido; i+=2, ic-=2)
+            {
+            // copy in
+            cc2[0] = {CC(i-1,0,k),CC(i,0,k)}; 
+            for (size_t m=1; m<=ip/2; ++m)
+              {
+              cc2[m] = {CC(i-1,2*m-1,k),CC(i,2*m,k)};
+              cc2[ip-m] = {CC(ic-1,2*m-1,k),-CC(ic,2*m,k)};
+              }
+            auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+            CH(i-1,k,0) = res[0].r;
+            CH(i,k,0) = res[0].i;
+            for (size_t m=1; m<ip; ++m)
+              {
+              auto val = res[m].template special_mul<fwd>(Tcd(WA(m-1,i-2),WA(m-1,i-1)));
+              CH(i-1,k,m) = val.r;
+              CH(i,k,m) = val.i;
+              }
+            }
+        }
+
+      return ch;
       }
 
   public:
     rfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
-      : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
-        subplan(make_cpass<Tfs>(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+      : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)),
+        blueplan(make_shared<cfftpblue<Tfs>>(1,1,ip,roots,vectorize))
       {
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
-
-      /* initialize b_k */
-      bk[0].Set(1, 0);
-      size_t coeff=0;
-      auto roots2 = ((roots->size()/(2*ip))*2*ip==roots->size()) ?
-                    roots : make_shared<const UnityRoots<Tfs,Tcs>>(2*ip);
-      size_t rfct2 = roots2->size()/(2*ip);
-      for (size_t m=1; m<ip; ++m)
-        {
-        coeff+=2*m-1;
-        if (coeff>=2*ip) coeff-=2*ip;
-        bk[m] = (*roots2)[coeff*rfct2];
-        }
-
-      /* initialize the zero-padded, Fourier transformed b_k. Add normalisation. */
-      aligned_array<Tcs> tbkf(ip2), tbkf2(ip2);
-      Tfs xn2 = Tfs(1)/Tfs(ip2);
-      tbkf[0] = bk[0]*xn2;
-      for (size_t m=1; m<ip; ++m)
-        tbkf[m] = tbkf[ip2-m] = bk[m]*xn2;
-      for (size_t m=ip;m<=(ip2-ip);++m)
-        tbkf[m].Set(0.,0.);
-      aligned_array<Tcs> buf(subplan->bufsize());
-      auto res = any_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1));
-      for (size_t i=0; i<ip2/2+1; ++i)
-        bkf[i] = res[i];
-
-      need_cpy = l1>1;
-      bufsz = ip2*(1+subplan->needs_copy()) + subplan->bufsize();
+        for (size_t i=1; i<=(ido-1)/2; ++i)
+          {
+          auto val = (*roots)[rfct*j*l1*i];
+          wa[(j-1)*(ido-1)+2*i-2] = val.r;
+          wa[(j-1)*(ido-1)+2*i-1] = val.i;
+          }
       }
 
-    virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
-    virtual bool needs_copy() const { return need_cpy; }
+    virtual size_t bufsize() const { return 4*ip + 2*blueplan->bufsize(); }
+    virtual bool needs_copy() const { return true; }
 
     POCKETFFT_EXEC_DISPATCH
   };
-#endif
 
 template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
   {
@@ -2580,20 +2575,11 @@ template<typename Tfs> Trpass<Tfs> make_rpass(size_t l1, size_t ido, size_t ip, 
         return make_shared<rfftp4<Tfs>>(l1, ido, roots);
       case 5:
         return make_shared<rfftp5<Tfs>>(l1, ido, roots);
-//       case 7:
-//         return make_shared<cfftp7<Tfs>>(l1, ido, roots);
-//       case 8:
-//         return make_shared<cfftp8<Tfs>>(l1, ido, roots);
-//       case 11:
-//         return make_shared<cfftp11<Tfs>>(l1, ido, roots);
-//       default:
-//         if (ip<110)
-//           return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
-//         else
-//           return make_shared<bluepass<Tfs>>(l1, ido, ip, roots, vectorize);
       default:
-        return make_shared<rfftpg<Tfs>>(l1, ido, ip, roots);
-//        MR_fail("not yet supported");
+        if (ip<135)
+          return make_shared<rfftpg<Tfs>>(l1, ido, ip, roots);
+        else
+          return make_shared<rfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
       }
     }
   else // more than one factor, need a multipass

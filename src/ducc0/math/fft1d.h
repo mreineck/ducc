@@ -1891,7 +1891,7 @@ template<typename T0> class pocketfft_c_old
 template<typename T0> class pocketfft_r
   {
   private:
-    std::unique_ptr<rfftp<T0>> packplan;
+    std::unique_ptr<pocketfft_r_new<T0>> packplan;
     std::unique_ptr<pocketfft_c<T0>> blueplan;
     size_t len;
 
@@ -1902,7 +1902,7 @@ template<typename T0> class pocketfft_r
       if (length==0) throw std::runtime_error("zero-length FFT requested");
       size_t tmp = (length<50) ? 0 : util1d::largest_prime_factor(length);
       if (tmp<230)
-        packplan=std::make_unique<rfftp<T0>>(length);
+        packplan=std::make_unique<pocketfft_r_new<T0>>(length);
       else
         blueplan=std::make_unique<pocketfft_c<T0>>(length);
       }
