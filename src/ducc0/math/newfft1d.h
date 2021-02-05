@@ -765,7 +765,7 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
     auto WA(size_t x, size_t i) const
       { return wa[i-1+x*(ido-1)]; }
 
-    template<bool fwd, typename Tcd> Tcd *exec_
+    template<bool fwd, typename Tcd> [[gnu::hot]] Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/)
       {
       constexpr Tfs tw1r= Tfs(0.8412535328311811688618116489193677L),
@@ -1170,6 +1170,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
+        MR_fail("currently unsupported");
         if constexpr(is_same<T,Tfs>::value) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
@@ -1334,7 +1335,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
       auto factors = cfftpass<Tfs>::factorize(ip);
-      size_t lim=vectorize ? 1024 : 10240000;
+      // FIXME TBD
+      size_t lim = vectorize ? 2000000000 : 2000000000;
       if (ip<=lim)
         {
         size_t l1l=1;
@@ -1346,6 +1348,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
+        MR_fail("currently unsupported");
         vector<size_t> packets(2,1);
         sort(factors.begin(), factors.end(), std::greater<size_t>());
         for (auto fct: factors)
