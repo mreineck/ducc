@@ -3,7 +3,6 @@
 
 #include <memory>
 #include <any>
-#include <complex>
 #include <cstring>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
@@ -11,8 +10,6 @@
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/unity_roots.h"
-
-#include <iostream>
 
 namespace ducc0 {
 
@@ -52,55 +49,6 @@ struct util1d // hack to avoid duplicate symbols
     }
   };
 
-vector<size_t> factorize(size_t N)
-  {
-  MR_assert(N>0, "need a positive number");
-  vector<size_t> factors;
-  while ((N&7)==0)
-    { factors.push_back(8); N>>=3; }
-  while ((N&3)==0)
-    { factors.push_back(4); N>>=2; }
-  if ((N&1)==0)
-    {
-    N>>=1;
-    // factor 2 should be at the front of the factor list
-    factors.push_back(2);
-    swap(factors[0], factors.back());
-    }
-  for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
-  while ((N%divisor)==0)
-    {
-    factors.push_back(divisor);
-    N/=divisor;
-    }
-  if (N>1) factors.push_back(N);
-  return factors;
-  }
-
-vector<size_t> factorize_r(size_t N)
-  {
-  MR_assert(N>0, "need a positive number");
-  vector<size_t> factors;
-  while ((N&3)==0)
-    { factors.push_back(4); N>>=2; }
-  if ((N&1)==0)
-    {
-    N>>=1;
-    // factor 2 should be at the front of the factor list
-    factors.push_back(2);
-    swap(factors[0], factors.back());
-    }
-  for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
-  while ((N%divisor)==0)
-    {
-    factors.push_back(divisor);
-    N/=divisor;
-    }
-  if (N>1) factors.push_back(N);
-  return factors;
-  }
-
-
 template<typename T> inline void PM(T &a, T &b, T c, T d)
   { a=c+d; b=c-d; }
 template<typename T> inline void PMINPLACE(T &a, T &b)
@@ -133,6 +81,36 @@ template <typename Tfs> class cfftpass
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
     virtual any exec(any in, any copy, any buf, bool fwd, size_t vlen) = 0;
+
+    static vector<size_t> factorize(size_t N)
+      {
+      MR_assert(N>0, "need a positive number");
+      vector<size_t> factors;
+      while ((N&7)==0)
+        { factors.push_back(8); N>>=3; }
+      while ((N&3)==0)
+        { factors.push_back(4); N>>=2; }
+      if ((N&1)==0)
+        {
+        N>>=1;
+        // factor 2 should be at the front of the factor list
+        factors.push_back(2);
+        swap(factors[0], factors.back());
+        }
+      for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
+      while ((N%divisor)==0)
+        {
+        factors.push_back(divisor);
+        N/=divisor;
+        }
+      if (N>1) factors.push_back(N);
+      return factors;
+      }
+
+    static shared_ptr<cfftpass> make_pass(size_t l1, size_t ido, size_t ip,
+      const Troots<Tfs> &roots, bool vectorize=false);
+    static shared_ptr<cfftpass> make_pass(size_t ip, bool vectorize=false)
+      { return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
@@ -188,13 +166,7 @@ template <typename Tfs> class cfftpass
       MR_fail("impossible vector length requested"); \
       }
 
-
 template<typename T> using Tcpass = shared_ptr<cfftpass<T>>;
-template<typename Tfs> Tcpass<Tfs> make_cpass(size_t l1, size_t ido, size_t ip,
-  const Troots<Tfs> &roots, bool vectorize=false);
-template<typename Tfs> Tcpass<Tfs> make_cpass(size_t ip, bool vectorize=false)
-  { return make_cpass<Tfs>(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
-
 
 template <typename Tfs> class cfftp1: public cfftpass<Tfs>
   {
@@ -944,16 +916,18 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
           }
       for (size_t l=1, lc=ip-1; l<ipph; ++l, --lc)
         {
-        // j=0
+        // j=0,1,2
+        {
+        auto wal  = fwd ? csarr[  l].conj() : csarr[  l];
+        auto wal2 = fwd ? csarr[2*l].conj() : csarr[2*l];
         for (size_t ik=0; ik<idl1; ++ik)
           {
-          auto wal  = fwd ? csarr[  l].conj() : csarr[  l];
-          auto wal2 = fwd ? csarr[2*l].conj() : csarr[2*l];
           CX2(ik,l ).r = CH2(ik,0).r+wal.r*CH2(ik,1).r+wal2.r*CH2(ik,2).r;
           CX2(ik,l ).i = CH2(ik,0).i+wal.r*CH2(ik,1).i+wal2.r*CH2(ik,2).i;
           CX2(ik,lc).r =-wal.i*CH2(ik,ip-1).i-wal2.i*CH2(ik,ip-2).i;
           CX2(ik,lc).i = wal.i*CH2(ik,ip-1).r+wal2.i*CH2(ik,ip-2).r;
           }
+        }
 
         size_t iwal=2*l;
         size_t j=3, jc=ip-3;
@@ -1018,6 +992,7 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
     cfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
       : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(ip)
       {
+      MR_assert((ip&1)&&(ip>=5), "need an odd number >=5");
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
@@ -1120,7 +1095,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
   public:
     cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
-        subplan(make_cpass<Tfs>(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+        subplan(cfftpass<Tfs>::make_pass(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
       {
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
@@ -1358,14 +1333,14 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         for (size_t i=1; i<ido; ++i)
           wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
-      auto factors = factorize(ip);
+      auto factors = cfftpass<Tfs>::factorize(ip);
       size_t lim=vectorize ? 1024 : 10240000;
       if (ip<=lim)
         {
         size_t l1l=1;
         for (auto fct: factors)
           {
-          passes.push_back(make_cpass<Tfs>(l1l, ip/(fct*l1l), fct, roots));
+          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots));
           l1l*=fct;
           }
         }
@@ -1383,7 +1358,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         size_t l1l=1;
         for (auto pkt: packets)
           {
-          passes.push_back(make_cpass<Tfs>(l1l, ip/(pkt*l1l), pkt, roots));
+          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(pkt*l1l), pkt, roots));
           l1l*=pkt;
           }
         }
@@ -1405,11 +1380,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-template<typename Tfs> Tcpass<Tfs> make_cpass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
+template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<cfftp1<Tfs>>();
-  auto factors=factorize(ip);
+  auto factors=cfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
     {
     switch(ip)
@@ -1448,7 +1423,8 @@ template<typename Tfs> class pocketfft_c
     Tcpass<Tfs> plan;
 
   public:
-    pocketfft_c(size_t n, bool vectorize=false) : N(n), plan(make_cpass<Tfs>(n,vectorize)) {}
+    pocketfft_c(size_t n, bool vectorize=false)
+      : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
     template<typename Tfd> Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf, Tfs fct, bool fwd) const
@@ -1488,6 +1464,34 @@ template <typename Tfs> class rfftpass
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
     virtual any exec(any in, any copy, any buf, bool fwd, size_t vlen) = 0;
+
+    static vector<size_t> factorize(size_t N)
+      {
+      MR_assert(N>0, "need a positive number");
+      vector<size_t> factors;
+      while ((N&3)==0)
+        { factors.push_back(4); N>>=2; }
+      if ((N&1)==0)
+        {
+        N>>=1;
+        // factor 2 should be at the front of the factor list
+        factors.push_back(2);
+        swap(factors[0], factors.back());
+        }
+      for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
+      while ((N%divisor)==0)
+        {
+        factors.push_back(divisor);
+        N/=divisor;
+        }
+      if (N>1) factors.push_back(N);
+      return factors;
+      }
+
+    static shared_ptr<rfftpass> make_pass(size_t l1, size_t ido, size_t ip,
+       const Troots<Tfs> &roots, bool vectorize=false);
+    static shared_ptr<rfftpass> make_pass(size_t ip, bool vectorize=false)
+      { return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
@@ -1544,10 +1548,6 @@ template <typename Tfs> class rfftpass
       }
 
 template<typename T> using Trpass = shared_ptr<rfftpass<T>>;
-template<typename Tfs> Trpass<Tfs> make_rpass(size_t l1, size_t ido, size_t ip,
-  const Troots<Tfs> &roots, bool vectorize=false);
-template<typename Tfs> Trpass<Tfs> make_rpass(size_t ip, bool vectorize=false)
-  { return make_rpass<Tfs>(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
 
 /* (a+ib) = conj(c+id) * (e+if) */
 template<typename T1, typename T2, typename T3> inline void MULPM
@@ -2396,9 +2396,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             // copy in
             cc2[0] = {CC(i-1,k,0),CC(i,k,0)};
             for (size_t m=1; m<ip; ++m)
-              {
               cc2[m] = Tcd(CC(i-1,k,m),CC(i,k,m)).template special_mul<fwd>(Tcd(WA(m-1,i-2),WA(m-1,i-1)));
-              }
             auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
             CH(i-1,0,k) = res[0].r; 
             CH(i,0,k) = res[0].i; 
@@ -2452,7 +2450,6 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               }
             }
         }
-
       return ch;
       }
 
@@ -2532,12 +2529,12 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
           wa[(j-1)*(ido-1)+2*i-1] = val.i;
           }
 
-      auto factors = factorize_r(ip);
+      auto factors = rfftpass<Tfs>::factorize(ip);
 
       size_t l1l=1;
       for (auto fct: factors)
         {
-        passes.push_back(make_rpass<Tfs>(l1l, ip/(fct*l1l), fct, roots));
+        passes.push_back(rfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots));
         l1l*=fct;
         }
       for (const auto &pass: passes)
@@ -2558,11 +2555,11 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-template<typename Tfs> Trpass<Tfs> make_rpass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
+template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
-  auto factors=factorize_r(ip);
+  auto factors=rfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
     {
     switch(ip)
@@ -2593,7 +2590,8 @@ template<typename Tfs> class pocketfft_r_new
     Trpass<Tfs> plan;
 
   public:
-    pocketfft_r_new(size_t n, bool vectorize=false) : N(n), plan(make_rpass<Tfs>(n,vectorize)) {}
+    pocketfft_r_new(size_t n, bool vectorize=false)
+      : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
     template<typename Tfd> Tfd *exec(Tfd *in, Tfd *buf, Tfs fct, bool fwd) const
