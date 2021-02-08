@@ -27,7 +27,6 @@ include src/ducc0/bindings/pybind_utils.h
 
 include src/ducc0/math/cmplx.h
 include src/ducc0/math/constants.h
-include src/ducc0/math/newfft1d.h
 include src/ducc0/math/fft1d.h
 include src/ducc0/math/fft.h
 include src/ducc0/math/geom_utils.cc
