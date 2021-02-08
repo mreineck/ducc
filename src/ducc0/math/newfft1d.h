@@ -110,7 +110,10 @@ template <typename Tfs> class cfftpass
     static shared_ptr<cfftpass> make_pass(size_t l1, size_t ido, size_t ip,
       const Troots<Tfs> &roots, bool vectorize=false);
     static shared_ptr<cfftpass> make_pass(size_t ip, bool vectorize=false)
-      { return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
+      {
+      return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),
+        vectorize);
+      }
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
@@ -1047,7 +1050,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true, simdlen<decltype(Tcd::r)>));
+          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true,
+            simdlen<decltype(Tcd::r)>));
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1060,7 +1064,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
             res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
 
           /* inverse FFT */
-          res = any_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf, subbuf, false, simdlen<decltype(Tcd::r)>));
+          res = any_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf,
+            subbuf, false, simdlen<decltype(Tcd::r)>));
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -1093,9 +1098,11 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
       }
 
   public:
-    cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
+    cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots,
+      bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
-        subplan(cfftpass<Tfs>::make_pass(ip2, vectorize)), wa((ip-1)*(ido-1)), bk(ip), bkf(ip2/2+1)
+        subplan(cfftpass<Tfs>::make_pass(ip2, vectorize)), wa((ip-1)*(ido-1)),
+        bk(ip), bkf(ip2/2+1)
       {
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
@@ -1126,7 +1133,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
       for (size_t m=ip;m<=(ip2-ip);++m)
         tbkf[m].Set(0.,0.);
       aligned_array<Tcs> buf(subplan->bufsize());
-      auto res = any_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(), buf.data(), true, 1));
+      auto res = any_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(),
+        buf.data(), true, 1));
       for (size_t i=0; i<ip2/2+1; ++i)
         bkf[i] = res[i];
 
@@ -1134,7 +1142,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
       bufsz = ip2*(1+subplan->needs_copy()) + subplan->bufsize();
       }
 
-    virtual size_t bufsize() const { return bufsz; } // FIXME: might be able to save some more
+    virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return need_cpy; }
 
     POCKETFFT_EXEC_DISPATCH
@@ -1155,7 +1163,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     auto WA(size_t x, size_t i) const
       { return wa[(i-1)*(ip-1)+x]; }
 
-    template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch, Cmplx<T> *buf)
+    template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
+      Cmplx<T> *buf)
       {
       using Tc = Cmplx<T>;
       if ((l1==1) && (ido==1)) // no chance at vectorizing
@@ -1170,7 +1179,6 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        MR_fail("currently unsupported");
         if constexpr(is_same<T,Tfs>::value) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
@@ -1336,7 +1344,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
       auto factors = cfftpass<Tfs>::factorize(ip);
       // FIXME TBD
-      size_t lim = vectorize ? 2000000000 : 2000000000;
+      size_t lim = vectorize ? 2000 : (~size_t(0));
       if (ip<=lim)
         {
         size_t l1l=1;
@@ -1348,16 +1356,10 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        MR_fail("currently unsupported");
         vector<size_t> packets(2,1);
         sort(factors.begin(), factors.end(), std::greater<size_t>());
         for (auto fct: factors)
-          {
-          if (packets[0]>packets[1])
-            packets[1]*=fct;
-          else
-            packets[0]*=fct;
-          }
+          (packets[0]>packets[1]) ? packets[1]*=fct : packets[0]*=fct;
         size_t l1l=1;
         for (auto pkt: packets)
           {
@@ -1383,7 +1385,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
+template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
+  size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<cfftp1<Tfs>>();
@@ -1430,7 +1433,8 @@ template<typename Tfs> class pocketfft_c
       : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
-    template<typename Tfd> Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf, Tfs fct, bool fwd) const
+    template<typename Tfd> Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
+      Tfs fct, bool fwd) const
       {
       auto res = any_cast<Cmplx<Tfd> *>(plan->exec(in, buf,
         buf+N*plan->needs_copy(), fwd, simdlen<Tfd>));
@@ -1494,7 +1498,10 @@ template <typename Tfs> class rfftpass
     static shared_ptr<rfftpass> make_pass(size_t l1, size_t ido, size_t ip,
        const Troots<Tfs> &roots, bool vectorize=false);
     static shared_ptr<rfftpass> make_pass(size_t ip, bool vectorize=false)
-      { return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),vectorize); }
+      {
+      return make_pass(1,1,ip,make_shared<UnityRoots<Tfs,Cmplx<Tfs>>>(ip),
+        vectorize);
+      }
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
@@ -2558,7 +2565,8 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1, size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
+template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
+  size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
