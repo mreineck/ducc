@@ -2564,6 +2564,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
       : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)),
         blueplan(make_shared<cfftpblue<Tfs>>(1,1,ip,roots,vectorize))
       {
+      MR_assert(ip&1, "Bluestein length must be odd");
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
