@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
+/* Copyright (C) 2019-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_CMPLX_H
@@ -43,6 +43,7 @@ template<typename T> struct Cmplx {
     r = tmp;
     return *this;
     }
+  Cmplx conj() const { return {r, -i}; }
   template<typename T2>Cmplx &operator+= (const Cmplx<T2> &other)
     { r+=other.r; i+=other.i; return *this; }
   template<typename T2>Cmplx &operator-= (const Cmplx<T2> &other)
