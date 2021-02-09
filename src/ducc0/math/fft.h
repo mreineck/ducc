@@ -262,7 +262,7 @@ template<typename T0> class T_dcst23
           c[NS2] *= 2*twiddle[NS2-1];
         auto res = fftplan.exec(c, buf, fct, true);
         if (res != c) // FIXME: not yet optimal
-          memcpy(c, res, N*sizeof(T));
+          copy(res, res+N, c);
         for (size_t k=1; k<N-1; k+=2)
           MPINPLACE(c[k], c[k+1]);
         if (!cosine)

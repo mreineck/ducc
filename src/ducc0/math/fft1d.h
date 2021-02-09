@@ -35,7 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_FFT1D_H
 #define DUCC0_FFT1D_H
 
-#include <cstring>
+#include <algorithm>
 #include <stdexcept>
 #include <any>
 #include "ducc0/infra/useful_macros.h"
@@ -1544,7 +1544,7 @@ template<typename Tfs> class pocketfft_c
         if (fct!=Tfs(1))
           for (size_t i=0; i<N; ++i) in[i]=res[i]*fct;
         else
-          memcpy(in, res, N*sizeof(Cmplx<Tfd>));
+          copy(res, res+N, in);
         }
       return in;
       }
@@ -2716,7 +2716,7 @@ template<typename Tfs> class pocketfft_r
         if (fct!=Tfs(1))
           for (size_t i=0; i<N; ++i) in[i]=res[i]*fct;
         else
-          memcpy(in, res, N*sizeof(Tfd));
+          copy(res, res+N, in);
         }
       return in;
       }
@@ -3377,7 +3377,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       for (size_t i=0; i<length; ++i)
         c[i] = ch[i]*fct;
     else
-      memcpy (c,p1,length*sizeof(T));
+      copy(p1, p1+length, c);
     }
   else
     if (fct!=1.)
@@ -4137,7 +4137,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           for (size_t i=0; i<n; ++i)
             c[i] = fct*p1[i];
         else
-          memcpy (c,p1,n*sizeof(T));
+          copy (p1, p1+n, c);
         }
       else
         if (fct!=1.)
@@ -4387,14 +4387,12 @@ template<typename T0> class fftblue
           tmp[m].Set(c[m], zero);
         fft<true>(tmp,buf2,fct);
         c[0] = tmp[0].r;
-        memcpy (reinterpret_cast<void *>(&c[1]),
-                reinterpret_cast<void *>(&tmp[1]), (n-1)*sizeof(T));
+        copy(&tmp[1].r, &tmp[1].r+n-1, &c[1]);
         }
       else
         {
         tmp[0].Set(c[0],c[0]*0);
-        memcpy (reinterpret_cast<void *>(&tmp[1]),
-                reinterpret_cast<void *>(c+1), (n-1)*sizeof(T));
+        copy(&c[1], &c[n], &tmp[1].r);
         if ((n&1)==0) tmp[n/2].i=T0(0)*c[0];
         for (size_t m=1; 2*m<n; ++m)
           tmp[n-m].Set(tmp[m].r, -tmp[m].i);
