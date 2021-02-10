@@ -467,8 +467,8 @@ template<typename T> using native_simd = vtp<T,1>;
 template<typename T> using native_simd = vtp<T,1>;
 #endif
 
-template<typename T> size_t simdlen = 1;
-template<typename T, size_t vlen> size_t simdlen<vtp<T,vlen>> = vlen;
+template<typename T> constexpr size_t simdlen = 1;
+template<typename T, size_t vlen> constexpr size_t simdlen<vtp<T,vlen>> = vlen;
 }
 
 using detail_simd::native_simd;
