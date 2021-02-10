@@ -1275,7 +1275,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && (simdlen<Tfs> > 1)) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
