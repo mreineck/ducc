@@ -135,7 +135,7 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE T_dct1(size_t length)
+    DUCC0_NOINLINE T_dct1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length-1)) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
@@ -174,7 +174,7 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE T_dst1(size_t length)
+    DUCC0_NOINLINE T_dst1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length+1)) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
@@ -208,7 +208,7 @@ template<typename T0> class T_dcst23
     std::vector<T0> twiddle;
 
   public:
-    DUCC0_NOINLINE T_dcst23(size_t length)
+    DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
       : fftplan(length), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
@@ -291,7 +291,7 @@ template<typename T0> class T_dcst4
     aligned_array<Cmplx<T0>> C2;
 
   public:
-    DUCC0_NOINLINE T_dcst4(size_t length)
+    DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
       : N(length),
         fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
         rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),
@@ -787,7 +787,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
     {
     size_t len=in.shape(axes[iax]);
     if ((!plan) || (len!=plan->length()))
-      plan = std::make_unique<Tplan>(len);
+      plan = std::make_unique<Tplan>(len, in.ndim()==1);
 
     execParallel(
       util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),

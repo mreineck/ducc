@@ -1323,19 +1323,20 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd, vlen));
               if (res==p2) swap (p1,p2);
               }
-            if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
-              {
-              auto i0 = (itrans*vlen)%ido;
-              if (l1>1)
-                for (size_t m=0; m<ip; ++m)
-                   for (size_t n=0; n<vlen; ++n)
-                     CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
-              else
-                for (size_t m=0; m<ip; ++m)
-                  for (size_t n=0; n<vlen; ++n)
-                    CC(i0+n,m,k0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
-              }
-            else
+// FIXME!
+//             if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
+//               {
+//               auto i0 = (itrans*vlen)%ido;
+//               if (l1>1)
+//                 for (size_t m=0; m<ip; ++m)
+//                    for (size_t n=0; n<vlen; ++n)
+//                      CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
+//               else
+//                 for (size_t m=0; m<ip; ++m)
+//                   for (size_t n=0; n<vlen; ++n)
+//                     CC(i0+n,m,k0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
+//               }
+//             else
               {
               for (size_t n=0; n<vlen; ++n)
                 {
@@ -1440,13 +1441,13 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
       auto factors = cfftpass<Tfs>::factorize(ip);
       // FIXME TBD
-      size_t lim = vectorize ? 2000 : (~size_t(0));
+      size_t lim = vectorize ? 1000 : ~size_t(0);
       if (ip<=lim)
         {
         size_t l1l=1;
         for (auto fct: factors)
           {
-          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots));
+          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots, vectorize));
           l1l*=fct;
           }
         }
@@ -1459,7 +1460,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         size_t l1l=1;
         for (auto pkt: packets)
           {
-          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(pkt*l1l), pkt, roots));
+          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(pkt*l1l), pkt, roots, false));
           l1l*=pkt;
           }
         }
@@ -1481,10 +1482,85 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
+template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
+  {
+  private:
+    static_assert(simd_exists<Tfs, vlen>, "bad vlen");
+    using typename cfftpass<Tfs>::Tcs;
+    using Tfv=simd<Tfs, vlen>;
+    using Tcv=Cmplx<Tfv>;
+
+    size_t ip;
+    Tcpass<Tfs> spass;
+    Tcpass<Tfs> vpass;
+    size_t bufsz;
+
+    template<bool fwd> Tcs *exec_ (Tcs *cc,
+      Tcs * /*ch*/, Tcs * /*buf*/)
+      {
+      aligned_array<Tcv> buf(2*ip+bufsz);
+      auto * cc2 = buf.data();
+      auto * ch2 = buf.data()+ip;
+      auto * buf2 = buf.data()+2*ip;
+// run scalar pass
+      auto res = any_cast<Tcs *>(spass->exec(cc, reinterpret_cast<Tcs *>(ch2),
+        reinterpret_cast<Tcs *>(buf2), fwd, 1));
+// arrange input in SIMD-friendly way
+      for (size_t i=0; i<ip/vlen; ++i)
+        for (size_t j=0; j<vlen; ++j)
+          {
+          size_t idx = j*(ip/vlen) + i;
+          cc2[i].r[j] = res[idx].r;
+          cc2[i].i[j] = res[idx].i;
+          }
+// run vector pass
+      auto res2 = any_cast<Tcv *>(vpass->exec(cc2, ch2, buf2, fwd, vlen));
+// de-SIMDify
+      for (size_t i=0; i<ip/vlen; ++i)
+        for (size_t j=0; j<vlen; ++j)
+          cc[i*vlen+j] = Tcs(res2[i].r[j], res2[i].i[j]);
+
+      return cc;
+      }
+
+  public:
+    cfftp_vecpass(size_t ip_, const Troots<Tfs> &roots)
+      : ip(ip_), spass(cfftpass<Tfs>::make_pass(1, ip/vlen, vlen, roots)),
+        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots)), bufsz(0)
+      {
+      MR_assert((ip/vlen)*vlen==ip, "cannot vectorize this size");
+      bufsz=2*ip+max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen);
+      }
+    virtual size_t bufsize() const { return 0; }
+    virtual bool needs_copy() const { return false; }
+    virtual any exec(any in, any copy, any buf, bool fwd, size_t vlen_in)
+      {
+      MR_assert(vlen_in==1, "bad input vlen");
+      auto in1 = any_cast<Tcs *>(in);
+      auto copy1 = any_cast<Tcs *>(copy);
+      auto buf1 = any_cast<Tcs *>(buf);
+      return fwd ? exec_<true>(in1, copy1, buf1)
+                 : exec_<false>(in1, copy1, buf1);
+      }
+  };
+
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
+  if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
+    {
+    if constexpr(simd_exists<Tfs,8>)
+      if ((ip&7)==0)
+        return make_shared<cfftp_vecpass<8,Tfs>>(ip, roots);
+    if constexpr(simd_exists<Tfs,4>)
+      if ((ip&3)==0)
+        return make_shared<cfftp_vecpass<4,Tfs>>(ip, roots);
+    if constexpr(simd_exists<Tfs,2>)
+      if ((ip&1)==0)
+        return make_shared<cfftp_vecpass<2,Tfs>>(ip, roots);
+    }
+
   if (ip==1) return make_shared<cfftp1<Tfs>>();
   auto factors=cfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
