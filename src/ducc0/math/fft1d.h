@@ -161,6 +161,22 @@ struct util1d // hack to avoid duplicate symbols
       }
     return bestfac;
     }
+
+  DUCC0_NOINLINE static vector<size_t> prime_factors(size_t N)
+    {
+    MR_assert(N>0, "need a positive number");
+    vector<size_t> factors;
+    while ((N&1)==0)
+      { N>>=1; factors.push_back(2); }
+    for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
+    while ((N%divisor)==0)
+      {
+      factors.push_back(divisor);
+      N/=divisor;
+      }
+    if (N>1) factors.push_back(N);
+    return factors;
+    }
   };
 
 template<typename T> using Troots = shared_ptr<const UnityRoots<T,Cmplx<T>>>;
@@ -1275,7 +1291,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && (simdlen<Tfs> > 1)) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && (simdlen<native_simd<Tfs>> > 1)) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
@@ -1323,49 +1339,33 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd, vlen));
               if (res==p2) swap (p1,p2);
               }
-// FIXME!
-//             if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
-//               {
-//               auto i0 = (itrans*vlen)%ido;
-//               if (l1>1)
-//                 for (size_t m=0; m<ip; ++m)
-//                    for (size_t n=0; n<vlen; ++n)
-//                      CH(i0+n,k0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
-//               else
-//                 for (size_t m=0; m<ip; ++m)
-//                   for (size_t n=0; n<vlen; ++n)
-//                     CC(i0+n,m,k0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i0+n));
-//               }
-//             else
+            for (size_t n=0; n<vlen; ++n)
               {
-              for (size_t n=0; n<vlen; ++n)
+              auto i = (itrans*vlen+n)%ido;
+              auto k = (itrans*vlen+n)/ido;
+              if (k>=l1) break;
+              if (l1>1)
                 {
-                auto i = (itrans*vlen+n)%ido;
-                auto k = (itrans*vlen+n)/ido;
-                if (k>=l1) break;
-                if (l1>1)
-                  {
-                  if (i==0)
-                    for (size_t m=0; m<ip; ++m)
-                      CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
-                  else
-                    {
-                    CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
-                    for (size_t m=1; m<ip; ++m)
-                      CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
-                    }
-                  }
+                if (i==0)
+                  for (size_t m=0; m<ip; ++m)
+                    CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
                 else
                   {
-                  if (i==0)
-                    for (size_t m=0; m<ip; ++m)
-                      CC(0,m,0) = {p1[m].r[n], p1[m].i[n]};
-                  else
-                    {
-                    CC(i,0,0) = Tcs(p1[0].r[n], p1[0].i[n]);
-                    for (size_t m=1; m<ip; ++m)
-                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
-                    }
+                  CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
+                  for (size_t m=1; m<ip; ++m)
+                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                  }
+                }
+              else
+                {
+                if (i==0)
+                  for (size_t m=0; m<ip; ++m)
+                    CC(0,m,0) = {p1[m].r[n], p1[m].i[n]};
+                else
+                  {
+                  CC(i,0,0) = Tcs(p1[0].r[n], p1[0].i[n]);
+                  for (size_t m=1; m<ip; ++m)
+                    CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
                   }
                 }
               }
@@ -1439,11 +1439,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         for (size_t i=1; i<ido; ++i)
           wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
-      auto factors = cfftpass<Tfs>::factorize(ip);
       // FIXME TBD
       size_t lim = vectorize ? 1000 : ~size_t(0);
       if (ip<=lim)
         {
+        auto factors = cfftpass<Tfs>::factorize(ip);
         size_t l1l=1;
         for (auto fct: factors)
           {
@@ -1454,6 +1454,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       else
         {
         vector<size_t> packets(2,1);
+        auto factors = util1d::prime_factors(ip);
         sort(factors.begin(), factors.end(), std::greater<size_t>());
         for (auto fct: factors)
           (packets[0]>packets[1]) ? packets[1]*=fct : packets[0]*=fct;
@@ -1550,15 +1551,10 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
     {
-    if constexpr(simd_exists<Tfs,8>)
-      if ((ip&7)==0)
-        return make_shared<cfftp_vecpass<8,Tfs>>(ip, roots);
-    if constexpr(simd_exists<Tfs,4>)
-      if ((ip&3)==0)
-        return make_shared<cfftp_vecpass<4,Tfs>>(ip, roots);
-    if constexpr(simd_exists<Tfs,2>)
-      if ((ip&1)==0)
-        return make_shared<cfftp_vecpass<2,Tfs>>(ip, roots);
+    constexpr auto vlen = simdlen<native_simd<Tfs>>;
+    if constexpr(vlen>1)
+      if ((ip&(vlen-1))==0)
+        return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
     }
 
   if (ip==1) return make_shared<cfftp1<Tfs>>();
@@ -2805,7 +2801,7 @@ template<typename Tfs> class pocketfft_r
 
 #undef POCKETFFT_EXEC_DISPATCH
 
-#if 0
+#if 1
 //
 // complex FFTPACK transforms
 //
@@ -4569,8 +4565,8 @@ template<typename T0> class pocketfft_r_old
 #endif
 }
 
-//using detail_fft::pocketfft_c_old;
-//using detail_fft::pocketfft_r_old;
+using detail_fft::pocketfft_c_old;
+using detail_fft::pocketfft_r_old;
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
 inline size_t good_size_complex(size_t n)
