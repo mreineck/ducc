@@ -88,7 +88,7 @@ def hc2c(inp, otype):
     return out
 
 
-tol = {np.float32: 6e-7, np.float64: 1.5e-15, np.longfloat: 1e-18}
+tol = {np.float32: 6e-7, np.float64: 3e-15, np.longfloat: 1e-18}
 ctype = {np.float32: np.complex64,
          np.float64: np.complex128,
          np.longfloat: np.longcomplex}
