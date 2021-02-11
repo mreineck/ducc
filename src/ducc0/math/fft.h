@@ -301,7 +301,7 @@ template<typename T0> class T_dcst4
         {
         UnityRoots<T0,Cmplx<T0>> tw(16*N);
         for (size_t i=0; i<N/2; ++i)
-          C2[i] = conj(tw[8*i+1]);
+          C2[i] = tw[8*i+1].conj();
         }
       }
 

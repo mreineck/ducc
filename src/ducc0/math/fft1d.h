@@ -62,21 +62,18 @@ template<typename T> inline void PMINPLACE(T &a, T &b)
   { T t = a; a+=b; b=t-b; }
 template<typename T> inline void MPINPLACE(T &a, T &b)
   { T t = a; a-=b; b=t+b; }
-template<typename T> Cmplx<T> conj(const Cmplx<T> &a)
-  { return {a.r, -a.i}; }
 template<bool fwd, typename T, typename T2> void special_mul (const Cmplx<T> &v1, const Cmplx<T2> &v2, Cmplx<T> &res)
   {
   res = fwd ? Cmplx<T>(v1.r*v2.r+v1.i*v2.i, v1.i*v2.r-v1.r*v2.i)
             : Cmplx<T>(v1.r*v2.r-v1.i*v2.i, v1.r*v2.i+v1.i*v2.r);
   }
 
-template<typename T> void ROT90(Cmplx<T> &a)
-  { auto tmp_=a.r; a.r=-a.i; a.i=tmp_; }
 template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
   { auto tmp_= fwd ? -a.r : a.r; a.r = fwd ? a.i : -a.i; a.i=tmp_; }
 
 struct util1d // hack to avoid duplicate symbols
   {
+#ifdef DUCC0_OLD_FFT_ENABLED
   DUCC0_NOINLINE static size_t largest_prime_factor (size_t n)
     {
     size_t res=1;
@@ -105,6 +102,7 @@ struct util1d // hack to avoid duplicate symbols
     if (n>1) result+=(n<=5) ? double(n) : lfp*double(n);
     return result*double(ni);
     }
+#endif
 
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
   DUCC0_NOINLINE static size_t good_size_cmplx(size_t n)
@@ -2801,7 +2799,7 @@ template<typename Tfs> class pocketfft_r
 
 #undef POCKETFFT_EXEC_DISPATCH
 
-#if 1
+#ifdef DUCC0_OLD_FFT_ENABLED
 //
 // complex FFTPACK transforms
 //
@@ -4565,8 +4563,10 @@ template<typename T0> class pocketfft_r_old
 #endif
 }
 
+#ifdef DUCC0_OLD_FFT_ENABLED
 using detail_fft::pocketfft_c_old;
 using detail_fft::pocketfft_r_old;
+#endif
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
 inline size_t good_size_complex(size_t n)
