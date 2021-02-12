@@ -30,7 +30,7 @@ shapes2D = ((128, 128), (128, 129),
             (129, 1), (127, 2), (127, 3), (127, 6))
 shapes3D = ((32, 17, 39),)
 shapes = shapes1D+shapes2D+shapes3D
-len1D = range(1, 2048)
+len1D = list(range(1, 2048)) + [137*137]
 
 
 def _l2error(a, b):
@@ -117,6 +117,7 @@ def test1D(len, inorm, dtype):
             < eps)
     assert_(_l2error(a.real, irfftn(rfftn(a.real, inorm=inorm),
                                     inorm=2-inorm, lastsize=len)) < eps)
+    assert_(_l2error(fftn(a.real.astype(ctype[dtype])), fftn(a.real)) < eps)
     tmp = a.copy()
     assert_(ifftn(fftn(tmp, out=tmp, inorm=inorm), out=tmp, inorm=2-inorm)
             is tmp)
