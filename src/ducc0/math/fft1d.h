@@ -2527,7 +2527,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
   private:
     const size_t l1, ido, ip;
     aligned_array<Tfs> wa;
-    const Tcpass<Tfs> blueplan;
+    const Tcpass<Tfs> cplan;
     size_t bufsz;
     bool need_cpy;
 
@@ -2556,7 +2556,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           // copy in
           for (size_t m=0; m<ip; ++m)
             cc2[m] = {CC(0,k,m),Tfd(0)};
-          auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
           // copy out
           CH(0,0,k) = res[0].r; 
           for (size_t m=1; m<=ip/2; ++m)
@@ -2566,22 +2566,26 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             }
           }
         if (ido==1) return ch;
+        size_t ipph = (ip+1)/2;
         for (size_t k=0; k<l1; ++k)
           for (size_t i=2, ic=ido-2; i<ido; i+=2, ic-=2)
             {
             // copy in
             cc2[0] = {CC(i-1,k,0),CC(i,k,0)};
-            for (size_t m=1; m<ip; ++m)
-              cc2[m] = Tcd(CC(i-1,k,m),CC(i,k,m)).template special_mul<fwd>(Tcd(WA(m-1,i-2),WA(m-1,i-1)));
-            auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+            for (size_t m=1; m<ipph; ++m)
+              {
+              MULPM (cc2[m].r,cc2[m].i,WA(m-1,i-2),WA(m-1,i-1),CC(i-1,k,m),CC(i,k,m));
+              MULPM (cc2[ip-m].r,cc2[ip-m].i,WA(ip-m-1,i-2),WA(ip-m-1,i-1),CC(i-1,k,ip-m),CC(i,k,ip-m));
+              }
+            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
             CH(i-1,0,k) = res[0].r; 
             CH(i,0,k) = res[0].i; 
-            for (size_t m=1; m<=ip/2; ++m)
+            for (size_t m=1; m<ipph; ++m)
               {
-              CH(ic-1,2*m-1,k)=res[m].r;
-              CH(ic,2*m-1,k)=res[m].i;
-              CH(i-1,2*m,k)=res[ip-m].r;
-              CH(i,2*m,k)=res[ip-m].i;
+              CH(i-1,2*m,k) = res[m].r;
+              CH(ic-1,2*m-1,k) = res[ip-m].r;
+              CH(i  ,2*m,k) = res[m].i;
+              CH(ic  ,2*m-1,k) = -res[ip-m].i;
               }
             }
         }
@@ -2600,7 +2604,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             cc2[m] = {CC(ido-1,2*m-1,k),CC(0,2*m,k)};
             cc2[ip-m] = {CC(ido-1,2*m-1,k),-CC(0,2*m,k)};
             }
-          auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
           for (size_t m=0; m<ip; ++m)
             CH(0,k,m) = res[m].r;
           }
@@ -2612,17 +2616,16 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             cc2[0] = {CC(i-1,0,k),CC(i,0,k)}; 
             for (size_t m=1; m<=ip/2; ++m)
               {
-              cc2[m] = {CC(i-1,2*m-1,k),CC(i,2*m,k)};
-              cc2[ip-m] = {CC(ic-1,2*m-1,k),-CC(ic,2*m,k)};
+              cc2[m] = {CC(i-1,2*m,k),CC(i,2*m,k)};
+              cc2[ip-m] = {CC(ic-1,2*m-1,k),-CC(ic,2*m-1,k)};
               }
-            auto res = any_cast<Tcd *>(blueplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
+            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, simdlen<Tfd>));
             CH(i-1,k,0) = res[0].r;
             CH(i,k,0) = res[0].i;
             for (size_t m=1; m<ip; ++m)
               {
-              auto val = res[m].template special_mul<fwd>(Tcd(WA(m-1,i-2),WA(m-1,i-1)));
-              CH(i-1,k,m) = val.r;
-              CH(i,k,m) = val.i;
+              MULPM(CH(i-1,k,m),CH(i,k,m),WA(m-1,i-2),-WA(m-1,i-1),res[m].r,res[m].i);
+              MULPM(CH(i-1,k,ip-m),CH(i,k,ip-m),WA(ip-m-1,i-2),-WA(ip-m-1,i-1),res[ip-m].r,res[ip-m].i);
               }
             }
         }
@@ -2632,7 +2635,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
   public:
     rfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots, bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)),
-        blueplan(make_shared<cfftpblue<Tfs>>(1,1,ip,roots,vectorize))
+        cplan(cfftpass<Tfs>::make_pass(1,1,ip,roots,vectorize))
       {
       MR_assert(ip&1, "Bluestein length must be odd");
       size_t N=ip*l1*ido;
@@ -2647,7 +2650,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           }
       }
 
-    virtual size_t bufsize() const { return 4*ip + 2*blueplan->bufsize(); }
+    virtual size_t bufsize() const { return 4*ip + 2*cplan->bufsize(); }
     virtual bool needs_copy() const { return true; }
 
     POCKETFFT_EXEC_DISPATCH
@@ -4491,7 +4494,7 @@ template<typename T0> class pocketfft_c_old
     size_t len;
 
   public:
-    DUCC0_NOINLINE pocketfft_c_old(size_t length)
+    DUCC0_NOINLINE pocketfft_c_old(size_t length, bool /*vectorize*/=false)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
@@ -4532,7 +4535,7 @@ template<typename T0> class pocketfft_r_old
     size_t len;
 
   public:
-    DUCC0_NOINLINE pocketfft_r_old(size_t length)
+    DUCC0_NOINLINE pocketfft_r_old(size_t length, bool /*vectorize*/=false)
       : len(length)
       {
       if (length==0) throw std::runtime_error("zero-length FFT requested");
