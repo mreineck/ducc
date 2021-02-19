@@ -1924,6 +1924,7 @@ template <typename Tfs> class rfftp3: public rfftpass<Tfs>
     rfftp3(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
       : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
       {
+      MR_assert(ido&1, "ido must be odd");
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
@@ -2189,6 +2190,7 @@ template <typename Tfs> class rfftp5: public rfftpass<Tfs>
     rfftp5(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
       : l1(l1_), ido(ido_), wa((ip-1)*(ido-1))
       {
+      MR_assert(ido&1, "ido must be odd");
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
@@ -2494,6 +2496,7 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
     rfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
       : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(2*ip)
       {
+      MR_assert(ido&1, "ido must be odd");
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
@@ -2638,6 +2641,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
         cplan(cfftpass<Tfs>::make_pass(1,1,ip,roots,vectorize))
       {
       MR_assert(ip&1, "Bluestein length must be odd");
+      MR_assert(ido&1, "ido must be odd");
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
