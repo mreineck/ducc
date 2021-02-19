@@ -31,8 +31,7 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
     f2 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr,
-                       planning_timelimit=5)
+    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr)
     f1[()] = a
     tmin = 1e38
     for i in range(nrepeat):
