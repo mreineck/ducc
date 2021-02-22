@@ -13,8 +13,8 @@ interface.
 
 - [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
-- a C++17-capable compiler (tested with g++ version 7 or newer and clang++;
-  recent versions of MSVC on Windows also work, but are tested less frequently)
+- a C++17-capable compiler (tested with g++ version 7 or newer, clang++,
+  MSVC 2019 and Intel icpx 2021.1.2)
 
 ### Sources
 
