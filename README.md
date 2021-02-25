@@ -150,7 +150,7 @@ as the `wgridder` component.
 - uses the analytical gridding kernel presented in
   <https://arxiv.org/abs/1808.06736>
 - uses the "improved W-stacking method" described in
-  <https://www.repository.cam.ac.uk/handle/1810/292298> (p. 139ff)
+  <https://arxiv.org/abs/2101.11172>
 - in combination these two aspects allow extremely accurate gridding/degridding
   operations (L2 error compared to explicit DFTs can go below 1e-12) with
   reasonable resource consumption
