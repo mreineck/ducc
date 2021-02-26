@@ -1468,12 +1468,12 @@ template<typename T> void alm2leg(  // associated Legendre transform
       auto lmin=max(spin,m);
       for (size_t l=m; l<lmin; ++l)
         for (size_t ialm=0; ialm<nalm; ++ialm)
-          almtmp(l,ialm) = 0;
+          almtmp.v(l,ialm) = 0;
       for (size_t l=lmin; l<=lmax; ++l)
         for (size_t ialm=0; ialm<nalm; ++ialm)
-          almtmp(l,ialm) = alm(mstart(mi)+l,ialm)*norm_l[l];
+          almtmp.v(l,ialm) = alm(mstart(mi)+l,ialm)*norm_l[l];
       for (size_t ialm=0; ialm<nalm; ++ialm)
-        almtmp(lmax+1,ialm) = 0;
+        almtmp.v(lmax+1,ialm) = 0;
       gen.prepare(m);
       inner_loop_a2m (almtmp, leg, rdata, gen, mi);
       }
