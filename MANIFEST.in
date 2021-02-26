@@ -43,6 +43,7 @@ include src/ducc0/math/space_filling.h
 include src/ducc0/math/unity_roots.h
 include src/ducc0/math/vec3.h
 
+include src/ducc0/sharp/sht.h
 include src/ducc0/sharp/sht.cc
 include src/ducc0/sharp/sharp_almhelpers.cc
 include src/ducc0/sharp/sharp_almhelpers.h
