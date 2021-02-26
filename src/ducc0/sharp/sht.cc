@@ -171,8 +171,8 @@ class Ylmgen: public YlmBase
     Ylmgen(const YlmBase &base)
       : YlmBase(base),
         m(~size_t(0)),
-        alpha((s==0) ? (lmax/2+2) : (lmax+3)),
-        coef((s==0) ? (lmax/2+2) : (lmax+3)),
+        alpha((s==0) ? (lmax/2+2) : (lmax+3), 0.),
+        coef((s==0) ? (lmax/2+2) : (lmax+3), {0.,0.}),
         eps((s==0) ? (lmax+4) : 0),
         mlo(~size_t(0)),
         mhi(~size_t(0))
@@ -1191,9 +1191,8 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
   else
     {
     //adjust the a_lm for the new algorithm
-    size_t nalm = (mode==ALM2MAP) ? 1 : 2;
     for (size_t l=gen.mhi; l<=gen.lmax+1; ++l)
-      for (size_t i=0; i<nalm; ++i)
+      for (size_t i=0; i<almtmp.shape(1); ++i)
         almtmp.v(l,i)*=gen.alpha[l];
 
     constexpr size_t nval=nvx*VLEN;
@@ -1227,6 +1226,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           {
           d.s.cth[i]=d.s.cth[nth-1];
           d.s.sth[i]=d.s.sth[nth-1];
+// FIXME are those two lines needed?
           d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
           d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
           }
@@ -1237,9 +1237,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           {
           auto tgt=itgt[i];
           dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
-                          q2(d.s.p2pr[i], d.s.p2pi[i]),
-                          u1(d.s.p1mr[i], d.s.p1mi[i]),
-                          u2(d.s.p2mr[i], d.s.p2mi[i]);
+                 q2(d.s.p2pr[i], d.s.p2pi[i]),
+                 u1(d.s.p1mr[i], d.s.p1mi[i]),
+                 u2(d.s.p2mr[i], d.s.p2mi[i]);
           phase.v(rdata[tgt].idx, mi, 0) = complex<T>(q1+q2);
           phase.v(rdata[tgt].idx, mi, 1) = complex<T>(u1+u2);
           if (rdata[tgt].idx!=rdata[tgt].midx)

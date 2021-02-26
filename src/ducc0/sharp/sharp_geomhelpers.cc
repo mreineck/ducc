@@ -263,6 +263,7 @@ unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t pprin
   weight[0]=2.+dw;
   for (size_t k=1; k<=(n/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k) + dw;
+//FIXME if (n>1) ???
   weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
   {
   pocketfft_r<double> plan(n);
