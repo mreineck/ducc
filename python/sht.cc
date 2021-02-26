@@ -30,6 +30,7 @@
 #include <vector>
 #include <complex>
 
+#include "ducc0/sharp/sht.h"
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
@@ -45,6 +46,61 @@ namespace detail_pymodule_sht {
 using namespace std;
 
 namespace py = pybind11;
+
+auto None = py::none();
+
+template<typename T> py::array alm2leg2(const py::array &alm_, const py::array &theta_, size_t lmax, size_t spin, size_t nthreads, py::object &out_)
+  {
+  auto alm = to_mav<complex<double>,2>(alm_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  size_t nalm = ((lmax+1)*(lmax+2))/2;
+  MR_assert(alm.shape(0)==nalm, "bad a_lm array size");
+  auto leg_ = get_optional_Pyarr<complex<T>>(out_, {theta.shape(0),lmax+1,alm.shape(1)});
+  auto leg = to_mav<complex<double>,3>(leg_, true);
+  mav<size_t,1> mval({lmax+1});
+  mav<size_t,1> mstart({lmax+1});
+  for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
+    {
+    mval.v(m) = m;
+    mstart.v(m) = idx;
+    }
+  alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
+  return leg_;
+  }
+py::array Pyalm2leg(const py::array &alm, const py::array &theta, size_t lmax, size_t spin, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return alm2leg2<float>(alm, theta, lmax, spin, nthreads, out);
+  if (isPyarr<complex<double>>(alm))
+    return alm2leg2<double>(alm, theta, lmax, spin, nthreads, out);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::array leg2alm2(const py::array &leg_, const py::array &theta_, size_t lmax, size_t spin, size_t nthreads, py::object &out_)
+  {
+  auto leg = to_mav<complex<double>,3>(leg_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  size_t nalm = ((lmax+1)*(lmax+2))/2;
+  MR_assert(leg.shape(0)==theta.shape(0), "bad a_lm array size");
+  auto alm_ = get_optional_Pyarr<complex<T>>(out_, {nalm,leg.shape(2)});
+  auto alm = to_mav<complex<double>,2>(alm_, true);
+  mav<size_t,1> mval({lmax+1});
+  mav<size_t,1> mstart({lmax+1});
+  for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
+    {
+    mval.v(m) = m;
+    mstart.v(m) = idx;
+    }
+  leg2alm(leg, alm, theta, mval, mstart, lmax, spin, nthreads);
+  return alm_;
+  }
+py::array Pyleg2alm(const py::array &leg, const py::array &theta, size_t lmax, size_t spin, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<complex<float>>(leg))
+    return leg2alm2<float>(leg, theta, lmax, spin, nthreads, out);
+  if (isPyarr<complex<double>>(leg))
+    return leg2alm2<double>(leg, theta, lmax, spin, nthreads, out);
+  MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
+  }
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -194,6 +250,9 @@ void add_sht(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
+
+  m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "nthreads"_a, "out"_a=None);
+  m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "nthreads"_a, "out"_a=None);
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

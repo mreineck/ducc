@@ -8,11 +8,6 @@ namespace detail_sht {
 
 using namespace std;
 
-enum SHT_mode { MAP2ALM,
-                ALM2MAP,
-                ALM2MAP_DERIV1
-              };
-
 struct ringdata
   {
   size_t mlim, idx, midx;
@@ -55,11 +50,35 @@ class YlmBase
       }
 
   public:
-    static vector<double> get_norm(size_t lmax, size_t spin);
-    /*! Returns a vectorwith \a lmax+1 entries containing
-        normalisation factors that must be applied to Y_lm values computed for
-        first derivatives. */
-    static vector<double> get_d1norm(size_t lmax);
+    static vector<double> get_norm(size_t lmax, size_t spin)
+      {
+      /* sign convention for H=1 (LensPix paper) */
+#if 1
+       double spinsign = (spin>0) ? -1.0 : 1.0;
+#else
+       double spinsign = 1.0;
+#endif
+
+      if (spin==0)
+        return vector<double>(lmax+1,1.);
+
+      vector<double> res(lmax+1);
+      spinsign = (spin&1) ? -spinsign : spinsign;
+      for (size_t l=0; l<=lmax; ++l)
+        res[l] = (l<spin) ? 0. : spinsign*0.5*sqrt((2*l+1)/(4*pi));
+      return res;
+      }
+
+    /*! Returns a vector with \a lmax+1 entries containing
+      normalisation factors that must be applied to Y_lm values computed for
+      first derivatives. */
+    static vector<double> get_d1norm(size_t lmax)
+      {
+      vector<double> res(lmax+1);
+      for (size_t l=0; l<=lmax; ++l)
+        res[l] = (l<1) ? 0. : 0.5*sqrt(l*(l+1.)*(2*l+1.)/(4*pi));
+      return res;
+      }
 
     YlmBase(size_t l_max, size_t m_max, size_t spin)
       : lmax(l_max), mmax(m_max), s(spin), cf(sharp_maxscale-sharp_minscale+1),
@@ -1106,266 +1125,243 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm
 
 template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
   mav<complex<double>,2> &almtmp,
-  mav<complex<T>,3> &phase, const mav<ringdata,1> &rdata,
+  mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi)
   {
-  switch (mode)
+  if (gen.s==0)
     {
-    case ALM2MAP:
-    case ALM2MAP_DERIV1:
+    // adjust the a_lm for the new algorithm
+    MR_assert(almtmp.stride(1)==1, "bad stride");
+    dcmplx * DUCC0_RESTRICT alm=almtmp.vdata();
+    for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
       {
-      if (gen.s==0)
-        {
-        // adjust the a_lm for the new algorithm
-        MR_assert(almtmp.stride(1)==1, "bad stride");
-        dcmplx * DUCC0_RESTRICT alm=almtmp.vdata();
-        for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
-          {
-          dcmplx al = alm[l];
-          dcmplx al1 = (l+1>gen.lmax) ? 0. : alm[l+1];
-          dcmplx al2 = (l+2>gen.lmax) ? 0. : alm[l+2];
-          alm[l  ] = gen.alpha[il]*(gen.eps[l+1]*al + gen.eps[l+2]*al2);
-          alm[l+1] = gen.alpha[il]*al1;
-          }
-
-        constexpr size_t nval=nv0*VLEN;
-        size_t ith=0;
-        std::array<size_t,nval> itgt;
-        while (ith<rdata.shape(0))
-          {
-          s0data_u d;
-          VZERO(d.s.p1r); VZERO(d.s.p1i); VZERO(d.s.p2r); VZERO(d.s.p2i);
-          size_t nth=0;
-          while ((nth<nval)&&(ith<rdata.shape(0)))
-            {
-            if (rdata(ith).mlim>=gen.m)
-              {
-              itgt[nth] = ith;
-              d.s.csq[nth]=rdata(ith).cth*rdata(ith).cth;
-              d.s.sth[nth]=rdata(ith).sth;
-              ++nth;
-              }
-            else
-              phase.v(mi, ith, 0) = phase.v(mi, ith, 1) = 0;
-            ++ith;
-            }
-          if (nth>0)
-            {
-            size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
-            for (auto i=nth; i<i2; ++i)
-              {
-              d.s.csq[i]=d.s.csq[nth-1];
-              d.s.sth[i]=d.s.sth[nth-1];
-              d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
-              }
-            calc_alm2map (almtmp.cdata(), gen, d.v, nth);
-            for (size_t i=0; i<nth; ++i)
-              {
-              auto tgt=itgt[i];
-              //adjust for new algorithm
-              d.s.p2r[i]*=rdata(tgt).cth;
-              d.s.p2i[i]*=rdata(tgt).cth;
-              dcmplx r1(d.s.p1r[i], d.s.p1i[i]),
-                              r2(d.s.p2r[i], d.s.p2i[i]);
-              phase.v(mi, rdata(tgt).idx, 0) = complex<T>(r1+r2);
-              if (rdata(tgt).idx!=rdata(tgt).midx)
-                phase.v(mi, rdata(tgt).midx, 0) = complex<T>(r1-r2);
-              }
-            }
-          }
-        }
-      else
-        {
-        //adjust the a_lm for the new algorithm
-        size_t nalm = (mode==ALM2MAP) ? 1 : 2;
-        for (size_t l=gen.mhi; l<=gen.lmax+1; ++l)
-          for (size_t i=0; i<nalm; ++i)
-            almtmp.v(l,i)*=gen.alpha[l];
-
-        constexpr size_t nval=nvx*VLEN;
-        size_t ith=0;
-        std::array<size_t,nval> itgt;
-        while (ith<rdata.shape(0))
-          {
-          sxdata_u d;
-          VZERO(d.s.p1pr); VZERO(d.s.p1pi); VZERO(d.s.p2pr); VZERO(d.s.p2pi);
-          VZERO(d.s.p1mr); VZERO(d.s.p1mi); VZERO(d.s.p2mr); VZERO(d.s.p2mi);
-          size_t nth=0;
-          while ((nth<nval)&&(ith<rdata.shape(0)))
-            {
-            if (rdata(ith).mlim>=gen.m)
-              {
-              itgt[nth] = ith;
-              d.s.cth[nth]=rdata(ith).cth; d.s.sth[nth]=rdata(ith).sth;
-              ++nth;
-              }
-            else
-              {
-              phase.v(mi, rdata(ith).idx, 0) = phase.v(mi, rdata(ith).midx, 0) = 0;
-              phase.v(mi, rdata(ith).idx, 1) = phase.v(mi, rdata(ith).midx, 1) = 0;
-              }
-            ++ith;
-            }
-          if (nth>0)
-            {
-            size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
-            for (size_t i=nth; i<i2; ++i)
-              {
-              d.s.cth[i]=d.s.cth[nth-1];
-              d.s.sth[i]=d.s.sth[nth-1];
-              d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
-              d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
-              }
-            (mode==ALM2MAP) ?
-              calc_alm2map_spin  (almtmp.cdata(), gen, d.v, nth) :
-              calc_alm2map_deriv1(almtmp.cdata(), gen, d.v, nth);
-            for (size_t i=0; i<nth; ++i)
-              {
-              auto tgt=itgt[i];
-              dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
-                              q2(d.s.p2pr[i], d.s.p2pi[i]),
-                              u1(d.s.p1mr[i], d.s.p1mi[i]),
-                              u2(d.s.p2mr[i], d.s.p2mi[i]);
-              phase.v(mi, rdata(tgt).idx, 0) = complex<T>(q1+q2);
-              phase.v(mi, rdata(tgt).idx, 1) = complex<T>(u1+u2);
-              if (rdata(tgt).idx!=rdata(tgt).midx)
-                {
-                auto *phQ = &(phase.v(mi, rdata(tgt).midx, 0)),
-                     *phU = &(phase.v(mi, rdata(tgt).midx, 1));
-                *phQ = complex<T>(q1-q2);
-                *phU = complex<T>(u1-u2);
-                if ((gen.mhi-gen.m+gen.s)&1)
-                  { *phQ=-(*phQ); *phU=-(*phU); }
-                }
-              }
-            }
-          }
-        }
-      break;
+      dcmplx al = alm[l];
+      dcmplx al1 = (l+1>gen.lmax) ? 0. : alm[l+1];
+      dcmplx al2 = (l+2>gen.lmax) ? 0. : alm[l+2];
+      alm[l  ] = gen.alpha[il]*(gen.eps[l+1]*al + gen.eps[l+2]*al2);
+      alm[l+1] = gen.alpha[il]*al1;
       }
-    default:
+
+    constexpr size_t nval=nv0*VLEN;
+    size_t ith=0;
+    std::array<size_t,nval> itgt;
+    while (ith<rdata.size())
       {
-      MR_fail("must not happen");
-      break;
+      s0data_u d;
+      VZERO(d.s.p1r); VZERO(d.s.p1i); VZERO(d.s.p2r); VZERO(d.s.p2i);
+      size_t nth=0;
+      while ((nth<nval)&&(ith<rdata.size()))
+        {
+        if (rdata[ith].mlim>=gen.m)
+          {
+          itgt[nth] = ith;
+          d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
+          d.s.sth[nth]=rdata[ith].sth;
+          ++nth;
+          }
+        else
+          phase.v(ith, mi, 0) = phase.v(ith, mi, 1) = 0;
+        ++ith;
+        }
+      if (nth>0)
+        {
+        size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
+        for (auto i=nth; i<i2; ++i)
+          {
+          d.s.csq[i]=d.s.csq[nth-1];
+          d.s.sth[i]=d.s.sth[nth-1];
+          d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
+          }
+        calc_alm2map (almtmp.cdata(), gen, d.v, nth);
+        for (size_t i=0; i<nth; ++i)
+          {
+          auto tgt=itgt[i];
+          //adjust for new algorithm
+          d.s.p2r[i]*=rdata[tgt].cth;
+          d.s.p2i[i]*=rdata[tgt].cth;
+          dcmplx r1(d.s.p1r[i], d.s.p1i[i]),
+                          r2(d.s.p2r[i], d.s.p2i[i]);
+          phase.v(rdata[tgt].idx, mi, 0) = complex<T>(r1+r2);
+          if (rdata[tgt].idx!=rdata[tgt].midx)
+            phase.v(rdata[tgt].midx, mi, 0) = complex<T>(r1-r2);
+          }
+        }
+      }
+    }
+  else
+    {
+    //adjust the a_lm for the new algorithm
+    size_t nalm = (mode==ALM2MAP) ? 1 : 2;
+    for (size_t l=gen.mhi; l<=gen.lmax+1; ++l)
+      for (size_t i=0; i<nalm; ++i)
+        almtmp.v(l,i)*=gen.alpha[l];
+
+    constexpr size_t nval=nvx*VLEN;
+    size_t ith=0;
+    std::array<size_t,nval> itgt;
+    while (ith<rdata.size())
+      {
+      sxdata_u d;
+      VZERO(d.s.p1pr); VZERO(d.s.p1pi); VZERO(d.s.p2pr); VZERO(d.s.p2pi);
+      VZERO(d.s.p1mr); VZERO(d.s.p1mi); VZERO(d.s.p2mr); VZERO(d.s.p2mi);
+      size_t nth=0;
+      while ((nth<nval)&&(ith<rdata.size()))
+        {
+        if (rdata[ith].mlim>=gen.m)
+          {
+          itgt[nth] = ith;
+          d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+          ++nth;
+          }
+        else
+          {
+          phase.v(rdata[ith].idx, mi, 0) = phase.v(rdata[ith].midx, mi, 0) = 0;
+          phase.v(rdata[ith].idx, mi, 1) = phase.v(rdata[ith].midx, mi, 1) = 0;
+          }
+        ++ith;
+        }
+      if (nth>0)
+        {
+        size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
+        for (size_t i=nth; i<i2; ++i)
+          {
+          d.s.cth[i]=d.s.cth[nth-1];
+          d.s.sth[i]=d.s.sth[nth-1];
+          d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
+          d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
+          }
+        (mode==ALM2MAP) ?
+          calc_alm2map_spin  (almtmp.cdata(), gen, d.v, nth) :
+          calc_alm2map_deriv1(almtmp.cdata(), gen, d.v, nth);
+        for (size_t i=0; i<nth; ++i)
+          {
+          auto tgt=itgt[i];
+          dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
+                          q2(d.s.p2pr[i], d.s.p2pi[i]),
+                          u1(d.s.p1mr[i], d.s.p1mi[i]),
+                          u2(d.s.p2mr[i], d.s.p2mi[i]);
+          phase.v(rdata[tgt].idx, mi, 0) = complex<T>(q1+q2);
+          phase.v(rdata[tgt].idx, mi, 1) = complex<T>(u1+u2);
+          if (rdata[tgt].idx!=rdata[tgt].midx)
+            {
+            auto *phQ = &(phase.v(rdata[tgt].midx, mi, 0)),
+                 *phU = &(phase.v(rdata[tgt].midx, mi, 1));
+            *phQ = complex<T>(q1-q2);
+            *phU = complex<T>(u1-u2);
+            if ((gen.mhi-gen.m+gen.s)&1)
+              { *phQ=-(*phQ); *phU=-(*phU); }
+            }
+          }
+        }
       }
     }
   }
 
-DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
+DUCC0_NOINLINE static void inner_loop_m2a(
   mav<complex<double>,2> &almtmp,
-  mav<complex<double>,3> &phase, const mav<ringdata,1> &rdata,
+  const mav<complex<double>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi)
   {
-  switch (mode)
+  if (gen.s==0)
     {
-    case MAP2ALM:
+    constexpr size_t nval=nv0*VLEN;
+    size_t ith=0;
+    while (ith<rdata.size())
       {
-      if (gen.s==0)
+      s0data_u d;
+      size_t nth=0;
+      while ((nth<nval)&&(ith<rdata.size()))
         {
-        constexpr size_t nval=nv0*VLEN;
-        size_t ith=0;
-        while (ith<rdata.shape(0))
+        if (rdata[ith].mlim>=gen.m)
           {
-          s0data_u d;
-          size_t nth=0;
-          while ((nth<nval)&&(ith<rdata.shape(0)))
-            {
-            if (rdata(ith).mlim>=gen.m)
-              {
-              d.s.csq[nth]=rdata(ith).cth*rdata(ith).cth; d.s.sth[nth]=rdata(ith).sth;
-              dcmplx ph1=phase(rdata(ith).idx, mi, 0);
-              dcmplx ph2=(rdata(ith).idx==rdata(ith).midx) ? 0 : phase(rdata(ith).midx, mi, 0);
-              d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
-              d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
-              //adjust for new algorithm
-              d.s.p2r[nth]*=rdata(ith).cth;
-              d.s.p2i[nth]*=rdata(ith).cth;
-              ++nth;
-              }
-            ++ith;
-            }
-          if (nth>0)
-            {
-            size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
-            for (size_t i=nth; i<i2; ++i)
-              {
-              d.s.csq[i]=d.s.csq[nth-1];
-              d.s.sth[i]=d.s.sth[nth-1];
-              d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
-              }
-            calc_map2alm (almtmp.vdata(), gen, d.v, nth);
-            }
+          d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+          dcmplx ph1=phase(rdata[ith].idx, mi, 0);
+          dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(rdata[ith].midx, mi, 0);
+          d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
+          d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
+          //adjust for new algorithm
+          d.s.p2r[nth]*=rdata[ith].cth;
+          d.s.p2i[nth]*=rdata[ith].cth;
+          ++nth;
           }
-        //adjust the a_lm for the new algorithm
-        dcmplx * DUCC0_RESTRICT alm=almtmp.vdata();
-        dcmplx alm2 = 0.;
-        double alold=0;
-        for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
-          {
-          dcmplx al = alm[l];
-          dcmplx al1 = (l+1>gen.lmax) ? 0. : alm[l+1];
-          alm[l  ] = gen.alpha[il]*gen.eps[l+1]*al + alold*gen.eps[l]*alm2;
-          alm[l+1] = gen.alpha[il]*al1;
-          alm2=al;
-          alold=gen.alpha[il];
-          }
+        ++ith;
         }
-      else
+      if (nth>0)
         {
-        constexpr size_t nval=nvx*VLEN;
-        size_t ith=0;
-        while (ith<rdata.shape(0))
+        size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
+        for (size_t i=nth; i<i2; ++i)
           {
-          sxdata_u d;
-          size_t nth=0;
-          while ((nth<nval)&&(ith<rdata.shape(0)))
-            {
-            if (rdata(ith).mlim>=gen.m)
-              {
-              d.s.cth[nth]=rdata(ith).cth; d.s.sth[nth]=rdata(ith).sth;
-              dcmplx p1Q=phase(rdata(ith).idx, mi, 0),
-                     p1U=phase(rdata(ith).idx, mi, 1),
-                     p2Q=(rdata(ith).idx!=rdata(ith).midx) ? phase(rdata(ith).midx, mi, 0):0.,
-                     p2U=(rdata(ith).idx!=rdata(ith).midx) ? phase(rdata(ith).midx, mi, 1):0.;
-              if ((gen.mhi-gen.m+gen.s)&1)
-                { p2Q=-p2Q; p2U=-p2U; }
-              d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
-              d.s.p1mr[nth]=(p1U+p2U).real(); d.s.p1mi[nth]=(p1U+p2U).imag();
-              d.s.p2pr[nth]=(p1Q-p2Q).real(); d.s.p2pi[nth]=(p1Q-p2Q).imag();
-              d.s.p2mr[nth]=(p1U-p2U).real(); d.s.p2mi[nth]=(p1U-p2U).imag();
-              ++nth;
-              }
-            ++ith;
-            }
-          if (nth>0)
-            {
-            size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
-            for (size_t i=nth; i<i2; ++i)
-              {
-              d.s.cth[i]=d.s.cth[nth-1];
-              d.s.sth[i]=d.s.sth[nth-1];
-              d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
-              d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
-              }
-            calc_map2alm_spin(almtmp.vdata(), gen, d.v, nth);
-            }
+          d.s.csq[i]=d.s.csq[nth-1];
+          d.s.sth[i]=d.s.sth[nth-1];
+          d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
           }
-        //adjust the a_lm for the new algorithm
-        for (size_t l=gen.mhi; l<=gen.lmax; ++l)
-          {
-          almtmp.v(l,0)*=gen.alpha[l];
-          almtmp.v(l,1)*=gen.alpha[l];
-          }
+        calc_map2alm (almtmp.vdata(), gen, d.v, nth);
         }
-      break;
       }
-    default:
+    //adjust the a_lm for the new algorithm
+    dcmplx * DUCC0_RESTRICT alm=almtmp.vdata();
+    dcmplx alm2 = 0.;
+    double alold=0;
+    for (size_t il=0, l=gen.m; l<=gen.lmax; ++il,l+=2)
       {
-      MR_fail("must not happen");
-      break;
+      dcmplx al = alm[l];
+      dcmplx al1 = (l+1>gen.lmax) ? 0. : alm[l+1];
+      alm[l  ] = gen.alpha[il]*gen.eps[l+1]*al + alold*gen.eps[l]*alm2;
+      alm[l+1] = gen.alpha[il]*al1;
+      alm2=al;
+      alold=gen.alpha[il];
+      }
+    }
+  else
+    {
+    constexpr size_t nval=nvx*VLEN;
+    size_t ith=0;
+    while (ith<rdata.size())
+      {
+      sxdata_u d;
+      size_t nth=0;
+      while ((nth<nval)&&(ith<rdata.size()))
+        {
+        if (rdata[ith].mlim>=gen.m)
+          {
+          d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+          dcmplx p1Q=phase(rdata[ith].idx, mi, 0),
+                 p1U=phase(rdata[ith].idx, mi, 1),
+                 p2Q=(rdata[ith].idx!=rdata[ith].midx) ? phase(rdata[ith].midx, mi, 0):0.,
+                 p2U=(rdata[ith].idx!=rdata[ith].midx) ? phase(rdata[ith].midx, mi, 1):0.;
+          if ((gen.mhi-gen.m+gen.s)&1)
+            { p2Q=-p2Q; p2U=-p2U; }
+          d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
+          d.s.p1mr[nth]=(p1U+p2U).real(); d.s.p1mi[nth]=(p1U+p2U).imag();
+          d.s.p2pr[nth]=(p1Q-p2Q).real(); d.s.p2pi[nth]=(p1Q-p2Q).imag();
+          d.s.p2mr[nth]=(p1U-p2U).real(); d.s.p2mi[nth]=(p1U-p2U).imag();
+          ++nth;
+          }
+        ++ith;
+        }
+      if (nth>0)
+        {
+        size_t i2=((nth+VLEN-1)/VLEN)*VLEN;
+        for (size_t i=nth; i<i2; ++i)
+          {
+          d.s.cth[i]=d.s.cth[nth-1];
+          d.s.sth[i]=d.s.sth[nth-1];
+          d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
+          d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
+          }
+        calc_map2alm_spin(almtmp.vdata(), gen, d.v, nth);
+        }
+      }
+    //adjust the a_lm for the new algorithm
+    for (size_t l=gen.mhi; l<=gen.lmax; ++l)
+      {
+      almtmp.v(l,0)*=gen.alpha[l];
+      almtmp.v(l,1)*=gen.alpha[l];
       }
     }
   }
+
+#undef VZERO
 
 size_t get_mmax(const mav<size_t,1> &mval, size_t lmax)
   {
@@ -1378,6 +1374,7 @@ size_t get_mmax(const mav<size_t,1> &mval, size_t lmax)
     MR_assert(m<=lmax, "mmax too large");
     MR_assert(!present[m], "m value present more than once");
     present[m]=true;
+    mmax = max(mmax,m);
     }
   return mmax;
   }
@@ -1429,6 +1426,7 @@ vector<ringdata> make_ringdata(const mav<double,1> &theta, size_t lmax,
       ++pos;
       }
     }
+cout << nrings << " rings => " << res.size() << " pairs." << endl;
   return res;
   }
 
@@ -1451,6 +1449,18 @@ template<typename T> void alm2leg(  // associated Legendre transform
   MR_assert(nm==leg.shape(1), "nm mismatch");
   auto nalm=alm.shape(1);
   auto mmax = get_mmax(mval, lmax);
+  if (mode==ALM2MAP_DERIV1)
+    {
+    spin=1;
+    MR_assert(alm.shape(1)==1, "need one a_lm component");
+    MR_assert(leg.shape(2)==2, "need two Legendre components");
+    }
+  else
+    {
+    size_t ncomp = (spin==0) ? 1 : 2;
+    MR_assert(alm.shape(1)==ncomp, "incorrect number of a_lm components");
+    MR_assert(leg.shape(2)==ncomp, "incorrect number of Legendre components");
+    }
 
   auto norm_l = (mode==ALM2MAP_DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
@@ -1475,14 +1485,14 @@ template<typename T> void alm2leg(  // associated Legendre transform
       for (size_t ialm=0; ialm<nalm; ++ialm)
         almtmp.v(lmax+1,ialm) = 0;
       gen.prepare(m);
-      inner_loop_a2m (almtmp, leg, rdata, gen, mi);
+      inner_loop_a2m (mode, almtmp, leg, rdata, gen, mi);
       }
     }); /* end of parallel region */
   }
 
 template<typename T> void leg2alm(  // associated Legendre transform
-  mav<complex<T>,2> &alm, // (lmidx, ncomp)
-  const mav<complex<T>,3> &leg, // (nrings, nm, ncomp)
+  const mav<complex<T>,3> &leg, // (lmidx, ncomp)
+  mav<complex<T>,2> &alm, // (nrings, nm, ncomp)
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
@@ -1490,9 +1500,42 @@ template<typename T> void leg2alm(  // associated Legendre transform
   size_t spin,
   size_t nthreads)
   {
-  }
+  // sanity checks
+  auto nrings=theta.shape(0);
+  MR_assert(nrings==leg.shape(0), "nrings mismatch");
+  auto nm=mval.shape(0);
+  MR_assert(nm==mstart.shape(0), "nm mismatch");
+  MR_assert(nm==leg.shape(1), "nm mismatch");
+  auto nalm=alm.shape(1);
+  auto mmax = get_mmax(mval, lmax);
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(alm.shape(1)==ncomp, "incorrect number of a_lm components");
+  MR_assert(leg.shape(2)==ncomp, "incorrect number of Legendre components");
 
-#undef VZERO
+  auto norm_l = Ylmgen::get_norm (lmax, spin);
+  auto rdata = make_ringdata(theta, lmax, spin);
+  YlmBase base(lmax, mmax, spin);
+
+  ducc0::execDynamic(mval.shape(0), nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    Ylmgen gen(base);
+    mav<complex<double>,2> almtmp({lmax+2,nalm});
+
+    while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+      {
+      auto m=mval(mi);
+      gen.prepare(m);
+      inner_loop_m2a (almtmp, leg, rdata, gen, mi);
+      auto lmin=max(spin,m);
+      for (size_t l=m; l<lmin; ++l)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
+          alm.v(mstart(mi)+l,ialm) = 0;
+      for (size_t l=lmin; l<=lmax; ++l)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
+          alm.v(mstart(mi)+l,ialm) = almtmp(l,ialm)*norm_l[l];
+      }
+    }); /* end of parallel region */
+  }
 
 
 }}
