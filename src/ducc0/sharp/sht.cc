@@ -1160,7 +1160,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           ++nth;
           }
         else
-          phase.v(ith, mi, 0) = phase.v(ith, mi, 1) = 0;
+          phase.v(rdata[ith].idx, mi, 0) = phase.v(rdata[ith].midx, mi, 0) = 0;
         ++ith;
         }
       if (nth>0)
@@ -1180,7 +1180,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           d.s.p2r[i]*=rdata[tgt].cth;
           d.s.p2i[i]*=rdata[tgt].cth;
           dcmplx r1(d.s.p1r[i], d.s.p1i[i]),
-                          r2(d.s.p2r[i], d.s.p2i[i]);
+                 r2(d.s.p2r[i], d.s.p2i[i]);
           phase.v(rdata[tgt].idx, mi, 0) = complex<T>(r1+r2);
           if (rdata[tgt].idx!=rdata[tgt].midx)
             phase.v(rdata[tgt].midx, mi, 0) = complex<T>(r1-r2);
@@ -1426,7 +1426,6 @@ vector<ringdata> make_ringdata(const mav<double,1> &theta, size_t lmax,
       ++pos;
       }
     }
-cout << nrings << " rings => " << res.size() << " pairs." << endl;
   return res;
   }
 
@@ -1452,18 +1451,18 @@ template<typename T> void alm2leg(  // associated Legendre transform
   if (mode==ALM2MAP_DERIV1)
     {
     spin=1;
-    MR_assert(alm.shape(1)==1, "need one a_lm component");
+    MR_assert(nalm==1, "need one a_lm component");
     MR_assert(leg.shape(2)==2, "need two Legendre components");
     }
   else
     {
     size_t ncomp = (spin==0) ? 1 : 2;
-    MR_assert(alm.shape(1)==ncomp, "incorrect number of a_lm components");
+    MR_assert(nalm==ncomp, "incorrect number of a_lm components");
     MR_assert(leg.shape(2)==ncomp, "incorrect number of Legendre components");
     }
 
   auto norm_l = (mode==ALM2MAP_DERIV1) ? Ylmgen::get_d1norm (lmax) :
-                                 Ylmgen::get_norm (lmax, spin);
+                                         Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 
