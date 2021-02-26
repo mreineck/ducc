@@ -6,6 +6,7 @@
 #include "ducc0/math/pointing.cc"
 #include "ducc0/math/geom_utils.cc"
 #include "ducc0/math/space_filling.cc"
+#include "ducc0/sharp/sht.cc"
 #include "ducc0/sharp/sharp.cc"
 #include "ducc0/sharp/sharp_almhelpers.cc"
 #include "ducc0/sharp/sharp_core.cc"
