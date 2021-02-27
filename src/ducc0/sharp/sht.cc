@@ -1524,6 +1524,9 @@ template<typename T> void leg2alm(  // associated Legendre transform
       {
       auto m=mval(mi);
       gen.prepare(m);
+      for (size_t l=m; l<almtmp.shape(0); ++l)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
+          almtmp.v(l,ialm) = 0.;
       inner_loop_m2a (almtmp, leg, rdata, gen, mi);
       auto lmin=max(spin,m);
       for (size_t l=m; l<lmin; ++l)
