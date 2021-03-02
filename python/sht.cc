@@ -80,7 +80,7 @@ template<typename T> py::array leg2alm2(const py::array &leg_, const py::array &
   auto leg = to_mav<complex<double>,3>(leg_, false);
   auto theta = to_mav<double,1>(theta_, false);
   size_t nalm = ((lmax+1)*(lmax+2))/2;
-  MR_assert(leg.shape(0)==theta.shape(0), "bad a_lm array size");
+  MR_assert(leg.shape(0)==theta.shape(0), "bad leg array size");
   auto alm_ = get_optional_Pyarr<complex<T>>(out_, {nalm,leg.shape(2)});
   auto alm = to_mav<complex<double>,2>(alm_, true);
   mav<size_t,1> mval({lmax+1});
