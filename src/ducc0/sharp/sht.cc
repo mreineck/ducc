@@ -1257,9 +1257,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
     }
   }
 
-DUCC0_NOINLINE static void inner_loop_m2a(
+template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
   mav<complex<double>,2> &almtmp,
-  const mav<complex<double>,3> &phase, const vector<ringdata> &rdata,
+  const mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi)
   {
   if (gen.s==0)
