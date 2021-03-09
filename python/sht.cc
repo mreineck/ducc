@@ -129,6 +129,15 @@ py::array Pyleg2alm(const py::array &leg, const py::array &theta, size_t lmax, s
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
+py::array Pyclenshaw_curtis_weights(int64_t nrings)
+  {
+  MR_assert(nrings>2, "nrings must be larger than 2");
+  py::array_t<double> res_(nrings);
+  auto res = to_mav<double,1>(res_, true);
+  clenshaw_curtis_weights(res);
+  return res_;
+  }
+
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
 using a_c_c = py::array_t<complex<double>,
@@ -280,6 +289,7 @@ void add_sht(py::module_ &msup)
 
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
+  m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

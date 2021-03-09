@@ -35,6 +35,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
   size_t spin,
   size_t nthreads);
 
+void clenshaw_curtis_weights(mav<double,1> &weight);
+
 }
 
 using detail_sht::SHT_mode;
@@ -42,6 +44,7 @@ using detail_sht::ALM2MAP;
 using detail_sht::MAP2ALM;
 using detail_sht::alm2leg;
 using detail_sht::leg2alm;
+using detail_sht::clenshaw_curtis_weights;
 
 }
 

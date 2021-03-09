@@ -1,6 +1,7 @@
 #include <vector>
 #include "ducc0/infra/simd.h"
 #include "ducc0/sharp/sht.h"
+#include "ducc0/math/fft1d.h"
 
 namespace ducc0 {
 
@@ -1539,5 +1540,23 @@ template<typename T> void leg2alm(  // associated Legendre transform
     }); /* end of parallel region */
   }
 
+void clenshaw_curtis_weights(mav<double,1> &weight)
+  {
+  auto nrings = weight.shape(0);
+  MR_assert(nrings>=2, "too few rings for CC geometry");
+  size_t n=nrings-1;
+  double dw=-1./(n*n-1.+(n&1));
+  vector<double> wgt(n);
+  wgt[0]=2.+dw;
+  for (size_t k=1; k<=(n/2-1); ++k)
+    wgt[2*k-1]=2./(1.-4.*k*k) + dw;
+  wgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
+  pocketfft_r<double> plan(n);
+  plan.exec(wgt.data(), 1., false);
+
+  for (size_t m=0; m<n; ++m)
+    weight.v(m) = double(wgt[m]*2*pi/n);
+  weight.v(n) = weight(0);
+  }
 
 }}
