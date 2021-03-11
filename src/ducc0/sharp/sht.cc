@@ -1567,7 +1567,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   clenshaw_curtis_weights(wgt);
   auto nm = leg.shape(1);
   auto nm2 = nm/2;
-  mav<complex<double>,3> tmp({2*nrings-2, (nm+1)/2, leg.shape(2)});
+  mav<complex<double>,3> tmp({2*nrings-2, (nm+1)/2, leg.shape(2)}, UNINITIALIZED);
   fmav<complex<double>> ftmp(tmp);
   double fct = ((spin&1)==0) ? 1 : -1;
   for (size_t j=0; j<nm2; ++j)
@@ -1582,7 +1582,6 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
       tmp.v(0,tmp.shape(1)-1,k) = leg(0,nm-1,k);
       tmp.v(nrings-1,tmp.shape(1)-1,k) = leg(nrings-1,nm-1,k);
       }
-  // parallelize?
   execParallel(1, nrings-1, nthreads, [&](size_t lo, size_t hi)
     {
     for (size_t i=lo; i<hi; ++i)
@@ -1608,10 +1607,8 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   UnityRoots<double,complex<double>> roots(4*nrings-4);
   for (size_t i=1; i<shift.size(); ++i)
     shift[i] = roots[i];
-  // parallelize?
   execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-//  for (size_t i=1, im=2*nrings-3; i<=im; ++i,--im)
     for (size_t i=lo, im=2*nrings-lo-2; (i<hi)&&(i<=im); ++i,--im)
       for (size_t j=0; j<tmp.shape(1); ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
@@ -1626,20 +1623,20 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   double norm = 1./(2*tmp.shape(0)*tmp.shape(0));
   execParallel(0, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-//  for (size_t i=0, im=2*nrings-3; i<=im; ++i,--im)
     for (size_t i=lo, im=2*nrings-lo-3; (i<hi)&&(i<im); ++i,--im)
+      {
+      auto factor = wgt(1+2*i)*norm;
       for (size_t j=0; j<tmp.shape(1); ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
-          tmp.v(i,j,k) *= wgt(1+2*i)*norm;
-          if (i!=im)
-            tmp.v(im,j,k) *= wgt(1+2*i)*norm;
+          tmp.v(i,j,k) *= factor;
+          if (i!=im) tmp.v(im,j,k) *= factor;
           }
+      }
     });
   c2c(ftmp,ftmp,{0},true,1.,nthreads);
   execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-//  for (size_t i=1, im=2*nrings-3; i<=im; ++i,--im)
     for (size_t i=lo, im=2*nrings-lo-2; (i<hi)&&(i<=im); ++i,--im)
       for (size_t j=0; j<tmp.shape(1); ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
