@@ -138,6 +138,13 @@ py::array Pyclenshaw_curtis_weights(int64_t nrings)
   return res_;
   }
 
+py::array Pyprep_for_analysis(py::array &leg_, size_t spin, size_t nthreads)
+  {
+  auto leg = to_mav<complex<double>,3>(leg_, true);
+  prep_for_analysis(leg, spin, nthreads);
+  return leg_;
+  }
+
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
 using a_c_c = py::array_t<complex<double>,
@@ -290,6 +297,7 @@ void add_sht(py::module_ &msup)
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
+  m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

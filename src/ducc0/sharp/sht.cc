@@ -2,6 +2,7 @@
 #include "ducc0/infra/simd.h"
 #include "ducc0/sharp/sht.h"
 #include "ducc0/math/fft1d.h"
+#include "ducc0/math/fft.h"
 
 namespace ducc0 {
 
@@ -1557,6 +1558,109 @@ void clenshaw_curtis_weights(mav<double,1> &weight)
   for (size_t m=0; m<n; ++m)
     weight.v(m) = double(wgt[m]*2*pi/n);
   weight.v(n) = weight(0);
+  }
+
+void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads)
+  {
+  auto nrings = leg.shape(0);
+  mav<double,1> wgt({2*nrings-1});
+  clenshaw_curtis_weights(wgt);
+  auto nm = leg.shape(1);
+  auto nm2 = nm/2;
+  mav<complex<double>,3> tmp({2*nrings-2, (nm+1)/2, leg.shape(2)});
+  fmav<complex<double>> ftmp(tmp);
+  double fct = ((spin&1)==0) ? 1 : -1;
+  for (size_t j=0; j<nm2; ++j)
+    for (size_t k=0; k<tmp.shape(2); ++k)
+      {
+      tmp.v(0,j,k) = leg(0,2*j,k) + leg(0,2*j+1,k);
+      tmp.v(nrings-1,j,k) = leg(nrings-1,2*j,k) + leg(nrings-1,2*j+1,k);
+      }
+  if ((nm&1)==1)
+    for (size_t k=0; k<tmp.shape(2); ++k)
+      {
+      tmp.v(0,tmp.shape(1)-1,k) = leg(0,nm-1,k);
+      tmp.v(nrings-1,tmp.shape(1)-1,k) = leg(nrings-1,nm-1,k);
+      }
+  for (size_t i=1; i+1<nrings; ++i)
+    {
+    for (size_t j=0; j<nm2; ++j)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        tmp.v(i,j,k) = leg(i,2*j,k) + leg(i,2*j+1,k);
+        tmp.v(tmp.shape(0)-i,j,k) = fct * (leg(i,2*j,k) - leg(i,2*j+1,k));
+        }
+    if ((nm&1)==1)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        tmp.v(i,tmp.shape(1)-1,k) = leg(i,nm-1,k);
+        tmp.v(tmp.shape(0)-i,tmp.shape(1)-1,k) = fct * leg(i,nm-1,k);
+        }
+    }
+
+  c2c(ftmp,ftmp,{0},true,1.,nthreads);
+
+  vector<complex<double>> shift(nrings+1);
+  UnityRoots<double,complex<double>> roots(4*nrings-4);
+  for (size_t i=1; i<shift.size(); ++i)
+    shift[i] = roots[i];
+  for (size_t i=1, im=2*nrings-3; i<=im; ++i,--im)
+    for (size_t j=0; j<tmp.shape(1); ++j)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        if (i!=im)
+          tmp.v(i,j,k) *= shift[i];
+        tmp.v(im,j,k) *= conj(shift[i]);
+        }
+
+  c2c(ftmp,ftmp,{0},false,1.,nthreads);
+
+  double norm = 1./(2*tmp.shape(0)*tmp.shape(0));
+  for (size_t i=0, im=2*nrings-3; i<=im; ++i,--im)
+    for (size_t j=0; j<tmp.shape(1); ++j)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        tmp.v(i,j,k) *= wgt(1+2*i)*norm;
+        if ((i<im) && (im<2*nrings-2))
+          tmp.v(im,j,k) *= wgt(1+2*i)*norm;
+        }
+  c2c(ftmp,ftmp,{0},true,1.,nthreads);
+  for (size_t i=1, im=2*nrings-3; i<=im; ++i,--im)
+    for (size_t j=0; j<tmp.shape(1); ++j)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        if (i!=im)
+          tmp.v(i,j,k) *= conj(shift[i]);
+        tmp.v(im,j,k) *= shift[i];
+        }
+  c2c(ftmp,ftmp,{0},false,1.,nthreads);
+
+  for (size_t j=0; j<nm2; ++j)
+    for (size_t k=0; k<tmp.shape(2); ++k)
+      {
+      leg.v(0,2*j,k) = wgt(0)*leg(0,2*j,k) + tmp(0,j,k);
+      leg.v(0,2*j+1,k) = wgt(0)*leg(0,2*j+1,k) + tmp(0,j,k);
+      leg.v(nrings-1,2*j,k) = wgt(2*nrings-2)*leg(nrings-1,2*j,k) + tmp(nrings-1,j,k);
+      leg.v(nrings-1,2*j+1,k) = wgt(2*nrings-2)*leg(nrings-1,2*j+1,k) + tmp(nrings-1,j,k);
+      }
+  if ((nm&1)==1)
+    for (size_t k=0; k<tmp.shape(2); ++k)
+      {
+      leg.v(0,nm-1,k) = wgt(0)*leg(0,nm-1,k) + tmp(0,tmp.shape(1)-1,k);
+      leg.v(nrings-1,nm-1,k) = wgt(2*nrings-2)*leg(nrings-1,nm-1,k) + tmp(nrings-1,tmp.shape(1)-1,k);
+      }
+  for (size_t i=1; i+1<nrings; ++i)
+    {
+    for (size_t j=0; j<nm2; ++j)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        {
+        leg.v(i,2*j,k) = wgt(2*i)*leg(i,2*j,k) + tmp(i,j,k) + fct*tmp(2*nrings-2-i,j,k);
+        leg.v(i,2*j+1,k) = wgt(2*i)*leg(i,2*j+1,k) + tmp(i,j,k) - fct*tmp(2*nrings-2-i,j,k);
+        }
+    if ((nm&1)==1)
+      for (size_t k=0; k<tmp.shape(2); ++k)
+        leg.v(i,nm-1,k) = wgt(2*i)*leg(i,nm-1,k) + tmp(i,tmp.shape(1)-1,k) + fct*tmp(2*nrings-2-i,tmp.shape(1)-1,k);
+    }
   }
 
 }}
