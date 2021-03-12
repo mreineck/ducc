@@ -4206,19 +4206,19 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
     }
   }
 
-    template<typename T> void copy_and_norm(T *c, T *p1, size_t n, T0 fct) const
+    template<typename T> void copy_and_norm(T *c, T *p1, T0 fct) const
       {
       if (p1!=c)
         {
         if (fct!=1.)
-          for (size_t i=0; i<n; ++i)
+          for (size_t i=0; i<length; ++i)
             c[i] = fct*p1[i];
         else
-          copy (p1, p1+n, c);
+          copy_n (p1, length, c);
         }
       else
         if (fct!=1.)
-          for (size_t i=0; i<n; ++i)
+          for (size_t i=0; i<length; ++i)
             c[i] *= fct;
       }
 
@@ -4266,7 +4266,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
           std::swap (p1,p2);
           l1*=ip;
           }
-      copy_and_norm(p1, p1, length, fct);
+      copy_and_norm(p1, p1, fct);
       return p1;
       }
 
@@ -4275,7 +4275,7 @@ template<typename T> void radbg(size_t ido, size_t ip, size_t l1,
       if (length==1) { c[0]*=fct; return; }
       aligned_array<T> ch(length);
       auto p1 = exec(c, ch.data(), T0(1), r2hc);
-      copy_and_norm(c,p1,length,fct);
+      copy_and_norm(c,p1,fct);
       }
 
   private:
@@ -4464,12 +4464,12 @@ template<typename T0> class fftblue
           tmp[m].Set(c[m], zero);
         fft<true>(tmp,buf2,fct);
         c[0] = tmp[0].r;
-        copy(&tmp[1].r, &tmp[1].r+n-1, &c[1]);
+        copy_n(&tmp[1].r, n-1, &c[1]);
         }
       else
         {
         tmp[0].Set(c[0],c[0]*0);
-        copy(&c[1], &c[n], &tmp[1].r);
+        copy_n(&c[1], n-1, &tmp[1].r);
         if ((n&1)==0) tmp[n/2].i=T0(0)*c[0];
         for (size_t m=1; 2*m<n; ++m)
           tmp[n-m].Set(tmp[m].r, -tmp[m].i);
