@@ -722,7 +722,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         static constexpr int nsafe = (supp+1)/2;
         static constexpr int su = 2*nsafe+(1<<logsquare);
         static constexpr int sv = 2*nsafe+(1<<logsquare);
-        static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
+        static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
         const Params *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -822,7 +822,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         static constexpr int nsafe = (supp+1)/2;
         static constexpr int su = 2*nsafe+(1<<logsquare);
         static constexpr int sv = 2*nsafe+(1<<logsquare);
-        static constexpr int svvec = ((sv+vlen-1)/vlen)*vlen;
+        static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
         const Params *parent;
 
