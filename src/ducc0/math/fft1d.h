@@ -1614,7 +1614,7 @@ template<typename Tfs> class pocketfft_c
         if (fct!=Tfs(1))
           for (size_t i=0; i<N; ++i) in[i]=res[i]*fct;
         else
-          copy(res, res+N, in);
+          copy_n(res, N, in);
         }
       return in;
       }
