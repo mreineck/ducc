@@ -13,8 +13,8 @@ interface.
 
 - [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
-- a C++17-capable compiler (tested with g++ version 7 or newer and clang++;
-  recent versions of MSVC on Windows also work, but are tested less frequently)
+- a C++17-capable compiler (tested with g++ version 7 or newer, clang++,
+  MSVC 2019 and Intel icpx 2021.1.2)
 
 ### Sources
 
@@ -150,7 +150,7 @@ as the `wgridder` component.
 - uses the analytical gridding kernel presented in
   <https://arxiv.org/abs/1808.06736>
 - uses the "improved W-stacking method" described in
-  <https://www.repository.cam.ac.uk/handle/1810/292298> (p. 139ff)
+  <https://arxiv.org/abs/2101.11172>
 - in combination these two aspects allow extremely accurate gridding/degridding
   operations (L2 error compared to explicit DFTs can go below 1e-12) with
   reasonable resource consumption
