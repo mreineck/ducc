@@ -245,10 +245,13 @@ static inline double Gy_index(int l, int i, int j)
     return -.5*sqrt(2*(l+1)*(l+2)/double((2*l+1)*(2*l+3)));
   else
     return 0.0;
-}
-static inline double Y_index(int l, int i, int j) {
-    return Gy_index(l, 2*l-i, i)*Gy_index(l, 2*l-i, j) + Gy_index(l, 2*l-i+1, i)*Gy_index(l, 2*l-i+1, j) + Gy_index(l, 2*l-i+2, i)*Gy_index(l, 2*l-i+2, j);
-}
+  }
+static inline double Y_index(int l, int i, int j)
+  {
+  return Gy_index(l, 2*l-i  , i)*Gy_index(l, 2*l-i  , j)
+       + Gy_index(l, 2*l-i+1, i)*Gy_index(l, 2*l-i+1, j)
+       + Gy_index(l, 2*l-i+2, i)*Gy_index(l, 2*l-i+2, j);
+  }
 static inline double Z_index(int l, int i, int j)
   {
   return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
@@ -265,24 +268,27 @@ struct ft_symmetric_tridiagonal
 
 struct ft_symmetric_tridiagonal_symmetric_eigen
   {
-    vector<double> A, B, C, lambda;
-    int sign;
-    int n;
+  vector<double> A, B, C, lambda;
+  int sign;
+  int n;
 
   ft_symmetric_tridiagonal_symmetric_eigen() {}
 
-  ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T, const vector<double> &lambda_, const int sign_)
+  ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T,
+    const vector<double> &lambda_, const int sign_)
     : A(T.n), B(T.n), C(T.n), lambda(lambda_), sign(sign_), n(T.n)
     {
-    if (n > 1) {
-        A[n-1] = 1/T.b[n-2];
-        B[n-1] = -T.a[n-1]/T.b[n-2];
-    }
-    for (int i = n-2; i > 0; i--) {
-        A[i] = 1/T.b[i-1];
-        B[i] = -T.a[i]/T.b[i-1];
-        C[i] = T.b[i]/T.b[i-1];
-    }
+    if (n>1)
+      {
+      A[n-1] = 1/T.b[n-2];
+      B[n-1] = -T.a[n-1]/T.b[n-2];
+      }
+    for (int i=n-2; i>0; i--)
+      {
+      A[i] = 1/T.b[i-1];
+      B[i] = -T.a[i]/T.b[i-1];
+      C[i] = T.b[i]/T.b[i-1];
+      }
     }
   };
 
@@ -299,47 +305,47 @@ struct ft_partial_sph_isometry_plan
     int n11 = l/2;
     ft_symmetric_tridiagonal Y11(n11);
     for (int i = 0; i < n11; i++)
-        Y11.a[n11-1-i] = Y_index(l, 2*i+1, 2*i+1);
+      Y11.a[n11-1-i] = Y_index(l, 2*i+1, 2*i+1);
     for (int i = 0; i < n11-1; i++)
-        Y11.b[n11-2-i] = Y_index(l, 2*i+1, 2*i+3);
+      Y11.b[n11-2-i] = Y_index(l, 2*i+1, 2*i+3);
     vector<double>lambda11(n11);
     for (int i = 0; i < n11; i++)
-        lambda11[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
+      lambda11[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
     int sign = (l%4)/2 == 1 ? 1 : -1;
     F11 = ft_symmetric_tridiagonal_symmetric_eigen(Y11, lambda11, sign);
 
     int n21 = (l+1)/2;
     ft_symmetric_tridiagonal Y21(n21);
     for (int i = 0; i < n21; i++)
-        Y21.a[n21-1-i] = Y_index(l, 2*i, 2*i);
+      Y21.a[n21-1-i] = Y_index(l, 2*i, 2*i);
     for (int i = 0; i < n21-1; i++)
-        Y21.b[n21-2-i] = Y_index(l, 2*i, 2*i+2);
+      Y21.b[n21-2-i] = Y_index(l, 2*i, 2*i+2);
     vector<double> lambda21(n21);
     for (int i = 0; i < n21; i++)
-        lambda21[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
+      lambda21[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
     sign = ((l+1)%4)/2 == 1 ? -1 : 1;
     F21 = ft_symmetric_tridiagonal_symmetric_eigen(Y21, lambda21, sign);
 
     int n12 = (l+1)/2;
     ft_symmetric_tridiagonal Y12(n12);
     for (int i = 0; i < n12; i++)
-        Y12.a[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+1);
+      Y12.a[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+1);
     for (int i = 0; i < n12-1; i++)
-        Y12.b[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+3);
+      Y12.b[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+3);
     vector<double> lambda12(n12);
     for (int i = 0; i < n12; i++)
-        lambda12[n12-1-i] = Z_index(l, 2*i, 2*i);
+      lambda12[n12-1-i] = Z_index(l, 2*i, 2*i);
     F12 = ft_symmetric_tridiagonal_symmetric_eigen(Y12, lambda12, sign);
 
     int n22 = (l+2)/2;
     ft_symmetric_tridiagonal Y22(n22);
     for (int i = 0; i < n22; i++)
-        Y22.a[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2);
+      Y22.a[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2);
     for (int i = 0; i < n22-1; i++)
-        Y22.b[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2+2);
+      Y22.b[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2+2);
     vector<double> lambda22(n22);
     for (int i = 0; i < n22; i++)
-        lambda22[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
+      lambda22[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
     sign = (l%4)/2 == 1 ? -1 : 1;
     F22 = ft_symmetric_tridiagonal_symmetric_eigen(Y22, lambda22, sign);
     }
@@ -523,14 +529,12 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
       }
     }
   else
-    {
     for (size_t m=0; m<=lmax; ++m)
       {
       auto ang = polar(1.,-(psi+phi)*m);
       for (size_t l=m; l<=lmax; ++l)
         alm(l,m) *= ang;
       }
-    }
   }
 #endif
 }
