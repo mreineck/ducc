@@ -226,31 +226,29 @@ template<typename T> class Alm: public Alm_Base
 #if 1
 // the a_lm rotation code is an adaptation of the algorithms found in
 // https://github.com/MikaelSlevinsky/FastTransforms
-constexpr double eps = 0x1p-52;
-constexpr double floatmin = 0x1p-1022;
 
-static inline double Gy_index(int l, int i, int j)
+static inline double Gy_index2(int l, int i, int j)
   {
   if (l+2 <= i && i <= 2*l && i+j == 2*l)
-    return .5*sqrt((j+1)*(j+2)/double((2*l+1)*(2*l+3)));
+    return sqrt((j+1)*(j+2));
   else if (2 <= i && i <= l && i+j == 2*l+2)
-    return -.5*sqrt((i-1)*i/double((2*l+1)*(2*l+3)));
+    return -sqrt((i-1)*i);
   else if (0 <= i && i <= l-1 && i+j == 2*l)
-    return -.5*sqrt((2*l+1-i)*(2*l+2-i)/double((2*l+1)*(2*l+3)));
+    return -sqrt((2*l+1-i)*(2*l+2-i));
   else if (l+3 <= i && i <= 2*l+2 && i+j == 2*l+2)
-    return .5*sqrt((2*l+1-j)*(2*l+2-j)/double((2*l+1)*(2*l+3)));
+    return sqrt((2*l+1-j)*(2*l+2-j));
   else if (i == l+1 && j == l-1)
-    return .5*sqrt(2*l*(l+1)/double((2*l+1)*(2*l+3)));
+    return sqrt(2*l*(l+1));
   else if (i == l && j == l)
-    return -.5*sqrt(2*(l+1)*(l+2)/double((2*l+1)*(2*l+3)));
+    return -sqrt(2*(l+1)*(l+2));
   else
     return 0.0;
   }
-static inline double Y_index(int l, int i, int j)
+static inline double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
   {
-  return Gy_index(l, 2*l-i  , i)*Gy_index(l, 2*l-i  , j)
-       + Gy_index(l, 2*l-i+1, i)*Gy_index(l, 2*l-i+1, j)
-       + Gy_index(l, 2*l-i+2, i)*Gy_index(l, 2*l-i+2, j);
+   return (Gy_index2(l, 2*l-i  , i)*Gy_index2(l, 2*l-i  , j)
+         + Gy_index2(l, 2*l-i+1, i)*Gy_index2(l, 2*l-i+1, j)
+         + Gy_index2(l, 2*l-i+2, i)*Gy_index2(l, 2*l-i+2, j))*0.25/double((2*l+1)*(2*l+3));
   }
 static inline double Z_index(int l, int i, int j)
   {
@@ -351,47 +349,13 @@ struct ft_partial_sph_isometry_plan
     }
   };
 
-int ft_eigen_eval(const ft_symmetric_tridiagonal_symmetric_eigen & F,
-  int jmin, const vector<double> &c, vector<double> &f)
-  {
-  if (F.n<1)
-    {
-    for (int j=0; j<F.n; ++j)
-      f[j] = 0.0;
-    return F.n;
-    }
-  for (int j=jmin; j<F.n; ++j)
-    {
-    double vk = 1.0;
-    double vkp1 = 0.0;
-    double nrm = 1.0;
-    double X = F.lambda[j];
-    double fj = c[F.n-1];
-    for (int k=F.n-1; k>0; --k)
-      {
-      double vkm1 = (F.A[k]*X+F.B[k])*vk - F.C[k]*vkp1;
-      vkp1 = vk;
-      vk = vkm1;
-      nrm += vkm1*vkm1;
-      fj += vkm1*c[k-1];
-      if (nrm > eps/floatmin)
-        {
-        nrm = 1.0/sqrt(nrm);
-        vkp1 *= nrm;
-        vk *= nrm;
-        fj *= nrm;
-        nrm = 1.0;
-        }
-      }
-    f[j] = fj*copysign(1.0/sqrt(nrm),F.sign*vk);
-    }
-  return F.n;
-  }
-
-template<typename Tv, size_t N> int ft_eigen_eval_vec
+template<typename Tv, size_t N> int ft_eigen_eval
   (const ft_symmetric_tridiagonal_symmetric_eigen &F,
   int jmin, const vector<double> &c, vector<double> &f)
   {
+  constexpr double eps = 0x1p-52;
+  constexpr double floatmin = 0x1p-1022;
+
   if (F.n<1)
     {
     for (int j=jmin; j<F.n; ++j)
@@ -439,8 +403,8 @@ template<typename Tv, size_t N> int ft_eigen_eval_vec
 void ft_semv (const ft_symmetric_tridiagonal_symmetric_eigen & F,
   const vector<double> &x, vector<double> &y)
   {
-  int j = ft_eigen_eval_vec<native_simd<double>,4>(F, 0, x, y);
-  ft_eigen_eval(F, j, x, y);
+  int j = ft_eigen_eval<native_simd<double>,4>(F, 0, x, y);
+  ft_eigen_eval<simd<double,1>,1>(F, j, x, y);
   }
 
 void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
@@ -457,16 +421,18 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
   if (lmax<=1) return;
   execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
     {
-    vector<double> tin(2*lmax+3), tout(2*lmax+3), tin2(2*lmax+3), tout2(2*lmax+3);
+    vector<double> tin(2*lmax+3), tout(2*lmax+3), tin2(2*lmax+3);
     while (auto rng=sched.getNext()) for(auto l=rng.lo+2; l<rng.hi+2; ++l)
       {
       ft_partial_sph_isometry_plan F(l);
+
       int mstart = 1+(l%2);
       for (int i=0; i<F.F11.n; ++i)
         tin[i] = alm(l,mstart+2*i).imag();
       ft_semv(F.F11, tin, tout);
       for (int i=0; i<F.F11.n; ++i)
         alm(l,mstart+2*i).imag(tout[i]);
+
       mstart = l%2;
       for (int i=0; i<F.F22.n; ++i)
         tin[i] = alm(l,mstart+2*i).real();
@@ -477,24 +443,26 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F22.n; ++i)
         alm(l,mstart+2*i).real(tout[i]);
+
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
         tin[i] = alm(l,mstart+2*i).imag();
+
       mstart = 1-(l%2);
       for (int i=0; i<F.F12.n; ++i)
         tin2[i] = alm(l,mstart+2*i).real();
       if (mstart==0)
         tin2[0]/=sqrt(2.);
       ft_semv(F.F21, tin, tout);
-      ft_semv(F.F12, tin2,tout2);
-      mstart = 2-(l%2);
-      for (int i=0; i<F.F21.n; ++i)
-        alm(l,mstart+2*i).imag(tout2[i]);
-      mstart = 1-(l%2);
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F12.n; ++i)
         alm(l,mstart+2*i).real(tout[i]);
+
+      ft_semv(F.F12, tin2,tout);
+      mstart = 2-(l%2);
+      for (int i=0; i<F.F21.n; ++i)
+        alm(l,mstart+2*i).imag(tout[i]);
       }
     });
   }
@@ -507,12 +475,13 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
 
   if (theta!=0)
     {
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      auto exppsi = polar(1.,-psi*m);
-      for (size_t l=m; l<=lmax; ++l)
-        alm(l,m)*=exppsi;
-      }
+    if (psi!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto exppsi = polar(1.,-psi*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m)*=exppsi;
+        }
     xchg_yz(alm, nthreads);
     for (size_t m=0; m<=lmax; ++m)
       {
@@ -521,20 +490,22 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
         alm(l,m)*=exptheta;
       }
     xchg_yz(alm, nthreads);
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      auto expphi = polar(1.,-phi*m);
-      for (size_t l=m; l<=lmax; ++l)
-        alm(l,m)*=expphi;
-      }
+    if (phi!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto expphi = polar(1.,-phi*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m)*=expphi;
+        }
     }
   else
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      auto ang = polar(1.,-(psi+phi)*m);
-      for (size_t l=m; l<=lmax; ++l)
-        alm(l,m) *= ang;
-      }
+    if (phi+psi!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto expang = polar(1.,-(psi+phi)*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m) *= expang;
+        }
   }
 #endif
 }
