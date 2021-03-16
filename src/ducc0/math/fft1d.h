@@ -2793,7 +2793,7 @@ template<typename Tfs> class pocketfft_r
         if (fct!=Tfs(1))
           for (size_t i=0; i<N; ++i) in[i]=res[i]*fct;
         else
-          copy(res, res+N, in);
+          copy_n(res, N, in);
         }
       return in;
       }
@@ -3454,7 +3454,7 @@ template<bool fwd, typename T> void pass_all(T c[], T0 fct) const
       for (size_t i=0; i<length; ++i)
         c[i] = ch[i]*fct;
     else
-      copy(p1, p1+length, c);
+      copy_n(p1, length, c);
     }
   else
     if (fct!=1.)
