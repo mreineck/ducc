@@ -19,6 +19,9 @@
  *
  *  Copyright (C) 2003-2021 Max-Planck-Society
  *  \author Martin Reinecke
+ *
+ *  For the a_lm rotation code:
+ *  Copyright (c) 2018 Richard Mikael Slevinsky and Everett Dawes
  */
 
 #ifndef DUCC0_ALM_H
@@ -224,88 +227,155 @@ template<typename T> class Alm: public Alm_Base
   };
 
 #if 1
-// the a_lm rotation code is an adaptation of the algorithms found in
+// the following struct is an adaptation of the algorithms found in
 // https://github.com/MikaelSlevinsky/FastTransforms
 
-static inline double Gy_index3(int l, int i, int j)
-  {
-  if (i+j == 2*l)
-    {
-    if (l+2 <= i && i <= 2*l)
-      return (j+1)*(j+2);
-    else if (0 <= i && i <= l-1)
-      return -(j+1)*(j+2);
-    else if (i==j+2) // j+1==l==i-1
-      return 2*(j+1)*(j+2);
-    else if (i==j)  // i==j==l
-      return -2*(j+1)*(j+2);
-    }
-  else if (i+j == 2*l+2)
-    {
-    if (2 <= i && i <= l)
-      return -(i-1)*i;
-    else if (l+3 <= i && i <= 2*l+2)
-      return (i-1)*i;
-    }
-  return 0.0;
-  }
-
-static double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
-  {
-  auto r1 = Gy_index3(l, 2*l-i  , i)*Gy_index3(l, 2*l-i  , j);
-  auto r2 = Gy_index3(l, 2*l-i+1, i)*Gy_index3(l, 2*l-i+1, j);
-  auto r3 = Gy_index3(l, 2*l-i+2, i)*Gy_index3(l, 2*l-i+2, j);
-  return (copysign(sqrt(abs(r1)),r1)
-        + copysign(sqrt(abs(r2)),r2)
-        + copysign(sqrt(abs(r3)),r3))
-        *0.25/double((2*l+1)*(2*l+3));
-  }
-static inline double Z_index(int l, int i, int j)
-  {
-  return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
-  }
-
-struct ft_symmetric_tridiagonal
-  {
-  vector<double> a, b;
-  int n;
-
-  ft_symmetric_tridiagonal(int N)
-    : a(N), b(N-1), n(N) {}
-  };
-
-struct ft_symmetric_tridiagonal_symmetric_eigen
-  {
-  vector<double> A, B, C, lambda;
-  int sign;
-  int n;
-
-  ft_symmetric_tridiagonal_symmetric_eigen() {}
-
-  ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T,
-    const vector<double> &lambda_, const int sign_)
-    : A(T.n), B(T.n), C(T.n), lambda(lambda_), sign(sign_), n(T.n)
-    {
-    if (n>1)
-      {
-      A[n-1] = 1/T.b[n-2];
-      B[n-1] = -T.a[n-1]/T.b[n-2];
-      }
-    for (int i=n-2; i>0; i--)
-      {
-      A[i] = 1/T.b[i-1];
-      B[i] = -T.a[i]/T.b[i-1];
-      C[i] = T.b[i]/T.b[i-1];
-      }
-    }
-  };
 
 struct ft_partial_sph_isometry_plan
   {
+  static double Gy_index3(int l, int i, int j)
+    {
+    if (i+j == 2*l)
+      {
+      if (l+2 <= i && i <= 2*l)
+        return (j+1)*(j+2);
+      else if (0 <= i && i <= l-1)
+        return -(j+1)*(j+2);
+      else if (i==j+2) // j+1==l==i-1
+        return 2*(j+1)*(j+2);
+      else if (i==j)  // i==j==l
+        return -2*(j+1)*(j+2);
+      }
+    else if (i+j == 2*l+2)
+      {
+      if (2 <= i && i <= l)
+        return -(i-1)*i;
+      else if (l+3 <= i && i <= 2*l+2)
+        return (i-1)*i;
+      }
+    return 0.0;
+    }
+
+  static double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
+    {
+    auto r1 = Gy_index3(l, 2*l-i  , i)*Gy_index3(l, 2*l-i  , j);
+    auto r2 = Gy_index3(l, 2*l-i+1, i)*Gy_index3(l, 2*l-i+1, j);
+    auto r3 = Gy_index3(l, 2*l-i+2, i)*Gy_index3(l, 2*l-i+2, j);
+    return (copysign(sqrt(abs(r1)),r1)
+          + copysign(sqrt(abs(r2)),r2)
+          + copysign(sqrt(abs(r3)),r3))
+          *0.25/double((2*l+1)*(2*l+3));
+    }
+  static double Z_index(int l, int i, int j)
+    {
+    return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
+    }
+
+  struct ft_symmetric_tridiagonal
+    {
+    vector<double> a, b;
+    int n;
+
+    ft_symmetric_tridiagonal(int N)
+      : a(N), b(N-1), n(N) {}
+    };
+
+  class ft_symmetric_tridiagonal_symmetric_eigen
+    {
+    private:
+      vector<double> A, B, C, lambda;
+      int sign;
+
+    public:
+      int n;
+
+    private:
+      template<typename Tv, size_t N> int eval_helper
+        (int jmin, const vector<double> &c, vector<double> &f) const
+        {
+        constexpr double eps = 0x1p-52;
+        constexpr double floatmin = 0x1p-1022;
+
+        if (n<1)
+          {
+          for (int j=jmin; j<n; ++j)
+            f[j] = 0.0;
+          return n;
+          }
+        constexpr size_t vlen=Tv::size();
+        constexpr size_t step=vlen*N;
+        int j=jmin;
+        for (; j+int(step)<=n; j+=int(step))
+          {
+          array<Tv, N> vk, vkp1, nrm, X, fj;
+          for (size_t i=0; i<N; ++i)
+            {
+            vk[i] = 1;
+            vkp1[i] = 0;
+            nrm[i] = 1;
+            X[i] = Tv::loadu(&lambda[j+i*Tv::size()]);
+            fj[i] = c[n-1];
+            }
+          for (int k=n-1; k>0; --k)
+            {
+            Tv maxnrm(0);
+            for (size_t i=0; i<N; ++i)
+              {
+              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+              vkp1[i] = vk[i];
+              vk[i] = vkm1;
+              nrm[i] += vkm1*vkm1;
+              maxnrm = max(maxnrm, nrm[i]);
+              fj[i] += vkm1*c[k-1];
+              }
+            if (any_of(maxnrm > eps/floatmin))
+              for (size_t i=0; i<N; ++i)
+                {
+                nrm[i] = Tv(1.0)/sqrt(nrm[i]);
+                vkp1[i] *= nrm[i];
+                vk[i] *= nrm[i];
+                fj[i] *= nrm[i];
+                nrm[i] = 1.0;
+                }
+            }
+          for (size_t i=0; i<N; ++i)
+            for (size_t q=0; q<vlen; ++q)
+              f[j+vlen*i+q] = fj[i][q]*copysign(1.0/sqrt(nrm[i][q]),sign*vk[i][q]);
+          }
+        return j;
+        }
+
+    public:
+      ft_symmetric_tridiagonal_symmetric_eigen() {}
+
+      ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T,
+        const vector<double> &lambda_, const int sign_)
+        : A(T.n), B(T.n), C(T.n), lambda(lambda_), sign(sign_), n(T.n)
+        {
+        if (n>1)
+          {
+          A[n-1] = 1/T.b[n-2];
+          B[n-1] = -T.a[n-1]/T.b[n-2];
+          }
+        for (int i=n-2; i>0; i--)
+          {
+          A[i] = 1/T.b[i-1];
+          B[i] = -T.a[i]/T.b[i-1];
+          C[i] = T.b[i]/T.b[i-1];
+          }
+        }
+
+      void eval (const vector<double> &x, vector<double> &y) const
+        {
+        int j = eval_helper<native_simd<double>,4>(0, x, y);
+        j = eval_helper<native_simd<double>,2>(j, x, y);
+        j = eval_helper<native_simd<double>,1>(j, x, y);
+        eval_helper<simd<double,1>,1>(j, x, y);
+        }
+    };
+
   ft_symmetric_tridiagonal_symmetric_eigen F11, F21, F12, F22;
   int l;
-
-  ft_partial_sph_isometry_plan() {}
 
   ft_partial_sph_isometry_plan(const int l_)
     : l(l_)
@@ -359,70 +429,6 @@ struct ft_partial_sph_isometry_plan
     }
   };
 
-template<typename Tv, size_t N> int ft_eigen_eval
-  (const ft_symmetric_tridiagonal_symmetric_eigen &F,
-  int jmin, const vector<double> &c, vector<double> &f)
-  {
-  constexpr double eps = 0x1p-52;
-  constexpr double floatmin = 0x1p-1022;
-
-  if (F.n<1)
-    {
-    for (int j=jmin; j<F.n; ++j)
-      f[j] = 0.0;
-    return F.n;
-    }
-  constexpr size_t vlen=Tv::size();
-  constexpr size_t step=vlen*N;
-  int j=jmin;
-  for (; j+int(step)<=F.n; j+=int(step))
-    {
-    array<Tv, N> vk, vkp1, nrm, X, fj;
-    for (size_t i=0; i<N; ++i)
-      {
-      vk[i] = 1;
-      vkp1[i] = 0;
-      nrm[i] = 1;
-      X[i] = Tv::loadu(&F.lambda[j+i*Tv::size()]);
-      fj[i] = c[F.n-1];
-      }
-    for (int k=F.n-1; k>0; --k)
-      {
-      Tv maxnrm(0);
-      for (size_t i=0; i<N; ++i)
-        {
-        auto vkm1 = (F.A[k]*X[i]+F.B[k])*vk[i] - F.C[k]*vkp1[i];
-        vkp1[i] = vk[i];
-        vk[i] = vkm1;
-        nrm[i] += vkm1*vkm1;
-        maxnrm = max(maxnrm, nrm[i]);
-        fj[i] += vkm1*c[k-1];
-        }
-      if (any_of(maxnrm > eps/floatmin))
-        for (size_t i=0; i<N; ++i)
-          {
-          nrm[i] = Tv(1.0)/sqrt(nrm[i]);
-          vkp1[i] *= nrm[i];
-          vk[i] *= nrm[i];
-          fj[i] *= nrm[i];
-          nrm[i] = 1.0;
-          }
-      }
-    for (size_t i=0; i<N; ++i)
-      for (size_t q=0; q<vlen; ++q)
-        f[j+vlen*i+q] = fj[i][q]*copysign(1.0/sqrt(nrm[i][q]),F.sign*vk[i][q]);
-    }
-  return j;
-  }
-
-void ft_semv (const ft_symmetric_tridiagonal_symmetric_eigen & F,
-  const vector<double> &x, vector<double> &y)
-  {
-  int j = ft_eigen_eval<native_simd<double>,4>(F, 0, x, y);
-  j = ft_eigen_eval<native_simd<double>,2>(F, j, x, y);
-  j = ft_eigen_eval<native_simd<double>,1>(F, j, x, y);
-  ft_eigen_eval<simd<double,1>,1>(F, j, x, y);
-  }
 
 void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
   {
@@ -446,7 +452,7 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
       int mstart = 1+(l%2);
       for (int i=0; i<F.F11.n; ++i)
         tin[i] = alm(l,mstart+2*i).imag();
-      ft_semv(F.F11, tin, tout);
+      F.F11.eval(tin, tout);
       for (int i=0; i<F.F11.n; ++i)
         alm(l,mstart+2*i).imag(tout[i]);
 
@@ -455,7 +461,7 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
         tin[i] = alm(l,mstart+2*i).real();
       if (mstart==0)
         tin[0]/=sqrt(2.);
-      ft_semv(F.F22, tin, tout);
+      F.F22.eval(tin, tout);
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F22.n; ++i)
@@ -470,13 +476,13 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
         tin2[i] = alm(l,mstart+2*i).real();
       if (mstart==0)
         tin2[0]/=sqrt(2.);
-      ft_semv(F.F21, tin, tout);
+      F.F21.eval(tin,tout);
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F12.n; ++i)
         alm(l,mstart+2*i).real(tout[i]);
 
-      ft_semv(F.F12, tin2,tout);
+      F.F12.eval(tin2,tout);
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
         alm(l,mstart+2*i).imag(tout[i]);
