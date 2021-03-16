@@ -4,6 +4,7 @@
     using Ignace Bogaert's implementation (https://doi.org/10.1137/140954969,
     https://sourceforge.net/projects/fastgausslegendrequadrature/)
   - Intel OneAPI compilers are now supported
+  - new accepted value "none-debug" for DUCC0_OPTIMIZATION
 
 - wgridder:
   - fixed a bug which could cause memory accesses beyond the end of an array
