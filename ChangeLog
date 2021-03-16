@@ -1,3 +1,22 @@
+0.9.0:
+- general:
+  - improved and faster computation of Gauss-Legendre nodes and weights
+    using Ignace Bogaert's implementation (https://doi.org/10.1137/140954969,
+    https://sourceforge.net/projects/fastgausslegendrequadrature/)
+  - Intel OneAPI compilers are now supported
+  - new accepted value "none-debug" for DUCC0_OPTIMIZATION
+
+- wgridder:
+  - fixed a bug which could cause memory accesses beyond the end of an array
+
+- fft:
+  - slightly improved buffer re-use
+
+- misc:
+  - substantially faster a_lm rotation code based on the Mikael Slevinsky's
+    FastTransforms package (https://github.com/MikaelSlevinsky/FastTransforms)
+
+
 0.8.0:
 - general:
   - compiles and runs on MacOS 11

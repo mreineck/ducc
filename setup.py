@@ -8,7 +8,7 @@ from setuptools import setup, Extension
 import pybind11
 
 pkgname = 'ducc0'
-version = '0.8.0'
+version = '0.9.0'
 
 user_cflags = os.getenv("DUCC0_CFLAGS", "").split(" ")
 user_cflags = [x for x in user_cflags if x != ""]
@@ -16,10 +16,10 @@ user_lflags = os.getenv("DUCC0_LFLAGS", "").split(" ")
 user_lflags = [x for x in user_lflags if x != ""]
 
 compilation_strategy = os.getenv('DUCC0_OPTIMIZATION', 'native')
-if compilation_strategy not in ['none', 'portable', 'portable-debug', 'native', 'native-debug']:
+if compilation_strategy not in ['none', 'none-debug', 'portable', 'portable-debug', 'native', 'native-debug']:
     raise RuntimeError('unknown compilation strategy')
-do_debug = compilation_strategy in ['portable-debug', 'native-debug']
-do_optimize = compilation_strategy not in ['none']
+do_debug = compilation_strategy in ['none-debug', 'portable-debug', 'native-debug']
+do_optimize = compilation_strategy not in ['none', 'none-debug']
 do_native = compilation_strategy in ['native', 'native-debug']
 
 def _get_files_by_suffix(directory, suffix):
