@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
 
 import ducc0.fft as fft
@@ -30,7 +30,7 @@ shapes2D = ((128, 128), (128, 129),
             (129, 1), (127, 2), (127, 3), (127, 6))
 shapes3D = ((32, 17, 39),)
 shapes = shapes1D+shapes2D+shapes3D
-len1D = range(1, 2048)
+len1D = list(range(1, 2048)) + [137*137]
 
 
 def _l2error(a, b):
@@ -88,7 +88,7 @@ def hc2c(inp, otype):
     return out
 
 
-tol = {np.float32: 6e-7, np.float64: 1.5e-15, np.longfloat: 1e-18}
+tol = {np.float32: 6e-7, np.float64: 2e-15, np.longfloat: 1e-18}
 ctype = {np.float32: np.complex64,
          np.float64: np.complex128,
          np.longfloat: np.longcomplex}
@@ -117,6 +117,7 @@ def test1D(len, inorm, dtype):
             < eps)
     assert_(_l2error(a.real, irfftn(rfftn(a.real, inorm=inorm),
                                     inorm=2-inorm, lastsize=len)) < eps)
+    assert_(_l2error(fftn(a.real.astype(ctype[dtype])), fftn(a.real)) < eps)
     tmp = a.copy()
     assert_(ifftn(fftn(tmp, out=tmp, inorm=inorm), out=tmp, inorm=2-inorm)
             is tmp)
