@@ -27,7 +27,7 @@ namespace ducc0 {
 template<typename T> struct Cmplx {
   T r, i;
   Cmplx() {}
-  Cmplx(T r_, T i_) : r(r_), i(i_) {}
+  constexpr Cmplx(T r_, T i_) : r(r_), i(i_) {}
   void Set(T r_, T i_) { r=r_; i=i_; }
   void Set(T r_) { r=r_; i=T(0); }
   void Split(T &r_, T &i_) const { r_=r; i_=i; }

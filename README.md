@@ -120,7 +120,7 @@ Library for high-accuracy 4pi convolution on the sphere, which generates a
 total convolution data cube from a set of sky and beam `a_lm` and computes
 interpolated values for a given list of detector pointings.
 This code has evolved from the original
-[totalconvolver](https://arxiv.org/abs/astro-ph/0008227) algorithm described
+[totalconvolver](https://arxiv.org/abs/astro-ph/0008227) algorithm
 via the [conviqt](https://arxiv.org/abs/1002.1050) code.
 
 
