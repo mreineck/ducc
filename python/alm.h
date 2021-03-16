@@ -17,8 +17,11 @@
 /*! \file alm.h
  *  Class for storing spherical harmonic coefficients.
  *
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2021 Max-Planck-Society
  *  \author Martin Reinecke
+ *
+ *  For the a_lm rotation code:
+ *  Copyright (c) 2018 Richard Mikael Slevinsky and Everett Dawes
  */
 
 #ifndef DUCC0_ALM_H
@@ -224,67 +227,268 @@ template<typename T> class Alm: public Alm_Base
   };
 
 #if 1
-/*! Class for calculation of the Wigner matrix at arbitrary angles, using Risbo
-    recursion in a way that can be OpenMP-parallelised. This approach uses more
-    memory and is slightly slower than wigner_d_risbo_scalar. */
-class wigner_d_risbo_openmp
+// the following struct is an adaptation of the algorithms found in
+// https://github.com/MikaelSlevinsky/FastTransforms
+
+
+struct ft_partial_sph_isometry_plan
   {
-  private:
-    double p,q;
-    vector<double> sqt;
-    mav<double,2> d, dd;
-    ptrdiff_t n;
-
-  public:
-    wigner_d_risbo_openmp(size_t lmax, double ang)
-      : p(sin(ang/2)), q(cos(ang/2)), sqt(2*lmax+1),
-        d({lmax+1,2*lmax+1}), dd({lmax+1,2*lmax+1}), n(-1)
-      { for (size_t m=0; m<sqt.size(); ++m) sqt[m] = std::sqrt(double(m)); }
-
-    const mav<double,2> &recurse()
+  static double Gy_index3(int l, int i, int j)
+    {
+    if (i+j == 2*l)
       {
-      ++n;
-      if (n==0)
-        d.v(0,0) = 1;
-      else if (n==1)
-        {
-        d.v(0,0) = q*q; d.v(0,1) = -p*q*sqt[2]; d.v(0,2) = p*p;
-        d.v(1,0) = -d(0,1); d.v(1,1) = q*q-p*p; d.v(1,2) = d(0,1);
-        }
-      else
-        {
-        // padding
-        int sign = (n&1)? -1 : 1;
-        for (int i=0; i<=2*n-2; ++i)
-          {
-          d.v(n,i) = sign*d(n-2,2*n-2-i);
-          sign=-sign;
-          }
-        for (int j=2*n-1; j<=2*n; ++j)
-          {
-          auto &xd((j&1) ? d : dd);
-          auto &xdd((j&1) ? dd: d);
-          double xj = 1./j;
-          xdd.v(0,0) = q*xd(0,0);
-          for (int i=1;i<j; ++i)
-            xdd.v(0,i) = xj*sqt[j]*(q*sqt[j-i]*xd(0,i) - p*sqt[i]*xd(0,i-1));
-          xdd.v(0,j) = -p*xd(0,j-1);
-// parallelize
-          for (int k=1; k<=n; ++k)
-            {
-            double t1 = xj*sqt[j-k]*q, t2 = xj*sqt[j-k]*p;
-            double t3 = xj*sqt[k  ]*p, t4 = xj*sqt[k  ]*q;
-            xdd.v(k,0) = xj*sqt[j]*(q*sqt[j-k]*xd(k,0) + p*sqt[k]*xd(k-1,0));
-            for (int i=1; i<j; ++i)
-              xdd.v(k,i) = t1*sqt[j-i]*xd(k,i) - t2*sqt[i]*xd(k,i-1)
-                        + t3*sqt[j-i]*xd(k-1,i) + t4*sqt[i]*xd(k-1,i-1);
-            xdd.v(k,j) = -t2*sqt[j]*xd(k,j-1) + t4*sqt[j]*xd(k-1,j-1);
-            }
-          }
-        }
-      return d;
+      if (l+2 <= i && i <= 2*l)
+        return (j+1)*(j+2);
+      else if (0 <= i && i <= l-1)
+        return -(j+1)*(j+2);
+      else if (i==j+2) // j+1==l==i-1
+        return 2*(j+1)*(j+2);
+      else if (i==j)  // i==j==l
+        return -2*(j+1)*(j+2);
       }
+    else if (i+j == 2*l+2)
+      {
+      if (2 <= i && i <= l)
+        return -(i-1)*i;
+      else if (l+3 <= i && i <= 2*l+2)
+        return (i-1)*i;
+      }
+    return 0.0;
+    }
+
+  static double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
+    {
+    auto r1 = Gy_index3(l, 2*l-i  , i)*Gy_index3(l, 2*l-i  , j);
+    auto r2 = Gy_index3(l, 2*l-i+1, i)*Gy_index3(l, 2*l-i+1, j);
+    auto r3 = Gy_index3(l, 2*l-i+2, i)*Gy_index3(l, 2*l-i+2, j);
+    return (copysign(sqrt(abs(r1)),r1)
+          + copysign(sqrt(abs(r2)),r2)
+          + copysign(sqrt(abs(r3)),r3))
+          *0.25/double((2*l+1)*(2*l+3));
+    }
+  static double Z_index(int l, int i, int j)
+    {
+    return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
+    }
+
+  struct ft_symmetric_tridiagonal
+    {
+    vector<double> a, b;
+    int n;
+
+    ft_symmetric_tridiagonal(int N)
+      : a(N), b(N-1), n(N) {}
+    };
+
+  class ft_symmetric_tridiagonal_symmetric_eigen
+    {
+    private:
+      vector<double> A, B, C, lambda;
+      int sign;
+
+    public:
+      int n;
+
+    private:
+      template<typename Tv, size_t N> int eval_helper
+        (int jmin, const vector<double> &c, vector<double> &f) const
+        {
+        constexpr double eps = 0x1p-52;
+        constexpr double floatmin = 0x1p-1022;
+
+        if (n<1)
+          {
+          for (int j=jmin; j<n; ++j)
+            f[j] = 0.0;
+          return n;
+          }
+        constexpr size_t vlen=Tv::size();
+        constexpr size_t step=vlen*N;
+        int j=jmin;
+        for (; j+int(step)<=n; j+=int(step))
+          {
+          array<Tv, N> vk, vkp1, nrm, X, fj;
+          for (size_t i=0; i<N; ++i)
+            {
+            vk[i] = 1;
+            vkp1[i] = 0;
+            nrm[i] = 1;
+            X[i] = Tv::loadu(&lambda[j+i*Tv::size()]);
+            fj[i] = c[n-1];
+            }
+          for (int k=n-1; k>0; --k)
+            {
+            Tv maxnrm(0);
+            for (size_t i=0; i<N; ++i)
+              {
+              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+              vkp1[i] = vk[i];
+              vk[i] = vkm1;
+              nrm[i] += vkm1*vkm1;
+              maxnrm = max(maxnrm, nrm[i]);
+              fj[i] += vkm1*c[k-1];
+              }
+            if (any_of(maxnrm > eps/floatmin))
+              for (size_t i=0; i<N; ++i)
+                {
+                nrm[i] = Tv(1.0)/sqrt(nrm[i]);
+                vkp1[i] *= nrm[i];
+                vk[i] *= nrm[i];
+                fj[i] *= nrm[i];
+                nrm[i] = 1.0;
+                }
+            }
+          for (size_t i=0; i<N; ++i)
+            for (size_t q=0; q<vlen; ++q)
+              f[j+vlen*i+q] = fj[i][q]*copysign(1.0/sqrt(nrm[i][q]),sign*vk[i][q]);
+          }
+        return j;
+        }
+
+    public:
+      ft_symmetric_tridiagonal_symmetric_eigen() {}
+
+      ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T,
+        const vector<double> &lambda_, const int sign_)
+        : A(T.n), B(T.n), C(T.n), lambda(lambda_), sign(sign_), n(T.n)
+        {
+        if (n>1)
+          {
+          A[n-1] = 1/T.b[n-2];
+          B[n-1] = -T.a[n-1]/T.b[n-2];
+          }
+        for (int i=n-2; i>0; i--)
+          {
+          A[i] = 1/T.b[i-1];
+          B[i] = -T.a[i]/T.b[i-1];
+          C[i] = T.b[i]/T.b[i-1];
+          }
+        }
+
+      void eval (const vector<double> &x, vector<double> &y) const
+        {
+        int j = eval_helper<native_simd<double>,4>(0, x, y);
+        j = eval_helper<native_simd<double>,2>(j, x, y);
+        j = eval_helper<native_simd<double>,1>(j, x, y);
+        eval_helper<simd<double,1>,1>(j, x, y);
+        }
+    };
+
+  ft_symmetric_tridiagonal_symmetric_eigen F11, F21, F12, F22;
+  int l;
+
+  ft_partial_sph_isometry_plan(const int l_)
+    : l(l_)
+    {
+    int n11 = l/2;
+    ft_symmetric_tridiagonal Y11(n11);
+    for (int i = 0; i < n11; i++)
+      Y11.a[n11-1-i] = Y_index(l, 2*i+1, 2*i+1);
+    for (int i = 0; i < n11-1; i++)
+      Y11.b[n11-2-i] = Y_index(l, 2*i+1, 2*i+3);
+    vector<double>lambda11(n11);
+    for (int i = 0; i < n11; i++)
+      lambda11[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
+    int sign = (l%4)/2 == 1 ? 1 : -1;
+    F11 = ft_symmetric_tridiagonal_symmetric_eigen(Y11, lambda11, sign);
+
+    int n21 = (l+1)/2;
+    ft_symmetric_tridiagonal Y21(n21);
+    for (int i = 0; i < n21; i++)
+      Y21.a[n21-1-i] = Y_index(l, 2*i, 2*i);
+    for (int i = 0; i < n21-1; i++)
+      Y21.b[n21-2-i] = Y_index(l, 2*i, 2*i+2);
+    vector<double> lambda21(n21);
+    for (int i = 0; i < n21; i++)
+      lambda21[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
+    sign = ((l+1)%4)/2 == 1 ? -1 : 1;
+    F21 = ft_symmetric_tridiagonal_symmetric_eigen(Y21, lambda21, sign);
+
+    int n12 = (l+1)/2;
+    ft_symmetric_tridiagonal Y12(n12);
+    for (int i = 0; i < n12; i++)
+      Y12.a[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+1);
+    for (int i = 0; i < n12-1; i++)
+      Y12.b[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+3);
+    vector<double> lambda12(n12);
+    for (int i = 0; i < n12; i++)
+      lambda12[n12-1-i] = Z_index(l, 2*i, 2*i);
+    F12 = ft_symmetric_tridiagonal_symmetric_eigen(Y12, lambda12, sign);
+
+    int n22 = (l+2)/2;
+    ft_symmetric_tridiagonal Y22(n22);
+    for (int i = 0; i < n22; i++)
+      Y22.a[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2);
+    for (int i = 0; i < n22-1; i++)
+      Y22.b[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2+2);
+    vector<double> lambda22(n22);
+    for (int i = 0; i < n22; i++)
+      lambda22[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
+    sign = (l%4)/2 == 1 ? -1 : 1;
+    F22 = ft_symmetric_tridiagonal_symmetric_eigen(Y22, lambda22, sign);
+    }
   };
+
+
+void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
+  {
+  auto lmax = alm.Lmax();
+  MR_assert(lmax==alm.Mmax(), "lmax and mmax must be equal");
+
+  if (lmax>0) // deal with l==1
+    {
+    auto t = -alm(1,0).real()/sqrt(2.);
+    alm(1,0).real(-alm(1,1).imag()*sqrt(2.));
+    alm(1,1).imag(t);
+    }
+  if (lmax<=1) return;
+  execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
+    {
+    vector<double> tin(2*lmax+3), tout(2*lmax+3), tin2(2*lmax+3);
+    while (auto rng=sched.getNext()) for(auto l=rng.lo+2; l<rng.hi+2; ++l)
+      {
+      ft_partial_sph_isometry_plan F(l);
+
+      int mstart = 1+(l%2);
+      for (int i=0; i<F.F11.n; ++i)
+        tin[i] = alm(l,mstart+2*i).imag();
+      F.F11.eval(tin, tout);
+      for (int i=0; i<F.F11.n; ++i)
+        alm(l,mstart+2*i).imag(tout[i]);
+
+      mstart = l%2;
+      for (int i=0; i<F.F22.n; ++i)
+        tin[i] = alm(l,mstart+2*i).real();
+      if (mstart==0)
+        tin[0]/=sqrt(2.);
+      F.F22.eval(tin, tout);
+      if (mstart==0)
+        tout[0]*=sqrt(2.);
+      for (int i=0; i<F.F22.n; ++i)
+        alm(l,mstart+2*i).real(tout[i]);
+
+      mstart = 2-(l%2);
+      for (int i=0; i<F.F21.n; ++i)
+        tin[i] = alm(l,mstart+2*i).imag();
+
+      mstart = 1-(l%2);
+      for (int i=0; i<F.F12.n; ++i)
+        tin2[i] = alm(l,mstart+2*i).real();
+      if (mstart==0)
+        tin2[0]/=sqrt(2.);
+      F.F21.eval(tin,tout);
+      if (mstart==0)
+        tout[0]*=sqrt(2.);
+      for (int i=0; i<F.F12.n; ++i)
+        alm(l,mstart+2*i).real(tout[i]);
+
+      F.F12.eval(tin2,tout);
+      mstart = 2-(l%2);
+      for (int i=0; i<F.F21.n; ++i)
+        alm(l,mstart+2*i).imag(tout[i]);
+      }
+    });
+  }
 
 template<typename T> void rotate_alm (Alm<complex<T>> &alm,
   double psi, double theta, double phi, size_t nthreads)
@@ -294,57 +498,37 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
 
   if (theta!=0)
     {
-    vector<complex<double> > exppsi(lmax+1), expphi(lmax+1);
+    if (psi!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto exppsi = polar(1.,-psi*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m)*=exppsi;
+        }
+    xchg_yz(alm, nthreads);
     for (size_t m=0; m<=lmax; ++m)
       {
-      exppsi[m] = polar(1.,-psi*m);
-      expphi[m] = polar(1.,-phi*m);
+      auto exptheta = polar(1.,-theta*m);
+      for (size_t l=m; l<=lmax; ++l)
+        alm(l,m)*=exptheta;
       }
-    vector<complex<double> > almtmp(lmax+1);
-    wigner_d_risbo_openmp rec(lmax,theta);
-    for (size_t l=0; l<=lmax; ++l)
-      {
-      const auto &d(rec.recurse());
-
-      for (size_t m=0; m<=l; ++m)
-        almtmp[m] = complex<double>(alm(l,0))*d(l,l+m);
-
-      execStatic(l+1, nthreads, 0, [&](Scheduler &sched)
+    xchg_yz(alm, nthreads);
+    if (phi!=0)
+      for (size_t m=0; m<=lmax; ++m)
         {
-        auto rng=sched.getNext();
-        auto lo=rng.lo;
-        auto hi=rng.hi;
-
-        bool flip = true;
-        for (size_t mm=1; mm<=l; ++mm)
-          {
-          auto t1 = complex<double>(alm(l,mm))*exppsi[mm];
-          bool flip2 = ((mm+lo)&1);
-          for (auto m=lo; m<hi; ++m)
-            {
-            double d1 = flip2 ? -d(l-mm,l-m) : d(l-mm,l-m);
-            double d2 = flip  ? -d(l-mm,l+m) : d(l-mm,l+m);
-            double f1 = d1+d2, f2 = d1-d2;
-            almtmp[m]+=complex<double>(t1.real()*f1,t1.imag()*f2);
-            flip2 = !flip2;
-            }
-          flip = !flip;
-          }
-        });
-
-      for (size_t m=0; m<=l; ++m)
-        alm(l,m) = complex<T>(almtmp[m]*expphi[m]);
-      }
+        auto expphi = polar(1.,-phi*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m)*=expphi;
+        }
     }
   else
-    {
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      auto ang = polar(1.,-(psi+phi)*m);
-      for (size_t l=m; l<=lmax; ++l)
-        alm(l,m) *= ang;
-      }
-    }
+    if (phi+psi!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto expang = polar(1.,-(psi+phi)*m);
+        for (size_t l=m; l<=lmax; ++l)
+          alm(l,m) *= expang;
+        }
   }
 #endif
 }

@@ -60,6 +60,7 @@ def convolve(alm1, alm2, lmax):
 lmax = 50
 kmax = 13
 ncomp = 1
+nthr = 2
 
 # get random sky a_lm
 # the a_lm arrays follow the same conventions as those in healpy
@@ -71,7 +72,7 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 
-plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=2)
+plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=nthr)
 cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
 cube[()] = 0
 plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0])
@@ -102,9 +103,9 @@ bar2 = np.zeros((nth, nph))
 blmfull = np.zeros(slm.shape)+0j
 blmfull[0:blm.shape[0], :] = blm
 for ith in range(nth):
-    rbeamth = misc.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0)
+    rbeamth = misc.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
     for iph in range(nph):
-        rbeam = misc.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1])
+        rbeam = misc.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
         bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)
