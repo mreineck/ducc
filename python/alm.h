@@ -17,7 +17,7 @@
 /*! \file alm.h
  *  Class for storing spherical harmonic coefficients.
  *
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -227,28 +227,38 @@ template<typename T> class Alm: public Alm_Base
 // the a_lm rotation code is an adaptation of the algorithms found in
 // https://github.com/MikaelSlevinsky/FastTransforms
 
-static inline double Gy_index2(int l, int i, int j)
+static inline double Gy_index3(int l, int i, int j)
   {
-  if (l+2 <= i && i <= 2*l && i+j == 2*l)
-    return sqrt((j+1)*(j+2));
-  else if (2 <= i && i <= l && i+j == 2*l+2)
-    return -sqrt((i-1)*i);
-  else if (0 <= i && i <= l-1 && i+j == 2*l)
-    return -sqrt((2*l+1-i)*(2*l+2-i));
-  else if (l+3 <= i && i <= 2*l+2 && i+j == 2*l+2)
-    return sqrt((2*l+1-j)*(2*l+2-j));
-  else if (i == l+1 && j == l-1)
-    return sqrt(2*l*(l+1));
-  else if (i == l && j == l)
-    return -sqrt(2*(l+1)*(l+2));
-  else
-    return 0.0;
+  if (i+j == 2*l)
+    {
+    if (l+2 <= i && i <= 2*l)
+      return (j+1)*(j+2);
+    else if (0 <= i && i <= l-1)
+      return -(j+1)*(j+2);
+    else if (i==j+2) // j+1==l==i-1
+      return 2*(j+1)*(j+2);
+    else if (i==j)  // i==j==l
+      return -2*(j+1)*(j+2);
+    }
+  else if (i+j == 2*l+2)
+    {
+    if (2 <= i && i <= l)
+      return -(i-1)*i;
+    else if (l+3 <= i && i <= 2*l+2)
+      return (i-1)*i;
+    }
+  return 0.0;
   }
-static inline double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
+
+static double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
   {
-   return (Gy_index2(l, 2*l-i  , i)*Gy_index2(l, 2*l-i  , j)
-         + Gy_index2(l, 2*l-i+1, i)*Gy_index2(l, 2*l-i+1, j)
-         + Gy_index2(l, 2*l-i+2, i)*Gy_index2(l, 2*l-i+2, j))*0.25/double((2*l+1)*(2*l+3));
+  auto r1 = Gy_index3(l, 2*l-i  , i)*Gy_index3(l, 2*l-i  , j);
+  auto r2 = Gy_index3(l, 2*l-i+1, i)*Gy_index3(l, 2*l-i+1, j);
+  auto r3 = Gy_index3(l, 2*l-i+2, i)*Gy_index3(l, 2*l-i+2, j);
+  return (copysign(sqrt(abs(r1)),r1)
+        + copysign(sqrt(abs(r2)),r2)
+        + copysign(sqrt(abs(r3)),r3))
+        *0.25/double((2*l+1)*(2*l+3));
   }
 static inline double Z_index(int l, int i, int j)
   {
@@ -377,14 +387,19 @@ template<typename Tv, size_t N> int ft_eigen_eval
       fj[i] = c[F.n-1];
       }
     for (int k=F.n-1; k>0; --k)
+      {
+      Tv maxnrm(0);
       for (size_t i=0; i<N; ++i)
         {
         auto vkm1 = (F.A[k]*X[i]+F.B[k])*vk[i] - F.C[k]*vkp1[i];
         vkp1[i] = vk[i];
         vk[i] = vkm1;
         nrm[i] += vkm1*vkm1;
+        maxnrm = max(maxnrm, nrm[i]);
         fj[i] += vkm1*c[k-1];
-        if (any_of(nrm[i] > eps/floatmin))
+        }
+      if (any_of(maxnrm > eps/floatmin))
+        for (size_t i=0; i<N; ++i)
           {
           nrm[i] = Tv(1.0)/sqrt(nrm[i]);
           vkp1[i] *= nrm[i];
@@ -392,7 +407,7 @@ template<typename Tv, size_t N> int ft_eigen_eval
           fj[i] *= nrm[i];
           nrm[i] = 1.0;
           }
-        }
+      }
     for (size_t i=0; i<N; ++i)
       for (size_t q=0; q<vlen; ++q)
         f[j+vlen*i+q] = fj[i][q]*copysign(1.0/sqrt(nrm[i][q]),F.sign*vk[i][q]);
@@ -404,6 +419,8 @@ void ft_semv (const ft_symmetric_tridiagonal_symmetric_eigen & F,
   const vector<double> &x, vector<double> &y)
   {
   int j = ft_eigen_eval<native_simd<double>,4>(F, 0, x, y);
+  j = ft_eigen_eval<native_simd<double>,2>(F, j, x, y);
+  j = ft_eigen_eval<native_simd<double>,1>(F, j, x, y);
   ft_eigen_eval<simd<double,1>,1>(F, j, x, y);
   }
 
