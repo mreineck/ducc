@@ -1781,10 +1781,10 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
       }
     });
   }
-
+#if 1
 void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads)
   {
-  mav<complex<double>,3> legtmp({leg.shape(0)-1,leg.shape(1), leg.shape(2)});
+  mav<complex<double>,3> legtmp({leg.shape(0)-1, leg.shape(1), leg.shape(2)});
   resample_theta(leg, true, true, legtmp, false, false, spin, nthreads);
 
   mav<double,1> wgt({2*leg.shape(0)-1});
@@ -1795,12 +1795,32 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, s
       for (size_t k=0; k<legtmp.shape(2); ++k)
         legtmp.v(i,j,k) *= wgt(1+2*i);
 
-  resample_theta(legtmp, false, false, legtmp, true, true, spin, nthreads);
+  mav<complex<double>,3> legtmp2({leg.shape(0), leg.shape(1), leg.shape(2)});
+  resample_theta(legtmp, false, false, legtmp2, true, true, spin, nthreads);
 
   for (size_t i=0; i<leg.shape(0); ++i)
     for (size_t j=0; j<leg.shape(1); ++j)
       for (size_t k=0; k<leg.shape(2); ++k)
-        leg.v(i,j,k) = leg(i,j,k)*wgt(2*i) + legtmp(i,j,k);
+        leg.v(i,j,k) = leg(i,j,k)*wgt(2*i) + legtmp2(i,j,k);
   }
+#else
+void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads)
+  {
+  auto nfull = 2*good_size_complex(2*lmax+1);
+  auto nrings = nfull/2 + 1;
 
+  mav<complex<double>,3> legtmp({nrings, leg.shape(1), leg.shape(2)});
+  resample_theta(leg, true, true, legtmp, true, true, spin, nthreads);
+
+  mav<double,1> wgt({legtmp.shape(0)});
+  clenshaw_curtis_weights(wgt);
+
+  for (size_t i=0; i<legtmp.shape(0); ++i)
+    for (size_t j=0; j<legtmp.shape(1); ++j)
+      for (size_t k=0; k<legtmp.shape(2); ++k)
+        legtmp.v(i,j,k) *= wgt(i);
+
+  resample_theta(legtmp, true, true, leg, true, true, spin, nthreads);
+  }
+#endif
 }}

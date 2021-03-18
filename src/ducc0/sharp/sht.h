@@ -39,6 +39,8 @@ void clenshaw_curtis_weights(mav<double,1> &weight);
 
 void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
 void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads);
+void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
+  mav<complex<double>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
 
 }
 
@@ -50,6 +52,7 @@ using detail_sht::leg2alm;
 using detail_sht::clenshaw_curtis_weights;
 using detail_sht::prep_for_analysis;
 using detail_sht::prep_for_analysis2;
+using detail_sht::resample_theta;
 
 }
 

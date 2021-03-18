@@ -150,6 +150,13 @@ py::array Pyprep_for_analysis2(py::array &leg_, size_t lmax, size_t spin, size_t
   prep_for_analysis2(leg, lmax, spin, nthreads);
   return leg_;
   }
+void Pyresample_theta(const py::array &legi_, bool npi, bool spi,
+  py::array &lego_, bool npo, bool spo, size_t spin, size_t nthreads)
+  {
+  auto legi = to_mav<complex<double>,3>(legi_, false);
+  auto lego = to_mav<complex<double>,3>(lego_, true);
+  resample_theta(legi, npi, spi, lego, npo, spo, spin, nthreads);
+  }
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -305,6 +312,7 @@ void add_sht(py::module_ &msup)
   m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
   m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "lmax"_a, "spin"_a, "nthreads"_a=1);
+  m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())
