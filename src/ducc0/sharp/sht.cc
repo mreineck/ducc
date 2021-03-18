@@ -1582,7 +1582,7 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
   // fill dark side
   execParallel(0, nrings_in, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo, im=nfull_in-lo-1+npi; i<hi; ++i,--im)
+    for (size_t i=lo, im=nfull_in-lo-1+npi; (i<hi)&&(i<=im); ++i,--im)
       {
       for (size_t j=0; j<nm2; ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
@@ -1643,28 +1643,22 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
 
   c2c(ftmp_out,ftmp_out,{0},false,1.,nthreads);
 
+  double norm = 1./(2*sqrt(nfull_in*nfull_out));
   execParallel(0, nrings_out, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo, im=nfull_out-lo-1+npo; i<hi; ++i,--im)
+    for (size_t i=lo; i<hi; ++i)
       {
+      size_t im = nfull_out-lo-1+npo-i;
+      if (im==nfull_out) im=0;
       for (size_t j=0; j<nm2; ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
-          lego.v(i,2*j,k) = tmp(i,j,k);
-          lego.v(i,2*j+1,k) = tmp(i,j,k);
-          if ((im<nfull_out) && (i!=im))
-            {
-            lego.v(i,2*j,k) += fct*tmp(im,j,k);
-            lego.v(i,2*j+1,k) -= fct*tmp(im,j,k);
-            }
+          lego.v(i,2*j  ,k) = norm * (tmp(i,j,k) + fct*tmp(im,j,k));
+          lego.v(i,2*j+1,k) = norm * (tmp(i,j,k) - fct*tmp(im,j,k));
           }
       if ((nm&1)==1)
         for (size_t k=0; k<tmp.shape(2); ++k)
-          {
-          lego.v(i,nm-1,k) = tmp(i,tmp.shape(1)-1,k);
-          if ((im<nfull_out) && (i!=im))
-            lego.v(i,nm-1,k) += fct*tmp(im,tmp.shape(1)-1,k);
-          }
+          lego.v(i,nm-1,k) = norm * (tmp(i,tmp.shape(1)-1,k) + fct*tmp(im,tmp.shape(1)-1,k));
       }
     });
   }
@@ -1788,21 +1782,8 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
     });
   }
 
-#if 1 // this works
 void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads)
   {
-//   {
-//   mav<complex<double>,3> legbla({3*leg.shape(0)+7,leg.shape(1), leg.shape(2)});
-//   resample_theta(leg, true, true, legbla, true, true, spin, nthreads);
-//   resample_theta(legbla, true, true, leg, true, true, spin, nthreads);
-// size_t nfull_in = 2*leg.shape(0)-2;
-// size_t nfull_out = 2*legbla.shape(0)-2;
-// double fct=1./(4*nfull_in*nfull_out);
-//   for (size_t i=0; i<leg.shape(0); ++i)
-//     for (size_t j=0; j<leg.shape(1); ++j)
-//       for (size_t k=0; k<leg.shape(2); ++k)
-//         leg.v(i,j,k) *= fct;
-//   }
   mav<complex<double>,3> legtmp({leg.shape(0)-1,leg.shape(1), leg.shape(2)});
   resample_theta(leg, true, true, legtmp, false, false, spin, nthreads);
 
@@ -1814,38 +1795,12 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, s
       for (size_t k=0; k<legtmp.shape(2); ++k)
         legtmp.v(i,j,k) *= wgt(1+2*i);
 
-  mav<complex<double>,3> legtmp2({leg.shape(0),leg.shape(1), leg.shape(2)});
-  resample_theta(legtmp, false, false, legtmp2, true, true, spin, nthreads);
+  resample_theta(legtmp, false, false, legtmp, true, true, spin, nthreads);
 
-size_t nfull_in = 2*leg.shape(0)-2;
-double fct=1./(4*nfull_in*nfull_in);
   for (size_t i=0; i<leg.shape(0); ++i)
     for (size_t j=0; j<leg.shape(1); ++j)
       for (size_t k=0; k<leg.shape(2); ++k)
-        leg.v(i,j,k) = leg(i,j,k)*wgt(2*i) + fct*legtmp2(i,j,k);
+        leg.v(i,j,k) = leg(i,j,k)*wgt(2*i) + legtmp(i,j,k);
   }
-#else
-void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads)
-  {
-  mav<complex<double>,3> legtmp({2*leg.shape(0),leg.shape(1), leg.shape(2)});
-  resample_theta(leg, true, true, legtmp, true, true, spin, nthreads);
 
-  mav<double,1> wgt({legtmp.shape(0)});
-  clenshaw_curtis_weights(wgt);
-
-  for (size_t i=0; i<legtmp.shape(0); ++i)
-    for (size_t j=0; j<legtmp.shape(1); ++j)
-      for (size_t k=0; k<legtmp.shape(2); ++k)
-        legtmp.v(i,j,k) *= wgt(i);
-
-  resample_theta(legtmp, true, true, leg, true, true, spin, nthreads);
-
-size_t nfull_in = 2*leg.shape(0)-2;
-double fct=1./(4*nfull_in*nfull_in);
-  for (size_t i=0; i<leg.shape(0); ++i)
-    for (size_t j=0; j<leg.shape(1); ++j)
-      for (size_t k=0; k<leg.shape(2); ++k)
-        leg.v(i,j,k) *=fct;
-  }
-#endif
 }}
