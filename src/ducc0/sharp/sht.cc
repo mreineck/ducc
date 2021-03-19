@@ -1595,7 +1595,7 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
   auto nm2 = nm/2;
-  mav<complex<double>,3> tmp({nfull, (nm+1)/2, legi.shape(2)});
+  mav<complex<double>,3> tmp({nfull, (nm+1)/2, legi.shape(2)}, UNINITIALIZED);
   fmav<complex<double>> ftmp_in(tmp.subarray<3>({0,0,0},{nfull_in,MAXIDX,MAXIDX}));
   fmav<complex<double>> ftmp_out(tmp.subarray<3>({0,0,0},{nfull_out,MAXIDX,MAXIDX}));
   double fct = ((spin&1)==0) ? 1 : -1;
@@ -1671,7 +1671,7 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
     {
     for (size_t i=lo; i<hi; ++i)
       {
-      size_t im = nfull_out-lo-1+npo-i;
+      size_t im = nfull_out-1+npo-i;
       if (im==nfull_out) im=0;
       for (size_t j=0; j<nm2; ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
