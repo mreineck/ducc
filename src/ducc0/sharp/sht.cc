@@ -1693,36 +1693,27 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   clenshaw_curtis_weights(wgt);
   auto nm = leg.shape(1);
   auto nm2 = nm/2;
-  mav<complex<double>,3> tmp({2*nrings-2, (nm+1)/2, leg.shape(2)}, UNINITIALIZED);
+  size_t nfull = 2*nrings-2;
+  mav<complex<double>,3> tmp({nfull, (nm+1)/2, leg.shape(2)}, UNINITIALIZED);
   fmav<complex<double>> ftmp(tmp);
   double fct = ((spin&1)==0) ? 1 : -1;
-  for (size_t j=0; j<nm2; ++j)
-    for (size_t k=0; k<tmp.shape(2); ++k)
-      {
-      tmp.v(0,j,k) = leg(0,2*j,k) + leg(0,2*j+1,k);
-      tmp.v(nrings-1,j,k) = leg(nrings-1,2*j,k) + leg(nrings-1,2*j+1,k);
-      }
-  if ((nm&1)==1)
-    for (size_t k=0; k<tmp.shape(2); ++k)
-      {
-      tmp.v(0,tmp.shape(1)-1,k) = leg(0,nm-1,k);
-      tmp.v(nrings-1,tmp.shape(1)-1,k) = leg(nrings-1,nm-1,k);
-      }
-  execParallel(1, nrings-1, nthreads, [&](size_t lo, size_t hi)
+  execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo; i<hi; ++i)
+    for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
       {
       for (size_t j=0; j<nm2; ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
           tmp.v(i,j,k) = leg(i,2*j,k) + leg(i,2*j+1,k);
-          tmp.v(tmp.shape(0)-i,j,k) = fct * (leg(i,2*j,k) - leg(i,2*j+1,k));
+          if ((im<nfull) && (i!=im))
+            tmp.v(im,j,k) = fct * (leg(i,2*j,k) - leg(i,2*j+1,k));
           }
       if ((nm&1)==1)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
           tmp.v(i,tmp.shape(1)-1,k) = leg(i,nm-1,k);
-          tmp.v(tmp.shape(0)-i,tmp.shape(1)-1,k) = fct * leg(i,nm-1,k);
+          if ((im<nfull) && (i!=im))
+            tmp.v(im,tmp.shape(1)-1,k) = fct * leg(i,nm-1,k);
           }
       }
     });
@@ -1735,7 +1726,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
     shift[i] = roots[i];
   execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo, im=2*nrings-lo-2; (i<hi)&&(i<=im); ++i,--im)
+    for (size_t i=lo, im=nfull-lo; (i<hi)&&(i<=im); ++i,--im)
       for (size_t j=0; j<tmp.shape(1); ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
@@ -1749,7 +1740,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   double norm = 1./(2*tmp.shape(0)*tmp.shape(0));
   execParallel(0, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo, im=2*nrings-lo-3; (i<hi)&&(i<im); ++i,--im)
+    for (size_t i=lo, im=nfull-lo-1; (i<hi)&&(i<im); ++i,--im)
       {
       auto factor = wgt(1+2*i)*norm;
       for (size_t j=0; j<tmp.shape(1); ++j)
@@ -1763,7 +1754,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
   c2c(ftmp,ftmp,{0},true,1.,nthreads);
   execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo, im=2*nrings-lo-2; (i<hi)&&(i<=im); ++i,--im)
+    for (size_t i=lo, im=nfull-lo; (i<hi)&&(i<=im); ++i,--im)
       for (size_t j=0; j<tmp.shape(1); ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
@@ -1774,33 +1765,28 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
     });
   c2c(ftmp,ftmp,{0},false,1.,nthreads);
 
-  for (size_t j=0; j<nm2; ++j)
-    for (size_t k=0; k<tmp.shape(2); ++k)
-      {
-      leg.v(0,2*j,k) = wgt(0)*leg(0,2*j,k) + tmp(0,j,k);
-      leg.v(0,2*j+1,k) = wgt(0)*leg(0,2*j+1,k) + tmp(0,j,k);
-      leg.v(nrings-1,2*j,k) = wgt(2*nrings-2)*leg(nrings-1,2*j,k) + tmp(nrings-1,j,k);
-      leg.v(nrings-1,2*j+1,k) = wgt(2*nrings-2)*leg(nrings-1,2*j+1,k) + tmp(nrings-1,j,k);
-      }
-  if ((nm&1)==1)
-    for (size_t k=0; k<tmp.shape(2); ++k)
-      {
-      leg.v(0,nm-1,k) = wgt(0)*leg(0,nm-1,k) + tmp(0,tmp.shape(1)-1,k);
-      leg.v(nrings-1,nm-1,k) = wgt(2*nrings-2)*leg(nrings-1,nm-1,k) + tmp(nrings-1,tmp.shape(1)-1,k);
-      }
-  execParallel(1, nrings-1, nthreads, [&](size_t lo, size_t hi)
+  execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
     {
-    for (size_t i=lo; i<hi; ++i)
+    for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
       {
       for (size_t j=0; j<nm2; ++j)
         for (size_t k=0; k<tmp.shape(2); ++k)
           {
-          leg.v(i,2*j,k) = wgt(2*i)*leg(i,2*j,k) + tmp(i,j,k) + fct*tmp(2*nrings-2-i,j,k);
-          leg.v(i,2*j+1,k) = wgt(2*i)*leg(i,2*j+1,k) + tmp(i,j,k) - fct*tmp(2*nrings-2-i,j,k);
+          leg.v(i,2*j,k) = wgt(2*i)*leg(i,2*j,k) + tmp(i,j,k);
+          leg.v(i,2*j+1,k) = wgt(2*i)*leg(i,2*j+1,k) + tmp(i,j,k);
+          if ((im<nfull) && (i!=im))
+            {
+            leg.v(i,2*j,k) += fct*tmp(im,j,k);
+            leg.v(i,2*j+1,k) -= fct*tmp(im,j,k);
+            }
           }
       if ((nm&1)==1)
         for (size_t k=0; k<tmp.shape(2); ++k)
-          leg.v(i,nm-1,k) = wgt(2*i)*leg(i,nm-1,k) + tmp(i,tmp.shape(1)-1,k) + fct*tmp(2*nrings-2-i,tmp.shape(1)-1,k);
+          {
+          leg.v(i,nm-1,k) = wgt(2*i)*leg(i,nm-1,k) + tmp(i,tmp.shape(1)-1,k);
+          if ((im<nfull) && (i!=im))
+            leg.v(i,nm-1,k) += fct*tmp(im,tmp.shape(1)-1,k);
+          }
       }
     });
   }
