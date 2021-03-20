@@ -38,58 +38,7 @@ namespace ducc0 {
 
 namespace detail_sharp {
 
-static constexpr int sharp_minscale=0, sharp_limscale=1, sharp_maxscale=1;
-static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
-static constexpr double sharp_ftol=0x1p-60;
-static constexpr double sharp_fbighalf=0x1p+400;
-
 using std::complex;
-
-class sharp_Ylmgen
-  {
-  public:
-    struct dbl2 { double a, b; };
-    sharp_Ylmgen(size_t l_max, size_t m_max, size_t spin);
-
-    /*! Prepares the object for the calculation at \a m. */
-    void prepare(size_t m_);
-    /*! Returns a vector with \a lmax+1 entries containing
-        normalisation factors that must be applied to Y_lm values computed for
-        \a spin. */
-    static std::vector<double> get_norm(size_t lmax, size_t spin);
-    /*! Returns a vectorwith \a lmax+1 entries containing
-        normalisation factors that must be applied to Y_lm values computed for
-        first derivatives. */
-    static std::vector<double> get_d1norm(size_t lmax);
-
-    /* for public use; immutable during lifetime */
-    size_t lmax, mmax, s;
-    std::vector<double> cf;
-    std::vector<double> powlimit;
-
-    /* for public use; will typically change after call to Ylmgen_prepare() */
-    size_t m;
-
-    std::vector<double> alpha;
-    std::vector<dbl2> coef;
-
-    /* used if s==0 */
-    std::vector<double> mfac, eps;
-
-    /* used if s!=0 */
-    size_t sinPow, cosPow;
-    bool preMinus_p, preMinus_m;
-    std::vector<double> prefac;
-    std::vector<int> fscale;
-
-    size_t mlo, mhi;
-  private:
-    /* used if s==0 */
-    std::vector<double> root, iroot;
-
-    /* used if s!=0 */
-    std::vector<double> flm1, flm2, inv;
-  };
 
 class sharp_job
   {
@@ -117,8 +66,6 @@ class sharp_job
     const sharp_geom_info &ginfo;
     const sharp_alm_info &ainfo;
     int nthreads;
-    double time;
-    uint64_t opcnt;
 
     sharp_job(sharp_jobtype type,
       size_t spin, const std::vector<std::any> &alm_,

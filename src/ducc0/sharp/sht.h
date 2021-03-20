@@ -242,6 +242,8 @@ class Ylmgen: public YlmBase
       }
   };
 
+DUCC0_NOINLINE size_t get_mlim (size_t lmax, size_t spin, double sth, double cth);
+
 template<typename T> DUCC0_NOINLINE static void inner_loop(SHT_mode mode,
   mav<complex<double>,2> &almtmp,
   mav<complex<T>,3> &phase, const vector<ringdata> &rdata,

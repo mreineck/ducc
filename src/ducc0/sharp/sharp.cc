@@ -27,7 +27,6 @@
 
 #include <cmath>
 #include <algorithm>
-#include <atomic>
 #include <memory>
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/fft1d.h"
@@ -37,7 +36,6 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
-#include "ducc0/infra/timers.h"
 #include "ducc0/sharp/sht.h"
 
 namespace ducc0 {
@@ -64,20 +62,6 @@ static void get_chunk_info (size_t ndata, size_t nmult, size_t &nchunks, size_t 
       chunksize = ((chunksize+nmult-1)/nmult)*nmult;
     }
   nchunks = (ndata+chunksize-1)/chunksize;
-  }
-
-DUCC0_NOINLINE size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth)
-  {
-  double ofs=lmax*0.01;
-  if (ofs<100.) ofs=100.;
-  double b = -2*double(spin)*abs(cth);
-  double t1 = lmax*sth+ofs;
-  double c = double(spin)*spin-t1*t1;
-  double discr = b*b-4*c;
-  if (discr<=0) return lmax;
-  double res=(-b+sqrt(discr))/2.;
-  res = min(res, double(lmax));
-  return size_t(res+0.5);
   }
 
 struct ringhelper
@@ -351,8 +335,6 @@ DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
 
 DUCC0_NOINLINE void sharp_job::execute()
   {
-  ducc0::SimpleTimer timer;
-  opcnt=0;
   size_t lmax = ainfo.lmax(),
          mmax = ainfo.mmax();
 
@@ -369,31 +351,23 @@ DUCC0_NOINLINE void sharp_job::execute()
 //FIXME: needs to be changed to "nm"
   auto phasebuf = alloc_phase(mmax+1,chunksize);
   set_phase(phasebuf);
-  std::atomic<uint64_t> a_opcnt(0);
   detail_sht::YlmBase ylmbase(lmax,mmax,spin);
-detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
-                            ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);
+  detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
+                             ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);
 /* chunk loop */
   for (size_t chunk=0; chunk<nchunks; ++chunk)
     {
     size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo.npairs());
     vector<detail_sht::ringdata> rdata(ulim-llim);
-//    vector<bool> ispair(ulim-llim);
-//    vector<size_t> vmlim(ulim-llim);
-//    vector<double> vcth(ulim-llim), vsth(ulim-llim);
     for (size_t i=0; i<ulim-llim; ++i)
       {
       double cth = ginfo.cth(ginfo.pair(i+llim).r1);
       double sth = ginfo.sth(ginfo.pair(i+llim).r1);
-      auto mlim = sharp_get_mlim(lmax, spin, sth, cth);
+      auto mlim = detail_sht::get_mlim(lmax, spin, sth, cth);
       size_t idx = 2*i;
       size_t midx = 2*i+1;
       if (ginfo.pair(i+llim).r2==~size_t(0)) midx=idx;
       rdata[i] = { mlim, idx, midx, cth, sth };
-//      ispair[i] = ginfo.pair(i+llim).r2!=~size_t(0);
-//      vcth[i] = ginfo.cth(ginfo.pair(i+llim).r1);
-//      vsth[i] = ginfo.sth(ginfo.pair(i+llim).r1);
-//      vmlim[i] = sharp_get_mlim(lmax, spin, vsth[i], vcth[i]);
       }
 
 /* map->phase where necessary */
@@ -403,8 +377,6 @@ detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM :
       {
       sharp_job ljob = *this;
       ljob.set_phase(phasebuf);
-      ljob.opcnt=0;
-//      sharp_Ylmgen generator(lmax,mmax,ljob.spin);
       detail_sht::Ylmgen ylmgen(ylmbase);
       ljob.alloc_almtmp(lmax);
 
@@ -412,31 +384,24 @@ detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM :
         {
 /* alm->alm_tmp where necessary */
         ljob.alm2almtmp(mi);
-//cout << almtmp.stride(1) << endl;
         ylmgen.prepare(ainfo.mval(mi));
         detail_sht::inner_loop(mode, ljob.almtmp, phasebuf, rdata, ylmgen, mi);
-//        inner_loop (ljob, ispair, vcth, vsth, llim, ulim, generator, mi, vmlim);
 
 /* alm_tmp->alm where necessary */
         ljob.almtmp2alm(mi);
         }
-
-      a_opcnt+=ljob.opcnt;
       }); /* end of parallel region */
 
 /* phase->map where necessary */
     phase2map (mmax, llim, ulim);
     } /* end of chunk loop */
-
-  opcnt = a_opcnt;
-  time=timer();
   }
 
 sharp_job::sharp_job (sharp_jobtype type_,
   size_t spin_, const vector<any> &alm_, const vector<any> &map_,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info, size_t flags_, int nthreads_)
   : alm(alm_), map(map_), type(type_), spin(spin_), flags(flags_), ginfo(geom_info), ainfo(alm_info),
-    nthreads(nthreads_), time(0.), opcnt(0)
+    nthreads(nthreads_)
   {
   if (type==SHARP_ALM2MAP_DERIV1) spin_=1;
   if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
@@ -451,13 +416,10 @@ sharp_job::sharp_job (sharp_jobtype type_,
 void sharp_execute (sharp_jobtype type, size_t spin, const vector<any> &alm,
   const vector<any> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads, double *time, uint64_t *opcnt)
+  size_t flags, int nthreads)
   {
   sharp_job job(type, spin, alm, map, geom_info, alm_info, flags, nthreads);
-
   job.execute();
-  if (time!=nullptr) *time = job.time;
-  if (opcnt!=nullptr) *opcnt = job.opcnt;
   }
 
 void sharp_set_chunksize_min(size_t new_chunksize_min)
