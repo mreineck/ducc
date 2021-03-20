@@ -16,9 +16,6 @@ struct ringdata
   double cth, sth;
   };
 
-static constexpr int sharp_minscale=0, sharp_limscale=1, sharp_maxscale=1;
-static_assert((sharp_minscale<=0)&&(sharp_maxscale>0),
-  "bad value for min/maxscale");
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
 static constexpr double sharp_ftol=0x1p-60;
 static constexpr double sharp_fbighalf=0x1p+400;
@@ -27,7 +24,6 @@ class YlmBase
   {
   public:
     size_t lmax, mmax, s;
-    vector<double> cf;
     vector<double> powlimit;
     /* used if s==0 */
     vector<double> mfac;
@@ -83,7 +79,7 @@ class YlmBase
       }
 
     YlmBase(size_t l_max, size_t m_max, size_t spin)
-      : lmax(l_max), mmax(m_max), s(spin), cf(sharp_maxscale-sharp_minscale+1),
+      : lmax(l_max), mmax(m_max), s(spin),
         powlimit(mmax+s+1),
         mfac((s==0) ? (mmax+1) : 0),
         root((s==0) ? (2*lmax+8) : 0),
@@ -96,11 +92,6 @@ class YlmBase
       {
       MR_assert(l_max>=spin,"incorrect l_max: must be >= spin");
       MR_assert(l_max>=m_max,"incorrect l_max: must be >= m_max");
-      cf[-sharp_minscale]=1.;
-      for (int sc=-sharp_minscale-1; sc>=0; --sc)
-        cf[size_t(sc)]=cf[size_t(sc+1)]*sharp_fsmall;
-      for (int sc=-sharp_minscale+1; sc<(sharp_maxscale-sharp_minscale+1); ++sc)
-        cf[size_t(sc)]=cf[size_t(sc-1)]*sharp_fbig;
       powlimit[0]=0.;
       constexpr double expo=-400*ln2;
       for (size_t i=1; i<=m_max+spin; ++i)
@@ -382,24 +373,9 @@ static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
     }
   }
 
-static inline void getCorfac(Tv scale, Tv & DUCC0_RESTRICT corfac,
-  const vector<double> &cf)
+static inline void getCorfac(Tv scale, Tv & DUCC0_RESTRICT corfac)
   {
-  union Tvu
-    {
-    Tv v;
-    std::array<double,VLEN> s;
-#if defined(_MSC_VER)
-    Tvu() {}
-#endif
-    };
-
-  Tvu sc, corf;
-  sc.v=scale;
-  for (size_t i=0; i<VLEN; ++i)
-    corf.s[i] = (sc.s[i]<sharp_minscale) ?
-      0. : cf[size_t(int(sc.s[i])-sharp_minscale)];
-  corfac=corf.v;
+  corfac=blend(scale<0, Tv(0), blend(scale<1, Tv(1), Tv(sharp_fbig)));
   }
 
 static inline bool rescale(Tv &v1, Tv &v2, Tv &s, Tv eps)
@@ -420,7 +396,6 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
   {
   size_t l=gen.m, il=0;
   Tv mfac = (gen.m&1) ? -gen.mfac[gen.m]:gen.mfac[gen.m];
-  Tv limscale=sharp_limscale;
   bool below_limit = true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -428,7 +403,7 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
     mypow(d.sth[i],gen.m,gen.powlimit,d.lam2[i],d.scale[i]);
     d.lam2[i] *= mfac;
     Tvnormalize(d.lam2[i],d.scale[i],sharp_ftol);
-    below_limit &= all_of(d.scale[i]<limscale);
+    below_limit &= all_of(d.scale[i]<1);
     }
 
   while (below_limit)
@@ -442,7 +417,7 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
       d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
       d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
       if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
-        below_limit &= all_of(d.scale[i]<sharp_limscale);
+        below_limit &= all_of(d.scale[i]<1);
       }
     l+=4; il+=2;
     }
@@ -543,8 +518,8 @@ DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
-    getCorfac(d.scale[i], d.corfac[i], gen.cf);
-    full_ieee &= all_of(d.scale[i]>=sharp_minscale);
+    getCorfac(d.scale[i], d.corfac[i]);
+    full_ieee &= all_of(d.scale[i]>=0);
     }
 
   while((!full_ieee) && (l<=lmax))
@@ -563,8 +538,8 @@ DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
       d.lam1[i] = d.lam2[i];
       d.lam2[i] = tmp;
       if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
-        getCorfac(d.scale[i], d.corfac[i], gen.cf);
-      full_ieee &= all_of(d.scale[i]>=sharp_minscale);
+        getCorfac(d.scale[i], d.corfac[i]);
+      full_ieee &= all_of(d.scale[i]>=0);
       }
     l+=2; ++il;
     }
@@ -634,8 +609,8 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
-    getCorfac(d.scale[i], d.corfac[i], gen.cf);
-    full_ieee &= all_of(d.scale[i]>=sharp_minscale);
+    getCorfac(d.scale[i], d.corfac[i]);
+    full_ieee &= all_of(d.scale[i]>=0);
     }
 
   while((!full_ieee) && (l<=lmax))
@@ -653,8 +628,8 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
       d.lam1[i] = d.lam2[i];
       d.lam2[i] = tmp;
       if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
-        getCorfac(d.scale[i], d.corfac[i], gen.cf);
-      full_ieee &= all_of(d.scale[i]>=sharp_minscale);
+        getCorfac(d.scale[i], d.corfac[i]);
+      full_ieee &= all_of(d.scale[i]>=0);
       }
     vhsum_cmplx_special (atmp[0], atmp[1], atmp[2], atmp[3], &alm[l]);
     l+=2; ++il;
@@ -675,7 +650,6 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
   const auto &fx = gen.coef;
   Tv prefac=gen.prefac[gen.m],
      prescale=gen.fscale[gen.m];
-  Tv limscale=sharp_limscale;
   bool below_limit=true;
   for (size_t i=0; i<nv2; ++i)
     {
@@ -713,8 +687,8 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
     Tvnormalize(d.l2m[i],d.scm[i],sharp_ftol);
     Tvnormalize(d.l2p[i],d.scp[i],sharp_ftol);
 
-    below_limit &= all_of(d.scm[i]<limscale) &&
-                   all_of(d.scp[i]<limscale);
+    below_limit &= all_of(d.scm[i]<1) &&
+                   all_of(d.scp[i]<1);
     }
 
   size_t l=gen.mhi;
@@ -731,10 +705,10 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
       d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) ||
+      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) |
           rescale(d.l1m[i],d.l2m[i],d.scm[i],sharp_ftol))
-        below_limit &= all_of(d.scp[i]<limscale) &&
-                       all_of(d.scm[i]<limscale);
+        below_limit &= all_of(d.scp[i]<1) &&
+                       all_of(d.scm[i]<1);
       }
     l+=2;
     }
@@ -810,10 +784,10 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
-    getCorfac(d.scp[i], d.cfp[i], gen.cf);
-    getCorfac(d.scm[i], d.cfm[i], gen.cf);
-    full_ieee &= all_of(d.scp[i]>=sharp_minscale) &&
-                 all_of(d.scm[i]>=sharp_minscale);
+    getCorfac(d.scp[i], d.cfp[i]);
+    getCorfac(d.scm[i], d.cfm[i]);
+    full_ieee &= all_of(d.scp[i]>=0) &&
+                 all_of(d.scm[i]>=0);
     }
 
   while((!full_ieee) && (l<=lmax))
@@ -846,11 +820,11 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
       if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
-        getCorfac(d.scp[i], d.cfp[i], gen.cf);
-      full_ieee &= all_of(d.scp[i]>=sharp_minscale);
+        getCorfac(d.scp[i], d.cfp[i]);
+      full_ieee &= all_of(d.scp[i]>=0);
       if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
-        getCorfac(d.scm[i], d.cfm[i], gen.cf);
-      full_ieee &= all_of(d.scm[i]>=sharp_minscale);
+        getCorfac(d.scm[i], d.cfm[i]);
+      full_ieee &= all_of(d.scm[i]>=0);
       }
     l+=2;
     }
@@ -941,10 +915,10 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
-    getCorfac(d.scp[i], d.cfp[i], gen.cf);
-    getCorfac(d.scm[i], d.cfm[i], gen.cf);
-    full_ieee &= all_of(d.scp[i]>=sharp_minscale) &&
-                 all_of(d.scm[i]>=sharp_minscale);
+    getCorfac(d.scp[i], d.cfp[i]);
+    getCorfac(d.scm[i], d.cfm[i]);
+    full_ieee &= all_of(d.scp[i]>=0) &&
+                 all_of(d.scm[i]>=0);
     }
   for (size_t i=0; i<nv2; ++i)
     {
@@ -980,11 +954,11 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
       if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
-        getCorfac(d.scp[i], d.cfp[i], gen.cf);
-      full_ieee &= all_of(d.scp[i]>=sharp_minscale);
+        getCorfac(d.scp[i], d.cfp[i]);
+      full_ieee &= all_of(d.scp[i]>=0);
       if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
-        getCorfac(d.scm[i], d.cfm[i], gen.cf);
-      full_ieee &= all_of(d.scm[i]>=sharp_minscale);
+        getCorfac(d.scm[i], d.cfm[i]);
+      full_ieee &= all_of(d.scm[i]>=0);
       }
     vhsum_cmplx_special (agr1,agi1,acr1,aci1,&alm[2*l]);
     vhsum_cmplx_special (agr2,agi2,acr2,aci2,&alm[2*l+2]);
@@ -1059,10 +1033,10 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm
   bool full_ieee=true;
   for (size_t i=0; i<nv2; ++i)
     {
-    getCorfac(d.scp[i], d.cfp[i], gen.cf);
-    getCorfac(d.scm[i], d.cfm[i], gen.cf);
-    full_ieee &= all_of(d.scp[i]>=sharp_minscale) &&
-                 all_of(d.scm[i]>=sharp_minscale);
+    getCorfac(d.scp[i], d.cfp[i]);
+    getCorfac(d.scm[i], d.cfm[i]);
+    full_ieee &= all_of(d.scp[i]>=0) &&
+                 all_of(d.scm[i]>=0);
     }
 
   while((!full_ieee) && (l<=lmax))
@@ -1093,11 +1067,11 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
       if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
-        getCorfac(d.scp[i], d.cfp[i], gen.cf);
-      full_ieee &= all_of(d.scp[i]>=sharp_minscale);
+        getCorfac(d.scp[i], d.cfp[i]);
+      full_ieee &= all_of(d.scp[i]>=0);
       if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
-        getCorfac(d.scm[i], d.cfm[i], gen.cf);
-      full_ieee &= all_of(d.scm[i]>=sharp_minscale);
+        getCorfac(d.scm[i], d.cfm[i]);
+      full_ieee &= all_of(d.scm[i]>=0);
       }
     l+=2;
     }

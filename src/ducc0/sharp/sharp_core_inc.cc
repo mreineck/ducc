@@ -21,7 +21,7 @@
 /*! \file sharp_core_inc.cc
  *  Computational core
  *
- *  Copyright (C) 2012-2020 Max-Planck-Society
+ *  Copyright (C) 2012-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -544,7 +544,7 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const sharp_Ylmgen &gen,
       d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) ||
+      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) |
           rescale(d.l1m[i],d.l2m[i],d.scm[i],sharp_ftol))
         below_limit &= all_of(d.scp[i]<limscale) &&
                        all_of(d.scm[i]<limscale);

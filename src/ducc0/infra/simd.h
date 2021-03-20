@@ -151,6 +151,8 @@ template<typename T, size_t len> class vtp
       { return hlp::lt(v, other.v); }
     Tm operator!=(const vtp &other) const
       { return hlp::ne(v, other.v); }
+    static vtp blend(Tm mask, const vtp &a, const vtp &b)
+      { return hlp::blend(mask, a, b); }
 
     class reference
       {
@@ -207,6 +209,8 @@ template<typename T, size_t len> inline bool none_of(const vmask_<T, len> &mask)
   { return mask.bits()==0; }
 template<typename T, size_t len> inline bool all_of(const vmask_<T, len> &mask)
   { return mask.bits()==(size_t(1)<<len)-1; }
+template<typename T, size_t len> inline vtp<T,len> blend (const vmask_<T, len> &mask, const vtp<T,len> &a, const vtp<T,len> &b)
+  { return vtp<T,len>::blend(mask, a, b); }
 template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op op)
   {
   T res=v[0];
