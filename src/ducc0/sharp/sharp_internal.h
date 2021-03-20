@@ -132,12 +132,6 @@ class sharp_job
     void execute();
   };
 
-void inner_loop (sharp_job &job, const std::vector<bool> &ispair,
-  const std::vector<double> &cth, const std::vector<double> &sth, size_t llim,
-  size_t ulim, sharp_Ylmgen &gen, size_t mi, const std::vector<size_t> &mlim);
-
-size_t sharp_max_nvec(size_t spin);
-
 }
 
 }

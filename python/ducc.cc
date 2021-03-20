@@ -9,8 +9,6 @@
 #include "ducc0/sharp/sht.cc"
 #include "ducc0/sharp/sharp.cc"
 #include "ducc0/sharp/sharp_almhelpers.cc"
-#include "ducc0/sharp/sharp_core.cc"
-#include "ducc0/sharp/sharp_ylmgen.cc"
 #include "ducc0/sharp/sharp_geomhelpers.cc"
 #include "ducc0/healpix/healpix_tables.cc"
 #include "ducc0/healpix/healpix_base.cc"

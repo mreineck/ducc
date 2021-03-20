@@ -154,8 +154,6 @@ void sharp_set_nchunks_max(size_t new_nchunks_max);
 /*! \} */
 
 size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth);
-size_t sharp_veclen(void);
-const char *sharp_architecture(void);
 
 }
 
@@ -170,8 +168,6 @@ using detail_sharp::SHARP_ALM2MAP;
 using detail_sharp::SHARP_Yt;
 using detail_sharp::SHARP_WY;
 using detail_sharp::SHARP_ALM2MAP_DERIV1;
-using detail_sharp::sharp_architecture;
-using detail_sharp::sharp_veclen;
 using detail_sharp::sharp_get_mlim;
 
 }
