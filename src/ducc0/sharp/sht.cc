@@ -1624,22 +1624,20 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
   c2c(ftmp_in,ftmp_in,{0},true,1.,nthreads);
 
   if (shift!=0)
-    {
-    vector<complex<double>> phase(nrings_in+1);
-    for (size_t i=1; i<phase.size(); ++i)
-      phase[i] = std::polar(1., i*shift);
     execParallel(1, nrings_in+1, nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo, im=nfull_in-lo; (i<hi)&&(i<=im); ++i,--im)
+        {
+        auto phase=std::polar(1., i*shift);
         for (size_t j=0; j<tmp.shape(1); ++j)
           for (size_t k=0; k<tmp.shape(2); ++k)
             {
             if (i!=im)
-              tmp.v(i,j,k) *= phase[i];
-            tmp.v(im,j,k) *= conj(phase[i]);
+              tmp.v(i,j,k) *= phase;
+            tmp.v(im,j,k) *= conj(phase);
             }
+        }
       });
-    }
 
   // zero padding/truncation
   if (nfull_out>nfull_in) // pad
