@@ -195,7 +195,8 @@ void sharp_job::init_output()
       ginfo.clear_map(map[i]);
   }
 
-DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp)
+DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp,
+  const std::vector<double> norm_l)
   {
   size_t nalm_ = nalm();
   size_t lmax = ainfo.lmax();
@@ -225,7 +226,7 @@ DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp)
   }
 
 DUCC0_NOINLINE void sharp_job::almtmp2alm (size_t mi,
-  mav<dcmplx,2> &almtmp)
+  mav<dcmplx,2> &almtmp, const std::vector<double> norm_l)
   {
   if (type != SHARP_MAP2ALM) return;
   size_t lmax = ainfo.lmax();
@@ -327,9 +328,9 @@ DUCC0_NOINLINE void sharp_job::execute()
   size_t lmax = ainfo.lmax(),
          mmax = ainfo.mmax();
 
-  norm_l = (type==SHARP_ALM2MAP_DERIV1) ?
-     detail_sht::YlmBase::get_d1norm (lmax) :
-     detail_sht::YlmBase::get_norm (lmax, spin);
+  auto norm_l = (type==SHARP_ALM2MAP_DERIV1) ?
+    detail_sht::YlmBase::get_d1norm (lmax) :
+    detail_sht::YlmBase::get_norm (lmax, spin);
 
 /* clear output arrays if requested */
   init_output();
@@ -369,12 +370,12 @@ DUCC0_NOINLINE void sharp_job::execute()
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
 /* alm->alm_tmp where necessary */
-        alm2almtmp(mi, almtmp);
+        alm2almtmp(mi, almtmp, norm_l);
         ylmgen.prepare(ainfo.mval(mi));
         detail_sht::inner_loop(mode, almtmp, phase, rdata, ylmgen, mi);
 
 /* alm_tmp->alm where necessary */
-        almtmp2alm(mi, almtmp);
+        almtmp2alm(mi, almtmp, norm_l);
         }
       }); /* end of parallel region */
 

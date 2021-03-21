@@ -47,8 +47,8 @@ class sharp_job
     std::vector<std::any> map;
 
     void init_output();
-    void alm2almtmp (size_t mi, mav<complex<double>,2> &almtmp);
-    void almtmp2alm (size_t mi, mav<complex<double>,2> &almtmp);
+    void alm2almtmp (size_t mi, mav<complex<double>,2> &almtmp, const std::vector<double> norm_l);
+    void almtmp2alm (size_t mi, mav<complex<double>,2> &almtmp, const std::vector<double> norm_l);
     void ring2ringtmp (size_t iring, mav<double,2> &ringtmp);
     void ringtmp2ring (size_t iring, const mav<double,2> &ringtmp);
     void map2phase (size_t mmax, size_t llim, size_t ulim, mav<complex<double>,3> &phase);
@@ -58,7 +58,6 @@ class sharp_job
     sharp_jobtype type;
     size_t spin;
     size_t flags;
-    std::vector<double> norm_l;
     const sharp_geom_info &ginfo;
     const sharp_alm_info &ainfo;
     int nthreads;
