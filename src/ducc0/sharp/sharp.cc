@@ -21,7 +21,7 @@
 /*! \file sharp.cc
  *  Spherical transform library
  *
- *  Copyright (C) 2006-2020 Max-Planck-Society
+ *  Copyright (C) 2006-2021 Max-Planck-Society
  *  \author Martin Reinecke \author Dag Sverre Seljebotn
  */
 
@@ -195,19 +195,7 @@ void sharp_job::init_output()
       ginfo.clear_map(map[i]);
   }
 
-DUCC0_NOINLINE mav<dcmplx,3> sharp_job::alloc_phase (size_t nm, size_t ntheta) const
-  { return phase.build_noncritical({2*ntheta,nm,nmaps()}); }
-
-void sharp_job::set_phase(mav<std::complex<double>,3> &phase_)
-  { phase.assign(phase_); }
-
-void sharp_job::alloc_almtmp (size_t lmax)
-  {
-  auto tmp = mav<dcmplx,2>({lmax+2, nalm()});
-  almtmp.assign(tmp);
-  }
-
-DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi)
+DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp)
   {
   size_t nalm_ = nalm();
   size_t lmax = ainfo.lmax();
@@ -236,7 +224,8 @@ DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi)
         almtmp.v(l,i)=0;
   }
 
-DUCC0_NOINLINE void sharp_job::almtmp2alm (size_t mi)
+DUCC0_NOINLINE void sharp_job::almtmp2alm (size_t mi,
+  mav<dcmplx,2> &almtmp)
   {
   if (type != SHARP_MAP2ALM) return;
   size_t lmax = ainfo.lmax();
@@ -269,7 +258,7 @@ DUCC0_NOINLINE void sharp_job::ring2ringtmp (size_t iring,
   }
 
 //FIXME: set phase to zero if not SHARP_MAP2ALM?
-DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
+DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim, mav<dcmplx,3> &phase)
   {
   if (type != SHARP_MAP2ALM) return;
   ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
@@ -301,7 +290,7 @@ DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim)
     }); /* end of parallel region */
   }
 
-DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim)
+DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim, const mav<dcmplx,3> &phase)
   {
   if (type == SHARP_MAP2ALM) return;
   ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
@@ -349,8 +338,7 @@ DUCC0_NOINLINE void sharp_job::execute()
   get_chunk_info(ginfo.npairs(), (spin==0) ? 128 : 64,
                  nchunks,chunksize);
 //FIXME: needs to be changed to "nm"
-  auto phasebuf = alloc_phase(mmax+1,chunksize);
-  set_phase(phasebuf);
+  auto phase = mav<dcmplx,3>::build_noncritical({2*chunksize,mmax+1,nmaps()});
   detail_sht::YlmBase ylmbase(lmax,mmax,spin);
   detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
                              ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);
@@ -371,29 +359,27 @@ DUCC0_NOINLINE void sharp_job::execute()
       }
 
 /* map->phase where necessary */
-    map2phase(mmax, llim, ulim);
+    map2phase(mmax, llim, ulim, phase);
 
     ducc0::execDynamic(ainfo.nm(), nthreads, 1, [&](ducc0::Scheduler &sched)
       {
-      sharp_job ljob = *this;
-      ljob.set_phase(phasebuf);
       detail_sht::Ylmgen ylmgen(ylmbase);
-      ljob.alloc_almtmp(lmax);
+      auto almtmp = mav<dcmplx,2>({lmax+2, nalm()});
 
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
 /* alm->alm_tmp where necessary */
-        ljob.alm2almtmp(mi);
+        alm2almtmp(mi, almtmp);
         ylmgen.prepare(ainfo.mval(mi));
-        detail_sht::inner_loop(mode, ljob.almtmp, phasebuf, rdata, ylmgen, mi);
+        detail_sht::inner_loop(mode, almtmp, phase, rdata, ylmgen, mi);
 
 /* alm_tmp->alm where necessary */
-        ljob.almtmp2alm(mi);
+        almtmp2alm(mi, almtmp);
         }
       }); /* end of parallel region */
 
 /* phase->map where necessary */
-    phase2map (mmax, llim, ulim);
+    phase2map (mmax, llim, ulim, phase);
     } /* end of chunk loop */
   }
 
