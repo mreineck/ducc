@@ -5,7 +5,7 @@ variables:
 
 stages:
   - build_docker
-  - testing
+  # - testing
 #  - demos
   - release
 
@@ -17,19 +17,19 @@ build_docker:
     - docker build -t $CONTAINER_TEST_IMAGE .
     - docker push $CONTAINER_TEST_IMAGE
 
-test_gcc:
-  stage: testing
-  script:
-    - python3 setup.py sdist
-    - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && python3 setup.py install --user -f && pytest-3 -q python/test'
+# test_gcc:
+#   stage: testing
+#   script:
+#     - python3 setup.py sdist
+#     - 'tar xvzf dist/ducc0*.tar.gz'
+#     - 'cd ducc0-* && python3 setup.py install --user -f && pytest-3 -q python/test'
 
-test_clang:
-  stage: testing
-  script:
-    - python3 setup.py sdist
-    - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang-11 python3 setup.py install --user -f && pytest-3 -q python/test'
+# test_clang:
+#   stage: testing
+#   script:
+#     - python3 setup.py sdist
+#     - 'tar xvzf dist/ducc0*.tar.gz'
+#     - 'cd ducc0-* && CC=clang-11 python3 setup.py install --user -f && pytest-3 -q python/test'
 
 #wgridding_demo:
 #  stage: demos
