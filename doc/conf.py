@@ -4,8 +4,8 @@ import ducc0
 needs_sphinx = '3.2.0'
 
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
+    # 'sphinx.ext.autodoc',
+    # 'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
 ]
 
