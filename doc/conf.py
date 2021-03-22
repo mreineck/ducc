@@ -31,17 +31,22 @@ version = release.split(".")[0]
 html_static_path = ['_static']
 html_theme = 'pydata_sphinx_theme'
 html_logo = '_static/ducc.jpg'
+html_theme_options = {
+    "icon_links": [
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/ducc0",
+            "icon": "fas fa-box",
+        }
+    ],
+    "gitlab_url": "https://gitlab.mpcdf.mpg.de/mtr/ducc",
+}
 
 #######################################
 # Napoleon
 #######################################
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
-napoleon_use_ivar = True
-napoleon_use_admonition_for_notes = True
-napoleon_use_admonition_for_examples = True
-napoleon_use_admonition_for_references = True
-napoleon_include_special_with_doc = True
 
 #######################################
 # Autosummary
