@@ -32,9 +32,7 @@
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/bucket_sort.h"
-#include "ducc0/sharp/sharp.h"
-#include "ducc0/sharp/sharp_almhelpers.h"
-#include "ducc0/sharp/sharp_geomhelpers.h"
+#include "ducc0/sharp/sht.h"
 #include "python/alm.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/math/math_utils.h"
@@ -564,9 +562,6 @@ template<typename T> class ConvolverPlan
         }
       MR_assert(mbeam <= kmax, "mbeam too high");
 
-      auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
-      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
-
       vector<T> lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
@@ -582,7 +577,8 @@ template<typename T> class ConvolverPlan
               a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
             }
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        sharp_alm2map(a1.Alms().cdata(), m1.vdata(), *ginfo, *ainfo, 0, nthreads);
+        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
+        synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
         correct(m1,0);
         }
       else
@@ -601,9 +597,10 @@ template<typename T> class ConvolverPlan
                 }
             }
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
         auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        sharp_alm2map_spin(mbeam, a1.Alms().cdata(), a2.Alms().cdata(),
-          m1.vdata(), m2.vdata(), *ginfo, *ainfo, 0, nthreads);
+        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
+        synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
         correct(m1,mbeam);
         correct(m2,mbeam);
         }
@@ -724,9 +721,6 @@ template<typename T> class ConvolverPlan
         }
       MR_assert(mbeam <= kmax, "mbeam too high");
 
-      auto ginfo = sharp_make_cc_geom_info(ntheta_s,nphi_s,0.,re.stride(1),re.stride(0));
-      auto ainfo = sharp_make_triangular_alm_info(lmax,lmax,1);
-
       // move stuff from border regions onto the main grid
       for (size_t i=0; i<ntheta; ++i)
         for (size_t j=0; j<nbphi; ++j)
@@ -785,7 +779,8 @@ template<typename T> class ConvolverPlan
         Alm<complex<T>> a1(lmax, lmax);
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,0);
-        sharp_alm2map_adjoint(a1.Alms().vdata(), m1.cdata(), *ginfo, *ainfo, 0, nthreads);
+        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
+        adjoint_synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             for (size_t i=0; i<ncomp; ++i)
@@ -796,11 +791,12 @@ template<typename T> class ConvolverPlan
         Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
+        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
+        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
-        sharp_alm2map_spin_adjoint(mbeam, a1.Alms().vdata(), a2.Alms().vdata(), m1.cdata(),
-          m2.cdata(), *ginfo, *ainfo, 0, nthreads);
+        adjoint_synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)

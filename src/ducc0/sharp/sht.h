@@ -26,6 +26,9 @@
 
 #include <complex>
 #include "ducc0/infra/mav.h"
+#include "ducc0/sharp/sharp.h"
+#include "ducc0/sharp/sharp_geomhelpers.h"
+#include "ducc0/sharp/sharp_almhelpers.h"
 
 namespace ducc0 {
 
@@ -303,6 +306,71 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, s
 void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
   mav<complex<double>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
 
+template<typename T> void synthesis(const mav<complex<T>,1> &alm, size_t lmax,
+  mav<T,2> &map, const string &geometry, size_t nthreads)
+  {
+  unique_ptr<sharp_geom_info> ginfo;
+  if (geometry=="CC")
+    ginfo = sharp_make_cc_geom_info (map.shape(0), map.shape(1), 0.,
+      map.stride(1), map.stride(0));
+  else
+    MR_fail("unsupported grid geometry");
+  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(0), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(0));
+  sharp_alm2map(alm.cdata(), map.vdata(), *ginfo, *ainfo, 0, nthreads);
+  }
+template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
+  const mav<T,2> &map, const string &geometry, size_t nthreads)
+  {
+  unique_ptr<sharp_geom_info> ginfo;
+  if (geometry=="CC")
+    ginfo = sharp_make_cc_geom_info (map.shape(0), map.shape(1), 0.,
+      map.stride(1), map.stride(0));
+  else
+    MR_fail("unsupported grid geometry");
+  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(0), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(0));
+  sharp_alm2map_adjoint(alm.vdata(), map.cdata(), *ginfo, *ainfo, 0, nthreads);
+  }
+template<typename T> void synthesis(const mav<complex<T>,1> &alm1,
+  const mav<complex<T>,1> &alm2, size_t lmax, mav<T,2> &map1, mav<T,2> &map2,
+  size_t spin, const string &geometry, size_t nthreads)
+  {
+  unique_ptr<sharp_geom_info> ginfo;
+  MR_assert(map1.shape()==map2.shape(), "map shape mismatch");
+  MR_assert(map1.stride()==map2.stride(), "map stride mismatch");
+  MR_assert(alm1.shape()==alm2.shape(), "alm shape mismatch");
+  MR_assert(alm1.stride()==alm2.stride(), "alm stride mismatch");
+  if (geometry=="CC")
+    ginfo = sharp_make_cc_geom_info (map1.shape(0), map1.shape(1), 0.,
+      map1.stride(1), map1.stride(0));
+  else
+    MR_fail("unsupported grid geometry");
+  MR_assert(((lmax+1)*(lmax+2))/2==alm1.shape(0), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm1.stride(0));
+  sharp_alm2map_spin(spin, alm1.cdata(), alm2.cdata(), map1.vdata(), map2.vdata(),
+    *ginfo, *ainfo, 0, nthreads);
+  }
+template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm1,
+  mav<complex<T>,1> &alm2, size_t lmax, const mav<T,2> &map1, const mav<T,2> &map2,
+  size_t spin, const string &geometry, size_t nthreads)
+  {
+  unique_ptr<sharp_geom_info> ginfo;
+  MR_assert(map1.shape()==map2.shape(), "map shape mismatch");
+  MR_assert(map1.stride()==map2.stride(), "map stride mismatch");
+  MR_assert(alm1.shape()==alm2.shape(), "alm shape mismatch");
+  MR_assert(alm1.stride()==alm2.stride(), "alm stride mismatch");
+  if (geometry=="CC")
+    ginfo = sharp_make_cc_geom_info (map1.shape(0), map1.shape(1), 0.,
+      map1.stride(1), map1.stride(0));
+  else
+    MR_fail("unsupported grid geometry");
+  MR_assert(((lmax+1)*(lmax+2))/2==alm1.shape(0), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm1.stride(0));
+  sharp_alm2map_spin_adjoint(spin, alm1.vdata(), alm2.vdata(), map1.cdata(), map2.cdata(),
+    *ginfo, *ainfo, 0, nthreads);
+  }
+
 }
 
 using detail_sht::SHT_mode;
@@ -314,6 +382,8 @@ using detail_sht::clenshaw_curtis_weights;
 using detail_sht::prep_for_analysis;
 using detail_sht::prep_for_analysis2;
 using detail_sht::resample_theta;
+using detail_sht::synthesis;
+using detail_sht::adjoint_synthesis;
 
 }
 

@@ -1604,4 +1604,5 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, s
   resample_theta(legtmp, true, true, leg, true, true, spin, nthreads);
   }
 #endif
+
 }}
