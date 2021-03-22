@@ -48,6 +48,7 @@ release:
 pages:
   stage: release
   script:
+    - DUCC0_OPTIMIZATION=none pip3 install .
     - make html
     - mv build/html public
   artifacts:
