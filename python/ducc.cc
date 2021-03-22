@@ -25,6 +25,7 @@
 
 using namespace ducc0;
 
+
 PYBIND11_MODULE(PKGNAME, m)
   {
 #if (!defined(_MSC_VER)) // no idea why this doesn't work on Windows
@@ -38,4 +39,4 @@ PYBIND11_MODULE(PKGNAME, m)
   add_healpix(m);
   add_misc(m);
   add_pointingprovider(m);
-  }
+}
