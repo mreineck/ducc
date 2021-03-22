@@ -11,5 +11,7 @@ RUN apt-get update && apt-get install -qq \
       python3-scipy python3-pybind11 pybind11-dev python3-mpi4py mpi-default-dev mpi-default-bin \
       # Clang
       clang-11 \
+      # Docs
+      python3-sphinx \
       && rm -rf /var/lib/apt/lists/*
 # RUN pip install numba   # demo dependency
