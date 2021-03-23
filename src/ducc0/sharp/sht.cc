@@ -171,8 +171,8 @@ static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
 
 static inline void getCorfac(Tv scale, Tv & DUCC0_RESTRICT corfac)
   {
-  corfac = 1;
-  where(scale<0,corfac)=0;
+  corfac = Tv(1.);
+  where(scale<0,corfac)=Tv(0.);
   where(scale>0,corfac)=sharp_fbig;
   }
 
@@ -183,7 +183,7 @@ static inline bool rescale(Tv &v1, Tv &v2, Tv &s, Tv eps)
     {
     where(mask,v1)*=sharp_fsmall;
     where(mask,v2)*=sharp_fsmall;
-    where(mask,s)+=1;
+    where(mask,s)+=Tv(1.);
     return true;
     }
   return false;

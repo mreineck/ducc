@@ -100,10 +100,10 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
     res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
 
-template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
-  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
-template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
-  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
+// template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
+//   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
+// template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
+//   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 

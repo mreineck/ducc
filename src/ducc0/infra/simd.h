@@ -138,14 +138,14 @@ template<typename T, size_t len> struct vmask_
     size_t bits() const { return hlp::maskbits(v); }
     vmask_ operator& (const vmask_ &other) const { return hlp::mask_and(v,other.v); }
   };
-
+struct element_aligned_tag {};
 template<typename T, size_t len> class vtp
   {
   private:
     using hlp = helper_<T, len>;
 
   public:
-    using Ts = T;
+    using value_type = T;
     using Tv = typename hlp::Tv;
     using Tm = vmask_<T, len>;
     static constexpr size_t size() { return len; }
@@ -166,8 +166,8 @@ template<typename T, size_t len> class vtp
     vtp &operator=(const T &other) { v=hlp::from_scalar(other); return *this; }
     operator Tv() const { return v; }
 
-    static vtp loadu(const T *ptr) { return vtp(hlp::loadu(ptr)); }
-    void storeu(T *ptr) const { hlp::storeu(ptr, v); }
+    vtp(const T *ptr, element_aligned_tag) : v(hlp::loadu(ptr)) {}
+    void copy_to(T *ptr, element_aligned_tag) const { hlp::storeu(ptr, v); }
 
     vtp operator-() const { return vtp(-v); }
     vtp operator+(vtp other) const { return vtp(v+other.v); }
@@ -229,6 +229,8 @@ template<typename T, size_t len> class vtp
       public:
         where_expr (Tm m_, vtp &v_)
           : v(v_), m(m_) {}
+        where_expr &operator= (const vtp &other)
+          { v=hlp::blend(m, other.v, v.v); return *this; }
         where_expr &operator*= (const vtp &other)
           { v=hlp::blend(m, v.v*other.v, v.v); return *this; }
         where_expr &operator+= (const vtp &other)
@@ -265,8 +267,13 @@ template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op 
     res = op(res, v[i]);
   return res;
   }
-template<typename Op, typename T, size_t len> T accumulate(const vtp<T, len> &v, Op op)
-  { return reduce(v, op); }
+template<typename Func, typename T, size_t vlen> vtp<T, vlen> apply(vtp<T, vlen> in, Func func)
+  {
+  vtp<T, vlen> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
 template<typename T> class pseudoscalar
   {
   private:
@@ -522,10 +529,12 @@ template<typename T> constexpr size_t simdlen = 1;
 template<typename T, size_t vlen> constexpr size_t simdlen<vtp<T,vlen>> = vlen;
 }
 
+using detail_simd::element_aligned_tag;
 using detail_simd::native_simd;
 template<typename T, size_t len> using simd = detail_simd::vtp<T, len>;
 using detail_simd::simd_exists;
 using detail_simd::reduce;
+using detail_simd::apply;
 using detail_simd::max;
 using detail_simd::abs;
 using detail_simd::sqrt;
