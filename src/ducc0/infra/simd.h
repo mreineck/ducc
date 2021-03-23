@@ -22,6 +22,53 @@
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
+#if __has_include(<experimental/simd>)
+#include <cstdint>
+#include <cstdlib>
+#include <cmath>
+#include <algorithm>
+#include <experimental/simd>
+
+namespace ducc0 {
+using std::experimental::native_simd;
+template<typename T, int len> using simd = std::experimental::fixed_size_simd<T, len>;
+
+//using detail_simd::simd_exists;
+using std::experimental::reduce;
+using std::experimental::max;
+//using detail_simd::abs;
+//using detail_simd::sqrt;
+using std::experimental::any_of;
+using std::experimental::none_of;
+using std::experimental::all_of;
+using std::experimental::element_aligned_tag;
+template<typename T> constexpr size_t simdlen = 1;
+template<typename T, int vlen> constexpr size_t simdlen<simd<T,vlen>> = vlen;
+template<typename T> constexpr size_t simdlen<native_simd<T>> = native_simd<T>::size();
+template<typename T, int vlen> constexpr inline bool simd_exists = (vlen>1) && (native_simd<T>::size()>=vlen);
+using std::abs;
+using std::sqrt;
+using std::max;
+
+template<typename Func, typename T, int vlen> simd<T, vlen> apply(simd<T, vlen> in, Func func)
+  {
+  simd<T, vlen> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
+template<typename Func, typename T> native_simd<T> apply(native_simd<T> in, Func func)
+  {
+  native_simd<T> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
+
+}
+
+#else
+
 // only enable SIMD support for gcc>=5.0 and clang>=5.0
 #ifndef DUCC0_NO_SIMD
 #define DUCC0_NO_SIMD
@@ -496,5 +543,5 @@ using std::sqrt;
 using std::max;
 
 }
-
+#endif
 #endif

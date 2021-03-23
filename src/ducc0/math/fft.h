@@ -605,7 +605,7 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
-  const fmav<Cmplx<typename Tsimd::Ts>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
+  const fmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_i())
@@ -665,7 +665,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
-  const fmav<typename Tsimd::Ts> &src, Tsimd *DUCC0_RESTRICT dst)
+  const fmav<typename Tsimd::value_type> &src, Tsimd *DUCC0_RESTRICT dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_i())
@@ -701,7 +701,7 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Cmplx<Tsimd> *DUCC0_RESTRICT src, fmav<Cmplx<typename Tsimd::Ts>> &dst)
+  const Cmplx<Tsimd> *DUCC0_RESTRICT src, fmav<Cmplx<typename Tsimd::value_type>> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
@@ -732,7 +732,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::Ts> &dst)
+  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::value_type> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
@@ -845,7 +845,7 @@ struct ExecC2C
   };
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_hartley(const Titer &it,
-  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::Ts> &dst)
+  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::value_type> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())

@@ -26,6 +26,7 @@
 
 #include <complex>
 #include "ducc0/infra/mav.h"
+#include "ducc0/math/constants.h"
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/sharp/sharp_almhelpers.h"

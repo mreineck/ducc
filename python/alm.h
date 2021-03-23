@@ -313,7 +313,7 @@ struct ft_partial_sph_isometry_plan
             vk[i] = 1;
             vkp1[i] = 0;
             nrm[i] = 1;
-            X[i] = Tv::loadu(&lambda[j+i*Tv::size()]);
+            X[i] = Tv(&lambda[j+i*Tv::size()], element_aligned_tag());
             fj[i] = c[n-1];
             }
           for (int k=n-1; k>0; --k)
