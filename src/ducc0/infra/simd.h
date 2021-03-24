@@ -22,7 +22,7 @@
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
-#if __has_include(<experimental/simd>)
+#if 0 //__has_include(<experimental/simd>)
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
