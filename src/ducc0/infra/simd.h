@@ -30,43 +30,25 @@
 #include <experimental/simd>
 
 namespace ducc0 {
-using std::experimental::native_simd;
-template<typename T, int len> using simd = std::experimental::fixed_size_simd<T, len>;
+namespace stdx=std::experimental;
+using stdx::native_simd;
+template<typename T, int len> using simd = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>;
 
-using std::experimental::reduce;
-//using std::experimental::max;
-//using std::experimental::min;
+using stdx::reduce;
+//using stdx::max;
+//using stdx::min;
 //using detail_simd::abs;
 //using detail_simd::sqrt;
-using std::experimental::any_of;
-using std::experimental::none_of;
-using std::experimental::all_of;
-using std::experimental::element_aligned_tag;
-template<typename T, int vlen> constexpr inline bool simd_exists = false;
-#if defined(__SSE2__)
-template<> constexpr inline bool simd_exists<float,4> = true;
-template<> constexpr inline bool simd_exists<double,2> = true;
-#endif
-#if defined(__AVX__)
-template<> constexpr inline bool simd_exists<float,8> = true;
-template<> constexpr inline bool simd_exists<double,4> = true;
-#endif
-#if defined(__AVX512F__)
-template<> constexpr inline bool simd_exists<float,16> = true;
-template<> constexpr inline bool simd_exists<double,8> = true;
-#endif
+using stdx::any_of;
+using stdx::none_of;
+using stdx::all_of;
+using stdx::element_aligned_tag;
 template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
+template<typename T, int N>
+constexpr inline bool simd_exists = (N>1) && vectorizable<T> && (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>);
 using std::abs;
 using std::sqrt;
 using std::max;
-
-template<typename T1, typename T2> inline T1 nasty_cast(const T2 &v)
-  {
-  union U { T1 t1; T2 t2; };
-  U u;
-  u.t2 = v;
-  return u.t1;
-  }
 
 template<typename Func, typename T, int vlen> simd<T, vlen> apply(simd<T, vlen> in, Func func)
   {
@@ -197,13 +179,6 @@ template<typename T, size_t len> class vtp
     vtp &operator*=(vtp other) { v*=other.v; return *this; }
     vtp &operator/=(vtp other) { v/=other.v; return *this; }
     vtp abs() const { return hlp::abs(v); }
-    template<typename Func> vtp apply(Func func) const
-      {
-      vtp res;
-      for (size_t i=0; i<len; ++i)
-        res[i] = func(v[i]);
-      return res;
-      }
     inline vtp sqrt() const
       { return hlp::sqrt(v); }
     vtp max(const vtp &other) const
@@ -542,13 +517,6 @@ template<typename T> using native_simd = vtp<T,1>;
 #else // DUCC0_NO_SIMD is defined
 template<typename T> using native_simd = vtp<T,1>;
 #endif
-template<typename T1, typename T2> inline T1 nasty_cast(const T2 &v)
-  {
-  union U { T1 t1; T2 t2; };
-  U u;
-  u.t2 = v;
-  return u.t1;
-  }
 
 }
 
@@ -564,7 +532,6 @@ using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
-using detail_simd::nasty_cast;
 
 // since we are explicitly introducing a few names that are also available in
 // std::, we need to import them from std::as well, otherwise name resolution

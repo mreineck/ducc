@@ -44,8 +44,8 @@ static constexpr size_t VLEN=Tv::size();
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * DUCC0_RESTRICT cc)
   {
-  auto tmp1=_mm256_hadd_pd(nasty_cast<__m256d>(a),nasty_cast<__m256d>(b)),
-       tmp2=_mm256_hadd_pd(nasty_cast<__m256d>(c),nasty_cast<__m256d>(d));
+  auto tmp1=_mm256_hadd_pd(__m256d(a),__m256d(b)),
+       tmp2=_mm256_hadd_pd(__m256d(c),__m256d(d));
   auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
        tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
   tmp1=tmp3+tmp4;

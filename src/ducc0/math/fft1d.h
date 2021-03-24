@@ -246,16 +246,6 @@ template <typename Tfs> class cfftpass
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
-      if constexpr (simd_exists<Tfs,1>) \
-        if (hcin==typeid(Cmplx<simd<Tfs,1>> *).hash_code()) \
-          { \
-          using Tcv = Cmplx<simd<Tfs,1>>; \
-          auto in1 = any_cast<Tcv *>(in); \
-          auto copy1 = any_cast<Tcv *>(copy); \
-          auto buf1 = any_cast<Tcv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1) \
-                     : exec_<false>(in1, copy1, buf1); \
-          } \
       MR_fail("impossible vector length requested"); \
       }
 
@@ -1694,16 +1684,6 @@ template <typename Tfs> class rfftpass
         if (hcin==typeid(simd<Tfs,2> *).hash_code()) \
           { \
           using Tfv = simd<Tfs,2>; \
-          auto in1 = any_cast<Tfv *>(in); \
-          auto copy1 = any_cast<Tfv *>(copy); \
-          auto buf1 = any_cast<Tfv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1) \
-                     : exec_<false>(in1, copy1, buf1); \
-          } \
-      if constexpr (simd_exists<Tfs,1>) \
-        if (hcin==typeid(simd<Tfs,1> *).hash_code()) \
-          { \
-          using Tfv = simd<Tfs,1>; \
           auto in1 = any_cast<Tfv *>(in); \
           auto copy1 = any_cast<Tfv *>(copy); \
           auto buf1 = any_cast<Tfv *>(buf); \

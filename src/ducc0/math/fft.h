@@ -804,20 +804,22 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
             auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
             exec(it, tin, out, tdatav, *plan, fct);
             }
-        if constexpr (simd_exists<T0,vlen/2>)
-          if (it.remaining()>=vlen/2)
-            {
-            it.advance(vlen/2);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
-            exec(it, tin, out, tdatav, *plan, fct);
-            }
-        if constexpr (simd_exists<T0,vlen/4>)
-          if (it.remaining()>=vlen/4)
-            {
-            it.advance(vlen/4);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
-            exec(it, tin, out, tdatav, *plan, fct);
-            }
+        if constexpr (vlen>2)
+          if constexpr (simd_exists<T0,vlen/2>)
+            if (it.remaining()>=vlen/2)
+              {
+              it.advance(vlen/2);
+              auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
+              exec(it, tin, out, tdatav, *plan, fct);
+              }
+        if constexpr (vlen>4)
+          if constexpr (simd_exists<T0,vlen/4>)
+            if (it.remaining()>=vlen/4)
+              {
+              it.advance(vlen/4);
+              auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
+              exec(it, tin, out, tdatav, *plan, fct);
+              }
 #endif
         while (it.remaining()>0)
           {
@@ -998,52 +1000,54 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           for (size_t j=0; j<vlen; ++j)
             vout[it.oofs(j,ii)].Set(tdatav[i][j]);
         }
-    if constexpr (simd_exists<T,vlen/2>)
-      if (it.remaining()>=vlen/2)
-        {
-        it.advance(vlen/2);
-        auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
-        copy_input(it, in, tdatav);
-        plan->exec(tdatav, fct, true);
-        auto vout = out.vdata();
-        for (size_t j=0; j<vlen/2; ++j)
-          vout[it.oofs(j,0)].Set(tdatav[0][j]);
-        size_t i=1, ii=1;
-        if (forward)
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen/2; ++j)
-              vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
-        else
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen/2; ++j)
-              vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
-        if (i<len)
+    if constexpr (vlen>2)
+      if constexpr (simd_exists<T,vlen/2>)
+        if (it.remaining()>=vlen/2)
+          {
+          it.advance(vlen/2);
+          auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
+          copy_input(it, in, tdatav);
+          plan->exec(tdatav, fct, true);
+          auto vout = out.vdata();
           for (size_t j=0; j<vlen/2; ++j)
-            vout[it.oofs(j,ii)].Set(tdatav[i][j]);
-        }
-    if constexpr (simd_exists<T,vlen/4>)
-      if (it.remaining()>=vlen/4)
-        {
-        it.advance(vlen/4);
-        auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
-        copy_input(it, in, tdatav);
-        plan->exec(tdatav, fct, true);
-        auto vout = out.vdata();
-        for (size_t j=0; j<vlen/4; ++j)
-          vout[it.oofs(j,0)].Set(tdatav[0][j]);
-        size_t i=1, ii=1;
-        if (forward)
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen/4; ++j)
-              vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
-        else
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen/4; ++j)
-              vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
-        if (i<len)
+            vout[it.oofs(j,0)].Set(tdatav[0][j]);
+          size_t i=1, ii=1;
+          if (forward)
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/2; ++j)
+                vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
+          else
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/2; ++j)
+                vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
+          if (i<len)
+            for (size_t j=0; j<vlen/2; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j]);
+          }
+    if constexpr (vlen>4)
+      if constexpr( simd_exists<T,vlen/4>)
+        if (it.remaining()>=vlen/4)
+          {
+          it.advance(vlen/4);
+          auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
+          copy_input(it, in, tdatav);
+          plan->exec(tdatav, fct, true);
+          auto vout = out.vdata();
           for (size_t j=0; j<vlen/4; ++j)
-            vout[it.oofs(j,ii)].Set(tdatav[i][j]);
-        }
+            vout[it.oofs(j,0)].Set(tdatav[0][j]);
+          size_t i=1, ii=1;
+          if (forward)
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/4; ++j)
+                vout[it.oofs(j,ii)].Set(tdatav[i][j], tdatav[i+1][j]);
+          else
+            for (; i<len-1; i+=2, ++ii)
+              for (size_t j=0; j<vlen/4; ++j)
+                vout[it.oofs(j,ii)].Set(tdatav[i][j], -tdatav[i+1][j]);
+          if (i<len)
+            for (size_t j=0; j<vlen/4; ++j)
+              vout[it.oofs(j,ii)].Set(tdatav[i][j]);
+          }
 #endif
     while (it.remaining()>0)
       {
@@ -1108,66 +1112,68 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
           plan->exec(tdatav, fct, false);
           copy_output(it, tdatav, out);
           }
-      if constexpr (simd_exists<T,vlen/2>)
-        if (it.remaining()>=vlen/2)
-          {
-          it.advance(vlen/2);
-          auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
-          for (size_t j=0; j<vlen/2; ++j)
-            tdatav[0][j]=in.craw(it.iofs(j,0)).r;
-          {
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                {
-                tdatav[i  ][j] =  in.craw(it.iofs(j,ii)).r;
-                tdatav[i+1][j] = -in.craw(it.iofs(j,ii)).i;
-                }
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                {
-                tdatav[i  ][j] = in.craw(it.iofs(j,ii)).r;
-                tdatav[i+1][j] = in.craw(it.iofs(j,ii)).i;
-                }
-          if (i<len)
+      if constexpr (vlen>2)
+        if constexpr (simd_exists<T,vlen/2>)
+          if (it.remaining()>=vlen/2)
+            {
+            it.advance(vlen/2);
+            auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
             for (size_t j=0; j<vlen/2; ++j)
-              tdatav[i][j] = in.craw(it.iofs(j,ii)).r;
-          }
-          plan->exec(tdatav, fct, false);
-          copy_output(it, tdatav, out);
-          }
-      if constexpr (simd_exists<T,vlen/4>)
-        if (it.remaining()>=vlen/4)
-          {
-          it.advance(vlen/4);
-          auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
-          for (size_t j=0; j<vlen/4; ++j)
-            tdatav[0][j]=in.craw(it.iofs(j,0)).r;
-          {
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                {
-                tdatav[i  ][j] =  in.craw(it.iofs(j,ii)).r;
-                tdatav[i+1][j] = -in.craw(it.iofs(j,ii)).i;
-                }
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                {
-                tdatav[i  ][j] = in.craw(it.iofs(j,ii)).r;
-                tdatav[i+1][j] = in.craw(it.iofs(j,ii)).i;
-                }
-          if (i<len)
+              tdatav[0][j]=in.craw(it.iofs(j,0)).r;
+            {
+            size_t i=1, ii=1;
+            if (forward)
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen/2; ++j)
+                  {
+                  tdatav[i  ][j] =  in.craw(it.iofs(j,ii)).r;
+                  tdatav[i+1][j] = -in.craw(it.iofs(j,ii)).i;
+                  }
+            else
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen/2; ++j)
+                  {
+                  tdatav[i  ][j] = in.craw(it.iofs(j,ii)).r;
+                  tdatav[i+1][j] = in.craw(it.iofs(j,ii)).i;
+                  }
+            if (i<len)
+              for (size_t j=0; j<vlen/2; ++j)
+                tdatav[i][j] = in.craw(it.iofs(j,ii)).r;
+            }
+            plan->exec(tdatav, fct, false);
+            copy_output(it, tdatav, out);
+            }
+      if constexpr (vlen>4)
+        if constexpr(simd_exists<T,vlen/4>)
+          if (it.remaining()>=vlen/4)
+            {
+            it.advance(vlen/4);
+            auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
             for (size_t j=0; j<vlen/4; ++j)
-              tdatav[i][j] = in.craw(it.iofs(j,ii)).r;
-          }
-          plan->exec(tdatav, fct, false);
-          copy_output(it, tdatav, out);
-          }
+              tdatav[0][j]=in.craw(it.iofs(j,0)).r;
+            {
+            size_t i=1, ii=1;
+            if (forward)
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen/4; ++j)
+                  {
+                  tdatav[i  ][j] =  in.craw(it.iofs(j,ii)).r;
+                  tdatav[i+1][j] = -in.craw(it.iofs(j,ii)).i;
+                  }
+            else
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen/4; ++j)
+                  {
+                  tdatav[i  ][j] = in.craw(it.iofs(j,ii)).r;
+                  tdatav[i+1][j] = in.craw(it.iofs(j,ii)).i;
+                  }
+            if (i<len)
+              for (size_t j=0; j<vlen/4; ++j)
+                tdatav[i][j] = in.craw(it.iofs(j,ii)).r;
+            }
+            plan->exec(tdatav, fct, false);
+            copy_output(it, tdatav, out);
+            }
 #endif
       while (it.remaining()>0)
         {
