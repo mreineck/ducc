@@ -101,20 +101,14 @@ namespace ducc0 {
 namespace detail_simd {
 
 template<typename T> constexpr inline bool vectorizable = false;
+#if defined(__SSE2__)
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
-template<> constexpr inline bool vectorizable<int8_t> = true;
-template<> constexpr inline bool vectorizable<uint8_t> = true;
-template<> constexpr inline bool vectorizable<int16_t> = true;
-template<> constexpr inline bool vectorizable<uint16_t> = true;
-template<> constexpr inline bool vectorizable<int32_t> = true;
-template<> constexpr inline bool vectorizable<uint32_t> = true;
-template<> constexpr inline bool vectorizable<int64_t> = true;
-template<> constexpr inline bool vectorizable<uint64_t> = true;
+#endif
 
 template<typename T, size_t len> constexpr inline bool simd_exists = false;
 
-template<typename T, size_t reglen> constexpr size_t vlen
+template<typename T, size_t reglen> constexpr size_t vectorlen
   = vectorizable<T> ? reglen/sizeof(T) : 1;
 
 template<typename T, size_t len> class helper_;
@@ -505,11 +499,11 @@ template<> class helper_<float,4>
 #endif
 
 #if defined(__AVX512F__)
-template<typename T> using native_simd = vtp<T,vlen<T,64>>;
+template<typename T> using native_simd = vtp<T,vextorlen<T,64>>;
 #elif defined(__AVX__)
-template<typename T> using native_simd = vtp<T,vlen<T,32>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,32>>;
 #elif defined(__SSE2__)
-template<typename T> using native_simd = vtp<T,vlen<T,16>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
@@ -532,6 +526,7 @@ using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
+using detail_simd::vectorizable;
 
 // since we are explicitly introducing a few names that are also available in
 // std::, we need to import them from std::as well, otherwise name resolution

@@ -367,9 +367,13 @@ struct ft_partial_sph_isometry_plan
 
       void eval (const vector<double> &x, vector<double> &y) const
         {
-        int j = eval_helper<native_simd<double>,4>(0, x, y);
-        j = eval_helper<native_simd<double>,2>(j, x, y);
-        j = eval_helper<native_simd<double>,1>(j, x, y);
+        int j=0;
+        if constexpr (vectorizable<double>)
+          {
+          j = eval_helper<native_simd<double>,4>(j, x, y);
+          j = eval_helper<native_simd<double>,2>(j, x, y);
+          j = eval_helper<native_simd<double>,1>(j, x, y);
+          }
         eval_helper<simd<double,1>,1>(j, x, y);
         }
     };
