@@ -29,6 +29,9 @@
 #include <vector>
 #include <array>
 #include <memory>
+#if (defined(__AVX__)||defined(__SSE3__))
+#include <x86intrin.h>
+#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -47,10 +50,10 @@ namespace detail_gridder {
 
 using namespace std;
 
-template<typename T> constexpr int mysimdlen()
-  { return min<int>(8, native_simd<T>::size()); }
+template<typename T> constexpr inline int mysimdlen
+  = min<int>(8, native_simd<T>::size());
 
-template<typename T> using mysimd = simd<T,mysimdlen<T>()>;
+template<typename T> using mysimd = simd<T,mysimdlen<T>>;
 
 template<typename T> T sqr(T val) { return val*val; }
 
@@ -100,44 +103,43 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
     res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
 
-// template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
-//   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
-// template<typename T> complex<T> hsum_cmplx(native_simd<T> vr, native_simd<T> vi)
-//   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
-// #if (defined(__AVX__))
-// #if 1
-// inline complex<float> hsum_cmplx(simd<float,8> vr, simd<float,8> vi)
-//   {
-//   auto t1 = _mm256_hadd_ps(vr, vi);
-//   auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
-//   t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
-//   return complex<float>(t2[0], t2[1]);
-//   }
-// #else
-// // this version may be slightly faster, but this needs more benchmarking
-// inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
-//   {
-//   auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
-//   auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
-//   auto t3 = _mm256_add_ps(t1,t2);
-//   t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
-//   auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
-//   auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
-//   return complex<float>(t5[0], t5[1]);
-//   }
-// #endif
-// #endif
-// #if defined(__SSE3__)
-// inline complex<float> hsum_cmplx(simd<float,4> vr, simd<float,4> vi)
-//   {
-//   auto t1 = _mm_hadd_ps(vr, vi);
-//   t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
-//   return complex<float>(t1[0], t1[2]);
-//   }
-// #endif
+#if (defined(__AVX__))
+#if 1
+inline complex<float> hsum_cmplx(__m256 vr, __m256 vi)
+  {
+  auto t1 = _mm256_hadd_ps(vr, vi);
+  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
+  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
+  return complex<float>(t2[0], t2[1]);
+  }
+inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
+  { return hsum_cmplx(nasty_cast<__m256>(vr), nasty_cast<__m256>(vi)); }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return complex<float>(t5[0], t5[1]);
+  }
+#endif
+#elif defined(__SSE3__)
+inline complex<float> hsum_cmplx(__m128 vr, __m128 vi)
+  {
+  auto t1 = _mm_hadd_ps(vr, vi);
+  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
+  return complex<float>(t1[0], t1[2]);
+  }
+inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
+  { return hsum_cmplx(nasty_cast<__m128>(vr), nasty_cast<__m128>(vi)); }
+#endif
 
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)

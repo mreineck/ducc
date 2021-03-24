@@ -33,22 +33,40 @@ namespace ducc0 {
 using std::experimental::native_simd;
 template<typename T, int len> using simd = std::experimental::fixed_size_simd<T, len>;
 
-//using detail_simd::simd_exists;
 using std::experimental::reduce;
-using std::experimental::max;
+//using std::experimental::max;
+//using std::experimental::min;
 //using detail_simd::abs;
 //using detail_simd::sqrt;
 using std::experimental::any_of;
 using std::experimental::none_of;
 using std::experimental::all_of;
 using std::experimental::element_aligned_tag;
-template<typename T> constexpr size_t simdlen = 1;
-template<typename T, int vlen> constexpr size_t simdlen<simd<T,vlen>> = vlen;
-template<typename T> constexpr size_t simdlen<native_simd<T>> = native_simd<T>::size();
-template<typename T, int vlen> constexpr inline bool simd_exists = (vlen>1) && (native_simd<T>::size()>=vlen);
+template<typename T, int vlen> constexpr inline bool simd_exists = false;
+#if defined(__SSE2__)
+template<> constexpr inline bool simd_exists<float,4> = true;
+template<> constexpr inline bool simd_exists<double,2> = true;
+#endif
+#if defined(__AVX__)
+template<> constexpr inline bool simd_exists<float,8> = true;
+template<> constexpr inline bool simd_exists<double,4> = true;
+#endif
+#if defined(__AVX512F__)
+template<> constexpr inline bool simd_exists<float,16> = true;
+template<> constexpr inline bool simd_exists<double,8> = true;
+#endif
+template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
 using std::abs;
 using std::sqrt;
 using std::max;
+
+template<typename T1, typename T2> inline T1 nasty_cast(const T2 &v)
+  {
+  union U { T1 t1; T2 t2; };
+  U u;
+  u.t2 = v;
+  return u.t1;
+  }
 
 template<typename Func, typename T, int vlen> simd<T, vlen> apply(simd<T, vlen> in, Func func)
   {
@@ -524,9 +542,14 @@ template<typename T> using native_simd = vtp<T,1>;
 #else // DUCC0_NO_SIMD is defined
 template<typename T> using native_simd = vtp<T,1>;
 #endif
+template<typename T1, typename T2> inline T1 nasty_cast(const T2 &v)
+  {
+  union U { T1 t1; T2 t2; };
+  U u;
+  u.t2 = v;
+  return u.t1;
+  }
 
-template<typename T> constexpr size_t simdlen = 1;
-template<typename T, size_t vlen> constexpr size_t simdlen<vtp<T,vlen>> = vlen;
 }
 
 using detail_simd::element_aligned_tag;
@@ -541,7 +564,7 @@ using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
-using detail_simd::simdlen;
+using detail_simd::nasty_cast;
 
 // since we are explicitly introducing a few names that are also available in
 // std::, we need to import them from std::as well, otherwise name resolution

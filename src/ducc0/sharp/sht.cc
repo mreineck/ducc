@@ -22,6 +22,10 @@
  */
 
 #include <vector>
+#include <cmath>
+#if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
+#include <x86intrin.h>
+#endif
 #include "ducc0/infra/simd.h"
 #include "ducc0/sharp/sht.h"
 #include "ducc0/math/fft1d.h"
@@ -36,25 +40,26 @@ using namespace std;
 using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
-// #if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
-// static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
-//   complex<double> * DUCC0_RESTRICT cc)
-//   {
-//   auto tmp1=_mm256_hadd_pd(a,b), tmp2=_mm256_hadd_pd(c,d);
-//   auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
-//        tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
-//   tmp1=tmp3+tmp4;
-//   cc[0]+=complex<double>(tmp1[0], tmp1[1]);
-//   cc[1]+=complex<double>(tmp1[2], tmp1[3]);
-//   }
-// #else
+#if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
+static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
+  complex<double> * DUCC0_RESTRICT cc)
+  {
+  auto tmp1=_mm256_hadd_pd(nasty_cast<__m256d>(a),nasty_cast<__m256d>(b)),
+       tmp2=_mm256_hadd_pd(nasty_cast<__m256d>(c),nasty_cast<__m256d>(d));
+  auto tmp3=_mm256_permute2f128_pd(tmp1,tmp2,49),
+       tmp4=_mm256_permute2f128_pd(tmp1,tmp2,32);
+  tmp1=tmp3+tmp4;
+  cc[0]+=complex<double>(tmp1[0], tmp1[1]);
+  cc[1]+=complex<double>(tmp1[2], tmp1[3]);
+  }
+#else
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * DUCC0_RESTRICT cc)
   {
   cc[0] += complex<double>(reduce(a,std::plus<>()),reduce(b,std::plus<>()));
   cc[1] += complex<double>(reduce(c,std::plus<>()),reduce(d,std::plus<>()));
   }
-//#endif
+#endif
 
 using dcmplx = complex<double>;
 

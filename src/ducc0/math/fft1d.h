@@ -198,7 +198,8 @@ template <typename Tfs> class cfftpass
 #define POCKETFFT_EXEC_DISPATCH \
     virtual any exec(any in, any copy, any buf, bool fwd) const \
       { \
-      if (in.type().hash_code()==typeid(Tcs *).hash_code()) \
+      auto hcin = in.type().hash_code(); \
+      if (hcin==typeid(Tcs *).hash_code()) \
         { \
         auto in1 = any_cast<Tcs *>(in); \
         auto copy1 = any_cast<Tcs *>(copy); \
@@ -206,7 +207,7 @@ template <typename Tfs> class cfftpass
         return fwd ? exec_<true>(in1, copy1, buf1) \
                    : exec_<false>(in1, copy1, buf1); \
         } \
-      if (in.type().hash_code()==typeid(Cmplx<native_simd<Tfs>> *).hash_code()) \
+      if (hcin==typeid(Cmplx<native_simd<Tfs>> *).hash_code()) \
         {  \
         using Tcv = Cmplx<native_simd<Tfs>>; \
         auto in1 = any_cast<Tcv *>(in); \
@@ -216,7 +217,7 @@ template <typename Tfs> class cfftpass
                    : exec_<false>(in1, copy1, buf1); \
         } \
       if constexpr (simd_exists<Tfs,8>) \
-        if (in.type().hash_code()==typeid(Cmplx<simd<Tfs,8>> *).hash_code()) \
+        if (hcin==typeid(Cmplx<simd<Tfs,8>> *).hash_code()) \
           { \
           using Tcv = Cmplx<simd<Tfs,8>>; \
           auto in1 = any_cast<Tcv *>(in); \
@@ -226,7 +227,7 @@ template <typename Tfs> class cfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,4>) \
-        if (in.type().hash_code()==typeid(Cmplx<simd<Tfs,4>> *).hash_code()) \
+        if (hcin==typeid(Cmplx<simd<Tfs,4>> *).hash_code()) \
           { \
           using Tcv = Cmplx<simd<Tfs,4>>; \
           auto in1 = any_cast<Tcv *>(in); \
@@ -236,7 +237,7 @@ template <typename Tfs> class cfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,2>) \
-        if (in.type().hash_code()==typeid(Cmplx<simd<Tfs,2>> *).hash_code()) \
+        if (hcin==typeid(Cmplx<simd<Tfs,2>> *).hash_code()) \
           { \
           using Tcv = Cmplx<simd<Tfs,2>>; \
           auto in1 = any_cast<Tcv *>(in); \
@@ -246,7 +247,7 @@ template <typename Tfs> class cfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,1>) \
-        if (in.type().hash_code()==typeid(Cmplx<simd<Tfs,1>> *).hash_code()) \
+        if (hcin==typeid(Cmplx<simd<Tfs,1>> *).hash_code()) \
           { \
           using Tcv = Cmplx<simd<Tfs,1>>; \
           auto in1 = any_cast<Tcv *>(in); \
@@ -1267,7 +1268,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && (simdlen<native_simd<Tfs>> > 1)) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && (native_simd<Tfs>::size() > 1)) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
@@ -1529,7 +1530,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
     {
-    constexpr auto vlen = simdlen<native_simd<Tfs>>;
+    constexpr auto vlen = native_simd<Tfs>::size();
     if constexpr(vlen>1)
       if ((ip&(vlen-1))==0)
         return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
@@ -1651,7 +1652,8 @@ template <typename Tfs> class rfftpass
 #define POCKETFFT_EXEC_DISPATCH \
     virtual any exec(any in, any copy, any buf, bool fwd) const \
       { \
-      if (in.type()==typeid(Tfs *)) \
+      auto hcin = in.type().hash_code(); \
+      if (hcin==typeid(Tfs *).hash_code()) \
         { \
         auto in1 = any_cast<Tfs *>(in); \
         auto copy1 = any_cast<Tfs *>(copy); \
@@ -1659,7 +1661,7 @@ template <typename Tfs> class rfftpass
         return fwd ? exec_<true>(in1, copy1, buf1) \
                    : exec_<false>(in1, copy1, buf1); \
         } \
-      if (in.type()==typeid(native_simd<Tfs> *)) \
+      if (hcin==typeid(native_simd<Tfs> *).hash_code()) \
         {  \
         using Tfv = native_simd<Tfs>; \
         auto in1 = any_cast<Tfv *>(in); \
@@ -1669,7 +1671,7 @@ template <typename Tfs> class rfftpass
                    : exec_<false>(in1, copy1, buf1); \
         } \
       if constexpr (simd_exists<Tfs,8>) \
-        if (in.type()==typeid(simd<Tfs,8> *)) \
+        if (hcin==typeid(simd<Tfs,8> *).hash_code()) \
           { \
           using Tfv = simd<Tfs,8>; \
           auto in1 = any_cast<Tfv *>(in); \
@@ -1679,7 +1681,7 @@ template <typename Tfs> class rfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,4>) \
-        if (in.type()==typeid(simd<Tfs,4> *)) \
+        if (hcin==typeid(simd<Tfs,4> *).hash_code()) \
           { \
           using Tfv = simd<Tfs,4>; \
           auto in1 = any_cast<Tfv *>(in); \
@@ -1689,7 +1691,7 @@ template <typename Tfs> class rfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,2>) \
-        if (in.type()==typeid(simd<Tfs,2> *)) \
+        if (hcin==typeid(simd<Tfs,2> *).hash_code()) \
           { \
           using Tfv = simd<Tfs,2>; \
           auto in1 = any_cast<Tfv *>(in); \
@@ -1699,7 +1701,7 @@ template <typename Tfs> class rfftpass
                      : exec_<false>(in1, copy1, buf1); \
           } \
       if constexpr (simd_exists<Tfs,1>) \
-        if (in.type()==typeid(simd<Tfs,1> *)) \
+        if (hcin==typeid(simd<Tfs,1> *).hash_code()) \
           { \
           using Tfv = simd<Tfs,1>; \
           auto in1 = any_cast<Tfv *>(in); \
