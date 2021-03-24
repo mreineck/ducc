@@ -101,9 +101,11 @@ namespace ducc0 {
 namespace detail_simd {
 
 template<typename T> constexpr inline bool vectorizable = false;
+#if (!defined(DUCC0_NO_SIMD))
 #if defined(__SSE2__)
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
+#endif
 #endif
 
 template<typename T, size_t len> constexpr inline bool simd_exists = false;
