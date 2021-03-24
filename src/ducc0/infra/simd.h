@@ -499,7 +499,7 @@ template<> class helper_<float,4>
 #endif
 
 #if defined(__AVX512F__)
-template<typename T> using native_simd = vtp<T,vextorlen<T,64>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,64>>;
 #elif defined(__AVX__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,32>>;
 #elif defined(__SSE2__)
