@@ -106,7 +106,7 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
 template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
-#if ((!defined(DUCC0_NO_SIMD))
+#if (!defined(DUCC0_NO_SIMD))
 #if (defined(__AVX__))
 #if 1
 inline complex<float> hsum_cmplx(__m256 vr, __m256 vi)
