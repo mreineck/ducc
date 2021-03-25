@@ -37,10 +37,6 @@ using stdx::native_simd;
 template<typename T, int len> using simd = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>;
 
 using stdx::reduce;
-//using stdx::max;
-//using stdx::min;
-//using detail_simd::abs;
-//using detail_simd::sqrt;
 using stdx::any_of;
 using stdx::none_of;
 using stdx::all_of;
