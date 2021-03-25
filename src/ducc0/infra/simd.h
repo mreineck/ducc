@@ -22,8 +22,6 @@
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
-#define DUCC0_NO_SIMD
-
 #if 0 //__has_include(<experimental/simd>)
 #include <cstdint>
 #include <cstdlib>
