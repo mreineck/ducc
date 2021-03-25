@@ -78,20 +78,22 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
           auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
           exec(it, in, out, tdatav, *plan1, *plan2, kernel);
           }
-      if constexpr (simd_exists<T,vlen/2>)
-        if (it.remaining()>=vlen/2)
-          {
-          it.advance(vlen/2);
-          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
-          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
-          }
-      if constexpr (simd_exists<T,vlen/4>)
-        if (it.remaining()>=vlen/4)
-          {
-          it.advance(vlen/4);
-          auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
-          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
-          }
+      if constexpr (vlen>2)
+        if constexpr (simd_exists<T,vlen/2>)
+          if (it.remaining()>=vlen/2)
+            {
+            it.advance(vlen/2);
+            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
+            exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+            }
+      if constexpr (vlen>4)
+        if constexpr (simd_exists<T,vlen/4>)
+          if (it.remaining()>=vlen/4)
+            {
+            it.advance(vlen/4);
+            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
+            exec(it, in, out, tdatav, *plan1, *plan2, kernel);
+            }
 #endif
       while (it.remaining()>0)
         {
@@ -357,7 +359,7 @@ template<typename T> class ConvolverPlan
               const T * DUCC0_RESTRICT ptr2 = ptr;
               Tsimd tres=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
-                tres += hlp.wtheta[itheta]*Tsimd::loadu(ptr2);
+                tres += hlp.wtheta[itheta]*Tsimd(ptr2, element_aligned_tag());
               res += tres*hlp.wpsi[ipsic];
               if (++ipsi>=npsi_b) ipsi=0;
               ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
@@ -372,7 +374,7 @@ template<typename T> class ConvolverPlan
               Tsimd tres=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
                 for (size_t iphi=0; iphi<nvec; ++iphi)
-                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd::loadu(ptr2+iphi*vlen);
+                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd(ptr2+iphi*vlen,element_aligned_tag());
               res += tres*hlp.wpsi[ipsic];
               if (++ipsi>=npsi_b) ipsi=0;
               ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
@@ -449,9 +451,9 @@ template<typename T> class ConvolverPlan
                 T * DUCC0_RESTRICT ptr2 = ptr;
                 for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
                   {
-                  Tsimd var=Tsimd::loadu(ptr2);
+                  Tsimd var=Tsimd(ptr2,element_aligned_tag());
                   var += ttmp*hlp.wtheta[itheta];
-                  var.storeu(ptr2);
+                  var.copy_to(ptr2,element_aligned_tag());
                   }
                 if (++ipsi>=npsi_b) ipsi=0;
                 ptr = &cube.v(ipsi,hlp.itheta,hlp.iphi);
@@ -468,9 +470,9 @@ template<typename T> class ConvolverPlan
                   auto tttmp=ttmp*hlp.wtheta[itheta];
                   for (size_t iphi=0; iphi<nvec; ++iphi)
                     {
-                    Tsimd var=Tsimd::loadu(ptr2+iphi*vlen);
+                    Tsimd var=Tsimd(ptr2+iphi*vlen, element_aligned_tag());
                     var += tttmp*hlp.wphi[iphi];
-                    var.storeu(ptr2+iphi*vlen);
+                    var.copy_to(ptr2+iphi*vlen, element_aligned_tag());
                     }
                   ptr2 += hlp.jumptheta;
                   }

@@ -29,6 +29,9 @@
 #include <vector>
 #include <array>
 #include <memory>
+#if ((!defined(DUCC0_NO_SIMD)) && (defined(__AVX__)||defined(__SSE3__)))
+#include <x86intrin.h>
+#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -47,10 +50,10 @@ namespace detail_gridder {
 
 using namespace std;
 
-template<typename T> constexpr size_t simdlen()
-  { return min<size_t>(8, native_simd<T>::size()); }
+template<typename T> constexpr inline int mysimdlen
+  = min<int>(8, native_simd<T>::size());
 
-template<typename T> using mysimd = simd<T,simdlen<T>()>;
+template<typename T> using mysimd = simd<T,mysimdlen<T>>;
 
 template<typename T> T sqr(T val) { return val*val; }
 
@@ -90,9 +93,9 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   size_t i=0;
   for (; i+vlen-1<n; i+=vlen)
     {
-    auto vang = Tsimd::loadu(&buf[i]);
-    auto vcos = vang.apply([](T arg) { return cos(arg); });
-    auto vsin = vang.apply([](T arg) { return sin(arg); });
+    auto vang = Tsimd(&buf[i],element_aligned_tag());
+    auto vcos = apply(vang, [](T arg) { return cos(arg); });
+    auto vsin = apply(vang, [](T arg) { return sin(arg); });
     for (size_t ii=0; ii<vlen; ++ii)
       res[i+ii] = complex<T>(vcos[ii], vsin[ii]);
     }
@@ -100,14 +103,15 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
     res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
 
-template<typename T, size_t len> complex<T> hsum_cmplx(simd<T, len> vr, simd<T, len> vi)
+template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
+#if (!defined(DUCC0_NO_SIMD))
 #if (defined(__AVX__))
 #if 1
-inline complex<float> hsum_cmplx(simd<float,8> vr, simd<float,8> vi)
+inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
   {
-  auto t1 = _mm256_hadd_ps(vr, vi);
+  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
   auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
   t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
   return complex<float>(t2[0], t2[1]);
@@ -125,14 +129,14 @@ inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   return complex<float>(t5[0], t5[1]);
   }
 #endif
-#endif
-#if defined(__SSE3__)
-inline complex<float> hsum_cmplx(simd<float,4> vr, simd<float,4> vi)
+#elif defined(__SSE3__)
+inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
   {
-  auto t1 = _mm_hadd_ps(vr, vi);
+  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
   t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
   return complex<float>(t1[0], t1[2]);
   }
+#endif
 #endif
 
 template<size_t ndim> void checkShape
@@ -967,12 +971,12 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                     {
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = mysimd<Tacc>::loadu(pxr);
-                    auto ti = mysimd<Tacc>::loadu(pxi);
+                    auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+                    auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
                     tr += vr*ku[cu];
                     ti += vi*ku[cu];
-                    tr.storeu(pxr);
-                    ti.storeu(pxi);
+                    tr.copy_to(pxr,element_aligned_tag());
+                    ti.copy_to(pxi,element_aligned_tag());
                     }
                   }
                 else
@@ -985,12 +989,12 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                       {
                       auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
                       auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = mysimd<Tacc>::loadu(pxr);
+                      auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
                       tr += tmpr*kv[cv];
-                      tr.storeu(pxr);
-                      auto ti = mysimd<Tacc>::loadu(pxi);
+                      tr.copy_to(pxr,element_aligned_tag());
+                      auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
                       ti += tmpi*kv[cv];
-                      ti.storeu(pxi);
+                      ti.copy_to(pxi,element_aligned_tag());
                       }
                     }
                   }
@@ -1070,8 +1074,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += mysimd<Tcalc>::loadu(pxr)*ku[cu];
-                    ri += mysimd<Tcalc>::loadu(pxi)*ku[cu];
+                    rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
+                    ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
                     }
                   rr *= kv[0];
                   ri *= kv[0];
@@ -1085,8 +1089,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                       {
                       const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
                       const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                      tmpr += kv[cv]*mysimd<Tcalc>::loadu(pxr);
-                      tmpi += kv[cv]*mysimd<Tcalc>::loadu(pxi);
+                      tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
+                      tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
                       }
                     rr += ku[cu]*tmpr;
                     ri += ku[cu]*tmpi;
