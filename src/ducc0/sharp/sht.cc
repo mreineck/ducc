@@ -176,13 +176,12 @@ static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
 
 static inline void getCorfac(Tv scale, Tv & DUCC0_RESTRICT corfac)
   {
-//  for (size_t i=0; i<Tv::size(); ++i)
-//    {
-//    corfac[i] = (scale[i]<0) ? 0. : ((scale[i]<1) ? 1. : sharp_fbig);
-//    }
-  corfac = Tv(1.);
-  where(scale<-0.5,corfac)*=0;
-  where(scale>0.5,corfac)*=sharp_fbig;
+// FIXME: I would like to use "where expressions" here but MSVC miscompiles them
+  for (size_t i=0; i<Tv::size(); ++i)
+    corfac[i] = (scale[i]<0) ? 0. : ((scale[i]<1) ? 1. : sharp_fbig);
+//  corfac = Tv(1.);
+//  where(scale<-0.5,corfac)=0;
+//  where(scale>0.5,corfac)=sharp_fbig;
   }
 
 static inline bool rescale(Tv &v1, Tv &v2, Tv &s, Tv eps)
