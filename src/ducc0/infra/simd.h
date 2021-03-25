@@ -220,9 +220,8 @@ template<typename T, size_t len> class vtp
       public:
         where_expr (Tm m_, vtp &v_)
           : v(v_), m(m_) {}
-// FIXME: MSVC somehow generates broken code for this, so let's not use it ...
-//        where_expr &operator= (const vtp &other)
-//          { v=hlp::blend(m, other.v, v.v); return *this; }
+        where_expr &operator= (const vtp &other)
+          { v=hlp::blend(m, other.v, v.v); return *this; }
         where_expr &operator*= (const vtp &other)
           { v=hlp::blend(m, v.v*other.v, v.v); return *this; }
         where_expr &operator+= (const vtp &other)
