@@ -1,51 +1,6 @@
 name: ducc-tests
 on: [push]
 jobs:
-  test-linux:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v2
-      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-      - run: python3 setup.py install --user --prefix=
-      - run: python3 -m pytest python/test -x
-  test-linuxold:
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-             python-version: '3.7'
-      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-      - run: python setup.py install --user --prefix=
-      - run: python -m pytest python/test -x
-  test-intel:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v2
-      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-      - run: wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
-      - run: sudo apt update
-      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp
-      - run: |
-          source /opt/intel/oneapi/setvars.sh intel64
-          DUCC0_LFLAGS="-lsvml" CC=icpx python3 setup.py install --user --prefix=
-          python3 -m pytest python/test -x
-  test-macos10:
-    runs-on: macos-10.15
-    steps:
-      - uses: actions/checkout@v2
-      - run: pip3 install --user --upgrade setuptools pybind11 pytest
-      - run: python3 setup.py install --user --prefix=
-      - run: python3 -m pytest python/test -x
-  test-macos11:
-    runs-on: macos-11.0
-    steps:
-      - uses: actions/checkout@v2
-      - run: pip3 install --user --upgrade setuptools pybind11 pytest numpy
-      - run: python3 setup.py install --user --prefix=
-      - run: python3 -m pytest python/test -x
   test-windows:
     runs-on: windows-latest
     steps:
