@@ -166,6 +166,8 @@ using detail_sharp::SHARP_ALM2MAP;
 using detail_sharp::SHARP_Yt;
 using detail_sharp::SHARP_WY;
 using detail_sharp::SHARP_ALM2MAP_DERIV1;
+using detail_sharp::sharp_set_chunksize_min;
+using detail_sharp::sharp_set_nchunks_max;
 
 }
 

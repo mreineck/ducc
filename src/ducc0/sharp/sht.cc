@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <cmath>
+#include <cstring>
 #if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
 #include <x86intrin.h>
 #endif
@@ -30,6 +31,7 @@
 #include "ducc0/sharp/sht.h"
 #include "ducc0/math/fft1d.h"
 #include "ducc0/math/fft.h"
+#include "ducc0/math/math_utils.h"
 
 namespace ducc0 {
 
@@ -1147,6 +1149,23 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
   }
 
 #undef VZERO
+
+template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
+  mav<complex<double>,2> &almtmp,
+  mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
+  Ylmgen &gen, size_t mi)
+  {
+  (mode==MAP2ALM) ? inner_loop_m2a(almtmp, phase, rdata, gen, mi)
+                  : inner_loop_a2m(mode, almtmp, phase, rdata, gen, mi);
+  }
+template void inner_loop(SHT_mode mode,
+  mav<complex<double>,2> &almtmp,
+  mav<complex<double>,3> &phase, const vector<ringdata> &rdata,
+  Ylmgen &gen, size_t mi);
+template void inner_loop(SHT_mode mode,
+  mav<complex<double>,2> &almtmp,
+  mav<complex<float>,3> &phase, const vector<ringdata> &rdata,
+  Ylmgen &gen, size_t mi);
 
 size_t get_mmax(const mav<size_t,1> &mval, size_t lmax)
   {

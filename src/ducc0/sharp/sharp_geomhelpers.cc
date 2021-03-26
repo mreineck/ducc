@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <cstring>
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"

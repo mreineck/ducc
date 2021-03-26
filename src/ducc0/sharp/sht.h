@@ -271,14 +271,10 @@ class Ylmgen: public YlmBase
 
 DUCC0_NOINLINE size_t get_mlim (size_t lmax, size_t spin, double sth, double cth);
 
-template<typename T> DUCC0_NOINLINE static void inner_loop(SHT_mode mode,
+template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
   mav<complex<double>,2> &almtmp,
   mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
-  Ylmgen &gen, size_t mi)
-  {
-  (mode==MAP2ALM) ? inner_loop_m2a(almtmp, phase, rdata, gen, mi)
-                  : inner_loop_a2m(mode, almtmp, phase, rdata, gen, mi);
-  }
+  Ylmgen &gen, size_t mi);
 
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (lmidx, ncomp)
@@ -288,7 +284,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
   const mav<size_t,1> &mstart, // (nm)
   size_t lmax,
   size_t spin,
-  size_t nthreads);
+  size_t nthreads,
+  SHT_mode mode);
 
 template<typename T> void leg2alm(  // associated Legendre transform
   const mav<complex<T>,3> &leg, // (lmidx, ncomp)
