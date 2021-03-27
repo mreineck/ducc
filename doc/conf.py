@@ -18,7 +18,7 @@ master_doc = 'index'
 # Project info
 #######################################
 project = u'ducc'
-copyright = u'TODO'
+copyright = u'2021, Max-Planck-Society'
 author = 'Martin Reinecke'
 # The full version, including alpha/beta/rc tags.
 release = ducc0.__version__
