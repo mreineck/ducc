@@ -60,7 +60,7 @@ include src/ducc0/healpix/healpix_base.h
 include src/ducc0/healpix/healpix_tables.cc
 include src/ducc0/healpix/healpix_tables.h
 
-include src/ducc0/wgridder/gridder_cxx.h
+include src/ducc0/wgridder/wgridder.h
 
 include python/fft_pymod.cc
 include python/sht_pymod.cc
