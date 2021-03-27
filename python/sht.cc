@@ -30,6 +30,7 @@
 #include <vector>
 #include <complex>
 
+#include "ducc0/sharp/sht.h"
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
@@ -45,6 +46,121 @@ namespace detail_pymodule_sht {
 using namespace std;
 
 namespace py = pybind11;
+
+auto None = py::none();
+
+#if 0
+
+void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
+  mav<size_t,1> &mval, mav<size_t,1> &mstart)
+  {
+  MR_assert(mval_.is_none()==mstart_.is_none(), "mval and mstart must be supplied together");
+  if (mval_.is_none())
+    {
+    mav<size_t,1> tmv({lmax+1});
+    mval.assign(tmv);
+    mav<size_t,1> tms({lmax+1});
+    mstart.assign(tms);
+    for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
+      {
+      mval.v(m) = m;
+      mstart.v(m) = idx;
+      }
+    }
+  else
+    {
+    auto tmval = to_mav<int64_t,1>(mval_,false);
+    auto tmstart = to_mav<int64_t,1>(mstart_,false);
+    size_t nm = tmval.shape(0);
+    MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
+    mav<size_t,1> tmv({nm});
+    mval.assign(tmv);
+    mav<size_t,1> tms({nm});
+    mstart.assign(tms);
+    for (size_t i=0; i<nm; ++i)
+      {
+      auto m = tmval(i);
+      MR_assert((m>=0) && (m<=int64_t(lmax)), "bad m value");
+      mval.v(i) = size_t(m);
+      mstart.v(i) = size_t(tmstart(i));
+      }
+    }
+  }
+
+template<typename T> py::array alm2leg2(const py::array &alm_, const py::array &theta_, size_t lmax, size_t spin, const py::object &mval_, const py::object &mstart_, size_t nthreads, py::object &out_)
+  {
+  auto alm = to_mav<complex<double>,2>(alm_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  size_t nalm = ((lmax+1)*(lmax+2))/2;
+  MR_assert(alm.shape(0)==nalm, "bad a_lm array size");
+  MR_assert(mval_.is_none()==mstart_.is_none(), "mval and mstart must be supplied together");
+  mav<size_t,1> mval, mstart;
+  getmstuff(lmax, mval_, mstart_, mval, mstart);
+  auto leg_ = get_optional_Pyarr<complex<T>>(out_, {theta.shape(0),mval.shape(0),alm.shape(1)});
+  auto leg = to_mav<complex<double>,3>(leg_, true);
+  alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
+  return leg_;
+  }
+py::array Pyalm2leg(const py::array &alm, const py::array &theta, size_t lmax, size_t spin, const py::object &mval, const py::object &mstart, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return alm2leg2<float>(alm, theta, lmax, spin, mval, mstart, nthreads, out);
+  if (isPyarr<complex<double>>(alm))
+    return alm2leg2<double>(alm, theta, lmax, spin, mval, mstart, nthreads, out);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::array leg2alm2(const py::array &leg_, const py::array &theta_, size_t lmax, size_t spin, const py::object &mval_, const py::object &mstart_, size_t nthreads, py::object &out_)
+  {
+  auto leg = to_mav<complex<double>,3>(leg_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  size_t nalm = ((lmax+1)*(lmax+2))/2;
+  MR_assert(leg.shape(0)==theta.shape(0), "bad leg array size");
+  auto alm_ = get_optional_Pyarr<complex<T>>(out_, {nalm,leg.shape(2)});
+  auto alm = to_mav<complex<double>,2>(alm_, true);
+  mav<size_t,1> mval, mstart;
+  getmstuff(lmax, mval_, mstart_, mval, mstart);
+  leg2alm(leg, alm, theta, mval, mstart, lmax, spin, nthreads);
+  return alm_;
+  }
+py::array Pyleg2alm(const py::array &leg, const py::array &theta, size_t lmax, size_t spin, const py::object &mval, const py::object &mstart, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<complex<float>>(leg))
+    return leg2alm2<float>(leg, theta, lmax, spin, mval, mstart, nthreads, out);
+  if (isPyarr<complex<double>>(leg))
+    return leg2alm2<double>(leg, theta, lmax, spin, mval, mstart, nthreads, out);
+  MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
+  }
+
+py::array Pyclenshaw_curtis_weights(int64_t nrings)
+  {
+  MR_assert(nrings>2, "nrings must be larger than 2");
+  py::array_t<double> res_(nrings);
+  auto res = to_mav<double,1>(res_, true);
+  clenshaw_curtis_weights(res);
+  return res_;
+  }
+
+py::array Pyprep_for_analysis(py::array &leg_, size_t spin, size_t nthreads)
+  {
+  auto leg = to_mav<complex<double>,3>(leg_, true);
+  prep_for_analysis(leg, spin, nthreads);
+  return leg_;
+  }
+py::array Pyprep_for_analysis2(py::array &leg_, size_t lmax, size_t spin, size_t nthreads)
+  {
+  auto leg = to_mav<complex<double>,3>(leg_, true);
+  prep_for_analysis2(leg, lmax, spin, nthreads);
+  return leg_;
+  }
+void Pyresample_theta(const py::array &legi_, bool npi, bool spi,
+  py::array &lego_, bool npo, bool spo, size_t spin, size_t nthreads)
+  {
+  auto legi = to_mav<complex<double>,3>(legi_, false);
+  auto lego = to_mav<complex<double>,3>(lego_, true);
+  resample_theta(legi, npi, spi, lego, npo, spo, spin, nthreads);
+  }
+
+#endif
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -194,6 +310,15 @@ void add_sht(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
+
+#if 0
+  m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
+  m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
+  m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
+  m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
+  m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "lmax"_a, "spin"_a, "nthreads"_a=1);
+  m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
+#endif
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

@@ -22,6 +22,49 @@
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
+#if 0 //__has_include(<experimental/simd>)
+#include <cstdint>
+#include <cstdlib>
+#include <cmath>
+#include <algorithm>
+#include <experimental/simd>
+
+namespace ducc0 {
+namespace stdx=std::experimental;
+using stdx::native_simd;
+template<typename T, int len> using simd = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>;
+
+using stdx::reduce;
+using stdx::any_of;
+using stdx::none_of;
+using stdx::all_of;
+using stdx::element_aligned_tag;
+template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
+template<typename T, int N>
+constexpr inline bool simd_exists = (N>1) && vectorizable<T> && (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>);
+using std::abs;
+using std::sqrt;
+using std::max;
+
+template<typename Func, typename T, int vlen> simd<T, vlen> apply(simd<T, vlen> in, Func func)
+  {
+  simd<T, vlen> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
+template<typename Func, typename T> native_simd<T> apply(native_simd<T> in, Func func)
+  {
+  native_simd<T> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
+
+}
+
+#else
+
 // only enable SIMD support for gcc>=5.0 and clang>=5.0
 #ifndef DUCC0_NO_SIMD
 #define DUCC0_NO_SIMD
@@ -54,20 +97,16 @@ namespace ducc0 {
 namespace detail_simd {
 
 template<typename T> constexpr inline bool vectorizable = false;
+#if (!defined(DUCC0_NO_SIMD))
+#if defined(__SSE2__)
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
-template<> constexpr inline bool vectorizable<int8_t> = true;
-template<> constexpr inline bool vectorizable<uint8_t> = true;
-template<> constexpr inline bool vectorizable<int16_t> = true;
-template<> constexpr inline bool vectorizable<uint16_t> = true;
-template<> constexpr inline bool vectorizable<int32_t> = true;
-template<> constexpr inline bool vectorizable<uint32_t> = true;
-template<> constexpr inline bool vectorizable<int64_t> = true;
-template<> constexpr inline bool vectorizable<uint64_t> = true;
+#endif
+#endif
 
 template<typename T, size_t len> constexpr inline bool simd_exists = false;
 
-template<typename T, size_t reglen> constexpr size_t vlen
+template<typename T, size_t reglen> constexpr size_t vectorlen
   = vectorizable<T> ? reglen/sizeof(T) : 1;
 
 template<typename T, size_t len> class helper_;
@@ -91,14 +130,14 @@ template<typename T, size_t len> struct vmask_
     size_t bits() const { return hlp::maskbits(v); }
     vmask_ operator& (const vmask_ &other) const { return hlp::mask_and(v,other.v); }
   };
-
+struct element_aligned_tag {};
 template<typename T, size_t len> class vtp
   {
   private:
     using hlp = helper_<T, len>;
 
   public:
-    using Ts = T;
+    using value_type = T;
     using Tv = typename hlp::Tv;
     using Tm = vmask_<T, len>;
     static constexpr size_t size() { return len; }
@@ -119,8 +158,8 @@ template<typename T, size_t len> class vtp
     vtp &operator=(const T &other) { v=hlp::from_scalar(other); return *this; }
     operator Tv() const { return v; }
 
-    static vtp loadu(const T *ptr) { return vtp(hlp::loadu(ptr)); }
-    void storeu(T *ptr) const { hlp::storeu(ptr, v); }
+    vtp(const T *ptr, element_aligned_tag) : v(hlp::loadu(ptr)) {}
+    void copy_to(T *ptr, element_aligned_tag) const { hlp::storeu(ptr, v); }
 
     vtp operator-() const { return vtp(-v); }
     vtp operator+(vtp other) const { return vtp(v+other.v); }
@@ -132,13 +171,6 @@ template<typename T, size_t len> class vtp
     vtp &operator*=(vtp other) { v*=other.v; return *this; }
     vtp &operator/=(vtp other) { v/=other.v; return *this; }
     vtp abs() const { return hlp::abs(v); }
-    template<typename Func> vtp apply(Func func) const
-      {
-      vtp res;
-      for (size_t i=0; i<len; ++i)
-        res[i] = func(v[i]);
-      return res;
-      }
     inline vtp sqrt() const
       { return hlp::sqrt(v); }
     vtp max(const vtp &other) const
@@ -151,6 +183,8 @@ template<typename T, size_t len> class vtp
       { return hlp::lt(v, other.v); }
     Tm operator!=(const vtp &other) const
       { return hlp::ne(v, other.v); }
+    static vtp blend(Tm mask, const vtp &a, const vtp &b)
+      { return hlp::blend(mask, a, b); }
 
     class reference
       {
@@ -180,6 +214,8 @@ template<typename T, size_t len> class vtp
       public:
         where_expr (Tm m_, vtp &v_)
           : v(v_), m(m_) {}
+        where_expr &operator= (const vtp &other)
+          { v=hlp::blend(m, other.v, v.v); return *this; }
         where_expr &operator*= (const vtp &other)
           { v=hlp::blend(m, v.v*other.v, v.v); return *this; }
         where_expr &operator+= (const vtp &other)
@@ -207,6 +243,8 @@ template<typename T, size_t len> inline bool none_of(const vmask_<T, len> &mask)
   { return mask.bits()==0; }
 template<typename T, size_t len> inline bool all_of(const vmask_<T, len> &mask)
   { return mask.bits()==(size_t(1)<<len)-1; }
+template<typename T, size_t len> inline vtp<T,len> blend (const vmask_<T, len> &mask, const vtp<T,len> &a, const vtp<T,len> &b)
+  { return vtp<T,len>::blend(mask, a, b); }
 template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op op)
   {
   T res=v[0];
@@ -214,8 +252,13 @@ template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op 
     res = op(res, v[i]);
   return res;
   }
-template<typename Op, typename T, size_t len> T accumulate(const vtp<T, len> &v, Op op)
-  { return reduce(v, op); }
+template<typename Func, typename T, size_t vlen> vtp<T, vlen> apply(vtp<T, vlen> in, Func func)
+  {
+  vtp<T, vlen> res;
+  for (size_t i=0; i<in.size(); ++i)
+    res[i] = func(in[i]);
+  return res;
+  }
 template<typename T> class pseudoscalar
   {
   private:
@@ -454,11 +497,11 @@ template<> class helper_<float,4>
 #endif
 
 #if defined(__AVX512F__)
-template<typename T> using native_simd = vtp<T,vlen<T,64>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,64>>;
 #elif defined(__AVX__)
-template<typename T> using native_simd = vtp<T,vlen<T,32>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,32>>;
 #elif defined(__SSE2__)
-template<typename T> using native_simd = vtp<T,vlen<T,16>>;
+template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
@@ -467,21 +510,21 @@ template<typename T> using native_simd = vtp<T,1>;
 template<typename T> using native_simd = vtp<T,1>;
 #endif
 
-template<typename T> constexpr size_t simdlen = 1;
-template<typename T, size_t vlen> constexpr size_t simdlen<vtp<T,vlen>> = vlen;
 }
 
+using detail_simd::element_aligned_tag;
 using detail_simd::native_simd;
 template<typename T, size_t len> using simd = detail_simd::vtp<T, len>;
 using detail_simd::simd_exists;
 using detail_simd::reduce;
+using detail_simd::apply;
 using detail_simd::max;
 using detail_simd::abs;
 using detail_simd::sqrt;
 using detail_simd::any_of;
 using detail_simd::none_of;
 using detail_simd::all_of;
-using detail_simd::simdlen;
+using detail_simd::vectorizable;
 
 // since we are explicitly introducing a few names that are also available in
 // std::, we need to import them from std::as well, otherwise name resolution
@@ -492,5 +535,5 @@ using std::sqrt;
 using std::max;
 
 }
-
+#endif
 #endif

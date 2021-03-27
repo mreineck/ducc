@@ -109,53 +109,49 @@ enum sharp_jobflags {
 void sharp_execute (sharp_jobtype type, size_t spin, const std::vector<std::any> &alm,
   const std::vector<std::any> &map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr);
+  size_t flags, int nthreads=1);
 
 template<typename T> void sharp_alm2map(const std::complex<T> *alm, T *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Y, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Y, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads);
   }
 template<typename T> void sharp_alm2map_adjoint(std::complex<T> *alm, const T *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Yt, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Yt, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads);
   }
 template<typename T> void sharp_alm2map_spin(size_t spin, const std::complex<T> *alm1, const std::complex<T> *alm2, T *map1, T *map2,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Y, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Y, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads);
   }
 template<typename T> void sharp_alm2map_spin_adjoint(size_t spin, std::complex<T> *alm1, std::complex<T> *alm2, const T *map1, const T *map2,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Yt, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Yt, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads);
   }
 template<typename T> void sharp_map2alm(std::complex<T> *alm, const T *map,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Yt, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Yt, 0, {alm}, {map}, geom_info, alm_info, flags, nthreads);
   }
 template<typename T> void sharp_map2alm_spin(size_t spin, std::complex<T> *alm1, std::complex<T> *alm2, const T *map1, const T *map2,
   const sharp_geom_info &geom_info, const sharp_alm_info &alm_info,
-  size_t flags, int nthreads=1, double *time=nullptr, uint64_t *opcnt=nullptr)
+  size_t flags, int nthreads=1)
   {
-  sharp_execute(SHARP_Yt, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads, time, opcnt);
+  sharp_execute(SHARP_Yt, spin, {alm1, alm2}, {map1, map2}, geom_info, alm_info, flags, nthreads);
   }
 
 void sharp_set_chunksize_min(size_t new_chunksize_min);
 void sharp_set_nchunks_max(size_t new_nchunks_max);
 
 /*! \} */
-
-size_t sharp_get_mlim (size_t lmax, size_t spin, double sth, double cth);
-size_t sharp_veclen(void);
-const char *sharp_architecture(void);
 
 }
 
@@ -170,9 +166,8 @@ using detail_sharp::SHARP_ALM2MAP;
 using detail_sharp::SHARP_Yt;
 using detail_sharp::SHARP_WY;
 using detail_sharp::SHARP_ALM2MAP_DERIV1;
-using detail_sharp::sharp_architecture;
-using detail_sharp::sharp_veclen;
-using detail_sharp::sharp_get_mlim;
+using detail_sharp::sharp_set_chunksize_min;
+using detail_sharp::sharp_set_nchunks_max;
 
 }
 

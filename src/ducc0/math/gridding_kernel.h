@@ -183,7 +183,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
   {
   private:
     static constexpr auto D=W+3;
-    using T = typename Tsimd::Ts;
+    using T = typename Tsimd::value_type;
     static constexpr auto vlen = Tsimd::size();
     static constexpr auto nvec = (W+vlen-1)/vlen;
 

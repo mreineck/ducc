@@ -313,7 +313,7 @@ struct ft_partial_sph_isometry_plan
             vk[i] = 1;
             vkp1[i] = 0;
             nrm[i] = 1;
-            X[i] = Tv::loadu(&lambda[j+i*Tv::size()]);
+            X[i] = Tv(&lambda[j+i*Tv::size()], element_aligned_tag());
             fj[i] = c[n-1];
             }
           for (int k=n-1; k>0; --k)
@@ -367,9 +367,13 @@ struct ft_partial_sph_isometry_plan
 
       void eval (const vector<double> &x, vector<double> &y) const
         {
-        int j = eval_helper<native_simd<double>,4>(0, x, y);
-        j = eval_helper<native_simd<double>,2>(j, x, y);
-        j = eval_helper<native_simd<double>,1>(j, x, y);
+        int j=0;
+        if constexpr (vectorizable<double>)
+          {
+          j = eval_helper<native_simd<double>,4>(j, x, y);
+          j = eval_helper<native_simd<double>,2>(j, x, y);
+          j = eval_helper<native_simd<double>,1>(j, x, y);
+          }
         eval_helper<simd<double,1>,1>(j, x, y);
         }
     };
