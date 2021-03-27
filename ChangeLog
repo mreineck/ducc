@@ -12,7 +12,7 @@
 - sht:
   - rewrite, moving away from pointers to mav objects. This is not finished,
     and once it is complete, the Python SHT interface will most likely change.
-    So this might probably has to wait for ducc1.
+    So this might have to wait for ducc1.
 
 0.9.0:
 - general:
