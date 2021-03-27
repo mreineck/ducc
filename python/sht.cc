@@ -49,6 +49,8 @@ namespace py = pybind11;
 
 auto None = py::none();
 
+#if 0
+
 void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
   mav<size_t,1> &mval, mav<size_t,1> &mstart)
   {
@@ -157,6 +159,8 @@ void Pyresample_theta(const py::array &legi_, bool npi, bool spi,
   auto lego = to_mav<complex<double>,3>(lego_, true);
   resample_theta(legi, npi, spi, lego, npo, spo, spin, nthreads);
   }
+
+#endif
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -307,12 +311,14 @@ void add_sht(py::module_ &msup)
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
 
+#if 0
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
   m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "lmax"_a, "spin"_a, "nthreads"_a=1);
   m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
+#endif
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

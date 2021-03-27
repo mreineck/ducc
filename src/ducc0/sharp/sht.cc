@@ -1197,6 +1197,8 @@ DUCC0_NOINLINE size_t get_mlim (size_t lmax, size_t spin, double sth, double cth
   return size_t(res+0.5);
   }
 
+#if 0
+
 vector<ringdata> make_ringdata(const mav<double,1> &theta, size_t lmax,
   size_t spin)
   {
@@ -1635,6 +1637,8 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, s
 
   resample_theta(legtmp, true, true, leg, true, true, spin, nthreads);
   }
+#endif
+
 #endif
 
 }}

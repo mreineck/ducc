@@ -276,6 +276,8 @@ template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
   mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi);
 
+#if 0
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (lmidx, ncomp)
   mav<complex<T>,3> &leg, // (nrings, nm, ncomp)
@@ -303,6 +305,8 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
 void prep_for_analysis2(mav<complex<double>,3> &leg, size_t lmax, size_t spin, size_t nthreads);
 void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
   mav<complex<double>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
+
+#endif
 
 template<typename T> void synthesis(const mav<complex<T>,1> &alm, size_t lmax,
   mav<T,2> &map, const string &geometry, size_t nthreads)
@@ -371,6 +375,7 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm1,
 
 }
 
+#if 0
 using detail_sht::SHT_mode;
 using detail_sht::ALM2MAP;
 using detail_sht::MAP2ALM;
@@ -380,6 +385,7 @@ using detail_sht::clenshaw_curtis_weights;
 using detail_sht::prep_for_analysis;
 using detail_sht::prep_for_analysis2;
 using detail_sht::resample_theta;
+#endif
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
 
