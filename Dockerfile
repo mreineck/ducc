@@ -13,3 +13,4 @@ RUN apt-get update && apt-get install -qq \
       clang-11 \
       && rm -rf /var/lib/apt/lists/*
 # RUN pip install numba   # demo dependency
+RUN pip install sphinx pydata-sphinx-theme

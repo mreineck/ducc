@@ -238,13 +238,14 @@ Python interface for total convolution/interpolation library
 
 All arrays containing spherical harmonic coefficients are assumed to have the
 following format:
-- values for m=0, l going from 0 to lmax
-  (these values must have an imaginary part of zero)
-- values for m=1, l going from 1 to lmax
-  (these values can be fully complex)
-- values for m=2, l going from 2 to lmax
-- ...
-- values for m=mmax, l going from mmax to lmax 
+
+  - values for m=0, l going from 0 to lmax
+    (these values must have an imaginary part of zero)
+  - values for m=1, l going from 1 to lmax
+    (these values can be fully complex)
+  - values for m=2, l going from 2 to lmax
+  - ...
+  - values for m=mmax, l going from mmax to lmax 
 
 Error conditions are reported by raising exceptions.
 )""";
