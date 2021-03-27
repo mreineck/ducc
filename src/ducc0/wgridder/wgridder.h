@@ -53,7 +53,7 @@ using namespace std;
 template<typename T> constexpr inline int mysimdlen
   = min<int>(8, native_simd<T>::size());
 
-template<typename T> using mysimd = simd<T,mysimdlen<T>>;
+template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
 
 template<typename T> T sqr(T val) { return val*val; }
 
@@ -94,8 +94,8 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   for (; i+vlen-1<n; i+=vlen)
     {
     auto vang = Tsimd(&buf[i],element_aligned_tag());
-    auto vcos = apply(vang, [](T arg) { return cos(arg); });
-    auto vsin = apply(vang, [](T arg) { return sin(arg); });
+    auto vcos = cos(vang);
+    auto vsin = sin(vang);
     for (size_t ii=0; ii<vlen; ++ii)
       res[i+ii] = complex<T>(vcos[ii], vsin[ii]);
     }
@@ -109,7 +109,7 @@ template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
 #if (!defined(DUCC0_NO_SIMD))
 #if (defined(__AVX__))
 #if 1
-inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
   {
   auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
   auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
@@ -118,7 +118,7 @@ inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
   }
 #else
 // this version may be slightly faster, but this needs more benchmarking
-inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
   {
   auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
   auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
@@ -130,7 +130,7 @@ inline complex<float> hsum_cmplx(native_simd<float> vr, native_simd<float> vi)
   }
 #endif
 #elif defined(__SSE3__)
-inline complex<float> hsum_cmplx(mysimd<float> vr, mysimd<float> vi)
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
   {
   auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
   t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
@@ -1097,7 +1097,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                     }
                   }
                 ri *= imflip;
-                auto r = hsum_cmplx(rr,ri);
+                auto r = hsum_cmplx<Tcalc>(rr,ri);
                 ms_out.v(row, ch) += r;
                 if (lastplane)
                   ms_out.v(row, ch) *= shifting ?

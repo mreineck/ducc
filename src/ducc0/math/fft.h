@@ -771,9 +771,10 @@ template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_it
     ptr[it.oofs(i)] = src[i];
   }
 
-template <typename T, size_t vlen> struct add_vec { using type = simd<T, vlen>; };
+template <typename T, size_t vlen> struct add_vec
+  { using type = typename simd_select<T, vlen>::type; };
 template <typename T, size_t vlen> struct add_vec<Cmplx<T>, vlen>
-  { using type = Cmplx<simd<T, vlen>>; };
+  { using type = Cmplx<typename simd_select<T, vlen>::type>; };
 template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
@@ -981,7 +982,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
       while (it.remaining()>=vlen)
         {
         it.advance(vlen);
-        auto tdatav = reinterpret_cast<simd<T,vlen> *>(storage.data());
+        auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true);
         auto vout = out.vdata();
@@ -1005,7 +1006,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
         if (it.remaining()>=vlen/2)
           {
           it.advance(vlen/2);
-          auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
+          auto tdatav = reinterpret_cast<typename simd_select<T,vlen/2>::type *>(storage.data());
           copy_input(it, in, tdatav);
           plan->exec(tdatav, fct, true);
           auto vout = out.vdata();
@@ -1029,7 +1030,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
         if (it.remaining()>=vlen/4)
           {
           it.advance(vlen/4);
-          auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
+          auto tdatav = reinterpret_cast<typename simd_select<T,vlen/4>::type *>(storage.data());
           copy_input(it, in, tdatav);
           plan->exec(tdatav, fct, true);
           auto vout = out.vdata();
@@ -1117,7 +1118,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
           if (it.remaining()>=vlen/2)
             {
             it.advance(vlen/2);
-            auto tdatav = reinterpret_cast<simd<T,vlen/2> *>(storage.data());
+            auto tdatav = reinterpret_cast<typename simd_select<T,vlen/2>::type *>(storage.data());
             for (size_t j=0; j<vlen/2; ++j)
               tdatav[0][j]=in.craw(it.iofs(j,0)).r;
             {
@@ -1148,7 +1149,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
           if (it.remaining()>=vlen/4)
             {
             it.advance(vlen/4);
-            auto tdatav = reinterpret_cast<simd<T,vlen/4> *>(storage.data());
+            auto tdatav = reinterpret_cast<typename simd_select<T,vlen/4>::type *>(storage.data());
             for (size_t j=0; j<vlen/4; ++j)
               tdatav[0][j]=in.craw(it.iofs(j,0)).r;
             {

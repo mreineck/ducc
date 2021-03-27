@@ -1,6 +1,9 @@
 0.10.0:
 - general:
   - HTML documentation generation using Sphinx
+  - SIMD datatypes are now much more compatible with C++ upcoming SIMD types.
+    The code can be compiled with the types from <experimental/simd> if
+    available, with very small manual changes.
   - reshuffling and renaming of files
 
 - fft:

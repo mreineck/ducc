@@ -371,7 +371,7 @@ struct ft_partial_sph_isometry_plan
           j = eval_helper<native_simd<double>,2>(j, x, y);
           j = eval_helper<native_simd<double>,1>(j, x, y);
           }
-        eval_helper<simd<double,1>,1>(j, x, y);
+        eval_helper<typename simd_select<double,1>::type,1>(j, x, y);
         }
     };
 

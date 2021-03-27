@@ -152,7 +152,7 @@ template<typename T> class ConvolverPlan
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
-    using Tsimd = simd<T, vlen>;
+    using Tsimd = typename simd_select<T, vlen>::type;
 
     size_t nthreads;
     size_t lmax, kmax;
