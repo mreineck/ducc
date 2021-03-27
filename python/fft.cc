@@ -396,9 +396,10 @@ forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of the lengths of the transformed axes.
 out : numpy.ndarray (same shape as `a`, complex type with same accuracy as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
@@ -426,9 +427,10 @@ forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of the lengths of the transformed input axes.
 out : numpy.ndarray (complex type with same accuracy as `a`)
     For the required shape, see the `Returns` section.
@@ -461,9 +463,10 @@ forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of the lengths of the transformed output axes.
 out : numpy.ndarray (real type with same accuracy as `a`)
     For the required shape, see the `Returns` section.
@@ -498,9 +501,10 @@ forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the length of `axis`.
 out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
@@ -529,9 +533,10 @@ axes : list of integers
     If not set, all axes will be transformed.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of the lengths of the transformed axes.
 out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
@@ -561,9 +566,10 @@ axes : list of integers
     If not set, all axes will be transformed.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of the lengths of the transformed axes.
 out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
@@ -589,21 +595,28 @@ type : integer
 axes : list of integers
     The axes along which the transform is carried out.
     If not set, all axes will be transformed.
-inorm : int
-    Normalization type
-      0 : no normalization
-      1 : make transform orthogonal and divide by sqrt(N)
-      2 : divide by N
+inorm : integer
+    the normalization type
+      | 0 : no normalization
+      | 1 : make transform orthogonal and divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of n_i for every transformed axis i.
     n_i is 2*(<axis_length>-1 for type 1 and 2*<axis length>
     for types 2, 3, 4.
     Making the transform orthogonal involves the following additional steps
     for every 1D sub-transform:
-      Type 1 : multiply first and last input value by sqrt(2)
-               divide first and last output value by sqrt(2)
-      Type 2 : divide first output value by sqrt(2)
-      Type 3 : multiply first input value by sqrt(2)
-      Type 4 : nothing
+
+    Type 1
+      multiply first and last input value by sqrt(2);
+      divide first and last output value by sqrt(2)
+    Type 2
+      divide first output value by sqrt(2)
+    Type 3
+      multiply first input value by sqrt(2)
+    Type 4
+      nothing
+
 out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
@@ -630,18 +643,25 @@ axes : list of integers
     If not set, all axes will be transformed.
 inorm : int
     Normalization type
-      0 : no normalization
-      1 : make transform orthogonal and divide by sqrt(N)
-      2 : divide by N
+      | 0 : no normalization
+      | 1 : make transform orthogonal and divide by sqrt(N)
+      | 2 : divide by N
+
     where N is the product of n_i for every transformed axis i.
     n_i is 2*(<axis_length>+1 for type 1 and 2*<axis length>
     for types 2, 3, 4.
     Making the transform orthogonal involves the following additional steps
     for every 1D sub-transform:
-      Type 1 : nothing
-      Type 2 : divide first output value by sqrt(2)
-      Type 3 : multiply first input value by sqrt(2)
-      Type 4 : nothing
+
+    Type 1
+      nothing
+    Type 2
+      divide first output value by sqrt(2)
+    Type 3
+      multiply first input value by sqrt(2)
+    Type 4
+      nothing
+
 out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.

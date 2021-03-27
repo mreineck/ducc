@@ -7,7 +7,7 @@ stages:
   - build_docker
   - testing
 #  - demos
-  - build_tarballs
+  - release
 
 build_docker:
   image: docker
@@ -37,10 +37,22 @@ test_clang:
 #    - python3 setup.py install --user -f && python3 python/demos/wgridder_python_implementations.py
 
 release:
-  stage: build_tarballs
+  stage: release
   script:
     - python3 setup.py sdist
     - 'mv dist/*.tar.gz .'
   artifacts:
     paths:
       - '*.tar.gz'
+
+pages:
+  stage: release
+  script:
+    - DUCC0_OPTIMIZATION=none pip3 install .
+    - make -C doc html
+    - mv doc/build/html public
+  artifacts:
+    paths:
+    - public
+  only:
+    - ducc0
