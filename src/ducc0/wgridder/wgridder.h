@@ -19,8 +19,8 @@
 /* Copyright (C) 2019-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef GRIDDER_CXX_H
-#define GRIDDER_CXX_H
+#ifndef DUCC0_WGRIDDER_H
+#define DUCC0_WGRIDDER_H
 
 #include <iostream>
 #include <algorithm>

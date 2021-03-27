@@ -22,7 +22,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
-#include "python/gridder_cxx.h"
+#include "ducc0/wgridder/wgridder.h"
 
 namespace ducc0 {
 

@@ -33,7 +33,7 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/sharp/sht.h"
-#include "python/alm.h"
+#include "ducc0/sharp/alm.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/math/math_utils.h"
 
