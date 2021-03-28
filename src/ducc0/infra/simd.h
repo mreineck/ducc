@@ -22,7 +22,7 @@
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
-#if __has_include(<experimental/simd>)
+#if 0 //__has_include(<experimental/simd>)
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
@@ -50,8 +50,7 @@ template<typename T, int N> constexpr bool simd_exists_h()
         return true;
   return false;
   }
-template<typename T, int N>
-constexpr inline bool simd_exists = simd_exists_h<T,N>();
+template<typename T, int N> constexpr inline bool simd_exists = simd_exists_h<T,N>();
 
 template<typename Func, typename T, typename Abi> inline stdx::simd<T, Abi> apply(stdx::simd<T, Abi> in, Func func)
   {
