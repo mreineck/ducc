@@ -41,8 +41,17 @@ template<typename T, int len> struct simd_select
 
 using stdx::element_aligned_tag;
 template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
+
+template<typename T, int N> constexpr bool simd_exists_h()
+  {
+  if constexpr (N>1)
+    if constexpr (vectorizable<T>)
+      if constexpr (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>)
+        return true;
+  return false;
+  }
 template<typename T, int N>
-constexpr inline bool simd_exists = (N>1) && vectorizable<T> && (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>);
+constexpr inline bool simd_exists = simd_exists_h<T,N>();
 
 template<typename Func, typename T, typename Abi> inline stdx::simd<T, Abi> apply(stdx::simd<T, Abi> in, Func func)
   {
