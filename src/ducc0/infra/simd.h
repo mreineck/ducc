@@ -30,36 +30,47 @@
 #include <experimental/simd>
 
 namespace ducc0 {
+
+namespace detail_simd {
+
 namespace stdx=std::experimental;
 using stdx::native_simd;
-template<typename T, int len> using simd = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>;
 
-using stdx::reduce;
-using stdx::any_of;
-using stdx::none_of;
-using stdx::all_of;
+template<typename T, int len> struct simd_select
+  { using type = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>; };
+
 using stdx::element_aligned_tag;
 template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
-template<typename T, int N>
-constexpr inline bool simd_exists = (N>1) && vectorizable<T> && (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>);
-using std::abs;
-using std::sqrt;
-using std::max;
 
-template<typename Func, typename T, int vlen> simd<T, vlen> apply(simd<T, vlen> in, Func func)
+template<typename T, int N> constexpr bool simd_exists_h()
   {
-  simd<T, vlen> res;
+  if constexpr (N>1)
+    if constexpr (vectorizable<T>)
+      if constexpr (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>)
+        return true;
+  return false;
+  }
+template<typename T, int N> constexpr inline bool simd_exists = simd_exists_h<T,N>();
+
+template<typename Func, typename T, typename Abi> inline stdx::simd<T, Abi> apply(stdx::simd<T, Abi> in, Func func)
+  {
+  stdx::simd<T, Abi> res;
   for (size_t i=0; i<in.size(); ++i)
     res[i] = func(in[i]);
   return res;
   }
-template<typename Func, typename T> native_simd<T> apply(native_simd<T> in, Func func)
-  {
-  native_simd<T> res;
-  for (size_t i=0; i<in.size(); ++i)
-    res[i] = func(in[i]);
-  return res;
-  }
+template<typename T, typename Abi> inline stdx::simd<T,Abi> sin(stdx::simd<T,Abi> in)
+  { return apply(in,[](T v){return sin(v);}); }
+template<typename T, typename Abi> inline stdx::simd<T,Abi> cos(stdx::simd<T,Abi> in)
+  { return apply(in,[](T v){return cos(v);}); }
+
+}
+
+using detail_simd::element_aligned_tag;
+using detail_simd::native_simd;
+using detail_simd::simd_select;
+using detail_simd::simd_exists;
+using detail_simd::vectorizable;
 
 }
 
@@ -509,30 +520,20 @@ template<typename T> using native_simd = vtp<T,1>;
 #else // DUCC0_NO_SIMD is defined
 template<typename T> using native_simd = vtp<T,1>;
 #endif
+template<typename T, int len> struct simd_select
+  { using type = vtp<T, len>; };
+template<typename T, size_t len> inline vtp<T,len> sin(vtp<T,len> in)
+  { return apply(in,[](T v){return std::sin(v);}); }
+template<typename T, size_t len> inline vtp<T,len> cos(vtp<T,len> in)
+  { return apply(in,[](T v){return std::cos(v);}); }
 
 }
 
 using detail_simd::element_aligned_tag;
 using detail_simd::native_simd;
-template<typename T, size_t len> using simd = detail_simd::vtp<T, len>;
+using detail_simd::simd_select;
 using detail_simd::simd_exists;
-using detail_simd::reduce;
-using detail_simd::apply;
-using detail_simd::max;
-using detail_simd::abs;
-using detail_simd::sqrt;
-using detail_simd::any_of;
-using detail_simd::none_of;
-using detail_simd::all_of;
 using detail_simd::vectorizable;
-
-// since we are explicitly introducing a few names that are also available in
-// std::, we need to import them from std::as well, otherwise name resolution
-// can fail in certain circumstances.
-
-using std::abs;
-using std::sqrt;
-using std::max;
 
 }
 #endif

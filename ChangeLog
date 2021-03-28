@@ -1,3 +1,22 @@
+0.10.0:
+- general:
+  - HTML documentation generation using Sphinx
+  - SIMD datatypes are now much more compatible with C++ upcoming SIMD types.
+    The code can be compiled with the types from <experimental/simd> if
+    available, with very small manual changes.
+  - reshuffling and renaming of files
+
+- fft:
+  - 1D transforms have been rewritten using a much more flexible class hierarchy
+    which allows more optimizations. For example 1D FFTs can now be partially
+    multi-threaded and the Bluestein algorithm can be used as a single pass
+    instead of just replacing a whole transform.
+
+- sht:
+  - rewrite, moving away from pointers to mav objects. This is not finished,
+    and once it is complete, the Python SHT interface will most likely change.
+    So this might have to wait for ducc1.
+
 0.9.0:
 - general:
   - improved and faster computation of Gauss-Legendre nodes and weights

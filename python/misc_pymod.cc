@@ -35,7 +35,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/bindings/pybind_utils.h"
-#include "python/alm.h"
+#include "ducc0/sharp/alm.h"
 
 namespace ducc0 {
 

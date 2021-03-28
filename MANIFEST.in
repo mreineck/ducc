@@ -43,6 +43,7 @@ include src/ducc0/math/space_filling.h
 include src/ducc0/math/unity_roots.h
 include src/ducc0/math/vec3.h
 
+include src/ducc0/sharp/alm.h
 include src/ducc0/sharp/sht.h
 include src/ducc0/sharp/sht.cc
 include src/ducc0/sharp/sharp_almhelpers.cc
@@ -52,22 +53,22 @@ include src/ducc0/sharp/sharp_geomhelpers.cc
 include src/ducc0/sharp/sharp_geomhelpers.h
 include src/ducc0/sharp/sharp.h
 include src/ducc0/sharp/sharp_internal.h
+include src/ducc0/sharp/totalconvolve.h
 
 include src/ducc0/healpix/healpix_base.cc
 include src/ducc0/healpix/healpix_base.h
 include src/ducc0/healpix/healpix_tables.cc
 include src/ducc0/healpix/healpix_tables.h
 
-include python/fft.cc
-include python/sht.cc
-include python/healpix.cc
-include python/gridder_cxx.h
-include python/wgridder.cc
-include python/alm.h
-include python/totalconvolve.h
-include python/totalconvolve.cc
-include python/misc.cc
-include python/pointingprovider.cc
+include src/ducc0/wgridder/wgridder.h
+
+include python/fft_pymod.cc
+include python/sht_pymod.cc
+include python/healpix_pymod.cc
+include python/wgridder_pymod.cc
+include python/totalconvolve_pymod.cc
+include python/misc_pymod.cc
+include python/pointingprovider_pymod.cc
 
 include python/test/test_fft.py
 include python/test/test_healpix.py

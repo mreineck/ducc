@@ -22,7 +22,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
-#include "python/totalconvolve.h"
+#include "ducc0/sharp/totalconvolve.h"
 
 namespace ducc0 {
 

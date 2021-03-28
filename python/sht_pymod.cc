@@ -190,7 +190,7 @@ template<typename T> class py_sharpjob
       {
       MR_assert((nrings>0)&&(nphi>0),"bad grid dimensions");
       npix_=nrings*nphi;
-      ginfo = sharp_make_gauss_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "GL");
       }
     void set_healpix_geometry(int64_t nside)
       {
@@ -203,35 +203,35 @@ template<typename T> class py_sharpjob
       MR_assert(nrings>0,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_fejer1_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "F1");
       }
     void set_fejer2_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>0,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_fejer2_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "F2");
       }
     void set_cc_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>0,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_cc_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "CC");
       }
     void set_dh_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>1,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_dh_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "DH");
       }
     void set_mw_geometry(int64_t nrings, int64_t nphi)
       {
       MR_assert(nrings>0,"bad nrings value");
       MR_assert(nphi>0,"bad nphi value");
       npix_=nrings*nphi;
-      ginfo = sharp_make_mw_geom_info (nrings, nphi, 0., 1, nphi);
+      ginfo = sharp_make_2d_geom_info (nrings, nphi, 0., 1, nphi, "MW", false);
       }
     void set_triangular_alm_info (int64_t lmax, int64_t mmax)
       {

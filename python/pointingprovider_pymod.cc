@@ -96,9 +96,8 @@ template<typename T> class PointingProvider
             omega[ii] = rangle[idx[ii]];
             xsin[ii] = rxsin[idx[ii]];
             }
-          auto mysin = [](double arg) { return sin(arg); };
-          w1 = apply((1.-frac)*omega, mysin)*xsin;
-          w2 = apply((frac*omega),mysin)*xsin;
+          w1 = sin((1.-frac)*omega)*xsin;
+          w2 = sin(frac*omega)*xsin;
           for (size_t ii=0; ii<vlen; ++ii)
             {
             if (rotflip[idx[ii]]) w1[ii]=-w1[ii];

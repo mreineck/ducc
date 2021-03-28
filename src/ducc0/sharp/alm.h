@@ -27,12 +27,9 @@
 #ifndef DUCC0_ALM_H
 #define DUCC0_ALM_H
 
-#if 1
 #include <complex>
 #include <cmath>
 #include "ducc0/infra/threading.h"
-#endif
-
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/error_handling.h"
 
@@ -226,7 +223,7 @@ template<typename T> class Alm: public Alm_Base
       }
   };
 
-#if 1
+
 // the following struct is an adaptation of the algorithms found in
 // https://github.com/MikaelSlevinsky/FastTransforms
 
@@ -374,7 +371,7 @@ struct ft_partial_sph_isometry_plan
           j = eval_helper<native_simd<double>,2>(j, x, y);
           j = eval_helper<native_simd<double>,1>(j, x, y);
           }
-        eval_helper<simd<double,1>,1>(j, x, y);
+        eval_helper<typename simd_select<double,1>::type,1>(j, x, y);
         }
     };
 
@@ -534,14 +531,11 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
           alm(l,m) *= expang;
         }
   }
-#endif
 }
 
 using detail_alm::Alm_Base;
 using detail_alm::Alm;
-#if 1
 using detail_alm::rotate_alm;
-#endif
 }
 
 #endif

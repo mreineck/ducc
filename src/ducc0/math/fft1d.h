@@ -217,35 +217,41 @@ template <typename Tfs> class cfftpass
                    : exec_<false>(in1, copy1, buf1); \
         } \
       if constexpr (simd_exists<Tfs,8>) \
-        if (hcin==typeid(Cmplx<simd<Tfs,8>> *).hash_code()) \
+        { \
+        using Tcv = Cmplx<typename simd_select<Tfs,8>::type>; \
+        if (hcin==typeid(Tcv *).hash_code()) \
           { \
-          using Tcv = Cmplx<simd<Tfs,8>>; \
           auto in1 = any_cast<Tcv *>(in); \
           auto copy1 = any_cast<Tcv *>(copy); \
           auto buf1 = any_cast<Tcv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       if constexpr (simd_exists<Tfs,4>) \
-        if (hcin==typeid(Cmplx<simd<Tfs,4>> *).hash_code()) \
+        { \
+        using Tcv = Cmplx<typename simd_select<Tfs,4>::type>; \
+        if (hcin==typeid(Tcv *).hash_code()) \
           { \
-          using Tcv = Cmplx<simd<Tfs,4>>; \
           auto in1 = any_cast<Tcv *>(in); \
           auto copy1 = any_cast<Tcv *>(copy); \
           auto buf1 = any_cast<Tcv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       if constexpr (simd_exists<Tfs,2>) \
-        if (hcin==typeid(Cmplx<simd<Tfs,2>> *).hash_code()) \
+        { \
+        using Tcv = Cmplx<typename simd_select<Tfs,2>::type>; \
+        if (hcin==typeid(Tcv *).hash_code()) \
           { \
-          using Tcv = Cmplx<simd<Tfs,2>>; \
           auto in1 = any_cast<Tcv *>(in); \
           auto copy1 = any_cast<Tcv *>(copy); \
           auto buf1 = any_cast<Tcv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       MR_fail("impossible vector length requested"); \
       }
 
@@ -1457,7 +1463,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
   private:
     static_assert(simd_exists<Tfs, vlen>, "bad vlen");
     using typename cfftpass<Tfs>::Tcs;
-    using Tfv=simd<Tfs, vlen>;
+    using Tfv=typename simd_select<Tfs, vlen>::type;
     using Tcv=Cmplx<Tfv>;
 
     size_t ip;
@@ -1661,35 +1667,41 @@ template <typename Tfs> class rfftpass
                    : exec_<false>(in1, copy1, buf1); \
         } \
       if constexpr (simd_exists<Tfs,8>) \
-        if (hcin==typeid(simd<Tfs,8> *).hash_code()) \
+        { \
+        using Tfv = typename simd_select<Tfs,8>::type; \
+        if (hcin==typeid(Tfv *).hash_code()) \
           { \
-          using Tfv = simd<Tfs,8>; \
           auto in1 = any_cast<Tfv *>(in); \
           auto copy1 = any_cast<Tfv *>(copy); \
           auto buf1 = any_cast<Tfv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       if constexpr (simd_exists<Tfs,4>) \
-        if (hcin==typeid(simd<Tfs,4> *).hash_code()) \
+        { \
+        using Tfv = typename simd_select<Tfs,4>::type; \
+        if (hcin==typeid(Tfv *).hash_code()) \
           { \
-          using Tfv = simd<Tfs,4>; \
           auto in1 = any_cast<Tfv *>(in); \
           auto copy1 = any_cast<Tfv *>(copy); \
           auto buf1 = any_cast<Tfv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       if constexpr (simd_exists<Tfs,2>) \
-        if (hcin==typeid(simd<Tfs,2> *).hash_code()) \
+        { \
+        using Tfv = typename simd_select<Tfs,2>::type; \
+        if (hcin==typeid(Tfv *).hash_code()) \
           { \
-          using Tfv = simd<Tfs,2>; \
           auto in1 = any_cast<Tfv *>(in); \
           auto copy1 = any_cast<Tfv *>(copy); \
           auto buf1 = any_cast<Tfv *>(buf); \
           return fwd ? exec_<true>(in1, copy1, buf1) \
                      : exec_<false>(in1, copy1, buf1); \
           } \
+        } \
       MR_fail("impossible vector length requested"); \
       }
 

@@ -14,13 +14,13 @@
 #include "ducc0/healpix/healpix_base.cc"
 
 #include <pybind11/pybind11.h>
-#include "python/sht.cc"
-#include "python/fft.cc"
-#include "python/totalconvolve.cc"
-#include "python/wgridder.cc"
-#include "python/healpix.cc"
-#include "python/misc.cc"
-#include "python/pointingprovider.cc"
+#include "python/sht_pymod.cc"
+#include "python/fft_pymod.cc"
+#include "python/totalconvolve_pymod.cc"
+#include "python/wgridder_pymod.cc"
+#include "python/healpix_pymod.cc"
+#include "python/misc_pymod.cc"
+#include "python/pointingprovider_pymod.cc"
 
 using namespace ducc0;
 

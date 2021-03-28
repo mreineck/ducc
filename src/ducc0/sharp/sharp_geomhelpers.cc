@@ -199,92 +199,7 @@ unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside,
   return sharp_make_subset_healpix_geom_info(nside, stride, 4*nside-1, nullptr, weight);
   }
 
-unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t nphi, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  {
-  vector<size_t> nph(nrings, nphi);
-  vector<double> phi0_(nrings, phi0);
-  vector<ptrdiff_t> ofs(nrings);
-
-  ducc0::GL_Integrator integ(nrings);
-  auto theta = integ.coords();
-  auto weight = integ.weights();
-  for (size_t m=0; m<nrings; ++m)
-    {
-    theta[m] = acos(-theta[m]);
-    ofs[m]=ptrdiff_t(m)*stride_lat;
-    weight[m]*=2*pi/nphi;
-    }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
-  }
-
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  {
-  vector<double> theta(nrings), weight(nrings), phi0_(nrings, phi0);
-  vector<size_t> nph(nrings, ppring);
-  vector<ptrdiff_t> ofs(nrings);
-
-  weight[0]=2.;
-  for (size_t k=1; k<=(nrings-1)/2; ++k)
-    {
-    weight[2*k-1]=2./(1.-4.*k*k)*cos((k*pi)/nrings);
-    weight[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
-    }
-  if ((nrings&1)==0) weight[nrings-1]=0.;
-  {
-  pocketfft_r<double> plan(nrings);
-  plan.exec(weight.data(), 1., false);
-  }
-
-  for (size_t m=0; m<(nrings+1)/2; ++m)
-    {
-    theta[m]=pi*(m+0.5)/nrings;
-    theta[nrings-1-m]=pi-theta[m];
-    ofs[m]=ptrdiff_t(m)*stride_lat;
-    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
-    weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(nrings*nph[m]);
-    }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
-  }
-
-/* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  {
-  vector<double> theta(nrings), weight(nrings,0.), phi0_(nrings, phi0);
-  vector<size_t> nph(nrings, ppring);
-  vector<ptrdiff_t> ofs(nrings);
-
-  size_t n=nrings-1;
-  double dw=-1./(n*n-1.+(n&1));
-  weight[0]=2.+dw;
-  for (size_t k=1; k<=(n/2-1); ++k)
-    weight[2*k-1]=2./(1.-4.*k*k) + dw;
-//FIXME if (n>1) ???
-  weight[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
-  {
-  pocketfft_r<double> plan(n);
-  plan.exec(weight.data(), 1., false);
-  }
-  weight[n]=weight[0];
-
-  for (size_t m=0; m<(nrings+1)/2; ++m)
-    {
-    theta[m]=pi*m/(nrings-1.);
-    if (theta[m]<1e-15) theta[m]=1e-15;
-    theta[nrings-1-m]=pi-theta[m];
-    ofs[m]=ptrdiff_t(m)*stride_lat;
-    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
-    weight[m]=weight[nrings-1-m]=weight[m]*2*pi/(n*nph[m]);
-    }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
-  }
-
 static vector<double> get_dh_weights(size_t nrings)
   {
   vector<double> weight(nrings);
@@ -293,68 +208,128 @@ static vector<double> get_dh_weights(size_t nrings)
   for (size_t k=1; k<=(nrings/2-1); ++k)
     weight[2*k-1]=2./(1.-4.*k*k);
   weight[2*(nrings/2)-1]=(nrings-3.)/(2*(nrings/2)-1) -1.;
-  {
   pocketfft_r<double> plan(nrings);
   plan.exec(weight.data(), 1., false);
-  }
   return weight;
   }
 
-/* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
+void get_gridinfo(const string &type,
+  mav<double, 1> &theta, mav<double, 1> &wgt)
   {
-  vector<double> theta(nrings), weight(get_dh_weights(nrings+1)), phi0_(nrings, phi0);
-  vector<size_t> nph(nrings, ppring);
-  vector<ptrdiff_t> ofs(nrings);
+  auto nrings = theta.shape(0);
+  bool do_wgt = (wgt.shape(0)!=0);
+  if (do_wgt)
+    MR_assert(wgt.shape(0)==nrings, "array size mismatch");
 
-  for (size_t m=0; m<nrings; ++m)
-    weight[m]=weight[m+1];
-
-  for (size_t m=0; m<(nrings+1)/2; ++m)
+  if (type=="GL") // Gauss-Legendre
     {
-    theta[m]=pi*(m+1)/(nrings+1.);
-    theta[nrings-1-m]=pi-theta[m];
-    ofs[m]=ptrdiff_t(m)*stride_lat;
-    ofs[nrings-1-m]=ptrdiff_t(nrings-1-m)*stride_lat;
-    weight[m]=weight[nrings-1-m]=weight[m]*2*pi/((nrings+1)*nph[m]);
+    ducc0::GL_Integrator integ(nrings);
+    auto cth = integ.coords();
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m) = acos(-cth[m]);
+    if (do_wgt)
+      {
+      auto xwgt = integ.weights();
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = 2*pi*xwgt[m];
+      }
     }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
+  else if (type=="F1") // Fejer 1
+    {
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=pi*(m+0.5)/nrings;
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+    if (do_wgt)
+      {
+      /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
+      vector<double> xwgt(nrings);
+      xwgt[0]=2.;
+      for (size_t k=1; k<=(nrings-1)/2; ++k)
+        {
+        xwgt[2*k-1]=2./(1.-4.*k*k)*cos((k*pi)/nrings);
+        xwgt[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
+        }
+      if ((nrings&1)==0) xwgt[nrings-1]=0.;
+      pocketfft_r<double> plan(nrings);
+      plan.exec(xwgt.data(), 1., false);
+      for (size_t m=0; m<(nrings+1)/2; ++m)
+        wgt.v(m)=wgt.v(nrings-1-m)=xwgt[m]*2*pi/nrings;
+      }
+    }
+  else if (type=="CC") // Clenshaw-Curtis
+    {
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=max(1e-15,pi*m/(nrings-1.));
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+    if (do_wgt)
+      {
+      /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
+      size_t n=nrings-1;
+      double dw=-1./(n*n-1.+(n&1));
+      vector<double> xwgt(nrings);
+      xwgt[0]=2.+dw;
+      for (size_t k=1; k<=(n/2-1); ++k)
+        xwgt[2*k-1]=2./(1.-4.*k*k) + dw;
+      //FIXME if (n>1) ???
+      xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
+      pocketfft_r<double> plan(n);
+      plan.exec(xwgt.data(), 1., false);
+      for (size_t m=0; m<(nrings+1)/2; ++m)
+        wgt.v(m)=wgt.v(nrings-1-m)=xwgt[m]*2*pi/n;
+      }
+    }
+  else if (type=="F2") // Fejer 2
+    {
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(m+1)/(nrings+1.);
+    if (do_wgt)
+      {
+      auto xwgt = get_dh_weights(nrings+1);
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = xwgt[m+1]*2*pi/(nrings+1);
+      }
+    }
+  else if (type=="DH") // Driscoll-Healy
+    {
+    for (size_t m=0; m<nrings; ++m)
+    theta.v(m) = m*pi/nrings;
+    if (do_wgt)
+      {
+      auto xwgt = get_dh_weights(nrings);
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = xwgt[m]*2*pi/nrings;
+      }
+    }
+  else if (type=="MW") // McEwen-Wiaux
+    {
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(2.*m+1.)/(2.*nrings-1.);
+    MR_assert(!do_wgt, "no quadrature weights exist for the MW grid");
+    }
+  else
+    MR_fail("unsupported grid type");
   }
 
-unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
+unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
+  (size_t nrings, size_t ppring, double phi0, ptrdiff_t stride_lon,
+  ptrdiff_t stride_lat, const string &type, bool with_weight)
   {
-  vector<double> theta(nrings), weight(get_dh_weights(nrings)), phi0_(nrings, phi0);
   vector<size_t> nph(nrings, ppring);
+  vector<double> phi0_(nrings, phi0);
   vector<ptrdiff_t> ofs(nrings);
-
+  mav<double,1> theta({nrings}), weight({with_weight ? nrings : 0});
+  get_gridinfo(type, theta, weight);
   for (size_t m=0; m<nrings; ++m)
     {
-    theta[m] = m*pi/nrings;
-    ofs[m] = ptrdiff_t(m)*stride_lat;
-    weight[m]*=2*pi/(nrings*ppring);
-    }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), weight.data());
-  }
-
-unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  {
-  vector<double> theta(nrings), phi0_(nrings, phi0);
-  vector<size_t> nph(nrings, ppring);
-  vector<ptrdiff_t> ofs(nrings);
-
-  for (size_t m=0; m<nrings; ++m)
-    {
-    theta[m]=pi*(2.*m+1.)/(2.*nrings-1.);
-    if (theta[m]>pi-1e-15) theta[m]=pi-1e-15;
     ofs[m]=ptrdiff_t(m)*stride_lat;
+    if (with_weight) weight.v(m) /= ppring;
     }
-
-  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride_lon, phi0_.data(), theta.data(), nullptr);
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(),
+    stride_lon, phi0_.data(), theta.cdata(), with_weight ? weight.cdata() : nullptr);
   }
 
 }}
