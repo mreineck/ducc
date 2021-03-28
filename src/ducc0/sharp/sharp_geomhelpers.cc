@@ -316,7 +316,7 @@ void get_gridinfo(const string &type,
 
 unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
   (size_t nrings, size_t ppring, double phi0, ptrdiff_t stride_lon,
-  ptrdiff_t stride_lat, const string &type, bool with_weight=true)
+  ptrdiff_t stride_lat, const string &type, bool with_weight)
   {
   vector<size_t> nph(nrings, ppring);
   vector<double> phi0_(nrings, phi0);
@@ -331,29 +331,5 @@ unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(),
     stride_lon, phi0_.data(), theta.cdata(), with_weight ? weight.cdata() : nullptr);
   }
-
-unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "GL"); }
-
-unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "F1"); }
-
-unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "CC"); }
-
-unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "F2"); }
-
-unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "DH"); }
-
-unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat)
-  { return sharp_make_2d_geom_info(nrings, ppring, phi0, stride_lon, stride_lat, "MW", false); }
 
 }}

@@ -107,104 +107,35 @@ std::unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t n
 static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (size_t nside, ptrdiff_t stride)
   { return sharp_make_weighted_healpix_geom_info (nside, stride, nullptr); }
 
-/*! Creates a geometry information describing a Gaussian map with \a nrings
-    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
-    pixel in each ring is \a phi0 (in radians). The index difference between
-    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
-    difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_gauss_geom_info (size_t nrings, size_t nphi, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
-/*! Creates a geometry information describing an ECP map with \a nrings
-    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
-    pixel in each ring is \a phi0 (in radians). The index difference between
-    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
-    difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \note The spacing of pixel centers is equidistant in colatitude and
-      longitude.
-    \note The sphere is pixelized in a way that the colatitude of the first ring
-      is \a 0.5*(pi/nrings) and the colatitude of the last ring is
-      \a pi-0.5*(pi/nrings). There are no pixel centers at the poles.
-    \note This grid corresponds to Fejer's first rule.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_fejer1_geom_info (size_t nrings, size_t nphi, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
-/*! Creates a geometry information describing an ECP map with \a nrings
-    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
-    pixel in each ring is \a phi0 (in radians). The index difference between
-    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
-    difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \note The spacing of pixel centers is equidistant in colatitude and
-      longitude.
-    \note The sphere is pixelized in a way that the colatitude of the first ring
-      is \a 0 and that of the last ring is \a pi.
-    \note This grid corresponds to Clenshaw-Curtis integration.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_cc_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
-/*! Creates a geometry information describing an ECP map with \a nrings
-    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
-    pixel in each ring is \a phi0 (in radians). The index difference between
-    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
-    difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \note The spacing of pixel centers is equidistant in colatitude and
-      longitude.
-    \note The sphere is pixelized in a way that the colatitude of the first ring
-      is \a pi/(nrings+1) and that of the last ring is \a pi-pi/(nrings+1).
-    \note This grid corresponds to Fejer's second rule.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_fejer2_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
-/*! Creates a geometry information describing a Driscoll-Healy map with \a nrings
-    iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
-    pixel in each ring is \a phi0 (in radians). The index difference between
-    two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
-    difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \note The spacing of pixel centers is equidistant in colatitude and
-      longitude.
-    \note The sphere is pixelized in a way that the colatitude of the first ring
-      is 0 and that of the last ring is \a pi-pi/nrings.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_dh_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
 /*! Creates a geometry information describing a map with \a nrings
     iso-latitude rings and \a nphi pixels per ring. The azimuth of the first
     pixel in each ring is \a phi0 (in radians). The index difference between
     two adjacent pixels in an iso-latitude ring is \a stride_lon, the index
     difference between the two start pixels in consecutive iso-latitude rings
-    is \a stride_lat.
-    \note The spacing of pixel centers is equidistant in colatitude and
-      longitude.
-    \note The sphere is pixelized in a way that the colatitude of the first ring
-      is \a pi/(2*nrings-1) and that of the last ring is \a pi.
-    \note This is the grid introduced by McEwen & Wiaux 2011.
-    \note This function does \e not define any quadrature weights.
-    \ingroup geominfogroup */
-std::unique_ptr<sharp_geom_info> sharp_make_mw_geom_info (size_t nrings, size_t ppring, double phi0,
-  ptrdiff_t stride_lon, ptrdiff_t stride_lat);
-
+    is \a stride_lat. If \a with_weight is true, ring weights for analysis are
+    computed.
+    The ring colatitudes depend on \type:
+     - "GL" : rings are located at Gauss-Legendre quadrature nodes
+     - "CC" : rings are placed according to the Clenshaw-Curtis quadrature rule,
+              i.e. theta_i = i*pi/(nrings-1)
+     - "F1" : rings are placed according to Fejer's first rule,
+              i.e. theta_i = (i+0.5)*(pi/nrings)
+     - "F2" : rings are placed according to Fejer's second rule,
+              i.e. theta_i = i*pi/(nrings+1)
+     - "DH" : rings are placed according to the Driscoll-Healy scheme,
+              i.e. theta_i = i*pi/nrings
+     - "MW" : rings are placed according to the McEwen-Wiaux scheme,
+              i.e. theta_i = (i+0.5)*2*pi/(2*nrings-1) */
+std::unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
+  (size_t nrings, size_t ppring, double phi0, ptrdiff_t stride_lon,
+  ptrdiff_t stride_lat, const string &type, bool with_weight=true);
 }
 
 using detail_sharp::sharp_standard_geom_info;
 using detail_sharp::sharp_make_subset_healpix_geom_info;
 using detail_sharp::sharp_make_weighted_healpix_geom_info;
 using detail_sharp::sharp_make_healpix_geom_info;
-using detail_sharp::sharp_make_gauss_geom_info;
-using detail_sharp::sharp_make_fejer1_geom_info;
-using detail_sharp::sharp_make_fejer2_geom_info;
-using detail_sharp::sharp_make_cc_geom_info;
-using detail_sharp::sharp_make_dh_geom_info;
-using detail_sharp::sharp_make_mw_geom_info;
+using detail_sharp::sharp_make_2d_geom_info;
 
 }
 
