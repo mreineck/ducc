@@ -373,9 +373,9 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
 const char *fft_DS = R"""(Fast Fourier and Hartley transforms.
 
 This module supports
-- single, double, and long double precision
-- complex and real-valued transforms
-- multi-dimensional transforms
+ - single, double, and long double precision
+ - complex and real-valued transforms
+ - multi-dimensional transforms
 
 For two- and higher-dimensional transforms the code will use SSE2 and AVX
 vector instructions for faster execution if these are supported by the CPU and
