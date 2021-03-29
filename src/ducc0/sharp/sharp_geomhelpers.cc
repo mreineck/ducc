@@ -21,7 +21,7 @@
 /*! \file sharp_geomhelpers.cc
  *  Spherical transform library
  *
- *  Copyright (C) 2006-2020 Max-Planck-Society
+ *  Copyright (C) 2006-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -107,8 +107,11 @@ template<typename T> void sharp_standard_geom_info::tclear(T *map) const
 
 void sharp_standard_geom_info::clear_map (const any &map) const
   {
-  if (map.type()==typeid(double *)) tclear(any_cast<double *>(map));
-  else if (map.type()==typeid(float *)) tclear(any_cast<float *>(map));
+  auto hc = map.type().hash_code();
+  if (hc==typeid(double *).hash_code())
+    tclear(any_cast<double *>(map));
+  else if (hc==typeid(float *).hash_code())
+    tclear(any_cast<float *>(map));
   else MR_fail("bad map data type");
   }
 
@@ -122,8 +125,11 @@ template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t i
 //virtual
 void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const mav<double,1> &ringtmp, const any &map) const
   {
-  if (map.type()==typeid(double *)) tadd(weighted, iring, ringtmp, any_cast<double *>(map));
-  else if (map.type()==typeid(float *)) tadd(weighted, iring, ringtmp, any_cast<float *>(map));
+  auto hc = map.type().hash_code();
+  if (hc==typeid(double *).hash_code())
+    tadd(weighted, iring, ringtmp, any_cast<double *>(map));
+  else if (hc==typeid(float *).hash_code())
+    tadd(weighted, iring, ringtmp, any_cast<float *>(map));
   else MR_fail("bad map data type");
   }
 template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, mav<double,1> &ringtmp) const
@@ -136,10 +142,15 @@ template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t i
 //virtual
 void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, mav<double,1> &ringtmp) const
   {
-  if (map.type()==typeid(const double *)) tget(weighted, iring, any_cast<const double *>(map), ringtmp);
-  else if (map.type()==typeid(double *)) tget(weighted, iring, any_cast<double *>(map), ringtmp);
-  else if (map.type()==typeid(const float *)) tget(weighted, iring, any_cast<const float *>(map), ringtmp);
-  else if (map.type()==typeid(float *)) tget(weighted, iring, any_cast<float *>(map), ringtmp);
+  auto hc = map.type().hash_code();
+  if (hc==typeid(const double *).hash_code())
+    tget(weighted, iring, any_cast<const double *>(map), ringtmp);
+  else if (hc==typeid(double *).hash_code())
+    tget(weighted, iring, any_cast<double *>(map), ringtmp);
+  else if (hc==typeid(const float *).hash_code())
+    tget(weighted, iring, any_cast<const float *>(map), ringtmp);
+  else if (hc==typeid(float *).hash_code())
+    tget(weighted, iring, any_cast<float *>(map), ringtmp);
   else MR_fail("bad map data type",map.type().name());
   }
 
