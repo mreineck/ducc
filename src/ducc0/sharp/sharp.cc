@@ -30,7 +30,6 @@
 #include <memory>
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/fft1d.h"
-#include "ducc0/sharp/sharp_internal.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/infra/threading.h"
@@ -184,221 +183,238 @@ struct ringhelper
     }
   };
 
-void sharp_job::init_output()
+class sharp_job
   {
-  if (flags&SHARP_ADD) return;
-  if (type == SHARP_MAP2ALM)
-    for (size_t i=0; i<alm.size(); ++i)
-      ainfo.clear_alm (alm[i]);
-  else
-    for (size_t i=0; i<map.size(); ++i)
-      ginfo.clear_map(map[i]);
-  }
+  private:
+    std::vector<std::any> alm;
+    std::vector<std::any> map;
+    sharp_jobtype type;
+    size_t spin;
+    size_t flags;
+    const sharp_geom_info &ginfo;
+    const sharp_alm_info &ainfo;
+    int nthreads;
 
-DUCC0_NOINLINE void sharp_job::alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp,
-  const std::vector<double> norm_l)
-  {
-  size_t nalm_ = nalm();
-  size_t lmax = ainfo.lmax();
-  if (type!=SHARP_MAP2ALM)
-    {
-    auto m=ainfo.mval(mi);
-    auto lmin=(m<spin) ? spin : m;
-    for (size_t i=0; i<nalm_; ++i)
+    size_t nmaps() const { return 1+(spin>0); }
+    size_t nalm() const { return (type==SHARP_ALM2MAP_DERIV1) ? 1 : (1+(spin>0)); }
+
+    void init_output()
       {
-      auto sub = subarray<1>(almtmp, {0,i},{MAXIDX,0});
-      ainfo.get_alm(mi, alm[i], sub);
+      if (flags&SHARP_ADD) return;
+      if (type == SHARP_MAP2ALM)
+        for (size_t i=0; i<alm.size(); ++i)
+          ainfo.clear_alm (alm[i]);
+      else
+        for (size_t i=0; i<map.size(); ++i)
+          ginfo.clear_map(map[i]);
       }
-    for (auto l=m; l<lmin; ++l)
-      for (size_t i=0; i<nalm_; ++i)
-        almtmp.v(l,i) = 0;
-    for (size_t i=0; i<nalm_; ++i)
-      almtmp.v(lmax+1,i) = 0;
-    if (spin>0)
-      for (auto l=lmin; l<=lmax; ++l)
+
+    DUCC0_NOINLINE void alm2almtmp (size_t mi, mav<dcmplx,2> &almtmp,
+      const vector<double> norm_l)
+      {
+      size_t nalm_ = nalm();
+      size_t lmax = ainfo.lmax();
+      if (type!=SHARP_MAP2ALM)
+        {
+        auto m=ainfo.mval(mi);
+        auto lmin=(m<spin) ? spin : m;
         for (size_t i=0; i<nalm_; ++i)
-          almtmp.v(l,i) *= norm_l[l];
-    }
-  else
-    for (size_t l=ainfo.mval(mi); l<(lmax+2); ++l)
-      for (size_t i=0; i<nalm(); ++i)
-        almtmp.v(l,i)=0;
-  }
+          {
+          auto sub = subarray<1>(almtmp, {0,i},{MAXIDX,0});
+          ainfo.get_alm(mi, alm[i], sub);
+          }
+        for (auto l=m; l<lmin; ++l)
+          for (size_t i=0; i<nalm_; ++i)
+            almtmp.v(l,i) = 0;
+        for (size_t i=0; i<nalm_; ++i)
+          almtmp.v(lmax+1,i) = 0;
+        if (spin>0)
+          for (auto l=lmin; l<=lmax; ++l)
+            for (size_t i=0; i<nalm_; ++i)
+              almtmp.v(l,i) *= norm_l[l];
+        }
+      else
+        for (size_t l=ainfo.mval(mi); l<(lmax+2); ++l)
+          for (size_t i=0; i<nalm(); ++i)
+            almtmp.v(l,i)=0;
+      }
 
-DUCC0_NOINLINE void sharp_job::almtmp2alm (size_t mi,
-  mav<dcmplx,2> &almtmp, const std::vector<double> norm_l)
-  {
-  if (type != SHARP_MAP2ALM) return;
-  size_t lmax = ainfo.lmax();
-  auto m=ainfo.mval(mi);
-  auto lmin=(m<spin) ? spin : m;
-  size_t nalm_ = nalm();
-  if (spin>0)
-    for (auto l=lmin; l<=lmax; ++l)
+    DUCC0_NOINLINE void almtmp2alm (size_t mi,
+      mav<dcmplx,2> &almtmp, const vector<double> norm_l)
+      {
+      if (type != SHARP_MAP2ALM) return;
+      size_t lmax = ainfo.lmax();
+      auto m=ainfo.mval(mi);
+      auto lmin=(m<spin) ? spin : m;
+      size_t nalm_ = nalm();
+      if (spin>0)
+        for (auto l=lmin; l<=lmax; ++l)
+          for (size_t i=0; i<nalm_; ++i)
+            almtmp.v(l,i) *= norm_l[l];
       for (size_t i=0; i<nalm_; ++i)
-        almtmp.v(l,i) *= norm_l[l];
-  for (size_t i=0; i<nalm_; ++i)
-    ainfo.add_alm(mi, subarray<1>(almtmp, {0,i},{MAXIDX,0}), alm[i]);
-  }
-
-DUCC0_NOINLINE void sharp_job::ringtmp2ring (size_t iring,
-  const mav<double,2> &ringtmp)
-  {
-  for (size_t i=0; i<nmaps(); ++i)
-    ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, subarray<1>(ringtmp, {i,1},{0,MAXIDX}), map[i]);
-  }
-
-DUCC0_NOINLINE void sharp_job::ring2ringtmp (size_t iring,
-  mav<double,2> &ringtmp)
-  {
-  for (size_t i=0; i<nmaps(); ++i)
-    {
-    auto rtmp = subarray<1>(ringtmp, {i,1},{0,MAXIDX});
-    ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, map[i], rtmp);
-    }
-  }
-
-//FIXME: set phase to zero if not SHARP_MAP2ALM?
-DUCC0_NOINLINE void sharp_job::map2phase (size_t mmax, size_t llim, size_t ulim, mav<dcmplx,3> &phase)
-  {
-  if (type != SHARP_MAP2ALM) return;
-  ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    ringhelper helper;
-    size_t rstride=ginfo.nphmax()+2;
-    mav<double,2> ringtmp({nmaps(), rstride});
-
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
-      {
-      ring2ringtmp(ginfo.pair(ith).r1,ringtmp);
-      for (size_t i=0; i<nmaps(); ++i)
-        {
-        auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-        auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
-        helper.ring2phase (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
-        }
-      if (ginfo.pair(ith).r2!=~size_t(0))
-        {
-        ring2ringtmp(ginfo.pair(ith).r2,ringtmp);
-        for (size_t i=0; i<nmaps(); ++i)
-          {
-          auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-          auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
-          helper.ring2phase (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
-          }
-        }
+        ainfo.add_alm(mi, subarray<1>(almtmp, {0,i},{MAXIDX,0}), alm[i]);
       }
-    }); /* end of parallel region */
-  }
 
-DUCC0_NOINLINE void sharp_job::phase2map (size_t mmax, size_t llim, size_t ulim, const mav<dcmplx,3> &phase)
-  {
-  if (type == SHARP_MAP2ALM) return;
-  ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    ringhelper helper;
-    size_t rstride=ginfo.nphmax()+2;
-    mav<double,2> ringtmp({nmaps(), rstride});
+    DUCC0_NOINLINE void ringtmp2ring (size_t iring,
+      const mav<double,2> &ringtmp)
+      {
+      for (size_t i=0; i<nmaps(); ++i)
+        ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, subarray<1>(ringtmp, {i,1},{0,MAXIDX}), map[i]);
+      }
 
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
+    DUCC0_NOINLINE void ring2ringtmp (size_t iring,
+      mav<double,2> &ringtmp)
       {
       for (size_t i=0; i<nmaps(); ++i)
         {
-        auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-        auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
-        helper.phase2ring (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
+        auto rtmp = subarray<1>(ringtmp, {i,1},{0,MAXIDX});
+        ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, map[i], rtmp);
         }
-      ringtmp2ring(ginfo.pair(ith).r1,ringtmp);
-      if (ginfo.pair(ith).r2!=~size_t(0))
+      }
+
+    //FIXME: set phase to zero if not SHARP_MAP2ALM?
+    DUCC0_NOINLINE void map2phase (size_t mmax, size_t llim, size_t ulim, mav<dcmplx,3> &phase)
+      {
+      if (type != SHARP_MAP2ALM) return;
+      ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
         {
-        for (size_t i=0; i<nmaps(); ++i)
+        ringhelper helper;
+        size_t rstride=ginfo.nphmax()+2;
+        mav<double,2> ringtmp({nmaps(), rstride});
+
+        while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
           {
-          auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-          auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
-          helper.phase2ring (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
+          ring2ringtmp(ginfo.pair(ith).r1,ringtmp);
+          for (size_t i=0; i<nmaps(); ++i)
+            {
+            auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
+            auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
+            helper.ring2phase (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
+            }
+          if (ginfo.pair(ith).r2!=~size_t(0))
+            {
+            ring2ringtmp(ginfo.pair(ith).r2,ringtmp);
+            for (size_t i=0; i<nmaps(); ++i)
+              {
+              auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
+              auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
+              helper.ring2phase (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
+              }
+            }
           }
-        ringtmp2ring(ginfo.pair(ith).r2,ringtmp);
-        }
-      }
-    }); /* end of parallel region */
-  }
-
-DUCC0_NOINLINE void sharp_job::execute()
-  {
-  size_t lmax = ainfo.lmax(),
-         mmax = ainfo.mmax();
-
-  auto norm_l = (type==SHARP_ALM2MAP_DERIV1) ?
-    detail_sht::YlmBase::get_d1norm (lmax) :
-    detail_sht::YlmBase::get_norm (lmax, spin);
-
-/* clear output arrays if requested */
-  init_output();
-
-  size_t nchunks, chunksize;
-  get_chunk_info(ginfo.npairs(), (spin==0) ? 128 : 64,
-                 nchunks,chunksize);
-//FIXME: needs to be changed to "nm"
-  auto phase = mav<dcmplx,3>::build_noncritical({2*chunksize,mmax+1,nmaps()});
-  detail_sht::YlmBase ylmbase(lmax,mmax,spin);
-  detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
-                             ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);
-/* chunk loop */
-  for (size_t chunk=0; chunk<nchunks; ++chunk)
-    {
-    size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo.npairs());
-    vector<detail_sht::ringdata> rdata(ulim-llim);
-    for (size_t i=0; i<ulim-llim; ++i)
-      {
-      double cth = ginfo.cth(ginfo.pair(i+llim).r1);
-      double sth = ginfo.sth(ginfo.pair(i+llim).r1);
-      auto mlim = detail_sht::get_mlim(lmax, spin, sth, cth);
-      size_t idx = 2*i;
-      size_t midx = 2*i+1;
-      if (ginfo.pair(i+llim).r2==~size_t(0)) midx=idx;
-      rdata[i] = { mlim, idx, midx, cth, sth };
+        }); /* end of parallel region */
       }
 
-/* map->phase where necessary */
-    map2phase(mmax, llim, ulim, phase);
-
-    ducc0::execDynamic(ainfo.nm(), nthreads, 1, [&](ducc0::Scheduler &sched)
+    DUCC0_NOINLINE void phase2map (size_t mmax, size_t llim, size_t ulim, const mav<dcmplx,3> &phase)
       {
-      detail_sht::Ylmgen ylmgen(ylmbase);
-      auto almtmp = mav<dcmplx,2>({lmax+2, nalm()});
-
-      while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+      if (type == SHARP_MAP2ALM) return;
+      ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
         {
-/* alm->alm_tmp where necessary */
-        alm2almtmp(mi, almtmp, norm_l);
-        ylmgen.prepare(ainfo.mval(mi));
-        detail_sht::inner_loop(mode, almtmp, phase, rdata, ylmgen, mi);
+        ringhelper helper;
+        size_t rstride=ginfo.nphmax()+2;
+        mav<double,2> ringtmp({nmaps(), rstride});
 
-/* alm_tmp->alm where necessary */
-        almtmp2alm(mi, almtmp, norm_l);
-        }
-      }); /* end of parallel region */
+        while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
+          {
+          for (size_t i=0; i<nmaps(); ++i)
+            {
+            auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
+            auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
+            helper.phase2ring (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
+            }
+          ringtmp2ring(ginfo.pair(ith).r1,ringtmp);
+          if (ginfo.pair(ith).r2!=~size_t(0))
+            {
+            for (size_t i=0; i<nmaps(); ++i)
+              {
+              auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
+              auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
+              helper.phase2ring (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
+              }
+            ringtmp2ring(ginfo.pair(ith).r2,ringtmp);
+            }
+          }
+        }); /* end of parallel region */
+      }
 
-/* phase->map where necessary */
-    phase2map (mmax, llim, ulim, phase);
-    } /* end of chunk loop */
-  }
+  public:
+    DUCC0_NOINLINE void execute()
+      {
+      size_t lmax = ainfo.lmax(),
+             mmax = ainfo.mmax();
 
-sharp_job::sharp_job (sharp_jobtype type_,
-  size_t spin_, const vector<any> &alm_, const vector<any> &map_,
-  const sharp_geom_info &geom_info, const sharp_alm_info &alm_info, size_t flags_, int nthreads_)
-  : alm(alm_), map(map_), type(type_), spin(spin_), flags(flags_), ginfo(geom_info), ainfo(alm_info),
-    nthreads(nthreads_)
-  {
-  if (type==SHARP_ALM2MAP_DERIV1) spin_=1;
-  if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
-  if (type==SHARP_Yt) type=SHARP_MAP2ALM;
-  if (type==SHARP_WY) { type=SHARP_ALM2MAP; flags|=SHARP_USE_WEIGHTS; }
+      auto norm_l = (type==SHARP_ALM2MAP_DERIV1) ?
+        detail_sht::YlmBase::get_d1norm (lmax) :
+        detail_sht::YlmBase::get_norm (lmax, spin);
 
-  MR_assert(spin<=ainfo.lmax(), "bad spin");
-  MR_assert(alm.size()==nalm(), "incorrect # of a_lm components");
-  MR_assert(map.size()==nmaps(), "incorrect # of a_lm components");
-  }
+    /* clear output arrays if requested */
+      init_output();
+
+      size_t nchunks, chunksize;
+      get_chunk_info(ginfo.npairs(), (spin==0) ? 128 : 64,
+                     nchunks,chunksize);
+    //FIXME: needs to be changed to "nm"
+      auto phase = mav<dcmplx,3>::build_noncritical({2*chunksize,mmax+1,nmaps()});
+      detail_sht::YlmBase ylmbase(lmax,mmax,spin);
+      detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
+                                 ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);
+    /* chunk loop */
+      for (size_t chunk=0; chunk<nchunks; ++chunk)
+        {
+        size_t llim=chunk*chunksize, ulim=min(llim+chunksize,ginfo.npairs());
+        vector<detail_sht::ringdata> rdata(ulim-llim);
+        for (size_t i=0; i<ulim-llim; ++i)
+          {
+          double cth = ginfo.cth(ginfo.pair(i+llim).r1);
+          double sth = ginfo.sth(ginfo.pair(i+llim).r1);
+          auto mlim = detail_sht::get_mlim(lmax, spin, sth, cth);
+          size_t idx = 2*i;
+          size_t midx = 2*i+1;
+          if (ginfo.pair(i+llim).r2==~size_t(0)) midx=idx;
+          rdata[i] = { mlim, idx, midx, cth, sth };
+          }
+
+    /* map->phase where necessary */
+        map2phase(mmax, llim, ulim, phase);
+
+        ducc0::execDynamic(ainfo.nm(), nthreads, 1, [&](ducc0::Scheduler &sched)
+          {
+          detail_sht::Ylmgen ylmgen(ylmbase);
+          auto almtmp = mav<dcmplx,2>({lmax+2, nalm()});
+
+          while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+            {
+    /* alm->alm_tmp where necessary */
+            alm2almtmp(mi, almtmp, norm_l);
+            ylmgen.prepare(ainfo.mval(mi));
+            detail_sht::inner_loop(mode, almtmp, phase, rdata, ylmgen, mi);
+
+    /* alm_tmp->alm where necessary */
+            almtmp2alm(mi, almtmp, norm_l);
+            }
+          }); /* end of parallel region */
+
+    /* phase->map where necessary */
+        phase2map (mmax, llim, ulim, phase);
+        } /* end of chunk loop */
+      }
+
+    sharp_job (sharp_jobtype type_,
+      size_t spin_, const vector<any> &alm_, const vector<any> &map_,
+      const sharp_geom_info &geom_info, const sharp_alm_info &alm_info, size_t flags_, int nthreads_)
+      : alm(alm_), map(map_), type(type_), spin(spin_), flags(flags_), ginfo(geom_info), ainfo(alm_info),
+        nthreads(nthreads_)
+      {
+      if (type==SHARP_ALM2MAP_DERIV1) spin_=1;
+      if (type==SHARP_MAP2ALM) flags|=SHARP_USE_WEIGHTS;
+      if (type==SHARP_Yt) type=SHARP_MAP2ALM;
+      if (type==SHARP_WY) { type=SHARP_ALM2MAP; flags|=SHARP_USE_WEIGHTS; }
+
+      MR_assert(spin<=ainfo.lmax(), "bad spin");
+      MR_assert(alm.size()==nalm(), "incorrect # of a_lm components");
+      MR_assert(map.size()==nmaps(), "incorrect # of a_lm components");
+      }
+  };
 
 void sharp_execute (sharp_jobtype type, size_t spin, const vector<any> &alm,
   const vector<any> &map,
