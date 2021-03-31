@@ -21,7 +21,7 @@
 /*! \file sharp_almhelpers.cc
  *  Spherical transform library
  *
- *  Copyright (C) 2008-2020 Max-Planck-Society
+ *  Copyright (C) 2008-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -67,8 +67,11 @@ template<typename T> void sharp_standard_alm_info::tclear (T *alm) const
   }
 void sharp_standard_alm_info::clear_alm(const any &alm) const
   {
-  if (alm.type()==typeid(dcmplx *)) tclear(any_cast<dcmplx *>(alm));
-  else if (alm.type()==typeid(fcmplx *)) tclear(any_cast<fcmplx *>(alm));
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tclear(any_cast<dcmplx *>(alm));
+  else if (hc==typeid(fcmplx *).hash_code())
+    tclear(any_cast<fcmplx *>(alm));
   else MR_fail("bad a_lm data type");
   }
 template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm, mav<dcmplx,1> &almtmp) const
@@ -78,10 +81,15 @@ template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm,
   }
 void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, mav<dcmplx,1> &almtmp) const
   {
-  if (alm.type()==typeid(dcmplx *)) tget(mi, any_cast<dcmplx *>(alm), almtmp);
-  else if (alm.type()==typeid(const dcmplx *)) tget(mi, any_cast<const dcmplx *>(alm), almtmp);
-  else if (alm.type()==typeid(fcmplx *)) tget(mi, any_cast<fcmplx *>(alm), almtmp);
-  else if (alm.type()==typeid(const fcmplx *)) tget(mi, any_cast<const fcmplx *>(alm), almtmp);
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tget(mi, any_cast<dcmplx *>(alm), almtmp);
+  else if (hc==typeid(const dcmplx *).hash_code())
+    tget(mi, any_cast<const dcmplx *>(alm), almtmp);
+  else if (hc==typeid(fcmplx *).hash_code())
+    tget(mi, any_cast<fcmplx *>(alm), almtmp);
+  else if (hc==typeid(const fcmplx *).hash_code())
+    tget(mi, any_cast<const fcmplx *>(alm), almtmp);
   else MR_fail("bad a_lm data type");
   }
 template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const mav<dcmplx,1> &almtmp, T *alm) const
@@ -91,8 +99,11 @@ template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const mav<dcm
   }
 void sharp_standard_alm_info::add_alm(size_t mi, const mav<dcmplx,1> &almtmp, const any &alm) const
   {
-  if (alm.type()==typeid(dcmplx *)) tadd(mi, almtmp, any_cast<dcmplx *>(alm));
-  else if (alm.type()==typeid(fcmplx *)) tadd(mi, almtmp, any_cast<fcmplx *>(alm));
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tadd(mi, almtmp, any_cast<dcmplx *>(alm));
+  else if (hc==typeid(fcmplx *).hash_code())
+    tadd(mi, almtmp, any_cast<fcmplx *>(alm));
   else MR_fail("bad a_lm data type");
   }
 

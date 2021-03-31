@@ -29,6 +29,7 @@
 #define SHARP2_GEOMHELPERS_H
 
 #include <memory>
+#include <string>
 #include "ducc0/sharp/sharp.h"
 
 namespace ducc0 {
@@ -128,7 +129,7 @@ static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (siz
               i.e. theta_i = (i+0.5)*2*pi/(2*nrings-1) */
 std::unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
   (size_t nrings, size_t ppring, double phi0, ptrdiff_t stride_lon,
-  ptrdiff_t stride_lat, const string &type, bool with_weight=true);
+  ptrdiff_t stride_lat, const std::string &type, bool with_weight=true);
 }
 
 using detail_sharp::sharp_standard_geom_info;
