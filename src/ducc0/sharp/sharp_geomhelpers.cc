@@ -301,7 +301,7 @@ void get_gridinfo(const string &type,
   else if (type=="DH") // Driscoll-Healy
     {
     for (size_t m=0; m<nrings; ++m)
-    theta.v(m) = m*pi/nrings;
+      theta.v(m) = m*pi/nrings;
     if (do_wgt)
       {
       auto xwgt = get_dh_weights(nrings);
