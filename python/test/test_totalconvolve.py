@@ -84,9 +84,9 @@ def test_against_convolution(lkmax):
     ptg[:, 2] = rng.uniform(0, 2*np.pi, nptg)
 
     cube = np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
-    conv.getPlane(slm, blm, 0, cube[0])
+    conv.getPlane(slm, blm, 0, cube[0:1])
     for mbeam in range(1, kmax+1):
-        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1:2*mbeam+1])
     conv.prepPsi(cube)
     res1 = np.empty(ptg.shape[0])
     conv.interpol(cube, 0, 0, ptg[:, 0], ptg[:, 1], ptg[:, 2], res1)
@@ -182,9 +182,9 @@ def test_adjointness(lkmax):
                                        epsilon=1e-5, nthreads=2)
 
     cube = np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
-    conv.getPlane(slm, blm, 0, cube[0])
+    conv.getPlane(slm, blm, 0, cube[0:1])
     for mbeam in range(1, kmax+1):
-        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1], cube[2*mbeam])
+        conv.getPlane(slm, blm, mbeam, cube[2*mbeam-1:2*mbeam+1])
     conv.prepPsi(cube)
     inter1 = np.empty(ptg.shape[0])
     conv.interpol(cube, 0, 0, ptg[:, 0], ptg[:, 1], ptg[:, 2], inter1)
@@ -194,9 +194,9 @@ def test_adjointness(lkmax):
     conv.deinterpol(cube2, 0, 0, ptg[:, 0], ptg[:, 1], ptg[:, 2], fake)
     bla = slm*0.
     conv.deprepPsi(cube2)
-    conv.updateSlm(bla, blm, 0, cube2[0])
+    conv.updateSlm(bla, blm, 0, cube2[0:1])
     for mbeam in range(1, kmax+1):
-        conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1], cube2[2*mbeam])
+        conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1:2*mbeam+1])
 
     v1 = myalmdot(slm, bla, lmax, lmax, 0)
     v2 = np.vdot(fake, inter1)

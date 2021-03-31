@@ -288,7 +288,7 @@ class sharp_job
           for (size_t i=0; i<nmaps(); ++i)
             {
             auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-            auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
+            auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
             helper.ring2phase (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
             }
           if (ginfo.pair(ith).r2!=~size_t(0))
@@ -297,7 +297,7 @@ class sharp_job
             for (size_t i=0; i<nmaps(); ++i)
               {
               auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-              auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
+              auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
               helper.ring2phase (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
               }
             }
@@ -319,7 +319,7 @@ class sharp_job
           for (size_t i=0; i<nmaps(); ++i)
             {
             auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-            auto ptmp = subarray<1>(phase, {2*(ith-llim), 0, i}, {0, MAXIDX, 0});
+            auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
             helper.phase2ring (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
             }
           ringtmp2ring(ginfo.pair(ith).r1,ringtmp);
@@ -328,7 +328,7 @@ class sharp_job
             for (size_t i=0; i<nmaps(); ++i)
               {
               auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-              auto ptmp = subarray<1>(phase, {2*(ith-llim)+1, 0, i}, {0, MAXIDX, 0});
+              auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
               helper.phase2ring (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
               }
             ringtmp2ring(ginfo.pair(ith).r2,ringtmp);
@@ -354,7 +354,7 @@ class sharp_job
       get_chunk_info(ginfo.npairs(), (spin==0) ? 128 : 64,
                      nchunks,chunksize);
     //FIXME: needs to be changed to "nm"
-      auto phase = mav<dcmplx,3>::build_noncritical({2*chunksize,mmax+1,nmaps()});
+      auto phase = mav<dcmplx,3>::build_noncritical({nmaps(),2*chunksize,mmax+1});
       detail_sht::YlmBase ylmbase(lmax,mmax,spin);
       detail_sht::SHT_mode mode = (type==SHARP_MAP2ALM) ? detail_sht::MAP2ALM : 
                                  ((type==SHARP_ALM2MAP) ? detail_sht::ALM2MAP : detail_sht::ALM2MAP_DERIV1);

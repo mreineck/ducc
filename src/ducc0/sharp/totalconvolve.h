@@ -548,8 +548,11 @@ template<typename T> class ConvolverPlan
       }
 
     void getPlane(const mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
+      MR_assert(planes.shape(0)==1+(mbeam>0), "bad number of planes");
+      auto re = subarray<2>(planes, {0,0,0}, {0,MAXIDX,MAXIDX});
+      auto im = (mbeam>0) ? subarray<2>(planes, {1,0,0}, {0,MAXIDX,MAXIDX}) : mav<T,2>({0,0});
       auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
       MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
@@ -557,11 +560,6 @@ template<typename T> class ConvolverPlan
       MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
       MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
-      if (mbeam>0)
-        {
-        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
-        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
-        }
       MR_assert(mbeam <= kmax, "mbeam too high");
 
       vector<T> lnorm(lmax+1);
@@ -585,7 +583,10 @@ template<typename T> class ConvolverPlan
         }
       else
         {
-        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+        mav<complex<T>,2> almarr({2, Alm_Base::Num_Alms(lmax,lmax)});
+        auto almarr1 = subarray<1>(almarr, {0, 0}, {0, MAXIDX});
+        auto almarr2 = subarray<1>(almarr, {1, 0}, {0, MAXIDX});
+        Alm<complex<T>> a1(almarr1, lmax, lmax), a2(almarr2, lmax, lmax);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             {
@@ -599,10 +600,9 @@ template<typename T> class ConvolverPlan
                 }
             }
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
         auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
-        synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
+        auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {2, ntheta_s, nphi_s});
+        synthesis(almarr, lmax, subplanes, mbeam, "CC", nthreads);
         correct(m1,mbeam);
         correct(m2,mbeam);
         }
@@ -645,11 +645,11 @@ template<typename T> class ConvolverPlan
         }
       }
     void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
       mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
       mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
-      getPlane(vslm, vblm, mbeam, re, im);
+      getPlane(vslm, vblm, mbeam, planes);
       }
 
     void interpol(const mav<T,3> &cube, size_t itheta0,
@@ -707,8 +707,11 @@ template<typename T> class ConvolverPlan
       }
 
      void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
+      MR_assert(planes.shape(0)==1+(mbeam>0), "bad number of planes");
+      auto re = subarray<2>(planes, {0,0,0}, {0,MAXIDX,MAXIDX});
+      auto im = (mbeam>0) ? subarray<2>(planes, {1,0,0}, {0,MAXIDX,MAXIDX}) : mav<T,2>({0,0});
       auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
       MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
@@ -716,11 +719,6 @@ template<typename T> class ConvolverPlan
       MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
       MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
       MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
-      if (mbeam>0)
-        {
-        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
-        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
-        }
       MR_assert(mbeam <= kmax, "mbeam too high");
 
       // move stuff from border regions onto the main grid
@@ -790,15 +788,17 @@ template<typename T> class ConvolverPlan
         }
       else
         {
-        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
+        mav<complex<T>,2> almarr({2, Alm_Base::Num_Alms(lmax,lmax)});
+        auto almarr1 = subarray<1>(almarr, {0, 0}, {0, MAXIDX});
+        auto almarr2 = subarray<1>(almarr, {1, 0}, {0, MAXIDX});
+        Alm<complex<T>> a1(almarr1, lmax, lmax), a2(almarr2, lmax, lmax);
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
+        auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {2, ntheta_s, nphi_s});
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
-        adjoint_synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
+        adjoint_synthesis(almarr, lmax, subplanes, mbeam, "CC", nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)
@@ -811,11 +811,11 @@ template<typename T> class ConvolverPlan
         }
       }
     void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
       mav<complex<T>,2> vslm(&slm.v(0), {slm.shape(0),1}, {slm.stride(0),0}, true);
       mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
-      updateSlm(vslm, vblm, mbeam, re, im);
+      updateSlm(vslm, vblm, mbeam, planes);
       }
 
     void prepPsi(mav<T,3> &subcube) const

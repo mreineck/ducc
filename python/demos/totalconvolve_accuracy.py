@@ -75,9 +75,9 @@ t0 = time.time()
 plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=nthr)
 cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
 cube[()] = 0
-plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0])
+plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0:1])
 for mbeam in range(1, kmax+1):
-    plan.getPlane(slm[:, 0], blm[:, 0], mbeam, cube[2*mbeam-1], cube[2*mbeam])
+    plan.getPlane(slm[:, 0], blm[:, 0], mbeam, cube[2*mbeam-1:2*mbeam+1])
 plan.prepPsi(cube)
 
 print("setup time: ", time.time()-t0)

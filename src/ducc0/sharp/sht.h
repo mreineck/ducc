@@ -279,8 +279,8 @@ template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
 #if 0
 
 template<typename T> void alm2leg(  // associated Legendre transform
-  const mav<complex<T>,2> &alm, // (lmidx, ncomp)
-  mav<complex<T>,3> &leg, // (nrings, nm, ncomp)
+  const mav<complex<T>,2> &alm, // (ncomp, lmidx)
+  mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
@@ -290,8 +290,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
   SHT_mode mode);
 
 template<typename T> void leg2alm(  // associated Legendre transform
-  const mav<complex<T>,3> &leg, // (lmidx, ncomp)
-  mav<complex<T>,2> &alm, // (nrings, nm, ncomp)
+  const mav<complex<T>,3> &leg, //  (ncomp, nrings, nm)
+  mav<complex<T>,2> &alm, // (ncomp, lmidx)
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
@@ -308,59 +308,46 @@ void resample_theta(const mav<complex<double>,3> &legi, bool npi, bool spi,
 
 #endif
 
+template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
+  mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+  {
+  unique_ptr<sharp_geom_info> ginfo;
+  ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
+    map.stride(2), map.stride(1), geometry);
+  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(1), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(1));
+  (spin==0) ?
+    sharp_alm2map(alm.cdata(), map.vdata(), *ginfo, *ainfo, 0, nthreads) :
+    sharp_alm2map_spin(spin, &alm(0,0), &alm(1,0), &map.v(0,0,0), &map.v(1,0,0),
+      *ginfo, *ainfo, 0, nthreads);
+  }
 template<typename T> void synthesis(const mav<complex<T>,1> &alm, size_t lmax,
   mav<T,2> &map, const string &geometry, size_t nthreads)
   {
+  mav<complex<T>,2> alm2(alm.cdata(), {1,alm.shape(0)}, {0,alm.stride(0)});
+  mav<T,3> map2(map.vdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)}, true);
+  synthesis (alm2, lmax, map2, 0, geometry, nthreads);
+  }
+template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm, size_t lmax,
+  const mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+  {
   unique_ptr<sharp_geom_info> ginfo;
-  ginfo = sharp_make_2d_geom_info (map.shape(0), map.shape(1), 0.,
-    map.stride(1), map.stride(0), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(0), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(0));
-  sharp_alm2map(alm.cdata(), map.vdata(), *ginfo, *ainfo, 0, nthreads);
+  ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
+    map.stride(2), map.stride(1), geometry);
+  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(1), "bad a_lm size");
+  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(1));
+  (spin==0) ?
+    sharp_alm2map_adjoint(alm.vdata(), map.cdata(), *ginfo, *ainfo, 0, nthreads) :
+    sharp_alm2map_spin_adjoint(spin, &alm.v(0,0), &alm.v(1,0), &map(0,0,0), &map(1,0,0),
+      *ginfo, *ainfo, 0, nthreads);
   }
 template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
   const mav<T,2> &map, const string &geometry, size_t nthreads)
   {
-  unique_ptr<sharp_geom_info> ginfo;
-  ginfo = sharp_make_2d_geom_info (map.shape(0), map.shape(1), 0.,
-    map.stride(1), map.stride(0), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(0), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(0));
-  sharp_alm2map_adjoint(alm.vdata(), map.cdata(), *ginfo, *ainfo, 0, nthreads);
+  mav<complex<T>,2> alm2(alm.vdata(), {1,alm.shape(0)}, {0,alm.stride(0)}, true);
+  mav<T,3> map2(map.cdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)});
+  adjoint_synthesis (alm2, lmax, map2, 0, geometry, nthreads);
   }
-template<typename T> void synthesis(const mav<complex<T>,1> &alm1,
-  const mav<complex<T>,1> &alm2, size_t lmax, mav<T,2> &map1, mav<T,2> &map2,
-  size_t spin, const string &geometry, size_t nthreads)
-  {
-  unique_ptr<sharp_geom_info> ginfo;
-  MR_assert(map1.shape()==map2.shape(), "map shape mismatch");
-  MR_assert(map1.stride()==map2.stride(), "map stride mismatch");
-  MR_assert(alm1.shape()==alm2.shape(), "alm shape mismatch");
-  MR_assert(alm1.stride()==alm2.stride(), "alm stride mismatch");
-  ginfo = sharp_make_2d_geom_info (map1.shape(0), map1.shape(1), 0.,
-    map1.stride(1), map1.stride(0), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm1.shape(0), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm1.stride(0));
-  sharp_alm2map_spin(spin, alm1.cdata(), alm2.cdata(), map1.vdata(), map2.vdata(),
-    *ginfo, *ainfo, 0, nthreads);
-  }
-template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm1,
-  mav<complex<T>,1> &alm2, size_t lmax, const mav<T,2> &map1, const mav<T,2> &map2,
-  size_t spin, const string &geometry, size_t nthreads)
-  {
-  unique_ptr<sharp_geom_info> ginfo;
-  MR_assert(map1.shape()==map2.shape(), "map shape mismatch");
-  MR_assert(map1.stride()==map2.stride(), "map stride mismatch");
-  MR_assert(alm1.shape()==alm2.shape(), "alm shape mismatch");
-  MR_assert(alm1.stride()==alm2.stride(), "alm stride mismatch");
-  ginfo = sharp_make_2d_geom_info (map1.shape(0), map1.shape(1), 0.,
-    map1.stride(1), map1.stride(0), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm1.shape(0), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm1.stride(0));
-  sharp_alm2map_spin_adjoint(spin, alm1.vdata(), alm2.vdata(), map1.cdata(), map2.cdata(),
-    *ginfo, *ainfo, 0, nthreads);
-  }
-
 }
 
 #if 0

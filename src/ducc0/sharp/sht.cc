@@ -947,7 +947,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           ++nth;
           }
         else
-          phase.v(rdata[ith].idx, mi, 0) = phase.v(rdata[ith].midx, mi, 0) = 0;
+          phase.v(0, rdata[ith].idx, mi) = phase.v(0, rdata[ith].midx, mi) = 0;
         ++ith;
         }
       if (nth>0)
@@ -968,9 +968,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           d.s.p2i[i]*=rdata[tgt].cth;
           dcmplx r1(d.s.p1r[i], d.s.p1i[i]),
                  r2(d.s.p2r[i], d.s.p2i[i]);
-          phase.v(rdata[tgt].idx, mi, 0) = complex<T>(r1+r2);
+          phase.v(0, rdata[tgt].idx, mi) = complex<T>(r1+r2);
           if (rdata[tgt].idx!=rdata[tgt].midx)
-            phase.v(rdata[tgt].midx, mi, 0) = complex<T>(r1-r2);
+            phase.v(0, rdata[tgt].midx, mi) = complex<T>(r1-r2);
           }
         }
       }
@@ -1001,8 +1001,8 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           }
         else
           {
-          phase.v(rdata[ith].idx, mi, 0) = phase.v(rdata[ith].midx, mi, 0) = 0;
-          phase.v(rdata[ith].idx, mi, 1) = phase.v(rdata[ith].midx, mi, 1) = 0;
+          phase.v(0, rdata[ith].idx, mi) = phase.v(0, rdata[ith].midx, mi) = 0;
+          phase.v(1, rdata[ith].idx, mi) = phase.v(1, rdata[ith].midx, mi) = 0;
           }
         ++ith;
         }
@@ -1027,12 +1027,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
                  q2(d.s.p2pr[i], d.s.p2pi[i]),
                  u1(d.s.p1mr[i], d.s.p1mi[i]),
                  u2(d.s.p2mr[i], d.s.p2mi[i]);
-          phase.v(rdata[tgt].idx, mi, 0) = complex<T>(q1+q2);
-          phase.v(rdata[tgt].idx, mi, 1) = complex<T>(u1+u2);
+          phase.v(0, rdata[tgt].idx, mi) = complex<T>(q1+q2);
+          phase.v(1, rdata[tgt].idx, mi) = complex<T>(u1+u2);
           if (rdata[tgt].idx!=rdata[tgt].midx)
             {
-            auto *phQ = &(phase.v(rdata[tgt].midx, mi, 0)),
-                 *phU = &(phase.v(rdata[tgt].midx, mi, 1));
+            auto *phQ = &(phase.v(0, rdata[tgt].midx, mi)),
+                 *phU = &(phase.v(1, rdata[tgt].midx, mi));
             *phQ = complex<T>(q1-q2);
             *phU = complex<T>(u1-u2);
             if ((gen.mhi-gen.m+gen.s)&1)
@@ -1062,8 +1062,8 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
         if (rdata[ith].mlim>=gen.m)
           {
           d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
-          dcmplx ph1=phase(rdata[ith].idx, mi, 0);
-          dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(rdata[ith].midx, mi, 0);
+          dcmplx ph1=phase(0, rdata[ith].idx, mi);
+          dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi);
           d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
           d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
           //adjust for new algorithm
@@ -1112,10 +1112,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
         if (rdata[ith].mlim>=gen.m)
           {
           d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
-          dcmplx p1Q=phase(rdata[ith].idx, mi, 0),
-                 p1U=phase(rdata[ith].idx, mi, 1),
-                 p2Q=(rdata[ith].idx!=rdata[ith].midx) ? phase(rdata[ith].midx, mi, 0):0.,
-                 p2U=(rdata[ith].idx!=rdata[ith].midx) ? phase(rdata[ith].midx, mi, 1):0.;
+          dcmplx p1Q=phase(0, rdata[ith].idx, mi),
+                 p1U=phase(1, rdata[ith].idx, mi),
+                 p2Q=(rdata[ith].idx!=rdata[ith].midx) ? phase(0, rdata[ith].midx, mi):0.,
+                 p2U=(rdata[ith].idx!=rdata[ith].midx) ? phase(1, rdata[ith].midx, mi):0.;
           if ((gen.mhi-gen.m+gen.s)&1)
             { p2Q=-p2Q; p2U=-p2U; }
           d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
