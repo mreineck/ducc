@@ -53,13 +53,12 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
     vector<size_t> pyGetPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
       { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
     void pyGetPlane(const py::array &py_slm, const py::array &py_blm,
-      size_t mbeam, py::array &py_re, py::object &py_im) const
+      size_t mbeam, py::array &py_planes) const
       {
       auto slm = to_mav<complex<T>,1>(py_slm);
       auto blm = to_mav<complex<T>,1>(py_blm);
-      auto re = to_mav<T,2>(py_re, true);
-      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
-      getPlane(slm, blm, mbeam, re, im);
+      auto planes = to_mav<T,3>(py_planes, true);
+      getPlane(slm, blm, mbeam, planes);
       }
     void pyPrepPsi(const py::array &py_subcube) const
       {
@@ -94,13 +93,12 @@ template<typename T> class PyConvolverPlan: public ConvolverPlan<T>
       deinterpol(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
     void pyUpdateSlm(py::array &py_slm, const py::array &py_blm,
-      size_t mbeam, py::array &py_re, py::object &py_im) const
+      size_t mbeam, py::array &py_planes) const
       {
       auto slm = to_mav<complex<T>,1>(py_slm, true);
       auto blm = to_mav<complex<T>,1>(py_blm);
-      auto re = to_mav<T,2>(py_re, true);
-      auto im = (mbeam==0) ? mav<T,2>::build_empty() : to_mav<T,2>(py_im, true);
-      updateSlm(slm, blm, mbeam, re, im);
+      auto planes = to_mav<T,3>(py_planes, true);
+      updateSlm(slm, blm, mbeam, planes);
       }
   };
 
@@ -122,26 +120,24 @@ template<typename T> class PyInterpolator
       if (separate)
         for (size_t i=0; i<vslm.shape(1); ++i)
           {
-          auto re = subarray<2>(cube, {i,0,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
           auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
           auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
-          conv.getPlane(vslmi, vblmi, 0, re, re);
+          conv.getPlane(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto re = subarray<2>(cube, {i,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
-            auto im = subarray<2>(cube, {i,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
-            conv.getPlane(vslmi, vblmi, k, re, im);
+            auto planes = subarray<3>(cube, {i,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+            conv.getPlane(vslmi, vblmi, k, planes);
             }
           }
       else
         {
-        auto re = subarray<2>(cube, {0,0,0,0},{0, 0, MAXIDX, MAXIDX});
-        conv.getPlane(vslm, vblm, 0, re, re);
+        auto planes = subarray<3>(cube, {0,0,0,0},{0, 1, MAXIDX, MAXIDX});
+        conv.getPlane(vslm, vblm, 0, planes);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto re = subarray<2>(cube, {0,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
-          auto im = subarray<2>(cube, {0,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
-          conv.getPlane(vslm, vblm, k, re, im);
+          auto planes = subarray<3>(cube, {0,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+          conv.getPlane(vslm, vblm, k, planes);
           }
         }
       for (size_t i=0; i<cube.shape(0); ++i)
@@ -207,26 +203,24 @@ template<typename T> class PyInterpolator
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
-          auto re = subarray<2>(cube, {i,0,0,0},{0, 0, MAXIDX, MAXIDX});
+          auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
           auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
           auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
-          conv.updateSlm(vslmi, vblmi, 0, re, re);
+          conv.updateSlm(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto re = subarray<2>(cube, {i,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
-            auto im = subarray<2>(cube, {i,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
-            conv.updateSlm(vslmi, vblmi, k, re, im);
+            auto planes = subarray<3>(cube, {i,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+            conv.updateSlm(vslmi, vblmi, k, planes);
             }
           }
       else
         {
-        auto re = subarray<2>(cube, {0,0,0,0},{0, 0, MAXIDX, MAXIDX});
-        conv.updateSlm(vslm, vblm, 0, re, re);
+        auto planes = subarray<3>(cube, {0,0,0,0},{0, 1, MAXIDX, MAXIDX});
+        conv.updateSlm(vslm, vblm, 0, planes);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto re = subarray<2>(cube, {0,2*k-1,0,0},{0, 0, MAXIDX, MAXIDX});
-          auto im = subarray<2>(cube, {0,2*k  ,0,0},{0, 0, MAXIDX, MAXIDX});
-          conv.updateSlm(vslm, vblm, k, re, im);
+          auto planes = subarray<3>(cube, {0,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+          conv.updateSlm(vslm, vblm, k, planes);
           }
         }
       return move(res);
@@ -357,11 +351,10 @@ blm : numpy.ndarray((nalm_beam), dtype=numpy.complex128), or
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
-re : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float64)
-    will be filled with the real part of the requested sub-plane on exit
-im : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float64) or None
-    if mbeam > 0,
-      will be filled with the imaginary part of the requested sub-plane on exit
+planes : numpy.ndarray((nplanes, Ntheta(), Nphi()), dtype=numpy.float64)
+    nplanes must be 1 for mbeam==0, else 2
+    will be filled with the real part (and the imaginary part for mbeam>0)
+    of the requested sub-planes on exit
 
 Notes
 -----
@@ -382,11 +375,10 @@ blm : numpy.ndarray((nalm_beam), dtype=numpy.complex64), or
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
-re : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float32)
-    will be filled with the real part of the requested sub-plane on exit
-im : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float32) or None
-    if mbeam > 0,
-      will be filled with the imaginary part of the requested sub-plane on exit
+planes : numpy.ndarray((nplanes, Ntheta(), Nphi()), dtype=numpy.float32)
+    nplanes must be 1 for mbeam==0, else 2
+    will be filled with the real part (and the imaginary part for mbeam>0)
+    of the requested sub-planes on exit
 
 Notes
 -----
@@ -552,11 +544,9 @@ blm : numpy.ndarray((nalm_beam), dtype=numpy.complex128), or
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
-re : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float64)
-    real part of the requested plane
-im : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float64) or None
-    if mbeam > 0,
-      imaginary part of the requested plane
+planes : numpy.ndarray((nplanes, Ntheta(), Nphi()), dtype=numpy.float64)
+    nplanes must be 1 for mbeam==0, else 2
+    real part (and imaginary part for mbeam>0) of the requested plane
 
 Notes
 -----
@@ -580,11 +570,9 @@ blm : numpy.ndarray((nalm_beam), dtype=numpy.complex64), or
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
-re : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float32)
-    real part of the requested plane
-im : numpy.ndarray((Ntheta(), Nphi()), dtype=numpy.float32) or None
-    if mbeam > 0,
-      imaginary part of the requested plane
+planes : numpy.ndarray((nplanes, Ntheta(), Nphi()), dtype=numpy.float32)
+    nplanes must be 1 for mbeam==0, else 2
+    real part (and imaginary part for mbeam>0) of the requested plane
 
 Notes
 -----
@@ -733,7 +721,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPatchInfo", &conv_d::pyGetPatchInfo, pyConvolverPlan_getPatchInfo_DS,
       "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_d::pyGetPlane, pyConvolverPlan_getPlane_DS,
-      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+      "slm"_a, "blm"_a, "mbeam"_a, "planes"_a)
     .def("prepPsi", &conv_d::pyPrepPsi, pyConvolverPlan_prepPsi_DS, "subcube"_a)
     .def("deprepPsi", &conv_d::pyDeprepPsi, pyConvolverPlan_prepPsi_DS, "subcube"_a)
     .def("interpol", &conv_d::pyinterpol, pyConvolverPlan_interpol_DS,
@@ -741,7 +729,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("deinterpol", &conv_d::pydeinterpol, pyConvolverPlan_deinterpol_DS,
       "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_d::pyUpdateSlm, pyConvolverPlan_updateSlm_DS,
-      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
+      "slm"_a, "blm"_a, "mbeam"_a, "planes"_a);
   using conv_f = PyConvolverPlan<float>;
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local(), pyConvolverPlan_f_DS)
     .def(py::init<size_t, size_t, double, double, size_t>(), pyConvolverPlan_f_init_DS,
@@ -752,7 +740,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPatchInfo", &conv_f::pyGetPatchInfo, pyConvolverPlan_getPatchInfo_DS,
       "theta_lo"_a, "theta_hi"_a, "phi_lo"_a, "phi_hi"_a)
     .def("getPlane", &conv_f::pyGetPlane, pyConvolverPlan_f_getPlane_DS,
-      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None)
+      "slm"_a, "blm"_a, "mbeam"_a, "planes"_a)
     .def("prepPsi", &conv_f::pyPrepPsi, pyConvolverPlan_f_prepPsi_DS, "subcube"_a)
     .def("deprepPsi", &conv_f::pyDeprepPsi, pyConvolverPlan_f_deprepPsi_DS, "subcube"_a)
     .def("interpol", &conv_f::pyinterpol, pyConvolverPlan_f_interpol_DS,
@@ -760,7 +748,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("deinterpol", &conv_f::pydeinterpol, pyConvolverPlan_f_deinterpol_DS,
       "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("updateSlm", &conv_f::pyUpdateSlm, pyConvolverPlan_f_updateSlm_DS,
-      "slm"_a, "blm"_a, "mbeam"_a, "re"_a, "im"_a=None);
+      "slm"_a, "blm"_a, "mbeam"_a, "planes"_a);
 
   using inter_d = PyInterpolator<double>;
   py::class_<inter_d> (m, "Interpolator", py::module_local(), pyinterpolator_DS)

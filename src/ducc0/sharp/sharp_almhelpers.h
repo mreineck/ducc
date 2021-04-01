@@ -97,11 +97,6 @@ class sharp_standard_alm_info: public sharp_alm_info
     \ingroup almgroup */
 std::unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride);
 
-/*! Initialises an a_lm data structure according to the scheme used by
-    Fortran Healpix
-    \ingroup almgroup */
-std::unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride);
-
 }
 
 using detail_sharp::sharp_standard_alm_info;

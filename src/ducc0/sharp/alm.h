@@ -134,95 +134,6 @@ class Alm_Base
       { return mval.size() == lmax+1; }
   };
 
-/*! Class for storing spherical harmonic coefficients. */
-template<typename T> class Alm: public Alm_Base
-  {
-  private:
-    mav<T,1> alm;
-
-    template<typename Func> void applyLM(Func func)
-      {
-      for (auto m: mval)
-        for (size_t l=m; l<=lmax; ++l)
-          func(l,m,alm.v(index(l,m)));
-      }
-
-  public:
-    /*! Constructs an Alm object with given \a lmax and \a mmax. */
-    Alm (mav<T,1> &data, size_t lmax_, size_t mmax_)
-      : Alm_Base(lmax_, mmax_), alm(data)
-      { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
-    Alm (const mav<T,1> &data, size_t lmax_, size_t mmax_)
-      : Alm_Base(lmax_, mmax_), alm(data)
-      { MR_assert(alm.size()==Num_Alms(lmax, mmax_), "bad array size"); }
-    Alm (size_t lmax_=0, size_t mmax_=0)
-      : Alm_Base(lmax_,mmax_), alm ({Num_Alms(lmax,mmax_)}) {}
-
-    /*! Sets all coefficients to zero. */
-    void SetToZero ()
-      { alm.fill(0); }
-
-    /*! Multiplies all coefficients by \a factor. */
-    template<typename T2> void Scale (const T2 &factor)
-      { for (size_t m=0; m<alm.size(); ++m) alm.v(m)*=factor; }
-    /*! \a a(l,m) *= \a factor[l] for all \a l,m. */
-    template<typename T2> void ScaleL (const mav<T2,1> &factor)
-      {
-      MR_assert(factor.size()>size_t(lmax),
-        "alm.ScaleL: factor array too short");
-      applyLM([&factor](size_t l, size_t /*m*/, T &v){v*=factor(l);}); 
-      }
-    /*! \a a(l,m) *= \a factor[m] for all \a l,m. */
-    template<typename T2> void ScaleM (const mav<T2,1> &factor)
-      {
-      MR_assert(factor.size()>size_t(Mmax()),
-        "alm.ScaleM: factor array too short");
-      applyLM([&factor](size_t /*l*/, size_t m, T &v){v*=factor(m);}); 
-      }
-    /*! Adds \a num to a_00. */
-    template<typename T2> void Add (const T2 &num)
-      {
-      MR_assert(mval[0]==0, "cannot add a constant: no m=0 mode present");
-      alm.v(index_l0(0))+=num;
-      }
-
-    /*! Returns a reference to the specified coefficient. */
-    T &operator() (size_t l, size_t m)
-      { return alm.v(index(l,m)); }
-    /*! Returns a constant reference to the specified coefficient. */
-    const T &operator() (size_t l, size_t m) const
-      { return alm(index(l,m)); }
-    /*! Returns a constant reference to the specified coefficient. */
-    const T &c(size_t l, size_t m) const
-      { return alm(index(l,m)); }
-
-    /*! Returns a pointer for a given m, from which the address of a_lm
-        can be obtained by adding l. */
-    T *mstart (size_t m)
-      { return &alm.v(index_l0(m)); }
-    /*! Returns a pointer for a given m, from which the address of a_lm
-        can be obtained by adding l. */
-    const T *mstart (size_t m) const
-      { return &alm(index_l0(m)); }
-
-    /*! Returns a constant reference to the a_lm data. */
-    const mav<T,1> &Alms() const { return alm; }
-
-    /*! Returns a reference to the a_lm data. */
-    mav<T,1> &Alms() { return alm; }
-
-    ptrdiff_t stride() const
-      { return alm.stride(0); }
-
-    /*! Adds all coefficients from \a other to the own coefficients. */
-    void Add (const Alm &other)
-      {
-      MR_assert (conformable(other), "A_lm are not conformable");
-      for (size_t m=0; m<alm.size(); ++m)
-        alm.v(m) += other.alm(m);
-      }
-  };
-
 
 // the following struct is an adaptation of the algorithms found in
 // https://github.com/MikaelSlevinsky/FastTransforms
@@ -431,16 +342,16 @@ struct ft_partial_sph_isometry_plan
   };
 
 
-void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
+void xchg_yz(const Alm_Base &base, mav<complex<double>,1> &alm, size_t nthreads)
   {
-  auto lmax = alm.Lmax();
-  MR_assert(lmax==alm.Mmax(), "lmax and mmax must be equal");
+  auto lmax = base.Lmax();
+  MR_assert(lmax==base.Mmax(), "lmax and mmax must be equal");
 
   if (lmax>0) // deal with l==1
     {
-    auto t = -alm(1,0).real()/sqrt(2.);
-    alm(1,0).real(-alm(1,1).imag()*sqrt(2.));
-    alm(1,1).imag(t);
+    auto t = -alm(base.index(1,0)).real()/sqrt(2.);
+    alm.v(base.index(1,0)).real(-alm(base.index(1,1)).imag()*sqrt(2.));
+    alm.v(base.index(1,1)).imag(t);
     }
   if (lmax<=1) return;
   execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
@@ -452,50 +363,50 @@ void xchg_yz(Alm<complex<double>> &alm, size_t nthreads)
 
       int mstart = 1+(l%2);
       for (int i=0; i<F.F11.n; ++i)
-        tin[i] = alm(l,mstart+2*i).imag();
+        tin[i] = alm(base.index(l,mstart+2*i)).imag();
       F.F11.eval(tin, tout);
       for (int i=0; i<F.F11.n; ++i)
-        alm(l,mstart+2*i).imag(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).imag(tout[i]);
 
       mstart = l%2;
       for (int i=0; i<F.F22.n; ++i)
-        tin[i] = alm(l,mstart+2*i).real();
+        tin[i] = alm(base.index(l,mstart+2*i)).real();
       if (mstart==0)
         tin[0]/=sqrt(2.);
       F.F22.eval(tin, tout);
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F22.n; ++i)
-        alm(l,mstart+2*i).real(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).real(tout[i]);
 
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
-        tin[i] = alm(l,mstart+2*i).imag();
+        tin[i] = alm(base.index(l,mstart+2*i)).imag();
 
       mstart = 1-(l%2);
       for (int i=0; i<F.F12.n; ++i)
-        tin2[i] = alm(l,mstart+2*i).real();
+        tin2[i] = alm(base.index(l,mstart+2*i)).real();
       if (mstart==0)
         tin2[0]/=sqrt(2.);
       F.F21.eval(tin,tout);
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F12.n; ++i)
-        alm(l,mstart+2*i).real(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).real(tout[i]);
 
       F.F12.eval(tin2,tout);
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
-        alm(l,mstart+2*i).imag(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).imag(tout[i]);
       }
     });
   }
 
-template<typename T> void rotate_alm (Alm<complex<T>> &alm,
+template<typename T> void rotate_alm (const Alm_Base &base, mav<complex<T>,1> &alm,
   double psi, double theta, double phi, size_t nthreads)
   {
-  auto lmax=alm.Lmax();
-  MR_assert (alm.complete(), "rotate_alm: need complete A_lm set");
+  auto lmax=base.Lmax();
+  MR_assert (base.complete(), "rotate_alm: need complete A_lm set");
 
   if (theta!=0)
     {
@@ -504,22 +415,22 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
         {
         auto exppsi = polar(1.,-psi*m);
         for (size_t l=m; l<=lmax; ++l)
-          alm(l,m)*=exppsi;
+          alm.v(base.index(l,m))*=exppsi;
         }
-    xchg_yz(alm, nthreads);
+    xchg_yz(base, alm, nthreads);
     for (size_t m=0; m<=lmax; ++m)
       {
       auto exptheta = polar(1.,-theta*m);
       for (size_t l=m; l<=lmax; ++l)
-        alm(l,m)*=exptheta;
+        alm.v(base.index(l,m))*=exptheta;
       }
-    xchg_yz(alm, nthreads);
+    xchg_yz(base, alm, nthreads);
     if (phi!=0)
       for (size_t m=0; m<=lmax; ++m)
         {
         auto expphi = polar(1.,-phi*m);
         for (size_t l=m; l<=lmax; ++l)
-          alm(l,m)*=expphi;
+          alm.v(base.index(l,m))*=expphi;
         }
     }
   else
@@ -528,13 +439,12 @@ template<typename T> void rotate_alm (Alm<complex<T>> &alm,
         {
         auto expang = polar(1.,-(psi+phi)*m);
         for (size_t l=m; l<=lmax; ++l)
-          alm(l,m) *= expang;
+          alm.v(base.index(l,m)) *= expang;
         }
   }
 }
 
 using detail_alm::Alm_Base;
-using detail_alm::Alm;
 using detail_alm::rotate_alm;
 }
 

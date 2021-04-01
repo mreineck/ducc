@@ -87,16 +87,24 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
     }
   }
 
+py::array Pyget_gridweights(const string &type, size_t nrings)
+  {
+  auto wgt_ = make_Pyarr<double>({nrings});
+  auto wgt = to_mav<double,1>(wgt_, true);
+  get_gridweights(type, wgt);
+  return wgt_;
+  }
+
 template<typename T> py::array alm2leg2(const py::array &alm_, const py::array &theta_, size_t lmax, size_t spin, const py::object &mval_, const py::object &mstart_, size_t nthreads, py::object &out_)
   {
   auto alm = to_mav<complex<double>,2>(alm_, false);
   auto theta = to_mav<double,1>(theta_, false);
   size_t nalm = ((lmax+1)*(lmax+2))/2;
-  MR_assert(alm.shape(0)==nalm, "bad a_lm array size");
+  MR_assert(alm.shape(1)==nalm, "bad a_lm array size");
   MR_assert(mval_.is_none()==mstart_.is_none(), "mval and mstart must be supplied together");
   mav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
-  auto leg_ = get_optional_Pyarr<complex<T>>(out_, {theta.shape(0),mval.shape(0),alm.shape(1)});
+  auto leg_ = get_optional_Pyarr<complex<T>>(out_, {alm.shape(0),theta.shape(0),mval.shape(0)});
   auto leg = to_mav<complex<double>,3>(leg_, true);
   alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
   return leg_;
@@ -114,8 +122,8 @@ template<typename T> py::array leg2alm2(const py::array &leg_, const py::array &
   auto leg = to_mav<complex<double>,3>(leg_, false);
   auto theta = to_mav<double,1>(theta_, false);
   size_t nalm = ((lmax+1)*(lmax+2))/2;
-  MR_assert(leg.shape(0)==theta.shape(0), "bad leg array size");
-  auto alm_ = get_optional_Pyarr<complex<T>>(out_, {nalm,leg.shape(2)});
+  MR_assert(leg.shape(1)==theta.shape(0), "bad leg array size");
+  auto alm_ = get_optional_Pyarr<complex<T>>(out_, {leg.shape(0),nalm});
   auto alm = to_mav<complex<double>,2>(alm_, true);
   mav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
@@ -131,32 +139,23 @@ py::array Pyleg2alm(const py::array &leg, const py::array &theta, size_t lmax, s
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
-py::array Pyclenshaw_curtis_weights(int64_t nrings)
-  {
-  MR_assert(nrings>2, "nrings must be larger than 2");
-  py::array_t<double> res_(nrings);
-  auto res = to_mav<double,1>(res_, true);
-  clenshaw_curtis_weights(res);
-  return res_;
-  }
-
 py::array Pyprep_for_analysis(py::array &leg_, size_t spin, size_t nthreads)
   {
   auto leg = to_mav<complex<double>,3>(leg_, true);
   prep_for_analysis(leg, spin, nthreads);
   return leg_;
   }
-py::array Pyprep_for_analysis2(py::array &leg_, size_t lmax, size_t spin, size_t nthreads)
+py::array Pyprep_for_analysis2(py::array &leg_, size_t spin, size_t nthreads)
   {
   auto leg = to_mav<complex<double>,3>(leg_, true);
-  prep_for_analysis2(leg, lmax, spin, nthreads);
+  prep_for_analysis2(leg, spin, nthreads);
   return leg_;
   }
 void Pyresample_theta(const py::array &legi_, bool npi, bool spi,
   py::array &lego_, bool npo, bool spo, size_t spin, size_t nthreads)
   {
-  auto legi = to_mav<complex<double>,3>(legi_, false);
-  auto lego = to_mav<complex<double>,3>(lego_, true);
+  auto legi = to_mav<complex<double>,2>(legi_, false);
+  auto lego = to_mav<complex<double>,2>(lego_, true);
   resample_theta(legi, npi, spi, lego, npo, spo, spin, nthreads);
   }
 
@@ -312,11 +311,13 @@ void add_sht(py::module_ &msup)
   m.doc() = sht_DS;
 
 #if 0
+//  m.def("synthesis", &Pysynthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
+//  m.def("synthesis", &Pysynthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
+  m.def("get_gridweights", &Pyget_gridweights, "type"_a, "nrings"_a);
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
-  m.def("clenshaw_curtis_weights", &Pyclenshaw_curtis_weights, "nrings"_a);
   m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
-  m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "lmax"_a, "spin"_a, "nthreads"_a=1);
+  m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
 #endif
 

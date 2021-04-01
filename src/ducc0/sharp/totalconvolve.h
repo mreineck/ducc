@@ -548,108 +548,81 @@ template<typename T> class ConvolverPlan
       }
 
     void getPlane(const mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
+      size_t nplanes=1+(mbeam>0);
       auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
       MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
       Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
       MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
       MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
-      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
-      if (mbeam>0)
-        {
-        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
-        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
-        }
+      MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
       MR_assert(mbeam <= kmax, "mbeam too high");
 
       vector<T> lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
-      if (mbeam==0)
-        {
-        Alm<complex<T>> a1(lmax, lmax);
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
+      Alm_Base base(lmax, lmax);
+      mav<complex<T>,2> aarr({nplanes,base.Num_Alms()});
+      for (size_t m=0; m<=lmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          aarr.v(0, base.index(l,m))=0.;
+          if (mbeam>0)
+            aarr.v(1, base.index(l,m))=0.;
+          if (l>=mbeam)
             {
-            a1(l,m) = vslm(islm.index(l,m),0)*vblm(iblm.index(l,0),0).real()*lnorm[l];
-            for (size_t i=1; i<ncomp; ++i)
-              a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
+            auto norm = (mbeam>0) ? -lnorm[l] : lnorm[l];
+            for (size_t i=0; i<ncomp; ++i)
+              {
+              auto tmp = vblm(iblm.index(l,mbeam),i)*norm;
+              aarr.v(0,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.real();
+              if (mbeam>0)
+                aarr.v(1,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.imag();
+              }
             }
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
-        correct(m1,0);
-        }
-      else
+          }
+      auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {nplanes, ntheta_s, nphi_s});
+      synthesis(aarr, lmax, subplanes, mbeam, "CC", nthreads);
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
-            {
-            a1(l,m)=a2(l,m)=0.;
-            if (l>=mbeam)
-              for (size_t i=0; i<ncomp; ++i)
-                {
-                auto tmp = vblm(iblm.index(l,mbeam),i)*(-lnorm[l]);
-                a1(l,m) += vslm(islm.index(l,m),i)*tmp.real();
-                a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
-                }
-            }
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
-        synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
-        correct(m1,mbeam);
-        correct(m2,mbeam);
+        auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
+        correct(m,mbeam);
         }
+
       // fill border regions
       T fct = (mbeam&1) ? -1 : 1;
-      for (size_t i=0; i<nbtheta; ++i)
-        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
-          {
-          if (j2>=nphi_b) j2-=nphi_b;
-          for (size_t l=0; l<re.shape(1); ++l)
-            {
-            re.v(nbtheta-1-i,j2+nbphi) = fct*re(nbtheta+1+i,j+nbphi);
-            re.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*re(nbtheta+ntheta_b-2-i,j+nbphi);
-            }
-          if (mbeam>0)
-            {
-            im.v(nbtheta-1-i,j2+nbphi) = fct*im(nbtheta+1+i,j+nbphi);
-            im.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*im(nbtheta+ntheta_b-2-i,j+nbphi);
-            }
-          }
-      for (size_t i=0; i<ntheta; ++i)
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        for (size_t j=0; j<nbphi; ++j)
-          {
-          re.v(i,j) = re(i,j+nphi_b);
-          re.v(i,j+nphi_b+nbphi) = re(i,j+nbphi);
-          if (mbeam>0)
+        for (size_t i=0; i<nbtheta; ++i)
+          for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
             {
-            im.v(i,j) = im(i,j+nphi_b);
-            im.v(i,j+nphi_b+nbphi) = im(i,j+nbphi);
+            if (j2>=nphi_b) j2-=nphi_b;
+            planes.v(iplane,nbtheta-1-i,j2+nbphi) = fct*planes(iplane,nbtheta+1+i,j+nbphi);
+            planes.v(iplane,nbtheta+ntheta_b+i,j2+nbphi) = fct*planes(iplane,nbtheta+ntheta_b-2-i,j+nbphi);
             }
-          }
-        // SIMD buffer
-        for (size_t j=0; j<vlen; ++j)
+        for (size_t i=0; i<ntheta; ++i)
           {
-          re.v(i, nphi-vlen+j) = T(0);
-          if (mbeam>0)
-            im.v(i, nphi-vlen+j) = T(0);
+          for (size_t j=0; j<nbphi; ++j)
+            {
+            planes.v(iplane,i,j) = planes(iplane,i,j+nphi_b);
+            planes.v(iplane,i,j+nphi_b+nbphi) = planes(iplane,i,j+nbphi);
+            }
+          // SIMD buffer
+          for (size_t j=0; j<vlen; ++j)
+            planes.v(iplane, i, nphi-vlen+j) = T(0);
           }
         }
       }
+
     void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
       mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
       mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
-      getPlane(vslm, vblm, mbeam, re, im);
+      getPlane(vslm, vblm, mbeam, planes);
       }
 
     void interpol(const mav<T,3> &cube, size_t itheta0,
@@ -706,69 +679,49 @@ template<typename T> class ConvolverPlan
         }
       }
 
-     void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+    void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,
+      size_t mbeam, mav<T,3> &planes) const
       {
+      size_t nplanes=1+(mbeam>0);
       auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
       MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
       Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
       MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
       MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
-      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
-      if (mbeam>0)
-        {
-        MR_assert(re.shape()==im.shape(), "re and im must have identical shape");
-        MR_assert(re.stride()==im.stride(), "re and im must have identical strides");
-        }
+      MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
       MR_assert(mbeam <= kmax, "mbeam too high");
 
       // move stuff from border regions onto the main grid
-      for (size_t i=0; i<ntheta; ++i)
-        for (size_t j=0; j<nbphi; ++j)
-          {
-          re.v(i,j+nphi_b) += re(i,j);
-          re.v(i,j+nbphi) += re(i,j+nphi_b+nbphi);
-          if (mbeam>0)
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
+        {
+        for (size_t i=0; i<ntheta; ++i)
+          for (size_t j=0; j<nbphi; ++j)
             {
-            im.v(i,j+nphi_b) += im(i,j);
-            im.v(i,j+nbphi) += im(i,j+nphi_b+nbphi);
+            planes.v(iplane,i,j+nphi_b) += planes(iplane,i,j);
+            planes.v(iplane,i,j+nbphi) += planes(iplane,i,j+nphi_b+nbphi);
             }
-          }
 
-      for (size_t i=0; i<nbtheta; ++i)
-        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
+        for (size_t i=0; i<nbtheta; ++i)
+          for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
+            {
+            T fct = (mbeam&1) ? -1 : 1;
+            if (j2>=nphi_b) j2-=nphi_b;
+            planes.v(iplane,nbtheta+1+i,j+nbphi) += fct*planes(iplane,nbtheta-1-i,j2+nbphi);
+            planes.v(iplane,nbtheta+ntheta_b-2-i, j+nbphi) += fct*planes(iplane,nbtheta+ntheta_b+i,j2+nbphi);
+            }
+
+        // special treatment for poles
+        for (size_t j=0,j2=nphi_b/2; j<nphi_b/2; ++j,++j2)
           {
           T fct = (mbeam&1) ? -1 : 1;
           if (j2>=nphi_b) j2-=nphi_b;
-          re.v(nbtheta+1+i,j+nbphi) += fct*re(nbtheta-1-i,j2+nbphi);
-          re.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*re(nbtheta+ntheta_b+i,j2+nbphi);
-          if (mbeam>0)
-            {
-            im.v(nbtheta+1+i,j+nbphi) += fct*im(nbtheta-1-i,j2+nbphi);
-            im.v(nbtheta+ntheta_b-2-i, j+nbphi) += fct*im(nbtheta+ntheta_b+i,j2+nbphi);
-            }
-          }
-
-      // special treatment for poles
-      for (size_t j=0,j2=nphi_b/2; j<nphi_b/2; ++j,++j2)
-        {
-        T fct = (mbeam&1) ? -1 : 1;
-        if (j2>=nphi_b) j2-=nphi_b;
-        T tval = (re(nbtheta,j+nbphi) + fct*re(nbtheta,j2+nbphi));
-        re.v(nbtheta,j+nbphi) = tval;
-        re.v(nbtheta,j2+nbphi) = fct*tval;
-        tval = (re(nbtheta+ntheta_b-1,j+nbphi) + fct*re(nbtheta+ntheta_b-1,j2+nbphi));
-        re.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
-        re.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
-        if (mbeam>0)
-          {
-          tval = (im(nbtheta,j+nbphi) + fct*im(nbtheta,j2+nbphi));
-          im.v(nbtheta,j+nbphi) = tval;
-          im.v(nbtheta,j2+nbphi) = fct*tval;
-          tval = (im(nbtheta+ntheta_b-1,j+nbphi) + fct*im(nbtheta+ntheta_b-1,j2+nbphi));
-          im.v(nbtheta+ntheta_b-1,j+nbphi) = tval;
-          im.v(nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
+          T tval = planes(iplane,nbtheta,j+nbphi) + fct*planes(iplane,nbtheta,j2+nbphi);
+          planes.v(iplane,nbtheta,j+nbphi) = tval;
+          planes.v(iplane,nbtheta,j2+nbphi) = fct*tval;
+          tval = planes(iplane,nbtheta+ntheta_b-1,j+nbphi) + fct*planes(iplane,nbtheta+ntheta_b-1,j2+nbphi);
+          planes.v(iplane,nbtheta+ntheta_b-1,j+nbphi) = tval;
+          planes.v(iplane,nbtheta+ntheta_b-1,j2+nbphi) = fct*tval;
           }
         }
 
@@ -776,46 +729,35 @@ template<typename T> class ConvolverPlan
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
-      if (mbeam==0)
-        {
-        Alm<complex<T>> a1(lmax, lmax);
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        decorrect(m1,0);
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        adjoint_synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
-            for (size_t i=0; i<ncomp; ++i)
-              vslm.v(islm.index(l,m),i) += conj(a1(l,m))*vblm(iblm.index(l,0),i).real()*lnorm[l];
-        }
-      else
-        {
-        Alm<complex<T>> a1(lmax, lmax), a2(lmax,lmax);
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        auto m21 = subarray<2>(m2, {0,0},{ntheta_s, nphi_s});
-        decorrect(m1,mbeam);
-        decorrect(m2,mbeam);
+      Alm_Base base(lmax,lmax);
 
-        adjoint_synthesis(a1.Alms(), a2.Alms(), lmax, m11, m21, mbeam, "CC", nthreads);
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
-            if (l>=mbeam)
-              for (size_t i=0; i<ncomp; ++i)
-                {
-                auto tmp = vblm(iblm.index(l,mbeam),i)*(-2*lnorm[l]);
-                vslm.v(islm.index(l,m),i) += conj(a1(l,m))*tmp.real();
-                vslm.v(islm.index(l,m),i) += conj(a2(l,m))*tmp.imag();
-                }
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
+        {
+        auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
+        decorrect(m,mbeam);
         }
+      auto subplanes=subarray<3>(planes,{0, nbtheta, nbphi}, {nplanes, ntheta_s, nphi_s});
+
+      mav<complex<T>,2> aarr({nplanes, base.Num_Alms()});
+      adjoint_synthesis(aarr, lmax, subplanes, mbeam, "CC", nthreads);
+      for (size_t m=0; m<=lmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          if (l>=mbeam)
+            for (size_t i=0; i<ncomp; ++i)
+              {
+              auto tmp = vblm(iblm.index(l,mbeam),i)*lnorm[l] * T((mbeam==0) ? 1 : (-2));
+              vslm.v(islm.index(l,m),i) += conj(aarr(0,base.index(l,m)))*tmp.real();
+              if (mbeam>0)
+                vslm.v(islm.index(l,m),i) += conj(aarr(1,base.index(l,m)))*tmp.imag();
+              }
       }
+
     void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
-      size_t mbeam, mav<T,2> &re, mav<T,2> &im) const
+      size_t mbeam, mav<T,3> &planes) const
       {
       mav<complex<T>,2> vslm(&slm.v(0), {slm.shape(0),1}, {slm.stride(0),0}, true);
       mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
-      updateSlm(vslm, vblm, mbeam, re, im);
+      updateSlm(vslm, vblm, mbeam, planes);
       }
 
     void prepPsi(mav<T,3> &subcube) const

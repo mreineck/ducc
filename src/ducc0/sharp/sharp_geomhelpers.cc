@@ -204,12 +204,6 @@ unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, p
   return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride, phi0.data(), theta.data(), weight_.data());
   }
 
-unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside, ptrdiff_t stride,
-  const double *weight)
-  {
-  return sharp_make_subset_healpix_geom_info(nside, stride, 4*nside-1, nullptr, weight);
-  }
-
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
 static vector<double> get_dh_weights(size_t nrings)
   {
@@ -307,7 +301,7 @@ void get_gridinfo(const string &type,
   else if (type=="DH") // Driscoll-Healy
     {
     for (size_t m=0; m<nrings; ++m)
-    theta.v(m) = m*pi/nrings;
+      theta.v(m) = m*pi/nrings;
     if (do_wgt)
       {
       auto xwgt = get_dh_weights(nrings);

@@ -17,7 +17,7 @@
 from time import time
 
 import numpy as np
-import scipy
+import scipy.fft
 from ducc0.wgridder import dirty2ms as dirty2ms_ducc
 from ducc0.wgridder import ms2dirty as ms2dirty_ducc
 from numba import njit

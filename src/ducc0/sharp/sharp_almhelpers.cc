@@ -134,13 +134,4 @@ unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (size_t lmax,
     mvstart[m] = stride*ptrdiff_t((m*(tval-m))>>1);
   return make_unique<sharp_standard_alm_info>(lmax, mmax, stride, mvstart.data());
   }
-
-unique_ptr<sharp_standard_alm_info> sharp_make_rectangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride)
-  {
-  vector<ptrdiff_t> mvstart(mmax+1);
-  for (size_t m=0; m<=mmax; ++m)
-    mvstart[m] = stride*ptrdiff_t(m*(lmax+1));
-  return make_unique<sharp_standard_alm_info>(lmax, mmax, stride, mvstart.data());
-  }
-
 }}

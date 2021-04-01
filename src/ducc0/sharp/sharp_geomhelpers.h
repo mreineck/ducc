@@ -92,7 +92,7 @@ class sharp_standard_geom_info: public sharp_geom_info
     \note if \a rings is a null pointer, take all rings
     \ingroup geominfogroup */
 std::unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
-  const size_t *rings, const double *weight);
+  const size_t *rings=nullptr, const double *weight=nullptr);
 
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside. \a weight contains the relative ring
@@ -100,7 +100,9 @@ std::unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nsi
     \note if \a weight is a null pointer, all weights are assumed to be 1.
     \ingroup geominfogroup */
 std::unique_ptr<sharp_geom_info> sharp_make_weighted_healpix_geom_info (size_t nside, ptrdiff_t stride,
-  const double *weight);
+  const double *weight=nullptr)
+  { return sharp_make_subset_healpix_geom_info(nside, stride, 4*nside-1, nullptr, weight); }
+
 
 /*! Creates a geometry information describing a HEALPix map with an
     Nside parameter \a nside.

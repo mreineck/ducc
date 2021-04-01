@@ -73,8 +73,8 @@ template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
   auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
   auto a2 = to_mav<complex<T>,1>(alm,true);
   for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
-  auto tmp = Alm<complex<T>>(a2,lmax,lmax);
-  rotate_alm(tmp, psi, theta, phi, nthreads);
+  Alm_Base base(lmax,lmax);
+  rotate_alm(base, a2, psi, theta, phi, nthreads);
   return move(alm);
   }
 
