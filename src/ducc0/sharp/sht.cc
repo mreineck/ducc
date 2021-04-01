@@ -1235,6 +1235,8 @@ vector<ringdata> make_ringdata(const mav<double,1> &theta, size_t lmax,
   return res;
   }
 
+#if 0
+
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
 static vector<double> get_dh_weights(size_t nrings)
   {
@@ -1647,5 +1649,6 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthread
       }
     }
   }
+#endif
 
 }}

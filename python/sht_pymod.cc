@@ -49,7 +49,7 @@ namespace py = pybind11;
 
 auto None = py::none();
 
-#if 1
+#if 0
 
 void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
   mav<size_t,1> &mval, mav<size_t,1> &mstart)
@@ -310,7 +310,9 @@ void add_sht(py::module_ &msup)
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
 
-#if 1
+#if 0
+//  m.def("synthesis", &Pysynthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
+//  m.def("synthesis", &Pysynthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
   m.def("get_gridweights", &Pyget_gridweights, "type"_a, "nrings"_a);
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
