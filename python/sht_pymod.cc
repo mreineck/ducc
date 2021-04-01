@@ -91,9 +91,7 @@ py::array Pyget_gridweights(const string &type, size_t nrings)
   {
   auto wgt_ = make_Pyarr<double>({nrings});
   auto wgt = to_mav<double,1>(wgt_, true);
-  auto wgt2 = get_gridweights(type, nrings);
-  for (size_t i=0; i<nrings; ++i)
-    wgt.v(i) = wgt2(i);
+  get_gridweights(type, wgt);
   return wgt_;
   }
 

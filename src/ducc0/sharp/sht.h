@@ -277,6 +277,7 @@ template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
   Ylmgen &gen, size_t mi);
 
 #if 1
+void get_gridweights(const string &type, mav<double,1> &wgt);
 mav<double,1> get_gridweights(const string &type, size_t nrings);
 
 template<typename T> void alm2leg(  // associated Legendre transform
@@ -347,6 +348,19 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
   mav<T,3> map2(map.cdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)});
   adjoint_synthesis (alm2, lmax, map2, 0, geometry, nthreads);
   }
+// template<typename T> void analysis(mav<complex<T>,2> &alm, size_t lmax,
+//   size_t mmax, const mav<T,3> &map, size_t spin, const string &geometry,
+//   size_t nthreads)
+//   {
+// // if nphi is too low => error
+// // if nrings is too low for geometry => error
+// // nrings high enough for analysis with quadrature weights => standard analysis
+// // - map2leg
+// // - upsample to CC grid with enough rings for quadrature
+// // - apply CC weights
+// // - resample odd rings to fall on even rings
+// // - adjoint synthesis
+//   }
 }
 
 #if 1

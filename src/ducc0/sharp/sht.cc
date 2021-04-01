@@ -1249,9 +1249,9 @@ static vector<double> get_dh_weights(size_t nrings)
   return weight;
   }
 
-mav<double,1> get_gridweights(const string &type, size_t nrings)
+void get_gridweights(const string &type, mav<double,1> &wgt)
   {
-  mav<double,1> wgt({nrings});
+  size_t nrings=wgt.shape(0);
   if (type=="GL") // Gauss-Legendre
     {
     ducc0::GL_Integrator integ(nrings);
@@ -1306,8 +1306,15 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
     }
   else
     MR_fail("unsupported grid type");
+  }
+
+mav<double,1> get_gridweights(const string &type, size_t nrings)
+  {
+  mav<double,1> wgt({nrings});
+  get_gridweights(type, wgt);
   return wgt;
   }
+
 
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)

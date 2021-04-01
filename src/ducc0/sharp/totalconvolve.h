@@ -551,96 +551,69 @@ template<typename T> class ConvolverPlan
       size_t mbeam, mav<T,3> &planes) const
       {
       MR_assert(planes.shape(0)==1+(mbeam>0), "bad number of planes");
-      auto re = subarray<2>(planes, {0,0,0}, {0,MAXIDX,MAXIDX});
-      auto im = (mbeam>0) ? subarray<2>(planes, {1,0,0}, {0,MAXIDX,MAXIDX}) : mav<T,2>({0,0});
       auto ncomp = vslm.shape(1);
       MR_assert(ncomp>0, "need at least one component");
       MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
       Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
       MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
       MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
-      MR_assert(re.conformable({Ntheta(), Nphi()}), "bad re shape");
+      MR_assert(planes.conformable({planes.shape(0), Ntheta(), Nphi()}), "bad planes shape");
       MR_assert(mbeam <= kmax, "mbeam too high");
 
       vector<T> lnorm(lmax+1);
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
-      if (mbeam==0)
-        {
-        Alm<complex<T>> a1(lmax, lmax);
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
+      Alm_Base base(lmax, lmax);
+      size_t nplanes=1+(mbeam>0);
+      mav<complex<T>,2> aarr({nplanes,base.Num_Alms()});
+      for (size_t m=0; m<=lmax; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          aarr.v(0, base.index(l,m))=0.;
+          if (mbeam>0)
+            aarr.v(1, base.index(l,m))=0.;
+          if (l>=mbeam)
             {
-            a1(l,m) = vslm(islm.index(l,m),0)*vblm(iblm.index(l,0),0).real()*lnorm[l];
-            for (size_t i=1; i<ncomp; ++i)
-              a1(l,m) += vslm(islm.index(l,m),i)*vblm(iblm.index(l,0),i).real()*lnorm[l];
+            auto norm = (mbeam>0) ? -lnorm[l] : lnorm[l];
+            for (size_t i=0; i<ncomp; ++i)
+              {
+              auto tmp = vblm(iblm.index(l,mbeam),i)*norm;
+              aarr.v(0,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.real();
+              if (mbeam>0)
+                aarr.v(1,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.imag();
+              }
             }
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
-        correct(m1,0);
-        }
-      else
+          }
+      auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {nplanes, ntheta_s, nphi_s});
+      synthesis(aarr, lmax, subplanes, mbeam, "CC", nthreads);
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        mav<complex<T>,2> almarr({2, Alm_Base::Num_Alms(lmax,lmax)});
-        auto almarr1 = subarray<1>(almarr, {0, 0}, {0, MAXIDX});
-        auto almarr2 = subarray<1>(almarr, {1, 0}, {0, MAXIDX});
-        Alm<complex<T>> a1(almarr1, lmax, lmax), a2(almarr2, lmax, lmax);
-        for (size_t m=0; m<=lmax; ++m)
-          for (size_t l=m; l<=lmax; ++l)
-            {
-            a1(l,m)=a2(l,m)=0.;
-            if (l>=mbeam)
-              for (size_t i=0; i<ncomp; ++i)
-                {
-                auto tmp = vblm(iblm.index(l,mbeam),i)*(-lnorm[l]);
-                a1(l,m) += vslm(islm.index(l,m),i)*tmp.real();
-                a2(l,m) += vslm(islm.index(l,m),i)*tmp.imag();
-                }
-            }
-        auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
-        auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {2, ntheta_s, nphi_s});
-        synthesis(almarr, lmax, subplanes, mbeam, "CC", nthreads);
-        correct(m1,mbeam);
-        correct(m2,mbeam);
+        auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
+        correct(m,mbeam);
         }
+
       // fill border regions
       T fct = (mbeam&1) ? -1 : 1;
-      for (size_t i=0; i<nbtheta; ++i)
-        for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
-          {
-          if (j2>=nphi_b) j2-=nphi_b;
-          for (size_t l=0; l<re.shape(1); ++l)
-            {
-            re.v(nbtheta-1-i,j2+nbphi) = fct*re(nbtheta+1+i,j+nbphi);
-            re.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*re(nbtheta+ntheta_b-2-i,j+nbphi);
-            }
-          if (mbeam>0)
-            {
-            im.v(nbtheta-1-i,j2+nbphi) = fct*im(nbtheta+1+i,j+nbphi);
-            im.v(nbtheta+ntheta_b+i,j2+nbphi) = fct*im(nbtheta+ntheta_b-2-i,j+nbphi);
-            }
-          }
-      for (size_t i=0; i<ntheta; ++i)
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        for (size_t j=0; j<nbphi; ++j)
-          {
-          re.v(i,j) = re(i,j+nphi_b);
-          re.v(i,j+nphi_b+nbphi) = re(i,j+nbphi);
-          if (mbeam>0)
+        for (size_t i=0; i<nbtheta; ++i)
+          for (size_t j=0, j2=nphi_b/2; j<nphi_b; ++j,++j2)
             {
-            im.v(i,j) = im(i,j+nphi_b);
-            im.v(i,j+nphi_b+nbphi) = im(i,j+nbphi);
+            if (j2>=nphi_b) j2-=nphi_b;
+            planes.v(iplane,nbtheta-1-i,j2+nbphi) = fct*planes(iplane,nbtheta+1+i,j+nbphi);
+            planes.v(iplane,nbtheta+ntheta_b+i,j2+nbphi) = fct*planes(iplane,nbtheta+ntheta_b-2-i,j+nbphi);
             }
-          }
-        // SIMD buffer
-        for (size_t j=0; j<vlen; ++j)
+        for (size_t i=0; i<ntheta; ++i)
           {
-          re.v(i, nphi-vlen+j) = T(0);
-          if (mbeam>0)
-            im.v(i, nphi-vlen+j) = T(0);
+          for (size_t j=0; j<nbphi; ++j)
+            {
+            planes.v(iplane,i,j) = planes(iplane,i,j+nphi_b);
+            planes.v(iplane,i,j+nphi_b+nbphi) = planes(iplane,i,j+nbphi);
+            }
+          // SIMD buffer
+          for (size_t j=0; j<vlen; ++j)
+            planes.v(iplane, i, nphi-vlen+j) = T(0);
           }
         }
       }
@@ -774,39 +747,37 @@ template<typename T> class ConvolverPlan
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
+      Alm_Base base(lmax,lmax);
       if (mbeam==0)
         {
-        Alm<complex<T>> a1(lmax, lmax);
+        mav<complex<T>,1> a1({base.Num_Alms()});
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         decorrect(m1,0);
         auto m11 = subarray<2>(m1, {0,0},{ntheta_s, nphi_s});
-        adjoint_synthesis(a1.Alms(), lmax, m11, "CC", nthreads); 
+        adjoint_synthesis(a1, lmax, m11, "CC", nthreads); 
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             for (size_t i=0; i<ncomp; ++i)
-              vslm.v(islm.index(l,m),i) += conj(a1(l,m))*vblm(iblm.index(l,0),i).real()*lnorm[l];
+              vslm.v(islm.index(l,m),i) += conj(a1(base.index(l,m)))*vblm(iblm.index(l,0),i).real()*lnorm[l];
         }
       else
         {
-        mav<complex<T>,2> almarr({2, Alm_Base::Num_Alms(lmax,lmax)});
-        auto almarr1 = subarray<1>(almarr, {0, 0}, {0, MAXIDX});
-        auto almarr2 = subarray<1>(almarr, {1, 0}, {0, MAXIDX});
-        Alm<complex<T>> a1(almarr1, lmax, lmax), a2(almarr2, lmax, lmax);
+        mav<complex<T>,2> a12({2, base.Num_Alms()});
         auto m1 = subarray<2>(re, {nbtheta,nbphi},{ntheta_b,nphi_b});
         auto m2 = subarray<2>(im, {nbtheta,nbphi},{ntheta_b,nphi_b});
         auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {2, ntheta_s, nphi_s});
         decorrect(m1,mbeam);
         decorrect(m2,mbeam);
 
-        adjoint_synthesis(almarr, lmax, subplanes, mbeam, "CC", nthreads);
+        adjoint_synthesis(a12, lmax, subplanes, mbeam, "CC", nthreads);
         for (size_t m=0; m<=lmax; ++m)
           for (size_t l=m; l<=lmax; ++l)
             if (l>=mbeam)
               for (size_t i=0; i<ncomp; ++i)
                 {
                 auto tmp = vblm(iblm.index(l,mbeam),i)*(-2*lnorm[l]);
-                vslm.v(islm.index(l,m),i) += conj(a1(l,m))*tmp.real();
-                vslm.v(islm.index(l,m),i) += conj(a2(l,m))*tmp.imag();
+                vslm.v(islm.index(l,m),i) += conj(a12(0,base.index(l,m)))*tmp.real();
+                vslm.v(islm.index(l,m),i) += conj(a12(1,base.index(l,m)))*tmp.imag();
                 }
         }
       }
