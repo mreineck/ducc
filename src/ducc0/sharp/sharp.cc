@@ -123,8 +123,8 @@ struct ringhelper
       data.v(0)=phase(0).real();
       fill(&data.v(1),&data.v(nph+2),0.);
 
-      size_t idx1=1, idx2=nph-1;
-      for (size_t m=1; m<=mmax; ++m)
+      for (size_t m=1, idx1=1, idx2=nph-1; m<=mmax; ++m,
+           idx1=(idx1+1==nph) ? 0 : idx1+1, idx2=(idx2==0) ? nph-1 : idx2-1)
         {
         dcmplx tmp = phase(m);
         if(!norot) tmp*=shiftarr[m];
@@ -138,8 +138,6 @@ struct ringhelper
           data.v(2*idx2)+=tmp.real();
           data.v(2*idx2+1)-=tmp.imag();
           }
-        if (++idx1>=nph) idx1=0;
-        idx2 = (idx2==0) ? nph-1 : idx2-1;
         }
       }
     data.v(1)=data(0);
@@ -167,9 +165,8 @@ struct ringhelper
       }
     else
       {
-      for (size_t m=0; m<=mmax; ++m)
+      for (size_t m=0, idx=0; m<=mmax; ++m, idx=(idx+1==nph) ? 0 : idx+1)
         {
-        auto idx=m%nph;
         dcmplx val;
         if (idx<(nph-idx))
           val = dcmplx(data(2*idx), data(2*idx+1));
