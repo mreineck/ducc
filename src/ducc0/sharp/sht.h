@@ -276,7 +276,7 @@ template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
   mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi);
 
-#if 0
+#if 1
 void get_gridweights(const string &type, mav<double,1> &wgt);
 mav<double,1> get_gridweights(const string &type, size_t nrings);
 
@@ -363,7 +363,7 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
 //   }
 }
 
-#if 0
+#if 1
 using detail_sht::SHT_mode;
 using detail_sht::ALM2MAP;
 using detail_sht::MAP2ALM;
