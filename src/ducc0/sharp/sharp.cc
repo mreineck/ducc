@@ -76,16 +76,14 @@ struct ringhelper
     {
     norot = (abs(phi0)<1e-14);
     if (!norot)
-      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-12)))
+      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-15)))
       {
       shiftarr.resize(mmax+1);
       s_shift = mmax+1;
       phi0_ = phi0;
-// FIXME: improve this by using sincos2pibyn(nph) etc.
+      MultiExp<double, dcmplx> mexp(phi0, mmax+1);
       for (size_t m=0; m<=mmax; ++m)
-        shiftarr[m] = dcmplx(cos(m*phi0),sin(m*phi0));
-//      double *tmp=(double *) self->shiftarr;
-//      sincos_multi (mmax+1, phi0, &tmp[1], &tmp[0], 2);
+        shiftarr[m] = mexp[m];
       }
     if (nph!=length)
       {

@@ -109,9 +109,46 @@ template<typename T, typename Tc> class UnityRoots
       }
   };
 
+template<typename T, typename Tc> class MultiExp
+  {
+  private:
+    using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
+    struct cmplx_ { Thigh r, i; };
+    size_t N, mask, shift;
+    vector<cmplx_> v1, v2;
+
+  public:
+    MultiExp(T ang0, size_t n)
+      : N(n)
+      {
+      Thigh ang = ang0;
+      size_t nval = n+2;
+      shift = 1;
+      while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
+      mask = (size_t(1)<<shift)-1;
+      v1.resize(mask+1);
+      v1[0]={Thigh(1), Thigh(0)};
+      for (size_t i=1; i<v1.size(); ++i)
+        v1[i] = {cos(i*ang), sin(i*ang)};
+      v2.resize((nval+mask)/(mask+1));
+      v2[0]={Thigh(1), Thigh(0)};
+      for (size_t i=1; i<v2.size(); ++i)
+        v2[i] = {cos((i*(mask+1))*ang), sin((i*(mask+1))*ang)};
+      }
+
+    size_t size() const { return N; }
+
+    Tc operator[](size_t idx) const
+      {
+      auto x1=v1[idx&mask], x2=v2[idx>>shift];
+      return Tc(T(x1.r*x2.r-x1.i*x2.i), T(x1.r*x2.i+x1.i*x2.r));
+      }
+  };
+
 }
 
 using detail_unity_roots::UnityRoots;
+using detail_unity_roots::MultiExp;
 
 }
 
