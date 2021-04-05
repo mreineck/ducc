@@ -34,6 +34,7 @@
 #include "ducc0/sharp/sharp.h"
 #include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/sharp/sharp_almhelpers.h"
+#include "ducc0/sharp/alm.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -48,6 +49,18 @@ using namespace std;
 namespace py = pybind11;
 
 auto None = py::none();
+
+template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
+  double psi, double theta, double phi, size_t nthreads)
+  {
+  auto a1 = to_mav<complex<T>,1>(alm_);
+  auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
+  auto a2 = to_mav<complex<T>,1>(alm,true);
+  for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
+  Alm_Base base(lmax,lmax);
+  rotate_alm(base, a2, psi, theta, phi, nthreads);
+  return move(alm);
+  }
 
 #if 1
 
@@ -319,6 +332,9 @@ void add_sht(py::module_ &msup)
   m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
+  m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
+    "phi"_a, "nthreads"_a=1);
+
 #endif
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())

@@ -291,6 +291,22 @@ template<typename T> void alm2leg(  // associated Legendre transform
   size_t nthreads,
   SHT_mode mode);
 
+template<typename T> void leg2map(  // FFT
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  mav<complex<T>,2> &map, // (ncomp, pix)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &offset, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  size_t nthreads);
+
+template<typename T> void map2leg(  // FFT
+  const mav<complex<T>,2> &map, // (ncomp, pix)
+  mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &offset, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  size_t nthreads);
+
 template<typename T> void leg2alm(  // associated Legendre transform
   const mav<complex<T>,3> &leg, //  (ncomp, nrings, nm)
   mav<complex<T>,2> &alm, // (ncomp, lmidx)
@@ -370,6 +386,8 @@ using detail_sht::MAP2ALM;
 using detail_sht::get_gridweights;
 using detail_sht::alm2leg;
 using detail_sht::leg2alm;
+using detail_sht::map2leg;
+using detail_sht::leg2map;
 using detail_sht::prep_for_analysis;
 using detail_sht::prep_for_analysis2;
 using detail_sht::resample_theta;

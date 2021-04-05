@@ -17,7 +17,6 @@
 import ducc0.totalconvolve as totalconvolve
 import numpy as np
 import ducc0.sht as sht
-import ducc0.misc as misc
 import time
 import matplotlib.pyplot as plt
 
@@ -103,9 +102,9 @@ bar2 = np.zeros((nth, nph))
 blmfull = np.zeros(slm.shape)+0j
 blmfull[0:blm.shape[0], :] = blm
 for ith in range(nth):
-    rbeamth = misc.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
+    rbeamth = sht.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
     for iph in range(nph):
-        rbeam = misc.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
+        rbeam = sht.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
         bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)

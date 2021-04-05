@@ -19,7 +19,6 @@ import pytest
 from numpy.testing import assert_
 import ducc0.totalconvolve as totalconvolve
 import ducc0.sht as sht
-import ducc0.misc as misc
 
 pmp = pytest.mark.parametrize
 
@@ -95,7 +94,7 @@ def test_against_convolution(lkmax):
     blm2[0:blm.shape[0]] = blm
     res2 = np.zeros((nptg,))
     for i in range(nptg):
-        rbeam = misc.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
+        rbeam = sht.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
         res2[i] = convolve(slm, rbeam, lmax).real
     _assert_close(res1, res2, 1e-13)
 
@@ -124,8 +123,8 @@ def test_against_convolution_2(lkmax, ncomp, separate):
     res2 = np.zeros((nptg, ncomp))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = misc.rotate_alm(blm2[:, c], lmax,
-                                    ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            rbeam = sht.rotate_alm(blm2[:, c], lmax,
+                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[i, c] = convolve(slm[:, c], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-13)
@@ -158,8 +157,8 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
     res2 = np.zeros((nptg, ncomp))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = misc.rotate_alm(blm2[:, c], lmax,
-                                    ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            rbeam = sht.rotate_alm(blm2[:, c], lmax,
+                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[i, c] = convolve(slm[:, c], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-6)

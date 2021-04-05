@@ -1447,6 +1447,188 @@ template<typename T> void leg2alm(  // associated Legendre transform
     }); /* end of parallel region */
   }
 
+struct ringhelper
+  {
+  double phi0_;
+  vector<dcmplx> shiftarr;
+  size_t s_shift;
+  unique_ptr<pocketfft_r<double>> plan;
+  size_t length;
+  bool norot;
+  ringhelper() : length(0) {}
+  void update(size_t nph, size_t mmax, double phi0)
+    {
+    norot = (abs(phi0)<1e-14);
+    if (!norot)
+      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-15)))
+      {
+      shiftarr.resize(mmax+1);
+      s_shift = mmax+1;
+      phi0_ = phi0;
+      MultiExp<double, dcmplx> mexp(phi0, mmax+1);
+      for (size_t m=0; m<=mmax; ++m)
+        shiftarr[m] = mexp[m];
+      }
+    if (nph!=length)
+      {
+      plan.reset(new pocketfft_r<double>(nph));
+      length=nph;
+      }
+    }
+  DUCC0_NOINLINE void phase2ring (size_t nph, double phi0,
+    mav<double,1> &data, size_t mmax, const mav<dcmplx,1> &phase)
+    {
+    update (nph, mmax, phi0);
+
+    if (nph>=2*mmax+1)
+      {
+      if (norot)
+        for (size_t m=0; m<=mmax; ++m)
+          {
+          data.v(2*m)=phase(m).real();
+          data.v(2*m+1)=phase(m).imag();
+          }
+      else
+        for (size_t m=0; m<=mmax; ++m)
+          {
+          dcmplx tmp = phase(m)*shiftarr[m];
+          data.v(2*m)=tmp.real();
+          data.v(2*m+1)=tmp.imag();
+          }
+      for (size_t m=2*(mmax+1); m<nph+2; ++m)
+        data.v(m)=0.;
+      }
+    else
+      {
+      data.v(0)=phase(0).real();
+      fill(&data.v(1),&data.v(nph+2),0.);
+
+      for (size_t m=1, idx1=1, idx2=nph-1; m<=mmax; ++m,
+           idx1=(idx1+1==nph) ? 0 : idx1+1, idx2=(idx2==0) ? nph-1 : idx2-1)
+        {
+        dcmplx tmp = phase(m);
+        if(!norot) tmp*=shiftarr[m];
+        if (idx1<(nph+2)/2)
+          {
+          data.v(2*idx1)+=tmp.real();
+          data.v(2*idx1+1)+=tmp.imag();
+          }
+        if (idx2<(nph+2)/2)
+          {
+          data.v(2*idx2)+=tmp.real();
+          data.v(2*idx2+1)-=tmp.imag();
+          }
+        }
+      }
+    data.v(1)=data(0);
+    plan->exec(&(data.v(1)), 1., false);
+    }
+  DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
+    mav<double,1> &data, size_t mmax, mav<dcmplx,1> &phase)
+    {
+    update (nph, mmax, -phi0);
+
+    plan->exec (&(data.v(1)), 1., true);
+    data.v(0)=data(1);
+    data.v(1)=data.v(nph+1)=0.;
+
+    if (mmax<=nph/2)
+      {
+      if (norot)
+        for (size_t m=0; m<=mmax; ++m)
+          phase.v(m) = dcmplx(data(2*m), data(2*m+1));
+      else
+        for (size_t m=0; m<=mmax; ++m)
+          phase.v(m) = dcmplx(data(2*m), data(2*m+1)) * shiftarr[m];
+      }
+    else
+      {
+      for (size_t m=0, idx=0; m<=mmax; ++m, idx=(idx+1==nph) ? 0 : idx+1)
+        {
+        dcmplx val;
+        if (idx<(nph-idx))
+          val = dcmplx(data(2*idx), data(2*idx+1));
+        else
+          val = dcmplx(data(2*(nph-idx)), -data(2*(nph-idx)+1));
+        if (!norot)
+          val *= shiftarr[m];
+        phase.v(m)=val;
+        }
+      }
+    }
+  };
+template<typename T> void leg2map(  // FFT
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  mav<complex<T>,2> &map, // (ncomp, pix)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &offset, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  size_t nthreads)
+  {
+  size_t ncomp=map.shape(0);
+  MR_assert(ncomp==leg.shape(0), "number of components mismatch");
+  size_t nrings=leg.shape(1);
+  MR_assert(nrings>=1, "need at least one ring");
+  MR_assert((nrings==nphi.shape(0)) && (nrings==offset.shape(0))
+         && (nrings==phi0.shape(0)), "inconsistent number of rings");
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
+    nphmax=max(nphi(i),nphmax);
+  MR_assert(leg.shape(2)>=1, "bad mmax");
+  size_t mmax=leg.shape(2)-1;
+  execDynamic(nrings, nthreads, 1, [&](Scheduler &sched)
+    {
+    ringhelper helper;
+    mav<double,1> ringtmp({nphmax+2});
+    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+      {
+      for (size_t icomp=0; icomp<ncomp; ++icomp)
+        {
+        auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
+        helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+        for (size_t i=0; i<nphi(ith); ++i)
+          map.v(icomp,offset(ith)+i) = ringtmp(i);
+        }
+      }
+    }); /* end of parallel region */
+  }
+
+template<typename T> void map2leg(  // FFT
+  const mav<complex<T>,2> &map, // (ncomp, pix)
+  mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &offset, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  size_t nthreads)
+  {
+  size_t ncomp=map.shape(0);
+  MR_assert(ncomp==leg.shape(0), "number of components mismatch");
+  size_t nrings=leg.shape(1);
+  MR_assert(nrings>=1, "need at least one ring");
+  MR_assert((nrings==nphi.shape(0)) && (nrings==offset.shape(0))
+         && (nrings==phi0.shape(0)), "inconsistent number of rings");
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
+    nphmax=max(nphi(i),nphmax);
+  MR_assert(leg.shape(2)>=1, "bad mmax");
+  size_t mmax=leg.shape(2)-1;
+  execDynamic(nrings, nthreads, 1, [&](Scheduler &sched)
+    {
+    ringhelper helper;
+    mav<double,1> ringtmp({nphmax+2});
+    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+      {
+      for (size_t icomp=0; icomp<ncomp; ++icomp)
+        {
+        for (size_t i=0; i<nphi(ith); ++i)
+          ringtmp.v(i) = map(icomp,offset(ith)+i);
+        auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
+        helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+        }
+      }
+    }); /* end of parallel region */
+  }
+
 void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
   mav<complex<double>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {

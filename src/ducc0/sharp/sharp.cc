@@ -91,12 +91,10 @@ struct ringhelper
       length=nph;
       }
     }
-  DUCC0_NOINLINE void phase2ring (const sharp_geom_info &info, size_t iring,
+  DUCC0_NOINLINE void phase2ring (size_t nph, double phi0,
     mav<double,1> &data, size_t mmax, const mav<dcmplx,1> &phase)
     {
-    size_t nph = info.nph(iring);
-
-    update (nph, mmax, info.phi0(iring));
+    update (nph, mmax, phi0);
 
     if (nph>=2*mmax+1)
       {
@@ -141,12 +139,10 @@ struct ringhelper
     data.v(1)=data(0);
     plan->exec(&(data.v(1)), 1., false);
     }
-  DUCC0_NOINLINE void ring2phase (const sharp_geom_info &info, size_t iring,
+  DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
     mav<double,1> &data, size_t mmax, mav<dcmplx,1> &phase)
     {
-    size_t nph = info.nph(iring);
-
-    update (nph, mmax, -info.phi0(iring));
+    update (nph, mmax, -phi0);
 
     plan->exec (&(data.v(1)), 1., true);
     data.v(0)=data(1);
@@ -271,7 +267,7 @@ class sharp_job
     DUCC0_NOINLINE void map2phase (size_t mmax, size_t llim, size_t ulim, mav<dcmplx,3> &phase)
       {
       if (type != SHARP_MAP2ALM) return;
-      ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
+      execDynamic(ulim-llim, nthreads, 1, [&](Scheduler &sched)
         {
         ringhelper helper;
         size_t rstride=ginfo.nphmax()+2;
@@ -279,21 +275,23 @@ class sharp_job
 
         while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
           {
-          ring2ringtmp(ginfo.pair(ith).r1,ringtmp);
+          size_t iring = ginfo.pair(ith).r1;
+          ring2ringtmp(iring,ringtmp);
           for (size_t i=0; i<nmaps(); ++i)
             {
             auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
             auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
-            helper.ring2phase (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
+            helper.ring2phase (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
             }
           if (ginfo.pair(ith).r2!=~size_t(0))
             {
-            ring2ringtmp(ginfo.pair(ith).r2,ringtmp);
+            size_t iring = ginfo.pair(ith).r2;
+            ring2ringtmp(iring,ringtmp);
             for (size_t i=0; i<nmaps(); ++i)
               {
               auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
               auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
-              helper.ring2phase (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
+              helper.ring2phase (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
               }
             }
           }
@@ -303,7 +301,7 @@ class sharp_job
     DUCC0_NOINLINE void phase2map (size_t mmax, size_t llim, size_t ulim, const mav<dcmplx,3> &phase)
       {
       if (type == SHARP_MAP2ALM) return;
-      ducc0::execDynamic(ulim-llim, nthreads, 1, [&](ducc0::Scheduler &sched)
+      execDynamic(ulim-llim, nthreads, 1, [&](Scheduler &sched)
         {
         ringhelper helper;
         size_t rstride=ginfo.nphmax()+2;
@@ -311,22 +309,24 @@ class sharp_job
 
         while (auto rng=sched.getNext()) for(auto ith=rng.lo+llim; ith<rng.hi+llim; ++ith)
           {
+          size_t iring = ginfo.pair(ith).r1;
           for (size_t i=0; i<nmaps(); ++i)
             {
             auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
             auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
-            helper.phase2ring (ginfo, ginfo.pair(ith).r1,rtmp,mmax,ptmp);
+            helper.phase2ring (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
             }
-          ringtmp2ring(ginfo.pair(ith).r1,ringtmp);
+          ringtmp2ring(iring,ringtmp);
           if (ginfo.pair(ith).r2!=~size_t(0))
             {
+            size_t iring = ginfo.pair(ith).r2;
             for (size_t i=0; i<nmaps(); ++i)
               {
               auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
               auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
-              helper.phase2ring (ginfo, ginfo.pair(ith).r2,rtmp,mmax,ptmp);
+              helper.phase2ring (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
               }
-            ringtmp2ring(ginfo.pair(ith).r2,ringtmp);
+            ringtmp2ring(iring,ringtmp);
             }
           }
         }); /* end of parallel region */
@@ -372,7 +372,7 @@ class sharp_job
     /* map->phase where necessary */
         map2phase(mmax, llim, ulim, phase);
 
-        ducc0::execDynamic(ainfo.nm(), nthreads, 1, [&](ducc0::Scheduler &sched)
+        execDynamic(ainfo.nm(), nthreads, 1, [&](Scheduler &sched)
           {
           detail_sht::Ylmgen ylmgen(ylmbase);
           auto almtmp = mav<dcmplx,2>({lmax+2, nalm()});
