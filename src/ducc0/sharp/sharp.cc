@@ -61,117 +61,6 @@ static void get_chunk_info (size_t ndata, size_t nmult, size_t &nchunks, size_t 
   nchunks = (ndata+chunksize-1)/chunksize;
   }
 
-struct ringhelper
-  {
-  double phi0_;
-  vector<dcmplx> shiftarr;
-  size_t s_shift;
-  unique_ptr<pocketfft_r<double>> plan;
-  size_t length;
-  bool norot;
-  ringhelper() : length(0) {}
-  void update(size_t nph, size_t mmax, double phi0)
-    {
-    norot = (abs(phi0)<1e-14);
-    if (!norot)
-      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-15)))
-      {
-      shiftarr.resize(mmax+1);
-      s_shift = mmax+1;
-      phi0_ = phi0;
-      MultiExp<double, dcmplx> mexp(phi0, mmax+1);
-      for (size_t m=0; m<=mmax; ++m)
-        shiftarr[m] = mexp[m];
-      }
-    if (nph!=length)
-      {
-      plan.reset(new pocketfft_r<double>(nph));
-      length=nph;
-      }
-    }
-  DUCC0_NOINLINE void phase2ring (size_t nph, double phi0,
-    mav<double,1> &data, size_t mmax, const mav<dcmplx,1> &phase)
-    {
-    update (nph, mmax, phi0);
-
-    if (nph>=2*mmax+1)
-      {
-      if (norot)
-        for (size_t m=0; m<=mmax; ++m)
-          {
-          data.v(2*m)=phase(m).real();
-          data.v(2*m+1)=phase(m).imag();
-          }
-      else
-        for (size_t m=0; m<=mmax; ++m)
-          {
-          dcmplx tmp = phase(m)*shiftarr[m];
-          data.v(2*m)=tmp.real();
-          data.v(2*m+1)=tmp.imag();
-          }
-      for (size_t m=2*(mmax+1); m<nph+2; ++m)
-        data.v(m)=0.;
-      }
-    else
-      {
-      data.v(0)=phase(0).real();
-      fill(&data.v(1),&data.v(nph+2),0.);
-
-      for (size_t m=1, idx1=1, idx2=nph-1; m<=mmax; ++m,
-           idx1=(idx1+1==nph) ? 0 : idx1+1, idx2=(idx2==0) ? nph-1 : idx2-1)
-        {
-        dcmplx tmp = phase(m);
-        if(!norot) tmp*=shiftarr[m];
-        if (idx1<(nph+2)/2)
-          {
-          data.v(2*idx1)+=tmp.real();
-          data.v(2*idx1+1)+=tmp.imag();
-          }
-        if (idx2<(nph+2)/2)
-          {
-          data.v(2*idx2)+=tmp.real();
-          data.v(2*idx2+1)-=tmp.imag();
-          }
-        }
-      }
-    data.v(1)=data(0);
-    plan->exec(&(data.v(1)), 1., false);
-    }
-  DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
-    mav<double,1> &data, size_t mmax, mav<dcmplx,1> &phase)
-    {
-    update (nph, mmax, -phi0);
-
-    plan->exec (&(data.v(1)), 1., true);
-    data.v(0)=data(1);
-    data.v(1)=data.v(nph+1)=0.;
-
-    if (mmax<=nph/2)
-      {
-      if (norot)
-        for (size_t m=0; m<=mmax; ++m)
-          phase.v(m) = dcmplx(data(2*m), data(2*m+1));
-      else
-        for (size_t m=0; m<=mmax; ++m)
-          phase.v(m) = dcmplx(data(2*m), data(2*m+1)) * shiftarr[m];
-      }
-    else
-      {
-      for (size_t m=0, idx=0; m<=mmax; ++m, idx=(idx+1==nph) ? 0 : idx+1)
-        {
-        dcmplx val;
-        if (idx<(nph-idx))
-          val = dcmplx(data(2*idx), data(2*idx+1));
-        else
-          val = dcmplx(data(2*(nph-idx)), -data(2*(nph-idx)+1));
-        if (!norot)
-          val *= shiftarr[m];
-        phase.v(m)=val;
-        }
-      }
-    }
-  };
-
 class sharp_job
   {
   private:
@@ -267,7 +156,7 @@ class sharp_job
       if (type != SHARP_MAP2ALM) return;
       execDynamic(ulim-llim, nthreads, 1, [&](Scheduler &sched)
         {
-        ringhelper helper;
+        detail_sht::ringhelper helper;
         size_t rstride=ginfo.nphmax()+2;
         mav<double,2> ringtmp({nmaps(), rstride});
 
@@ -301,7 +190,7 @@ class sharp_job
       if (type == SHARP_MAP2ALM) return;
       execDynamic(ulim-llim, nthreads, 1, [&](Scheduler &sched)
         {
-        ringhelper helper;
+        detail_sht::ringhelper helper;
         size_t rstride=ginfo.nphmax()+2;
         mav<double,2> ringtmp({nmaps(), rstride});
 
