@@ -30,8 +30,6 @@
 #include <memory>
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/fft1d.h"
-#include "ducc0/sharp/sharp_almhelpers.h"
-#include "ducc0/sharp/sharp_geomhelpers.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
@@ -424,5 +422,398 @@ void sharp_set_chunksize_min(size_t new_chunksize_min)
   { chunksize_min=new_chunksize_min; }
 void sharp_set_nchunks_max(size_t new_nchunks_max)
   { nchunks_max=new_nchunks_max; }
+
+sharp_standard_alm_info::sharp_standard_alm_info (size_t lmax__, size_t nm_, ptrdiff_t stride_,
+  const size_t *mval__, const ptrdiff_t *mstart)
+  : lmax_(lmax__), mval_(nm_), mvstart(nm_), stride(stride_)
+  {
+  for (size_t mi=0; mi<nm_; ++mi)
+    {
+    mval_[mi] = mval__[mi];
+    mvstart[mi] = mstart[mi];
+    }
+  }
+
+sharp_standard_alm_info::sharp_standard_alm_info (size_t lmax__, size_t mmax_, ptrdiff_t stride_,
+  const ptrdiff_t *mstart)
+  : lmax_(lmax__), mval_(mmax_+1), mvstart(mmax_+1), stride(stride_)
+  {
+  for (size_t i=0; i<=mmax_; ++i)
+    {
+    mval_[i]=i;
+    mvstart[i] = mstart[i];
+    }
+  }
+
+template<typename T> void sharp_standard_alm_info::tclear (T *alm) const
+  {
+  for (size_t mi=0;mi<mval_.size();++mi)
+    for (size_t l=mval_[mi];l<=lmax_;++l)
+      reinterpret_cast<T *>(alm)[mvstart[mi]+ptrdiff_t(l)*stride]=0.;
+  }
+void sharp_standard_alm_info::clear_alm(const any &alm) const
+  {
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tclear(any_cast<dcmplx *>(alm));
+  else if (hc==typeid(fcmplx *).hash_code())
+    tclear(any_cast<fcmplx *>(alm));
+  else MR_fail("bad a_lm data type");
+  }
+template<typename T> void sharp_standard_alm_info::tget(size_t mi, const T *alm, mav<dcmplx,1> &almtmp) const
+  {
+  for (auto l=mval_[mi]; l<=lmax_; ++l)
+    almtmp.v(l) = alm[mvstart[mi]+ptrdiff_t(l)*stride];
+  }
+void sharp_standard_alm_info::get_alm(size_t mi, const any &alm, mav<dcmplx,1> &almtmp) const
+  {
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tget(mi, any_cast<dcmplx *>(alm), almtmp);
+  else if (hc==typeid(const dcmplx *).hash_code())
+    tget(mi, any_cast<const dcmplx *>(alm), almtmp);
+  else if (hc==typeid(fcmplx *).hash_code())
+    tget(mi, any_cast<fcmplx *>(alm), almtmp);
+  else if (hc==typeid(const fcmplx *).hash_code())
+    tget(mi, any_cast<const fcmplx *>(alm), almtmp);
+  else MR_fail("bad a_lm data type");
+  }
+template<typename T> void sharp_standard_alm_info::tadd(size_t mi, const mav<dcmplx,1> &almtmp, T *alm) const
+  {
+  for (auto l=mval_[mi]; l<=lmax_; ++l)
+    alm[mvstart[mi]+ptrdiff_t(l)*stride] += T(almtmp(l));
+  }
+void sharp_standard_alm_info::add_alm(size_t mi, const mav<dcmplx,1> &almtmp, const any &alm) const
+  {
+  auto hc = alm.type().hash_code();
+  if (hc==typeid(dcmplx *).hash_code())
+    tadd(mi, almtmp, any_cast<dcmplx *>(alm));
+  else if (hc==typeid(fcmplx *).hash_code())
+    tadd(mi, almtmp, any_cast<fcmplx *>(alm));
+  else MR_fail("bad a_lm data type");
+  }
+
+ptrdiff_t sharp_standard_alm_info::index (size_t l, size_t mi)
+  { return mvstart[mi]+stride*ptrdiff_t(l); }
+/* This currently requires all m values from 0 to nm-1 to be present.
+   It might be worthwhile to relax this criterion such that holes in the m
+   distribution are permissible. */
+size_t sharp_standard_alm_info::mmax() const
+  {
+  //FIXME: if gaps are allowed, we have to search the maximum m in the array
+  auto nm_=mval_.size();
+  vector<bool> mcheck(nm_,false);
+  for (auto m_cur : mval_)
+    {
+    MR_assert(m_cur<nm_, "not all m values are present");
+    MR_assert(mcheck[m_cur]==false, "duplicate m value");
+    mcheck[m_cur]=true;
+    }
+  return nm_-1;
+  }
+
+unique_ptr<sharp_standard_alm_info> sharp_make_triangular_alm_info (size_t lmax, size_t mmax, ptrdiff_t stride)
+  {
+  vector<ptrdiff_t> mvstart(mmax+1);
+  size_t tval = 2*lmax+1;
+  for (size_t m=0; m<=mmax; ++m)
+    mvstart[m] = stride*ptrdiff_t((m*(tval-m))>>1);
+  return make_unique<sharp_standard_alm_info>(lmax, mmax, stride, mvstart.data());
+  }
+
+sharp_standard_geom_info::sharp_standard_geom_info(size_t nrings, const size_t *nph, const ptrdiff_t *ofs,
+  ptrdiff_t stride_, const double *phi0, const double *theta, const double *wgt)
+  : ring(nrings), stride(stride_)
+  {
+  size_t pos=0;
+
+  nphmax_=0;
+
+  for (size_t m=0; m<nrings; ++m)
+    {
+    ring[m].theta = theta[m];
+    ring[m].cth = cos(theta[m]);
+    ring[m].sth = sin(theta[m]);
+    ring[m].weight = (wgt != nullptr) ? wgt[m] : 1.;
+    ring[m].phi0 = phi0[m];
+    ring[m].ofs = ofs[m];
+    ring[m].nph = nph[m];
+    if (nphmax_<nph[m]) nphmax_=nph[m];
+    }
+  sort(ring.begin(), ring.end(),[](const Tring &a, const Tring &b)
+    { return (a.sth<b.sth); });
+  while (pos<nrings)
+    {
+    pair_.push_back(Tpair());
+    pair_.back().r1=pos;
+    if ((pos<nrings-1) && approx(ring[pos].cth,-ring[pos+1].cth,1e-12))
+      {
+      if (ring[pos].cth>0)  // make sure northern ring is in r1
+        pair_.back().r2=pos+1;
+      else
+        {
+        pair_.back().r1=pos+1;
+        pair_.back().r2=pos;
+        }
+      ++pos;
+      }
+    else
+      pair_.back().r2=size_t(~0);
+    ++pos;
+    }
+
+  sort(pair_.begin(), pair_.end(), [this] (const Tpair &a, const Tpair &b)
+    {
+    if (ring[a.r1].nph==ring[b.r1].nph)
+    return (ring[a.r1].phi0 < ring[b.r1].phi0) ? true :
+      ((ring[a.r1].phi0 > ring[b.r1].phi0) ? false :
+        (ring[a.r1].cth>ring[b.r1].cth));
+    return ring[a.r1].nph<ring[b.r1].nph;
+    });
+  }
+
+template<typename T> void sharp_standard_geom_info::tclear(T *map) const
+  {
+  for (const auto &r: ring)
+    {
+    if (stride==1)
+      memset(&map[r.ofs],0,r.nph*sizeof(T));
+    else
+      for (size_t i=0;i<r.nph;++i)
+        map[r.ofs+ptrdiff_t(i)*stride]=T(0);
+    }
+  }
+
+void sharp_standard_geom_info::clear_map (const any &map) const
+  {
+  auto hc = map.type().hash_code();
+  if (hc==typeid(double *).hash_code())
+    tclear(any_cast<double *>(map));
+  else if (hc==typeid(float *).hash_code())
+    tclear(any_cast<float *>(map));
+  else MR_fail("bad map data type");
+  }
+
+template<typename T> void sharp_standard_geom_info::tadd(bool weighted, size_t iring, const mav<double,1> &ringtmp, T *map) const
+  {
+  T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    p1[ptrdiff_t(m)*stride] += T(ringtmp(m)*wgt);
+  }
+//virtual
+void sharp_standard_geom_info::add_ring(bool weighted, size_t iring, const mav<double,1> &ringtmp, const any &map) const
+  {
+  auto hc = map.type().hash_code();
+  if (hc==typeid(double *).hash_code())
+    tadd(weighted, iring, ringtmp, any_cast<double *>(map));
+  else if (hc==typeid(float *).hash_code())
+    tadd(weighted, iring, ringtmp, any_cast<float *>(map));
+  else MR_fail("bad map data type");
+  }
+template<typename T> void sharp_standard_geom_info::tget(bool weighted, size_t iring, const T *map, mav<double,1> &ringtmp) const
+  {
+  const T *DUCC0_RESTRICT p1=&map[ring[iring].ofs];
+  double wgt = weighted ? ring[iring].weight : 1.;
+  for (size_t m=0; m<ring[iring].nph; ++m)
+    ringtmp.v(m) = p1[ptrdiff_t(m)*stride]*wgt;
+  }
+//virtual
+void sharp_standard_geom_info::get_ring(bool weighted, size_t iring, const any &map, mav<double,1> &ringtmp) const
+  {
+  auto hc = map.type().hash_code();
+  if (hc==typeid(const double *).hash_code())
+    tget(weighted, iring, any_cast<const double *>(map), ringtmp);
+  else if (hc==typeid(double *).hash_code())
+    tget(weighted, iring, any_cast<double *>(map), ringtmp);
+  else if (hc==typeid(const float *).hash_code())
+    tget(weighted, iring, any_cast<const float *>(map), ringtmp);
+  else if (hc==typeid(float *).hash_code())
+    tget(weighted, iring, any_cast<float *>(map), ringtmp);
+  else MR_fail("bad map data type",map.type().name());
+  }
+
+unique_ptr<sharp_geom_info> sharp_make_subset_healpix_geom_info (size_t nside, ptrdiff_t stride, size_t nrings,
+  const size_t *rings, const double *weight)
+  {
+  size_t npix=nside*nside*12;
+  size_t ncap=2*nside*(nside-1);
+
+  vector<double> theta(nrings), weight_(nrings), phi0(nrings);
+  vector<size_t> nph(nrings);
+  vector<ptrdiff_t> ofs(nrings);
+  ptrdiff_t curofs=0, checkofs; /* checkofs used for assertion introduced when adding rings arg */
+  for (size_t m=0; m<nrings; ++m)
+    {
+    auto ring = (rings==nullptr)? (m+1) : rings[m];
+    size_t northring = (ring>2*nside) ? 4*nside-ring : ring;
+    if (northring < nside)
+      {
+      theta[m] = 2*asin(northring/(sqrt(6.)*nside));
+      nph[m] = 4*northring;
+      phi0[m] = pi/nph[m];
+      checkofs = ptrdiff_t(2*northring*(northring-1))*stride;
+      }
+    else
+      {
+      double fact1 = (8.*nside)/npix;
+      double costheta = (2*nside-northring)*fact1;
+      theta[m] = acos(costheta);
+      nph[m] = 4*nside;
+      if ((northring-nside) & 1)
+        phi0[m] = 0;
+      else
+        phi0[m] = pi/nph[m];
+      checkofs = ptrdiff_t(ncap + (northring-nside)*nph[m])*stride;
+      ofs[m] = curofs;
+      }
+    if (northring != ring) /* southern hemisphere */
+      {
+      theta[m] = pi-theta[m];
+      checkofs = ptrdiff_t(npix - nph[m])*stride - checkofs;
+      ofs[m] = curofs;
+      }
+    weight_[m]=4.*pi/npix*((weight==nullptr) ? 1. : weight[northring-1]);
+    if (rings==nullptr)
+      MR_assert(curofs==checkofs, "Bug in computing ofs[m]");
+    ofs[m] = curofs;
+    curofs+=ptrdiff_t(nph[m]);
+    }
+
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(), stride, phi0.data(), theta.data(), weight_.data());
+  }
+
+/* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
+static vector<double> get_dh_weights(size_t nrings)
+  {
+  vector<double> weight(nrings);
+
+  weight[0]=2.;
+  for (size_t k=1; k<=(nrings/2-1); ++k)
+    weight[2*k-1]=2./(1.-4.*k*k);
+  weight[2*(nrings/2)-1]=(nrings-3.)/(2*(nrings/2)-1) -1.;
+  pocketfft_r<double> plan(nrings);
+  plan.exec(weight.data(), 1., false);
+  return weight;
+  }
+
+void get_gridinfo(const string &type,
+  mav<double, 1> &theta, mav<double, 1> &wgt)
+  {
+  auto nrings = theta.shape(0);
+  bool do_wgt = (wgt.shape(0)!=0);
+  if (do_wgt)
+    MR_assert(wgt.shape(0)==nrings, "array size mismatch");
+
+  if (type=="GL") // Gauss-Legendre
+    {
+    ducc0::GL_Integrator integ(nrings);
+    auto cth = integ.coords();
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m) = acos(-cth[m]);
+    if (do_wgt)
+      {
+      auto xwgt = integ.weights();
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = 2*pi*xwgt[m];
+      }
+    }
+  else if (type=="F1") // Fejer 1
+    {
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=pi*(m+0.5)/nrings;
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+    if (do_wgt)
+      {
+      /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
+      vector<double> xwgt(nrings);
+      xwgt[0]=2.;
+      for (size_t k=1; k<=(nrings-1)/2; ++k)
+        {
+        xwgt[2*k-1]=2./(1.-4.*k*k)*cos((k*pi)/nrings);
+        xwgt[2*k  ]=2./(1.-4.*k*k)*sin((k*pi)/nrings);
+        }
+      if ((nrings&1)==0) xwgt[nrings-1]=0.;
+      pocketfft_r<double> plan(nrings);
+      plan.exec(xwgt.data(), 1., false);
+      for (size_t m=0; m<(nrings+1)/2; ++m)
+        wgt.v(m)=wgt.v(nrings-1-m)=xwgt[m]*2*pi/nrings;
+      }
+    }
+  else if (type=="CC") // Clenshaw-Curtis
+    {
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=max(1e-15,pi*m/(nrings-1.));
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+    if (do_wgt)
+      {
+      /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
+      size_t n=nrings-1;
+      double dw=-1./(n*n-1.+(n&1));
+      vector<double> xwgt(nrings);
+      xwgt[0]=2.+dw;
+      for (size_t k=1; k<=(n/2-1); ++k)
+        xwgt[2*k-1]=2./(1.-4.*k*k) + dw;
+      //FIXME if (n>1) ???
+      xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
+      pocketfft_r<double> plan(n);
+      plan.exec(xwgt.data(), 1., false);
+      for (size_t m=0; m<(nrings+1)/2; ++m)
+        wgt.v(m)=wgt.v(nrings-1-m)=xwgt[m]*2*pi/n;
+      }
+    }
+  else if (type=="F2") // Fejer 2
+    {
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(m+1)/(nrings+1.);
+    if (do_wgt)
+      {
+      auto xwgt = get_dh_weights(nrings+1);
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = xwgt[m+1]*2*pi/(nrings+1);
+      }
+    }
+  else if (type=="DH") // Driscoll-Healy
+    {
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m) = m*pi/nrings;
+    if (do_wgt)
+      {
+      auto xwgt = get_dh_weights(nrings);
+      for (size_t m=0; m<nrings; ++m)
+        wgt.v(m) = xwgt[m]*2*pi/nrings;
+      }
+    }
+  else if (type=="MW") // McEwen-Wiaux
+    {
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(2.*m+1.)/(2.*nrings-1.);
+    MR_assert(!do_wgt, "no quadrature weights exist for the MW grid");
+    }
+  else
+    MR_fail("unsupported grid type");
+  }
+
+unique_ptr<sharp_geom_info> sharp_make_2d_geom_info
+  (size_t nrings, size_t ppring, double phi0, ptrdiff_t stride_lon,
+  ptrdiff_t stride_lat, const string &type, bool with_weight)
+  {
+  vector<size_t> nph(nrings, ppring);
+  vector<double> phi0_(nrings, phi0);
+  vector<ptrdiff_t> ofs(nrings);
+  mav<double,1> theta({nrings}), weight({with_weight ? nrings : 0});
+  get_gridinfo(type, theta, weight);
+  for (size_t m=0; m<nrings; ++m)
+    {
+    ofs[m]=ptrdiff_t(m)*stride_lat;
+    if (with_weight) weight.v(m) /= ppring;
+    }
+  return make_unique<sharp_standard_geom_info>(nrings, nph.data(), ofs.data(),
+    stride_lon, phi0_.data(), theta.cdata(), with_weight ? weight.cdata() : nullptr);
+  }
 
 }}

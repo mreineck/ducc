@@ -46,11 +46,7 @@ include src/ducc0/math/vec3.h
 include src/ducc0/sharp/alm.h
 include src/ducc0/sharp/sht.h
 include src/ducc0/sharp/sht.cc
-include src/ducc0/sharp/sharp_almhelpers.cc
-include src/ducc0/sharp/sharp_almhelpers.h
 include src/ducc0/sharp/sharp.cc
-include src/ducc0/sharp/sharp_geomhelpers.cc
-include src/ducc0/sharp/sharp_geomhelpers.h
 include src/ducc0/sharp/sharp.h
 include src/ducc0/sharp/sharp_internal.h
 include src/ducc0/sharp/totalconvolve.h
