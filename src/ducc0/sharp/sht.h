@@ -297,8 +297,8 @@ struct ringhelper
       length=nph;
       }
     }
-  DUCC0_NOINLINE void phase2ring (size_t nph, double phi0,
-    mav<double,1> &data, size_t mmax, const mav<dcmplx,1> &phase)
+  template<typename T> DUCC0_NOINLINE void phase2ring (size_t nph,
+    double phi0, mav<double,1> &data, size_t mmax, const mav<complex<T>,1> &phase)
     {
     update (nph, mmax, phi0);
 
@@ -313,7 +313,7 @@ struct ringhelper
       else
         for (size_t m=0; m<=mmax; ++m)
           {
-          dcmplx tmp = phase(m)*shiftarr[m];
+          dcmplx tmp = dcmplx(phase(m))*shiftarr[m];
           data.v(2*m)=tmp.real();
           data.v(2*m+1)=tmp.imag();
           }
@@ -345,8 +345,8 @@ struct ringhelper
     data.v(1)=data(0);
     plan->exec(&(data.v(1)), 1., false);
     }
-  DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
-    mav<double,1> &data, size_t mmax, mav<dcmplx,1> &phase)
+  template<typename T> DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
+    mav<double,1> &data, size_t mmax, mav<complex<T>,1> &phase)
     {
     update (nph, mmax, -phi0);
 
@@ -358,10 +358,10 @@ struct ringhelper
       {
       if (norot)
         for (size_t m=0; m<=mmax; ++m)
-          phase.v(m) = dcmplx(data(2*m), data(2*m+1));
+          phase.v(m) = complex<T>(T(data(2*m)), T(data(2*m+1)));
       else
         for (size_t m=0; m<=mmax; ++m)
-          phase.v(m) = dcmplx(data(2*m), data(2*m+1)) * shiftarr[m];
+          phase.v(m) = complex<T>(dcmplx(data(2*m), data(2*m+1)) * shiftarr[m]);
       }
     else
       {
@@ -374,7 +374,7 @@ struct ringhelper
           val = dcmplx(data(2*(nph-idx)), -data(2*(nph-idx)+1));
         if (!norot)
           val *= shiftarr[m];
-        phase.v(m)=val;
+        phase.v(m)=complex<T>(val);
         }
       }
     }
@@ -404,14 +404,14 @@ template<typename T> void alm2leg(  // associated Legendre transform
 
 template<typename T> void leg2map(  // FFT
   const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
-  mav<complex<T>,2> &map, // (ncomp, pix)
+  mav<T,2> &map, // (ncomp, pix)
   const mav<size_t,1> &nphi, // (nrings)
   const mav<size_t,1> &offset, // (nrings)
   const mav<double,1> &phi0, // (nrings)
   size_t nthreads);
 
 template<typename T> void map2leg(  // FFT
-  const mav<complex<T>,2> &map, // (ncomp, pix)
+  const mav<T,2> &map, // (ncomp, pix)
   mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const mav<size_t,1> &nphi, // (nrings)
   const mav<size_t,1> &offset, // (nrings)
@@ -434,6 +434,34 @@ void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
   mav<complex<double>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
 
 #endif
+
+// fully general map synthesis
+// conditions:
+// - ncomp = 1+(spin>0)
+// - all mval together must form a gapless sequence starting from 0
+template<typename T> void synthesis(
+  const mav<complex<T>,2> &alm, // (ncomp, *)
+  size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  mav<T,2> &map, // (ncomp, *)
+  const mav<double,1> &theta, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  size_t spin,
+  size_t nthreads);
+// - check that mval are a gapless sequence starting at 0
+// - check that lmax>=mmax
+// - (check that mstart has consistent values?)
+// - check that theta are in [0;pi]
+// - (check that ringstart and nphi are consistent)
+// - check that ncomp and spin are consistent
+// - is theta grid equidistant and (CC, F!, MW)?
+//   - if no, run standard synthesis
+//   - check lmax and nrings whether accelerated synthesis makes sense
+//   - if yes, run synthesis on grid with minimal nrings and upsample
+//   - otherwise run standard synthesis
 
 template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
   mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)

@@ -1389,7 +1389,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
         for (size_t l=m; l<lmin; ++l)
           almtmp.v(l,ialm) = 0;
         for (size_t l=lmin; l<=lmax; ++l)
-          almtmp.v(l,ialm) = alm(ialm,mstart(mi)+l)*norm_l[l];
+          almtmp.v(l,ialm) = alm(ialm,mstart(mi)+l)*T(norm_l[l]);
         almtmp.v(lmax+1,ialm) = 0;
         }
       gen.prepare(m);
@@ -1442,14 +1442,14 @@ template<typename T> void leg2alm(  // associated Legendre transform
           alm.v(ialm,mstart(mi)+l) = 0;
       for (size_t l=lmin; l<=lmax; ++l)
         for (size_t ialm=0; ialm<ncomp; ++ialm)
-          alm.v(ialm,mstart(mi)+l) = almtmp(l,ialm)*norm_l[l];
+          alm.v(ialm,mstart(mi)+l) = almtmp(l,ialm)*T(norm_l[l]);
       }
     }); /* end of parallel region */
   }
 
 template<typename T> void leg2map(  // FFT
   const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
-  mav<complex<T>,2> &map, // (ncomp, pix)
+  mav<T,2> &map, // (ncomp, pix)
   const mav<size_t,1> &nphi, // (nrings)
   const mav<size_t,1> &offset, // (nrings)
   const mav<double,1> &phi0, // (nrings)
@@ -1477,14 +1477,14 @@ template<typename T> void leg2map(  // FFT
         auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
         helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         for (size_t i=0; i<nphi(ith); ++i)
-          map.v(icomp,offset(ith)+i) = ringtmp(i);
+          map.v(icomp,offset(ith)+i) = T(ringtmp(i+1));
         }
       }
     }); /* end of parallel region */
   }
 
 template<typename T> void map2leg(  // FFT
-  const mav<complex<T>,2> &map, // (ncomp, pix)
+  const mav<T,2> &map, // (ncomp, pix)
   mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const mav<size_t,1> &nphi, // (nrings)
   const mav<size_t,1> &offset, // (nrings)
@@ -1741,6 +1741,72 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthread
       }
     }
   }
+
+template<typename T> void synthesis(
+  const mav<complex<T>,2> &alm, // (ncomp, *)
+  size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  mav<T,2> &map, // (ncomp, *)
+  const mav<double,1> &theta, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  size_t spin,
+  size_t nthreads)
+  {
+  size_t nm = mval.shape(0);
+  MR_assert(nm>0, "need at least one m value");
+  MR_assert(nm==mstart.shape(0), "nm mismatch");
+  // check that mval are a gapless sequence starting at 0
+  size_t mmax = nm-1;
+  {
+  vector<bool> m_present(mmax+1, false);
+  for (size_t im=0; im<=mmax; ++im)
+    {
+    MR_assert(mval(im)<=mmax, "m value too large");
+    MR_assert(!m_present[mval(im)], "m value supplied more than once");
+    m_present[mval(im)] = true;
+    }
+  }
+  MR_assert(lmax>=mmax, "lmax must be >= mmax");
+  size_t nrings = theta.shape(0);
+  MR_assert(nrings>0, "need at least one ring");
+  MR_assert((phi0.shape(0)==nrings) &&
+            (nphi.shape(0)==nrings) &&
+            (ringstart.shape(0)==nrings),
+    "inconsistency in the number of rings");
+  size_t ncomp = 1+(spin>0);
+  MR_assert((alm.shape(0)==ncomp) && (map.shape(0)==ncomp),
+    "inconsistent number of components");
+// just doing standard synthesis now, in the future we can use faster methods
+// for some of the theta-equidistant grids here
+  mav<complex<T>,3> leg({ncomp,nrings,nm});
+  alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
+  leg2map(leg, map, nphi, ringstart, phi0, nthreads);
+  }
+template void synthesis(
+  const mav<complex<double>,2> &alm, size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  mav<double,2> &map, // (ncomp, *)
+  const mav<double,1> &theta, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  size_t spin,
+  size_t nthreads);
+template void synthesis(
+  const mav<complex<float>,2> &alm, size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  mav<float,2> &map, // (ncomp, *)
+  const mav<double,1> &theta, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  size_t spin,
+  size_t nthreads);
 #endif
 
 }}
