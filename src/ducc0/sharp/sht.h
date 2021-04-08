@@ -462,6 +462,18 @@ template<typename T> void synthesis(
 //   - check lmax and nrings whether accelerated synthesis makes sense
 //   - if yes, run synthesis on grid with minimal nrings and upsample
 //   - otherwise run standard synthesis
+template<typename T> void adjoint_synthesis(
+  mav<complex<T>,2> &alm, // (ncomp, *)
+  size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  const mav<T,2> &map, // (ncomp, *)
+  const mav<double,1> &theta, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  size_t spin,
+  size_t nthreads);
 
 template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
   mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)

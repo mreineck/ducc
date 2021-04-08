@@ -201,6 +201,37 @@ py::array Pyfull_synthesis(const py::array &alm_, size_t lmax,
       phi0_, nphi_, ringstart_, spin, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
+template<typename T> py::array full_adjoint_synthesis2(py::array &alm_,
+  size_t lmax, const py::array &mval_, const py::array &mstart_,
+  const py::array &map_, const py::array &theta_, const py::array &phi0_,
+  const py::array &nphi_, const py::array &ringstart_, size_t spin,
+  size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, true);
+  auto mval = to_mav<size_t,1>(mval_, false);
+  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto map = to_mav<T,2>(map_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  auto phi0 = to_mav<double,1>(phi0_, false);
+  auto nphi = to_mav<size_t,1>(nphi_, false);
+  auto ringstart = to_mav<size_t,1>(ringstart_, false);
+  adjoint_synthesis(alm, lmax, mval, mstart, map, theta, phi0, nphi, ringstart, spin, nthreads);
+  return alm_;
+  }
+py::array Pyfull_adjoint_synthesis(py::array &alm_, size_t lmax,
+  const py::array &mval_, const py::array &mstart_,
+  const py::array &map_, const py::array &theta_, const py::array &phi0_,
+  const py::array &nphi_, const py::array &ringstart_, size_t spin,
+  size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(alm_))
+    return full_adjoint_synthesis2<float>(alm_, lmax, mval_, mstart_, map_, theta_,
+      phi0_, nphi_, ringstart_, spin, nthreads);
+  else if (isPyarr<complex<double>>(alm_))
+    return full_adjoint_synthesis2<double>(alm_, lmax, mval_, mstart_, map_, theta_,
+      phi0_, nphi_, ringstart_, spin, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
 #endif
 
 using a_d = py::array_t<double>;
@@ -356,6 +387,7 @@ void add_sht(py::module_ &msup)
 //  m.def("synthesis", &Pysynthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
 //  m.def("synthesis", &Pysynthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
   m.def("synthesis", &Pyfull_synthesis, "alm"_a, "lmax"_a, "mval"_a, "mstart"_a, "map"_a, "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "spin"_a, "nthreads"_a);
+  m.def("adjoint_synthesis", &Pyfull_adjoint_synthesis, "alm"_a, "lmax"_a, "mval"_a, "mstart"_a, "map"_a, "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "spin"_a, "nthreads"_a);
 
   m.def("get_gridweights", &Pyget_gridweights, "type"_a, "nrings"_a);
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
