@@ -135,9 +135,10 @@ via the [conviqt](https://arxiv.org/abs/1002.1050) code.
 ducc.wgridder
 -------------
 
-Library for high-accuracy gridding/degridding of radio interferometry datasets.
-An earlier version of this code has been integrated into
-[wsclean](https://sourceforge.net/projects/wsclean/)
+Library for high-accuracy gridding/degridding of radio interferometry datasets
+(code paper available at <https://arxiv.org/abs/2010.10122>).
+This code has also been integrated into
+[wsclean](https://gitlab.com/aroffringa/wsclean)
 (<https://arxiv.org/abs/1407.1943>)
 as the `wgridder` component.
 
