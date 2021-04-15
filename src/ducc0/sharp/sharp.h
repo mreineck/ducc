@@ -254,6 +254,8 @@ class sharp_standard_geom_info: public sharp_geom_info
     virtual double cth(size_t iring) const { return ring[iring].cth; }
     virtual double sth(size_t iring) const { return ring[iring].sth; }
     virtual double phi0(size_t iring) const { return ring[iring].phi0; }
+    virtual ptrdiff_t ofs(size_t iring) const { return ring[iring].ofs; }
+    virtual double weight(size_t iring) const { return ring[iring].weight; }
     virtual Tpair pair(size_t ipair) const { return pair_[ipair]; }
     virtual void clear_map(const std::any &map) const;
     virtual void get_ring(bool weighted, size_t iring, const std::any &map, mav<double,1> &ringtmp) const;
