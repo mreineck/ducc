@@ -1439,7 +1439,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
       auto lmin=max(spin,m);
       for (size_t l=m; l<lmin; ++l)
         for (size_t ialm=0; ialm<ncomp; ++ialm)
-          alm.v(ialm,mstart(mi)+l) = 0;
+          alm.v(ialm,mstart(mi)+l*lstride) = 0;
       for (size_t l=lmin; l<=lmax; ++l)
         for (size_t ialm=0; ialm<ncomp; ++ialm)
           alm.v(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(l,ialm)*norm_l[l]);
@@ -1513,7 +1513,7 @@ template<typename T> void map2leg(  // FFT
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
         for (size_t i=0; i<nphi(ith); ++i)
-          ringtmp.v(i) = map(icomp,ringstart(ith)+i*pixstride);
+          ringtmp.v(i+1) = map(icomp,ringstart(ith)+i*pixstride);
         auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
         helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         }
