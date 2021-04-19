@@ -60,8 +60,6 @@ template<typename T> py::array pyrotate_alm(const py::array &alm_, int64_t lmax,
   return move(alm);
   }
 
-#if 1
-
 void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
   mav<size_t,1> &mval, mav<size_t,1> &mstart)
   {
@@ -156,12 +154,12 @@ py::array Pyprep_for_analysis(py::array &leg_, size_t spin, size_t nthreads)
   prep_for_analysis(leg, spin, nthreads);
   return leg_;
   }
-py::array Pyprep_for_analysis2(py::array &leg_, size_t spin, size_t nthreads)
-  {
-  auto leg = to_mav<complex<double>,3>(leg_, true);
-  prep_for_analysis2(leg, spin, nthreads);
-  return leg_;
-  }
+//py::array Pyprep_for_analysis2(py::array &leg_, size_t spin, size_t nthreads)
+  //{
+  //auto leg = to_mav<complex<double>,3>(leg_, true);
+  //prep_for_analysis2(leg, spin, nthreads);
+  //return leg_;
+  //}
 void Pyresample_theta(const py::array &legi_, bool npi, bool spi,
   py::array &lego_, bool npo, bool spo, size_t spin, size_t nthreads)
   {
@@ -232,7 +230,6 @@ py::array Pyfull_adjoint_synthesis(py::array &alm_, size_t lmax,
       phi0_, nphi_, ringstart_, spin, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#endif
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -383,7 +380,6 @@ void add_sht(py::module_ &msup)
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
 
-#if 1
 //  m.def("synthesis", &Pysynthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
 //  m.def("synthesis", &Pysynthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
   m.def("synthesis", &Pyfull_synthesis, "alm"_a, "lmax"_a, "mval"_a, "mstart"_a, "map"_a, "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "spin"_a, "nthreads"_a);
@@ -393,12 +389,10 @@ void add_sht(py::module_ &msup)
   m.def("alm2leg", &Pyalm2leg, "alm"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("leg2alm", &Pyleg2alm, "leg"_a, "theta"_a, "lmax"_a, "spin"_a, "mval"_a=None, "mstart"_a=None, "nthreads"_a=1, "out"_a=None);
   m.def("prep_for_analysis", &Pyprep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
-  m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "spin"_a, "nthreads"_a=1);
+//  m.def("prep_for_analysis2", &Pyprep_for_analysis2, "leg"_a, "spin"_a, "nthreads"_a=1);
   m.def("resample_theta", &Pyresample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
   m.def("rotate_alm", &pyrotate_alm<double>, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a, "nthreads"_a=1);
-
-#endif
 
   py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local())
     .def(py::init<>())

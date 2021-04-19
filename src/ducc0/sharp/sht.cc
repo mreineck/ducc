@@ -1253,8 +1253,6 @@ vector<ringdata> make_ringdata(const mav<double,1> &theta, size_t lmax,
   return res;
   }
 
-#if 1
-
 /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
 static vector<double> get_dh_weights(size_t nrings)
   {
@@ -1864,6 +1862,5 @@ template void adjoint_synthesis(
   const mav<size_t,1> &ringstart, // (nrings)
   size_t spin,
   size_t nthreads);
-#endif
 
 }}
