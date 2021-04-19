@@ -1339,10 +1339,10 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   size_t nthreads,
@@ -1400,10 +1400,10 @@ template<typename T> void alm2leg(  // associated Legendre transform
 template<typename T> void leg2alm(  // associated Legendre transform
   mav<complex<T>,2> &alm, // (ncomp, lmidx)
   const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   size_t nthreads)
@@ -1784,87 +1784,103 @@ void sanity_checks(
 
 template<typename T> void synthesis(
   const mav<complex<T>,2> &alm, // (ncomp, *)
+  mav<T,2> &map, // (ncomp, *)
+  size_t spin,
   size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  mav<T,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads)
   {
   sanity_checks(alm, lmax, mval, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
   mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
-  alm2leg(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads, ALM2MAP);
-  leg2map(map, leg, nphi, phi0, ringstart, 1, nthreads);
+  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+  leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
 template void synthesis(
-  const mav<complex<double>,2> &alm, size_t lmax,
+  const mav<complex<double>,2> &alm, // (ncomp, *)
+  mav<double,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  mav<double,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 template void synthesis(
-  const mav<complex<float>,2> &alm, size_t lmax,
+  const mav<complex<float>,2> &alm, // (ncomp, *)
+  mav<float,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  mav<float,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 template<typename T> void adjoint_synthesis(
   mav<complex<T>,2> &alm, // (ncomp, *)
+  const mav<T,2> &map, // (ncomp, *)
+  size_t spin,
   size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  const mav<T,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads)
   {
   sanity_checks(alm, lmax, mval, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
   mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
-  map2leg(map, leg, nphi, phi0, ringstart, 1, nthreads);
-  leg2alm(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads);
+  map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
   }
 template void adjoint_synthesis(
-  mav<complex<double>,2> &alm, size_t lmax,
+  mav<complex<double>,2> &alm, // (ncomp, *)
+  const mav<double,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  const mav<double,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 template void adjoint_synthesis(
-  mav<complex<float>,2> &alm, size_t lmax,
+  mav<complex<float>,2> &alm, // (ncomp, *)
+  const mav<float,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  const mav<float,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 
 }}

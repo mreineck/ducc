@@ -393,10 +393,10 @@ mav<double,1> get_gridweights(const string &type, size_t nrings);
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   size_t nthreads,
@@ -404,10 +404,10 @@ template<typename T> void alm2leg(  // associated Legendre transform
 template<typename T> void leg2alm(  // associated Legendre transform
   mav<complex<T>,2> &alm, // (ncomp, lmidx)
   const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   size_t nthreads);
@@ -440,15 +440,17 @@ void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
 // - all mval together must form a gapless sequence starting from 0
 template<typename T> void synthesis(
   const mav<complex<T>,2> &alm, // (ncomp, *)
+  mav<T,2> &map, // (ncomp, *)
+  size_t spin,
   size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  mav<T,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 // - check that mval are a gapless sequence starting at 0
 // - check that lmax>=mmax
@@ -463,19 +465,21 @@ template<typename T> void synthesis(
 //   - otherwise run standard synthesis
 template<typename T> void adjoint_synthesis(
   mav<complex<T>,2> &alm, // (ncomp, *)
+  const mav<T,2> &map, // (ncomp, *)
+  size_t spin,
   size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  const mav<T,2> &map, // (ncomp, *)
+  ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin,
+  ptrdiff_t pixstride,
   size_t nthreads);
 
-template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
-  mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
   unique_ptr<sharp_geom_info> ginfo;
   ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
@@ -487,15 +491,15 @@ template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
     sharp_alm2map_spin(spin, &alm(0,0), &alm(1,0), &map.v(0,0,0), &map.v(1,0,0),
       *ginfo, *ainfo, 0, nthreads);
   }
-template<typename T> void synthesis(const mav<complex<T>,1> &alm, size_t lmax,
-  mav<T,2> &map, const string &geometry, size_t nthreads)
+template<typename T> void synthesis(const mav<complex<T>,1> &alm,
+  mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   mav<complex<T>,2> alm2(alm.cdata(), {1,alm.shape(0)}, {0,alm.stride(0)});
   mav<T,3> map2(map.vdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)}, true);
-  synthesis (alm2, lmax, map2, 0, geometry, nthreads);
+  synthesis (alm2, map2, 0, lmax, geometry, nthreads);
   }
-template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm, size_t lmax,
-  const mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
   unique_ptr<sharp_geom_info> ginfo;
   ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
@@ -507,12 +511,12 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm, size_t lmax,
     sharp_alm2map_spin_adjoint(spin, &alm.v(0,0), &alm.v(1,0), &map(0,0,0), &map(1,0,0),
       *ginfo, *ainfo, 0, nthreads);
   }
-template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
-  const mav<T,2> &map, const string &geometry, size_t nthreads)
+template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
+  const mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   mav<complex<T>,2> alm2(alm.vdata(), {1,alm.shape(0)}, {0,alm.stride(0)}, true);
   mav<T,3> map2(map.cdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)});
-  adjoint_synthesis (alm2, lmax, map2, 0, geometry, nthreads);
+  adjoint_synthesis (alm2, map2, 0, lmax, geometry, nthreads);
   }
 // template<typename T> void analysis(mav<complex<T>,2> &alm, size_t lmax,
 //   size_t mmax, const mav<T,3> &map, size_t spin, const string &geometry,
