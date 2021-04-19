@@ -55,6 +55,8 @@ class sharp_geom_info
     virtual double cth(size_t iring) const = 0;
     virtual double sth(size_t iring) const = 0;
     virtual double phi0(size_t iring) const = 0;
+    virtual double weight(size_t iring) const = 0;
+    virtual ptrdiff_t ofs(size_t iring) const = 0;
     virtual Tpair pair(size_t ipair) const = 0;
 
     virtual void clear_map(const std::any &map) const = 0;
