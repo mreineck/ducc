@@ -1339,11 +1339,12 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
-  const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
   size_t lmax,
   size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
   size_t nthreads,
   SHT_mode mode)
   {
@@ -1387,7 +1388,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
         for (size_t l=m; l<lmin; ++l)
           almtmp.v(l,ialm) = 0;
         for (size_t l=lmin; l<=lmax; ++l)
-          almtmp.v(l,ialm) = alm(ialm,mstart(mi)+l)*T(norm_l[l]);
+          almtmp.v(l,ialm) = alm(ialm,mstart(mi)+l*lstride)*T(norm_l[l]);
         almtmp.v(lmax+1,ialm) = 0;
         }
       gen.prepare(m);
@@ -1397,13 +1398,14 @@ template<typename T> void alm2leg(  // associated Legendre transform
   }
 
 template<typename T> void leg2alm(  // associated Legendre transform
-  const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   mav<complex<T>,2> &alm, // (ncomp, lmidx)
-  const mav<double,1> &theta, // (nrings)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
   size_t lmax,
   size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
   size_t nthreads)
   {
   // sanity checks
@@ -1440,24 +1442,25 @@ template<typename T> void leg2alm(  // associated Legendre transform
           alm.v(ialm,mstart(mi)+l) = 0;
       for (size_t l=lmin; l<=lmax; ++l)
         for (size_t ialm=0; ialm<ncomp; ++ialm)
-          alm.v(ialm,mstart(mi)+l) = complex<T>(almtmp(l,ialm)*norm_l[l]);
+          alm.v(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(l,ialm)*norm_l[l]);
       }
     }); /* end of parallel region */
   }
 
 template<typename T> void leg2map(  // FFT
-  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   mav<T,2> &map, // (ncomp, pix)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const mav<size_t,1> &nphi, // (nrings)
-  const mav<size_t,1> &offset, // (nrings)
   const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
   size_t nthreads)
   {
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
   MR_assert(nrings>=1, "need at least one ring");
-  MR_assert((nrings==nphi.shape(0)) && (nrings==offset.shape(0))
+  MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   size_t nphmax=0;
   for (size_t i=0; i<nrings; ++i)
@@ -1475,7 +1478,7 @@ template<typename T> void leg2map(  // FFT
         auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
         helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         for (size_t i=0; i<nphi(ith); ++i)
-          map.v(icomp,offset(ith)+i) = T(ringtmp(i+1));
+          map.v(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
         }
       }
     }); /* end of parallel region */
@@ -1485,15 +1488,16 @@ template<typename T> void map2leg(  // FFT
   const mav<T,2> &map, // (ncomp, pix)
   mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const mav<size_t,1> &nphi, // (nrings)
-  const mav<size_t,1> &offset, // (nrings)
   const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
   size_t nthreads)
   {
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
   MR_assert(nrings>=1, "need at least one ring");
-  MR_assert((nrings==nphi.shape(0)) && (nrings==offset.shape(0))
+  MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   size_t nphmax=0;
   for (size_t i=0; i<nrings; ++i)
@@ -1509,7 +1513,7 @@ template<typename T> void map2leg(  // FFT
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
         for (size_t i=0; i<nphi(ith); ++i)
-          ringtmp.v(i) = map(icomp,offset(ith)+i);
+          ringtmp.v(i) = map(icomp,ringstart(ith)+i*pixstride);
         auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
         helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         }
@@ -1795,8 +1799,8 @@ template<typename T> void synthesis(
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
   mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
-  alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
-  leg2map(leg, map, nphi, ringstart, phi0, nthreads);
+  alm2leg(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads, ALM2MAP);
+  leg2map(map, leg, nphi, phi0, ringstart, 1, nthreads);
   }
 template void synthesis(
   const mav<complex<double>,2> &alm, size_t lmax,
@@ -1837,8 +1841,8 @@ template<typename T> void adjoint_synthesis(
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
   mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
-  map2leg(map, leg, nphi, ringstart, phi0, nthreads);
-  leg2alm(leg, alm, theta, mval, mstart, lmax, spin, nthreads);
+  map2leg(map, leg, nphi, phi0, ringstart, 1, nthreads);
+  leg2alm(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads);
   }
 template void adjoint_synthesis(
   mav<complex<double>,2> &alm, size_t lmax,

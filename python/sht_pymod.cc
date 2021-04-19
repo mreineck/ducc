@@ -115,7 +115,7 @@ template<typename T> py::array alm2leg2(const py::array &alm_, const py::array &
   getmstuff(lmax, mval_, mstart_, mval, mstart);
   auto leg_ = get_optional_Pyarr<complex<T>>(out_, {alm.shape(0),theta.shape(0),mval.shape(0)});
   auto leg = to_mav<complex<double>,3>(leg_, true);
-  alm2leg(alm, leg, theta, mval, mstart, lmax, spin, nthreads, ALM2MAP);
+  alm2leg(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads, ALM2MAP);
   return leg_;
   }
 py::array Pyalm2leg(const py::array &alm, const py::array &theta, size_t lmax, size_t spin, const py::object &mval, const py::object &mstart, size_t nthreads, py::object &out)
@@ -136,7 +136,7 @@ template<typename T> py::array leg2alm2(const py::array &leg_, const py::array &
   auto alm = to_mav<complex<double>,2>(alm_, true);
   mav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
-  leg2alm(leg, alm, theta, mval, mstart, lmax, spin, nthreads);
+  leg2alm(alm, leg, mval, mstart, lmax, spin, 1, theta, nthreads);
   return alm_;
   }
 py::array Pyleg2alm(const py::array &leg, const py::array &theta, size_t lmax, size_t spin, const py::object &mval, const py::object &mstart, size_t nthreads, py::object &out)

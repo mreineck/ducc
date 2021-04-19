@@ -393,38 +393,40 @@ mav<double,1> get_gridweights(const string &type, size_t nrings);
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
-  const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
   size_t lmax,
   size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode);
-
-template<typename T> void leg2map(  // FFT
-  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
-  mav<T,2> &map, // (ncomp, pix)
-  const mav<size_t,1> &nphi, // (nrings)
-  const mav<size_t,1> &offset, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
+  SHT_mode mode=ALM2MAP);
+template<typename T> void leg2alm(  // associated Legendre transform
+  mav<complex<T>,2> &alm, // (ncomp, lmidx)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  size_t lmax,
+  size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
   size_t nthreads);
 
 template<typename T> void map2leg(  // FFT
   const mav<T,2> &map, // (ncomp, pix)
   mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const mav<size_t,1> &nphi, // (nrings)
-  const mav<size_t,1> &offset, // (nrings)
   const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
   size_t nthreads);
-
-template<typename T> void leg2alm(  // associated Legendre transform
-  const mav<complex<T>,3> &leg, //  (ncomp, nrings, nm)
-  mav<complex<T>,2> &alm, // (ncomp, lmidx)
-  const mav<double,1> &theta, // (nrings)
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
+template<typename T> void leg2map(  // FFT
+  mav<T,2> &map, // (ncomp, pix)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
   size_t nthreads);
 
 void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
