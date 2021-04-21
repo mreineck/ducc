@@ -113,16 +113,16 @@ template<typename T> class PyInterpolator
     PyInterpolator(const py::array &slm, const py::array &blm,
       bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
       : conv(lmax, kmax, ofactor, epsilon, nthreads),
-        cube({(separate ? size_t(slm.shape(1)) : 1u), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
+        cube({(separate ? size_t(slm.shape(0)) : 1u), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
       {
       auto vslm = to_mav<complex<T>,2>(slm);
       auto vblm = to_mav<complex<T>,2>(blm);
       if (separate)
-        for (size_t i=0; i<vslm.shape(1); ++i)
+        for (size_t i=0; i<vslm.shape(0); ++i)
           {
           auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
-          auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
-          auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
+          auto vslmi = subarray<2>(vslm, {i,0},{1,MAXIDX});
+          auto vblmi = subarray<2>(vblm, {i,0},{1,MAXIDX});
           conv.getPlane(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
@@ -159,12 +159,12 @@ template<typename T> class PyInterpolator
       auto pphi = subarray<1>(ptg2, {0,1},{MAXIDX,0});
       auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
       size_t ncomp = cube.shape(0);
-      auto res = make_Pyarr<T>({ptg2.shape(0),ncomp});
+      auto res = make_Pyarr<T>({ncomp,ptg2.shape(0)});
       auto res2 = to_mav<T,2>(res,true);
       for (size_t i=0; i<ncomp; ++i)
         {
         auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
-        auto subres = subarray<1>(res2, {0,i},{MAXIDX,0});
+        auto subres = subarray<1>(res2, {i,0},{0,MAXIDX});
         conv.interpol(subcube, 0, 0, ptheta, pphi, ppsi, subres);
         }
       return move(res);
@@ -181,7 +181,7 @@ template<typename T> class PyInterpolator
       for (size_t i=0; i<ncomp; ++i)
         {
         auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
-        auto subdata = subarray<1>(data2, {0,i},{MAXIDX,0});
+        auto subdata = subarray<1>(data2, {i,0},{0,MAXIDX});
         conv.deinterpol(subcube, 0, 0, ptheta, pphi, ppsi, subdata);
         }
       }
@@ -189,7 +189,7 @@ template<typename T> class PyInterpolator
       {
       size_t lmax=conv.Lmax(), kmax=conv.Kmax();
       auto vblm = to_mav<complex<T>,2>(blm_);
-      size_t ncomp = vblm.shape(1);
+      size_t ncomp = vblm.shape(0);
       bool separate = cube.shape(0)>1;
       if (separate) MR_assert(ncomp==cube.shape(0), "dimension mismatch");
       for (size_t i=0; i<cube.shape(0); ++i)
@@ -197,15 +197,15 @@ template<typename T> class PyInterpolator
         auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
         conv.deprepPsi(subcube);
         }
-      auto res = make_Pyarr<complex<T>>({Alm_Base::Num_Alms(lmax, lmax),ncomp});
+      auto res = make_Pyarr<complex<T>>({ncomp, Alm_Base::Num_Alms(lmax, lmax)});
       auto vslm = to_mav<complex<T>,2>(res, true);
       vslm.fill(T(0));
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
           auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
-          auto vslmi = subarray<2>(vslm, {0,i},{MAXIDX,1});
-          auto vblmi = subarray<2>(vblm, {0,i},{MAXIDX,1});
+          auto vslmi = subarray<2>(vslm, {i,0},{1,MAXIDX});
+          auto vblmi = subarray<2>(vblm, {i,0},{1,MAXIDX});
           conv.updateSlm(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
@@ -343,11 +343,11 @@ Computes a single (real or complex) sub-plane in (theta, phi) of the data cube
 
 Parameters
 ----------
-slm : numpy.ndarray((nalm_sky), dtype=numpy.complex128), or
-      numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex128)
+slm : numpy.ndarray((nalm_sky,), dtype=numpy.complex128), or
+      numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex128)
     spherical harmonic coefficients of the sky.
-blm : numpy.ndarray((nalm_beam), dtype=numpy.complex128), or
-      numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex128)
+blm : numpy.ndarray((nalm_beam,), dtype=numpy.complex128), or
+      numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex128)
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
@@ -367,11 +367,11 @@ Computes a single (real or complex) sub-plane in (theta, phi) of the data cube
 
 Parameters
 ----------
-slm : numpy.ndarray((nalm_sky), dtype=numpy.complex64), or
-      numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex)
+slm : numpy.ndarray((nalm_sky,), dtype=numpy.complex64), or
+      numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex)
     spherical harmonic coefficients of the sky.
-blm : numpy.ndarray((nalm_beam), dtype=numpy.complex64), or
-      numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex)
+blm : numpy.ndarray((nalm_beam,), dtype=numpy.complex64), or
+      numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex)
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
@@ -534,13 +534,13 @@ interpolation.
 
 Parameters
 ----------
-slm : numpy.ndarray((nalm_sky), dtype=numpy.complex128), or
-      numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex128)
+slm : numpy.ndarray((nalm_sky,), dtype=numpy.complex128), or
+      numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex128)
     The deinterpolated spherical harmonic coefficients will be added to this
     array.
     Must be zeroed before the first call to `updateSlm`!
-blm : numpy.ndarray((nalm_beam), dtype=numpy.complex128), or
-      numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex128)
+blm : numpy.ndarray((nalm_beam,), dtype=numpy.complex128), or
+      numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex128)
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
@@ -560,13 +560,13 @@ interpolation.
 
 Parameters
 ----------
-slm : numpy.ndarray((nalm_sky), dtype=numpy.complex64), or
-      numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex64)
+slm : numpy.ndarray((nalm_sky,), dtype=numpy.complex64), or
+      numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex64)
     The deinterpolated spherical harmonic coefficients will be added to this
     array.
     Must be zeroed before the first call to `updateSlm`!
-blm : numpy.ndarray((nalm_beam), dtype=numpy.complex64), or
-      numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex64)
+blm : numpy.ndarray((nalm_beam,), dtype=numpy.complex64), or
+      numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex64)
     spherical harmonic coefficients of the beam.
 mbeam : int, 0 <= mbeam <= kmax
     requested m moment of the beam
@@ -592,9 +592,9 @@ Constructor for interpolation mode
 
 Parameters
 ----------
-sky : numpy.ndarray((nalm_sky, ncomp), dtype=numpy.complex)
+sky : numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex)
     spherical harmonic coefficients of the sky. ncomp can be 1 or 3.
-beam : numpy.ndarray((nalm_beam, ncomp), dtype=numpy.complex)
+beam : numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex)
     spherical harmonic coefficients of the beam. ncomp can be 1 or 3
 separate : bool
     whether contributions of individual components should be added together.

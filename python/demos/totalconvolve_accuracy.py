@@ -28,8 +28,8 @@ def nalm(lmax, mmax):
 
 
 def random_alm(lmax, mmax, ncomp):
-    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
     res[0:lmax+1, :].imag = 0.
     return res
@@ -74,9 +74,9 @@ t0 = time.time()
 plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=nthr)
 cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
 cube[()] = 0
-plan.getPlane(slm[:, 0], blm[:, 0], 0, cube[0:1])
+plan.getPlane(slm[0, :], blm[0, :], 0, cube[0:1])
 for mbeam in range(1, kmax+1):
-    plan.getPlane(slm[:, 0], blm[:, 0], mbeam, cube[2*mbeam-1:2*mbeam+1])
+    plan.getPlane(slm[0, :], blm[0, :], mbeam, cube[2*mbeam-1:2*mbeam+1])
 plan.prepPsi(cube)
 
 print("setup time: ", time.time()-t0)
@@ -100,12 +100,12 @@ plt.subplot(2, 2, 1)
 plt.imshow(res[:, :, 0])
 bar2 = np.zeros((nth, nph))
 blmfull = np.zeros(slm.shape)+0j
-blmfull[0:blm.shape[0], :] = blm
+blmfull[:, 0:blm.shape[1]] = blm
 for ith in range(nth):
-    rbeamth = sht.rotate_alm(blmfull[:, 0], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
+    rbeamth = sht.rotate_alm(blmfull[0, :], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
     for iph in range(nph):
         rbeam = sht.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
-        bar2[ith, iph] = convolve(slm[:, 0], rbeam, lmax).real
+        bar2[ith, iph] = convolve(slm[0, :], rbeam, lmax).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)
 plt.subplot(2, 2, 4)

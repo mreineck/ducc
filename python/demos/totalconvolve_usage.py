@@ -29,8 +29,8 @@ def nalm(lmax, mmax):
 
 
 def random_alm(lmax, mmax, ncomp):
-    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
     res[0:lmax+1, :].imag = 0.
     return res
@@ -69,8 +69,8 @@ print("interpolating...")
 res = inter_classic.interpol(ptg)
 print("...done")
 
-# res is an array of shape (nptg, 1).
-# If we had specified `separate=True`, it would be of shape(nptg, 3).
+# res is an array of shape (1, nptg).
+# If we had specified `separate=True`, it would be of shape(3, nptg).
 print(res.shape)
 
 # Since the interpolator object holds large data structures, it should be
@@ -91,5 +91,5 @@ print("interpolating...")
 res = inter_hwp.interpol(ptg)
 print("...done")
 
-# now res has shape(nptg,3)
+# now res has shape(3, nptg)
 print(res.shape)
