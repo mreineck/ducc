@@ -28,7 +28,7 @@
 #include <x86intrin.h>
 #endif
 #include "ducc0/infra/simd.h"
-#include "ducc0/sharp/sht.h"
+#include "ducc0/sht/sht.h"
 #include "ducc0/math/fft1d.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/math/math_utils.h"

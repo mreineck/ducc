@@ -29,7 +29,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/fft1d.h"
 #include "ducc0/math/gl_integrator.h"
-#include "ducc0/sharp/sharp.h"
+#include "ducc0/sht/sharp.h"
 
 namespace ducc0 {
 

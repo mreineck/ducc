@@ -33,7 +33,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
-#include "ducc0/sharp/sht.h"
+#include "ducc0/sht/sht.h"
 
 namespace ducc0 {
 

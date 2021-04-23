@@ -30,9 +30,9 @@
 #include <vector>
 #include <complex>
 
-#include "ducc0/sharp/sht.h"
-#include "ducc0/sharp/sharp.h"
-#include "ducc0/sharp/alm.h"
+#include "ducc0/sht/sht.h"
+#include "ducc0/sht/sharp.h"
+#include "ducc0/sht/alm.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
