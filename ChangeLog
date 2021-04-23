@@ -13,9 +13,19 @@
     instead of just replacing a whole transform.
 
 - sht:
-  - rewrite, moving away from pointers to mav objects. This is not finished,
-    and once it is complete, the Python SHT interface will most likely change.
-    So this might have to wait for ducc1.
+  - design of a new SHT interface. Parts of this interface are made visible
+    from Python, but should be considered experimental. The "sharpjob_d"-based
+    interface will be kept for compatibility purposes until ducc1 is released.
+  - misc.rotate_alm was moved to the sht submodule.
+
+- totalconvolver:
+  - interface change to synchronize it better with the upcoming SHT interface.
+    Basically, if an array has a "number of components" axis, this is now
+    always in first place.
+    Strictly speaking this is an interface-breaking change, but to the best of
+    my knowledge the interface in question has not been used in other projects
+    yet.
+
 
 0.9.0:
 - general:
