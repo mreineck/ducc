@@ -500,6 +500,9 @@ template<typename T> void synthesis(
 //   - check lmax and nrings whether accelerated synthesis makes sense
 //   - if yes, run synthesis on grid with minimal nrings and upsample
 //   - otherwise run standard synthesis
+// standard synthesis: break down into several chunks to reduce memory
+// consumption due to temporary "leg" array. Be careful to put ring pairs into
+// the same chunk!
 template<typename T> void adjoint_synthesis(
   mav<complex<T>,2> &alm, // (ncomp, *)
   const mav<T,2> &map, // (ncomp, *)
