@@ -32,8 +32,8 @@
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/bucket_sort.h"
-#include "ducc0/sharp/sht.h"
-#include "ducc0/sharp/alm.h"
+#include "ducc0/sht/sht.h"
+#include "ducc0/sht/alm.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/math/math_utils.h"
 
@@ -551,12 +551,12 @@ template<typename T> class ConvolverPlan
       size_t mbeam, mav<T,3> &planes) const
       {
       size_t nplanes=1+(mbeam>0);
-      auto ncomp = vslm.shape(1);
+      auto ncomp = vslm.shape(0);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      MR_assert(vblm.shape(0)==ncomp, "inconsistent slm and blm vectors");
       Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
-      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
-      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
+      MR_assert(islm.Num_Alms()==vslm.shape(1), "bad array dimension");
+      MR_assert(iblm.Num_Alms()==vblm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
       MR_assert(mbeam <= kmax, "mbeam too high");
 
@@ -577,15 +577,15 @@ template<typename T> class ConvolverPlan
             auto norm = (mbeam>0) ? -lnorm[l] : lnorm[l];
             for (size_t i=0; i<ncomp; ++i)
               {
-              auto tmp = vblm(iblm.index(l,mbeam),i)*norm;
-              aarr.v(0,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.real();
+              auto tmp = vblm(i,iblm.index(l,mbeam))*norm;
+              aarr.v(0,base.index(l,m)) += vslm(i,islm.index(l,m))*tmp.real();
               if (mbeam>0)
-                aarr.v(1,base.index(l,m)) += vslm(islm.index(l,m),i)*tmp.imag();
+                aarr.v(1,base.index(l,m)) += vslm(i,islm.index(l,m))*tmp.imag();
               }
             }
           }
       auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {nplanes, ntheta_s, nphi_s});
-      synthesis(aarr, lmax, subplanes, mbeam, "CC", nthreads);
+      synthesis(aarr, subplanes, mbeam, lmax, "CC", nthreads);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
@@ -620,8 +620,8 @@ template<typename T> class ConvolverPlan
     void getPlane(const mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,3> &planes) const
       {
-      mav<complex<T>,2> vslm(&slm(0), {slm.shape(0),1}, {slm.stride(0),0});
-      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
+      mav<complex<T>,2> vslm(&slm(0), {1,slm.shape(0)}, {0,slm.stride(0)});
+      mav<complex<T>,2> vblm(&blm(0), {1,blm.shape(0)}, {0,blm.stride(0)});
       getPlane(vslm, vblm, mbeam, planes);
       }
 
@@ -683,12 +683,12 @@ template<typename T> class ConvolverPlan
       size_t mbeam, mav<T,3> &planes) const
       {
       size_t nplanes=1+(mbeam>0);
-      auto ncomp = vslm.shape(1);
+      auto ncomp = vslm.shape(0);
       MR_assert(ncomp>0, "need at least one component");
-      MR_assert(vblm.shape(1)==ncomp, "inconsistent slm and blm vectors");
+      MR_assert(vblm.shape(0)==ncomp, "inconsistent slm and blm vectors");
       Alm_Base islm(lmax, lmax), iblm(lmax, kmax);
-      MR_assert(islm.Num_Alms()==vslm.shape(0), "bad array dimenion");
-      MR_assert(iblm.Num_Alms()==vblm.shape(0), "bad array dimenion");
+      MR_assert(islm.Num_Alms()==vslm.shape(1), "bad array dimension");
+      MR_assert(iblm.Num_Alms()==vblm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
       MR_assert(mbeam <= kmax, "mbeam too high");
 
@@ -739,24 +739,24 @@ template<typename T> class ConvolverPlan
       auto subplanes=subarray<3>(planes,{0, nbtheta, nbphi}, {nplanes, ntheta_s, nphi_s});
 
       mav<complex<T>,2> aarr({nplanes, base.Num_Alms()});
-      adjoint_synthesis(aarr, lmax, subplanes, mbeam, "CC", nthreads);
+      adjoint_synthesis(aarr, subplanes, mbeam, lmax, "CC", nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           if (l>=mbeam)
             for (size_t i=0; i<ncomp; ++i)
               {
-              auto tmp = vblm(iblm.index(l,mbeam),i)*lnorm[l] * T((mbeam==0) ? 1 : (-2));
-              vslm.v(islm.index(l,m),i) += conj(aarr(0,base.index(l,m)))*tmp.real();
+              auto tmp = vblm(i,iblm.index(l,mbeam))*lnorm[l] * T((mbeam==0) ? 1 : (-2));
+              vslm.v(i,islm.index(l,m)) += conj(aarr(0,base.index(l,m)))*tmp.real();
               if (mbeam>0)
-                vslm.v(islm.index(l,m),i) += conj(aarr(1,base.index(l,m)))*tmp.imag();
+                vslm.v(i,islm.index(l,m)) += conj(aarr(1,base.index(l,m)))*tmp.imag();
               }
       }
 
     void updateSlm(mav<complex<T>,1> &slm, const mav<complex<T>,1> &blm,
       size_t mbeam, mav<T,3> &planes) const
       {
-      mav<complex<T>,2> vslm(&slm.v(0), {slm.shape(0),1}, {slm.stride(0),0}, true);
-      mav<complex<T>,2> vblm(&blm(0), {blm.shape(0),1}, {blm.stride(0),0});
+      mav<complex<T>,2> vslm(&slm.v(0), {1,slm.shape(0)}, {0,slm.stride(0)}, true);
+      mav<complex<T>,2> vblm(&blm(0), {1,blm.shape(0)}, {0,blm.stride(0)});
       updateSlm(vslm, vblm, mbeam, planes);
       }
 

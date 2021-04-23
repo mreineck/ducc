@@ -19,7 +19,6 @@ import pytest
 from numpy.testing import assert_
 import ducc0.totalconvolve as totalconvolve
 import ducc0.sht as sht
-import ducc0.misc as misc
 
 pmp = pytest.mark.parametrize
 
@@ -40,10 +39,10 @@ def nalm(lmax, mmax):
 
 
 def random_alm(rng, lmax, mmax, ncomp):
-    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1, :].imag = 0.
+    res[:, 0:lmax+1].imag = 0.
     return res
 
 
@@ -72,8 +71,8 @@ def myalmdot(a1, a2, lmax, mmax, spin):
 def test_against_convolution(lkmax):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
-    slm = random_alm(rng, lmax, lmax, 1)[:, 0]
-    blm = random_alm(rng, lmax, kmax, 1)[:, 0]
+    slm = random_alm(rng, lmax, lmax, 1)[0, :]
+    blm = random_alm(rng, lmax, kmax, 1)[0, :]
 
     conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2.,
                                        epsilon=1e-13, nthreads=2)
@@ -95,7 +94,7 @@ def test_against_convolution(lkmax):
     blm2[0:blm.shape[0]] = blm
     res2 = np.zeros((nptg,))
     for i in range(nptg):
-        rbeam = misc.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
+        rbeam = sht.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
         res2[i] = convolve(slm, rbeam, lmax).real
     _assert_close(res1, res2, 1e-13)
 
@@ -119,18 +118,18 @@ def test_against_convolution_2(lkmax, ncomp, separate):
 
     res1 = inter.interpol(ptg)
 
-    blm2 = np.zeros((nalm(lmax, lmax), ncomp))+0j
-    blm2[0:blm.shape[0], :] = blm
-    res2 = np.zeros((nptg, ncomp))
+    blm2 = np.zeros((ncomp, nalm(lmax, lmax)))+0j
+    blm2[:, 0:blm.shape[1]] = blm
+    res2 = np.zeros((ncomp, nptg))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = misc.rotate_alm(blm2[:, c], lmax,
-                                    ptg[i, 2], ptg[i, 0], ptg[i, 1])
-            res2[i, c] = convolve(slm[:, c], rbeam, lmax).real
+            rbeam = sht.rotate_alm(blm2[c, :], lmax,
+                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-13)
     else:
-        _assert_close(res1[:, 0], np.sum(res2, axis=1), 1e-13)
+        _assert_close(res1[0, :], np.sum(res2, axis=0), 1e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -153,26 +152,26 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
 
     res1 = inter.interpol(ptg)
 
-    blm2 = np.zeros((nalm(lmax, lmax), ncomp))+0j
-    blm2[0:blm.shape[0], :] = blm
-    res2 = np.zeros((nptg, ncomp))
+    blm2 = np.zeros((ncomp, nalm(lmax, lmax)))+0j
+    blm2[:, 0:blm.shape[1]] = blm
+    res2 = np.zeros((ncomp, nptg))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = misc.rotate_alm(blm2[:, c], lmax,
-                                    ptg[i, 2], ptg[i, 0], ptg[i, 1])
-            res2[i, c] = convolve(slm[:, c], rbeam, lmax).real
+            rbeam = sht.rotate_alm(blm2[c, :], lmax,
+                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-6)
     else:
-        _assert_close(res1[:, 0], np.sum(res2, axis=1), 1e-6)
+        _assert_close(res1[0, :], np.sum(res2, axis=0), 1e-6)
 
 
 @pmp("lkmax", [(13, 13), (20, 0), (2, 1), (30, 15), (35, 2)])
 def test_adjointness(lkmax):
     lmax, kmax = lkmax
     rng = np.random.default_rng(42)
-    slm = random_alm(rng, lmax, lmax, 1)[:, 0]
-    blm = random_alm(rng, lmax, kmax, 1)[:, 0]
+    slm = random_alm(rng, lmax, lmax, 1)[0, :]
+    blm = random_alm(rng, lmax, kmax, 1)[0, :]
     nptg = 50
     ptg = rng.uniform(0., 1., nptg*3).reshape(nptg, 3)
     ptg[:, 0] *= np.pi
@@ -227,8 +226,8 @@ def test_adjointness2(lkmax, ncomp, separate, single):
         foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
                                          epsilon=1e-6, ofactor=1.8, nthreads=2)
     inter1 = foo.interpol(ptg).astype("f8")
-    ncomp2 = inter1.shape[1]
-    fake = rng.uniform(-0.5, 0.5, (ptg.shape[0], ncomp2))
+    ncomp2 = inter1.shape[0]
+    fake = rng.uniform(-0.5, 0.5, (ncomp2, ptg.shape[0]))
     if single:
         fake = fake.astype("f4")
         foo2 = totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=1e-6,
@@ -238,8 +237,8 @@ def test_adjointness2(lkmax, ncomp, separate, single):
                                           ofactor=1.8, nthreads=2)
     foo2.deinterpol(ptg.reshape((-1, 3)), fake)
     bla = foo2.getSlm(blm).astype("c16")
-    v1 = np.sum([myalmdot(slm[:, c], bla[:, c], lmax, lmax, 0)
+    v1 = np.sum([myalmdot(slm[c, :], bla[c, :], lmax, lmax, 0)
                  for c in range(ncomp)])
-    v2 = np.sum([np.vdot(fake[:, c], inter1[:, c]) for c in range(ncomp2)])
+    v2 = np.sum([np.vdot(fake[c, :], inter1[c, :]) for c in range(ncomp2)])
     epsilon = 1e-4 if single else 1e-12
     _assert_close(v1, v2, epsilon)

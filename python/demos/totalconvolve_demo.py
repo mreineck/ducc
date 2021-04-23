@@ -26,8 +26,8 @@ def nalm(lmax, mmax):
 
 
 def random_alm(lmax, mmax, ncomp):
-    res = rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp)) \
-     + 1j*rng.uniform(-1., 1., (nalm(lmax, mmax), ncomp))
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
     res[0:lmax+1, :].imag = 0.
     return res
@@ -97,7 +97,7 @@ bar = foo.interpol(ptg)
 del foo
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
 t0 = time.time()
-fake = rng.uniform(0., 1., (ptg.shape[0], ncomp2))
+fake = rng.uniform(0., 1., (ncomp2, ptg.shape[0]))
 foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0 = time.time()
 foo2.deinterpol(ptg.reshape((-1, 3)), fake)
@@ -106,8 +106,8 @@ t0 = time.time()
 bla = foo2.getSlm(blm)
 del foo2
 print("Computing s_lm: {}s".format(time.time()-t0))
-v1 = np.sum([myalmdot(slm[:, i], bla[:, i], lmax, lmax, 0) for i in range(ncomp)])
-v2 = np.sum([np.vdot(fake[:, i], bar[:, i]) for i in range(ncomp2)])
+v1 = np.sum([myalmdot(slm[i, :], bla[i, :], lmax, lmax, 0) for i in range(ncomp)])
+v2 = np.sum([np.vdot(fake[i, :], bar[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))
 
 # build interpolator object for slm and blm
@@ -132,6 +132,6 @@ t0 = time.time()
 bla_f = foo2_f.getSlm(blm.astype(np.complex64))
 del foo2_f
 print("Computing s_lm: {}s".format(time.time()-t0))
-v1 = np.sum([myalmdot(slm[:, i], bla_f[:, i], lmax, lmax, 0) for i in range(ncomp)])
-v2 = np.sum([np.vdot(fake_f[:, i], bar_f[:, i]) for i in range(ncomp2)])
+v1 = np.sum([myalmdot(slm[i, :], bla_f[i, :], lmax, lmax, 0) for i in range(ncomp)])
+v2 = np.sum([np.vdot(fake_f[i, :], bar_f[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))

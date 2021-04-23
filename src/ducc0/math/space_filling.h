@@ -26,7 +26,7 @@
  *  Utilities for conversion between integer coordinates, Morton, and Peano
  *  indices
  *
- *  Copyright (C) 2015-2020 Max-Planck-Society
+ *  Copyright (C) 2015-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -36,13 +36,23 @@
 #include <cstdint>
 #include <array>
 
-#ifdef __BMI2__
+// PDEP and PEXT should not be used on modern AMD CPUs, since their
+// implementation is really slow. On Intel they provide some performance
+// advantage, but I think it's better overall to just switch this off.
+
+//#define USE_PDEP_PEXT
+
+#ifndef __BMI2__
+#undef DUCC0_USE_PDEP_PEXT
+#endif
+
+#ifdef DUCC0_USE_PDEP_PEXT
 #include <x86intrin.h>
 #endif
 
 namespace ducc0 {
 
-#ifndef __BMI2__
+#ifndef DUCC0_USE_PDEP_PEXT
 
 uint32_t spread_bits_2D_32 (uint32_t v);
 uint64_t spread_bits_2D_64 (uint64_t v);

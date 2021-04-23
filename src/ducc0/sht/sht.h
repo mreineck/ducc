@@ -27,9 +27,9 @@
 #include <complex>
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
-#include "ducc0/sharp/sharp.h"
-#include "ducc0/sharp/sharp_geomhelpers.h"
-#include "ducc0/sharp/sharp_almhelpers.h"
+#include "ducc0/math/fft1d.h"
+#include "ducc0/math/gl_integrator.h"
+#include "ducc0/sht/sharp.h"
 
 namespace ducc0 {
 
@@ -269,36 +269,201 @@ class Ylmgen: public YlmBase
       }
   };
 
+struct ringhelper
+  {
+  using dcmplx = complex<double>;
+  double phi0_;
+  vector<dcmplx> shiftarr;
+  size_t s_shift;
+  unique_ptr<pocketfft_r<double>> plan;
+  size_t length;
+  bool norot;
+  ringhelper() : length(0) {}
+  void update(size_t nph, size_t mmax, double phi0)
+    {
+    norot = (abs(phi0)<1e-14);
+    if (!norot)
+      if ((mmax!=s_shift-1) || (!approx(phi0,phi0_,1e-15)))
+      {
+      shiftarr.resize(mmax+1);
+      s_shift = mmax+1;
+      phi0_ = phi0;
+      MultiExp<double, dcmplx> mexp(phi0, mmax+1);
+      for (size_t m=0; m<=mmax; ++m)
+        shiftarr[m] = mexp[m];
+      }
+    if (nph!=length)
+      {
+      plan.reset(new pocketfft_r<double>(nph));
+      length=nph;
+      }
+    }
+  template<typename T> DUCC0_NOINLINE void phase2ring (size_t nph,
+    double phi0, mav<double,1> &data, size_t mmax, const mav<complex<T>,1> &phase)
+    {
+    update (nph, mmax, phi0);
+
+    if (nph>=2*mmax+1)
+      {
+      if (norot)
+        for (size_t m=0; m<=mmax; ++m)
+          {
+          data.v(2*m)=phase(m).real();
+          data.v(2*m+1)=phase(m).imag();
+          }
+      else
+        for (size_t m=0; m<=mmax; ++m)
+          {
+          dcmplx tmp = dcmplx(phase(m))*shiftarr[m];
+          data.v(2*m)=tmp.real();
+          data.v(2*m+1)=tmp.imag();
+          }
+      for (size_t m=2*(mmax+1); m<nph+2; ++m)
+        data.v(m)=0.;
+      }
+    else
+      {
+      data.v(0)=phase(0).real();
+      fill(&data.v(1),&data.v(nph+2),0.);
+
+      for (size_t m=1, idx1=1, idx2=nph-1; m<=mmax; ++m,
+           idx1=(idx1+1==nph) ? 0 : idx1+1, idx2=(idx2==0) ? nph-1 : idx2-1)
+        {
+        dcmplx tmp = phase(m);
+        if(!norot) tmp*=shiftarr[m];
+        if (idx1<(nph+2)/2)
+          {
+          data.v(2*idx1)+=tmp.real();
+          data.v(2*idx1+1)+=tmp.imag();
+          }
+        if (idx2<(nph+2)/2)
+          {
+          data.v(2*idx2)+=tmp.real();
+          data.v(2*idx2+1)-=tmp.imag();
+          }
+        }
+      }
+    data.v(1)=data(0);
+    plan->exec(&(data.v(1)), 1., false);
+    }
+  template<typename T> DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
+    mav<double,1> &data, size_t mmax, mav<complex<T>,1> &phase)
+    {
+    update (nph, mmax, -phi0);
+
+    plan->exec (&(data.v(1)), 1., true);
+    data.v(0)=data(1);
+    data.v(1)=data.v(nph+1)=0.;
+
+    if (mmax<=nph/2)
+      {
+      if (norot)
+        for (size_t m=0; m<=mmax; ++m)
+          phase.v(m) = complex<T>(T(data(2*m)), T(data(2*m+1)));
+      else
+        for (size_t m=0; m<=mmax; ++m)
+          phase.v(m) = complex<T>(dcmplx(data(2*m), data(2*m+1)) * shiftarr[m]);
+      }
+    else
+      {
+      for (size_t m=0, idx=0; m<=mmax; ++m, idx=(idx+1==nph) ? 0 : idx+1)
+        {
+        dcmplx val;
+        if (idx<(nph-idx))
+          val = dcmplx(data(2*idx), data(2*idx+1));
+        else
+          val = dcmplx(data(2*(nph-idx)), -data(2*(nph-idx)+1));
+        if (!norot)
+          val *= shiftarr[m];
+        phase.v(m)=complex<T>(val);
+        }
+      }
+    }
+  };
+
 DUCC0_NOINLINE size_t get_mlim (size_t lmax, size_t spin, double sth, double cth);
+
+void get_ringtheta_2d(const string &type, mav<double, 1> &theta)
+  {
+  auto nrings = theta.shape(0);
+
+  if (type=="GL") // Gauss-Legendre
+    {
+    ducc0::GL_Integrator integ(nrings);
+    auto cth = integ.coords();
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m) = acos(-cth[m]);
+    }
+  else if (type=="F1") // Fejer 1
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=pi*(m+0.5)/nrings;
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+  else if (type=="CC") // Clenshaw-Curtis
+    for (size_t m=0; m<(nrings+1)/2; ++m)
+      {
+      theta.v(m)=max(1e-15,pi*m/(nrings-1.));
+      theta.v(nrings-1-m)=pi-theta(m);
+      }
+  else if (type=="F2") // Fejer 2
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(m+1)/(nrings+1.);
+  else if (type=="DH") // Driscoll-Healy
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m) = m*pi/nrings;
+  else if (type=="MW") // McEwen-Wiaux
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(2.*m+1.)/(2.*nrings-1.);
+  else
+    MR_fail("unsupported grid type");
+  }
 
 template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
   mav<complex<double>,2> &almtmp,
   mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi);
 
-#if 0
 void get_gridweights(const string &type, mav<double,1> &wgt);
 mav<double,1> get_gridweights(const string &type, size_t nrings);
 
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
-  const mav<double,1> &theta, // (nrings)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode);
-
+  SHT_mode mode=ALM2MAP);
 template<typename T> void leg2alm(  // associated Legendre transform
-  const mav<complex<T>,3> &leg, //  (ncomp, nrings, nm)
   mav<complex<T>,2> &alm, // (ncomp, lmidx)
-  const mav<double,1> &theta, // (nrings)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
   const mav<size_t,1> &mval, // (nm)
   const mav<size_t,1> &mstart, // (nm)
-  size_t lmax,
-  size_t spin,
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
+  size_t nthreads);
+
+template<typename T> void map2leg(  // FFT
+  const mav<T,2> &map, // (ncomp, pix)
+  mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads);
+template<typename T> void leg2map(  // FFT
+  mav<T,2> &map, // (ncomp, pix)
+  const mav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
   size_t nthreads);
 
 void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
@@ -306,47 +471,112 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthread
 void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
   mav<complex<double>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
 
-#endif
+// fully general map synthesis
+// conditions:
+// - ncomp = 1+(spin>0)
+// - all mval together must form a gapless sequence starting from 0
+template<typename T> void synthesis(
+  const mav<complex<T>,2> &alm, // (ncomp, *)
+  mav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads);
+// - check that mval are a gapless sequence starting at 0
+// - check that lmax>=mmax
+// - (check that mstart has consistent values?)
+// - check that theta are in [0;pi]
+// - (check that ringstart and nphi are consistent)
+// - check that ncomp and spin are consistent
+// - is theta grid equidistant and (CC, F!, MW)?
+//   - if no, run standard synthesis
+//   - check lmax and nrings whether accelerated synthesis makes sense
+//   - if yes, run synthesis on grid with minimal nrings and upsample
+//   - otherwise run standard synthesis
+// standard synthesis: break down into several chunks to reduce memory
+// consumption due to temporary "leg" array. Be careful to put ring pairs into
+// the same chunk!
+template<typename T> void adjoint_synthesis(
+  mav<complex<T>,2> &alm, // (ncomp, *)
+  const mav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const mav<size_t,1> &mval, // (nm)
+  const mav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const mav<double,1> &theta, // (nrings)
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads);
 
-template<typename T> void synthesis(const mav<complex<T>,2> &alm, size_t lmax,
-  mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
-  unique_ptr<sharp_geom_info> ginfo;
-  ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
-    map.stride(2), map.stride(1), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(1), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(1));
-  (spin==0) ?
-    sharp_alm2map(alm.cdata(), map.vdata(), *ginfo, *ainfo, 0, nthreads) :
-    sharp_alm2map_spin(spin, &alm(0,0), &alm(1,0), &map.v(0,0,0), &map.v(1,0,0),
-      *ginfo, *ainfo, 0, nthreads);
+  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
+  mav<size_t,1> mval({lmax+1}), mstart({lmax+1});
+  for (size_t i=0, ofs=0; i<=lmax; ++i)
+    {
+    mval.v(i) = i;
+    mstart.v(i) = ofs-i;
+    ofs += lmax+1-i;
+    }
+  mav<size_t,1> ringstart({map.shape(1)});
+  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
+  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  for (size_t i=0; i<map.shape(1); ++i)
+    ringstart.v(i) = i*ringstride;
+  mav<T,2> map2(map.vdata(), {map.shape(0), map.shape(1)*map.shape(2)},
+                {map.stride(0), 1}, true);
+  mav<double,1> theta({map.shape(1)});
+  get_ringtheta_2d(geometry, theta);
+  synthesis(alm, map2, spin, lmax, mval, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
-template<typename T> void synthesis(const mav<complex<T>,1> &alm, size_t lmax,
-  mav<T,2> &map, const string &geometry, size_t nthreads)
+template<typename T> void synthesis(const mav<complex<T>,1> &alm,
+  mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   mav<complex<T>,2> alm2(alm.cdata(), {1,alm.shape(0)}, {0,alm.stride(0)});
   mav<T,3> map2(map.vdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)}, true);
-  synthesis (alm2, lmax, map2, 0, geometry, nthreads);
+  synthesis (alm2, map2, 0, lmax, geometry, nthreads);
   }
-template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm, size_t lmax,
-  const mav<T,3> &map, size_t spin, const string &geometry, size_t nthreads)
+template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
-  unique_ptr<sharp_geom_info> ginfo;
-  ginfo = sharp_make_2d_geom_info (map.shape(1), map.shape(2), 0.,
-    map.stride(2), map.stride(1), geometry);
-  MR_assert(((lmax+1)*(lmax+2))/2==alm.shape(1), "bad a_lm size");
-  auto ainfo = sharp_make_triangular_alm_info(lmax, lmax, alm.stride(1));
-  (spin==0) ?
-    sharp_alm2map_adjoint(alm.vdata(), map.cdata(), *ginfo, *ainfo, 0, nthreads) :
-    sharp_alm2map_spin_adjoint(spin, &alm.v(0,0), &alm.v(1,0), &map(0,0,0), &map(1,0,0),
-      *ginfo, *ainfo, 0, nthreads);
+  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
+  mav<size_t,1> mval({lmax+1}), mstart({lmax+1});
+  for (size_t i=0, ofs=0; i<=lmax; ++i)
+    {
+    mval.v(i) = i;
+    mstart.v(i) = ofs-i;
+    ofs += lmax+1-i;
+    }
+  mav<size_t,1> ringstart({map.shape(1)});
+  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
+  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  for (size_t i=0; i<map.shape(1); ++i)
+    ringstart.v(i) = i*ringstride;
+  mav<T,2> map2(map.cdata(), {map.shape(0), map.shape(1)*map.shape(2)},
+                {map.stride(0), 1});
+  mav<double,1> theta({map.shape(1)});
+  get_ringtheta_2d(geometry, theta);
+  adjoint_synthesis(alm, map2, spin, lmax, mval, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
-template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
-  const mav<T,2> &map, const string &geometry, size_t nthreads)
+template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
+  const mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   mav<complex<T>,2> alm2(alm.vdata(), {1,alm.shape(0)}, {0,alm.stride(0)}, true);
   mav<T,3> map2(map.cdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)});
-  adjoint_synthesis (alm2, lmax, map2, 0, geometry, nthreads);
+  adjoint_synthesis (alm2, map2, 0, lmax, geometry, nthreads);
   }
 // template<typename T> void analysis(mav<complex<T>,2> &alm, size_t lmax,
 //   size_t mmax, const mav<T,3> &map, size_t spin, const string &geometry,
@@ -363,17 +593,17 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm, size_t lmax,
 //   }
 }
 
-#if 0
 using detail_sht::SHT_mode;
 using detail_sht::ALM2MAP;
 using detail_sht::MAP2ALM;
 using detail_sht::get_gridweights;
 using detail_sht::alm2leg;
 using detail_sht::leg2alm;
+using detail_sht::map2leg;
+using detail_sht::leg2map;
 using detail_sht::prep_for_analysis;
-using detail_sht::prep_for_analysis2;
+//using detail_sht::prep_for_analysis2;
 using detail_sht::resample_theta;
-#endif
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
 

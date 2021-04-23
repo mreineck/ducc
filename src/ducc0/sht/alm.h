@@ -407,6 +407,7 @@ template<typename T> void rotate_alm (const Alm_Base &base, mav<complex<T>,1> &a
   {
   auto lmax=base.Lmax();
   MR_assert (base.complete(), "rotate_alm: need complete A_lm set");
+  MR_assert (alm.shape(0)==base.Num_Alms(), "bad size of a_lm array");
 
   if (theta!=0)
     {

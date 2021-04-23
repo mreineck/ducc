@@ -90,9 +90,9 @@ class Pyhpbase
     Pyhpbase (int64_t nside, const string &scheme)
       : base (nside, RING, SET_NSIDE)
       {
-      MR_assert((scheme=="RING")||(scheme=="NEST"),
+      MR_assert((scheme=="RING")||(scheme=="NEST")||(scheme=="NESTED"),
         "unknown ordering scheme");
-      if (scheme=="NEST")
+      if ((scheme=="NEST")||(scheme=="NESTED"))
         base.SetNside(nside,NEST);
       }
     string repr() const
@@ -246,7 +246,7 @@ py::array local_v_angle (const py::array &v1, const py::array &v2)
   return move(angle);
   }
 
-const char *healpix_DS = R"""(
+constexpr const char *healpix_DS = R"""(
 Python interface for some of the HEALPix C++ functionality
 
 All angles are interpreted as radians.
@@ -259,87 +259,102 @@ However, 3-vectors provided as input to the functions need not be normalized.
 Error conditions are reported by raising exceptions.
 )""";
 
-const char *order_DS = R"""(
+constexpr const char *Healpix_Base_DS = R"""(
+Functionality related to the HEALPix pixelization
+)""";
+
+constexpr const char *Healpix_Base_init_DS = R"""(
+Healpix_Base constructor
+
+Parameters
+----------
+nside: int
+    Nside parameter of the pixelization
+scheme: str
+    Must be "RING", "NEST", or "NESTED"
+)""";
+
+constexpr const char *order_DS = R"""(
 Returns the ORDER parameter of the pixelisation.
 If Nside is a power of 2, this is log_2(Nside), otherwise it is -1.
 )""";
 
-const char *nside_DS = R"""(
+constexpr const char *nside_DS = R"""(
 Returns the Nside parameter of the pixelisation.
 )""";
 
-const char *npix_DS = R"""(
+constexpr const char *npix_DS = R"""(
 Returns the total number of pixels of the pixelisation.
 )""";
 
-const char *scheme_DS = R"""(
+constexpr const char *scheme_DS = R"""(
 Returns a string representation of the pixelisation's ordering scheme
 ("RING" or "NEST").
 )""";
 
-const char *pix_area_DS = R"""(
+constexpr const char *pix_area_DS = R"""(
 Returns the area (in steradian) of a single pixel.
 )""";
 
-const char *max_pixrad_DS = R"""(
+constexpr const char *max_pixrad_DS = R"""(
 Returns the maximum angular distance (in radian) between a pixel center
 and its corners for this pixelisation.
 )""";
 
-const char *pix2ang_DS = R"""(
+constexpr const char *pix2ang_DS = R"""(
 Returns a (co-latitude, longitude) tuple for each value in pix.
 The result array has the same shape as pix, with an added last dimension
 of size 2.
 )""";
 
-const char *ang2pix_DS = R"""(
+constexpr const char *ang2pix_DS = R"""(
 Returns the index of the containing pixel for every (co-latitude, longitude)
 tuple in ang. ang must have a last dimension of size 2; the result array
 has the same shape as ang, except that ang's last dimension is removed.
 )""";
 
-const char *pix2vec_DS = R"""(
+constexpr const char *pix2vec_DS = R"""(
 Returns a normalized 3-vector for each value in pix.
 The result array has the same shape as pix, with an added last dimension
 of size 3.
 )""";
 
-const char *vec2pix_DS = R"""(
+constexpr const char *vec2pix_DS = R"""(
 Returns the index of the containing pixel for every 3-vector in vec.
 vec must have a last dimension of size 3; the result array has the same shape as
 vec, except that vec's last dimension is removed.
 )""";
 
-const char *ring2nest_DS = R"""(
+constexpr const char *ring2nest_DS = R"""(
 Returns the pixel index in NEST scheme for every entry of ring.
 The result array has the same shape as ring.
 )""";
 
-const char *nest2ring_DS = R"""(
+constexpr const char *nest2ring_DS = R"""(
 Returns the pixel index in RING scheme for every entry of nest.
 The result array has the same shape as nest.
 )""";
 
-const char *query_disc_DS = R"""(
+constexpr const char *query_disc_DS = R"""(
 Returns a range set of all pixels whose centers fall within "radius" of "ptg".
 "ptg" must be a single (co-latitude, longitude) tuple. The result is a 2D array
 with last dimension 2; the pixels lying inside the disc are
 [res[0,0] .. res[0,1]); [res[1,0] .. res[1,1]) etc.
 )""";
 
-const char *ang2vec_DS = R"""(
+constexpr const char *ang2vec_DS = R"""(
 Returns a normalized 3-vector for every (co-latitude, longitude)
 tuple in ang. ang must have a last dimension of size 2; the result array
 has the same shape as ang, except that its last dimension is 3 instead of 2.
 )""";
 
-const char *vec2ang_DS = R"""(
+constexpr const char *vec2ang_DS = R"""(
 Returns a (co-latitude, longitude) tuple for every 3-vector in vec.
 vec must have a last dimension of size 3; the result array has the same shape as
 vec, except that its last dimension is 2 instead of 3.
 )""";
 
-const char *v_angle_DS = R"""(
+constexpr const char *v_angle_DS = R"""(
 Returns the angles between the 3-vectors in v1 and v2. The input arrays must
 have identical shapes. The result array has the same shape as v1 or v2, except
 that their last dimension is removed.
@@ -352,8 +367,8 @@ void add_healpix(py::module_ &msup)
   auto m = msup.def_submodule("healpix");
   m.doc() = healpix_DS;
 
-  py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local())
-    .def(py::init<int,const string &>(),"nside"_a,"scheme"_a)
+  py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local(), Healpix_Base_DS)
+    .def(py::init<int,const string &>(), Healpix_Base_init_DS, "nside"_a,"scheme"_a)
     .def("order", [](Pyhpbase &self)
       { return self.base.Order(); }, order_DS)
     .def("nside", [](Pyhpbase &self)

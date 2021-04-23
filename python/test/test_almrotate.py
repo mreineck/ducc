@@ -17,7 +17,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import ducc0.misc as misc
+import ducc0.sht
 
 pmp = pytest.mark.parametrize
 
@@ -52,6 +52,6 @@ def test_rotation(lmax, nthreads):
     phi, theta, psi = rng.uniform(-2*np.pi, 2*np.pi, (3,))
 
     alm = random_alm(rng, lmax, lmax, 1)[:,0]
-    alm2 = misc.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
-    alm2 = misc.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
+    alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
+    alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     _assert_close(alm, alm2, 1e-12)
