@@ -33,7 +33,7 @@
 
 namespace ducc0 {
 
-#ifndef __BMI2__
+#ifndef DUCC0_USE_PDEP_PEXT
 
 #if 1
 
