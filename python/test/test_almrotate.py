@@ -55,3 +55,7 @@ def test_rotation(lmax, nthreads):
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     _assert_close(alm, alm2, 1e-12)
+    alm = alm.astype(np.complex64)
+    alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
+    alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
+    _assert_close(alm, alm2, 1e-6)

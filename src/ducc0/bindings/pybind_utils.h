@@ -112,6 +112,18 @@ template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   return tmp;
   }
 
+template<typename T> py::array_t<T> get_optional_Pyarr_minshape(py::object &arr_,
+  const shape_t &dims)
+  {
+  if (arr_.is_none()) return py::array_t<T>(dims);
+  MR_assert(isPyarr<T>(arr_), "incorrect data type");
+  auto tmp = toPyarr<T>(arr_);
+  MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]>=size_t(tmp.shape(int(i))), "dimension too small");
+  return tmp;
+  }
+
 template<typename T> py::array_t<T> get_optional_const_Pyarr(
   const py::object &arr_, const shape_t &dims)
   {
@@ -150,6 +162,7 @@ using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::get_Pyarr;
 using detail_pybind::get_optional_Pyarr;
+using detail_pybind::get_optional_Pyarr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_fmav;
 using detail_pybind::to_mav;

@@ -1521,24 +1521,24 @@ template<typename T> void map2leg(  // FFT
     }); /* end of parallel region */
   }
 
-void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
-  mav<complex<double>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
+template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
+  mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {
   MR_assert(legi.shape(1)==lego.shape(1), "dimension mismatch");
   size_t nrings_in = legi.shape(0);
   size_t nfull_in = 2*nrings_in-npi-spi;
   size_t nrings_out = lego.shape(0);
   size_t nfull_out = 2*nrings_out-npo-spo;
-  double dthi = 2*pi/nfull_in;
-  double dtho = 2*pi/nfull_out;
-  double shift = 0.5*(dtho*(1-npo)-dthi*(1-npi));
+  auto dthi = T(2*pi/nfull_in);
+  auto dtho = T(2*pi/nfull_out);
+  auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
   auto nm2 = nm/2;
-  auto tmp(mav<complex<double>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
-  fmav<complex<double>> ftmp_in(tmp.subarray<2>({0,0},{nfull_in,MAXIDX}));
-  fmav<complex<double>> ftmp_out(tmp.subarray<2>({0,0},{nfull_out,MAXIDX}));
-  double fct = ((spin&1)==0) ? 1 : -1;
+  auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
+  fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
+  fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
+  T fct = ((spin&1)==0) ? 1 : -1;
   // fill dark side
   execParallel(0, nrings_in, nthreads, [&](size_t lo, size_t hi)
     {
@@ -1559,14 +1559,14 @@ void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
       }
     });
 
-  c2c(ftmp_in,ftmp_in,{0},true,1.,nthreads);
+  c2c(ftmp_in,ftmp_in,{0},true,T(1),nthreads);
 
   if (shift!=0)
     execParallel(1, nrings_in+1, nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo, im=nfull_in-lo; (i<hi)&&(i<=im); ++i,--im)
         {
-        auto phase=std::polar(1., i*shift);
+        auto phase=std::polar(T(1), i*shift);
         for (size_t j=0; j<tmp.shape(1); ++j)
           {
           if (i!=im)
@@ -1597,9 +1597,9 @@ void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
         tmp.v(i-dist,j) = tmp(i,j);
     }
 
-  c2c(ftmp_out,ftmp_out,{0},false,1.,nthreads);
+  c2c(ftmp_out,ftmp_out,{0},false,T(1),nthreads);
 
-  double norm = 1./(2*sqrt(nfull_in*nfull_out));
+  auto norm = T(1./(2*sqrt(nfull_in*nfull_out)));
   execParallel(0, nrings_out, nthreads, [&](size_t lo, size_t hi)
     {
     for (size_t i=lo; i<hi; ++i)
@@ -1617,16 +1617,16 @@ void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
     });
   }
 
-void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads)
+template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads)
   {
   auto nrings = leg.shape(1);
   auto wgt = get_gridweights("CC", 2*nrings-1);
   auto nm = leg.shape(2);
   auto nm2 = nm/2;
   size_t nfull = 2*nrings-2;
-  auto tmp(mav<complex<double>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
-  fmav<complex<double>> ftmp(tmp);
-  double fct = ((spin&1)==0) ? 1 : -1;
+  auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
+  fmav<complex<T>> ftmp(tmp);
+  T fct = ((spin&1)==0) ? 1 : -1;
   for (size_t n=0; n<leg.shape(0); ++n)
     {
     execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
@@ -1648,10 +1648,10 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
         }
       });
 
-    c2c(ftmp,ftmp,{0},true,1.,nthreads);
+    c2c(ftmp,ftmp,{0},true,T(1),nthreads);
 
-    vector<complex<double>> shift(nrings+1);
-    UnityRoots<double,complex<double>> roots(4*nrings-4);
+    vector<complex<T>> shift(nrings+1);
+    UnityRoots<T,complex<T>> roots(4*nrings-4);
     for (size_t i=1; i<shift.size(); ++i)
       shift[i] = roots[i];
     execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
@@ -1664,14 +1664,14 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
           tmp.v(im,j) *= conj(shift[i]);
           }
       });
-    c2c(ftmp,ftmp,{0},false,1.,nthreads);
+    c2c(ftmp,ftmp,{0},false,T(1),nthreads);
 
-    double norm = 1./(2*tmp.shape(0)*tmp.shape(0));
+    T norm = T(1)/(2*tmp.shape(0)*tmp.shape(0));
     execParallel(0, nrings+1, nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo, im=nfull-lo-1; (i<hi)&&(i<im); ++i,--im)
         {
-        auto factor = wgt(1+2*i)*norm;
+        auto factor = T(wgt(1+2*i))*norm;
         for (size_t j=0; j<tmp.shape(1); ++j)
           {
           tmp.v(i,j) *= factor;
@@ -1679,7 +1679,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
           }
         }
       });
-    c2c(ftmp,ftmp,{0},true,1.,nthreads);
+    c2c(ftmp,ftmp,{0},true,T(1),nthreads);
     execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo, im=nfull-lo; (i<hi)&&(i<=im); ++i,--im)
@@ -1690,7 +1690,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
           tmp.v(im,j) *= shift[i];
           }
       });
-    c2c(ftmp,ftmp,{0},false,1.,nthreads);
+    c2c(ftmp,ftmp,{0},false,T(1),nthreads);
 
     execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
       {
@@ -1698,8 +1698,8 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
         {
         for (size_t j=0; j<nm2; ++j)
           {
-          leg.v(n,i,2*j) = wgt(2*i)*leg(n,i,2*j) + tmp(i,j);
-          leg.v(n,i,2*j+1) = wgt(2*i)*leg(n,i,2*j+1) + tmp(i,j);
+          leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + tmp(i,j);
+          leg.v(n,i,2*j+1) = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j);
           if ((im<nfull) && (i!=im))
             {
             leg.v(n,i,2*j) += fct*tmp(im,j);
@@ -1708,7 +1708,7 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
           }
         if ((nm&1)==1)
           {
-          leg.v(n,i,nm-1) = wgt(2*i)*leg(n,i,nm-1) + tmp(i,tmp.shape(1)-1);
+          leg.v(n,i,nm-1) = T(wgt(2*i))*leg(n,i,nm-1) + tmp(i,tmp.shape(1)-1);
           if ((im<nfull) && (i!=im))
             leg.v(n,i,nm-1) += fct*tmp(im,tmp.shape(1)-1);
           }
@@ -1716,7 +1716,10 @@ void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads
       });
     }
   }
+template void prep_for_analysis(mav<complex<float>,3> &leg, size_t spin, size_t nthreads);
+template void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
 
+#if 0
 void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthreads)
   {
   auto legtmp2(mav<complex<double>,2>::build_noncritical({leg.shape(1), leg.shape(2)}));
@@ -1743,6 +1746,7 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthread
       }
     }
   }
+#endif
 
 void sanity_checks(
   const mav_info<2> &alm, // (ncomp, *)

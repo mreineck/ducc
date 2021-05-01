@@ -342,15 +342,16 @@ struct ft_partial_sph_isometry_plan
   };
 
 
-void xchg_yz(const Alm_Base &base, mav<complex<double>,1> &alm, size_t nthreads)
+template<typename T> void xchg_yz(const Alm_Base &base, mav<complex<T>,1> &alm,
+  size_t nthreads)
   {
   auto lmax = base.Lmax();
   MR_assert(lmax==base.Mmax(), "lmax and mmax must be equal");
 
   if (lmax>0) // deal with l==1
     {
-    auto t = -alm(base.index(1,0)).real()/sqrt(2.);
-    alm.v(base.index(1,0)).real(-alm(base.index(1,1)).imag()*sqrt(2.));
+    auto t = T(-alm(base.index(1,0)).real()/sqrt(2.));
+    alm.v(base.index(1,0)).real(T(-alm(base.index(1,1)).imag()*sqrt(2.)));
     alm.v(base.index(1,1)).imag(t);
     }
   if (lmax<=1) return;
@@ -366,7 +367,7 @@ void xchg_yz(const Alm_Base &base, mav<complex<double>,1> &alm, size_t nthreads)
         tin[i] = alm(base.index(l,mstart+2*i)).imag();
       F.F11.eval(tin, tout);
       for (int i=0; i<F.F11.n; ++i)
-        alm.v(base.index(l,mstart+2*i)).imag(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).imag(T(tout[i]));
 
       mstart = l%2;
       for (int i=0; i<F.F22.n; ++i)
@@ -377,7 +378,7 @@ void xchg_yz(const Alm_Base &base, mav<complex<double>,1> &alm, size_t nthreads)
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F22.n; ++i)
-        alm.v(base.index(l,mstart+2*i)).real(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).real(T(tout[i]));
 
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
@@ -392,12 +393,12 @@ void xchg_yz(const Alm_Base &base, mav<complex<double>,1> &alm, size_t nthreads)
       if (mstart==0)
         tout[0]*=sqrt(2.);
       for (int i=0; i<F.F12.n; ++i)
-        alm.v(base.index(l,mstart+2*i)).real(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).real(T(tout[i]));
 
       F.F12.eval(tin2,tout);
       mstart = 2-(l%2);
       for (int i=0; i<F.F21.n; ++i)
-        alm.v(base.index(l,mstart+2*i)).imag(tout[i]);
+        alm.v(base.index(l,mstart+2*i)).imag(T(tout[i]));
       }
     });
   }
@@ -414,14 +415,14 @@ template<typename T> void rotate_alm (const Alm_Base &base, mav<complex<T>,1> &a
     if (psi!=0)
       for (size_t m=0; m<=lmax; ++m)
         {
-        auto exppsi = polar(1.,-psi*m);
+        auto exppsi = complex<T>(polar(1.,-psi*m));
         for (size_t l=m; l<=lmax; ++l)
           alm.v(base.index(l,m))*=exppsi;
         }
     xchg_yz(base, alm, nthreads);
     for (size_t m=0; m<=lmax; ++m)
       {
-      auto exptheta = polar(1.,-theta*m);
+      auto exptheta = complex<T>(polar(1.,-theta*m));
       for (size_t l=m; l<=lmax; ++l)
         alm.v(base.index(l,m))*=exptheta;
       }
@@ -429,7 +430,7 @@ template<typename T> void rotate_alm (const Alm_Base &base, mav<complex<T>,1> &a
     if (phi!=0)
       for (size_t m=0; m<=lmax; ++m)
         {
-        auto expphi = polar(1.,-phi*m);
+        auto expphi = complex<T>(polar(1.,-phi*m));
         for (size_t l=m; l<=lmax; ++l)
           alm.v(base.index(l,m))*=expphi;
         }
@@ -438,7 +439,7 @@ template<typename T> void rotate_alm (const Alm_Base &base, mav<complex<T>,1> &a
     if (phi+psi!=0)
       for (size_t m=0; m<=lmax; ++m)
         {
-        auto expang = polar(1.,-(psi+phi)*m);
+        auto expang = complex<T>(polar(1.,-(psi+phi)*m));
         for (size_t l=m; l<=lmax; ++l)
           alm.v(base.index(l,m)) *= expang;
         }
