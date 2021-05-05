@@ -337,7 +337,7 @@ using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
 using a_c_c = py::array_t<complex<double>,
   py::array::c_style | py::array::forcecast>;
 
-template<typename T> class py_sharpjob
+template<typename T> class Py_sharpjob
   {
   private:
     unique_ptr<sharp_geom_info> ginfo;
@@ -346,7 +346,7 @@ template<typename T> class py_sharpjob
     int nthreads;
 
   public:
-    py_sharpjob () : lmax_(0), mmax_(0), npix_(0), nthreads(1) {}
+    Py_sharpjob () : lmax_(0), mmax_(0), npix_(0), nthreads(1) {}
 
     string repr() const
       {
@@ -503,32 +503,32 @@ void add_sht(py::module_ &msup)
   m.def("rotate_alm", &Py_rotate_alm, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a, "nthreads"_a=1);
 
-  py::class_<py_sharpjob<double>> (m, "sharpjob_d", py::module_local(),sharpjob_d_DS)
+  py::class_<Py_sharpjob<double>> (m, "sharpjob_d", py::module_local(),sharpjob_d_DS)
     .def(py::init<>())
-    .def("set_nthreads", &py_sharpjob<double>::set_nthreads, "nthreads"_a)
-    .def("set_gauss_geometry", &py_sharpjob<double>::set_gauss_geometry,
+    .def("set_nthreads", &Py_sharpjob<double>::set_nthreads, "nthreads"_a)
+    .def("set_gauss_geometry", &Py_sharpjob<double>::set_gauss_geometry,
       "nrings"_a,"nphi"_a)
-    .def("set_healpix_geometry", &py_sharpjob<double>::set_healpix_geometry,
+    .def("set_healpix_geometry", &Py_sharpjob<double>::set_healpix_geometry,
       "nside"_a)
-    .def("set_fejer1_geometry", &py_sharpjob<double>::set_fejer1_geometry,
+    .def("set_fejer1_geometry", &Py_sharpjob<double>::set_fejer1_geometry,
       "nrings"_a, "nphi"_a)
-    .def("set_fejer2_geometry", &py_sharpjob<double>::set_fejer2_geometry,
+    .def("set_fejer2_geometry", &Py_sharpjob<double>::set_fejer2_geometry,
       "nrings"_a, "nphi"_a)
-    .def("set_cc_geometry", &py_sharpjob<double>::set_cc_geometry,
+    .def("set_cc_geometry", &Py_sharpjob<double>::set_cc_geometry,
       "nrings"_a, "nphi"_a)
-    .def("set_dh_geometry", &py_sharpjob<double>::set_dh_geometry,
+    .def("set_dh_geometry", &Py_sharpjob<double>::set_dh_geometry,
       "nrings"_a, "nphi"_a)
-    .def("set_mw_geometry", &py_sharpjob<double>::set_mw_geometry,
+    .def("set_mw_geometry", &Py_sharpjob<double>::set_mw_geometry,
       "nrings"_a, "nphi"_a)
     .def("set_triangular_alm_info",
-      &py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)
-    .def("n_alm", &py_sharpjob<double>::n_alm)
-    .def("alm2map", &py_sharpjob<double>::alm2map,"alm"_a)
-    .def("alm2map_adjoint", &py_sharpjob<double>::alm2map_adjoint,"map"_a)
-    .def("map2alm", &py_sharpjob<double>::map2alm,"map"_a)
-    .def("alm2map_spin", &py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
-    .def("map2alm_spin", &py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
-    .def("__repr__", &py_sharpjob<double>::repr);
+      &Py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)
+    .def("n_alm", &Py_sharpjob<double>::n_alm)
+    .def("alm2map", &Py_sharpjob<double>::alm2map,"alm"_a)
+    .def("alm2map_adjoint", &Py_sharpjob<double>::alm2map_adjoint,"map"_a)
+    .def("map2alm", &Py_sharpjob<double>::map2alm,"map"_a)
+    .def("alm2map_spin", &Py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
+    .def("map2alm_spin", &Py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
+    .def("__repr__", &Py_sharpjob<double>::repr);
   }
 
 }
