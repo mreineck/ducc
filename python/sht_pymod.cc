@@ -258,7 +258,7 @@ void Py_resample_theta(const py::array &legi, bool npi, bool spi,
   }
 #if 1
 
-template<typename T> py::array Py2_full_synthesis(const py::array &alm_,
+template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
   const py::array &mstart_, ptrdiff_t lstride, 
   const py::array &theta_, 
@@ -278,22 +278,21 @@ template<typename T> py::array Py2_full_synthesis(const py::array &alm_,
   synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
   return map_;
   }
-py::array Py_full_synthesis(const py::array &alm, const py::array &theta,
+py::array Py_synthesis(const py::array &alm, const py::array &theta,
   size_t lmax, const py::array &mstart, 
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads, py::object &map)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_full_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta, 
+    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta, 
       nphi, phi0, ringstart, pixstride, nthreads);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_full_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta, 
+    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta, 
       nphi, phi0, ringstart, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-//  m.def("synthesis", &Py_full_synthesis, "alm"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
-template<typename T> py::array Py2_full_adjoint_synthesis(py::object &alm__,
+template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   size_t lmax, const py::array &mstart_, ptrdiff_t lstride, 
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
   const py::array &nphi_, const py::array &ringstart_, size_t spin, ptrdiff_t pixstride,
@@ -314,7 +313,7 @@ template<typename T> py::array Py2_full_adjoint_synthesis(py::object &alm__,
   adjoint_synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
   return alm_;
   }
-py::array Py_full_adjoint_synthesis(const py::array &map, const py::array &theta,
+py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
  size_t lmax,
   const py::array &mstart,
   const py::array &nphi,
@@ -323,10 +322,10 @@ py::array Py_full_adjoint_synthesis(const py::array &map, const py::array &theta
   py::object &alm)
   {
   if (isPyarr<float>(map))
-    return Py2_full_adjoint_synthesis<float>(alm, lmax, mstart, lstride, map, theta,
+    return Py2_adjoint_synthesis<float>(alm, lmax, mstart, lstride, map, theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
   else if (isPyarr<double>(map))
-    return Py2_full_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
+    return Py2_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
@@ -489,8 +488,8 @@ void add_sht(py::module_ &msup)
 
 //  m.def("synthesis", &Pysynthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
 //  m.def("synthesis", &Pysynthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
-  m.def("synthesis", &Py_full_synthesis, py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a, "theta"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
-  m.def("adjoint_synthesis", &Py_full_adjoint_synthesis, py::kw_only(), "map_"_a, "theta"_a, "lmax"_a, "mstart"_a, "theta"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis", &Py_synthesis, py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "theta"_a, "nphi"_a, "phi0"_a=None, "ringstart"_a=None, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+  m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map_"_a, "theta"_a, "lmax"_a, "mstart"_a, "theta"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
 
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "nrings"_a);
   m2.def("alm2leg", &Py_alm2leg, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
