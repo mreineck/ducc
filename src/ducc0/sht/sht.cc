@@ -1751,8 +1751,7 @@ void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthread
 void sanity_checks(
   const mav_info<2> &alm, // (ncomp, *)
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   const mav_info<2> &map, // (ncomp, *)
   const mav<double,1> &theta, // (nrings)
   const mav_info<1> &phi0, // (nrings)
@@ -1760,20 +1759,9 @@ void sanity_checks(
   const mav<size_t,1> &ringstart, // (nrings)
   size_t spin)
   {
-  size_t nm = mval.shape(0);
-  MR_assert(nm>0, "need at least one m value");
-  MR_assert(nm==mstart.shape(0), "nm mismatch");
-  // check that mval are a gapless sequence starting at 0
+  size_t nm = mstart.shape(0);
+  MR_assert(nm>0, "mstart too small");
   size_t mmax = nm-1;
-  {
-  vector<bool> m_present(mmax+1, false);
-  for (size_t im=0; im<=mmax; ++im)
-    {
-    MR_assert(mval(im)<=mmax, "m value too large");
-    MR_assert(!m_present[mval(im)], "m value supplied more than once");
-    m_present[mval(im)] = true;
-    }
-  }
   MR_assert(lmax>=mmax, "lmax must be >= mmax");
   size_t nrings = theta.shape(0);
   MR_assert(nrings>0, "need at least one ring");
@@ -1791,8 +1779,7 @@ template<typename T> void synthesis(
   mav<T,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -1801,10 +1788,13 @@ template<typename T> void synthesis(
   ptrdiff_t pixstride,
   size_t nthreads)
   {
-  sanity_checks(alm, lmax, mval, mstart, map, theta, phi0, nphi, ringstart, spin);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
-  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
+  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mstart.shape(0)});
+  mav<size_t,1> mval({mstart.shape(0)});
+  for (size_t i=0; i<mstart.shape(0); ++i)
+    mval.v(i) = i;
   alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
@@ -1813,8 +1803,7 @@ template void synthesis(
   mav<double,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -1827,8 +1816,7 @@ template void synthesis(
   mav<float,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -1841,8 +1829,7 @@ template<typename T> void adjoint_synthesis(
   const mav<T,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -1851,11 +1838,14 @@ template<typename T> void adjoint_synthesis(
   ptrdiff_t pixstride,
   size_t nthreads)
   {
-  sanity_checks(alm, lmax, mval, mstart, map, theta, phi0, nphi, ringstart, spin);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
-  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mval.shape(0)});
+  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mstart.shape(0)});
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+  mav<size_t,1> mval({mstart.shape(0)});
+  for (size_t i=0; i<mstart.shape(0); ++i)
+    mval.v(i) = i;
   leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
   }
 template void adjoint_synthesis(
@@ -1863,8 +1853,7 @@ template void adjoint_synthesis(
   const mav<double,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -1877,8 +1866,7 @@ template void adjoint_synthesis(
   const mav<float,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
