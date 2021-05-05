@@ -39,10 +39,9 @@
 // PDEP and PEXT should not be used on modern AMD CPUs, since their
 // implementation is really slow. On Intel they provide some performance
 // advantage, but I think it's better overall to just switch this off.
+//#define DUCC0_USE_PDEP_PEXT
 
-//#define USE_PDEP_PEXT
-
-#ifndef __BMI2__
+#if (!(defined(__BMI2__) && defined(__x86_64__)))
 #undef DUCC0_USE_PDEP_PEXT
 #endif
 
