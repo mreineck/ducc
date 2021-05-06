@@ -527,8 +527,8 @@ template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
     ofs += lmax+1-i;
     }
   mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
-  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart.v(i) = i*ringstride;
   mav<T,2> map2(map.vdata(), {map.shape(0), map.shape(1)*map.shape(2)},
@@ -556,8 +556,8 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
     ofs += lmax+1-i;
     }
   mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
-  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart.v(i) = i*ringstride;
   mav<T,2> map2(map.cdata(), {map.shape(0), map.shape(1)*map.shape(2)},
