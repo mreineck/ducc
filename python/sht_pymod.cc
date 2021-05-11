@@ -469,6 +469,85 @@ spherical harmonic coefficients.
 Error conditions are reported by raising exceptions.
 )""";
 
+constexpr const char *alm2leg_DS = R"""(
+Transforms a set of spherical harmonic coefficients to Legendre coeficients
+dependent on theta and m.
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, *), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    ncomp must be 1 if spin is 0, else 2
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
+leg: None or numpy.ndarray((ncomp, nrings, nm), same dtype as `alm`)
+    output array containing the Legendre coefficients
+    if `None`, a new suitable array is allocated
+spin: int >= 0
+    the spin to use for the transform
+    if spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive)
+mval: numpy.ndarray((nm,), dtype = numpy.uint64)
+    the m moments for which the transform should be carried out
+    entries must be unique and <= lmax
+mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
+    the (hypothetical) index in the second dimension of `alm` on which the
+    entry with l=0, m=mstart[mi] would be stored, for mi in mval
+lstride: int
+    the index stride in the second dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+theta: numpy.ndarray((nrings,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+    numpy.ndarray((ncomp, nrings, nm), same dtype as `alm`): the Legendre coefficients
+        if `leg` was supplied, this will be the same object
+)""";
+
+constexpr const char *leg2alm_DS = R"""(
+Transforms a set of Legendre coeficients to spherical harmonic coefficients
+
+Parameters
+----------
+leg: numpy.ndarray((ncomp, nrings, nm), dtype=numpy.complex64 or numpy.complex128)
+    ncomp must be 1 if spin is 0, else 2
+alm: None or numpy.ndarray((ncomp, *), same dtype as `leg`)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
+    if `None`, a new suitable array is allocated
+spin: int >= 0
+    the spin to use for the transform
+    if spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive)
+mval: numpy.ndarray((nm,), dtype = numpy.uint64)
+    the m moments for which the transform should be carried out
+    entries must be unique and <= lmax
+mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
+    the (hypothetical) index in the second dimension of `alm` on which the
+    entry with l=0, m=mstart[mi] would be stored, for mi in mval
+lstride: int
+    the index stride in the second dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+theta: numpy.ndarray((nrings,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+    numpy.ndarray((ncomp, *), same dtype as `leg`): the Legendre coefficients
+        if `alm` was supplied, this will be the same object
+        If newly allocated, the smallest possible second dimensions will be chosen.
+)""";
+
 constexpr const char *sharpjob_d_DS = R"""(
 Interface class to some of libsharp2's functionality.
 )""";
@@ -486,8 +565,8 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
 
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "nrings"_a);
-  m2.def("alm2leg", &Py_alm2leg, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
-  m2.def("leg2alm", &Py_leg2alm, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
+  m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
   m2.def("map2leg", &Py_map2leg, py::kw_only(), "map"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "mmax"_a, "pixstride"_a=1, "nthreads"_a=1, "out"_a=None);
   m2.def("leg2map", &Py_leg2map, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "out"_a=None);
   m2.def("prep_for_analysis", &Py_prep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
