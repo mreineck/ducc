@@ -470,6 +470,13 @@ Error conditions are reported by raising exceptions.
 )""";
 constexpr const char *sht_experimental_DS = R"""(
 Experimental interface to the SHT functionality.
+
+Notes
+-----
+
+The functionality in this module is not considered to have a stable interface
+and also may be moved to other modules in the future. If you use it, be prepared
+to adjust your code at some point ion the future!
 )""";
 
 constexpr const char *rotate_alm_DS = R"""(
@@ -479,8 +486,8 @@ Parameters
 ----------
 alm: numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
     the spherical harmonic coefficients, in the order
-    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (1,2), ..., (lmax, lmax)
-lmax : int >=0
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, lmax)
+lmax : int >= 0
     Maximum multipole order l of the data set.
 psi : float
     First rotation angle about the z-axis. All angles are in radians,
