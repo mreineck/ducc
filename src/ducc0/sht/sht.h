@@ -466,22 +466,21 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads);
 
-void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
-void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
-void resample_theta(const mav<complex<double>,2> &legi, bool npi, bool spi,
-  mav<complex<double>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
+template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
+//void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
+template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
+  mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
 
 // fully general map synthesis
 // conditions:
 // - ncomp = 1+(spin>0)
-// - all mval together must form a gapless sequence starting from 0
+// - mval is implicitly assumed as [0; mmax]
 template<typename T> void synthesis(
   const mav<complex<T>,2> &alm, // (ncomp, *)
   mav<T,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -489,7 +488,6 @@ template<typename T> void synthesis(
   const mav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
-// - check that mval are a gapless sequence starting at 0
 // - check that lmax>=mmax
 // - (check that mstart has consistent values?)
 // - check that theta are in [0;pi]
@@ -508,8 +506,7 @@ template<typename T> void adjoint_synthesis(
   const mav<T,2> &map, // (ncomp, *)
   size_t spin,
   size_t lmax,
-  const mav<size_t,1> &mval, // (nm)
-  const mav<size_t,1> &mstart, // (nm)
+  const mav<size_t,1> &mstart, // (mmax+1)
   ptrdiff_t lstride,
   const mav<double,1> &theta, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
@@ -523,23 +520,22 @@ template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mval({lmax+1}), mstart({lmax+1});
+  mav<size_t,1> mstart({lmax+1});
   for (size_t i=0, ofs=0; i<=lmax; ++i)
     {
-    mval.v(i) = i;
     mstart.v(i) = ofs-i;
     ofs += lmax+1-i;
     }
   mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
-  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart.v(i) = i*ringstride;
   mav<T,2> map2(map.vdata(), {map.shape(0), map.shape(1)*map.shape(2)},
                 {map.stride(0), 1}, true);
   mav<double,1> theta({map.shape(1)});
   get_ringtheta_2d(geometry, theta);
-  synthesis(alm, map2, spin, lmax, mval, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
 template<typename T> void synthesis(const mav<complex<T>,1> &alm,
   mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
@@ -553,23 +549,22 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mval({lmax+1}), mstart({lmax+1});
+  mav<size_t,1> mstart({lmax+1});
   for (size_t i=0, ofs=0; i<=lmax; ++i)
     {
-    mval.v(i) = i;
     mstart.v(i) = ofs-i;
     ofs += lmax+1-i;
     }
   mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);// / ((map.stride(0)<map.stride(1)) ? map.stride(0) : 1);
-  auto pixstride = map.stride(2);// / ((map.stride(0)<map.stride(2)) ? map.stride(0) : 1);
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart.v(i) = i*ringstride;
   mav<T,2> map2(map.cdata(), {map.shape(0), map.shape(1)*map.shape(2)},
                 {map.stride(0), 1});
   mav<double,1> theta({map.shape(1)});
   get_ringtheta_2d(geometry, theta);
-  adjoint_synthesis(alm, map2, spin, lmax, mval, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
 template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
   const mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)

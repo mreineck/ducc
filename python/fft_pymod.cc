@@ -370,7 +370,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
 
-const char *fft_DS = R"""(Fast Fourier and Hartley transforms.
+const char *fft_DS = R"""(Fast Fourier, sine/cosine, and Hartley transforms.
 
 This module supports
  - single, double, and long double precision
@@ -405,8 +405,8 @@ out : numpy.ndarray (same shape as `a`, complex type with same accuracy as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -437,8 +437,8 @@ out : numpy.ndarray (complex type with same accuracy as `a`)
     Must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -473,8 +473,8 @@ out : numpy.ndarray (real type with same accuracy as `a`)
     Must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -510,8 +510,8 @@ out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -542,8 +542,8 @@ out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -575,8 +575,8 @@ out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -621,8 +621,8 @@ out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
@@ -666,8 +666,8 @@ out : numpy.ndarray (same shape and data type as `a`)
     May be identical to `a`, but if it isn't, it must not overlap with `a`.
     If None, a new array is allocated to store the output.
 nthreads : int
-    Number of threads to use. If 0, use the system default (typically governed
-    by the `OMP_NUM_THREADS` environment variable).
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------

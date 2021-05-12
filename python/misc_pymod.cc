@@ -105,7 +105,7 @@ void upsample_to_cc(const mav<double,2> &in, bool has_np, bool has_sp,
     }
   }
 
-py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
+py::array Py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   bool has_sp, py::object &out_)
   {
   auto in2 = to_mav<double,2>(in);
@@ -116,7 +116,7 @@ py::array py_upsample_to_cc(const py::array &in, size_t nrings_out, bool has_np,
   return move(out);
   }
 
-template<typename T> py::array tphelp2(const py::array &in, py::array &out)
+template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
   {
   auto in2 = to_fmav<T>(in, false);
   auto out2 = to_fmav<T>(out, true);
@@ -124,26 +124,33 @@ template<typename T> py::array tphelp2(const py::array &in, py::array &out)
   return out;
   }
 
-py::array py_transpose(const py::array &in, py::array &out)
+py::array Py_transpose(const py::array &in, py::array &out)
   {
   if (isPyarr<float>(in))
-    return tphelp2<float>(in, out);
+    return Py2_transpose<float>(in, out);
   if (isPyarr<double>(in))
-    return tphelp2<double>(in, out);
+    return Py2_transpose<double>(in, out);
   if (isPyarr<complex<float>>(in))
-    return tphelp2<complex<float>>(in, out);
+    return Py2_transpose<complex<float>>(in, out);
   if (isPyarr<complex<double>>(in))
-    return tphelp2<complex<double>>(in, out);
+    return Py2_transpose<complex<double>>(in, out);
   if (isPyarr<int>(in))
-    return tphelp2<int>(in, out);
+    return Py2_transpose<int>(in, out);
   if (isPyarr<long>(in))
-    return tphelp2<long>(in, out);
+    return Py2_transpose<long>(in, out);
   MR_fail("unsupported datatype");
   }
 
 
 const char *misc_DS = R"""(
 Various unsorted utilities
+
+Notes
+-----
+
+The functionality in this module is not considered to have a stable interface
+and also may be moved to other modules in the future. If you use it, be prepared
+to adjust your code at some point ion the future!
 )""";
 
 void add_misc(py::module_ &msup)
@@ -152,10 +159,10 @@ void add_misc(py::module_ &msup)
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 
-  m.def("upsample_to_cc",&py_upsample_to_cc, "in"_a, "nrings_out"_a,
+  m.def("upsample_to_cc",&Py_upsample_to_cc, "in"_a, "nrings_out"_a,
     "has_np"_a, "has_sp"_a, "out"_a=py::none());
 
-  m.def("transpose",&py_transpose, "in"_a, "out"_a);
+  m.def("transpose",&Py_transpose, "in"_a, "out"_a);
   }
 
 }

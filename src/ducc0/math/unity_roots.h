@@ -73,6 +73,64 @@ template<typename T, typename Tc> class UnityRoots
           }
         }
       }
+#if 0  // alternative version, similar speed, but maybe a bit more accurate
+    static cmplx_ calc2(size_t x, size_t n)
+      {
+      static constexpr Thigh pi = Thigh(3.141592653589793238462643383279502884197L);
+      Thigh n4 = Thigh(n<<2);
+
+      x<<=3;
+      if (x<4*n) // first half
+        {
+        if (x<2*n) // first quadrant
+          {
+          if (x<n)
+            {
+            auto ang = (x/n4)*pi;
+            return {cos(ang), sin(ang)};
+            }
+          auto ang = ((2*n-x)/n4)*pi;
+          return {sin(ang), cos(ang)};
+          }
+        else // second quadrant
+          {
+          x-=2*n;
+          if (x<n)
+            {
+            auto ang = (x/n4)*pi;
+            return {-sin(ang), cos(ang)};
+            }
+          auto ang = ((2*n-x)/n4)*pi;
+          return {-cos(ang), sin(ang)};
+          }
+        }
+      else
+        {
+        x=8*n-x;
+        if (x<2*n) // third quadrant
+          {
+          if (x<n)
+            {
+            auto ang = (x/n4)*pi;
+            return {cos(ang), -sin(ang)};
+            }
+          auto ang = ((2*n-x)/n4)*pi;
+          return {sin(ang), -cos(ang)};
+          }
+        else // fourth quadrant
+          {
+          x-=2*n;
+          if (x<n)
+            {
+            auto ang = (x/n4)*pi;
+            return {-sin(ang), -cos(ang)};
+            }
+          auto ang = ((2*n-x)/n4)*pi;
+          return {-cos(ang), -sin(ang)};
+          }
+        }
+      }
+#endif
 
   public:
     UnityRoots(size_t n)
