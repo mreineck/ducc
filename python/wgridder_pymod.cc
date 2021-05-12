@@ -360,11 +360,22 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
+constexpr const char *wgridder_experimental_DS = R"""(
+Experimental, more powerful interface to the gridding code
+
+Notes
+-----
+
+The functionality in this module is not considered to have a stable interface
+and also may be moved to other modules in the future. If you use it, be prepared
+to adjust your code at some point ion the future!
+)""";
+
 void add_wgridder(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("wgridder");
-  auto m2 = m.def_submodule("experimental");
+  auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 
   m2.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,

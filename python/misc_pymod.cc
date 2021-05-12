@@ -144,6 +144,13 @@ py::array Py_transpose(const py::array &in, py::array &out)
 
 const char *misc_DS = R"""(
 Various unsorted utilities
+
+Notes
+-----
+
+The functionality in this module is not considered to have a stable interface
+and also may be moved to other modules in the future. If you use it, be prepared
+to adjust your code at some point ion the future!
 )""";
 
 void add_misc(py::module_ &msup)

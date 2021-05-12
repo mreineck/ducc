@@ -608,8 +608,8 @@ pixstride: int
     the index stride in the second dimension of `map` between to subsequent
     pixels in a ring
 mmax: int
-    the maximum m moment to compute in this transform. If both `mmax` and `leg`
-    are provided, `mmax` must be equal to `leg.shape[2]=1`.
+    the maximum m moment to compute in this transform. If `leg`
+    is provided, `mmax` must be equal to `leg.shape[2]=1`.
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
