@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2020 Max-Planck-Society
+ *  Copyright (C) 2017-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -179,44 +179,44 @@ py::array Py_leg2alm(const py::array &leg, size_t lmax, const py::array &theta, 
     return Py2_leg2alm<double>(leg, theta, spin, lmax, mval, mstart, lstride, nthreads, alm);
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
-template<typename T> py::array Py2_map2leg(const py::array &map_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &out_)
+template<typename T> py::array Py2_map2leg(const py::array &map_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg__)
   {
   auto map = to_mav<T,2>(map_, false);
   auto nphi = to_mav<size_t,1>(nphi_, false);
   auto phi0 = to_mav<double,1>(phi0_, false);
   auto ringstart = to_mav<size_t,1>(ringstart_, false);
   MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride), "bad map array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(out_, {map.shape(0),nphi.shape(0),mmax+1});
+  auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {map.shape(0),nphi.shape(0),mmax+1});
   auto leg = to_mav<complex<T>,3>(leg_, true);
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   return leg_;
   }
-py::array Py_map2leg(const py::array &map, const py::array &nphi, const py::array &phi0, const py::array &ringstart, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &out)
+py::array Py_map2leg(const py::array &map, const py::array &nphi, const py::array &phi0, const py::array &ringstart, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg)
   {
   if (isPyarr<float>(map))
-    return Py2_map2leg<float>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, out);
+    return Py2_map2leg<float>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, leg);
   if (isPyarr<double>(map))
-    return Py2_map2leg<double>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, out);
+    return Py2_map2leg<double>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, leg);
   MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
   }
-template<typename T> py::array Py2_leg2map(const py::array &leg_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, ptrdiff_t pixstride, size_t nthreads, py::object &out_)
+template<typename T> py::array Py2_leg2map(const py::array &leg_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, ptrdiff_t pixstride, size_t nthreads, py::object &map__)
   {
   auto leg = to_mav<complex<T>,3>(leg_, false);
   auto nphi = to_mav<size_t,1>(nphi_, false);
   auto phi0 = to_mav<double,1>(phi0_, false);
   auto ringstart = to_mav<size_t,1>(ringstart_, false);
-  auto map_ = get_optional_Pyarr_minshape<T>(out_, {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_mav<T,2>(map_, true);
   MR_assert(map.shape(0)==leg.shape(0), "bad number of components in map array");
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   return map_;
   }
-py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride, size_t nthreads, py::object &out)
+py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride, size_t nthreads, py::object &map)
   {
   if (isPyarr<complex<float>>(leg))
-    return Py2_leg2map<float>(leg, nphi, phi0, ringstart, pixstride, nthreads, out);
+    return Py2_leg2map<float>(leg, nphi, phi0, ringstart, pixstride, nthreads, map);
   if (isPyarr<complex<double>>(leg))
-    return Py2_leg2map<double>(leg, nphi, phi0, ringstart, pixstride, nthreads, out);
+    return Py2_leg2map<double>(leg, nphi, phi0, ringstart, pixstride, nthreads, map);
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
@@ -468,16 +468,51 @@ spherical harmonic coefficients.
 
 Error conditions are reported by raising exceptions.
 )""";
+constexpr const char *sht_experimental_DS = R"""(
+Experimental interface to the SHT functionality.
+)""";
+
+constexpr const char *rotate_alm_DS = R"""(
+Rotates a set of spherical harmonic coefficients according to the given Euler angles.
+
+Parameters
+----------
+alm: numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
+    the spherical harmonic coefficients, in the order
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (1,2), ..., (lmax, lmax)
+lmax : int >=0
+    Maximum multipole order l of the data set.
+psi : float
+    First rotation angle about the z-axis. All angles are in radians,
+    the rotations are active and the referential system is assumed to be
+    right handed.
+theta : float
+    Second rotation angl about the original (unrotated) y-axis
+phi : float
+    Third rotation angle about the original (unrotated) z-axis.
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
+    the same object as `alm`
+
+Notes
+-----
+This function operates in place, i.e. it overwrites the input with the result.
+)""";
 
 constexpr const char *alm2leg_DS = R"""(
-Transforms a set of spherical harmonic coefficients to Legendre coeficients
+Transforms a set of spherical harmonic coefficients to Legendre coefficients
 dependent on theta and m.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, *), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
     the set of spherical harmonic coefficients.
-    ncomp must be 1 if spin is 0, else 2
+    ncomp must be 1 if spin is 0, else 2.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
 leg: None or numpy.ndarray((ncomp, nrings, nm), same dtype as `alm`)
@@ -505,18 +540,18 @@ nthreads: int >= 0
 
 Returns
 -------
-    numpy.ndarray((ncomp, nrings, nm), same dtype as `alm`): the Legendre coefficients
-        if `leg` was supplied, this will be the same object
+numpy.ndarray((ncomp, nrings, nm), same dtype as `alm`)
+    the Legendre coefficients. If `leg` was supplied, this will be the same object.
 )""";
 
 constexpr const char *leg2alm_DS = R"""(
-Transforms a set of Legendre coeficients to spherical harmonic coefficients
+Transforms a set of Legendre coefficients to spherical harmonic coefficients
 
 Parameters
 ----------
 leg: numpy.ndarray((ncomp, nrings, nm), dtype=numpy.complex64 or numpy.complex128)
     ncomp must be 1 if spin is 0, else 2
-alm: None or numpy.ndarray((ncomp, *), same dtype as `leg`)
+alm: None or numpy.ndarray((ncomp, x), same dtype as `leg`)
     the set of spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
@@ -543,9 +578,91 @@ nthreads: int >= 0
 
 Returns
 -------
-    numpy.ndarray((ncomp, *), same dtype as `leg`): the Legendre coefficients
-        if `alm` was supplied, this will be the same object
-        If newly allocated, the smallest possible second dimensions will be chosen.
+numpy.ndarray((ncomp, *), same dtype as `leg`)
+    the Legendre coefficients.
+    if `alm` was supplied, this will be the same object
+    If newly allocated, the smallest possible second dimensions will be chosen.
+)""";
+
+constexpr const char *map2leg_DS = R"""(
+Transforms a sky map or several sky maps to Legendre coefficients
+dependent on theta and m.
+
+Parameters
+----------
+map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64)
+    the map pixel data.
+    The second dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+leg: None or numpy.ndarray((ncomp, nrings, mmax+1), dtype=np.complex of same accuracy as `map`)
+    output array containing the Legendre coefficients
+    if `None`, a new suitable array is allocated
+nphi: numpy.ndarray((nrings,), dtype=np.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((nrings,), dtype=np.float64)
+    azimuth (in radians) of the first pixel in every ring
+ringstart: numpy.ndarray((nrings,), dtype=np.uint64)
+    the index in the second dimension of `map` at which the first pixel of every
+    ring is stored
+pixstride: int
+    the index stride in the second dimension of `map` between to subsequent
+    pixels in a ring
+mmax: int
+    the maximum m moment to compute in this transform. If both `mmax` and `leg`
+    are provided, `mmax` must be equal to `leg.shape[2]=1`.
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray((ncomp, nrings, nm), dtype=np.complex of same accuracy as `map`)
+    the Legendre coefficients
+    if `leg` was supplied, this will be the same object
+
+Notes
+-----
+In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
+range from 0 to mmax, inclusively. 
+)""";
+
+constexpr const char *leg2map_DS = R"""(
+Transforms one or more sets of Legendre coefficients to sky maps.
+
+Parameters
+----------
+leg: numpy.ndarray((ncomp, nrings, mmax+1), numppy.complex64 or numpy.complex128)
+    input array containing the Legendre coefficients
+map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`
+    the map pixel data.
+    The second dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+    if `None`, a new suitable array is allocated
+nphi: numpy.ndarray((nrings,), dtype=np.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((nrings,), dtype=np.float64)
+    azimuth (in radians) of the first pixel in every ring
+ringstart: numpy.ndarray((nrings,), dtype=np.uint64)
+    the index in the second dimension of `map` at which the first pixel of every
+    ring is stored
+pixstride: int
+    the index stride in the second dimension of `map` between to subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`
+    the map pixel data.
+    If `map` was supplied, this will be the same object
+    If newly allocated, the smallest possible second dimensions will be chosen.
+
+Notes
+-----
+In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
+range from 0 to mmax, inclusively. 
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
@@ -558,6 +675,7 @@ void add_sht(py::module_ &msup)
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");
+  m2.doc() = sht_experimental_DS;
 
 //  m2.def("synthesis", &Py_synthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
 //  m2.def("synthesis", &Py_synthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
@@ -567,11 +685,11 @@ void add_sht(py::module_ &msup)
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "nrings"_a);
   m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
   m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
-  m2.def("map2leg", &Py_map2leg, py::kw_only(), "map"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "mmax"_a, "pixstride"_a=1, "nthreads"_a=1, "out"_a=None);
-  m2.def("leg2map", &Py_leg2map, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "out"_a=None);
+  m2.def("map2leg", &Py_map2leg, map2leg_DS, py::kw_only(), "map"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "mmax"_a, "pixstride"_a=1, "nthreads"_a=1, "leg"_a=None);
+  m2.def("leg2map", &Py_leg2map, leg2map_DS, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
   m2.def("prep_for_analysis", &Py_prep_for_analysis, "leg"_a, "spin"_a, "nthreads"_a=1);
   m2.def("resample_theta", &Py_resample_theta, "legi"_a, "npi"_a, "spi"_a, "lego"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a);
-  m.def("rotate_alm", &Py_rotate_alm, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
+  m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a, "nthreads"_a=1);
 
   py::class_<Py_sharpjob<double>> (m, "sharpjob_d", py::module_local(),sharpjob_d_DS)
