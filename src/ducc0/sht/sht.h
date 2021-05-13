@@ -294,7 +294,7 @@ struct ringhelper
       }
     if (nph!=length)
       {
-      plan.reset(new pocketfft_r<double>(nph));
+      plan=make_unique<pocketfft_r<double>>(nph);
       length=nph;
       }
     }
