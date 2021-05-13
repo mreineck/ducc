@@ -131,7 +131,7 @@ size_t min_mapdim(const mav<size_t,1> &nphi, const mav<size_t,1> &ringstart, ptr
   size_t res=0;
   for (size_t i=0; i<nphi.shape(0); ++i)
     {
-    auto ilast = ptrdiff_t(ringstart(i)) + ptrdiff_t(nphi(i))*pixstride;
+    auto ilast = ptrdiff_t(ringstart(i)) + ptrdiff_t(nphi(i)-1)*pixstride;
     MR_assert(ilast>=0, "impossible map memory layout");
     res = max(res, max(ringstart(i), size_t(ilast)));
     }
