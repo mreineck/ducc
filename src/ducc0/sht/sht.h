@@ -278,7 +278,7 @@ struct ringhelper
   unique_ptr<pocketfft_r<double>> plan;
   size_t length;
   bool norot;
-  ringhelper() : length(0) {}
+  ringhelper() : phi0_(0), s_shift(0), length(0), norot(false) {}
   void update(size_t nph, size_t mmax, double phi0)
     {
     norot = (abs(phi0)<1e-14);
