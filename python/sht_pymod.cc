@@ -596,18 +596,18 @@ map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64)
     the map pixel data.
     The second dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
-leg: None or numpy.ndarray((ncomp, nrings, mmax+1), dtype=np.complex of same accuracy as `map`)
+leg: None or numpy.ndarray((ncomp, nrings, mmax+1), dtype=numpy.complex of same accuracy as `map`)
     output array containing the Legendre coefficients
     if `None`, a new suitable array is allocated
-nphi: numpy.ndarray((nrings,), dtype=np.uint64)
+nphi: numpy.ndarray((nrings,), dtype=numpy.uint64)
     number of pixels in every ring
-phi0: numpy.ndarray((nrings,), dtype=np.float64)
+phi0: numpy.ndarray((nrings,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-ringstart: numpy.ndarray((nrings,), dtype=np.uint64)
+ringstart: numpy.ndarray((nrings,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
 pixstride: int
-    the index stride in the second dimension of `map` between to subsequent
+    the index stride in the second dimension of `map` between two subsequent
     pixels in a ring
 mmax: int
     the maximum m moment to compute in this transform. If `leg`
@@ -618,7 +618,7 @@ nthreads: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, nrings, nm), dtype=np.complex of same accuracy as `map`)
+numpy.ndarray((ncomp, nrings, nm), dtype=numpy.complex of same accuracy as `map`)
     the Legendre coefficients
     if `leg` was supplied, this will be the same object
 
@@ -640,15 +640,15 @@ map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `le
     The second dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
-nphi: numpy.ndarray((nrings,), dtype=np.uint64)
+nphi: numpy.ndarray((nrings,), dtype=numpy.uint64)
     number of pixels in every ring
-phi0: numpy.ndarray((nrings,), dtype=np.float64)
+phi0: numpy.ndarray((nrings,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-ringstart: numpy.ndarray((nrings,), dtype=np.uint64)
+ringstart: numpy.ndarray((nrings,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
 pixstride: int
-    the index stride in the second dimension of `map` between to subsequent
+    the index stride in the second dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
