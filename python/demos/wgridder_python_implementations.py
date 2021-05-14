@@ -324,7 +324,7 @@ def main():
         t1 = time()-t0
         print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
         if dirty0 is not None:
-            print(np.max(np.abs(dirty-dirty0)))
+            print(np.max(np.abs(dirty-dirty0)) / np.max(np.abs(dirty0)))
         else:
             dirty0 = dirty
 
@@ -335,7 +335,7 @@ def main():
         t1 = time()-t0
         print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
         if ms0 is not None:
-            print(np.max(np.abs(ms-ms0)))
+            print(np.max(np.abs(ms-ms0)) / np.max(np.abs(ms0)))
         else:
             ms0 = ms
 
