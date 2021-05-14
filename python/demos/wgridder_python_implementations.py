@@ -16,10 +16,10 @@
 
 from time import time
 
+import ducc0.wgridder as wg
+import ducc0.wgridder.experimental as wg_future
 import numpy as np
 import scipy.fft
-from ducc0.wgridder import dirty2ms as dirty2ms_ducc
-from ducc0.wgridder import ms2dirty as ms2dirty_ducc
 from numba import njit
 from scipy.special.orthogonal import p_roots
 
@@ -286,6 +286,21 @@ def _ms2dirty_inner_loop(ii, supp, u, v, w, w0, dw, ng, myms):
     return grid
 
 
+# Interface adapters
+def ms2dirty_ducc1(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
+    return wg.ms2dirty(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+
+def ms2dirty_ducc2(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
+    return wg_future.vis2dirty(uvw=uvw, freq=freq, vis=ms, npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=do_wgridding)
+
+def dirty2ms_ducc1(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
+    return wg.dirty2ms(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+
+def dirty2ms_ducc2(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
+    return wg_future.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=do_wgridding)
+# End interface adapters
+
+
 def main():
     fov = 5
     nxdirty, nydirty = 512, 512
@@ -303,27 +318,24 @@ def main():
     nvis = nrow*nchan
 
     dirty0 = None
-    # Adapter to old interface
-    ms2dirty_ducc1 = lambda uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding: ms2dirty_ducc(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
-    dirty2ms_ducc1 = lambda uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding: dirty2ms_ducc(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
-    for f in (ms2dirty_dft, ms2dirty_python_slow, ms2dirty_python_fast, ms2dirty_numba, ms2dirty_ducc1):
+    for f in (ms2dirty_dft, ms2dirty_python_slow, ms2dirty_python_fast, ms2dirty_numba, ms2dirty_ducc1, ms2dirty_ducc2):
         t0 = time()
         dirty = f(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
         print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
         if dirty0 is not None:
-            print(np.max(np.abs(dirty-dirty0)))
+            print(np.max(np.abs(dirty-dirty0)) / np.max(np.abs(dirty0)))
         else:
             dirty0 = dirty
 
     ms0 = None
-    for f in (dirty2ms_python_slow, dirty2ms_python_fast, dirty2ms_ducc1):
+    for f in (dirty2ms_python_slow, dirty2ms_python_fast, dirty2ms_ducc1, dirty2ms_ducc2):
         t0 = time()
         ms = f(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
         print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
         if ms0 is not None:
-            print(np.max(np.abs(ms-ms0)))
+            print(np.max(np.abs(ms-ms0)) / np.max(np.abs(ms0)))
         else:
             ms0 = ms
 
