@@ -14,7 +14,7 @@
 
 - sht:
   - design of a new SHT interface. Parts of this interface are made visible
-    from Python, but should be considered experimental. The "sharpjob_d"-based
+    from Python, in the "sht.experimental" submodule. The "sharpjob_d"-based
     interface will be kept for compatibility purposes until ducc1 is released.
   - experimental support for spherical harmonic analysis that only requires
     lmax+1 or lmax+2 equidistant rings for exact analysis up to lmax.
