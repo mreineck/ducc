@@ -503,12 +503,7 @@ nthreads: int >= 0
 
 Returns
 -------
-numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
-    the same object as `alm`
-
-Notes
------
-This function operates in place, i.e. it overwrites the input with the result.
+numpy.ndarray(same shape and dtype as alm)
 )""";
 
 constexpr const char *alm2leg_DS = R"""(
