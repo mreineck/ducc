@@ -1,6 +1,8 @@
 0.10.0:
 - general:
   - HTML documentation generation using Sphinx
+    Up-to-date documentation for the ducc0 branch is available at
+    https://mtr.pages.mpcdf.de/ducc/.
   - more and improved docstrings
   - SIMD datatypes are now much more compatible with C++ upcoming SIMD types.
     The code can be compiled with the types from <experimental/simd> if
