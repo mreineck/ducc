@@ -33,6 +33,7 @@
 #include "ducc0/infra/transpose.h"
 #include "ducc0/math/fft.h"
 #include "ducc0/math/constants.h"
+#include "ducc0/math/gl_integrator.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {
@@ -41,6 +42,28 @@ namespace detail_pymodule_misc {
 
 using namespace std;
 namespace py = pybind11;
+
+py::array Py_GL_weights(size_t nlat, size_t nlon)
+  {
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
+  GL_Integrator integ(nlat);
+  auto wgt = integ.weights();
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = wgt[i]*twopi/nlon;
+  return move(res);
+  }
+
+py::array Py_GL_thetas(size_t nlat)
+  {
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
+  GL_Integrator integ(nlat);
+  auto x = integ.coords();
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = acos(-x[i]);
+  return move(res);
+  }
 
 void upsample_to_cc(const mav<double,2> &in, bool has_np, bool has_sp,
   mav<double,2> &out)
@@ -158,6 +181,9 @@ void add_misc(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
+
+  m.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
+  m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
 
   m.def("upsample_to_cc",&Py_upsample_to_cc, "in"_a, "nrings_out"_a,
     "has_np"_a, "has_sp"_a, "out"_a=py::none());
