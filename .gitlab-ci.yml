@@ -50,9 +50,11 @@ pages:
   script:
     - DUCC0_OPTIMIZATION=none pip3 install .
     - make -C doc html
+    - make -C src/doc html
     - mv doc/build/html public
+    - mv src/doc/build/html public/cpp
   artifacts:
     paths:
     - public
-  only:
-    - ducc0
+#  only:
+#    - ducc0
