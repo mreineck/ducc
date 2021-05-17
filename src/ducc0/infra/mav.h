@@ -187,7 +187,7 @@ class fmav_info
       }
   };
 
-/** Helper class containing shape and stride information of a mav object */
+/** Helper class containing shape and stride information of a `mav` object */
 template<size_t ndim> class mav_info
   {
   protected:
