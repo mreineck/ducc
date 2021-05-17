@@ -40,26 +40,28 @@ namespace ducc0 {
 /*! \defgroup vec3group 3D vectors */
 /*! \{ */
 
-/*! Class representing a 3D cartesian vector. */
+/// Class representing a 3D cartesian vector.
 template<typename T> class vec3_t
   {
   public:
-    T x, /*!< x-coordinate */
-      y, /*!< y-coordinate */
-      z; /*!< z-coordinate */
+    T x, ///< x-coordinate
+      y, ///< y-coordinate
+      z; ///< z-coordinate
 
-    /*! Default constructor. Does not initialize \a x, \a y, and \a z. */
+    /// Default constructor. Does not initialize \a x, \a y, and \a z.
     vec3_t () {}
-    /*! Creates a vector with the coordinates \a xc, \a yc, and \a zc. */
+    /// Creates a vector with the coordinates \a xc, \a yc, and \a zc.
     vec3_t (T xc, T yc, T zc)
       : x(xc), y(yc), z(zc) {}
+    /// Initializes the vector with the content of another vector
+    /// (possibly of a different data type).
     template<typename T2> explicit vec3_t (const vec3_t<T2> &orig)
       : x(orig.x), y(orig.y), z(orig.z) {}
 
-    /*! Sets the vector components to \a xc, \a yc, and \a zc. */
+    /// Sets the vector components to \a xc, \a yc, and \a zc.
     void Set (T xc, T yc, T zc)
       { x=xc; y=yc; z=zc; }
-    /*! Creates a unit vector from a z coordinate and an azimuthal angle. */
+    /// Creates a unit vector from a z coordinate and an azimuthal angle.
     void set_z_phi (T z_, T phi)
       {
       T sintheta = std::sqrt((T(1)-z_)*(T(1)+z_));
@@ -68,13 +70,14 @@ template<typename T> class vec3_t
       z = z_;
       }
 
-    /*! Normalizes the vector to length 1. */
+    /// Normalizes the vector to length 1.
     void Normalize ()
       {
       T l = T(1)/std::sqrt (x*x + y*y + z*z);
       x*=l; y*=l; z*=l;
       }
 
+    /// Returns a normalized copy of the vector.
     vec3_t Norm() const
       {
       vec3_t res(*this);
@@ -82,55 +85,55 @@ template<typename T> class vec3_t
       return res;
       }
 
-    /*! Returns the length of the vector. */
+    /// Returns the length of the vector.
     T Length () const
       { return std::sqrt (x*x + y*y + z*z); }
 
-    /*! Returns the squared length of the vector. */
+    /// Returns the squared length of the vector. Faster than `Length()`.
     T SquaredLength () const
       { return (x*x + y*y + z*z); }
-    /*! Returns the vector with the signs of all coordinates flipped. */
+    /// Returns the vector with the signs of all coordinates flipped.
     const vec3_t operator- () const
       { return vec3_t (-x, -y, -z); }
-    /*! Flips the signs of all coordinates. */
+    /// Flips the signs of all coordinates.
     void Flip ()
       { x=-x; y=-y; z=-z; }
-    /*! Returns (\a *this + \a vec). */
+    /// Returns (\a *this + \a vec).
     const vec3_t operator+ (const vec3_t &vec) const
       { return vec3_t (x+vec.x, y+vec.y, z+vec.z); }
-    /*! Adds \a vec to \a *this. */
+    /// Adds \a vec to \a *this.
     vec3_t &operator+= (const vec3_t &vec)
       { x+=vec.x; y+=vec.y; z+=vec.z; return *this; }
-    /*! Returns (\a *this - \a vec). */
+    /// Returns (\a *this - \a vec).
     const vec3_t operator- (const vec3_t &vec) const
       { return vec3_t (x-vec.x, y-vec.y, z-vec.z); }
-    /*! Subtracts \a vec from \a *this. */
+    /// Subtracts \a vec from \a *this.
     vec3_t &operator-= (const vec3_t &vec)
       { x-=vec.x; y-=vec.y; z-=vec.z; return *this; }
-    /*! Returns the vector scaled by \a fact. */
+    /// Returns the vector scaled by \a fact.
     const vec3_t operator* (T fact) const
       { return vec3_t (x*fact, y*fact, z*fact); }
-    /*! Returns the vector scaled by \a 1/fact. */
+    /// Returns the vector scaled by \a 1/fact.
     const vec3_t operator/ (T fact) const
       { T xfact = T(1)/fact; return vec3_t (x*xfact, y*xfact, z*xfact); }
-    /*! Scales the vector by \a fact. */
+    /// Scales the vector by \a fact.
     vec3_t &operator*= (T fact)
       { x*=fact; y*=fact; z*=fact; return *this; }
   };
 
-/*! Returns the dot product of \a v1 and \a v2.
-    \relates vec3_t */
+/// Returns the dot product of \a v1 and \a v2.
+/// \relates vec3_t
 template<typename T> inline T dotprod(const vec3_t<T> &v1, const vec3_t<T> &v2)
   { return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
 
-/*! Returns the cross product of \a a and \a b.
-    \relates vec3_t */
+/// Returns the cross product of \a a and \a b.
+/// \relates vec3_t
 template<typename T> inline vec3_t<T> crossprod
   (const vec3_t<T> &a, const vec3_t<T> &b)
   { return vec3_t<T>(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x); }
 
-/*! Writes \a v to \a os.
-    \relates vec3_t */
+/// Writes \a v to \a os.
+/// \relates vec3_t
 template<typename T> inline std::ostream &operator<<
   (std::ostream &os, const vec3_t<T> &v)
   {
@@ -138,9 +141,9 @@ template<typename T> inline std::ostream &operator<<
   return os;
   }
 
-/*! Specialisation of vec3_t for 64-bit floating point components */
+/// Specialisation of vec3_t for 64-bit floating point components
 using vec3 = vec3_t<double>;
-/*! Specialisation of vec3_t for 32-bit floating point components */
+/// Specialisation of vec3_t for 32-bit floating point components
 using vec3f = vec3_t<float>;
 
 /*! \} */

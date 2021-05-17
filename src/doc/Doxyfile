@@ -6,7 +6,7 @@
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "ducc0"
 PROJECT_NUMBER         = 0.10.1
-PROJECT_BRIEF          =
+PROJECT_BRIEF          = Distinctly useful code collection
 PROJECT_LOGO           = ducc.png
 OUTPUT_DIRECTORY       = build
 CREATE_SUBDIRS         = NO
@@ -26,16 +26,16 @@ ABBREVIATE_BRIEF       = "The $name class" \
                          a \
                          an \
                          the
-ALWAYS_DETAILED_SEC    = NO
+ALWAYS_DETAILED_SEC    = YES
 INLINE_INHERITED_MEMB  = NO
 FULL_PATH_NAMES        = YES
 STRIP_FROM_PATH        = ..
 STRIP_FROM_INC_PATH    =
 SHORT_NAMES            = NO
-JAVADOC_AUTOBRIEF      = NO
+JAVADOC_AUTOBRIEF      = YES
 JAVADOC_BANNER         = NO
 QT_AUTOBRIEF           = NO
-MULTILINE_CPP_IS_BRIEF = NO
+MULTILINE_CPP_IS_BRIEF = YES
 PYTHON_DOCSTRING       = YES
 INHERIT_DOCS           = YES
 SEPARATE_MEMBER_PAGES  = NO

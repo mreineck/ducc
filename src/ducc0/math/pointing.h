@@ -40,42 +40,40 @@ namespace ducc0 {
 /*! \defgroup pointinggroup Pointings */
 /*! \{ */
 
-/*! Class representing a direction in 3D space or a location on the
-    unit sphere. All angles in radians. */
+/// Class representing a direction in 3D space or a location on the
+/// unit sphere. All angles in radians.
 class pointing
   {
   public:
-    /*! Colatitude of the pointing (i.e. the North pole is at \a theta=0). */
+    /// Colatitude of the pointing (i.e. the North pole is at \a theta=0).
     double theta;
-    /*! Longitude of the pointing. */
+    /// Longitude of the pointing.
     double phi;
 
-    /*! Default constructor. \a theta and \a phi are not initialized. */
+    /// Default constructor. \a theta and \a phi are not initialized.
     pointing() {}
-    /*! Creates a pointing with \a Theta and \a Phi. */
+    /// Creates a pointing with \a Theta and \a Phi.
     pointing (double Theta, double Phi) : theta(Theta), phi(Phi) {}
 
-// FIXME: should become "explicit" some time
-    /*! Creates a pointing from the vector \a inp. \a inp need not be
-        normalized. */
-    pointing (const vec3 &inp)
+    /// Creates a pointing from the vector \a inp. \a inp need not be
+    /// normalized.
+    explicit pointing (const vec3 &inp)
       { from_vec3(inp); }
-// FIXME: should be removed some time
-    /*! Returns a normalized vector pointing in the same direction. */
-    operator vec3() const
+    /// Returns a normalized vector pointing in the same direction.
+    explicit operator vec3() const
       { return to_vec3(); }
-    /*! Returns a normalized vector pointing in the same direction. */
+    /// Returns a normalized vector pointing in the same direction.
     vec3 to_vec3() const;
-    /*! Converts \a inp to \a ptg. \a inp need not be normalized. */
+    /// Converts \a inp to \a ptg. \a inp need not be normalized.
     void from_vec3 (const vec3 &inp);
-    /*! Changes the angles so that \a 0<=theta<=pi. */
+    /// Changes the angles so that \a 0<=theta<=pi.
     void normalize_theta();
-    /*! Changes the angles so that \a 0<=theta<=pi and \a 0<=phi<2*pi. */
+    /// Changes the angles so that \a 0<=theta<=pi and \a 0<=phi<2*pi.
     void normalize();
   };
 
-/*! Writes \a p to \a os.
-    \relates pointing */
+/// Writes \a p to \a os.
+/// \relates pointing
 std::ostream &operator<< (std::ostream &os, const pointing &p);
 
 /*! \} */
