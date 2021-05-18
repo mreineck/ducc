@@ -309,7 +309,7 @@ class FmavIter
  *  value everywhere.
  *
  *  An fmav may "own" or "not own" the memory holding its array data. If it does
- *  not own the memory, it will not be deallocated when the mav is destroyend.
+ *  not own the memory, it will not be deallocated when the mav is destroyed.
  *  If it owns the memory, this "ownership" may be shared with other fmav objects.
  *  Memory is only deallocated if the last fmav object owning it is destroyed. */
 template<typename T> class fmav: public fmav_info, public membuf<T>
@@ -530,7 +530,7 @@ template<typename T> fmav<T> subarray
  *  value everywhere.
  *
  *  A mav may "own" or "not own" the memory holding its array data. If it does
- *  not own the memory, it will not be deallocated when the mav is destroyend.
+ *  not own the memory, it will not be deallocated when the mav is destroyed.
  *  If it owns the memory, this "ownership" may be shared with other mav objects.
  *  Memory is only deallocated if the last mav object owning it is destroyed. */
 template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membuf<T>
