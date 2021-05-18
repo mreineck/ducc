@@ -1264,6 +1264,7 @@ static vector<double> get_dh_weights(size_t nrings)
   weight[2*(nrings/2)-1]=(nrings-3.)/(2*(nrings/2)-1) -1.;
   pocketfft_r<double> plan(nrings);
   plan.exec(weight.data(), 1., false);
+  weight[0] = 0.;  // ensure that this is an exact zero
   return weight;
   }
 
