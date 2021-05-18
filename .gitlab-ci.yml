@@ -56,5 +56,5 @@ pages:
   artifacts:
     paths:
     - public
-#  only:
-#    - ducc0
+  only:
+    - ducc0
