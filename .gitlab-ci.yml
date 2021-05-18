@@ -50,7 +50,9 @@ pages:
   script:
     - DUCC0_OPTIMIZATION=none pip3 install .
     - make -C doc html
+    - 'cd src/doc && doxygen Doxyfile && cd ../..'
     - mv doc/build/html public
+    - mv src/doc/build/html public/cpp
   artifacts:
     paths:
     - public

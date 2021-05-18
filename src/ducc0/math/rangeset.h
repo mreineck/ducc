@@ -41,7 +41,7 @@
 
 namespace ducc0 {
 
-/*! Class for storing sets of ranges of integer numbers */
+/// Class for storing sets of ranges of integer numbers
 template<typename T> class rangeset
   {
   private:
@@ -50,8 +50,8 @@ template<typename T> class rangeset
     typedef typename rtype::const_iterator c_iterator;
     rtype r;
 
-    /*! Returns the index of the last number in \c r which is <= \a val.
-        If \a val is smaller than all numbers in \c r, returns -1. */
+    /// Returns the index of the last number in \c r which is <= \a val.
+    /// If \a val is smaller than all numbers in \c r, returns -1.
     ptrdiff_t iiv (const T &val) const
       { return ptrdiff_t(std::upper_bound(r.begin(),r.end(),val)-r.begin())-1; }
 
@@ -220,15 +220,17 @@ template<typename T> class rangeset
       }
 
   public:
-    /*! Removes all rangeset entries. */
+    /// Removes all entries.
     void clear() { r.clear(); }
-    /*! Reserves space for \a n ranges. */
+    /// Reserves space for \a n ranges.
     void reserve(size_t n) { r.reserve(2*n); }
-    /*! Returns the current number of ranges. */
+    /// Returns the current number of ranges.
     size_t nranges() const { return r.size()>>1; }
+    /// Returns the current number of ranges.
     size_t size() const { return nranges(); }
+    /// Returns `true` iff there are no ranges in the rangeset.
     bool empty() const { return r.empty(); }
-    /*! Returns the current vector of ranges. */
+    /// Returns the current vector of ranges.
     const rtype &data() const { return r; }
     void checkConsistency() const
       {
@@ -242,15 +244,15 @@ template<typename T> class rangeset
       checkConsistency();
       }
 
-    /*! Returns the first value of range \a i. */
+    /// Returns the first value of range \a i.
     const T &ivbegin (size_t i) const { return r[2*i]; }
-    /*! Returns the one-past-last value of range \a i. */
+    /// Returns the one-past-last value of range \a i.
     const T &ivend (size_t i) const { return r[2*i+1]; }
-    /*! Returns the length of range \a i. */
+    /// Returns the length of range \a i.
     T ivlen (size_t i) const { return r[2*i+1]-r[2*i]; }
 
-    /*! Appends \a [v1;v2[ to the rangeset. \a v1 must be larger
-        than the minimum of the last range in the rangeset. */
+    /// Appends \a [v1;v2[ to the rangeset. \a v1 must be larger
+    /// than the minimum of the last range in the rangeset.
     void append(const T &v1, const T &v2)
       {
       if (v2<=v1) return;
@@ -262,32 +264,32 @@ template<typename T> class rangeset
       else
         { r.push_back(v1); r.push_back(v2); }
       }
-    /*! Appends \a [v;v+1[ to the rangeset. \a v must be larger
-        than the minimum of the last range in the rangeset. */
+    /// Appends \a [v;v+1[ to the rangeset. \a v must be larger
+    /// than the minimum of the last range in the rangeset.
     void append(const T &v)
       { append(v,v+1); }
 
-    /*! Appends \a other to the rangeset. All values in \a other must be larger
-        than the minimum of the last range in the rangeset. */
+    /// Appends \a other to the rangeset. All values in \a other must be larger
+    /// than the minimum of the last range in the rangeset.
     void append (const rangeset &other)
       {
       for (size_t j=0; j<other.nranges(); ++j)
         append(other.ivbegin(j),other.ivend(j));
       }
 
-    /*! After this operation, the rangeset contains the union of itself
-        with \a [v1;v2[. */
+    /// After this operation, the rangeset contains the union of itself
+    /// with \a [v1;v2[.
     void add(const T &v1, const T &v2)
       {
       if (v2<=v1) return;
       if (r.empty() || (v1>=r[r.size()-2])) append(v1,v2);
       addRemove(v1,v2,1);
       }
-    /*! After this operation, the rangeset contains the union of itself
-        with \a [v;v+1[. */
+    /// After this operation, the rangeset contains the union of itself
+    /// with \a [v;v+1[.
     void add(const T &v) { add(v,v+1); }
 
-    /*! Removes all values within \a [v1;v2[ from the rangeset. */
+    /// Removes all values within \a [v1;v2[ from the rangeset.
     void remove(const T &v1, const T &v2)
       {
       if (v2<=v1) return;
@@ -296,10 +298,10 @@ template<typename T> class rangeset
       if ((v1<=r[0]) && (v2>=r.back())) { r.clear(); return; }
       addRemove(v1,v2,0);
       }
-    /*! Removes the value \a v from the rangeset. */
+    /// Removes the value \a v from the rangeset.
     void remove(const T &v) { remove(v,v+1); }
 
-    /*! Removes all values not within \a [a;b[ from the rangeset. */
+    /// Removes all values not within \a [a;b[ from the rangeset.
     void intersect (const T &a, const T &b)
       {
       if (r.empty()) return; // nothing to remove
@@ -319,7 +321,7 @@ template<typename T> class rangeset
         r.erase(r.begin(),r.begin()+pos1+1);
       }
 
-    /*! Returns the total number of elements in the rangeset. */
+    /// Returns the total number of elements in the rangeset.
     size_t nval() const
       {
       size_t result(0);
@@ -328,8 +330,8 @@ template<typename T> class rangeset
       return result;
       }
 
-    /*! After this operation, \a res contains all elements of the rangeset
-        in ascending order. */
+    /// After this operation, \a res contains all elements of the rangeset
+    /// in ascending order.
     void toVector (std::vector<T> &res) const
       {
       res.clear();
@@ -339,8 +341,8 @@ template<typename T> class rangeset
           res.push_back(m);
       }
 
-    /*! Returns a vector containing all elements of the rangeset in ascending
-        order. */
+    /// Returns a vector containing all elements of the rangeset in ascending
+    /// order.
     std::vector<T> toVector() const
       {
       std::vector<T> res;
@@ -348,29 +350,29 @@ template<typename T> class rangeset
       return res;
       }
 
-    /*! Returns the union of this rangeset and \a other. */
+    /// Returns the union of this rangeset and \a other.
     rangeset op_or (const rangeset &other) const
       {
       rangeset res;
       res.generalUnion (*this,other,false,false);
       return res;
       }
-    /*! Returns the intersection of this rangeset and \a other. */
+    /// Returns the intersection of this rangeset and \a other.
     rangeset op_and (const rangeset &other) const
       {
       rangeset res;
       res.generalUnion (*this,other,true,true);
       return res;
       }
-    /*! Returns the part of this rangeset which is not in \a other. */
+    /// Returns the part of this rangeset which is not in \a other.
     rangeset op_andnot (const rangeset &other) const
       {
       rangeset res;
       res.generalUnion (*this,other,true,false);
       return res;
       }
-    /*! Returns the parts of this rangeset and \a other, which are not in
-        both rangesets. */
+    /// Returns the parts of this rangeset and \a other, which are not in
+    /// both rangesets.
     rangeset op_xor (const rangeset &other) const
       {
       rangeset res;
@@ -378,37 +380,33 @@ template<typename T> class rangeset
       return res;
       }
 
-    /*! Returns the index of the interval containing \a v; if no such interval
-        exists, -1 is returned. */
+    /// Returns the index of the interval containing \a v; if no such interval
+    /// exists, -1 is returned.
     ptrdiff_t findInterval (const T &v) const
       {
       ptrdiff_t res = iiv(v);
       return (res&1) ? -1 : res>>1;
       }
 
-    /*! Returns \a true if the rangeset is identical to \a other, else \a false.
-        */
+    /// Returns \a true iff the rangeset is identical to \a other.
     bool operator== (const rangeset &other) const
       { return r==other.r; }
 
-    /*! Returns \a true if the rangeset contains all values in the range
-        \a [a;b[, else \a false. */
+    /// Returns \a true iff the rangeset contains all values in the range
+    /// \a [a;b[.
     bool contains (T a,T b) const
       {
       ptrdiff_t res=iiv(a);
       if (res&1) return false;
       return (b<=r[res+1]);
       }
-    /*! Returns \a true if the rangeset contains the value \a v,
-        else \a false. */
+    /// Returns \a true iff the rangeset contains the value \a v.
     bool contains (T v) const
       { return !(iiv(v)&1); }
-    /*! Returns \a true if the rangeset contains all values stored in \a other,
-        else \a false. */
+    /// Returns \a true iff the rangeset contains all values stored in \a other.
     bool contains (const rangeset &other) const
       { return generalAllOrNothing(*this,other,false,true); }
-    /** Returns true if any of the numbers [a;b[ are contained in the set,
-        else false. */
+    /// Returns true if any of the numbers [a;b[ are contained in the set.
     bool overlaps (T a,T b) const
       {
       ptrdiff_t res=iiv(a);
@@ -416,8 +414,7 @@ template<typename T> class rangeset
       if (res==ptrdiff_t(r.size())-1) return false; // beyond the end of the set
       return (r[res+1]<b);
       }
-    /** Returns true if there is overlap between the set and "other",
-        else false. */
+    /// Returns true if there is overlap between the set and \a other.
     bool overlaps (const rangeset &other) const
       { return !generalAllOrNothing(*this,other,true,true); }
   };

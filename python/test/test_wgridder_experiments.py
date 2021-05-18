@@ -68,7 +68,7 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         return
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
     speedoflight, f0 = 299792458., 1e9

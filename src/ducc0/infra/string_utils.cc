@@ -26,7 +26,7 @@
  *  This file contains the implementation of various convenience functions
  *  used by the Planck LevelS package.
  *
- *  Copyright (C) 2002-2020 Max-Planck-Society
+ *  Copyright (C) 2002-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -105,9 +105,10 @@ string intToString(int64_t x, size_t width)
   return trim(res);
   }
 
-template<typename T> void stringToData (const string &x, T &value)
+template<typename T> T stringToData (const string &x)
   {
   istringstream strstrm(x);
+  T value;
   strstrm >> value;
   bool ok = bool(strstrm);
   if (ok)
@@ -117,35 +118,36 @@ template<typename T> void stringToData (const string &x, T &value)
     ok = rest.length()==0;
     }
   MR_assert(ok, "could not convert '", x, "' to desired data type.");
+  return value;
   }
 
-template<> void stringToData (const string &x, string &value)
-  { value = trim(x); }
+template<> string stringToData (const string &x)
+  { return trim(x); }
 
-template<> void stringToData (const string &x, bool &value)
+template<> bool stringToData (const string &x)
   {
   const char *fval[] = {"f","n","false",".false."};
   const char *tval[] = {"t","y","true",".true."};
   for (size_t i=0; i< sizeof(fval)/sizeof(fval[0]); ++i)
-    if (equal_nocase(x,fval[i])) { value=false; return; }
+    if (equal_nocase(x,fval[i])) return false;
   for (size_t i=0; i< sizeof(tval)/sizeof(tval[0]); ++i)
-    if (equal_nocase(x,tval[i])) { value=true; return; }
+    if (equal_nocase(x,tval[i])) return true;
   MR_fail("conversion error in stringToData<bool>(",x,")");
   }
 
-template void stringToData (const string &x, signed char &value);
-template void stringToData (const string &x, unsigned char &value);
-template void stringToData (const string &x, short &value);
-template void stringToData (const string &x, unsigned short &value);
-template void stringToData (const string &x, int &value);
-template void stringToData (const string &x, unsigned int &value);
-template void stringToData (const string &x, long &value);
-template void stringToData (const string &x, unsigned long &value);
-template void stringToData (const string &x, long long &value);
-template void stringToData (const string &x, unsigned long long &value);
-template void stringToData (const string &x, float &value);
-template void stringToData (const string &x, double &value);
-template void stringToData (const string &x, long double &value);
+template signed char stringToData (const string &x);
+template unsigned char stringToData (const string &x);
+template short stringToData (const string &x);
+template unsigned short stringToData (const string &x);
+template int  stringToData (const string &x);
+template unsigned int stringToData (const string &x);
+template long stringToData (const string &x);
+template unsigned long stringToData (const string &x);
+template long long stringToData (const string &x);
+template unsigned long long stringToData (const string &x);
+template float stringToData (const string &x);
+template double stringToData (const string &x);
+template long double stringToData (const string &x);
 
 bool equal_nocase (const string &a, const string &b)
   {
@@ -163,128 +165,11 @@ string tolower(const string &input)
   return result;
   }
 
-void parse_file (const string &filename, map<string,string> &dict)
-  {
-  int lineno=0;
-  dict.clear();
-  ifstream inp(filename.c_str());
-  MR_assert (inp, "Could not open parameter file '", filename, "'.");
-  while (inp)
-    {
-    string line;
-    getline(inp, line);
-    ++lineno;
-    // remove potential carriage returns at the end of the line
-    line=line.substr(0,line.find("\r"));
-    line=line.substr(0,line.find("#"));
-    line=trim(line);
-    if (line.size()>0)
-      {
-      string::size_type eqpos=line.find("=");
-      if (eqpos!=string::npos)
-        {
-        string key=trim(line.substr(0,eqpos)),
-               value=trim(line.substr(eqpos+1,string::npos));
-        if (key=="")
-          cerr << "Warning: empty key in '" << filename << "', line "
-               << lineno << endl;
-        else
-          {
-          if (dict.find(key)!=dict.end())
-            cerr << "Warning: key '" << key << "' multiply defined in '"
-                 << filename << "', line " << lineno << endl;
-          dict[key]=value;
-          }
-        }
-      else
-        cerr << "Warning: unrecognized format in '" << filename << "', line "
-             << lineno << ":\n" << line << endl;
-      }
-    }
-  }
-
 namespace {
 
-bool isParam (const string &s)
+template<typename T> vector<T> split (istream &stream)
   {
-  if (s.size()<2) return false;
-  if (s[0]!='-') return false;
-  return !(isdigit(s[1]) || (s[1]=='.'));
-  }
-
-} // unnamed namespace
-
-void parse_cmdline_classic (int argc, const char **argv,
-  const vector<string> &leading_args, map<string,string> &dict)
-  {
-  dict.clear();
-  MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
-  for (size_t i=0; i<leading_args.size(); ++i)
-    dict[leading_args[i]] = argv[i+1];
-  int curarg=int(leading_args.size())+1;
-  while (curarg<argc)
-    {
-    string param=argv[curarg];
-    MR_assert(isParam(param),"unrecognized command line format");
-    if ((curarg==argc-1) || isParam(argv[curarg+1]))
-      {
-      dict[param.substr(1)]="true";
-      ++curarg;
-      }
-    else
-      {
-      dict[param.substr(1)]=argv[curarg+1];
-      curarg+=2;
-      }
-    }
-  }
-
-void parse_cmdline_classic (int argc, const char **argv,
-  map<string,string> &dict)
-  { parse_cmdline_classic (argc, argv, vector<string>(), dict); }
-
-void parse_cmdline_equalsign (int argc, const char **argv,
-  const vector<string> &leading_args, map<string,string> &dict)
-  {
-  dict.clear();
-  MR_assert(size_t(argc)>leading_args.size(),"not enough arguments");
-  for (size_t i=0; i<leading_args.size(); ++i)
-    dict[leading_args[i]] = argv[i+1];
-  for (int i=int(leading_args.size()+1); i<argc; ++i)
-    {
-    string arg=trim(argv[i]);
-    if (arg.size()>0)
-      {
-      string::size_type eqpos=arg.find("=");
-      if (eqpos!=string::npos)
-        {
-        string key=trim(arg.substr(0,eqpos)),
-               value=trim(arg.substr(eqpos+1,string::npos));
-        if (key=="")
-          cerr << "Warning: empty key in argument'" << arg << "'" << endl;
-        else
-          {
-          if (dict.find(key)!=dict.end())
-            cerr << "Warning: key '" << key << "' multiply defined" << endl;
-          dict[key]=value;
-          }
-        }
-      else
-        cerr << "Warning: unrecognized format in argument '" << arg << "'"
-             << endl;
-      }
-    }
-  }
-
-void parse_cmdline_equalsign (int argc, const char **argv,
-  map<string,string> &dict)
-  { parse_cmdline_equalsign (argc, argv, vector<string>(), dict); }
-
-namespace {
-
-template<typename T> void split (istream &stream, vector<T> &list)
-  {
-  list.clear();
+  vector<T> list;
   while (stream)
     {
     string word;
@@ -293,34 +178,36 @@ template<typename T> void split (istream &stream, vector<T> &list)
       "error while splitting stream into components");
     if (stream) list.push_back(stringToData<T>(word));
     }
+  return list;
   }
 
 } // unnamed namespace
 
-template<typename T> void split (const string &inp, vector<T> &list)
+template<typename T> vector<T> split (const string &inp)
   {
-  istringstream stream(inp);
-  split (stream,list);
+  istringstream is(inp);
+  return split<T>(is);
   }
 
-template void split (const string &inp, vector<string> &list);
-template void split (const string &inp, vector<float> &list);
-template void split (const string &inp, vector<double> &list);
-template void split (const string &inp, vector<int> &list);
-template void split (const string &inp, vector<long> &list);
+template vector<string> split (const string &inp);
+template vector<float> split (const string &inp);
+template vector<double> split (const string &inp);
+template vector<int> split (const string &inp);
+template vector<long> split (const string &inp);
 
-void tokenize (const string &inp, char delim, vector<string> &list)
+vector<string> tokenize (const string &inp, char delim)
   {
   istringstream stream(inp);
   string token;
-  list.clear();
+  vector<string> list;
   while (getline(stream,token,delim))
     list.push_back(token);
+  return list;
   }
 
-void parse_words_from_file (const string &filename, vector<string> &words)
+vector<string> parse_words_from_file (const string &filename)
   {
-  words.clear();
+  vector<string> words;
   ifstream inp(filename.c_str());
   MR_assert (inp,"Could not open file '", filename, "'.");
   while (inp)
@@ -330,6 +217,7 @@ void parse_words_from_file (const string &filename, vector<string> &words)
     word=trim(word);
     if (word!="") words.push_back(word);
     }
+  return words;
   }
 
 }}
