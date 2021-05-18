@@ -56,6 +56,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <mutex>
 #endif
 
+/** \file fft.h
+ *  Implementation of multi-dimensional Fast Fourier and related transforms
+ */
+
 namespace ducc0 {
 
 namespace detail_fft {
@@ -1225,6 +1229,23 @@ struct ExecR2R
     }
   };
 
+/// Complex-to-complex Fast Fourier Transform
+/** This executes a Fast Fourier Transform on \a in and stores the result in
+ *  \a out.
+ *
+ *  \a in and \a out must have identical shapes; they may point to the same
+ *  memory; in this case their strides must also be identical.
+ *
+ *  \a axes specifies the axes over which the transform is carried out.
+ * 
+ *  If \a forward is true, a minus sign will be used in the exponent.
+ * 
+ *  No normalization factors will be applied by default; if multiplication by
+ *  a constant is desired, it can be supplied in \a fct.
+ * 
+ *  If the underlying array has more than one dimension, the computation will
+ *  be distributed over \a nthreads threads.
+ */
 template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in,
   fmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1)
@@ -1236,6 +1257,27 @@ template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in,
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
+/// Fast Discrete Cosine Transform
+/** This executes a DCT on \a in and stores the result in \a out.
+ *
+ *  \a in and \a out must have identical shapes; they may point to the same
+ *  memory; in this case their strides must also be identical.
+ *
+ *  \a axes specifies the axes over which the transform is carried out.
+ * 
+ *  If \a forward is true, a DCT is computed, otherwise an inverse DCT.
+ *
+ *  \a type specifies the desired type (1-4) of the transform.
+ * 
+ *  No normalization factors will be applied by default; if multiplication by
+ *  a constant is desired, it can be supplied in \a fct.
+ *
+ *  If \a ortho is true, the first and last array entries are corrected (if
+ *  necessary) to allow an orthonormalized transform.
+ * 
+ *  If the underlying array has more than one dimension, the computation will
+ *  be distributed over \a nthreads threads.
+ */
 template<typename T> DUCC0_NOINLINE void dct(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
@@ -1251,6 +1293,27 @@ template<typename T> DUCC0_NOINLINE void dct(const fmav<T> &in, fmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
+/// Fast Discrete Sine Transform
+/** This executes a DST on \a in and stores the result in \a out.
+ *
+ *  \a in and \a out must have identical shapes; they may point to the same
+ *  memory; in this case their strides must also be identical.
+ *
+ *  \a axes specifies the axes over which the transform is carried out.
+ * 
+ *  If \a forward is true, a DST is computed, otherwise an inverse DST.
+ *
+ *  \a type specifies the desired type (1-4) of the transform.
+ * 
+ *  No normalization factors will be applied by default; if multiplication by
+ *  a constant is desired, it can be supplied in \a fct.
+ *
+ *  If \a ortho is true, the first and last array entries are corrected (if
+ *  necessary) to allow an orthonormalized transform.
+ * 
+ *  If the underlying array has more than one dimension, the computation will
+ *  be distributed over \a nthreads threads.
+ */
 template<typename T> DUCC0_NOINLINE void dst(const fmav<T> &in, fmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
