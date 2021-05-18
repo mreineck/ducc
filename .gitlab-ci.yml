@@ -22,14 +22,14 @@ test_gcc:
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && python3 setup.py install --user -f && pytest-3 -q python/test'
+    - 'cd ducc0-* && python3 -m pip install --user . && python3 -m pytest -q python/test'
 
 test_clang:
   stage: testing
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang-11 python3 setup.py install --user -f && pytest-3 -q python/test'
+    - 'cd ducc0-* && CC=clang-11 python3 -m pip install --user . && python3 -m pytest -q python/test'
 
 #wgridding_demo:
 #  stage: demos
@@ -48,7 +48,7 @@ release:
 pages:
   stage: release
   script:
-    - DUCC0_OPTIMIZATION=none pip3 install .
+    - DUCC0_OPTIMIZATION=none python3 -m pip install --user .
     - make -C doc html
     - 'cd src/doc && doxygen Doxyfile && cd ../..'
     - mv doc/build/html public
