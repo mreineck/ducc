@@ -187,7 +187,7 @@ class fmav_info
       }
   };
 
-/** Helper class containing shape and stride information of a `mav` object */
+/// Helper class containing shape and stride information of a `mav` object
 template<size_t ndim> class mav_info
   {
   protected:
@@ -216,13 +216,13 @@ template<size_t ndim> class mav_info
       { return str[dim]*n; }
 
   public:
-    /** Constructs an object with all extents and strides set to zero. */
+    /// Constructs an object with all extents and strides set to zero.
     mav_info() : sz(0)
       {
       for (size_t i=0; i<ndim; ++i)
         { shp[i]=0; str[i]=0; }
       }
-    /** Constructs an object with the given shape and stride. */
+    /// Constructs an object with the given shape and stride.
     mav_info(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
     mav_info(const shape_t &shape_)
@@ -238,8 +238,8 @@ template<size_t ndim> class mav_info
     size_t shape(size_t i) const { return shp[i]; }
     const stride_t &stride() const { return str; }
     const ptrdiff_t &stride(size_t i) const { return str[i]; }
-    /** Returns true iff the last dimension has stride 1.
-     *  Typically used for optimization purposes. */
+    /// Returns true iff the last dimension has stride 1.
+    /**  Typically used for optimization purposes. */
     bool last_contiguous() const
       { return (str.back()==1); }
     /** Returns true iff the object is C-contiguous, i.e. if the stride of the
@@ -255,14 +255,14 @@ template<size_t ndim> class mav_info
         }
       return true;
       }
-    /** Returns true iff this->shape and other.shape match. */
+    /// Returns true iff this->shape and other.shape match.
     bool conformable(const mav_info &other) const
       { return shp==other.shp; }
-    /** Returns true iff this->shape and other match. */
+    /// Returns true iff this->shape and other match.
     bool conformable(const shape_t &other) const
       { return shp==other; }
-    /** Returns the one-dimensional index of an entry from the given
-     *  multi-dimensional index tuple, taking strides into account. */
+    /// Returns the one-dimensional index of an entry from the given
+    /// multi-dimensional index tuple, taking strides into account.
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
       {
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
@@ -300,9 +300,9 @@ class FmavIter
   };
 
 
-/** Class for storing (or referring to) multi-dimensional arrays with a
- *  dimensionality that is not known at compile time.
- *  ("fmav" stands for "flexible multidimensional array view".)
+/// Class for storing (or referring to) multi-dimensional arrays with a
+/// dimensionality that is not known at compile time.
+/** "fmav" stands for "flexible multidimensional array view".
  *  The shape must consist of non-negative integers (zeros are allowed).
  *  Strides may be positive or negative; stride values of zero are accepted and
  *  may be useful in specific circumstances (e.g. read-only arrays with the same
@@ -521,9 +521,9 @@ template<typename T> fmav<T> subarray
 //     else
 //   }
 
-/** Class for storing (or referring to) multi-dimensional arrays with a
- *  dimensionality known at compile time.
- *  ("mav" stands for "multidimensional array view".)
+/// Class for storing (or referring to) multi-dimensional arrays with a
+/// dimensionality known at compile time.
+/** "mav" stands for "multidimensional array view".
  *  The shape must consist of non-negative integers (zeros are allowed).
  *  Strides may be positive or negative; stride values of zero are accepted and
  *  may be useful in specific circumstances (e.g. read-only arrays with the same
@@ -618,24 +618,24 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
-    /** Constructs a mav with size and stride zero in all dimensions and no
-     *  data content. */
+    /// Constructs a mav with size and stride zero in all dimensions and no
+    /// data content.
     mav() {}
-    /** Constructs a read-only mav with its first data entry at \d
+    /** Constructs a read-only mav with its first data entry at \a d
      *  and the given shape and strides. The mav does not own the memory. */
     mav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(d_) {}
-    /** Constructs a mav with its first data entry at \d
+    /** Constructs a mav with its first data entry at \a d
      *  and the given shape and strides. The mav does not own the memory.
      *  Iff \a rw_ is true, write accesses to the array are allowed. */
     mav(T *d_, const shape_t &shp_, const stride_t &str_, bool rw_=false)
       : tinfo(shp_, str_), tbuf(d_, rw_) {}
-    /** Constructs a read-only mav with its first data entry at \d
+    /** Constructs a read-only mav with its first data entry at \a d
      *  and the given shape. The array is assumed to be C-contiguous.
      *  The mav does not own the memory. */
     mav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
-    /** Constructs a mav with its first data entry at \d and the given shape.
+    /** Constructs a mav with its first data entry at \a d and the given shape.
      *  The array is assumed to be C-contiguous.
      *  The mav does not own the memory.
      *  Iff \a rw_ is true, write accesses to the array are allowed. */
@@ -687,10 +687,10 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       return fmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
-    /** Returns the data entry at the given set of indices. */
+    /// Returns the data entry at the given set of indices.
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return craw(idx(ns...)); }
-    /** Returns the data entry at the given set of indices. */
+    /// Returns the data entry at the given set of indices.
     template<typename... Ns> const T &c(Ns... ns) const
       { return craw(idx(ns...)); }
     /** Returns a writable reference to the data entry at the given set of
@@ -713,7 +713,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     template<typename T2, typename Func> void apply
       (const mav<T2, ndim> &other,Func func)
       { applyHelper<0,T2,Func>(0,0,other,func); }
-    /** Sets every entry of the array to \a val. */
+    /// Sets every entry of the array to \a val.
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
     /** Returns a mav (of the same or smaller dimensionality) representing a
@@ -739,7 +739,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
       }
 
-    /** Returns a zero-extent mav with no associatd data. */
+    /// Returns a zero-extent mav with no associatd data.
     static mav build_empty()
       {
       shape_t nshp;
