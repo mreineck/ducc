@@ -58,6 +58,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /** \file fft.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms
+ *  \copyright Copyright (C) 2010-2021 Max-Planck-Society
+ *  \copyright Copyright (C) 2019 Peter Bell
+ *  \copyright  
+ *  \copyright For the odd-sized DCT-IV transforms:
+ *  \copyright   Copyright (C) 2003, 2007-14 Matteo Frigo
+ *  \copyright   Copyright (C) 2003, 2007-14 Massachusetts Institute of Technology
+ *
+ * \authors Martin Reinecke, Peter Bell
  */
 
 namespace ducc0 {

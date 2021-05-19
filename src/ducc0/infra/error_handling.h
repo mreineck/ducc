@@ -16,8 +16,11 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
-   Author: Martin Reinecke */
+/** \file ducc0/infra/error_handling.h
+ *
+ * \copyright Copyright (C) 2019-2020 Max-Planck-Society
+ * \author Martin Reinecke
+ */
 
 #ifndef DUCC0_ERROR_HANDLING_H
 #define DUCC0_ERROR_HANDLING_H
@@ -72,11 +75,15 @@ template<typename ...Args>
     throw ::std::runtime_error(msg.str()); \
   }
 
+/// Throws a std::runtime_error containing the code location and the
+/// passed arguments.
 #define MR_fail(...) \
   do { \
     ::ducc0::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
     } while(0)
 
+/// If \a cond is false, throws a std::runtime_error containing the code
+/// location and the passed arguments.
 #define MR_assert(cond,...) \
   do { \
     if (cond); \

@@ -17,7 +17,7 @@
 /*! \file sht.h
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  \copyright Copyright (C) 2020-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 

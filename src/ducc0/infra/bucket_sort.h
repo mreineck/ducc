@@ -14,9 +14,10 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/*
- *  Copyright (C) 2020 Max-Planck-Society
- *  Author: Martin Reinecke
+/** \file ducc0/infra/bucket_sort.h
+ * 
+ *  \copyright Copyright (C) 2020 Max-Planck-Society
+ *  \author Martin Reinecke
  */
 
 #ifndef DUCC0_BUCKET_SORT_H
@@ -76,6 +77,22 @@ template<typename RAidx, typename Tkey, typename Tidx> void subsort
       lo+numbers[i], newnumbers, idxbak, keybak);
   }
 
+/// Efficient bucket sort to determine an ascending order for the given set
+/// of keys.
+/** \param keys
+ *         Random access iterator to a set of keys to be processed in ascending
+ *         order.
+ *  \param res
+ *         Random access iterator to a writable integer-like sequence which will
+ *         hold the key indices in the desired order.
+ *  \param nval
+ *         The number of keys to be sorted
+ *  \param max_key
+ *         An upper limit for the maximum key value. The closer this is to the
+ *         actual maximum key, the better the algorithm will perform.
+ *  \param nthreads
+ *         The number of threads to use for the sorting
+ */
 template<typename RAidx, typename RAkey> void bucket_sort
   (RAkey keys, RAidx res, size_t nval, size_t max_key, size_t nthreads)
   {

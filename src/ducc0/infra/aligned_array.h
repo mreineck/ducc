@@ -16,8 +16,11 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
-   Author: Martin Reinecke */
+/** \file ducc0/infra/aligned_array.h
+ *
+ * \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ * \author Martin Reinecke
+ */
 
 #ifndef DUCC0_ALIGNED_ARRAY_H
 #define DUCC0_ALIGNED_ARRAY_H
@@ -31,8 +34,10 @@ namespace detail_aligned_array {
 
 using namespace std;
 
-/*! Simple array class guaranteeing 64-byte alignment of the data pointer.
-    Mostly useful for storing data accessed by SIMD instructions. */
+/// Simple array class guaranteeing 64-byte alignment of the data pointer.
+/** Mostly useful for storing data accessed by SIMD instructions.
+ *  \note Since this class operates on raw memory, it should only be used with
+ *        POD types, and even then only with caution! */
 template<typename T> class aligned_array
   {
   private:
@@ -69,13 +74,19 @@ template<typename T> class aligned_array
 #endif
 
   public:
+    /// Creates a zero-sized array with no associated memory.
     aligned_array() : p(nullptr), sz(0) {}
+    /// Creates an array with \a n entries.
+    /** \note Memory is not initialized! */
     aligned_array(size_t n) : p(ralloc(n)), sz(n) {}
     aligned_array(aligned_array &&other)
       : p(other.p), sz(other.sz)
       { other.p=nullptr; other.sz=0; }
     ~aligned_array() { dealloc(p); }
 
+    /// If \a n is different from the currnt size, resizes the array to hold
+    /// \a n elements.
+    /** \note No data content is copied, the new array is uninitialized! */
     void resize(size_t n)
       {
       if (n==sz) return;
@@ -84,12 +95,17 @@ template<typename T> class aligned_array
       sz = n;
       }
 
+    /// Returns a writeable reference to the element at index \a idx.
     T &operator[](size_t idx) { return p[idx]; }
+    /// Returns a read-only reference to the element at index \a idx.
     const T &operator[](size_t idx) const { return p[idx]; }
 
+    /// Returns a writeable pointer to the array data.
     T *data() { return p; }
+    /// Returns a read-only pointer to the array data.
     const T *data() const { return p; }
 
+    /// Returns the size of the array.
     size_t size() const { return sz; }
   };
 
