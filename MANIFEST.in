@@ -11,17 +11,11 @@ include src/ducc0/infra/misc_utils.h
 include src/ducc0/infra/simd.h
 include src/ducc0/infra/string_utils.cc
 include src/ducc0/infra/string_utils.h
-include src/ducc0/infra/system.cc
-include src/ducc0/infra/system.h
 include src/ducc0/infra/threading.cc
 include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
 include src/ducc0/infra/transpose.h
 include src/ducc0/infra/useful_macros.h
-include src/ducc0/infra/types.h
-include src/ducc0/infra/types.cc
-include src/ducc0/infra/communication.h
-include src/ducc0/infra/communication.cc
 
 include src/ducc0/bindings/pybind_utils.h
 

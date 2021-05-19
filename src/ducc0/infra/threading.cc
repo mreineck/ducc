@@ -16,8 +16,11 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Peter Bell, Max-Planck-Society
-   Authors: Peter Bell, Martin Reinecke */
+/** \file ducc0/infra/threading.cc
+ *
+ *  \copyright Copyright (C) 2019-2020 Peter Bell, Max-Planck-Society
+ *  \authors Peter Bell, Martin Reinecke
+ */
 
 #include "ducc0/infra/threading.h"
 

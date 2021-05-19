@@ -16,8 +16,11 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
-   Author: Martin Reinecke */
+/** \file ducc0/infra/string_utils.h
+ *
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *  \author Martin Reinecke
+ */
 
 #ifndef DUCC0_STRING_UTILS_H
 #define DUCC0_STRING_UTILS_H

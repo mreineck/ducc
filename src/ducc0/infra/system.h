@@ -16,8 +16,14 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
-   Author: Martin Reinecke */
+/** \file ducc0/infra/system.h
+ *  Helper functions for determining system resources
+ *
+ *  \note This functionality accesses the Linux /proc file system and will not
+ *        work on other platforms.
+ *  \copyright Copyright (C) 2019-2020 Max-Planck-Society
+ *  \author Martin Reinecke
+ */
 
 #ifndef DUCC0_SYSTEM_H
 #define DUCC0_SYSTEM_H
