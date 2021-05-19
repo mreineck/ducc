@@ -14,10 +14,10 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/*! \file quaternion.h
+/*! \file ducc0/math/quaternion.h
  *  Quaternion class for rotation transforms in 3D space
  *
- *  Copyright (C) 2005-2020 Max-Planck-Society
+ *  \copyright Copyright (C) 2005-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */
 

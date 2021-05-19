@@ -16,8 +16,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society, Ignace Bogaert
-   Author: Martin Reinecke */
+/** \file ducc0/math/gl_integrator.h
+ *  Functionality for Gauss-Legendre quadrature
+ *
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society, Ignace Bogaert
+ *  \author Martin Reinecke
+ */
 
 #ifndef DUCC0_GL_INTEGRATOR_H
 #define DUCC0_GL_INTEGRATOR_H
@@ -223,7 +227,7 @@ pair<double,double> calc_gl_bogaert(size_t n, size_t k0)
   double Deno = BNuoSin + BNuoSin * WIS2*(WSF1T + WIS2*(WSF2T + WIS2*WSF3T));
   double weight = (2.0*w)/Deno;
   return make_pair((k==k0) ? cos(theta) : -cos(theta), weight);
- }
+  }
 
 pair<double, double> calc_gl(size_t n, size_t k)
   {
@@ -232,6 +236,7 @@ pair<double, double> calc_gl(size_t n, size_t k)
   return (n<=100) ? calc_gl_iterative(n,k) : calc_gl_bogaert(n,k);
   }
 
+/// Class for computing Gauss-Lgendre abscissas, weights and intgrals
 class GL_Integrator
   {
   private:
@@ -239,6 +244,8 @@ class GL_Integrator
     vector<double> x, w;
 
   public:
+    /// Creates an integrator for \a n abscissas
+    /** \note The \a nthreads parameter is obsolescent and ignored. */
     GL_Integrator(size_t n, size_t /*nthreads*/=1)
       : n_(n)
       {
@@ -254,6 +261,7 @@ class GL_Integrator
         }
       }
 
+    /// Returns the approximated integral of \a func in [-1;1]
     template<typename Func> auto integrate(Func f) -> decltype(f(0.))
       {
       using T = decltype(f(0.));
@@ -269,6 +277,8 @@ class GL_Integrator
       return res;
       }
 
+    /// Returns the approximated integral of \a func in [-1;1], where \a func
+    /// is symmetric with respect to x=0.
     template<typename Func> auto integrateSymmetric(Func f) -> decltype(f(0.))
       {
       using T = decltype(f(0.));
@@ -279,6 +289,7 @@ class GL_Integrator
       return res*2;
       }
 
+    /// Returns the Gauss-Legendre abscissas.
     vector<double> coords() const
       {
       vector<double> res(n_);
@@ -289,9 +300,11 @@ class GL_Integrator
         }
       return res;
       }
+    /// Returns the non-negative Gauss-Legendre abscissas.
     const vector<double> &coordsSymmetric() const
       { return x; }
 
+    /// Returns the Gauss-Legendre weights.
     vector<double> weights() const
       {
       vector<double> res(n_);
@@ -299,6 +312,8 @@ class GL_Integrator
         res[i]=res[n_-1-i]=w[w.size()-1-i];
       return res;
       }
+    /// Returns the Gauss-Legendre weights for the non-negative abscissas,
+    /// with an additional factor of 2 for positive abscissas.
     vector<double> weightsSymmetric() const
       {
       auto res = w;
