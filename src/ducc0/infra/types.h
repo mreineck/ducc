@@ -16,13 +16,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020 Max-Planck-Society
+/* Copyright (C) 2020-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_TYPES_H
 #define DUCC0_TYPES_H
 
-#include <typeinfo>
 #include <typeindex>
 #include <cstddef>
 #include <unordered_map>

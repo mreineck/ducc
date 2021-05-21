@@ -25,10 +25,11 @@
 /*! \file pointing.cc
  *  Class representing a direction in 3D space
  *
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
+#include <cmath>
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/math_utils.h"

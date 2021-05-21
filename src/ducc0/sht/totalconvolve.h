@@ -22,9 +22,19 @@
 #ifndef DUCC0_TOTALCONVOLVE_H
 #define DUCC0_TOTALCONVOLVE_H
 
+#include <cstdint>
+#include <algorithm>
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <type_traits>
 #include <vector>
 #include <complex>
 #include <cmath>
+#include <mutex>
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/threading.h"
+#include "ducc0/math/fft1d.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"

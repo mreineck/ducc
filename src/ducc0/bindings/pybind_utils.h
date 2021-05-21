@@ -14,16 +14,19 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020 Max-Planck-Society
+/* Copyright (C) 2020-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 
 #ifndef DUCC0_PYBIND_UTILS_H
 #define DUCC0_PYBIND_UTILS_H
 
+#include <cstddef>
+#include <array>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
 
 namespace ducc0 {

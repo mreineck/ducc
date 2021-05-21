@@ -22,6 +22,14 @@
 #ifndef DUCC0_WGRIDDER_H
 #define DUCC0_WGRIDDER_H
 
+#include <cstring>
+#include <complex>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <type_traits>
+#include <utility>
+#include <mutex>
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>

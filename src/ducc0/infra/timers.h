@@ -16,19 +16,27 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2020 Max-Planck-Society
-   Authors: Peter Bell, Martin Reinecke */
+/** \file ducc0/infra/timers.h
+ *  High precision wallclock timers.
+ * 
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *  \authors Peter Bell, Martin Reinecke
+ */
 
 #ifndef DUCC0_TIMERS_H
 #define DUCC0_TIMERS_H
 
 #include <chrono>
+#include <utility>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <map>
+#include <vector>
+#include <cmath>
+#include <cstddef>
 
 #include "ducc0/infra/error_handling.h"
 
@@ -38,6 +46,7 @@ namespace detail_timers {
 
 using namespace std;
 
+/// Minimalistic wallclock timer.
 class SimpleTimer
   {
   private:
@@ -45,14 +54,18 @@ class SimpleTimer
     clock::time_point starttime;
 
   public:
+    /// Sets the start time to the time of construction.
     SimpleTimer()
       : starttime(clock::now()) {}
+    /// Resets the start time to the time of the reset() call.
     void reset()
       { starttime = clock::now(); }
+    /// Returns the difference of the current time and the start time in seconds.
     double operator()() const
       { return chrono::duration<double>(clock::now() - starttime).count(); }
   };
 
+/// Stack-based hierarchical timing system
 class TimerHierarchy
   {
   private:
@@ -183,22 +196,29 @@ class TimerHierarchy
   public:
     TimerHierarchy(const string &name="<root>")
       : last_time(clock::now()), root(name, nullptr), curnode(&root) {}
+    /// Push a new category \a name to the stack.
+    /** While this is on the stack, all elapsed time will be added to this
+     *  category. */
     void push(const string &name)
       {
       adjust_time();
       push_internal(name);
       }
+    /// Remove the top category from the stack.
     void pop()
       {
       adjust_time();
       curnode = curnode->parent;
       MR_assert(curnode!=nullptr, "tried to pop from empty timer stack");
       }
+    /// Replace the top category on the stack with \a name.
     void poppush(const string &name)
       {
       pop();
       push_internal(name);
       }
+    /// Returns a dictionary containing all used categories and their
+    /// accumulated time.
     map<string, double> get_timings()
       {
       adjust_time();
@@ -206,6 +226,7 @@ class TimerHierarchy
       root.add_timings("root", res);
       return res;
       }
+    /// Writes a fancy timing report to \a os.
     void report(ostream &os) const
       { ostringstream oss; root.report(oss); os<<oss.str(); }
   };

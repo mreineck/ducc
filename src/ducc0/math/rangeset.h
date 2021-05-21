@@ -25,7 +25,7 @@
 /*! \file rangeset.h
  *  Class for storing sets of ranges of integer numbers
  *
- *  Copyright (C) 2011-2020 Max-Planck-Society
+ *  Copyright (C) 2011-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -34,7 +34,7 @@
 
 #include <algorithm>
 #include <vector>
-#include <utility>
+#include <cstddef>
 #include <iostream>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/math_utils.h"

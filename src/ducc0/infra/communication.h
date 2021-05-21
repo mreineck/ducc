@@ -26,6 +26,8 @@
 
 //#define DUCC0_USE_MPI
 
+#include <cstddef>
+#include <typeindex>
 #include <vector>
 #ifdef DUCC0_USE_MPI
 #include <mpi.h>

@@ -21,14 +21,20 @@
  */
 
 /*
- *  Copyright (C) 2020 Max-Planck-Society
+ *  Copyright (C) 2020-2021 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
 #ifndef DUCC_TRANSPOSE_H
 #define DUCC_TRANSPOSE_H
 
+#include <cstddef>
+#include <numeric>
+#include <tuple>
+#include <utility>
 #include <algorithm>
+#include <vector>
+#include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
 

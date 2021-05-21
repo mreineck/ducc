@@ -1589,6 +1589,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
         tmp.v(i-dist,j) = 0;
         }
     }
+  // FIXME: truncation may not be what we need here!
   if (nfull_out<nfull_in) // truncate
     {
     size_t dist = nfull_in-nfull_out;

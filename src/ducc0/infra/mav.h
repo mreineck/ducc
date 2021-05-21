@@ -26,11 +26,13 @@
 #ifndef DUCC0_MAV_H
 #define DUCC0_MAV_H
 
-#include <cstdlib>
 #include <array>
 #include <vector>
 #include <memory>
 #include <numeric>
+#include <cstddef>
+#include <functional>
+#include <tuple>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 

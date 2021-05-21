@@ -16,8 +16,14 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
-   Author: Martin Reinecke */
+/** \file ducc0/infra/simd.h
+ *  Functionality which approximates future standard C++ SIMD classes.
+ *
+ *  For details see section 9 of https://wg21.link/N4808
+ * 
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *  \author Martin Reinecke
+ */
 
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
@@ -95,8 +101,7 @@ using detail_simd::vectorizable;
 #endif
 #endif
 
-#include <cstdint>
-#include <cstdlib>
+#include <cstddef>
 #include <cmath>
 #include <algorithm>
 #ifndef DUCC0_NO_SIMD
@@ -107,6 +112,7 @@ namespace ducc0 {
 
 namespace detail_simd {
 
+/// true iff SIMD support is provided for \a T.
 template<typename T> constexpr inline bool vectorizable = false;
 #if (!defined(DUCC0_NO_SIMD))
 #if defined(__SSE2__)
@@ -115,6 +121,7 @@ template<> constexpr inline bool vectorizable<double> = true;
 #endif
 #endif
 
+/// true iff a SIMD type with vector length \a len exists for \a T.
 template<typename T, size_t len> constexpr inline bool simd_exists = false;
 
 template<typename T, size_t reglen> constexpr size_t vectorlen
@@ -518,8 +525,10 @@ template<typename T> using native_simd = vtp<T,1>;
 #endif
 
 #else // DUCC0_NO_SIMD is defined
+/// The SIMD type for \a T with the largest vector length on this platform.
 template<typename T> using native_simd = vtp<T,1>;
 #endif
+/// Provides a SIMD type for \a T with vector length \a len, if it exists.
 template<typename T, int len> struct simd_select
   { using type = vtp<T, len>; };
 template<typename T, size_t len> inline vtp<T,len> sin(vtp<T,len> in)

@@ -36,6 +36,9 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/math/math_utils.h"
+#include "ducc0/math/vec3.h"
 #include "ducc0/healpix/healpix_tables.h"
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/rangeset.h"

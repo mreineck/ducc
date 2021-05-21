@@ -42,19 +42,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/math/fft1d.h"
 
 #include <cmath>
-#include <cstdlib>
+#include <cstddef>
+#include <numeric>
 #include <stdexcept>
 #include <memory>
 #include <vector>
 #include <complex>
 #include <algorithm>
+#include "ducc0/infra/useful_macros.h"
+#include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/mav.h"
-#ifndef DUCC0_NO_THREADING
-#include <mutex>
-#endif
+#include "ducc0/infra/aligned_array.h"
+#include "ducc0/math/cmplx.h"
+#include "ducc0/math/unity_roots.h"
 
 /** \file fft.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms

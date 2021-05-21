@@ -16,12 +16,11 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020 Max-Planck-Society
+/* Copyright (C) 2020-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <cstdint>
 
-#include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/types.h"
 
 using namespace std;
