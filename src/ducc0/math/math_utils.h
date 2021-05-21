@@ -25,7 +25,7 @@
 /*! \file math_utils.h
  *  Various convenience mathematical functions.
  *
- *  Copyright (C) 2002-2020 Max-Planck-Society
+ *  Copyright (C) 2002-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -33,6 +33,7 @@
 #define DUCC0_MATH_UTILS_H
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 

@@ -35,8 +35,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_FFT1D_H
 #define DUCC0_FFT1D_H
 
+#include <memory>
+#include <cstddef>
 #include <algorithm>
-#include <stdexcept>
+#include <functional>
+#include <type_traits>
+#include <utility>
+#include <vector>
 #include <any>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/math/cmplx.h"
@@ -50,6 +55,9 @@ namespace ducc0 {
 namespace detail_fft {
 
 using namespace std;
+
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::any;
 
 // Always use std:: for <cmath> functions
 template <typename T> T cos(T) = delete;

@@ -27,9 +27,12 @@
 #define DUCC0_GL_INTEGRATOR_H
 
 #include <cmath>
+#include <array>
+#include <cstddef>
+#include <utility>
+#include <vector>
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/error_handling.h"
-#include "ducc0/infra/threading.h"
 
 namespace ducc0 {
 

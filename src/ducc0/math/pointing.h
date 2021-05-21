@@ -25,7 +25,7 @@
 /*! \file pointing.h
  *  Class representing a direction in 3D space
  *
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -33,6 +33,7 @@
 #define DUCC0_POINTING_H
 
 #include <cmath>
+#include <iostream>
 #include "ducc0/math/vec3.h"
 
 namespace ducc0 {

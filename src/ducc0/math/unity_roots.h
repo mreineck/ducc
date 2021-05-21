@@ -23,6 +23,7 @@
 #define DUCC0_UNITY_ROOTS_H
 
 #include <cmath>
+#include <cstddef>
 #include <type_traits>
 #include <vector>
 
