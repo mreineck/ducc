@@ -838,7 +838,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       if (contiguous())
         {
-        T *d2 = vdata();
+        const T *d2 = cdata();
         for (auto v=d2; v!=d2+size(); ++v)
           func(*v);
         return;
