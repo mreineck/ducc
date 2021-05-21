@@ -829,6 +829,17 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       applyHelper<0,Func>(0,func);
       }
+    template<typename Func> void apply(Func func) const
+      {
+      if (contiguous())
+        {
+        T *d2 = vdata();
+        for (auto v=d2; v!=d2+size(); ++v)
+          func(*v);
+        return;
+        }
+      applyHelper<0,Func>(0,func);
+      }
     template<typename T2, typename Func> void apply
       (const mav<T2, ndim> &other,Func func)
       { applyHelper<0,T2,Func>(0,0,other,func); }
