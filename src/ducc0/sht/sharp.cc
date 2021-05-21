@@ -41,6 +41,9 @@ namespace detail_sharp {
 
 using namespace std;
 
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::any;
+
 using dcmplx = complex<double>;
 using fcmplx = complex<float>;
 
