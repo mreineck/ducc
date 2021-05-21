@@ -359,6 +359,36 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using typename tinfo::stride_t;
 
   protected:
+    template<typename Func, typename T2> void apply2Helper(size_t idim,
+      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &f2, Func func)
+      {
+      auto ndim = tinfo::ndim();
+      if (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          apply2Helper<Func>(idim+1, idx+i*str[idim], idx2+i*f2.str[idim], f2, func);
+      else
+        {
+        T *d1 = vdata();
+        const T2 *d2 = f2.cdata();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d1[idx=i*str[idim]], d2[idx2+i*f2.str[idim]]);
+        }
+      }
+    template<typename Func, typename T2> void apply2Helper(size_t idim,
+      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &f2, Func func) const
+      {
+      auto ndim = tinfo::ndim();
+      if (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          apply2Helper<Func>(idim+1, idx+i*str[idim], idx2+i*f2.str[idim], f2, func);
+      else
+        {
+        const T *d1 = cdata();
+        const T2 *d2 = f2.cdata();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d1[idx=i*str[idim]], d2[idx2+i*f2.str[idim]]);
+        }
+      }
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
       {
       auto ndim = tinfo::ndim();
@@ -562,6 +592,16 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
         return;
         }
       applyHelper<Func>(0, 0, func);
+      }
+    template<typename Func, typename T2> void apply2(const fmav<T2> &f2, Func func)
+      {
+      MR_assert(conformable(f2), "fmavs are not conformable");
+      apply2Helper<Func>(0, 0, 0, f2, func);
+      }
+    template<typename Func, typename T2> void apply2(const fmav<T2> &f2, Func func) const
+      {
+      MR_assert(conformable(f2), "fmavs are not conformable");
+      apply2Helper<Func>(0, 0, 0, f2, func);
       }
     vector<T> dump() const
       {
