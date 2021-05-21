@@ -123,7 +123,7 @@ template<typename T> py::array_t<T> get_optional_Pyarr_minshape(py::object &arr_
   auto tmp = toPyarr<T>(arr_);
   MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
-    MR_assert(dims[i]>=size_t(tmp.shape(int(i))), "dimension too small");
+    MR_assert(dims[i]<=size_t(tmp.shape(int(i))), "array shape too small");
   return tmp;
   }
 
