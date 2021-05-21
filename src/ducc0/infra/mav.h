@@ -359,34 +359,34 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using typename tinfo::stride_t;
 
   protected:
-    template<typename Func, typename T2> void apply2Helper(size_t idim,
-      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &f2, Func func)
+    template<typename Func, typename T2> void applyHelper(size_t idim,
+      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func)
       {
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          apply2Helper<Func>(idim+1, idx+i*str[idim], idx2+i*f2.str[idim], f2, func);
+          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.str[idim], other, func);
       else
         {
         T *d1 = vdata();
-        const T2 *d2 = f2.cdata();
+        const T2 *d2 = other.cdata();
         for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx=i*str[idim]], d2[idx2+i*f2.str[idim]]);
+          func(d1[idx=i*str[idim]], d2[idx2+i*other.str[idim]]);
         }
       }
-    template<typename Func, typename T2> void apply2Helper(size_t idim,
-      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &f2, Func func) const
+    template<typename Func, typename T2> void applyHelper(size_t idim,
+      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func) const
       {
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          apply2Helper<Func>(idim+1, idx+i*str[idim], idx2+i*f2.str[idim], f2, func);
+          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.str[idim], other, func);
       else
         {
         const T *d1 = cdata();
-        const T2 *d2 = f2.cdata();
+        const T2 *d2 = other.cdata();
         for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx=i*str[idim]], d2[idx2+i*f2.str[idim]]);
+          func(d1[idx=i*str[idim]], d2[idx2+i*other.str[idim]]);
         }
       }
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
@@ -567,8 +567,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto [nshp, nstr, nofs] = subdata(i0, extent);
       return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
-    /** Calls \a func for every entry in the array, passing a reference to it.
-     *  The calls may happen in any order. */
+    /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
       if (contiguous())
@@ -581,7 +580,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       applyHelper<Func>(0, 0,func);
       }
     /** Calls \a func for every entry in the array, passing a constant
-     *  reference to it. The calls may happen in any order. */
+     *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
       if (contiguous())
@@ -593,15 +592,20 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
         }
       applyHelper<Func>(0, 0, func);
       }
-    template<typename Func, typename T2> void apply2(const fmav<T2> &f2, Func func)
+    /** Calls \a func for every entry in the array and the corresponding entry
+     *  in \a other, passing constant references. */
+    template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func)
       {
-      MR_assert(conformable(f2), "fmavs are not conformable");
-      apply2Helper<Func>(0, 0, 0, f2, func);
+      MR_assert(conformable(other), "fmavs are not conformable");
+      applyHelper<Func>(0, 0, 0, other, func);
       }
-    template<typename Func, typename T2> void apply2(const fmav<T2> &f2, Func func) const
+    /** Calls \a func for every entry in the array and the corresponding entry
+     *  in \a other, passing a nonconstant reference to the entry in this array
+     *  and a constant one for the entry in \a other. */
+    template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func) const
       {
-      MR_assert(conformable(f2), "fmavs are not conformable");
-      apply2Helper<Func>(0, 0, 0, f2, func);
+      MR_assert(conformable(other), "fmavs are not conformable");
+      applyHelper<Func>(0, 0, 0, other, func);
       }
     vector<T> dump() const
       {
@@ -816,8 +820,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  indices. This call will throw an exception if the mav is read-only. */
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
-    /** Calls \a func for every entry in the array, passing a reference to it.
-     *  The calls may happen in any order. */
+    /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
       if (contiguous())
@@ -829,6 +832,8 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       applyHelper<0,Func>(0,func);
       }
+    /** Calls \a func for every entry in the array, passing a constant
+     *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
       if (contiguous())
@@ -840,6 +845,9 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       applyHelper<0,Func>(0,func);
       }
+    /** Calls \a func for every entry in the array and the corresponding entry
+     *  in \a other, passing a nonconstant reference to the entry in this array
+     *  and a constant one for the entry in \a other. */
     template<typename T2, typename Func> void apply
       (const mav<T2, ndim> &other,Func func)
       { applyHelper<0,T2,Func>(0,0,other,func); }
