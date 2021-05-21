@@ -24,10 +24,20 @@
 #ifndef DUCC0_SHT_H
 #define DUCC0_SHT_H
 
+#include <cmath>
+#include <cstddef>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
 #include <complex>
+#include "ducc0/infra/useful_macros.h"
+#include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
+#include "ducc0/math/unity_roots.h"
 #include "ducc0/math/fft1d.h"
+#include "ducc0/math/math_utils.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/sht/sharp.h"
 

@@ -29,6 +29,11 @@
 
 #include <complex>
 #include <cmath>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <vector>
+#include "ducc0/infra/simd.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/error_handling.h"

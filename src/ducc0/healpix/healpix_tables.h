@@ -33,6 +33,7 @@
 #ifndef HEALPIX_TABLES_H
 #define HEALPIX_TABLES_H
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

@@ -21,13 +21,14 @@
 /*! \file sharp.h
  *  Portable interface for the spherical transform library.
  *
- *  Copyright (C) 2012-2020 Max-Planck-Society
+ *  Copyright (C) 2012-2021 Max-Planck-Society
  *  \author Martin Reinecke \author Dag Sverre Seljebotn
  */
 
-#ifndef SHARP_SHARP_H
-#define SHARP_SHARP_H
+#ifndef DUCC0_SHARP_H
+#define DUCC0_SHARP_H
 
+#include <string>
 #include <complex>
 #include <cstddef>
 #include <vector>
