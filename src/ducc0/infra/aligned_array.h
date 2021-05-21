@@ -26,7 +26,7 @@
 #define DUCC0_ALIGNED_ARRAY_H
 
 #include <cstdlib>
-#include <memory>
+#include <new>
 
 namespace ducc0 {
 

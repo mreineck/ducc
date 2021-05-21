@@ -19,7 +19,7 @@
 /** \file ducc0/infra/timers.h
  *  High precision wallclock timers.
  * 
- *  \copyright Copyright (C) 2019-2020 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -27,12 +27,16 @@
 #define DUCC0_TIMERS_H
 
 #include <chrono>
+#include <utility>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <map>
+#include <vector>
+#include <cmath>
+#include <cstddef>
 
 #include "ducc0/infra/error_handling.h"
 

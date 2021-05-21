@@ -21,7 +21,7 @@
  *
  *  \note This functionality accesses the Linux /proc file system and will not
  *        work on other platforms.
- *  \copyright Copyright (C) 2019-2020 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -29,7 +29,7 @@
 #define DUCC0_SYSTEM_H
 
 #include <string>
-#include <cstdlib>
+#include <cstddef>
 
 namespace ducc0 {
 

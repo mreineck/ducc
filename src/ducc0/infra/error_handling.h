@@ -18,7 +18,7 @@
 
 /** \file ducc0/infra/error_handling.h
  *
- * \copyright Copyright (C) 2019-2020 Max-Planck-Society
+ * \copyright Copyright (C) 2019-2021 Max-Planck-Society
  * \author Martin Reinecke
  */
 
@@ -26,9 +26,7 @@
 #define DUCC0_ERROR_HANDLING_H
 
 #include <sstream>
-#include <exception>
 #include <stdexcept>
-
 #include "ducc0/infra/useful_macros.h"
 
 namespace ducc0 {

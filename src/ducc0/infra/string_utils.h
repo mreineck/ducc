@@ -25,7 +25,10 @@
 #ifndef DUCC0_STRING_UTILS_H
 #define DUCC0_STRING_UTILS_H
 
+#include <string>
 #include <vector>
+#include <cstdint>
+#include <cstddef>
 
 namespace ducc0 {
 

@@ -101,8 +101,7 @@ using detail_simd::vectorizable;
 #endif
 #endif
 
-#include <cstdint>
-#include <cstdlib>
+#include <cstddef>
 #include <cmath>
 #include <algorithm>
 #ifndef DUCC0_NO_SIMD

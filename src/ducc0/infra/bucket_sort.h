@@ -16,13 +16,18 @@
 
 /** \file ducc0/infra/bucket_sort.h
  * 
- *  \copyright Copyright (C) 2020 Max-Planck-Society
+ *  \copyright Copyright (C) 2020-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
 #ifndef DUCC0_BUCKET_SORT_H
 #define DUCC0_BUCKET_SORT_H
 
+#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <type_traits>
 #include <vector>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"

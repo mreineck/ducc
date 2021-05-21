@@ -19,13 +19,14 @@
 /** \file ducc0/infra/threading.h
  *  Mulithreading support, similar to functionality provided by OpenMP
  *
- * \copyright Copyright (C) 2019-2020 Peter Bell, Max-Planck-Society
+ * \copyright Copyright (C) 2019-2021 Peter Bell, Max-Planck-Society
  * \authors Peter Bell, Martin Reinecke
  */
 
 #ifndef DUCC0_THREADING_H
 #define DUCC0_THREADING_H
 
+#include <cstddef>
 #include <functional>
 
 namespace ducc0 {
