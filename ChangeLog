@@ -1,3 +1,11 @@
+0.11.0:
+- general:
+  - beginning of Doxygen documentation for the C++ part
+  - fixes to the #include statements in header files; now every header can be
+    included in isolation.
+  - some CI streamlining
+
+
 0.10.0:
 - general:
   - HTML documentation generation using Sphinx

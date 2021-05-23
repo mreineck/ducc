@@ -47,6 +47,28 @@ namespace py = pybind11;
 
 auto None = py::none();
 
+py::array Py_GL_weights(size_t nlat, size_t nlon)
+  {
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
+  GL_Integrator integ(nlat);
+  auto wgt = integ.weights();
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = wgt[i]*twopi/nlon;
+  return move(res);
+  }
+
+py::array Py_GL_thetas(size_t nlat)
+  {
+  auto res = make_Pyarr<double>({nlat});
+  auto res2 = to_mav<double,1>(res, true);
+  GL_Integrator integ(nlat);
+  auto x = integ.coords();
+  for (size_t i=0; i<res2.shape(0); ++i)
+    res2.v(i) = acos(-x[i]);
+  return move(res);
+  }
+
 template<typename T> py::array Py2_rotate_alm(const py::array &alm_, int64_t lmax,
   double psi, double theta, double phi, size_t nthreads)
   {
@@ -683,6 +705,8 @@ void add_sht(py::module_ &msup)
   m2.def("synthesis", &Py_synthesis, py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
 
+  m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
+  m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "nrings"_a);
   m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
   m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
