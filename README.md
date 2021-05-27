@@ -25,7 +25,7 @@ The latest version of DUCC can be obtained by cloning the repository via
 
 ### Installation
 
-DUCC can be installed using a simple `pip` invocation.
+DUCC can be installed using a simple `pip` invocation:
 
     pip3 install --user ducc0
 
