@@ -13,6 +13,7 @@ interface.
 
 - [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
+  (only during compiling/installation)
 - a C++17-capable compiler (tested with g++ version 7 or newer, clang++,
   MSVC 2019 and Intel icpx 2021.1.2)
 
@@ -24,18 +25,22 @@ The latest version of DUCC can be obtained by cloning the repository via
 
 ### Installation
 
-In the following, we assume a Debian-based distribution. For other
-distributions, the "apt" lines will need slight changes.
+DUCC can be installed using a simple `pip` invocation.
 
-DUCC and its mandatory dependencies can be installed via:
+    pip3 install --user ducc0
 
-    sudo apt-get install git python3 python3-pip python3-dev python3-pybind11 pybind11-dev
-    pip3 install --user git+https://gitlab.mpcdf.mpg.de/mtr/ducc.git
+This will download the source package and compile it to a binary that is
+optimized for the host CPU, but will probably not run on other computers
+with slightly different CPUs.
 
-NOTE: compilation of the code will take a significant amount of time
-(several minutes). Binary packages are deliberately not made available, since
-much better performance can be achieved by compiling the code specifically for
-the detected target CPU.
+At the cost of performance (typically factors of 1.5 to 2) it is possible to
+generate a binary which will work on all CPUs of a given architecture (e.g.
+x86_64). This can be done via
+
+    DUCC0_OPTIMIZATION=portable pip3 install --user ducc0
+
+NOTE: compilation of the code can take a significant amount of time
+(several minutes).
 
 
 Installing multiple versions simultaneously
