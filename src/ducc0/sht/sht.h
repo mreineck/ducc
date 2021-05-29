@@ -600,6 +600,7 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
 
 using detail_sht::SHT_mode;
 using detail_sht::ALM2MAP;
+using detail_sht::ALM2MAP_DERIV1;
 using detail_sht::MAP2ALM;
 using detail_sht::get_gridweights;
 using detail_sht::alm2leg;
