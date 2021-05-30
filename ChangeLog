@@ -1,3 +1,12 @@
+0.12.0:
+- general:
+  - update installation instructions in README.md
+
+- sht:
+  - expose functionality for computing gradient maps from spherical harmonic
+    coefficients
+
+
 0.11.0:
 - general:
   - beginning of Doxygen documentation for the C++ part
