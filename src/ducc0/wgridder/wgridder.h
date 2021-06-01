@@ -57,6 +57,8 @@ namespace ducc0 {
 namespace detail_gridder {
 
 using namespace std;
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::min, std::max;
 
 template<typename T> constexpr inline int mysimdlen
   = min<int>(8, native_simd<T>::size());
