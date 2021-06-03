@@ -193,7 +193,7 @@ t0 : float
 freq : float
     the frequency at which the provided satellite orientations are sampled
 quat : numpy.ndarray((nval, 4), dtype=numpy.float64)
-    the satellite orientation quaternions. Components are expecetd in the order
+    the satellite orientation quaternions. Components are expected in the order
     (x, y, z, w). The quaternions need not be normalized.
 nthreads : int
     number of threads to use for the interpolation operations
@@ -204,7 +204,7 @@ PointingProvider : the constructed object
 )""";
 
 const char *get_rotated_quaternions_DS = R"""(
-Produces quaternions started at the requested time, sampled at the requested
+Produces quaternions starting at the requested time, sampled at the requested
 frequency, which are rotated relative to the satellite orientation according to
 a provided quaternion.
 
@@ -218,7 +218,7 @@ freq : float
     the frequency at which the output orientations should be sampled
 rot : numpy.ndarray((4,), dtype=numpy.float64)
     A single rotation quaternion describing the rotation from the satellite to
-    the detector reference system. Components are expecetd in the order
+    the detector reference system. Components are expected in the order
     (x, y, z, w). The quaternion need not be normalized.
 nval : int
     the number of requested quaternions
@@ -233,7 +233,7 @@ numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
 )""";
 
 const char *get_rotated_quaternions2_DS = R"""(
-Produces quaternions started at the requested time, sampled at the requested
+Produces quaternions starting at the requested time, sampled at the requested
 frequency, which are rotated relative to the satellite orientation according to
 a provided quaternion.
 
@@ -247,7 +247,7 @@ freq : float
     the frequency at which the output orientations should be sampled
 rot : numpy.ndarray((4,), dtype=numpy.float64)
     A single rotation quaternion describing the rotation from the satellite to
-    the detector reference system. Components are expecetd in the order
+    the detector reference system. Components are expected in the order
     (x, y, z, w). The quaternion need not be normalized.
 rot_left : bool (optional, default=True)
     if True, the rotation quaternion is multiplied from the left side,
