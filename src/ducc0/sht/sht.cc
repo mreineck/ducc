@@ -1528,9 +1528,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   MR_assert(legi.shape(1)==lego.shape(1), "dimension mismatch");
   if ((npi==npo)&&(spi==spo)&&(legi.shape(0)==lego.shape(0)))  // shortcut
     {
-    for (size_t i=0; i<legi.shape(0); ++i)
-      for (size_t j=0; j<legi.shape(1); ++j)
-        lego.v(i,j) = legi(i,j);
+    lego.apply(legi, [](complex<T> &a, complex<T> b) {a=b;});
     return;
     }
   size_t nrings_in = legi.shape(0);
@@ -1591,10 +1589,10 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
     size_t nmove = nfull_in/2;
     for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
       for (size_t j=0; j<tmp.shape(1); ++j)
-        {
         tmp.v(i,j) = tmp(i-dist,j);
-        tmp.v(i-dist,j) = 0;
-        }
+    for (size_t i=nfull_out-nmove-dist+1; i<nfull_out-nmove+1; ++i)
+      for (size_t j=0; j<tmp.shape(1); ++j)
+        tmp.v(i,j) = 0;
     }
   // FIXME: truncation may not be what we need here!
   if (nfull_out<nfull_in) // truncate

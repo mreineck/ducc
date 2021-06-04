@@ -300,6 +300,24 @@ py::array Py_resample_to_prepared_CC(const py::array &legi, bool npi, bool spi,
     return Py2_resample_to_prepared_CC<double>(legi, npi, spi, spin, nthreads);
   MR_fail("type matching failed: 'legi' has neither type 'c8' nor 'c16'");
   }
+template<typename T> py::array Py2_resample_from_CC(const py::array &legi_,
+  size_t ntheta_out, bool npo, bool spo, size_t spin, size_t nthreads)
+  {
+  auto legi = to_mav<complex<T>,3>(legi_, false);
+  auto lego_ = make_Pyarr<complex<T>>({legi.shape(0), ntheta_out, legi.shape(2)});
+  auto lego = to_mav<complex<T>,3>(lego_, true);
+  resample_from_CC(legi, lego, npo, spo, spin, nthreads);
+  return lego_;
+  }
+py::array Py_resample_from_CC(const py::array &legi, size_t ntheta_out,
+  bool npi, bool spi, size_t spin, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(legi))
+    return Py2_resample_from_CC<float>(legi, ntheta_out, npi, spi, spin, nthreads);
+  if (isPyarr<complex<double>>(legi))
+    return Py2_resample_from_CC<double>(legi, ntheta_out, npi, spi, spin, nthreads);
+  MR_fail("type matching failed: 'legi' has neither type 'c8' nor 'c16'");
+  }
 
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
@@ -782,6 +800,7 @@ void add_sht(py::module_ &msup)
   m2.def("leg2map", &Py_leg2map, leg2map_DS, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
   m2.def("resample_to_CC", &Py_resample_to_CC, "legi"_a, "npi"_a, "spi"_a, "spin"_a, "nthreads"_a=1);
   m2.def("resample_to_prepared_CC", &Py_resample_to_prepared_CC, "legi"_a, "npi"_a, "spi"_a, "spin"_a, "nthreads"_a=1);
+  m2.def("resample_from_CC", &Py_resample_from_CC, "legi"_a, "ntheta_out"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a=1);
   m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a, "nthreads"_a=1);
 

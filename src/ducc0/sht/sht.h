@@ -638,6 +638,7 @@ using detail_sht::map2leg;
 using detail_sht::leg2map;
 using detail_sht::resample_to_CC;
 using detail_sht::resample_to_prepared_CC;
+using detail_sht::resample_from_CC;
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
 
