@@ -1590,7 +1590,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
     for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
       for (size_t j=0; j<tmp.shape(1); ++j)
         tmp.v(i,j) = tmp(i-dist,j);
-    for (size_t i=nfull_out-nmove-dist+1; i<nfull_out-nmove+1; ++i)
+    for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
       for (size_t j=0; j<tmp.shape(1); ++j)
         tmp.v(i,j) = 0;
     }
