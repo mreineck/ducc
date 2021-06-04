@@ -1526,6 +1526,13 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {
   MR_assert(legi.shape(1)==lego.shape(1), "dimension mismatch");
+  if ((npi==npo)&&(spi==spo)&&(legi.shape(0)==lego.shape(0)))  // shortcut
+    {
+    for (size_t i=0; i<legi.shape(0); ++i)
+      for (size_t j=0; j<legi.shape(1); ++j)
+        lego.v(i,j) = legi(i,j);
+    return;
+    }
   size_t nrings_in = legi.shape(0);
   size_t nfull_in = 2*nrings_in-npi-spi;
   size_t nrings_out = lego.shape(0);
@@ -1601,7 +1608,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
 
   c2c(ftmp_out,ftmp_out,{0},false,T(1),nthreads);
 
-  auto norm = T(1./(2*sqrt(nfull_in*nfull_out)));
+  auto norm = T(1./(2*nfull_in));
   execParallel(0, nrings_out, nthreads, [&](size_t lo, size_t hi)
     {
     for (size_t i=lo; i<hi; ++i)
@@ -1720,35 +1727,6 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
   }
 template void prep_for_analysis(mav<complex<float>,3> &leg, size_t spin, size_t nthreads);
 template void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
-
-#if 0
-void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthreads)
-  {
-  auto legtmp2(mav<complex<double>,2>::build_noncritical({leg.shape(1), leg.shape(2)}));
-  auto legtmp = legtmp2.subarray<2>({0,0},{leg.shape(1)-1, leg.shape(2)});
-  for (size_t n=0; n<leg.shape(0); ++n)
-    {
-    auto legsub = leg.subarray<2>({n,0,0},{0,MAXIDX,MAXIDX});
-    resample_theta(legsub, true, true, legtmp, false, false, spin, nthreads);
-
-    auto wgt = get_gridweights("CC", 2*leg.shape(1)-1);
-
-    for (size_t i=0; i<legtmp.shape(0); ++i)
-      for (size_t j=0; j<legtmp.shape(1); ++j)
-        legtmp.v(i,j) *= wgt(1+2*i);
-
-    resample_theta(legtmp, false, false, legtmp2, true, true, spin, nthreads);
-
-    for (size_t i=0; i<leg.shape(1); ++i)
-      {
-      double wgtx=1;
-      if ((i==0)||(i==leg.shape(1)-1)) wgtx=0.5;
-      for (size_t j=0; j<leg.shape(2); ++j)
-        legsub.v(i,j) = legsub(i,j)*wgt(2*i) + wgtx*legtmp2(i,j);
-      }
-    }
-  }
-#endif
 
 void sanity_checks(
   const mav_info<2> &alm, // (ncomp, *)
