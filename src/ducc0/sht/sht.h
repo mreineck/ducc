@@ -477,9 +477,38 @@ template<typename T> void leg2map(  // FFT
   size_t nthreads);
 
 template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
-//void prep_for_analysis2(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
+
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
+
+template<typename T> void resample_to_CC(const mav<complex<T>,3> &legi,
+  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
+  {
+  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
+  for (size_t i=0; i<legi.shape(0); ++i)
+    {
+    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+    resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
+    }
+  }
+template<typename T> void resample_from_CC(const mav<complex<T>,3> &legi,
+  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
+  {
+  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
+  for (size_t i=0; i<legi.shape(0); ++i)
+    {
+    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+    resample_theta(subi, true, true, subo, npo, spo, spin, nthreads);
+    }
+  }
+template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
+  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
+  {
+  resample_to_CC(legi, npi, spi, lego, spin, nthreads);
+  prep_for_analysis(lego, spin, nthreads);
+  }
 
 // fully general map synthesis
 // conditions:
@@ -607,9 +636,9 @@ using detail_sht::alm2leg;
 using detail_sht::leg2alm;
 using detail_sht::map2leg;
 using detail_sht::leg2map;
-using detail_sht::prep_for_analysis;
-//using detail_sht::prep_for_analysis2;
-using detail_sht::resample_theta;
+using detail_sht::resample_to_CC;
+using detail_sht::resample_to_prepared_CC;
+using detail_sht::resample_from_CC;
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
 
