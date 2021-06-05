@@ -104,7 +104,7 @@ recurrence algorithms presented in
 <https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
 
 The code rotation of spherical harmonic components was taken (with some
-modifications) from the
+modifications) from Mikael Slevinsky's
 [FastTransforms package](https://github.com/MikaelSlevinsky/FastTransforms).
 
 
