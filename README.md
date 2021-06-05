@@ -103,6 +103,10 @@ is derived from [libsharp](https://arxiv.org/abs/1303.4945), with accelerated
 recurrence algorithms presented in
 <https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
 
+The code rotation of spherical harmonic components was taken (with some
+modifications) from the
+[FastTransforms package](https://github.com/MikaelSlevinsky/FastTransforms).
+
 
 ducc.healpix
 ------------
@@ -168,3 +172,8 @@ ducc.misc
 Various unsorted functionality which will hopefully be categorized in the
 future.
 
+This module contains an efficient algorithm for the computation of abscissas and
+weights for Gauss-Legendre quadrature. For degrees up to 100, the solutions are
+computed in the standard iterative fashion; for higher degrees Ignace Bogaert's
+[FastGL algorithm](https://epubs.siam.org/doi/pdf/10.1137/140954969)
+is used.
