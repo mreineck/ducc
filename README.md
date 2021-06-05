@@ -103,7 +103,7 @@ is derived from [libsharp](https://arxiv.org/abs/1303.4945), with accelerated
 recurrence algorithms presented in
 <https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
 
-The code rotation of spherical harmonic components was taken (with some
+The code for rotating spherical harmonic coefficients was taken (with some
 modifications) from Mikael Slevinsky's
 [FastTransforms package](https://github.com/MikaelSlevinsky/FastTransforms).
 
