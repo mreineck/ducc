@@ -1337,6 +1337,19 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
   }
 
 
+bool regular_thetas(const mav<double,1> &theta, bool &npi, bool &spi)
+  {
+  size_t ntheta = theta.shape(0);
+  npi = approx(theta(0), 0., 1e-15);
+  spi = approx(theta(ntheta-1), pi, 1e-15);
+  size_t nthetafull = 2*ntheta-npi-spi;
+  double dtheta = 2*pi/nthetafull;
+  for (size_t i=0; i<ntheta; ++i)
+    if (!approx(theta(i),(0.5*(1-npi)+i)*dtheta, 1e-15))
+      return false;
+  return true;
+  }
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1368,6 +1381,34 @@ template<typename T> void alm2leg(  // associated Legendre transform
     size_t ncomp = (spin==0) ? 1 : 2;
     MR_assert(nalm==ncomp, "incorrect number of a_lm components");
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
+    }
+  // See if we can take any shortcuts
+  if (nrings>50)  // OK, it's worth even thinking about shortcuts
+    {
+    bool npi, spi;
+    if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
+      {
+      size_t npairs = nrings*(2-(npi==spi))/2;
+      if (2*npairs>=1.5*lmax)  // There is potential to save time
+        {
+        size_t nrings_small = good_size_complex(lmax+1)+2;
+        if (true) //nrings_small<=nrings)  // just to be safe
+          {
+          mav<double,1> theta_small({nrings_small});
+          for (size_t i=0; i<nrings_small; ++i)
+            theta_small.v(i) = i*pi/(nrings_small-1);
+          mav<complex<T>,3> leg_small({leg.shape(0), nrings_small, leg.shape(2)});
+          alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
+          for (size_t i=0; i<leg.shape(0); ++i)
+            {
+            auto subi = leg_small.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+            auto subo = leg.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+            resample_theta(subi, true, true, subo, npi, spi, spin, nthreads);
+            }
+          return;
+          }
+        }
+      }
     }
 
   auto norm_l = (mode==ALM2MAP_DERIV1) ? Ylmgen::get_d1norm (lmax) :
