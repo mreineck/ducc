@@ -1465,27 +1465,27 @@ template<typename T> void leg2alm(  // associated Legendre transform
   if (nrings>500)  // OK, it's worth even thinking about shortcuts
     {
     bool npi, spi;
-    if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
+    if (regular_thetas(theta, npi, spi) && (npi!=spi))  // we are on a MW-like grid
       {
       size_t npairs = nrings*(2-(npi==spi))/2;
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
-        size_t nrings_small = good_size_complex(lmax+1)+1;
+        size_t nrings_sym = good_size_complex(nrings)+1;
         if (true) //nrings_small<=nrings)  // just to be safe
           {
-cout << "shrinking " << nrings << "->" << nrings_small << endl;
-          mav<double,1> theta_small({nrings_small});
-          for (size_t i=0; i<nrings_small; ++i)
-            theta_small.v(i) = i*pi/(nrings_small-1);
-          auto leg_small(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_small, leg.shape(2)}));
+cout << "symmetrizing " << nrings << "->" << nrings_sym << endl;
+          mav<double,1> theta_sym({nrings_sym});
+          for (size_t i=0; i<nrings_sym; ++i)
+            theta_sym.v(i) = i*pi/(nrings_sym-1);
+          auto leg_sym(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_sym, leg.shape(2)}));
           for (size_t i=0; i<leg.shape(0); ++i)
             {
             auto subi = leg.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-            auto subo = leg_small.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+            auto subo = leg_sym.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
             resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
             }
-          leg2alm(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads);
-          alm.apply([=](complex<T> &v){v*=double(nrings)/(nrings_small);});
+          leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
+          alm.apply([=](complex<T> &v){v*=double(nrings)/nrings_sym;});
           return;
           }
         }
@@ -1540,7 +1540,7 @@ template<typename T> void leg2map(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 1, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 50, [&](Scheduler &sched)
     {
     ringhelper helper;
     mav<double,1> ringtmp({nphmax+2});
@@ -1577,7 +1577,7 @@ template<typename T> void map2leg(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 1, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 50, [&](Scheduler &sched)
     {
     ringhelper helper;
     mav<double,1> ringtmp({nphmax+2});
@@ -1612,7 +1612,6 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
-  auto nm2 = nm/2;
   // FIXME: try to allocate less temporary memory!
   auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
   fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
@@ -1623,17 +1622,12 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
     {
     for (size_t i=lo, im=nfull_in-lo-1+npi; (i<hi)&&(i<=im); ++i,--im)
       {
-      for (size_t j=0; j<nm2; ++j)
+      for (size_t j=0; j<tmp.shape(1); ++j)
         {
-        tmp.v(i,j) = legi(i,2*j) + legi(i,2*j+1);
+        complex<T> plus1 = ((2*j+1)<nm) ? legi(i,2*j+1) : 0;
+        tmp.v(i,j) = legi(i,2*j) + plus1;
         if ((im<nfull_in) && (i!=im))
-          tmp.v(im,j) = fct * (legi(i,2*j) - legi(i,2*j+1));
-        }
-      if ((nm&1)==1)
-        {
-        tmp.v(i,tmp.shape(1)-1) = legi(i,nm-1);
-        if ((im<nfull_in) && (i!=im))
-          tmp.v(im,tmp.shape(1)-1) = fct * legi(i,nm-1);
+          tmp.v(im,j) = fct * (legi(i,2*j) - plus1);
         }
       }
     });
@@ -1686,13 +1680,12 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
       {
       size_t im = nfull_out-1+npo-i;
       if (im==nfull_out) im=0;
-      for (size_t j=0; j<nm2; ++j)
+      for (size_t j=0; j<tmp.shape(1); ++j)
         {
         lego.v(i,2*j  ) = norm * (tmp(i,j) + fct*tmp(im,j));
-        lego.v(i,2*j+1) = norm * (tmp(i,j) - fct*tmp(im,j));
+        if ((2*j+1)<nm)
+          lego.v(i,2*j+1) = norm * (tmp(i,j) - fct*tmp(im,j));
         }
-      if ((nm&1)==1)
-        lego.v(i,nm-1) = norm * (tmp(i,tmp.shape(1)-1) + fct*tmp(im,tmp.shape(1)-1));
       }
     });
   }
@@ -1702,7 +1695,6 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
   auto nrings = leg.shape(1);
   auto wgt = get_gridweights("CC", 2*nrings-1);
   auto nm = leg.shape(2);
-  auto nm2 = nm/2;
   size_t nfull = 2*nrings-2;
   // FIXME: try to allocate less temporary memory!
   auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
@@ -1714,17 +1706,12 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
       {
       for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
         {
-        for (size_t j=0; j<nm2; ++j)
+        for (size_t j=0; j<tmp.shape(1); ++j)
           {
-          tmp.v(i,j) = leg(n,i,2*j) + leg(n,i,2*j+1);
+          complex<T> plus1 = ((2*j+1)<nm) ? leg(n,i,2*j+1) : 0;
+          tmp.v(i,j) = leg(n,i,2*j) + plus1;
           if ((im<nfull) && (i!=im))
-            tmp.v(im,j) = fct * (leg(n,i,2*j) - leg(n,i,2*j+1));
-          }
-        if ((nm&1)==1)
-          {
-          tmp.v(i,tmp.shape(1)-1) = leg(n,i,nm-1);
-          if ((im<nfull) && (i!=im))
-            tmp.v(im,tmp.shape(1)-1) = fct * leg(n,i,nm-1);
+            tmp.v(im,j) = fct * (leg(n,i,2*j) - plus1);
           }
         }
       });
@@ -1777,21 +1764,17 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
       {
       for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
         {
-        for (size_t j=0; j<nm2; ++j)
+        for (size_t j=0; j<tmp.shape(1); ++j)
           {
           leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + tmp(i,j);
-          leg.v(n,i,2*j+1) = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j);
+          complex<T> plus1 = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j);
           if ((im<nfull) && (i!=im))
             {
             leg.v(n,i,2*j) += fct*tmp(im,j);
-            leg.v(n,i,2*j+1) -= fct*tmp(im,j);
+            plus1 -= fct*tmp(im,j);
             }
-          }
-        if ((nm&1)==1)
-          {
-          leg.v(n,i,nm-1) = T(wgt(2*i))*leg(n,i,nm-1) + tmp(i,tmp.shape(1)-1);
-          if ((im<nfull) && (i!=im))
-            leg.v(n,i,nm-1) += fct*tmp(im,tmp.shape(1)-1);
+          if ((2*j+1)<nm)
+            leg.v(n,i,2*j+1) = plus1;
           }
         }
       });
