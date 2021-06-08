@@ -1696,86 +1696,82 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
   auto wgt = get_gridweights("CC", 2*nrings-1);
   auto nm = leg.shape(2);
   size_t nfull = 2*nrings-2;
-  // FIXME: try to allocate less temporary memory!
-  auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
-  fmav<complex<T>> ftmp(tmp);
   T fct = ((spin&1)==0) ? 1 : -1;
+  vector<complex<T>> shift(nrings+1);
+  UnityRoots<T,complex<T>> roots(4*nrings-4);
+  for (size_t i=1; i<shift.size(); ++i)
+    shift[i] = roots[i];
   for (size_t n=0; n<leg.shape(0); ++n)
     {
-    execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
+    execStatic((nm+1)/2, nthreads, 64, [&](Scheduler &sched)
       {
-      for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
+      auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(64,(nm+1)/2)}, UNINITIALIZED));
+      while (auto rng=sched.getNext())
         {
-        for (size_t j=0; j<tmp.shape(1); ++j)
-          {
-          complex<T> plus1 = ((2*j+1)<nm) ? leg(n,i,2*j+1) : 0;
-          tmp.v(i,j) = leg(n,i,2*j) + plus1;
-          if ((im<nfull) && (i!=im))
-            tmp.v(im,j) = fct * (leg(n,i,2*j) - plus1);
-          }
-        }
-      });
-
-    c2c(ftmp,ftmp,{0},true,T(1),nthreads);
-
-    vector<complex<T>> shift(nrings+1);
-    UnityRoots<T,complex<T>> roots(4*nrings-4);
-    for (size_t i=1; i<shift.size(); ++i)
-      shift[i] = roots[i];
-    execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo, im=nfull-lo; (i<hi)&&(i<=im); ++i,--im)
-        for (size_t j=0; j<tmp.shape(1); ++j)
-          {
-          if (i!=im)
-            tmp.v(i,j) *= shift[i];
-          tmp.v(im,j) *= conj(shift[i]);
-          }
-      });
-    c2c(ftmp,ftmp,{0},false,T(1),nthreads);
-
-    T norm = T(1)/(2*tmp.shape(0)*tmp.shape(0));
-    execParallel(0, nrings+1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo, im=nfull-lo-1; (i<hi)&&(i<im); ++i,--im)
-        {
-        auto factor = T(wgt(1+2*i))*norm;
-        for (size_t j=0; j<tmp.shape(1); ++j)
-          {
-          tmp.v(i,j) *= factor;
-          if (i!=im) tmp.v(im,j) *= factor;
-          }
-        }
-      });
-    c2c(ftmp,ftmp,{0},true,T(1),nthreads);
-    execParallel(1, nrings+1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo, im=nfull-lo; (i<hi)&&(i<=im); ++i,--im)
-        for (size_t j=0; j<tmp.shape(1); ++j)
-          {
-          if (i!=im)
-            tmp.v(i,j) *= conj(shift[i]);
-          tmp.v(im,j) *= shift[i];
-          }
-      });
-    c2c(ftmp,ftmp,{0},false,T(1),nthreads);
-
-    execParallel(0, nrings, nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo, im=nfull-lo; i<hi; ++i,--im)
-        {
-        for (size_t j=0; j<tmp.shape(1); ++j)
-          {
-          leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + tmp(i,j);
-          complex<T> plus1 = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j);
-          if ((im<nfull) && (i!=im))
+        auto tmp=tmpx.template subarray<2>({0,0},{MAXIDX,rng.hi-rng.lo});
+        fmav<complex<T>> ftmp(tmp);
+        for (size_t i=0, im=nfull; i<nrings; ++i,--im)
+          for (size_t j=rng.lo; j<rng.hi; ++j)
             {
-            leg.v(n,i,2*j) += fct*tmp(im,j);
-            plus1 -= fct*tmp(im,j);
+            complex<T> plus1 = ((2*j+1)<nm) ? leg(n,i,2*j+1) : 0;
+            tmp.v(i,j-rng.lo) = leg(n,i,2*j) + plus1;
+            if ((im<nfull) && (i!=im))
+              tmp.v(im,j-rng.lo) = fct * (leg(n,i,2*j) - plus1);
             }
-          if ((2*j+1)<nm)
-            leg.v(n,i,2*j+1) = plus1;
+        c2c(ftmp,ftmp,{0},true,T(1),1);
+
+        for (size_t i=1, im=nfull; (i<nrings+1)&&(i<=im); ++i,--im)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            {
+            if (i!=im)
+              tmp.v(i,j) *= shift[i];
+            tmp.v(im,j) *= conj(shift[i]);
+            }
+
+        c2c(ftmp,ftmp,{0},false,T(1),1);
+
+        T norm = T(1)/(2*nfull*nfull);
+        for (size_t i=0, im=nfull-1; (i<nrings+1)&&(i<im); ++i,--im)
+          {
+          auto factor = T(wgt(1+2*i))*norm;
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            {
+            tmp.v(i,j) *= factor;
+            if (i!=im) tmp.v(im,j) *= factor;
+            }
           }
+        c2c(ftmp,ftmp,{0},true,T(1),1);
+        for (size_t i=1, im=nfull; (i<nrings+1)&&(i<=im); ++i,--im)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            {
+            if (i!=im)
+              tmp.v(i,j) *= conj(shift[i]);
+            tmp.v(im,j) *= shift[i];
+            }
+        c2c(ftmp,ftmp,{0},false,T(1),1);
+        for (size_t i=0, im=nfull; i<nrings; ++i,--im)
+          for (size_t j=rng.lo; j<rng.hi; ++j)
+            {
+            complex<T> v1 = tmp(i,j-rng.lo);
+            complex<T> v2 = tmp(i,j-rng.lo);
+            if ((im<nfull) && (i!=im))
+              {
+              v1 += fct*tmp(im,j-rng.lo);
+              v2 -= fct*tmp(im,j-rng.lo);
+              }
+            leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + v1;
+            if ((2*j+1)<nm)
+              leg.v(n,i,2*j+1) = T(wgt(2*i))*leg(n,i,2*j+1) + v2;
+            //leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + tmp(i,j-rng.lo);
+            //complex<T> plus1 = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j-rng.lo);
+            //if ((im<nfull) && (i!=im))
+              //{
+              //leg.v(n,i,2*j) += fct*tmp(im,j-rng.lo);
+              //plus1 -= fct*tmp(im,j-rng.lo);
+              //}
+            //if ((2*j+1)<nm)
+              //leg.v(n,i,2*j+1) = plus1;
+            }
         }
       });
     }
