@@ -1720,7 +1720,7 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
             }
         c2c(ftmp,ftmp,{0},true,T(1),1);
 
-        for (size_t i=1, im=nfull; (i<nrings+1)&&(i<=im); ++i,--im)
+        for (size_t i=1, im=nfull-1; (i<nrings+1)&&(i<=im); ++i,--im)
           for (size_t j=0; j+rng.lo<rng.hi; ++j)
             {
             if (i!=im)
@@ -1741,7 +1741,7 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
             }
           }
         c2c(ftmp,ftmp,{0},true,T(1),1);
-        for (size_t i=1, im=nfull; (i<nrings+1)&&(i<=im); ++i,--im)
+        for (size_t i=1, im=nfull-1; (i<nrings+1)&&(i<=im); ++i,--im)
           for (size_t j=0; j+rng.lo<rng.hi; ++j)
             {
             if (i!=im)
