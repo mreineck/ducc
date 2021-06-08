@@ -25,24 +25,7 @@ def random_alm(lmax, mmax, spin, ncomp):
     return res
 
 
-def synthesize_equidistant(alm, lmax, spin, ntheta, nphi,
-                           ring_on_north_pole, ring_on_south_pole, nthreads):
-    # go to CC grid wih minimal number of rings
-    ntheta0 = lmax+2
-    theta0 = np.arange(ntheta0)*np.pi/(ntheta0-1)
-    leg = ducc0.sht.experimental.alm2leg(alm=alm, theta=theta0, lmax=lmax,
-                                         spin=spin, nthreads=nthreads)
-    # resample in theta direction to the desired grid
-    leg = ducc0.sht.experimental.resample_from_CC(leg, ntheta,
-        ring_on_north_pole, ring_on_south_pole, spin, nthreads)
-    return ducc0.sht.experimental.leg2map(
-        leg=leg,
-        nphi=np.full(ntheta,np.uint64(nphi)),
-        phi0=np.zeros(ntheta,dtype=np.float64),
-        ringstart=nphi*np.arange(ntheta,dtype=np.uint64),
-        nthreads=nthreads).reshape((alm.shape[0],ntheta,nphi))
-
-def synthesize_direct(alm, lmax, spin, theta, nphi, nthreads):
+def synthesize(alm, lmax, spin, theta, nphi, nthreads):
     ntheta = theta.shape[0]
     leg = ducc0.sht.experimental.alm2leg(alm=alm, theta=theta, lmax=lmax,
                                          spin=spin, nthreads=nthreads)
@@ -65,7 +48,7 @@ def analyze_equidistant(map, lmax, spin,
     # resample in theta to obtain a compatible CC grid which already is
     # correcly set up for anaylsis
     ntheta0=leg.shape[1]
-    leg = ducc0.sht.experimental.resample_to_prepared_CC(leg, ring_on_north_pole, ring_on_south_pole, spin,1)
+    leg = ducc0.sht.experimental.resample_to_prepared_CC(leg, ring_on_north_pole, ring_on_south_pole, spin,nthreads)
     theta = np.arange(leg.shape[1])*2*np.pi/(2*leg.shape[1]-2)
     return ducc0.sht.experimental.leg2alm(leg=leg, theta=theta, lmax=lmax, spin=spin, nthreads=nthreads) / map.shape[2]
 
@@ -73,23 +56,20 @@ def test(lmax, npi, spi, spin, nthreads=1):
     print("testing lmax={}, spin={}, nthreads={}, npi={}, spi={}".format(lmax,spin,nthreads,npi,spi))
     ncomp = 1 if spin == 0 else 2
 
-    nrings = lmax+1
+    nrings = 2*lmax+1
     if npi and spi:
         nrings = nrings+1
     nrings_full = 2*nrings-npi-spi
 
     theta=(2*np.pi/nrings_full)*(np.arange(nrings)+0.5*(1-npi))
     alm1 = random_alm(lmax, lmax, spin, ncomp)
-    blub = synthesize_equidistant(alm1,lmax,spin,nrings,2*lmax+2, npi, spi, nthreads)
-    blubx = synthesize_direct(alm1,lmax,spin,theta,2*lmax+2, nthreads)
-    print("L2 error compared to direct synthesis:", _l2error(blub, blubx))
+    blub = synthesize(alm1,lmax,spin,theta,2*lmax+2, nthreads)
     blub2 = analyze_equidistant(blub,lmax,spin, npi, spi, nthreads)
     print("L2 error after full round-trip:", _l2error(blub2,alm1))
 
-l0 = 1023
 nthr=4
 for l0 in [10, 1023]:
     for npi in [True, False]:
-        for spi in [True, False]:
+        for spi in [False]:
             for spin in [0,1,2]:
                 test(lmax=l0, npi=npi, spi=spi, spin=spin, nthreads=nthr)

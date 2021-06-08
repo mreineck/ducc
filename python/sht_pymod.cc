@@ -285,7 +285,8 @@ template<typename T> py::array Py2_resample_to_prepared_CC(const py::array &legi
   size_t spin, size_t nthreads)
   {
   auto legi = to_mav<complex<T>,3>(legi_, false);
-  size_t ntheta_out = legi.shape(1) + 1 - (npi&&spi);
+  size_t nrings_min = legi.shape(1) + 1 - (npi&&spi);
+  size_t ntheta_out = good_size_complex(nrings_min-1)+1;
   auto lego_ = make_Pyarr<complex<T>>({legi.shape(0), ntheta_out, legi.shape(2)});
   auto lego = to_mav<complex<T>,3>(lego_, true);
   resample_to_prepared_CC(legi, npi, spi, lego, spin, nthreads);

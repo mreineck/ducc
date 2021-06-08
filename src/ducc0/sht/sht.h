@@ -286,6 +286,7 @@ struct ringhelper
   vector<dcmplx> shiftarr;
   size_t s_shift;
   unique_ptr<pocketfft_r<double>> plan;
+  vector<double> buf;
   size_t length;
   bool norot;
   ringhelper() : phi0_(0), s_shift(0), length(0), norot(false) {}
@@ -305,6 +306,7 @@ struct ringhelper
     if (nph!=length)
       {
       plan=make_unique<pocketfft_r<double>>(nph);
+      buf.resize(plan->bufsize());
       length=nph;
       }
     }
@@ -354,14 +356,14 @@ struct ringhelper
         }
       }
     data.v(1)=data(0);
-    plan->exec(&(data.v(1)), 1., false);
+    plan->exec(&(data.v(1)), buf.data(), 1., false);
     }
   template<typename T> DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
     mav<double,1> &data, size_t mmax, mav<complex<T>,1> &phase)
     {
     update (nph, mmax, -phi0);
 
-    plan->exec (&(data.v(1)), 1., true);
+    plan->exec (&(data.v(1)), buf.data(), 1., true);
     data.v(0)=data(1);
     data.v(1)=data.v(nph+1)=0.;
 

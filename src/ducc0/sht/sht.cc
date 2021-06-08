@@ -1397,7 +1397,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
           mav<double,1> theta_small({nrings_small});
           for (size_t i=0; i<nrings_small; ++i)
             theta_small.v(i) = i*pi/(nrings_small-1);
-          mav<complex<T>,3> leg_small({leg.shape(0), nrings_small, leg.shape(2)});
+          auto leg_small(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_small, leg.shape(2)}));
           alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
           for (size_t i=0; i<leg.shape(0); ++i)
             {
@@ -1460,7 +1460,38 @@ template<typename T> void leg2alm(  // associated Legendre transform
   size_t ncomp = (spin==0) ? 1 : 2;
   MR_assert(alm.shape(0)==ncomp, "incorrect number of a_lm components");
   MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
-
+#if 0
+  // See if we can take any shortcuts
+  if (nrings>500)  // OK, it's worth even thinking about shortcuts
+    {
+    bool npi, spi;
+    if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
+      {
+      size_t npairs = nrings*(2-(npi==spi))/2;
+      if (2*npairs>=1.5*lmax)  // There is potential to save time
+        {
+        size_t nrings_small = good_size_complex(lmax+1)+1;
+        if (true) //nrings_small<=nrings)  // just to be safe
+          {
+cout << "shrinking " << nrings << "->" << nrings_small << endl;
+          mav<double,1> theta_small({nrings_small});
+          for (size_t i=0; i<nrings_small; ++i)
+            theta_small.v(i) = i*pi/(nrings_small-1);
+          auto leg_small(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_small, leg.shape(2)}));
+          for (size_t i=0; i<leg.shape(0); ++i)
+            {
+            auto subi = leg.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+            auto subo = leg_small.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
+            resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
+            }
+          leg2alm(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads);
+          alm.apply([=](complex<T> &v){v*=double(nrings)/(nrings_small);});
+          return;
+          }
+        }
+      }
+    }
+#endif
   auto norm_l = Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
@@ -1582,6 +1613,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
   auto nm2 = nm/2;
+  // FIXME: try to allocate less temporary memory!
   auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
   fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
   fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
@@ -1672,6 +1704,7 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
   auto nm = leg.shape(2);
   auto nm2 = nm/2;
   size_t nfull = 2*nrings-2;
+  // FIXME: try to allocate less temporary memory!
   auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
   fmav<complex<T>> ftmp(tmp);
   T fct = ((spin&1)==0) ? 1 : -1;
