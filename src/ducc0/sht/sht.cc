@@ -1612,79 +1612,70 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
-  // FIXME: try to allocate less temporary memory!
-  auto tmp(mav<complex<T>,2>::build_noncritical({nfull, (nm+1)/2}, UNINITIALIZED));
-  fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
-  fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
   T fct = ((spin&1)==0) ? 1 : -1;
-  // fill dark side
-  execParallel(0, nrings_in, nthreads, [&](size_t lo, size_t hi)
+  execStatic((nm+1)/2, nthreads, 64, [&](Scheduler &sched)
     {
-    for (size_t i=lo, im=nfull_in-lo-1+npi; (i<hi)&&(i<=im); ++i,--im)
+    auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(64,(nm+1)/2)}, UNINITIALIZED));
+    while (auto rng=sched.getNext())
       {
-      for (size_t j=0; j<tmp.shape(1); ++j)
-        {
-        complex<T> plus1 = ((2*j+1)<nm) ? legi(i,2*j+1) : 0;
-        tmp.v(i,j) = legi(i,2*j) + plus1;
-        if ((im<nfull_in) && (i!=im))
-          tmp.v(im,j) = fct * (legi(i,2*j) - plus1);
-        }
-      }
-    });
-
-  c2c(ftmp_in,ftmp_in,{0},true,T(1),nthreads);
-
-  if (shift!=0)
-    execParallel(1, nrings_in+1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo, im=nfull_in-lo; (i<hi)&&(i<=im); ++i,--im)
-        {
-        auto phase=std::polar(T(1), i*shift);
-        for (size_t j=0; j<tmp.shape(1); ++j)
+      auto tmp(tmpx.template subarray<2>({0,0},{MAXIDX, rng.hi-rng.lo}));
+      fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
+      fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
+      // fill dark side
+      for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
+        for (size_t j=rng.lo; j<rng.hi; ++j)
           {
-          if (i!=im)
-            tmp.v(i,j) *= phase;
-          tmp.v(im,j) *= conj(phase);
+          complex<T> plus1 = ((2*j+1)<nm) ? legi(i,2*j+1) : 0;
+          tmp.v(i,j-rng.lo) = legi(i,2*j) + plus1;
+          if ((im<nfull_in) && (i!=im))
+            tmp.v(im,j-rng.lo) = fct * (legi(i,2*j) - plus1);
           }
-        }
-      });
+      c2c(ftmp_in,ftmp_in,{0},true,T(1),1);
+      if (shift!=0)
+        for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
+          {
+          auto phase=std::polar(T(1), i*shift);
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            {
+            if (i!=im)
+              tmp.v(i,j) *= phase;
+            tmp.v(im,j) *= conj(phase);
+            }
+          }
 
-  // zero padding/truncation
-  if (nfull_out>nfull_in) // pad
-    {
-    size_t dist = nfull_out-nfull_in;
-    size_t nmove = nfull_in/2;
-    for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
-      for (size_t j=0; j<tmp.shape(1); ++j)
-        tmp.v(i,j) = tmp(i-dist,j);
-    for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
-      for (size_t j=0; j<tmp.shape(1); ++j)
-        tmp.v(i,j) = 0;
-    }
-  // FIXME: truncation may not be what we need here!
-  if (nfull_out<nfull_in) // truncate
-    {
-    size_t dist = nfull_in-nfull_out;
-    size_t nmove = nfull_out/2;
-    for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-      for (size_t j=0; j<tmp.shape(1); ++j)
-        tmp.v(i-dist,j) = tmp(i,j);
-    }
-
-  c2c(ftmp_out,ftmp_out,{0},false,T(1),nthreads);
-
-  auto norm = T(1./(2*nfull_in));
-  execParallel(0, nrings_out, nthreads, [&](size_t lo, size_t hi)
-    {
-    for (size_t i=lo; i<hi; ++i)
-      {
-      size_t im = nfull_out-1+npo-i;
-      if (im==nfull_out) im=0;
-      for (size_t j=0; j<tmp.shape(1); ++j)
+      // zero padding/truncation
+      if (nfull_out>nfull_in) // pad
         {
-        lego.v(i,2*j  ) = norm * (tmp(i,j) + fct*tmp(im,j));
-        if ((2*j+1)<nm)
-          lego.v(i,2*j+1) = norm * (tmp(i,j) - fct*tmp(im,j));
+        size_t dist = nfull_out-nfull_in;
+        size_t nmove = nfull_in/2;
+        for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            tmp.v(i,j) = tmp(i-dist,j);
+        for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            tmp.v(i,j) = 0;
+        }
+      // FIXME: truncation may not be what we need here!
+      if (nfull_out<nfull_in) // truncate
+        {
+        size_t dist = nfull_in-nfull_out;
+        size_t nmove = nfull_out/2;
+        for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            tmp.v(i-dist,j) = tmp(i,j);
+        }
+      c2c(ftmp_out,ftmp_out,{0},false,T(1),1);
+      auto norm = T(1./(2*nfull_in));
+      for (size_t i=0; i<nrings_out; ++i)
+        {
+        size_t im = nfull_out-1+npo-i;
+        if (im==nfull_out) im=0;
+        for (size_t j=rng.lo; j<rng.hi; ++j)
+          {
+          lego.v(i,2*j  ) = norm * (tmp(i,j-rng.lo) + fct*tmp(im,j-rng.lo));
+          if ((2*j+1)<nm)
+            lego.v(i,2*j+1) = norm * (tmp(i,j-rng.lo) - fct*tmp(im,j-rng.lo));
+          }
         }
       }
     });
@@ -1719,7 +1710,6 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
               tmp.v(im,j-rng.lo) = fct * (leg(n,i,2*j) - plus1);
             }
         c2c(ftmp,ftmp,{0},true,T(1),1);
-
         for (size_t i=1, im=nfull-1; (i<nrings+1)&&(i<=im); ++i,--im)
           for (size_t j=0; j+rng.lo<rng.hi; ++j)
             {
@@ -1727,9 +1717,7 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
               tmp.v(i,j) *= shift[i];
             tmp.v(im,j) *= conj(shift[i]);
             }
-
         c2c(ftmp,ftmp,{0},false,T(1),1);
-
         T norm = T(1)/(2*nfull*nfull);
         for (size_t i=0, im=nfull-1; (i<nrings+1)&&(i<im); ++i,--im)
           {
@@ -1762,15 +1750,6 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
             leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + v1;
             if ((2*j+1)<nm)
               leg.v(n,i,2*j+1) = T(wgt(2*i))*leg(n,i,2*j+1) + v2;
-            //leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + tmp(i,j-rng.lo);
-            //complex<T> plus1 = T(wgt(2*i))*leg(n,i,2*j+1) + tmp(i,j-rng.lo);
-            //if ((im<nfull) && (i!=im))
-              //{
-              //leg.v(n,i,2*j) += fct*tmp(im,j-rng.lo);
-              //plus1 -= fct*tmp(im,j-rng.lo);
-              //}
-            //if ((2*j+1)<nm)
-              //leg.v(n,i,2*j+1) = plus1;
             }
         }
       });
