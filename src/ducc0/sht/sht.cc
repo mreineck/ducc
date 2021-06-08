@@ -1383,7 +1383,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
   // See if we can take any shortcuts
-  if (nrings>50)  // OK, it's worth even thinking about shortcuts
+  if (nrings>500)  // OK, it's worth even thinking about shortcuts
     {
     bool npi, spi;
     if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
@@ -1391,7 +1391,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
       size_t npairs = nrings*(2-(npi==spi))/2;
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
-        size_t nrings_small = good_size_complex(lmax+1)+2;
+        size_t nrings_small = good_size_complex(lmax+1)+1;
         if (true) //nrings_small<=nrings)  // just to be safe
           {
           mav<double,1> theta_small({nrings_small});
