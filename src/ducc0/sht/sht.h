@@ -478,7 +478,7 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads);
 
-template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
+//template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
 
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);

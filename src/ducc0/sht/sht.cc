@@ -1801,6 +1801,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
     });
   }
 
+#if 0
 template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads)
   {
   auto nrings = leg.shape(1);
@@ -1877,6 +1878,7 @@ template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin,
   }
 template void prep_for_analysis(mav<complex<float>,3> &leg, size_t spin, size_t nthreads);
 template void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
+#endif
 
 void sanity_checks(
   const mav_info<2> &alm, // (ncomp, *)
