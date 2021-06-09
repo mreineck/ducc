@@ -1594,6 +1594,126 @@ template<typename T> void map2leg(  // FFT
     }); /* end of parallel region */
   }
 
+template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi, bool npi, bool spi,
+  mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
+  {
+  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
+  auto nm = legi.shape(2);
+  MR_assert(lego.shape(2)==nm, "dimension mismatch");
+  size_t nrings_in = legi.shape(1);
+  size_t nfull_in = 2*nrings_in-npi-spi;
+  size_t nrings_out = lego.shape(1);
+  size_t nfull_out = 2*nrings_out-2;
+  size_t nfull = 2*nfull_out;
+  MR_assert(nfull_out>=nfull_in, "no downsampling allowed in this function");
+  vector<complex<T>> shift(npi ? 0 : nrings_in+1);
+  if (!npi)
+    {
+    UnityRoots<T,complex<T>> roots(2*nfull_in);
+    for (size_t i=0; i<shift.size(); ++i)
+      shift[i] = roots[i];
+    }
+  vector<complex<T>> shift2(nrings_out+1);
+  UnityRoots<T,complex<T>> roots2(2*nfull_out);
+  for (size_t i=0; i<shift2.size(); ++i)
+    shift2[i] = roots2[i];
+  auto wgt = get_gridweights("CC", nfull/2+1);
+  T fct = ((spin&1)==0) ? 1 : -1;
+  for (size_t n=0; n<legi.shape(0); ++n)
+    {
+    execStatic((nm+1)/2, nthreads, 64, [&](Scheduler &sched)
+      {
+      auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(64,(nm+1)/2)}, UNINITIALIZED));
+      while (auto rng=sched.getNext())
+        {
+        auto tmp(tmpx.template subarray<2>({0,0},{MAXIDX, rng.hi-rng.lo}));
+        fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
+        fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
+        fmav<complex<T>> ftmp_full(tmp.template subarray<2>({0,0},{nfull,MAXIDX}));
+        // fill dark side
+        for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
+          for (size_t j=rng.lo; j<rng.hi; ++j)
+            {
+            complex<T> plus1 = ((2*j+1)<nm) ? legi(n,i,2*j+1) : 0;
+            tmp.v(i,j-rng.lo) = legi(n,i,2*j) + plus1;
+            if ((im<nfull_in) && (i!=im))
+              tmp.v(im,j-rng.lo) = fct * (legi(n,i,2*j) - plus1);
+            }
+        c2c(ftmp_in,ftmp_in,{0},true,T(1),1);
+        // shift
+        if (!npi)
+          for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
+            for (size_t j=0; j+rng.lo<rng.hi; ++j)
+              {
+              if (i!=im)
+                tmp.v(i,j) *= conj(shift[i]);
+              tmp.v(im,j) *= shift[i];
+              }
+  
+        // zero padding to full-resolution CC grid
+        if (nfull>nfull_in) // pad
+          {
+          size_t dist = nfull-nfull_in;
+          size_t nmove = nfull_in/2;
+          for (size_t i=nfull-1; i+1+nmove>nfull; --i)
+            for (size_t j=0; j+rng.lo<rng.hi; ++j)
+              tmp.v(i,j) = tmp(i-dist,j);
+          for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
+            for (size_t j=0; j+rng.lo<rng.hi; ++j)
+              tmp.v(i,j) = 0;
+          }
+        c2c(ftmp_full,ftmp_full,{0},false,T(1),1);
+        auto norm = T(1./(2*nfull_in));
+        // copy all even rings to output
+        for (size_t i=0; i<nrings_out; ++i)
+          {
+          size_t im = nfull_out-i;
+          if (im==nfull_out) im=0;
+          auto norm2 = norm * T(wgt(2*i));
+          for (size_t j=rng.lo; j<rng.hi; ++j)
+            {
+            lego.v(n,i,2*j  ) = norm2 * (tmp(2*i,j-rng.lo) + fct*tmp(2*im,j-rng.lo));
+            if ((2*j+1)<nm)
+              lego.v(n,i,2*j+1) = norm2 * (tmp(2*i,j-rng.lo) - fct*tmp(2*im,j-rng.lo));
+            }
+          }
+        // compact odd rings
+        for (size_t i=0; i<nfull_out; ++i)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            tmp.v(i,j) = tmp(2*i+1,j) * T(wgt(min(2*i+1,nfull-2*i-1)));
+        // shift back
+        c2c(ftmp_out,ftmp_out,{0},true,T(1),1);
+        for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
+          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+            {
+            if (i!=im)
+              tmp.v(i,j) *= conj(shift2[i]);
+            tmp.v(im,j) *= shift2[i];
+            }
+        c2c(ftmp_out,ftmp_out,{0},false,T(1),1);
+        // add to output
+        norm *= T(1./nfull_out);
+        for (size_t i=0; i<nrings_out; ++i)
+          {
+          size_t im = nfull_out-i;
+          if (im==nfull_out) im=0;
+          auto xfct = T(1)-T(0.5)*(i==im);
+          for (size_t j=rng.lo; j<rng.hi; ++j)
+            {
+            lego.v(n,i,2*j  ) += xfct * norm * (tmp(i,j-rng.lo) + fct*tmp(im,j-rng.lo));
+            if ((2*j+1)<nm)
+              lego.v(n,i,2*j+1) += xfct * norm * (tmp(i,j-rng.lo) - fct*tmp(im,j-rng.lo));
+            }
+          }
+        }
+      });
+    }
+  }
+template void resample_to_prepared_CC(const mav<complex<float>,3> &legi, bool npi, bool spi,
+  mav<complex<float>,3> &lego, size_t spin, size_t nthreads);
+template void resample_to_prepared_CC(const mav<complex<double>,3> &legi, bool npi, bool spi,
+  mav<complex<double>,3> &lego, size_t spin, size_t nthreads);
+
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {

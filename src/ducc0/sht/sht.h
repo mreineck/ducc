@@ -506,11 +506,7 @@ template<typename T> void resample_from_CC(const mav<complex<T>,3> &legi,
     }
   }
 template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
-  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
-  {
-  resample_to_CC(legi, npi, spi, lego, spin, nthreads);
-  prep_for_analysis(lego, spin, nthreads);
-  }
+  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads);
 
 // fully general map synthesis
 // conditions:
