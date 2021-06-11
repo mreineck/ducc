@@ -1540,7 +1540,7 @@ template<typename T> void leg2map(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 50, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
     {
     ringhelper helper;
     mav<double,1> ringtmp({nphmax+2});
@@ -1577,7 +1577,7 @@ template<typename T> void map2leg(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 50, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
     {
     ringhelper helper;
     mav<double,1> ringtmp({nphmax+2});
@@ -1597,7 +1597,7 @@ template<typename T> void map2leg(  // FFT
 template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi, bool npi, bool spi,
   mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
   {
-constexpr size_t chunksize=64;
+  constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
   auto nm = legi.shape(2);
   MR_assert(lego.shape(2)==nm, "dimension mismatch");
@@ -1620,10 +1620,10 @@ constexpr size_t chunksize=64;
     shift2[i] = roots2[i];
   auto wgt = get_gridweights("CC", nfull/2+1);
   T fct = ((spin&1)==0) ? 1 : -1;
-  execStatic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
+  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out), plan_full(nfull);
+  execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
     auto tmp(mav<complex<T>,1>::build_noncritical({nfull}, UNINITIALIZED));
-    pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out), plan_full(nfull);
     mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
@@ -1712,7 +1712,7 @@ template void resample_to_prepared_CC(const mav<complex<double>,3> &legi, bool n
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {
-constexpr size_t chunksize=64;
+  constexpr size_t chunksize=64;
   MR_assert(legi.shape(1)==lego.shape(1), "dimension mismatch");
   if ((npi==npo)&&(spi==spo)&&(legi.shape(0)==lego.shape(0)))  // shortcut
     {
@@ -1729,10 +1729,10 @@ constexpr size_t chunksize=64;
   size_t nfull = max(nfull_in, nfull_out);
   auto nm = legi.shape(1);
   T fct = ((spin&1)==0) ? 1 : -1;
-  execStatic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
+  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
+  execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
     mav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
-    pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
     mav<complex<T>,1> buf({max(plan_in.bufsize(), plan_out.bufsize())}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
