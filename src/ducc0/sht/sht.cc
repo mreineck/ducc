@@ -1597,7 +1597,7 @@ template<typename T> void map2leg(  // FFT
 template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi, bool npi, bool spi,
   mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
   {
-constexpr size_t chunksize=1;
+constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
   auto nm = legi.shape(2);
   MR_assert(lego.shape(2)==nm, "dimension mismatch");
@@ -1622,91 +1622,82 @@ constexpr size_t chunksize=1;
   T fct = ((spin&1)==0) ? 1 : -1;
   execStatic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(chunksize,(nm+1)/2)}, UNINITIALIZED));
+    auto tmp(mav<complex<T>,1>::build_noncritical({nfull}, UNINITIALIZED));
+    pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out), plan_full(nfull);
+    mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
-      auto tmp(tmpx.template subarray<2>({0,0},{MAXIDX, rng.hi-rng.lo}));
-      fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
-      fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
-      fmav<complex<T>> ftmp_full(tmp.template subarray<2>({0,0},{nfull,MAXIDX}));
       for (size_t n=0; n<legi.shape(0); ++n)
         {
         auto llegi(legi.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
         auto llego(lego.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        // fill dark side
-        for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-          for (size_t j=0; j<tmp.shape(1); ++j)
+        for (size_t j=0; j+rng.lo<rng.hi; ++j)
+          {
+          // fill dark side
+          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
             {
             complex<T> v1 = llegi(i,2*j);
             complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-            tmp.v(i,j) = v1 + v2;
+            tmp.v(i) = v1 + v2;
             if ((im<nfull_in) && (i!=im))
-              tmp.v(im,j) = fct * (v1-v2);
+              tmp.v(im) = fct * (v1-v2);
             }
-        c2c(ftmp_in,ftmp_in,{0},true,T(1),1);
-        // shift
-        if (!npi)
-          for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-            for (size_t j=0; j<tmp.shape(1); ++j)
+          plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+
+          // shift
+          if (!npi)
+            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
               {
               if (i!=im)
-                tmp.v(i,j) *= conj(shift[i]);
-              tmp.v(im,j) *= shift[i];
+                tmp.v(i) *= conj(shift[i]);
+              tmp.v(im) *= shift[i];
               }
   
-        // zero padding to full-resolution CC grid
-        if (nfull>nfull_in) // pad
-          {
-          size_t dist = nfull-nfull_in;
-          size_t nmove = nfull_in/2;
-          for (size_t i=nfull-1; i+1+nmove>nfull; --i)
-            for (size_t j=0; j<tmp.shape(1); ++j)
-              tmp.v(i,j) = tmp(i-dist,j);
-          for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
-            for (size_t j=0; j<tmp.shape(1); ++j)
-              tmp.v(i,j) = 0;
-          }
-        c2c(ftmp_full,ftmp_full,{0},false,T(1),1);
-        auto norm = T(1./(2*nfull_in));
-        // copy all even rings to output
-        for (size_t i=0; i<nrings_out; ++i)
-          {
-          size_t im = nfull_out-i;
-          if (im==nfull_out) im=0;
-          auto norm2 = norm * T(wgt(2*i));
-          for (size_t j=0; j<tmp.shape(1); ++j)
+          // zero padding to full-resolution CC grid
+          if (nfull>nfull_in) // pad
             {
-            llego.v(i,2*j  ) = norm2 * (tmp(2*i,j) + fct*tmp(2*im,j));
-            if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) = norm2 * (tmp(2*i,j) - fct*tmp(2*im,j));
+            size_t dist = nfull-nfull_in;
+            size_t nmove = nfull_in/2;
+            for (size_t i=nfull-1; i+1+nmove>nfull; --i)
+              tmp.v(i) = tmp(i-dist);
+            for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
+              tmp.v(i) = 0;
             }
-          }
-        // compact odd rings
-        for (size_t i=0; i<nfull_out; ++i)
-          for (size_t j=0; j<tmp.shape(1); ++j)
-            tmp.v(i,j) = tmp(2*i+1,j) * T(wgt(min(2*i+1,nfull-2*i-1)));
-        // shift back
-        c2c(ftmp_out,ftmp_out,{0},true,T(1),1);
-        for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
-          for (size_t j=0; j<tmp.shape(1); ++j)
+          plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          auto norm = T(1./(2*nfull_in));
+          // copy all even rings to output
+          for (size_t i=0; i<nrings_out; ++i)
+            {
+            size_t im = nfull_out-i;
+            if (im==nfull_out) im=0;
+            auto norm2 = norm * T(wgt(2*i));
+            llego.v(i,2*j  ) = norm2 * (tmp(2*i) + fct*tmp(2*im));
+            if ((2*j+1)<llego.shape(1))
+              llego.v(i,2*j+1) = norm2 * (tmp(2*i) - fct*tmp(2*im));
+            }
+
+          // compact odd rings
+          for (size_t i=0; i<nfull_out; ++i)
+            tmp.v(i) = tmp(2*i+1) * T(wgt(min(2*i+1,nfull-2*i-1)));
+          // shift back
+          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
             {
             if (i!=im)
-              tmp.v(i,j) *= conj(shift2[i]);
-            tmp.v(im,j) *= shift2[i];
+              tmp.v(i) *= conj(shift2[i]);
+            tmp.v(im) *= shift2[i];
             }
-        c2c(ftmp_out,ftmp_out,{0},false,T(1),1);
-        // add to output
-        norm *= T(1./nfull_out);
-        for (size_t i=0; i<nrings_out; ++i)
-          {
-          size_t im = nfull_out-i;
-          if (im==nfull_out) im=0;
-          auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-          for (size_t j=0; j<tmp.shape(1); ++j)
+          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          // add to output
+          norm *= T(1./nfull_out);
+          for (size_t i=0; i<nrings_out; ++i)
             {
-            llego.v(i,2*j  ) += norm2 * (tmp(i,j) + fct*tmp(im,j));
+            size_t im = nfull_out-i;
+            if (im==nfull_out) im=0;
+            auto norm2 = norm * (T(1)-T(0.5)*(i==im));
+            llego.v(i,2*j  ) += norm2 * (tmp(i) + fct*tmp(im));
             if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) += norm2 * (tmp(i,j) - fct*tmp(im,j));
+              llego.v(i,2*j+1) += norm2 * (tmp(i) - fct*tmp(im));
             }
           }
         }
@@ -1721,7 +1712,7 @@ template void resample_to_prepared_CC(const mav<complex<double>,3> &legi, bool n
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
   {
-constexpr size_t chunksize=256;
+constexpr size_t chunksize=64;
   MR_assert(legi.shape(1)==lego.shape(1), "dimension mismatch");
   if ((npi==npo)&&(spi==spo)&&(legi.shape(0)==lego.shape(0)))  // shortcut
     {
@@ -1740,66 +1731,58 @@ constexpr size_t chunksize=256;
   T fct = ((spin&1)==0) ? 1 : -1;
   execStatic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(chunksize,(nm+1)/2)}, UNINITIALIZED));
+    mav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
+    pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
+    mav<complex<T>,1> buf({max(plan_in.bufsize(), plan_out.bufsize())}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
-      auto tmp(tmpx.template subarray<2>({0,0},{MAXIDX, rng.hi-rng.lo}));
-      fmav<complex<T>> ftmp_in(tmp.template subarray<2>({0,0},{nfull_in,MAXIDX}));
-      fmav<complex<T>> ftmp_out(tmp.template subarray<2>({0,0},{nfull_out,MAXIDX}));
-      // fill dark side
-      for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-        for (size_t j=rng.lo; j<rng.hi; ++j)
+      for (size_t j=0; j+rng.lo<rng.hi; ++j)
+        {
+        // fill dark side
+        for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
           {
-          complex<T> plus1 = ((2*j+1)<nm) ? legi(i,2*j+1) : 0;
-          tmp.v(i,j-rng.lo) = legi(i,2*j) + plus1;
+          complex<T> plus1 = ((2*(j+rng.lo)+1)<nm) ? legi(i,2*(j+rng.lo)+1) : 0;
+          tmp.v(i) = legi(i,2*(j+rng.lo)) + plus1;
           if ((im<nfull_in) && (i!=im))
-            tmp.v(im,j-rng.lo) = fct * (legi(i,2*j) - plus1);
+            tmp.v(im) = fct * (legi(i,2*(j+rng.lo)) - plus1);
           }
-      c2c(ftmp_in,ftmp_in,{0},true,T(1),1);
-      if (shift!=0)
-        for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-          {
-          auto phase=std::polar(T(1), i*shift);
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
+        plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+        if (shift!=0)
+          for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
             {
+            auto phase=std::polar(T(1), i*shift);
             if (i!=im)
-              tmp.v(i,j) *= phase;
-            tmp.v(im,j) *= conj(phase);
+              tmp.v(i) *= phase;
+            tmp.v(im) *= conj(phase);
             }
-          }
 
-      // zero padding/truncation
-      if (nfull_out>nfull_in) // pad
-        {
-        size_t dist = nfull_out-nfull_in;
-        size_t nmove = nfull_in/2;
-        for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            tmp.v(i,j) = tmp(i-dist,j);
-        for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            tmp.v(i,j) = 0;
-        }
-      // FIXME: truncation may not be what we need here!
-      if (nfull_out<nfull_in) // truncate
-        {
-        size_t dist = nfull_in-nfull_out;
-        size_t nmove = nfull_out/2;
-        for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            tmp.v(i-dist,j) = tmp(i,j);
-        }
-      c2c(ftmp_out,ftmp_out,{0},false,T(1),1);
-      auto norm = T(1./(2*nfull_in));
-      for (size_t i=0; i<nrings_out; ++i)
-        {
-        size_t im = nfull_out-1+npo-i;
-        if (im==nfull_out) im=0;
-        for (size_t j=rng.lo; j<rng.hi; ++j)
+        // zero padding/truncation
+        if (nfull_out>nfull_in) // pad
           {
-          lego.v(i,2*j  ) = norm * (tmp(i,j-rng.lo) + fct*tmp(im,j-rng.lo));
-          if ((2*j+1)<nm)
-            lego.v(i,2*j+1) = norm * (tmp(i,j-rng.lo) - fct*tmp(im,j-rng.lo));
+          size_t dist = nfull_out-nfull_in;
+          size_t nmove = nfull_in/2;
+          for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
+            tmp.v(i) = tmp(i-dist);
+          for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
+            tmp.v(i) = 0;
+          }
+        // FIXME: truncation may not be what we need here!
+        if (nfull_out<nfull_in) // truncate
+          {
+          size_t dist = nfull_in-nfull_out;
+          size_t nmove = nfull_out/2;
+          for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
+            tmp.v(i-dist) = tmp(i);
+          }
+        plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+        auto norm = T(1./(2*nfull_in));
+        for (size_t i=0; i<nrings_out; ++i)
+          {
+          size_t im = nfull_out-1+npo-i;
+          if (im==nfull_out) im=0;
+          lego.v(i,2*(j+rng.lo)  ) = norm * (tmp(i) + fct*tmp(im));
+          if ((2*(j+rng.lo)+1)<nm)
+            lego.v(i,2*(j+rng.lo)+1) = norm * (tmp(i) - fct*tmp(im));
           }
         }
       }

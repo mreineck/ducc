@@ -1584,7 +1584,7 @@ template<typename Tfs> class pocketfft_c
       : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
-    template<typename Tfd> Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
+    template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd) const
       {
       auto res = any_cast<Cmplx<Tfd> *>(plan->exec(in, buf,
@@ -1603,7 +1603,7 @@ template<typename Tfs> class pocketfft_c
         }
       return in;
       }
-    template<typename Tfd> void exec(Cmplx<Tfd> *in, Tfs fct, bool fwd) const
+    template<typename Tfd> DUCC0_NOINLINE void exec(Cmplx<Tfd> *in, Tfs fct, bool fwd) const
       {
       aligned_array<Cmplx<Tfd>> buf(N*plan->needs_copy()+plan->bufsize());
       exec(in, buf.data(), fct, fwd);
@@ -2771,7 +2771,7 @@ template<typename Tfs> class pocketfft_r
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
-    template<typename Tfd> Tfd *exec(Tfd *in, Tfd *buf, Tfs fct, bool fwd) const
+    template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct, bool fwd) const
       {
       auto res = any_cast<Tfd *>(plan->exec(in, buf,
         buf+N*plan->needs_copy(), fwd));
@@ -2789,7 +2789,7 @@ template<typename Tfs> class pocketfft_r
         }
       return in;
       }
-    template<typename Tfd> void exec(Tfd *in, Tfs fct, bool fwd) const
+    template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd) const
       {
       aligned_array<Tfd> buf(N*plan->needs_copy()+plan->bufsize());
       exec(in, buf.data(), fct, fwd);
