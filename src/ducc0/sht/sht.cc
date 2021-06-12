@@ -1828,7 +1828,7 @@ template<typename T> void synthesis(
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
-  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mstart.shape(0)});
+  auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval.v(i) = i;
@@ -1878,7 +1878,7 @@ template<typename T> void adjoint_synthesis(
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
 // just doing standard synthesis now, in the future we can use faster methods
 // for some of the theta-equidistant grids here
-  mav<complex<T>,3> leg({alm.shape(0),theta.shape(0),mstart.shape(0)});
+  auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
@@ -1955,7 +1955,7 @@ template<typename T> void analysis_2d(
       }
     if (!direct_analysis)
       {
-      mav<complex<T>,3> leg({map.shape(0), ntheta_leg, mstart.shape(0)});
+      auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), ntheta_leg, mstart.shape(0)}));
       auto legsmall(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
       map2leg(map, legsmall, nphi, phi0, ringstart, pixstride, nthreads);
       for (size_t i=0; i<legsmall.shape(0); ++i)
@@ -1974,7 +1974,7 @@ template<typename T> void analysis_2d(
       }
     }
   auto wgt = get_gridweights(geometry, theta.shape(0));
-  mav<complex<T>,3> leg({map.shape(0), theta.shape(0), mstart.shape(0)});
+  auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   for (size_t i=0; i<leg.shape(0); ++i)
     for (size_t j=0; j<leg.shape(1); ++j)
