@@ -262,64 +262,6 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
-template<typename T> py::array Py2_resample_to_CC(const py::array &legi_, bool npi, bool spi,
-  size_t spin, size_t nthreads)
-  {
-  auto legi = to_mav<complex<T>,3>(legi_, false);
-  size_t ntheta_out = legi.shape(1) + 1 - (npi&&spi);
-  auto lego_ = make_Pyarr<complex<T>>({legi.shape(0), ntheta_out, legi.shape(2)});
-  auto lego = to_mav<complex<T>,3>(lego_, true);
-  resample_to_CC(legi, npi, spi, lego, spin, nthreads);
-  return lego_;
-  }
-py::array Py_resample_to_CC(const py::array &legi, bool npi, bool spi,
-  size_t spin, size_t nthreads)
-  {
-  if (isPyarr<complex<float>>(legi))
-    return Py2_resample_to_CC<float>(legi, npi, spi, spin, nthreads);
-  if (isPyarr<complex<double>>(legi))
-    return Py2_resample_to_CC<double>(legi, npi, spi, spin, nthreads);
-  MR_fail("type matching failed: 'legi' has neither type 'c8' nor 'c16'");
-  }
-template<typename T> py::array Py2_resample_to_prepared_CC(const py::array &legi_, bool npi, bool spi,
-  size_t spin, size_t nthreads)
-  {
-  auto legi = to_mav<complex<T>,3>(legi_, false);
-  size_t nrings_min = legi.shape(1) + 1 - (npi&&spi);
-  size_t ntheta_out = good_size_complex(nrings_min-1)+1;
-  auto lego_ = make_Pyarr<complex<T>>({legi.shape(0), ntheta_out, legi.shape(2)});
-  auto lego = to_mav<complex<T>,3>(lego_, true);
-  resample_to_prepared_CC(legi, npi, spi, lego, spin, nthreads);
-  return lego_;
-  }
-py::array Py_resample_to_prepared_CC(const py::array &legi, bool npi, bool spi,
-  size_t spin, size_t nthreads)
-  {
-  if (isPyarr<complex<float>>(legi))
-    return Py2_resample_to_prepared_CC<float>(legi, npi, spi, spin, nthreads);
-  if (isPyarr<complex<double>>(legi))
-    return Py2_resample_to_prepared_CC<double>(legi, npi, spi, spin, nthreads);
-  MR_fail("type matching failed: 'legi' has neither type 'c8' nor 'c16'");
-  }
-template<typename T> py::array Py2_resample_from_CC(const py::array &legi_,
-  size_t ntheta_out, bool npo, bool spo, size_t spin, size_t nthreads)
-  {
-  auto legi = to_mav<complex<T>,3>(legi_, false);
-  auto lego_ = make_Pyarr<complex<T>>({legi.shape(0), ntheta_out, legi.shape(2)});
-  auto lego = to_mav<complex<T>,3>(lego_, true);
-  resample_from_CC(legi, lego, npo, spo, spin, nthreads);
-  return lego_;
-  }
-py::array Py_resample_from_CC(const py::array &legi, size_t ntheta_out,
-  bool npi, bool spi, size_t spin, size_t nthreads)
-  {
-  if (isPyarr<complex<float>>(legi))
-    return Py2_resample_from_CC<float>(legi, ntheta_out, npi, spi, spin, nthreads);
-  if (isPyarr<complex<double>>(legi))
-    return Py2_resample_from_CC<double>(legi, ntheta_out, npi, spi, spin, nthreads);
-  MR_fail("type matching failed: 'legi' has neither type 'c8' nor 'c16'");
-  }
-
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
   const py::array &mstart_, ptrdiff_t lstride, 
@@ -352,6 +294,24 @@ py::array Py_synthesis(const py::array &alm, const py::array &theta,
   else if (isPyarr<complex<double>>(alm))
     return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta, 
       nphi, phi0, ringstart, pixstride, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
+  py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, false);
+  auto map = to_mav<T,3>(map_, true);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  synthesis_2d(alm, map, spin, lmax, geometry, nthreads);
+  return map_;
+  }
+py::array Py_synthesis_2d(const py::array &alm,
+  py::array &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_synthesis_2d<float>(alm, map, spin, lmax, geometry, nthreads);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_synthesis_2d<double>(alm, map, spin, lmax, geometry, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
@@ -389,6 +349,25 @@ py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
   else if (isPyarr<double>(map))
     return Py2_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
+template<typename T> py::array Py2_analysis_2d(py::array &alm_,
+  const py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, true);
+  auto map = to_mav<T,3>(map_, false);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  analysis_2d(alm, map, spin, lmax, geometry, nthreads);
+  return alm_;
+  }
+py::array Py_analysis_2d(py::array &alm,
+  const py::array &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_analysis_2d<float>(alm, map, spin, lmax, geometry, nthreads);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_analysis_2d<double>(alm, map, spin, lmax, geometry, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -788,8 +767,11 @@ void add_sht(py::module_ &msup)
 
 //  m2.def("synthesis", &Py_synthesis, "type"_a, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a);
 //  m2.def("synthesis", &Py_synthesis, "alm"_a, "map"_a, "lmax"_a, "mmax"_a, "spin"_a, "theta"_a, "nphi"_a, "phi0"_a, "offset"_a);
-  m2.def("synthesis", &Py_synthesis, py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
-  m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+//  m2.def("synthesis", &Py_synthesis, py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+//  m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+//  m2.def("equidistant_analysis", &Py_equidistant_analysis, py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a=0, "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis_2d", &Py_synthesis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
+  m2.def("analysis_2d", &Py_analysis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
@@ -799,9 +781,6 @@ void add_sht(py::module_ &msup)
   m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
   m2.def("map2leg", &Py_map2leg, map2leg_DS, py::kw_only(), "map"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "mmax"_a, "pixstride"_a=1, "nthreads"_a=1, "leg"_a=None);
   m2.def("leg2map", &Py_leg2map, leg2map_DS, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
-  m2.def("resample_to_CC", &Py_resample_to_CC, "legi"_a, "npi"_a, "spi"_a, "spin"_a, "nthreads"_a=1);
-  m2.def("resample_to_prepared_CC", &Py_resample_to_prepared_CC, "legi"_a, "npi"_a, "spi"_a, "spin"_a, "nthreads"_a=1);
-  m2.def("resample_from_CC", &Py_resample_from_CC, "legi"_a, "ntheta_out"_a, "npo"_a, "spo"_a, "spin"_a, "nthreads"_a=1);
   m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
     "phi"_a, "nthreads"_a=1);
 

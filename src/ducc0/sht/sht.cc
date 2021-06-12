@@ -1340,12 +1340,12 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
 bool regular_thetas(const mav<double,1> &theta, bool &npi, bool &spi)
   {
   size_t ntheta = theta.shape(0);
-  npi = approx(theta(0), 0., 1e-15);
-  spi = approx(theta(ntheta-1), pi, 1e-15);
+  npi = abs_approx(theta(0), 0., 1e-14);
+  spi = abs_approx(theta(ntheta-1), pi, 1e-14);
   size_t nthetafull = 2*ntheta-npi-spi;
   double dtheta = 2*pi/nthetafull;
   for (size_t i=0; i<ntheta; ++i)
-    if (!approx(theta(i),(0.5*(1-npi)+i)*dtheta, 1e-15))
+    if (!abs_approx(theta(i),(0.5*(1-npi)+i)*dtheta, 1e-14))
       return false;
   return true;
   }
@@ -1392,12 +1392,12 @@ template<typename T> void alm2leg(  // associated Legendre transform
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
         size_t nrings_small = good_size_complex(lmax+1)+1;
-        if (true) //nrings_small<=nrings)  // just to be safe
+        if (nrings_small<=nrings)  // just to be safe
           {
           mav<double,1> theta_small({nrings_small});
           for (size_t i=0; i<nrings_small; ++i)
             theta_small.v(i) = i*pi/(nrings_small-1);
-          auto leg_small(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_small, leg.shape(2)}));
+          auto leg_small(leg.template subarray<3>({0,0,0},{MAXIDX,nrings_small,MAXIDX}));
           alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
           for (size_t i=0; i<leg.shape(0); ++i)
             {
@@ -1704,10 +1704,6 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
       }
     });
   }
-template void resample_to_prepared_CC(const mav<complex<float>,3> &legi, bool npi, bool spi,
-  mav<complex<float>,3> &lego, size_t spin, size_t nthreads);
-template void resample_to_prepared_CC(const mav<complex<double>,3> &legi, bool npi, bool spi,
-  mav<complex<double>,3> &lego, size_t spin, size_t nthreads);
 
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
@@ -1788,85 +1784,6 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
       }
     });
   }
-
-#if 0
-template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads)
-  {
-  auto nrings = leg.shape(1);
-  auto wgt = get_gridweights("CC", 2*nrings-1);
-  auto nm = leg.shape(2);
-  size_t nfull = 2*nrings-2;
-  T fct = ((spin&1)==0) ? 1 : -1;
-  vector<complex<T>> shift(nrings+1);
-  UnityRoots<T,complex<T>> roots(4*nrings-4);
-  for (size_t i=1; i<shift.size(); ++i)
-    shift[i] = roots[i];
-  for (size_t n=0; n<leg.shape(0); ++n)
-    {
-    execStatic((nm+1)/2, nthreads, 64, [&](Scheduler &sched)
-      {
-      auto tmpx(mav<complex<T>,2>::build_noncritical({nfull, min<size_t>(64,(nm+1)/2)}, UNINITIALIZED));
-      while (auto rng=sched.getNext())
-        {
-        auto tmp=tmpx.template subarray<2>({0,0},{MAXIDX,rng.hi-rng.lo});
-        fmav<complex<T>> ftmp(tmp);
-        for (size_t i=0, im=nfull; i<nrings; ++i,--im)
-          for (size_t j=rng.lo; j<rng.hi; ++j)
-            {
-            complex<T> plus1 = ((2*j+1)<nm) ? leg(n,i,2*j+1) : 0;
-            tmp.v(i,j-rng.lo) = leg(n,i,2*j) + plus1;
-            if ((im<nfull) && (i!=im))
-              tmp.v(im,j-rng.lo) = fct * (leg(n,i,2*j) - plus1);
-            }
-        c2c(ftmp,ftmp,{0},true,T(1),1);
-        for (size_t i=1, im=nfull-1; (i<nrings+1)&&(i<=im); ++i,--im)
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            {
-            if (i!=im)
-              tmp.v(i,j) *= shift[i];
-            tmp.v(im,j) *= conj(shift[i]);
-            }
-        c2c(ftmp,ftmp,{0},false,T(1),1);
-        T norm = T(1)/(2*nfull*nfull);
-        for (size_t i=0, im=nfull-1; (i<nrings+1)&&(i<im); ++i,--im)
-          {
-          auto factor = T(wgt(1+2*i))*norm;
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            {
-            tmp.v(i,j) *= factor;
-            if (i!=im) tmp.v(im,j) *= factor;
-            }
-          }
-        c2c(ftmp,ftmp,{0},true,T(1),1);
-        for (size_t i=1, im=nfull-1; (i<nrings+1)&&(i<=im); ++i,--im)
-          for (size_t j=0; j+rng.lo<rng.hi; ++j)
-            {
-            if (i!=im)
-              tmp.v(i,j) *= conj(shift[i]);
-            tmp.v(im,j) *= shift[i];
-            }
-        c2c(ftmp,ftmp,{0},false,T(1),1);
-        for (size_t i=0, im=nfull; i<nrings; ++i,--im)
-          for (size_t j=rng.lo; j<rng.hi; ++j)
-            {
-            complex<T> v1 = tmp(i,j-rng.lo);
-            complex<T> v2 = tmp(i,j-rng.lo);
-            if ((im<nfull) && (i!=im))
-              {
-              v1 += fct*tmp(im,j-rng.lo);
-              v2 -= fct*tmp(im,j-rng.lo);
-              }
-            leg.v(n,i,2*j) = T(wgt(2*i))*leg(n,i,2*j) + v1;
-            if ((2*j+1)<nm)
-              leg.v(n,i,2*j+1) = T(wgt(2*i))*leg(n,i,2*j+1) + v2;
-            }
-        }
-      });
-    }
-  }
-template void prep_for_analysis(mav<complex<float>,3> &leg, size_t spin, size_t nthreads);
-template void prep_for_analysis(mav<complex<double>,3> &leg, size_t spin, size_t nthreads);
-#endif
 
 void sanity_checks(
   const mav_info<2> &alm, // (ncomp, *)
@@ -1995,4 +1912,102 @@ template void adjoint_synthesis(
   ptrdiff_t pixstride,
   size_t nthreads);
 
+template<typename T> void analysis_2d(
+  mav<complex<T>,2> &alm, // (ncomp, *)
+  const mav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const mav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads)
+  {
+  mav<size_t,1> mval({mstart.shape(0)});
+  for (size_t i=0; i<mstart.shape(0); ++i)
+    mval.v(i) = i;
+  mav<double,1> theta({nphi.shape(0)});
+  get_ringtheta_2d(geometry, theta);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
+  if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
+    {
+    bool npi, spi;
+    if (geometry=="CC")
+      { npi=spi=true; }
+    else if (geometry=="F1")
+      { npi=spi=false; }
+    else if (geometry=="MW")
+      { npi=false; spi=true; }
+    else
+      { npi=true; spi=false; }
+
+    bool direct_analysis = false;
+    size_t ntheta_min = theta.shape(0) + 1 - (npi&&spi);
+    size_t ntheta_leg = good_size_complex(ntheta_min-1)+1;
+    if (npi==spi)  // CC or F1
+      {
+      size_t ntheta_min = 2*lmax+1+(npi&&spi);
+      if (ntheta_min<=theta.shape(0))
+        direct_analysis = true;
+      }
+    if (!direct_analysis)
+      {
+      mav<complex<T>,3> leg({map.shape(0), ntheta_leg, mstart.shape(0)});
+      auto legsmall(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
+      map2leg(map, legsmall, nphi, phi0, ringstart, pixstride, nthreads);
+      for (size_t i=0; i<legsmall.shape(0); ++i)
+        for (size_t j=0; j<legsmall.shape(1); ++j)
+          {
+          auto wgt1 = T(1./nphi(j));
+          for (size_t k=0; k<legsmall.shape(2); ++k)
+            leg.v(i,j,k) *= wgt1;
+          }
+      resample_to_prepared_CC(legsmall, npi, spi, leg, spin, nthreads);
+      mav<double,1> newtheta({ntheta_leg});
+      for (size_t i=0; i<ntheta_leg; ++i)
+        newtheta.v(i) = (pi*i)/(ntheta_leg-1);
+      leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, newtheta, nthreads);
+      return;
+      }
+    }
+  auto wgt = get_gridweights(geometry, theta.shape(0));
+  mav<complex<T>,3> leg({map.shape(0), theta.shape(0), mstart.shape(0)});
+  map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+  for (size_t i=0; i<leg.shape(0); ++i)
+    for (size_t j=0; j<leg.shape(1); ++j)
+      {
+      auto wgt1 = T(wgt(j)/nphi(j));
+      for (size_t k=0; k<leg.shape(2); ++k)
+        leg.v(i,j,k) *= wgt1;
+      }
+  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+  }
+template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
+  mav<size_t,1> mstart({lmax+1});
+  for (size_t i=0, ofs=0; i<=lmax; ++i)
+    {
+    mstart.v(i) = ofs-i;
+    ofs += lmax+1-i;
+    }
+  mav<size_t,1> ringstart({map.shape(1)});
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
+  for (size_t i=0; i<map.shape(1); ++i)
+    ringstart.v(i) = i*ringstride;
+  mav<T,2> map2(map.cdata(), {map.shape(0), map.shape(1)*map.shape(2)},
+                {map.stride(0), 1});
+
+  analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0, ringstart, pixstride, nthreads);
+  }
+template<typename T> void analysis_2d(mav<complex<double>,2> &alm,
+  const mav<double,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+template<typename T> void analysis_2d(mav<complex<float>,2> &alm,
+  const mav<float,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
 }}

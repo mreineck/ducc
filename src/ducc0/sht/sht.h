@@ -427,6 +427,9 @@ void get_ringtheta_2d(const string &type, mav<double, 1> &theta)
   else if (type=="MW") // McEwen-Wiaux
     for (size_t m=0; m<nrings; ++m)
       theta.v(m)=pi*(2.*m+1.)/(2.*nrings-1.);
+  else if (type=="MWflip") // McEwen-Wiaux mirrored
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(2.*m)/(2.*nrings-1.);
   else
     MR_fail("unsupported grid type");
   }
@@ -478,35 +481,8 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads);
 
-//template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
-
 template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
   mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
-
-template<typename T> void resample_to_CC(const mav<complex<T>,3> &legi,
-  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
-  {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  for (size_t i=0; i<legi.shape(0); ++i)
-    {
-    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
-    }
-  }
-template<typename T> void resample_from_CC(const mav<complex<T>,3> &legi,
-  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
-  {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  for (size_t i=0; i<legi.shape(0); ++i)
-    {
-    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    resample_theta(subi, true, true, subo, npo, spo, spin, nthreads);
-    }
-  }
-template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
-  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads);
 
 // fully general map synthesis
 // conditions:
@@ -552,7 +528,7 @@ template<typename T> void adjoint_synthesis(
   ptrdiff_t pixstride,
   size_t nthreads);
 
-template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
+template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
   size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
@@ -574,14 +550,14 @@ template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
   get_ringtheta_2d(geometry, theta);
   synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
-template<typename T> void synthesis(const mav<complex<T>,1> &alm,
+template<typename T> void synthesis_2d(const mav<complex<T>,1> &alm,
   mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   mav<complex<T>,2> alm2(alm.cdata(), {1,alm.shape(0)}, {0,alm.stride(0)});
   mav<T,3> map2(map.vdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)}, true);
-  synthesis (alm2, map2, 0, lmax, geometry, nthreads);
+  synthesis_2d (alm2, map2, 0, lmax, geometry, nthreads);
   }
-template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
+template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
   const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
@@ -623,6 +599,10 @@ template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
 // // - resample odd rings to fall on even rings
 // // - adjoint synthesis
 //   }
+
+template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+
 }
 
 using detail_sht::SHT_mode;
@@ -634,11 +614,11 @@ using detail_sht::alm2leg;
 using detail_sht::leg2alm;
 using detail_sht::map2leg;
 using detail_sht::leg2map;
-using detail_sht::resample_to_CC;
-using detail_sht::resample_to_prepared_CC;
-using detail_sht::resample_from_CC;
+using detail_sht::synthesis_2d;
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
+using detail_sht::adjoint_synthesis_2d;
+using detail_sht::analysis_2d;
 
 }
 
