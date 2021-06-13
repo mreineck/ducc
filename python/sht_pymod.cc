@@ -316,6 +316,24 @@ py::array Py_synthesis_2d(const py::array &alm,
     return Py2_synthesis_2d<double>(alm, map, spin, lmax, geometry, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
+template<typename T> py::array Py2_synthesis_2d_deriv1(const py::array &alm_,
+  py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, false);
+  auto map = to_mav<T,3>(map_, true);
+  MR_assert((map.shape(0)==2) && (alm.shape(0)==1), "incorrect number of components");
+  synthesis_2d(alm, map, spin, lmax, geometry, nthreads, ALM2MAP_DERIV1);
+  return map_;
+  }
+py::array Py_synthesis_2d_deriv1(const py::array &alm,
+  py::array &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_synthesis_2d_deriv1<float>(alm, map, spin, lmax, geometry, nthreads);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_synthesis_2d_deriv1<double>(alm, map, spin, lmax, geometry, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
 #if 0
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   size_t lmax, const py::array &mstart_, ptrdiff_t lstride, 
@@ -770,6 +788,7 @@ void add_sht(py::module_ &msup)
   m2.doc() = sht_experimental_DS;
 
   m2.def("synthesis_2d", &Py_synthesis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
+  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
   m2.def("analysis_2d", &Py_analysis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);

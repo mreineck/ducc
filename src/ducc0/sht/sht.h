@@ -482,7 +482,7 @@ template<typename T> void leg2map(  // FFT
   size_t nthreads);
 
 template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads, SHT_mode mode=ALM2MAP);
 
 template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
   const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);

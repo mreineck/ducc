@@ -1794,7 +1794,8 @@ void sanity_checks(
   const mav_info<1> &phi0, // (nrings)
   const mav<size_t,1> &nphi, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
-  size_t spin)
+  size_t spin,
+  SHT_mode mode)
   {
   size_t nm = mstart.shape(0);
   MR_assert(nm>0, "mstart too small");
@@ -1807,8 +1808,12 @@ void sanity_checks(
             (ringstart.shape(0)==nrings),
     "inconsistency in the number of rings");
   size_t ncomp = 1+(spin>0);
-  MR_assert((alm.shape(0)==ncomp) && (map.shape(0)==ncomp),
-    "inconsistent number of components");
+  if (mode==ALM2MAP_DERIV1)
+    MR_assert((alm.shape(0)==1) && (map.shape(0)==2),
+      "inconsistent number of components");
+  else
+    MR_assert((alm.shape(0)==ncomp) && (map.shape(0)==ncomp),
+      "inconsistent number of components");
   }
 
 template<typename T> void synthesis(
@@ -1823,19 +1828,21 @@ template<typename T> void synthesis(
   const mav<double,1> &phi0, // (nrings)
   const mav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
-  size_t nthreads)
+  size_t nthreads,
+  SHT_mode mode)
   {
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
-  auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
+  auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}));
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval.v(i) = i;
-  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
 
 template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  SHT_mode mode)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
@@ -1854,12 +1861,15 @@ template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &m
                 {map.stride(0), 1}, true);
   mav<double,1> theta({map.shape(1)});
   get_ringtheta_2d(geometry, theta);
-  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads,
+  mode);
   }
 template void synthesis_2d(const mav<complex<double>,2> &alm, mav<double,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  SHT_mode mode);
 template void synthesis_2d(const mav<complex<float>,2> &alm, mav<float,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  SHT_mode mode);
 
 template<typename T> void adjoint_synthesis(
   mav<complex<T>,2> &alm, // (ncomp, *)
@@ -1875,7 +1885,7 @@ template<typename T> void adjoint_synthesis(
   ptrdiff_t pixstride,
   size_t nthreads)
   {
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
   auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   mav<size_t,1> mval({mstart.shape(0)});
@@ -1930,7 +1940,7 @@ template<typename T> void analysis_2d(
     mval.v(i) = i;
   mav<double,1> theta({nphi.shape(0)});
   get_ringtheta_2d(geometry, theta);
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
     {
     bool npi, spi;
