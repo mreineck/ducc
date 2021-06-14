@@ -1371,6 +1371,7 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
   auto nm = legi.shape(1);
   T fct = ((spin&1)==0) ? 1 : -1;
   pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
+  MultiExp<T,complex<T>> phase(shift, (shift==0.) ? 1 : nrings_in+2);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
     mav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
@@ -1391,10 +1392,9 @@ template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi
         if (shift!=0)
           for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
             {
-            auto phase=std::polar(T(1), i*shift);
             if (i!=im)
-              tmp.v(i) *= phase;
-            tmp.v(im) *= conj(phase);
+              tmp.v(i) *= phase[i];
+            tmp.v(im) *= conj(phase[i]);
             }
 
         // zero padding/truncation
@@ -1544,13 +1544,15 @@ template<typename T> void leg2alm(  // associated Legendre transform
   // See if we can take any shortcuts
   if (nrings>500)  // OK, it's worth even thinking about shortcuts
     {
+cout <<"beep1" << endl;
     bool npi, spi;
-    if (regular_thetas(theta, npi, spi) && (npi!=spi))  // we are on a MW-like grid
+    if (regular_thetas(theta, npi, spi))
       {
+cout <<"beep2" << endl;
       size_t npairs = nrings*(2-(npi==spi))/2;
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
-        size_t nrings_sym = good_size_complex(nrings)+1;
+        size_t nrings_sym = good_size_complex(lmax)+1;
         if (true) //nrings_small<=nrings)  // just to be safe
           {
 cout << "symmetrizing " << nrings << "->" << nrings_sym << endl;
@@ -1565,7 +1567,7 @@ cout << "symmetrizing " << nrings << "->" << nrings_sym << endl;
             resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
             }
           leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
-          alm.apply([=](complex<T> &v){v*=double(nrings)/nrings_sym;});
+          alm.apply([=](complex<T> &v){v*=T(nrings)/nrings_sym;});
           return;
           }
         }
@@ -1675,7 +1677,7 @@ template<typename T> void map2leg(  // FFT
   }
 
 template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi, bool npi, bool spi,
-  mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
+  mav<complex<T>,3> &lego, size_t spin, size_t lmax, size_t nthreads)
   {
   constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
@@ -1685,8 +1687,9 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
   size_t nfull_in = 2*nrings_in-npi-spi;
   size_t nrings_out = lego.shape(1);
   size_t nfull_out = 2*nrings_out-2;
-  size_t nfull = 2*nfull_out;
-  MR_assert(nfull_out>=nfull_in, "no downsampling allowed in this function");
+  bool need_first_resample = !(npi&&spi&&(nfull_in>=2*lmax+2));
+  size_t nfull = need_first_resample ? 2*nfull_out : nfull_in;
+
   vector<complex<T>> shift(npi ? 0 : nrings_in+1);
   if (!npi)
     {
@@ -1694,16 +1697,13 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
     for (size_t i=0; i<shift.size(); ++i)
       shift[i] = roots[i];
     }
-  vector<complex<T>> shift2(nrings_out+1);
-  UnityRoots<T,complex<T>> roots2(2*nfull_out);
-  for (size_t i=0; i<shift2.size(); ++i)
-    shift2[i] = roots2[i];
   auto wgt = get_gridweights("CC", nfull/2+1);
   T fct = ((spin&1)==0) ? 1 : -1;
-  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out), plan_full(nfull);
+  pocketfft_c<T> plan_in(need_first_resample ? nfull_in : 1),
+                 plan_out(nfull_out), plan_full(nfull);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    auto tmp(mav<complex<T>,1>::build_noncritical({nfull}, UNINITIALIZED));
+    auto tmp(mav<complex<T>,1>::build_noncritical({max(nfull,nfull_in)}, UNINITIALIZED));
     mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
@@ -1722,62 +1722,64 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
             }
-          plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          if (need_first_resample)
+            {
+            plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
 
-          // shift
-          if (!npi)
-            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-              {
-              if (i!=im)
-                tmp.v(i) *= conj(shift[i]);
-              tmp.v(im) *= shift[i];
-              }
+            // shift
+            if (!npi)
+              for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
+                {
+                if (i!=im)
+                  tmp.v(i) *= conj(shift[i]);
+                tmp.v(im) *= shift[i];
+                }
   
-          // zero padding to full-resolution CC grid
-          if (nfull>nfull_in) // pad
-            {
-            size_t dist = nfull-nfull_in;
-            size_t nmove = nfull_in/2;
-            for (size_t i=nfull-1; i+1+nmove>nfull; --i)
-              tmp.v(i) = tmp(i-dist);
-            for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
-              tmp.v(i) = 0;
+            // zero padding to full-resolution CC grid
+            if (nfull>nfull_in) // pad
+              {
+              size_t dist = nfull-nfull_in;
+              size_t nmove = nfull_in/2;
+              for (size_t i=nfull-1; i+1+nmove>nfull; --i)
+                tmp.v(i) = tmp(i-dist);
+              for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
+                tmp.v(i) = 0;
+              }
+            if (nfull<nfull_in) // truncate
+              {
+              size_t dist = nfull_in-nfull;
+              size_t nmove = nfull/2;
+              for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
+                tmp.v(i-dist) = tmp(i);
+              }
+            plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
-          plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          auto norm = T(1./(2*nfull_in));
-          // copy all even rings to output
-          for (size_t i=0; i<nrings_out; ++i)
+          auto norm = T(1./(2*(need_first_resample ? nfull_in : 1)));
+          for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
-            size_t im = nfull_out-i;
-            if (im==nfull_out) im=0;
-            auto norm2 = norm * T(wgt(2*i));
-            llego.v(i,2*j  ) = norm2 * (tmp(2*i) + fct*tmp(2*im));
-            if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) = norm2 * (tmp(2*i) - fct*tmp(2*im));
+            tmp.v(i) *= T(wgt(i));
+            if ((i==0) || (i==im)) tmp.v(i)*=2;
+            if ((im<nfull) && (im!=i))
+              tmp.v(im) *= T(wgt(i));
             }
-
-          // compact odd rings
-          for (size_t i=0; i<nfull_out; ++i)
-            tmp.v(i) = tmp(2*i+1) * T(wgt(min(2*i+1,nfull-2*i-1)));
-          // shift back
-          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
-          for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
+          plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          if (nfull_out<nfull) // truncate
             {
-            if (i!=im)
-              tmp.v(i) *= conj(shift2[i]);
-            tmp.v(im) *= shift2[i];
+            size_t dist = nfull-nfull_out;
+            size_t nmove = nfull_out/2;
+            for (size_t i=nfull-nmove; i<nfull; ++i)
+            tmp.v(i-dist) = tmp(i);
             }
           plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          // add to output
           norm *= T(1./nfull_out);
           for (size_t i=0; i<nrings_out; ++i)
             {
             size_t im = nfull_out-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-            llego.v(i,2*j  ) += norm2 * (tmp(i) + fct*tmp(im));
+            llego.v(i,2*j  ) = norm2 * (tmp(i) + fct*tmp(im));
             if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) += norm2 * (tmp(i) - fct*tmp(im));
+              llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
             }
           }
         }
@@ -1953,46 +1955,41 @@ template<typename T> void analysis_2d(
     else
       { npi=true; spi=false; }
 
-    bool direct_analysis = false;
-    size_t ntheta_min = theta.shape(0) + 1 - (npi&&spi);
+    size_t ntheta_min = lmax+2;
     size_t ntheta_leg = good_size_complex(ntheta_min-1)+1;
-    if (npi==spi)  // CC or F1
-      {
-      size_t ntheta_min = 2*lmax+1+(npi&&spi);
-      if (ntheta_min<=theta.shape(0))
-        direct_analysis = true;
-      }
-    if (!direct_analysis)
-      {
-      auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), ntheta_leg, mstart.shape(0)}));
-      auto legsmall(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
-      map2leg(map, legsmall, nphi, phi0, ringstart, pixstride, nthreads);
-      for (size_t i=0; i<legsmall.shape(0); ++i)
-        for (size_t j=0; j<legsmall.shape(1); ++j)
-          {
-          auto wgt1 = T(1./nphi(j));
-          for (size_t k=0; k<legsmall.shape(2); ++k)
-            leg.v(i,j,k) *= wgt1;
-          }
-      resample_to_prepared_CC(legsmall, npi, spi, leg, spin, nthreads);
-      mav<double,1> newtheta({ntheta_leg});
-      for (size_t i=0; i<ntheta_leg; ++i)
-        newtheta.v(i) = (pi*i)/(ntheta_leg-1);
-      leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, newtheta, nthreads);
-      return;
-      }
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+    auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
+    auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
+    map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+    for (size_t i=0; i<legi.shape(0); ++i)
+      for (size_t j=0; j<legi.shape(1); ++j)
+        {
+        auto wgt1 = T(1./nphi(j));
+        for (size_t k=0; k<legi.shape(2); ++k)
+          leg.v(i,j,k) *= wgt1;
+        }
+         
+    resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
+    mav<double,1> newtheta({ntheta_leg});
+    for (size_t i=0; i<ntheta_leg; ++i)
+      newtheta.v(i) = (pi*i)/(ntheta_leg-1);
+    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads);
+    return;
     }
-  auto wgt = get_gridweights(geometry, theta.shape(0));
-  auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
-  map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
-  for (size_t i=0; i<leg.shape(0); ++i)
-    for (size_t j=0; j<leg.shape(1); ++j)
-      {
-      auto wgt1 = T(wgt(j)/nphi(j));
-      for (size_t k=0; k<leg.shape(2); ++k)
-        leg.v(i,j,k) *= wgt1;
-      }
-  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+  else
+    {
+    auto wgt = get_gridweights(geometry, theta.shape(0));
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
+    map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    for (size_t i=0; i<leg.shape(0); ++i)
+      for (size_t j=0; j<leg.shape(1); ++j)
+        {
+        auto wgt1 = T(wgt(j)/nphi(j));
+        for (size_t k=0; k<leg.shape(2); ++k)
+          leg.v(i,j,k) *= wgt1;
+        }
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    }
   }
 
 template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
