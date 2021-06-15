@@ -1685,7 +1685,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
   size_t nfull_in = 2*nrings_in-npi-spi;
   size_t nrings_out = lego.shape(1);
   size_t nfull_out = 2*nrings_out-2;
-  bool need_first_resample = !(npi&&spi&&(nfull_in>=2*lmax+2));
+  bool need_first_resample = !(npi&&spi&&(nrings_in>=2*lmax+2));
   size_t nfull = need_first_resample ? 2*nfull_out : nfull_in;
 
   vector<complex<T>> shift(npi ? 0 : nrings_in+1);
