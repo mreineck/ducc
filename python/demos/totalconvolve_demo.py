@@ -29,7 +29,7 @@ def random_alm(lmax, mmax, ncomp):
     res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
      + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1, :].imag = 0.
+    res[:, 0:lmax+1].imag = 0.
     return res
 
 
@@ -42,7 +42,7 @@ def compress_alm(alm, lmax):
 
 
 def myalmdot(a1, a2, lmax, mmax, spin):
-    return np.vdot(compress_alm(a1, lmax), compress_alm(np.conj(a2), lmax))
+    return np.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
 
 
 lmax = 1024

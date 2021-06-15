@@ -756,9 +756,9 @@ template<typename T> class ConvolverPlan
             for (size_t i=0; i<ncomp; ++i)
               {
               auto tmp = vblm(i,iblm.index(l,mbeam))*lnorm[l] * T((mbeam==0) ? 1 : (-2));
-              vslm.v(i,islm.index(l,m)) += conj(aarr(0,base.index(l,m)))*tmp.real();
+              vslm.v(i,islm.index(l,m)) += aarr(0,base.index(l,m))*tmp.real();
               if (mbeam>0)
-                vslm.v(i,islm.index(l,m)) += conj(aarr(1,base.index(l,m)))*tmp.imag();
+                vslm.v(i,islm.index(l,m)) += aarr(1,base.index(l,m))*tmp.imag();
               }
       }
 
