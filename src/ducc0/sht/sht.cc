@@ -1544,11 +1544,9 @@ template<typename T> void leg2alm(  // associated Legendre transform
   // See if we can take any shortcuts
   if (nrings>500)  // OK, it's worth even thinking about shortcuts
     {
-cout <<"beep1" << endl;
     bool npi, spi;
     if (regular_thetas(theta, npi, spi))
       {
-cout <<"beep2" << endl;
       size_t npairs = nrings*(2-(npi==spi))/2;
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
