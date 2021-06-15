@@ -91,7 +91,167 @@ py::array Py_transpose(const py::array &in, py::array &out)
   }
 
 
-const char *misc_DS = R"""(
+/*! A numeric filter which produces noise with the power spectrum
+
+    P(f)=(1/fsample)^2*(f^2+fknee^2)/(f^2+fmin^2)
+
+    when fed with Gaussian random numbers of sigma=1.
+    \author Stephane Plaszczynski (plaszczy@lal.in2p3.fr) */
+class oof2filter
+  {
+  private:
+    double x1, y1, c0, c1, d0;
+
+  public:
+    oof2filter (double fmin, double fknee, double fsample)
+      : x1(0), y1(0)
+      {
+      double w0 = pi*fmin/fsample, w1=pi*fknee/fsample;
+      c0 = (1+w1)/(1+w0);
+      c1 =-(1-w1)/(1+w0);
+      d0 = (1-w0)/(1+w0);
+      }
+
+    void reset()
+      { x1=y1=0; }
+
+    double operator()(double x2)
+      {
+      double y2 = c0*x2 + c1*x1 + d0*y1;
+      x1 = x2;
+      y1 = y2;
+      return y2;
+      }
+  };
+
+
+/*! A numeric filter, based on superposition of 1/f2 filters.
+    see : {Keshner,PROC-IEE,vol-70 (1982)}
+    that approximates the power spectrum
+
+    P(f)=(1/fsamp)^2[(f^2+fknee^2)/(f^2+fmin^2)]^(alpha/2)
+
+    for 0<alpha<2, when fed with Gaussian random numbers of sigma=1.
+
+    Errors should be below 1% for any alpha.
+
+    \author Stephane Plaszczynski (plaszczy@lal.in2p3.fr) */
+class oofafilter
+  {
+  private:
+    vector<oof2filter> filter;
+
+  public:
+    oofafilter (double alpha, double fmin, double fknee, double fsample)
+      {
+      double lw0 = log10(twopi*fmin), lw1 = log10(twopi*fknee);
+
+      int Nproc = max(1,int(2*(lw1-lw0)));
+      double dp = (lw1-lw0)/Nproc;
+      double p0 = lw0 + dp*0.5*(1+0.5*alpha);
+      for (int i=0; i<Nproc; ++i)
+        {
+        double p_i = p0+i*dp;
+        double z_i = p_i - 0.5*dp*alpha;
+
+        filter.push_back
+          (oof2filter(pow(10.,p_i)/twopi,pow(10.,z_i)/twopi,fsample));
+        }
+      }
+
+    double operator()(double x2)
+      {
+      for (unsigned int i=0; i<filter.size(); ++i)
+        x2 = filter[i](x2);
+      return x2;
+      }
+
+    void reset()
+      {
+      for (unsigned int i=0; i<filter.size(); ++i)
+        filter[i].reset();
+      }
+  };
+
+
+class OofaNoise
+  {
+  private:
+    oofafilter filter;
+    double sigma;
+
+  public:
+    OofaNoise(double sigmawhite_, double f_knee_, double f_min_,
+      double f_samp_, double slope_)
+      : filter(slope_, f_min_, f_knee_, f_samp_), sigma(sigmawhite_)
+      {}
+
+    void filterGaussian(mav<double,1> &data)
+      {
+      for (size_t i=0; i<data.shape(0); ++i)
+        data.v(i) = sigma*filter(data(i));
+      }
+
+    void reset()
+      {
+      filter.reset();
+      }
+  };
+
+class Py_OofaNoise
+  {
+  private:
+    OofaNoise gen;
+
+  public:
+    Py_OofaNoise(double sigmawhite, double f_knee, double f_min,
+      double f_samp, double slope)
+      : gen(sigmawhite, f_knee, f_min, f_samp, -slope) {}
+
+    py::array filterGaussian(const py::array &rnd_)
+      {
+      auto rnd = to_mav<double,1>(rnd_, false);
+      auto res_ = make_Pyarr<double>({rnd.shape(0)});
+      auto res = to_mav<double,1>(res_, true);
+      res.apply(rnd, [](double &out, double in) {out=in;});
+      gen.filterGaussian(res);
+      return res_;
+      }
+  };
+
+constexpr const char *Py_OofaNoise_init_DS = R"""(
+OofaNoise constructor
+
+Parameters
+----------
+sigmawhite : float
+    sigma of the white noise part of the produced spectrum; units are arbitrary
+f_knee : float
+    knee frequency in Hz. Above this frequency, the spectrum will be white.
+f_min : float
+    minimum frequency in Hz. Below this frequency, the spectrum will become
+    white again. Must be lower than f_knee.
+f_samp : float
+    sampling frequency in Hz at which the noise samples should be generated.
+slope : float
+    the slope of the spectrum between f_min and f_knee. Must be in [0; -2]
+)""";
+
+constexpr const char *Py_OofaNoise_filterGaussian_DS = R"""(
+Apply the noise filter to input Gaussian noise
+
+Parameters
+----------
+rnd : numpy.ndarray((nsamples,), dtype=numpy.float64)
+    input Gaussian random numbers with mean=0 and sigma=1
+
+Returns
+-------
+numpy.ndarray((nsamples,), dtype=numpy.float64):
+    the filtered noise samples with the requested spectral shape
+)""";
+
+constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
 Notes
@@ -112,6 +272,12 @@ void add_misc(py::module_ &msup)
   m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
 
   m.def("transpose",&Py_transpose, "in"_a, "out"_a);
+
+  py::class_<Py_OofaNoise> (m, "OofaNoise", py::module_local())
+    .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
+      "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
+    .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
+      Py_OofaNoise_filterGaussian_DS, "rnd"_a);
   }
 
 }
