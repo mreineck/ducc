@@ -29,7 +29,7 @@ def random_alm(lmax, mmax, ncomp):
     res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
      + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1, :].imag = 0.
+    res[:, 0:lmax+1].imag = 0.
     return res
 
 
@@ -41,8 +41,8 @@ def compress_alm(alm, lmax):
     return res
 
 
-def myalmdot(a1, a2, lmax, mmax, spin):
-    return np.vdot(compress_alm(a1, lmax), compress_alm(np.conj(a2), lmax))
+def myalmdot(a1, a2, lmax):
+    return np.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
 
 
 lmax = 1024
@@ -106,7 +106,7 @@ t0 = time.time()
 bla = foo2.getSlm(blm)
 del foo2
 print("Computing s_lm: {}s".format(time.time()-t0))
-v1 = np.sum([myalmdot(slm[i, :], bla[i, :], lmax, lmax, 0) for i in range(ncomp)])
+v1 = np.sum([myalmdot(slm[i, :], bla[i, :], lmax) for i in range(ncomp)])
 v2 = np.sum([np.vdot(fake[i, :], bar[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))
 
@@ -132,6 +132,6 @@ t0 = time.time()
 bla_f = foo2_f.getSlm(blm.astype(np.complex64))
 del foo2_f
 print("Computing s_lm: {}s".format(time.time()-t0))
-v1 = np.sum([myalmdot(slm[i, :], bla_f[i, :], lmax, lmax, 0) for i in range(ncomp)])
+v1 = np.sum([myalmdot(slm[i, :], bla_f[i, :], lmax) for i in range(ncomp)])
 v2 = np.sum([np.vdot(fake_f[i, :], bar_f[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))

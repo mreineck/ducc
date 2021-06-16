@@ -286,6 +286,7 @@ struct ringhelper
   vector<dcmplx> shiftarr;
   size_t s_shift;
   unique_ptr<pocketfft_r<double>> plan;
+  vector<double> buf;
   size_t length;
   bool norot;
   ringhelper() : phi0_(0), s_shift(0), length(0), norot(false) {}
@@ -305,6 +306,7 @@ struct ringhelper
     if (nph!=length)
       {
       plan=make_unique<pocketfft_r<double>>(nph);
+      buf.resize(plan->bufsize());
       length=nph;
       }
     }
@@ -354,14 +356,14 @@ struct ringhelper
         }
       }
     data.v(1)=data(0);
-    plan->exec(&(data.v(1)), 1., false);
+    plan->exec(&(data.v(1)), buf.data(), 1., false);
     }
   template<typename T> DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
     mav<double,1> &data, size_t mmax, mav<complex<T>,1> &phase)
     {
     update (nph, mmax, -phi0);
 
-    plan->exec (&(data.v(1)), 1., true);
+    plan->exec (&(data.v(1)), buf.data(), 1., true);
     data.v(0)=data(1);
     data.v(1)=data.v(nph+1)=0.;
 
@@ -425,6 +427,9 @@ void get_ringtheta_2d(const string &type, mav<double, 1> &theta)
   else if (type=="MW") // McEwen-Wiaux
     for (size_t m=0; m<nrings; ++m)
       theta.v(m)=pi*(2.*m+1.)/(2.*nrings-1.);
+  else if (type=="MWflip") // McEwen-Wiaux mirrored
+    for (size_t m=0; m<nrings; ++m)
+      theta.v(m)=pi*(2.*m)/(2.*nrings-1.);
   else
     MR_fail("unsupported grid type");
   }
@@ -476,155 +481,15 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads);
 
-template<typename T> void prep_for_analysis(mav<complex<T>,3> &leg, size_t spin, size_t nthreads);
+template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
+  size_t spin, size_t lmax, const string &geometry, size_t nthreads, SHT_mode mode=ALM2MAP);
 
-template<typename T> void resample_theta(const mav<complex<T>,2> &legi, bool npi, bool spi,
-  mav<complex<T>,2> &lego, bool npo, bool spo, size_t spin, size_t nthreads);
+template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
 
-template<typename T> void resample_to_CC(const mav<complex<T>,3> &legi,
-  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
-  {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  for (size_t i=0; i<legi.shape(0); ++i)
-    {
-    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
-    }
-  }
-template<typename T> void resample_from_CC(const mav<complex<T>,3> &legi,
-  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
-  {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  for (size_t i=0; i<legi.shape(0); ++i)
-    {
-    auto subi = legi.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    auto subo = lego.template subarray<2>({i,0,0},{0,MAXIDX,MAXIDX});
-    resample_theta(subi, true, true, subo, npo, spo, spin, nthreads);
-    }
-  }
-template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
-  bool npi, bool spi, mav<complex<T>,3> &lego, size_t spin, size_t nthreads)
-  {
-  resample_to_CC(legi, npi, spi, lego, spin, nthreads);
-  prep_for_analysis(lego, spin, nthreads);
-  }
+template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
+  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
 
-// fully general map synthesis
-// conditions:
-// - ncomp = 1+(spin>0)
-// - mval is implicitly assumed as [0; mmax]
-template<typename T> void synthesis(
-  const mav<complex<T>,2> &alm, // (ncomp, *)
-  mav<T,2> &map, // (ncomp, *)
-  size_t spin,
-  size_t lmax,
-  const mav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const mav<double,1> &theta, // (nrings)
-  const mav<size_t,1> &nphi, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
-  const mav<size_t,1> &ringstart, // (nrings)
-  ptrdiff_t pixstride,
-  size_t nthreads);
-// - check that lmax>=mmax
-// - (check that mstart has consistent values?)
-// - check that theta are in [0;pi]
-// - (check that ringstart and nphi are consistent)
-// - check that ncomp and spin are consistent
-// - is theta grid equidistant and (CC, F!, MW)?
-//   - if no, run standard synthesis
-//   - check lmax and nrings whether accelerated synthesis makes sense
-//   - if yes, run synthesis on grid with minimal nrings and upsample
-//   - otherwise run standard synthesis
-// standard synthesis: break down into several chunks to reduce memory
-// consumption due to temporary "leg" array. Be careful to put ring pairs into
-// the same chunk!
-template<typename T> void adjoint_synthesis(
-  mav<complex<T>,2> &alm, // (ncomp, *)
-  const mav<T,2> &map, // (ncomp, *)
-  size_t spin,
-  size_t lmax,
-  const mav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const mav<double,1> &theta, // (nrings)
-  const mav<size_t,1> &nphi, // (nrings)
-  const mav<double,1> &phi0, // (nrings)
-  const mav<size_t,1> &ringstart, // (nrings)
-  ptrdiff_t pixstride,
-  size_t nthreads);
-
-template<typename T> void synthesis(const mav<complex<T>,2> &alm, mav<T,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads)
-  {
-  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mstart({lmax+1});
-  for (size_t i=0, ofs=0; i<=lmax; ++i)
-    {
-    mstart.v(i) = ofs-i;
-    ofs += lmax+1-i;
-    }
-  mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);
-  auto pixstride = map.stride(2);
-  for (size_t i=0; i<map.shape(1); ++i)
-    ringstart.v(i) = i*ringstride;
-  mav<T,2> map2(map.vdata(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1}, true);
-  mav<double,1> theta({map.shape(1)});
-  get_ringtheta_2d(geometry, theta);
-  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
-  }
-template<typename T> void synthesis(const mav<complex<T>,1> &alm,
-  mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
-  {
-  mav<complex<T>,2> alm2(alm.cdata(), {1,alm.shape(0)}, {0,alm.stride(0)});
-  mav<T,3> map2(map.vdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)}, true);
-  synthesis (alm2, map2, 0, lmax, geometry, nthreads);
-  }
-template<typename T> void adjoint_synthesis(mav<complex<T>,2> &alm,
-  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
-  {
-  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mstart({lmax+1});
-  for (size_t i=0, ofs=0; i<=lmax; ++i)
-    {
-    mstart.v(i) = ofs-i;
-    ofs += lmax+1-i;
-    }
-  mav<size_t,1> ringstart({map.shape(1)});
-  auto ringstride = map.stride(1);
-  auto pixstride = map.stride(2);
-  for (size_t i=0; i<map.shape(1); ++i)
-    ringstart.v(i) = i*ringstride;
-  mav<T,2> map2(map.cdata(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
-  mav<double,1> theta({map.shape(1)});
-  get_ringtheta_2d(geometry, theta);
-  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
-  }
-template<typename T> void adjoint_synthesis(mav<complex<T>,1> &alm,
-  const mav<T,2> &map, size_t lmax, const string &geometry, size_t nthreads)
-  {
-  mav<complex<T>,2> alm2(alm.vdata(), {1,alm.shape(0)}, {0,alm.stride(0)}, true);
-  mav<T,3> map2(map.cdata(), {1,map.shape(0),map.shape(1)}, {0,map.stride(0),map.stride(1)});
-  adjoint_synthesis (alm2, map2, 0, lmax, geometry, nthreads);
-  }
-// template<typename T> void analysis(mav<complex<T>,2> &alm, size_t lmax,
-//   size_t mmax, const mav<T,3> &map, size_t spin, const string &geometry,
-//   size_t nthreads)
-//   {
-// // if nphi is too low => error
-// // if nrings is too low for geometry => error
-// // nrings high enough for analysis with quadrature weights => standard analysis
-// // - map2leg
-// // - upsample to CC grid with enough rings for quadrature
-// // - apply CC weights
-// // - resample odd rings to fall on even rings
-// // - adjoint synthesis
-//   }
 }
 
 using detail_sht::SHT_mode;
@@ -636,11 +501,9 @@ using detail_sht::alm2leg;
 using detail_sht::leg2alm;
 using detail_sht::map2leg;
 using detail_sht::leg2map;
-using detail_sht::resample_to_CC;
-using detail_sht::resample_to_prepared_CC;
-using detail_sht::resample_from_CC;
-using detail_sht::synthesis;
-using detail_sht::adjoint_synthesis;
+using detail_sht::synthesis_2d;
+using detail_sht::adjoint_synthesis_2d;
+using detail_sht::analysis_2d;
 
 }
 

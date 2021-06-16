@@ -35,18 +35,6 @@ def random_alm(lmax, mmax, ncomp):
     return res
 
 
-def compress_alm(alm, lmax):
-    res = np.empty(2*len(alm)-lmax-1, dtype=np.float64)
-    res[0:lmax+1] = alm[0:lmax+1].real
-    res[lmax+1::2] = np.sqrt(2)*alm[lmax+1:].real
-    res[lmax+2::2] = np.sqrt(2)*alm[lmax+1:].imag
-    return res
-
-
-def myalmdot(a1, a2, lmax, mmax, spin):
-    return np.vdot(compress_alm(a1, lmax), compress_alm(np.conj(a2), lmax))
-
-
 def convolve(alm1, alm2, lmax):
     job = sht.sharpjob_d()
     job.set_triangular_alm_info(lmax, lmax)
