@@ -1550,8 +1550,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
       size_t npairs = nrings*(2-(npi==spi))/2;
       if (2*npairs>=1.5*lmax)  // There is potential to save time
         {
-        size_t nrings_sym = good_size_complex(lmax)+1;
-        if (true) //nrings_small<=nrings)  // just to be safe
+        size_t nrings_sym = good_size_complex(lmax+1)+1;
+        if (nrings_sym<=nrings)  // just to be safe
           {
 cout << "symmetrizing " << nrings << "->" << nrings_sym << endl;
           mav<double,1> theta_sym({nrings_sym});
@@ -1565,7 +1565,7 @@ cout << "symmetrizing " << nrings << "->" << nrings_sym << endl;
             resample_theta(subi, npi, spi, subo, true, true, spin, nthreads);
             }
           leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
-          alm.apply([=](complex<T> &v){v*=T(nrings)/nrings_sym;});
+       alm.apply([=](complex<T> &v){v*=T(2*nrings-npi-spi)/(2*nrings_sym-2);});
           return;
           }
         }
