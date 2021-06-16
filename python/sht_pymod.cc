@@ -713,7 +713,7 @@ numpy.ndarray((ncomp, *), same dtype as `leg`)
 )""";
 
 constexpr const char *map2leg_DS = R"""(
-Transforms a sky map or several sky maps to Legendre coefficients
+Transforms a map or several maps to Legendre coefficients
 dependent on theta and m.
 
 Parameters
@@ -755,7 +755,7 @@ range from 0 to mmax, inclusively.
 )""";
 
 constexpr const char *leg2map_DS = R"""(
-Transforms one or more sets of Legendre coefficients to sky maps.
+Transforms one or more sets of Legendre coefficients to maps.
 
 Parameters
 ----------
