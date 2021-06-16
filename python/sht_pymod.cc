@@ -335,21 +335,21 @@ py::array Py_adjoint_synthesis_2d(py::array &alm,
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_synthesis_2d_deriv1(const py::array &alm_,
-  py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  py::array &map_, size_t lmax, const string &geometry, size_t nthreads)
   {
   auto alm = to_mav<complex<T>,2>(alm_, false);
   auto map = to_mav<T,3>(map_, true);
   MR_assert((map.shape(0)==2) && (alm.shape(0)==1), "incorrect number of components");
-  synthesis_2d(alm, map, spin, lmax, geometry, nthreads, ALM2MAP_DERIV1);
+  synthesis_2d(alm, map, 1, lmax, geometry, nthreads, ALM2MAP_DERIV1);
   return map_;
   }
 py::array Py_synthesis_2d_deriv1(const py::array &alm,
-  py::array &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  py::array &map, size_t lmax, const string &geometry, size_t nthreads)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_2d_deriv1<float>(alm, map, spin, lmax, geometry, nthreads);
+    return Py2_synthesis_2d_deriv1<float>(alm, map, lmax, geometry, nthreads);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_2d_deriv1<double>(alm, map, spin, lmax, geometry, nthreads);
+    return Py2_synthesis_2d_deriv1<double>(alm, map, lmax, geometry, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 #if 0
@@ -782,7 +782,7 @@ nthreads: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`
+numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`)
     the map pixel data.
     If `map` was supplied, this will be the same object
     If newly allocated, the smallest possible second dimensions will be chosen.
@@ -791,6 +791,47 @@ Notes
 -----
 In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
 range from 0 to mmax, inclusively. 
+)""";
+
+constexpr const char *synthesis_2d_DS = R"""(
+Transforms one or more sets of spherical harmonic coefficients to 2D sky maps.
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention
+map: numpy.ndarray((ncomp, nrings, nphi), dtype=numpy.float of same accuracy as alm)
+    storage for the output map.
+spin: int >= 0
+    the spin to use for the transform
+    if spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l (and m) moment of the transform (inclusive)
+geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
+    the distribution of rings over the theta range
+    - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
+    - F1: Fejer's first rule, equidistant, first and last ring half a ring
+      width from the poles
+    - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
+      the north pole, last ring on the south pole
+    - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
+      north pole, last ring half a ring width from the south pole
+    - GL: Gauss-Legendre, non-equidistant
+    - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
+      ring width from the south pole
+    - F2: Fejer's second rule, equidistant, first and last ring one ring width
+      from the poles.
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray((ncomp, nrings, nphi), dtype=numpy.float of same accuracy as alm)
+    the computed map
+    The object should be identical to the input `map`
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
@@ -805,9 +846,9 @@ void add_sht(py::module_ &msup)
   auto m2 = m.def_submodule("experimental");
   m2.doc() = sht_experimental_DS;
 
-  m2.def("synthesis_2d", &Py_synthesis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
+  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
   m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
-  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
+  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, py::kw_only(), "alm"_a, "map"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
   m2.def("analysis_2d", &Py_analysis_2d, py::kw_only(), "alm"_a, "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "nthreads"_a=1);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
