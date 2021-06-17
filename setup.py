@@ -51,7 +51,7 @@ if do_native:
 python_module_link_args = []
 
 define_macros = [("PKGNAME", pkgname),
-                 ("PKGVERSION", '"%s"' % version)]
+                 ("PKGVERSION", version)]
 
 if sys.platform == 'darwin':
     import distutils.sysconfig
