@@ -20,14 +20,13 @@
 using namespace ducc0;
 
 
-#define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
-#define DUCC0_STRINGIFY(s) #s
-
 PYBIND11_MODULE(PKGNAME, m)
   {
-//#if (!defined(_MSC_VER)) // no idea why this doesn't work on Windows
+#define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
+#define DUCC0_STRINGIFY(s) #s
   m.attr("__version__") = DUCC0_XSTRINGIFY(PKGVERSION);
-//#endif
+#undef DUCC0_STRINGIFY
+#undef DUCC0_XSTRINGIFY
 
   add_fft(m);
   add_sht(m);
