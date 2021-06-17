@@ -1567,19 +1567,25 @@ template<typename T> void alm2leg(  // associated Legendre transform
     if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
       {
       size_t npairs = nrings*(2-(npi==spi))/2;
-      if (2*npairs>=1.5*lmax)  // There is potential to save time
+      size_t nrings_small = good_size_complex(lmax+1)+1;
+      if (2*npairs>=1.2*nrings_small)  // There is potential to save time
         {
-        size_t nrings_small = good_size_complex(lmax+1)+1;
-        if (nrings_small<=nrings)  // just to be safe
+        mav<double,1> theta_small({nrings_small});
+        for (size_t i=0; i<nrings_small; ++i)
+          theta_small.v(i) = i*pi/(nrings_small-1);
+        if (nrings_small<=nrings)
           {
-          mav<double,1> theta_small({nrings_small});
-          for (size_t i=0; i<nrings_small; ++i)
-            theta_small.v(i) = i*pi/(nrings_small-1);
           auto leg_small(leg.template subarray<3>({0,0,0},{MAXIDX,nrings_small,MAXIDX}));
           alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
           resample_theta(leg_small, true, true, leg, npi, spi, spin, nthreads);
-          return;
           }
+        else
+          {
+          mav<complex<T>,3> leg_small({leg.shape(0),nrings_small,leg.shape(2)});
+          alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
+          resample_theta(leg_small, true, true, leg, npi, spi, spin, nthreads);
+          }
+        return;
         }
       }
     }
@@ -1640,19 +1646,16 @@ template<typename T> void leg2alm(  // associated Legendre transform
     if (regular_thetas(theta, npi, spi))
       {
       size_t npairs = nrings*(2-(npi==spi))/2;
-      if (2*npairs>=1.5*lmax)  // There is potential to save time
+      size_t nrings_sym = good_size_complex(lmax+1)+1;
+      if (2*npairs>=1.2*nrings_sym)  // There is potential to save time
         {
-        size_t nrings_sym = good_size_complex(lmax+1)+1;
-        if (nrings_sym<=nrings)  // just to be safe
-          {
-          mav<double,1> theta_sym({nrings_sym});
-          for (size_t i=0; i<nrings_sym; ++i)
-            theta_sym.v(i) = i*pi/(nrings_sym-1);
-          auto leg_sym(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_sym, leg.shape(2)}));
-          resample_theta_adjoint(leg, npi, spi, leg_sym, true, true, spin, nthreads);
-          leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
-          return;
-          }
+        mav<double,1> theta_sym({nrings_sym});
+        for (size_t i=0; i<nrings_sym; ++i)
+          theta_sym.v(i) = i*pi/(nrings_sym-1);
+        auto leg_sym(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_sym, leg.shape(2)}));
+        resample_theta_adjoint(leg, npi, spi, leg_sym, true, true, spin, nthreads);
+        leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
+        return;
         }
       }
     }
