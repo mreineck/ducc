@@ -8,7 +8,7 @@ from setuptools import setup, Extension
 import pybind11
 
 pkgname = 'ducc0'
-version = '0.13.0'
+version = '0.14.0'
 
 user_cflags = os.getenv("DUCC0_CFLAGS", "").split(" ")
 user_cflags = [x for x in user_cflags if x != ""]
@@ -51,7 +51,7 @@ if do_native:
 python_module_link_args = []
 
 define_macros = [("PKGNAME", pkgname),
-                 ("PKGVERSION", '"%s"' % version)]
+                 ("PKGVERSION", version)]
 
 if sys.platform == 'darwin':
     import distutils.sysconfig

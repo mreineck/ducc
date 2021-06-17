@@ -595,7 +595,7 @@ template<typename T> class ConvolverPlan
             }
           }
       auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {nplanes, ntheta_s, nphi_s});
-      synthesis(aarr, subplanes, mbeam, lmax, "CC", nthreads);
+      synthesis_2d(aarr, subplanes, mbeam, lmax, "CC", nthreads);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
@@ -749,16 +749,16 @@ template<typename T> class ConvolverPlan
       auto subplanes=subarray<3>(planes,{0, nbtheta, nbphi}, {nplanes, ntheta_s, nphi_s});
 
       mav<complex<T>,2> aarr({nplanes, base.Num_Alms()});
-      adjoint_synthesis(aarr, subplanes, mbeam, lmax, "CC", nthreads);
+      adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, "CC", nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           if (l>=mbeam)
             for (size_t i=0; i<ncomp; ++i)
               {
               auto tmp = vblm(i,iblm.index(l,mbeam))*lnorm[l] * T((mbeam==0) ? 1 : (-2));
-              vslm.v(i,islm.index(l,m)) += conj(aarr(0,base.index(l,m)))*tmp.real();
+              vslm.v(i,islm.index(l,m)) += aarr(0,base.index(l,m))*tmp.real();
               if (mbeam>0)
-                vslm.v(i,islm.index(l,m)) += conj(aarr(1,base.index(l,m)))*tmp.imag();
+                vslm.v(i,islm.index(l,m)) += aarr(1,base.index(l,m))*tmp.imag();
               }
       }
 
