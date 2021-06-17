@@ -19,7 +19,6 @@
 
 using namespace ducc0;
 
-
 PYBIND11_MODULE(PKGNAME, m)
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
