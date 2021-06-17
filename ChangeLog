@@ -1,9 +1,13 @@
 0.14.0:
+- general:
+  - ducc0.__version__ is now also defined under Windows
+
 - sht:
   - further performance improvements
   - added functions for manipulation of "2D maps", i.e. maps consisting of
-    (ntheta*nphi) with equidistant pixels in phi, and rings distributed along
-    theta according to one of the CC, DH, F1, F2, GL, MW, MWflip schemes.
+    (ntheta*nphi) pixels with equidistant pixels in phi, and rings distributed
+    along theta according to one of the CC, DH, F1, F2, GL, MW, MWflip schemes.
+
 - totalconvolve:
   - bug fix in the adjoint convolution: results were inadvertently conjugated
 
