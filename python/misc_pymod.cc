@@ -206,7 +206,7 @@ class Py_OofaNoise
   public:
     Py_OofaNoise(double sigmawhite, double f_knee, double f_min,
       double f_samp, double slope)
-      : gen(sigmawhite, f_knee, f_min, f_samp, -slope) {}
+      : gen(sigmawhite, f_min, f_knee, f_samp, slope) {}
 
     py::array filterGaussian(const py::array &rnd_)
       {
