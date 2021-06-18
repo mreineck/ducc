@@ -1337,9 +1337,11 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
   }
 
 
-bool regular_thetas(const mav<double,1> &theta, bool &npi, bool &spi)
+bool downsampling_ok(const mav<double,1> &theta, size_t lmax,
+  bool &npi, bool &spi, size_t &ntheta_out)
   {
   size_t ntheta = theta.shape(0);
+  if (ntheta<=500) return false; // not worth thinking about shortcuts
   npi = abs_approx(theta(0), 0., 1e-14);
   spi = abs_approx(theta(ntheta-1), pi, 1e-14);
   size_t nthetafull = 2*ntheta-npi-spi;
@@ -1347,6 +1349,10 @@ bool regular_thetas(const mav<double,1> &theta, bool &npi, bool &spi)
   for (size_t i=0; i<ntheta; ++i)
     if (!abs_approx(theta(i),(0.5*(1-npi)+i)*dtheta, 1e-14))
       return false;
+  size_t npairs = ntheta*(2-(npi==spi))/2;
+  ntheta_out = good_size_complex(lmax+1)+1;
+  if (2*npairs<1.2*ntheta_out)  // not worth taking the shortcut
+    return false;
   return true;
   }
 
@@ -1394,7 +1400,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
             }
-          plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           if (shift!=0)
             for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
               {
@@ -1421,7 +1427,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
               tmp.v(i-dist) = tmp(i);
             }
-          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           auto norm = T(1./(2*nfull_in));
           for (size_t i=0; i<nrings_out; ++i)
             {
@@ -1482,7 +1488,7 @@ template<typename T> void resample_theta_adjoint(const mav<complex<T>,3> &legi, 
             else
               tmp.v(i) += fct * (v1-v2); // sic!
             }
-          plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           if (shift!=0)
             for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
               {
@@ -1509,7 +1515,7 @@ template<typename T> void resample_theta_adjoint(const mav<complex<T>,3> &legi, 
             for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
               tmp.v(i-dist) = tmp(i);
             }
-          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           auto norm = T(1./(2*nfull_out));
           for (size_t i=0; i<nrings_out; ++i)
             {
@@ -1560,34 +1566,27 @@ template<typename T> void alm2leg(  // associated Legendre transform
     MR_assert(nalm==ncomp, "incorrect number of a_lm components");
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
-  // See if we can take any shortcuts
-  if (nrings>500)  // OK, it's worth even thinking about shortcuts
+
+  bool npi, spi;
+  size_t ntheta_tmp;
+  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    bool npi, spi;
-    if (regular_thetas(theta, npi, spi))  // we are on a CC, MW or F1-like grid
+    mav<double,1> theta_tmp({ntheta_tmp});
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
+    if (ntheta_tmp<=nrings)
       {
-      size_t npairs = nrings*(2-(npi==spi))/2;
-      size_t nrings_small = good_size_complex(lmax+1)+1;
-      if (2*npairs>=1.2*nrings_small)  // There is potential to save time
-        {
-        mav<double,1> theta_small({nrings_small});
-        for (size_t i=0; i<nrings_small; ++i)
-          theta_small.v(i) = i*pi/(nrings_small-1);
-        if (nrings_small<=nrings)
-          {
-          auto leg_small(leg.template subarray<3>({0,0,0},{MAXIDX,nrings_small,MAXIDX}));
-          alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
-          resample_theta(leg_small, true, true, leg, npi, spi, spin, nthreads);
-          }
-        else
-          {
-          mav<complex<T>,3> leg_small({leg.shape(0),nrings_small,leg.shape(2)});
-          alm2leg(alm, leg_small, spin, lmax, mval, mstart, lstride, theta_small, nthreads, mode);
-          resample_theta(leg_small, true, true, leg, npi, spi, spin, nthreads);
-          }
-        return;
-        }
+      auto leg_tmp(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
+      alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads);
       }
+    else
+      {
+      mav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)});
+      alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads);
+      }
+    return;
     }
 
   auto norm_l = (mode==ALM2MAP_DERIV1) ? Ylmgen::get_d1norm (lmax) :
@@ -1639,25 +1638,18 @@ template<typename T> void leg2alm(  // associated Legendre transform
   size_t ncomp = (spin==0) ? 1 : 2;
   MR_assert(alm.shape(0)==ncomp, "incorrect number of a_lm components");
   MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
-  // See if we can take any shortcuts
-  if (nrings>500)  // OK, it's worth even thinking about shortcuts
+
+  bool npi, spi;
+  size_t ntheta_tmp;
+  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    bool npi, spi;
-    if (regular_thetas(theta, npi, spi))
-      {
-      size_t npairs = nrings*(2-(npi==spi))/2;
-      size_t nrings_sym = good_size_complex(lmax+1)+1;
-      if (2*npairs>=1.2*nrings_sym)  // There is potential to save time
-        {
-        mav<double,1> theta_sym({nrings_sym});
-        for (size_t i=0; i<nrings_sym; ++i)
-          theta_sym.v(i) = i*pi/(nrings_sym-1);
-        auto leg_sym(mav<complex<T>,3>::build_noncritical({leg.shape(0), nrings_sym, leg.shape(2)}));
-        resample_theta_adjoint(leg, npi, spi, leg_sym, true, true, spin, nthreads);
-        leg2alm(alm, leg_sym, spin, lmax, mval, mstart, lstride, theta_sym, nthreads);
-        return;
-        }
-      }
+    mav<double,1> theta_tmp({ntheta_tmp});
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
+    auto leg_tmp(mav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}));
+    resample_theta_adjoint(leg, npi, spi, leg_tmp, true, true, spin, nthreads);
+    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    return;
     }
 
   auto norm_l = Ylmgen::get_norm (lmax, spin);
@@ -1810,7 +1802,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             }
           if (need_first_resample)
             {
-            plan_in.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+            plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
 
             // shift
             if (!npi)
@@ -1838,7 +1830,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
               for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
                 tmp.v(i-dist) = tmp(i);
               }
-            plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+            plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
           auto norm = T(1./(2*(need_first_resample ? nfull_in : 1)));
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
@@ -1848,7 +1840,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             if ((im<nfull) && (im!=i))
               tmp.v(im) *= T(wgt(i));
             }
-          plan_full.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           if (nfull_out<nfull) // truncate
             {
             size_t dist = nfull-nfull_out;
@@ -1856,7 +1848,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             for (size_t i=nfull-nmove; i<nfull; ++i)
             tmp.v(i-dist) = tmp(i);
             }
-          plan_out.exec((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           norm *= T(1./nfull_out);
           for (size_t i=0; i<nrings_out; ++i)
             {
@@ -1920,12 +1912,30 @@ template<typename T> void synthesis(
   SHT_mode mode)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
-  auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}));
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval.v(i) = i;
-  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
-  leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+
+  bool npi, spi;
+  size_t ntheta_tmp;
+  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+    {
+    mav<double,1> theta_tmp({ntheta_tmp});
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
+    auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
+    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+    resample_theta(legi, true, true, lego, npi, spi, spin, nthreads);
+    leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
+    }
+  else
+    {
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}));
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
+    leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    }
   }
 
 template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
@@ -1974,12 +1984,30 @@ template<typename T> void adjoint_synthesis(
   size_t nthreads)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
-  auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
-  map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval.v(i) = i;
-  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+
+  bool npi, spi;
+  size_t ntheta_tmp;
+  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+    {
+    mav<double,1> theta_tmp({ntheta_tmp});
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
+    auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
+    map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+    resample_theta_adjoint(legi, npi, spi, lego, true, true, spin, nthreads);
+    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    }
+  else
+    {
+    auto leg(mav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
+    map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    }
   }
 
 template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
@@ -2023,6 +2051,16 @@ template<typename T> void analysis_2d(
   ptrdiff_t pixstride,
   size_t nthreads)
   {
+  size_t nrings_min = lmax+1;
+  if (geometry=="CC")
+    nrings_min = lmax+2;
+  else if (geometry=="DH")
+    nrings_min = 2*lmax+2;
+  else if (geometry=="F2")
+    nrings_min = 2*lmax+1;
+  MR_assert(map.shape(1)>=nrings_min,
+    "too few rings for analysis up to requested lmax");
+
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval.v(i) = i;
