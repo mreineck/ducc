@@ -55,11 +55,11 @@ using std::vector;
 
 //FIXME: introduce buffer to avoid many small allocations!
 template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
-  (const fmav_info &info, size_t axis, size_t len)
+  (const fmav_info &info, size_t axis, size_t len, size_t bufsize)
   {
   auto othersize = info.size()/info.shape(axis);
   constexpr auto vlen = native_simd<T0>::size();
-  return aligned_array<T>(len*std::min(vlen, othersize));
+  return aligned_array<T>((len+bufsize)*std::min(vlen, othersize));
   }
 
 template<typename Tplan, typename T, typename T0, typename Exec>
@@ -74,12 +74,13 @@ DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
   MR_assert(kernel.size()==l_min/2+1, "bad kernel size");
   plan1 = std::make_unique<Tplan>(l_in);
   plan2 = std::make_unique<Tplan>(l_out);
+  size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
   execParallel(
     util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
     [&](Scheduler &sched) {
       constexpr auto vlen = native_simd<T0>::size();
-      auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max);
+      auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max, bufsz);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
@@ -124,13 +125,15 @@ struct ExecConvR1
     {
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
-           l_min = std::min(l_in, l_out);
-    copy_input(it, in, buf);
-    plan1.exec(buf, T0(1), true);
-    for (size_t i=0; i<l_min; ++i) buf[i]*=kernel[(i+1)/2];
-    for (size_t i=l_in; i<l_out; ++i) buf[i] = T(0);
-    plan2.exec(buf, T0(1), false);
-    copy_output(it, buf, out);
+           l_min = std::min(l_in, l_out),
+           bufsz = max(plan1.bufsize(), plan2.bufsize());
+    T *buf1=buf, *buf2=buf+bufsz; 
+    copy_input(it, in, buf2);
+    plan1.exec_copyback(buf2, buf1, T0(1), true);
+    for (size_t i=0; i<l_min; ++i) buf2[i]*=kernel[(i+1)/2];
+    for (size_t i=l_in; i<l_out; ++i) buf2[i] = T(0);
+    auto res = plan2.exec(buf2, buf1, T0(1), false);
+    copy_output(it, res, out);
     }
   };
 
