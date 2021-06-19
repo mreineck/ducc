@@ -167,13 +167,13 @@ struct ft_partial_sph_isometry_plan
     return 0;
     }
 
-  DUCC0_NOINLINE static double Y_index_j_eq_i(int l, int i) // l>=0, i>=0, j>=i
+  static double Y_index_j_eq_i(int l, int i) // l>=0, i>=0, j>=i
     {
     auto r1 = abs(Gy_index3_a1(l, 2*l-i  , i));
     auto r3 = abs(Gy_index3_a2(l, 2*l-i+2));
     return (r1+r3)*0.25/double((2*l+1)*(2*l+3));
     }
-  DUCC0_NOINLINE static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
+  static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
     {
     auto r1 = Gy_index3_a1(l, 2*l-i  , i)*Gy_index3_a2(l, 2*l-i);
     return copysign(sqrt(abs(r1)),r1)*0.25/double((2*l+1)*(2*l+3));
@@ -190,19 +190,26 @@ struct ft_partial_sph_isometry_plan
 
     ft_symmetric_tridiagonal(int N)
       : a(N), b(N-1), n(N) {}
+    void resize(int N)
+      {
+      a.resize(N);
+      b.resize(N-1);
+      n=N;
+      }
     };
 
   class ft_symmetric_tridiagonal_symmetric_eigen
     {
     private:
-      vector<double> A, B, C, lambda;
+      vector<double> A, B, C;
       int sign;
 
     public:
+      vector<double> lambda;
       int n;
 
     private:
-      template<typename Tv, size_t N> int eval_helper
+      template<typename Tv, size_t N> DUCC0_NOINLINE int eval_helper
         (int jmin, const vector<double> &c, vector<double> &f) const
         {
         constexpr double eps = 0x1p-52;
@@ -259,11 +266,22 @@ struct ft_partial_sph_isometry_plan
 
     public:
       ft_symmetric_tridiagonal_symmetric_eigen() {}
-
-      ft_symmetric_tridiagonal_symmetric_eigen (const ft_symmetric_tridiagonal &T,
-        const vector<double> &lambda_, const int sign_)
-        : A(T.n), B(T.n), C(T.n), lambda(lambda_), sign(sign_), n(T.n)
+      ft_symmetric_tridiagonal_symmetric_eigen(size_t nmax)
         {
+        A.reserve(nmax);
+        B.reserve(nmax);
+        C.reserve(nmax);
+        lambda.reserve(nmax); // FIXME: maybe too much
+        }
+
+      void Set (const ft_symmetric_tridiagonal &T, const int sign_)
+        {
+        A.resize(T.n);
+        B.resize(T.n);
+        C.resize(T.n);
+        sign = sign_;
+        n = T.n;
+
         if (n>1)
           {
           A[n-1] = 1/T.b[n-2];
@@ -290,58 +308,62 @@ struct ft_partial_sph_isometry_plan
         }
     };
 
+  ft_symmetric_tridiagonal T;
   ft_symmetric_tridiagonal_symmetric_eigen F11, F21, F12, F22;
   int l;
 
-  ft_partial_sph_isometry_plan(const int l_)
-    : l(l_)
+  ft_partial_sph_isometry_plan(const int lmax)
+    : T((lmax+2)/2), F11(lmax/2), F21((lmax+1)/2), F12((lmax+1)/2), F22((lmax+2)/2), l(-1) {}
+
+  void Set(const int l_)
     {
+    l = l_;
     int n11 = l/2;
-    ft_symmetric_tridiagonal Y11(n11);
+    T.resize(n11);
     for (int i = 0; i < n11; i++)
-      Y11.a[n11-1-i] = Y_index_j_eq_i(l, 2*i+1);
+      T.a[n11-1-i] = Y_index_j_eq_i(l, 2*i+1);
     for (int i = 0; i < n11-1; i++)
-      Y11.b[n11-2-i] = Y_index_j_eq_i_plus_2(l, 2*i+1);
-    vector<double>lambda11(n11);
-    for (int i = 0; i < n11; i++)
-      lambda11[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
+      T.b[n11-2-i] = Y_index_j_eq_i_plus_2(l, 2*i+1);
     int sign = (l%4)/2 == 1 ? 1 : -1;
-    F11 = ft_symmetric_tridiagonal_symmetric_eigen(Y11, lambda11, sign);
+    F11.Set(T, sign);
+    F11.lambda.resize(n11);
+    for (int i = 0; i < n11; i++)
+      F11.lambda[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
 
     int n21 = (l+1)/2;
-    ft_symmetric_tridiagonal Y21(n21);
+    T.resize(n21);
     for (int i = 0; i < n21; i++)
-      Y21.a[n21-1-i] = Y_index_j_eq_i(l, 2*i);
+      T.a[n21-1-i] = Y_index_j_eq_i(l, 2*i);
     for (int i = 0; i < n21-1; i++)
-      Y21.b[n21-2-i] = Y_index_j_eq_i_plus_2(l, 2*i);
-    vector<double> lambda21(n21);
-    for (int i = 0; i < n21; i++)
-      lambda21[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
+      T.b[n21-2-i] = Y_index_j_eq_i_plus_2(l, 2*i);
     sign = ((l+1)%4)/2 == 1 ? -1 : 1;
-    F21 = ft_symmetric_tridiagonal_symmetric_eigen(Y21, lambda21, sign);
+    F21.Set(T, sign);
+    F21.lambda.resize(n21);
+    for (int i = 0; i < n21; i++)
+      F21.lambda[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
 
     int n12 = (l+1)/2;
-    ft_symmetric_tridiagonal Y12(n12);
+    T.resize(n12);
     for (int i = 0; i < n12; i++)
-      Y12.a[i] = Y_index_j_eq_i(l, 2*i+l-l%2+1);
+      T.a[i] = Y_index_j_eq_i(l, 2*i+l-l%2+1);
     for (int i = 0; i < n12-1; i++)
-      Y12.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l-l%2+1);
-    vector<double> lambda12(n12);
+      T.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l-l%2+1);
+    F12.Set(T, sign);
+    F12.lambda.resize(n12);
     for (int i = 0; i < n12; i++)
-      lambda12[n12-1-i] = Z_index(l, 2*i, 2*i);
-    F12 = ft_symmetric_tridiagonal_symmetric_eigen(Y12, lambda12, sign);
+      F12.lambda[n12-1-i] = Z_index(l, 2*i, 2*i);
 
     int n22 = (l+2)/2;
-    ft_symmetric_tridiagonal Y22(n22);
+    T.resize(n22);
     for (int i = 0; i < n22; i++)
-      Y22.a[i] = Y_index_j_eq_i(l, 2*i+l+l%2);
+      T.a[i] = Y_index_j_eq_i(l, 2*i+l+l%2);
     for (int i = 0; i < n22-1; i++)
-      Y22.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l+l%2);
-    vector<double> lambda22(n22);
-    for (int i = 0; i < n22; i++)
-      lambda22[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
+      T.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l+l%2);
     sign = (l%4)/2 == 1 ? -1 : 1;
-    F22 = ft_symmetric_tridiagonal_symmetric_eigen(Y22, lambda22, sign);
+    F22.Set(T, sign);
+    F22.lambda.resize(n22);
+    for (int i = 0; i < n22; i++)
+      F22.lambda[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
     }
   };
 
@@ -362,9 +384,10 @@ template<typename T> void xchg_yz(const Alm_Base &base, mav<complex<T>,1> &alm,
   execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
     {
     vector<double> tin(2*lmax+3), tout(2*lmax+3), tin2(2*lmax+3);
+    ft_partial_sph_isometry_plan F(lmax);
     while (auto rng=sched.getNext()) for(auto l=rng.lo+2; l<rng.hi+2; ++l)
       {
-      ft_partial_sph_isometry_plan F(l);
+      F.Set(l);
 
       int mstart = 1+(l%2);
       for (int i=0; i<F.F11.n; ++i)
