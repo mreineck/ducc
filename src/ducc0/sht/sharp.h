@@ -307,7 +307,7 @@ static inline std::unique_ptr<sharp_geom_info> sharp_make_healpix_geom_info (siz
      - "F1" : rings are placed according to Fejer's first rule,
               i.e. theta_i = (i+0.5)*(pi/nrings)
      - "F2" : rings are placed according to Fejer's second rule,
-              i.e. theta_i = i*pi/(nrings+1)
+              i.e. theta_i = (i+1)*pi/(nrings+1)
      - "DH" : rings are placed according to the Driscoll-Healy scheme,
               i.e. theta_i = i*pi/nrings
      - "MW" : rings are placed according to the McEwen-Wiaux scheme,

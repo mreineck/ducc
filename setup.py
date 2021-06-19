@@ -33,7 +33,7 @@ include_dirs = ['.', './src/',
                 pybind11.get_include(True),
                 pybind11.get_include(False)]
 
-extra_compile_args = ['-std=c++17']
+extra_compile_args = ['-std=c++17', '-fvisibility=hidden']
 
 if do_debug:
     extra_compile_args += ['-g']

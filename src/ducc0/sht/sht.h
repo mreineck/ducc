@@ -356,14 +356,14 @@ struct ringhelper
         }
       }
     data.v(1)=data(0);
-    plan->exec(&(data.v(1)), buf.data(), 1., false);
+    plan->exec_copyback(&(data.v(1)), buf.data(), 1., false);
     }
   template<typename T> DUCC0_NOINLINE void ring2phase (size_t nph, double phi0,
     mav<double,1> &data, size_t mmax, mav<complex<T>,1> &phase)
     {
     update (nph, mmax, -phi0);
 
-    plan->exec (&(data.v(1)), buf.data(), 1., true);
+    plan->exec_copyback(&(data.v(1)), buf.data(), 1., true);
     data.v(0)=data(1);
     data.v(1)=data.v(nph+1)=0.;
 

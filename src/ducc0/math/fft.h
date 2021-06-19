@@ -395,7 +395,7 @@ template<typename T0> class T_dcst4
       return c;
       }
 
-    template<typename T> DUCC0_NOINLINE T *exec(T c[], T0 fct,
+    template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine) const
       {
       exec(c, nullptr, fct, true, 4, cosine);
