@@ -146,38 +146,37 @@ class Alm_Base
 
 struct ft_partial_sph_isometry_plan
   {
-  static double Gy_index3(int l, int i, int j)
+  static double Gy_index3_a1(int l, int i, int j) // precondition: i+j == 2*l
     {
-    if (i+j == 2*l)
-      {
-      if (l+2 <= i && i <= 2*l)
-        return (j+1)*(j+2);
-      else if (0 <= i && i <= l-1)
-        return -(j+1)*(j+2);
-      else if (i==j+2) // j+1==l==i-1
-        return 2*(j+1)*(j+2);
-      else if (i==j)  // i==j==l
-        return -2*(j+1)*(j+2);
-      }
-    else if (i+j == 2*l+2)
-      {
-      if (2 <= i && i <= l)
-        return -(i-1)*i;
-      else if (l+3 <= i && i <= 2*l+2)
-        return (i-1)*i;
-      }
-    return 0.0;
+    if (l+2 <= i && i <= 2*l)
+      return (j+1)*(j+2);
+    else if (0 <= i && i <= l-1)
+      return -(j+1)*(j+2);
+    else if (i==j+2) // j+1==l==i-1
+      return 2*(j+1)*(j+2);
+    else if (i==j)  // i==j==l
+      return -2*(j+1)*(j+2);
+    return 0;
+    }
+  static double Gy_index3_a2(int l, int i) // precondition: i+j == 2*l+2
+    {
+    if (2 <= i && i <= l)
+      return -(i-1)*i;
+    else if (l+3 <= i && i <= 2*l+2)
+      return (i-1)*i;
+    return 0;
     }
 
-  static double Y_index(int l, int i, int j) // l>=0, i>=0, j>=i
+  DUCC0_NOINLINE static double Y_index_j_eq_i(int l, int i) // l>=0, i>=0, j>=i
     {
-    auto r1 = Gy_index3(l, 2*l-i  , i)*Gy_index3(l, 2*l-i  , j);
-    auto r2 = Gy_index3(l, 2*l-i+1, i)*Gy_index3(l, 2*l-i+1, j);
-    auto r3 = Gy_index3(l, 2*l-i+2, i)*Gy_index3(l, 2*l-i+2, j);
-    return (copysign(sqrt(abs(r1)),r1)
-          + copysign(sqrt(abs(r2)),r2)
-          + copysign(sqrt(abs(r3)),r3))
-          *0.25/double((2*l+1)*(2*l+3));
+    auto r1 = abs(Gy_index3_a1(l, 2*l-i  , i));
+    auto r3 = abs(Gy_index3_a2(l, 2*l-i+2));
+    return (r1+r3)*0.25/double((2*l+1)*(2*l+3));
+    }
+  DUCC0_NOINLINE static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
+    {
+    auto r1 = Gy_index3_a1(l, 2*l-i  , i)*Gy_index3_a2(l, 2*l-i);
+    return copysign(sqrt(abs(r1)),r1)*0.25/double((2*l+1)*(2*l+3));
     }
   static double Z_index(int l, int i, int j)
     {
@@ -300,9 +299,9 @@ struct ft_partial_sph_isometry_plan
     int n11 = l/2;
     ft_symmetric_tridiagonal Y11(n11);
     for (int i = 0; i < n11; i++)
-      Y11.a[n11-1-i] = Y_index(l, 2*i+1, 2*i+1);
+      Y11.a[n11-1-i] = Y_index_j_eq_i(l, 2*i+1);
     for (int i = 0; i < n11-1; i++)
-      Y11.b[n11-2-i] = Y_index(l, 2*i+1, 2*i+3);
+      Y11.b[n11-2-i] = Y_index_j_eq_i_plus_2(l, 2*i+1);
     vector<double>lambda11(n11);
     for (int i = 0; i < n11; i++)
       lambda11[n11-1-i] = Z_index(l, 2*i+1, 2*i+1);
@@ -312,9 +311,9 @@ struct ft_partial_sph_isometry_plan
     int n21 = (l+1)/2;
     ft_symmetric_tridiagonal Y21(n21);
     for (int i = 0; i < n21; i++)
-      Y21.a[n21-1-i] = Y_index(l, 2*i, 2*i);
+      Y21.a[n21-1-i] = Y_index_j_eq_i(l, 2*i);
     for (int i = 0; i < n21-1; i++)
-      Y21.b[n21-2-i] = Y_index(l, 2*i, 2*i+2);
+      Y21.b[n21-2-i] = Y_index_j_eq_i_plus_2(l, 2*i);
     vector<double> lambda21(n21);
     for (int i = 0; i < n21; i++)
       lambda21[i] = Z_index(l, l+1-l%2+2*i, l+1-l%2+2*i);
@@ -324,9 +323,9 @@ struct ft_partial_sph_isometry_plan
     int n12 = (l+1)/2;
     ft_symmetric_tridiagonal Y12(n12);
     for (int i = 0; i < n12; i++)
-      Y12.a[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+1);
+      Y12.a[i] = Y_index_j_eq_i(l, 2*i+l-l%2+1);
     for (int i = 0; i < n12-1; i++)
-      Y12.b[i] = Y_index(l, 2*i+l-l%2+1, 2*i+l-l%2+3);
+      Y12.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l-l%2+1);
     vector<double> lambda12(n12);
     for (int i = 0; i < n12; i++)
       lambda12[n12-1-i] = Z_index(l, 2*i, 2*i);
@@ -335,9 +334,9 @@ struct ft_partial_sph_isometry_plan
     int n22 = (l+2)/2;
     ft_symmetric_tridiagonal Y22(n22);
     for (int i = 0; i < n22; i++)
-      Y22.a[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2);
+      Y22.a[i] = Y_index_j_eq_i(l, 2*i+l+l%2);
     for (int i = 0; i < n22-1; i++)
-      Y22.b[i] = Y_index(l, 2*i+l+l%2, 2*i+l+l%2+2);
+      Y22.b[i] = Y_index_j_eq_i_plus_2(l, 2*i+l+l%2);
     vector<double> lambda22(n22);
     for (int i = 0; i < n22; i++)
       lambda22[i] = Z_index(l, l+l%2+2*i, l+l%2+2*i);
