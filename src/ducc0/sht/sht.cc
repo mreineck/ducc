@@ -1359,9 +1359,10 @@ bool downsampling_ok(const mav<double,1> &theta, size_t lmax,
 template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi, bool spi,
   mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
   {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
   constexpr size_t chunksize=64;
-  MR_assert(legi.shape(2)==lego.shape(2), "dimension mismatch");
+  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
+  auto nm = legi.shape(2);
+  MR_assert(lego.shape(2)==nm, "dimension mismatch");
   if ((npi==npo)&&(spi==spo)&&(legi.shape(1)==lego.shape(1)))  // shortcut
     {
     lego.apply(legi, [](complex<T> &a, complex<T> b) {a=b;});
@@ -1375,7 +1376,6 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
   auto dtho = T(2*pi/nfull_out);
   auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
   size_t nfull = max(nfull_in, nfull_out);
-  auto nm = legi.shape(2);
   T fct = ((spin&1)==0) ? 1 : -1;
   pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
   MultiExp<T,complex<T>> phase(shift, (shift==0.) ? 1 : nrings_in+2);
@@ -1872,13 +1872,13 @@ template<typename T> void synthesis(
   }
 
 template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
   SHT_mode mode)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mstart({lmax+1});
-  for (size_t i=0, ofs=0; i<=lmax; ++i)
+  mav<size_t,1> mstart({mmax+1});
+  for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart.v(i) = ofs-i;
     ofs += lmax+1-i;
@@ -1896,10 +1896,10 @@ template<typename T> void synthesis_2d(const mav<complex<T>,2> &alm, mav<T,3> &m
   mode);
   }
 template void synthesis_2d(const mav<complex<double>,2> &alm, mav<double,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
   SHT_mode mode);
 template void synthesis_2d(const mav<complex<float>,2> &alm, mav<float,3> &map,
-  size_t spin, size_t lmax, const string &geometry, size_t nthreads,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
   SHT_mode mode);
 
 template<typename T> void adjoint_synthesis(
@@ -1944,12 +1944,13 @@ template<typename T> void adjoint_synthesis(
   }
 
 template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
-  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  const mav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mstart({lmax+1});
-  for (size_t i=0, ofs=0; i<=lmax; ++i)
+  mav<size_t,1> mstart({mmax+1});
+  for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart.v(i) = ofs-i;
     ofs += lmax+1-i;
@@ -1966,9 +1967,11 @@ template<typename T> void adjoint_synthesis_2d(mav<complex<T>,2> &alm,
   adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }
 template<typename T> void adjoint_synthesis_2d(mav<complex<double>,2> &alm,
-  const mav<double,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  const mav<double,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads);
 template<typename T> void adjoint_synthesis_2d(mav<complex<float>,2> &alm,
-  const mav<float,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  const mav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads);
 
 template<typename T> void analysis_2d(
   mav<complex<T>,2> &alm, // (ncomp, *)
@@ -2050,12 +2053,13 @@ template<typename T> void analysis_2d(
   }
 
 template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
-  const mav<T,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads)
+  const mav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads)
   {
   auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
-  mav<size_t,1> mstart({lmax+1});
-  for (size_t i=0, ofs=0; i<=lmax; ++i)
+  mav<size_t,1> mstart({mmax+1});
+  for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart.v(i) = ofs-i;
     ofs += lmax+1-i;
@@ -2071,7 +2075,9 @@ template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
   analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0, ringstart, pixstride, nthreads);
   }
 template<typename T> void analysis_2d(mav<complex<double>,2> &alm,
-  const mav<double,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  const mav<double,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads);
 template<typename T> void analysis_2d(mav<complex<float>,2> &alm,
-  const mav<float,3> &map, size_t spin, size_t lmax, const string &geometry, size_t nthreads);
+  const mav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads);
 }}
