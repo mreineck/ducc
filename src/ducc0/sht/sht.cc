@@ -1357,7 +1357,7 @@ bool downsampling_ok(const mav<double,1> &theta, size_t lmax,
   }
 
 template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi, bool spi,
-  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
+  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
   {
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
   constexpr size_t chunksize=64;
@@ -1392,14 +1392,26 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
-          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-            {
-            complex<T> v1 = llegi(i,2*j);
-            complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-            tmp.v(i) = v1 + v2;
-            if ((im<nfull_in) && (i!=im))
-              tmp.v(im) = fct * (v1-v2);
-            }
+          if (adjoint)
+            for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
+              {
+              complex<T> v1 = llegi(i,2*j);
+              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
+              tmp.v(i) = v1 + v2;
+              if ((im<nfull_in) && (i!=im))
+                tmp.v(im) = fct * (v1-v2);
+              else
+                tmp.v(i) += fct * (v1-v2); // sic!
+              }
+          else
+            for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
+              {
+              complex<T> v1 = llegi(i,2*j);
+              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
+              tmp.v(i) = v1 + v2;
+              if ((im<nfull_in) && (i!=im))
+                tmp.v(im) = fct * (v1-v2);
+              }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           if (shift!=0)
             for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
@@ -1419,7 +1431,6 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
               tmp.v(i) = 0;
             }
-          // FIXME: truncation may not be what we need here!
           if (nfull_out<nfull_in) // truncate
             {
             size_t dist = nfull_in-nfull_out;
@@ -1428,106 +1439,28 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
               tmp.v(i-dist) = tmp(i);
             }
           plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          auto norm = T(1./(2*nfull_in));
-          for (size_t i=0; i<nrings_out; ++i)
-            {
-            size_t im = nfull_out-1+npo-i;
-            if (im==nfull_out) im=0;
-            llego.v(i,2*j) = norm * (tmp(i) + fct*tmp(im));
-            if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) = norm * (tmp(i) - fct*tmp(im));
-            }
-          }
-        }
-      }
-    });
-  }
-template<typename T> void resample_theta_adjoint(const mav<complex<T>,3> &legi, bool npi, bool spi,
-  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads)
-  {
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  constexpr size_t chunksize=64;
-  MR_assert(legi.shape(2)==lego.shape(2), "dimension mismatch");
-  if ((npi==npo)&&(spi==spo)&&(legi.shape(1)==lego.shape(1)))  // shortcut
-    {
-    lego.apply(legi, [](complex<T> &a, complex<T> b) {a=b;});
-    return;
-    }
-  size_t nrings_in = legi.shape(1);
-  size_t nfull_in = 2*nrings_in-npi-spi;
-  size_t nrings_out = lego.shape(1);
-  size_t nfull_out = 2*nrings_out-npo-spo;
-  auto dthi = T(2*pi/nfull_in);
-  auto dtho = T(2*pi/nfull_out);
-  auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
-  size_t nfull = max(nfull_in, nfull_out);
-  auto nm = legi.shape(2);
-  T fct = ((spin&1)==0) ? 1 : -1;
-  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
-  MultiExp<T,complex<T>> phase(shift, (shift==0.) ? 1 : nrings_in+2);
-  execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
-    {
-    mav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
-    mav<complex<T>,1> buf({max(plan_in.bufsize(), plan_out.bufsize())}, UNINITIALIZED);
-    while (auto rng=sched.getNext())
-      {
-      for (size_t n=0; n<legi.shape(0); ++n)
-        {
-        auto llegi(legi.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        auto llego(lego.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        for (size_t j=0; j+rng.lo<rng.hi; ++j)
-          {
-          // fill dark side
-          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-            {
-            complex<T> v1 = llegi(i,2*j);
-            complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-            tmp.v(i) = v1 + v2;
-            if ((im<nfull_in) && (i!=im))
-              tmp.v(im) = fct * (v1-v2);
-            else
-              tmp.v(i) += fct * (v1-v2); // sic!
-            }
-          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
-          if (shift!=0)
-            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
+          auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
+          if (adjoint)
+            for (size_t i=0; i<nrings_out; ++i)
               {
-              if (i!=im)
-                tmp.v(i) *= phase[i];
-              tmp.v(im) *= conj(phase[i]);
+              size_t im = nfull_out-1+npo-i;
+              if (im==nfull_out) im=0;
+              T fct2 = (im==i) ? T(0.5) : 1;
+              complex<T> v1 = fct2*tmp(i);
+              complex<T> v2 = fct2*fct*tmp(im);
+              llego.v(i,2*j) = norm * (v1 + v2);
+              if ((2*j+1)<llego.shape(1))
+                llego.v(i,2*j+1) = norm * (v1 - v2);
               }
-
-          // zero padding/truncation
-          if (nfull_out>nfull_in) // pad
-            {
-            size_t dist = nfull_out-nfull_in;
-            size_t nmove = nfull_in/2;
-            for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
-              tmp.v(i) = tmp(i-dist);
-            for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
-              tmp.v(i) = 0;
-            }
-          // FIXME: truncation may not be what we need here!
-          if (nfull_out<nfull_in) // truncate
-            {
-            size_t dist = nfull_in-nfull_out;
-            size_t nmove = nfull_out/2;
-            for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-              tmp.v(i-dist) = tmp(i);
-            }
-          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          auto norm = T(1./(2*nfull_out));
-          for (size_t i=0; i<nrings_out; ++i)
-            {
-            size_t im = nfull_out-1+npo-i;
-            if (im==nfull_out) im=0;
-            T fct2 = (im==i) ? T(0.5) : 1;
-            complex<T> v1 = fct2*tmp(i);
-            complex<T> v2 = fct2*fct*tmp(im);
-            llego.v(i,2*j) = norm * (v1 + v2);
-            if ((2*j+1)<llego.shape(1))
-              llego.v(i,2*j+1) = norm * (v1 - v2);
-            }
+          else
+            for (size_t i=0; i<nrings_out; ++i)
+              {
+              size_t im = nfull_out-1+npo-i;
+              if (im==nfull_out) im=0;
+              llego.v(i,2*j) = norm * (tmp(i) + fct*tmp(im));
+              if ((2*j+1)<llego.shape(1))
+                llego.v(i,2*j+1) = norm * (tmp(i) - fct*tmp(im));
+              }
           }
         }
       }
@@ -1578,13 +1511,13 @@ template<typename T> void alm2leg(  // associated Legendre transform
       {
       auto leg_tmp(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
     else
       {
       mav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)});
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
     return;
     }
@@ -1647,7 +1580,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
     auto leg_tmp(mav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}));
-    resample_theta_adjoint(leg, npi, spi, leg_tmp, true, true, spin, nthreads);
+    resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
     leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
     return;
     }
@@ -1927,7 +1860,7 @@ template<typename T> void synthesis(
     auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    resample_theta(legi, true, true, lego, npi, spi, spin, nthreads);
+    resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
     }
   else
@@ -1999,7 +1932,7 @@ template<typename T> void adjoint_synthesis(
     auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
-    resample_theta_adjoint(legi, npi, spi, lego, true, true, spin, nthreads);
+    resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
     leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
     }
   else
