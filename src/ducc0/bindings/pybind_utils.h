@@ -95,6 +95,27 @@ template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(co
 template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims)
   { return py::array_t<T>(dims); }
 
+template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
+  {
+  auto ndim = shape.size();
+  if (ndim==1) return make_Pyarr<T>(shape);
+  shape_t shape2(shape);
+  size_t stride = sizeof(T);
+  for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
+    {
+    size_t tstride = stride*shape[xi];
+    if ((tstride&4095)==0)
+      shape2[xi] += 3;
+    stride *= shape2[xi];
+    }
+  py::array_t<T> tarr(shape2);
+  py::list slices;
+  for (size_t i=0; i<ndim; ++i)
+    slices.append(py::slice(0, shape[i], 1));
+  py::array sub(tarr[py::tuple(slices)]);
+  return sub;
+  }
+
 template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims)
   {
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
@@ -163,6 +184,7 @@ template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool 
 
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
+using detail_pybind::make_noncritical_Pyarr;
 using detail_pybind::get_Pyarr;
 using detail_pybind::get_optional_Pyarr;
 using detail_pybind::get_optional_Pyarr_minshape;

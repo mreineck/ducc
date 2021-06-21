@@ -305,7 +305,7 @@ template<typename T> py::array_t<T> check_build_map(const py::object &map, size_
     {
     MR_assert((!ntheta.is_none()) && (!nphi.is_none()),
       "you need to specify either 'map' or 'ntheta' and 'nphi'");
-    return make_Pyarr<T>({ncomp, py::cast<size_t>(ntheta), py::cast<size_t>(nphi)});
+    return make_noncritical_Pyarr<T>({ncomp, py::cast<size_t>(ntheta), py::cast<size_t>(nphi)});
     }
   else
     {
