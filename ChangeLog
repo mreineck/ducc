@@ -1,3 +1,28 @@
+0.15.0:
+- general:
+  - the code is now compiled with the "-fvisibility=hidden" flag, which reduces
+    the size of the resulting binary.
+  - demo codes were adjusted to use the new SHT interface.
+
+- fft:
+  - added some functions to reduce the amount of unnecessary memory
+    allocations and data copying.
+
+- sht:
+  - it is no longer necessary to pre-allocate an array for the output of the
+    `sht.experimental.*2d*` functions. If not provided, the functions will
+    create the array automatically now, which requires passing of new `ntheta`
+    and `nphi` parameters in come cases.
+  - the `sht.experimental.*2d*` functions now take an optional `mmax` parameter
+    which can be used to limit the maximum azimuthal moment of a transform.
+    If not supplied, the code assumes that `mmax` is equal to `lmax`.
+  - added some unit tests for the new SHT interface.
+
+- misc:
+  - added functionality (originally from Planck Level-S) to simulate time
+    streams of detector noise.
+
+
 0.14.0:
 - general:
   - ducc0.__version__ is now also defined under Windows
