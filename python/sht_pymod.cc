@@ -851,9 +851,9 @@ map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as 
     storage for the output map.
     If not supplied, a new array is allocated.
 ntheta, nphi: int > 0
-    dimensions of the output map
-    If not supplied, map must be supplied.
-    If supplied, and map is also supplied, must match with the map dimensions
+    dimensions of the output map.
+    If not supplied, `map` must be supplied.
+    If supplied, and `map` is also supplied, must match with the array dimensions
 spin: int >= 0
     the spin to use for the transform.
     If spin==0, ncomp must be 1, otherwise 2
@@ -901,9 +901,9 @@ map: numpy.ndarray((2, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     storage for the output map.
     If not supplied, a new array is allocated.
 ntheta, nphi: int > 0
-    dimensions of the output map
-    If not supplied, map must be supplied.
-    If supplied, and map is also supplied, must match with the map dimensions
+    dimensions of the output map.
+    If not supplied, `map` must be supplied.
+    If supplied, and `map` is also supplied, must match with the array dimensions
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 and <= lmax
