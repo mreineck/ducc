@@ -125,7 +125,7 @@ class oof2filter
   };
 
 
-/*! A numeric filter, based on superposition of 1/f2 filters.
+/*! A numeric filter, based on superposition of 1/f^2 filters.
     see : {Keshner,PROC-IEE,vol-70 (1982)}
     that approximates the power spectrum
 
@@ -219,13 +219,20 @@ class Py_OofaNoise
       }
   };
 
+constexpr const char *Py_OofaNoise_DS = R"""(
+Class for computing noise with a power spectrum that has a given slope between
+a minimum frequency f_min and a knee frequency f_knee, and is white outside
+this region.
+)""";
+
 constexpr const char *Py_OofaNoise_init_DS = R"""(
 OofaNoise constructor
 
 Parameters
 ----------
 sigmawhite : float
-    sigma of the white noise part of the produced spectrum; units are arbitrary
+    sigma of the white noise part of the produced spectrum above f_knee;
+    units are arbitrary
 f_knee : float
     knee frequency in Hz. Above this frequency, the spectrum will be white.
 f_min : float
@@ -248,7 +255,14 @@ rnd : numpy.ndarray((nsamples,), dtype=numpy.float64)
 Returns
 -------
 numpy.ndarray((nsamples,), dtype=numpy.float64):
-    the filtered noise samples with the requested spectral shape
+    the filtered noise samples with the requested spectral shape.
+
+Notes
+-----
+Subsequent calls to this method will continue the same noise stream; i.e. it
+is possible to generate a very long noise time stream chunk by chunk.
+To generate multiple independent noise streams, use different `OofaNoise`
+objects (and supply them with independent Gaussian noise streams)! 
 )""";
 
 constexpr const char *misc_DS = R"""(
@@ -273,7 +287,7 @@ void add_misc(py::module_ &msup)
 
   m.def("transpose",&Py_transpose, "in"_a, "out"_a);
 
-  py::class_<Py_OofaNoise> (m, "OofaNoise", py::module_local())
+  py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS, py::module_local())
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
       "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
