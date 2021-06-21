@@ -224,7 +224,8 @@ Class for computing noise with a power spectrum that has a given slope between
 a minimum frequency f_min and a knee frequency f_knee, and is white outside
 this region.
 
-For details see https://arxiv.org/abs/astro-ph/0510081.
+Original implementation by Stephane Plaszczynski;
+for details see https://arxiv.org/abs/astro-ph/0510081.
 )""";
 
 constexpr const char *Py_OofaNoise_init_DS = R"""(
