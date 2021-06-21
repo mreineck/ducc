@@ -15,11 +15,44 @@
 
 
 import ducc0.sht as sht
+import ducc0
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_
 
 pmp = pytest.mark.parametrize
+
+
+def nalm(lmax, mmax):
+    return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
+
+
+def random_alm(lmax, mmax, spin, ncomp, rng):
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
+    # make a_lm with m==0 real-valued
+    res[:, 0:lmax+1].imag = 0.
+    ofs=0
+    for s in range(spin):
+        res[:, ofs:ofs+spin-s] = 0.
+        ofs += lmax+1-s
+    return res
+
+
+def compress_alm(alm, lmax):
+    res = np.empty(2*len(alm)-lmax-1, dtype=np.float64)
+    res[0:lmax+1] = alm[0:lmax+1].real
+    res[lmax+1::2] = np.sqrt(2)*alm[lmax+1:].real
+    res[lmax+2::2] = np.sqrt(2)*alm[lmax+1:].imag
+    return res
+
+
+def myalmdot(a1, a2, lmax):
+    return np.vdot(compress_alm(a1, lmax).astype(np.float64), compress_alm((a2), lmax).astype(np.float64))
+
+
+def _l2error(a, b):
+    return np.sqrt(np.sum(np.abs(a-b).astype(np.float64)**2)/np.sum(np.abs(a).astype(np.float64)**2))
 
 
 @pmp('params', [(511, 511, 512, 1024),
@@ -120,3 +153,56 @@ def test_dh(params):
     job.set_dh_geometry(nlat, nlon)
     alm2 = job.map2alm(job.alm2map(alm))
     assert_allclose(alm, alm2)
+
+
+@pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('lmax', (2, 5, 11, 32))
+def test_2d_roundtrip(lmax, geometry, spin, nthreads):
+    rng = np.random.default_rng(np.random.SeedSequence(42))
+    ncomp = 1 if spin == 0 else 2
+
+    nrings = lmax+1
+    if geometry=="CC":
+        nrings = lmax+2
+    elif geometry=="DH":
+        nrings = 2*lmax+2
+    elif geometry=="F2":
+        nrings = 2*lmax+1
+    nphi=2*lmax+2
+
+    alm = random_alm(lmax, lmax, spin, ncomp, rng)
+    map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    assert_(_l2error(alm2,alm)<1e-12)
+
+
+@pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('lmax', (2, 5, 11, 32))
+def test_2d_adjoint(lmax, geometry, spin, nthreads):
+    rng = np.random.default_rng(48)
+
+    mmax = lmax
+    ncomp = 1 if spin == 0 else 2
+
+    nrings = lmax+1
+    if geometry=="CC":
+        nrings = lmax+2
+    elif geometry=="DH":
+        nrings = 2*lmax+2
+    elif geometry=="F2":
+        nrings = 2*lmax+1
+    nphi=2*lmax+2
+
+    alm0 = random_alm(lmax, mmax, spin, ncomp, rng)
+
+    map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    map0 = rng.uniform(0., 1., (alm0.shape[0], nrings, nphi))
+    v2 = np.sum([np.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    del map1
+    alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    assert_(np.abs((v1-v2)/v1)<1e-12)

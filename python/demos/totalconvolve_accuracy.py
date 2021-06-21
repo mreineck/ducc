@@ -16,7 +16,7 @@
 
 import ducc0.totalconvolve as totalconvolve
 import numpy as np
-import ducc0.sht as sht
+import ducc0
 import time
 import matplotlib.pyplot as plt
 
@@ -35,13 +35,17 @@ def random_alm(lmax, mmax, ncomp):
     return res
 
 
-def convolve(alm1, alm2, lmax):
-    job = sht.sharpjob_d()
-    job.set_triangular_alm_info(lmax, lmax)
-    job.set_gauss_geometry(lmax+1, 2*lmax+1)
-    map = job.alm2map(alm1)*job.alm2map(alm2)
-    job.set_triangular_alm_info(0, 0)
-    return job.map2alm(map)[0]*np.sqrt(4*np.pi)
+def convolve(alm1, alm2, lmax, nthreads=1):
+    ntheta, nphi = lmax+1, ducc0.fft.good_size(2*lmax+1, True)
+    map = ducc0.sht.experimental.synthesis_2d(
+        alm=alm1.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
+        geometry="GL", spin=0, nthreads=nthreads)
+    map *= ducc0.sht.experimental.synthesis_2d(
+        alm=alm2.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
+        geometry="GL", spin=0, nthreads=nthreads)
+    res = ducc0.sht.experimental.analysis_2d(
+        map=map, lmax=0, spin=0, geometry="GL", nthreads=nthreads)
+    return np.sqrt(4*np.pi)*res[0,0]
 
 
 lmax = 50
@@ -90,10 +94,10 @@ bar2 = np.zeros((nth, nph))
 blmfull = np.zeros(slm.shape)+0j
 blmfull[:, 0:blm.shape[1]] = blm
 for ith in range(nth):
-    rbeamth = sht.rotate_alm(blmfull[0, :], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
+    rbeamth = ducc0.sht.rotate_alm(blmfull[0, :], lmax, ptg[ith, 0, 2], ptg[ith, 0, 0], 0, nthreads=nthr)
     for iph in range(nph):
-        rbeam = sht.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
-        bar2[ith, iph] = convolve(slm[0, :], rbeam, lmax).real
+        rbeam = ducc0.sht.rotate_alm(rbeamth, lmax, 0, 0, ptg[ith, iph, 1], nthreads=nthr)
+        bar2[ith, iph] = convolve(slm[0, :], rbeam, lmax, nthr).real
 plt.subplot(2, 2, 2)
 plt.imshow(bar2)
 plt.subplot(2, 2, 4)

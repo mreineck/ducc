@@ -385,7 +385,8 @@ template<typename T> void xchg_yz(const Alm_Base &base, mav<complex<T>,1> &alm,
     {
     vector<double> tin(2*lmax+3), tout(2*lmax+3), tin2(2*lmax+3);
     ft_partial_sph_isometry_plan F(lmax);
-    while (auto rng=sched.getNext()) for(auto l=rng.lo+2; l<rng.hi+2; ++l)
+    // iterate downwards in l to get the smaller work packages at the end
+    while (auto rng=sched.getNext()) for(auto l=lmax-rng.lo; l+rng.hi>lmax; --l)
       {
       F.Set(l);
 

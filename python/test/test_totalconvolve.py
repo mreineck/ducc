@@ -17,8 +17,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_
-import ducc0.totalconvolve as totalconvolve
-import ducc0.sht as sht
+import ducc0
 
 pmp = pytest.mark.parametrize
 
@@ -46,13 +45,17 @@ def random_alm(rng, lmax, mmax, ncomp):
     return res
 
 
-def convolve(alm1, alm2, lmax):
-    job = sht.sharpjob_d()
-    job.set_triangular_alm_info(lmax, lmax)
-    job.set_gauss_geometry(lmax+1, 2*lmax+1)
-    map = job.alm2map(alm1)*job.alm2map(alm2)
-    job.set_triangular_alm_info(0, 0)
-    return job.map2alm(map)[0]*np.sqrt(4*np.pi)
+def convolve(alm1, alm2, lmax, nthreads=1):
+    ntheta, nphi = lmax+1, ducc0.fft.good_size(2*lmax+1, True)
+    tmap = ducc0.sht.experimental.synthesis_2d(
+        alm=alm1.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
+        geometry="GL", spin=0, nthreads=nthreads)
+    tmap *= ducc0.sht.experimental.synthesis_2d(
+        alm=alm2.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
+        geometry="GL", spin=0, nthreads=nthreads)
+    res = ducc0.sht.experimental.analysis_2d(
+        map=tmap, lmax=0, spin=0, geometry="GL", nthreads=nthreads)
+    return np.sqrt(4*np.pi)*res[0,0]
 
 
 def compress_alm(alm, lmax):
@@ -74,8 +77,8 @@ def test_against_convolution(lkmax):
     slm = random_alm(rng, lmax, lmax, 1)[0, :]
     blm = random_alm(rng, lmax, kmax, 1)[0, :]
 
-    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2.,
-                                       epsilon=1e-13, nthreads=2)
+    conv = ducc0.totalconvolve.ConvolverPlan(lmax, kmax, sigma=2.,
+                                             epsilon=1e-13, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -94,7 +97,7 @@ def test_against_convolution(lkmax):
     blm2[0:blm.shape[0]] = blm
     res2 = np.zeros((nptg,))
     for i in range(nptg):
-        rbeam = sht.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
+        rbeam = ducc0.sht.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
         res2[i] = convolve(slm, rbeam, lmax).real
     _assert_close(res1, res2, 1e-13)
 
@@ -108,8 +111,8 @@ def test_against_convolution_2(lkmax, ncomp, separate):
     slm = random_alm(rng, lmax, lmax, ncomp)
     blm = random_alm(rng, lmax, kmax, ncomp)
 
-    inter = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                       epsilon=1e-13, ofactor=2., nthreads=2)
+    inter = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
+                                             epsilon=1e-13, ofactor=2., nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -123,8 +126,8 @@ def test_against_convolution_2(lkmax, ncomp, separate):
     res2 = np.zeros((ncomp, nptg))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = sht.rotate_alm(blm2[c, :], lmax,
-                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            rbeam = ducc0.sht.rotate_alm(blm2[c, :], lmax,
+                                         ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-13)
@@ -141,8 +144,8 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
     slm = random_alm(rng, lmax, lmax, ncomp).astype("c8")
     blm = random_alm(rng, lmax, kmax, ncomp).astype("c8")
 
-    inter = totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
-                                         epsilon=1e-6, ofactor=2., nthreads=2)
+    inter = ducc0.totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
+                                               epsilon=1e-6, ofactor=2., nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -157,8 +160,8 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
     res2 = np.zeros((ncomp, nptg))
     for c in range(ncomp):
         for i in range(nptg):
-            rbeam = sht.rotate_alm(blm2[c, :], lmax,
-                                   ptg[i, 2], ptg[i, 0], ptg[i, 1])
+            rbeam = ducc0.sht.rotate_alm(blm2[c, :], lmax,
+                                         ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
         _assert_close(res1, res2, 1e-6)
@@ -177,8 +180,8 @@ def test_adjointness(lkmax):
     ptg[:, 0] *= np.pi
     ptg[:, 1] *= 2*np.pi
     ptg[:, 2] *= 2*np.pi
-    conv = totalconvolve.ConvolverPlan(lmax, kmax, sigma=2,
-                                       epsilon=1e-5, nthreads=2)
+    conv = ducc0.totalconvolve.ConvolverPlan(lmax, kmax, sigma=2,
+                                             epsilon=1e-5, nthreads=2)
 
     cube = np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
     conv.getPlane(slm, blm, 0, cube[0:1])
@@ -220,21 +223,21 @@ def test_adjointness2(lkmax, ncomp, separate, single):
         slm = slm.astype("c8")
         blm = blm.astype("c8")
         ptg = ptg.astype("f4")
-        foo = totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
-                                         epsilon=1e-6, ofactor=1.8, nthreads=2)
+        foo = ducc0.totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
+                                                 epsilon=1e-6, ofactor=1.8, nthreads=2)
     else:
-        foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                         epsilon=1e-6, ofactor=1.8, nthreads=2)
+        foo = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
+                                               epsilon=1e-6, ofactor=1.8, nthreads=2)
     inter1 = foo.interpol(ptg).astype("f8")
     ncomp2 = inter1.shape[0]
     fake = rng.uniform(-0.5, 0.5, (ncomp2, ptg.shape[0]))
     if single:
         fake = fake.astype("f4")
-        foo2 = totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=1e-6,
-                                            ofactor=1.8, nthreads=2)
+        foo2 = ducc0.totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=1e-6,
+                                                  ofactor=1.8, nthreads=2)
     else:
-        foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=1e-6,
-                                          ofactor=1.8, nthreads=2)
+        foo2 = ducc0.totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=1e-6,
+                                                ofactor=1.8, nthreads=2)
     foo2.deinterpol(ptg.reshape((-1, 3)), fake)
     bla = foo2.getSlm(blm).astype("c16")
     v1 = np.sum([myalmdot(slm[c, :], bla[c, :], lmax)

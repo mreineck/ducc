@@ -11,15 +11,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
-# Elementary demo for the ducc0.sht interface using a Gauss-Legendre grid
-# I'm not sure I have a perfect equivalent for the DH grid(s) at the moment,
-# since they apparently do not include the South Pole. The Clenshaw-Curtis
-# and Fejer quadrature rules are very similar (see the documentation in
-# sharp_geomhelpers.h). An exact analogon to DH can be added easily, I expect.
+# Elementary demo for the ducc0.sht interface using a Gauss-Legendre grid and
+# a Clenshaw-Curtis grid.
 
-import ducc0.sht as sht
+
+import ducc0
 import numpy as np
 from time import time
 
@@ -28,17 +26,17 @@ def _l2error(a, b):
     return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
 
 
+# just run on one thread
+nthreads = 1
+
 # set maximum multipole moment
 lmax = 2047
-# maximum m. For SHTOOLS this is alway equal to lmax, if I understand correctly.
+# maximum m.
 mmax = lmax
 
 # Number of pixels per ring. Must be >=2*lmax+1, but I'm choosing a larger
 # number for which the FFT is faster.
-nlon = 4096
-
-# create an object which will do the SHT work
-job = sht.sharpjob_d()
+nlon = 2*lmax+2
 
 # create a set of spherical harmonic coefficients to transform
 # Libsharp works exclusively on real-valued maps. The corresponding harmonic
@@ -56,59 +54,49 @@ rng = np.random.default_rng(42)
 alm = rng.uniform(-1., 1., nalm) + 1j*rng.uniform(-1., 1., nalm)
 # make a_lm with m==0 real-valued
 alm[0:lmax+1].imag = 0.
+# add an extra leading dimension to the a_lm. This is necessary since for
+# transforms with spin!=0 two a_lm sets are required instead of one.
+alm = alm.reshape((1,-1))
 
-# describe the a_lm array to the job
-job.set_triangular_alm_info(lmax, mmax)
-
-
-print("testing Gauss-Legendre grid")
+print("testing Gauss-Legendre grid with lmax+1 rings")
 
 # Number of iso-latitude rings required for Gauss-Legendre grid
 nlat = lmax+1
 
-# describe the Gauss-Legendre geometry to the job
-job.set_gauss_geometry(nlat, nlon)
-
 # go from a_lm to map
 t0 = time()
-map = job.alm2map(alm)
+map = ducc0.sht.experimental.synthesis_2d(
+    alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
+    geometry="GL", nthreads=nthreads)
 print("time for map synthesis: {}s".format(time()-t0))
 
-# map is a 1D real-valued array with (nlat*nlon) entries. It can be reshaped
-# to (nlat, nlon) for plotting.
-# Libsharp woks on "1D" maps because it apso supports pixelizations that varying
-# number of pixels on each iso-latitude ring, which cannot be represented by 2D
-# arrays (e.g. Healpix)
+# transform back to a_lm
 
 t0 = time()
-alm2 = job.map2alm(map)
+alm2 = ducc0.sht.experimental.analysis_2d(
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="GL", nthreads=nthreads)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
 print("L2 error: ", _l2error(alm, alm2))
 
 
-print("testing Driscoll-Healy grid")
-
-# Number of iso-latitude rings required for Driscoll-Healy grid
-nlat = 2*lmax+2
-
-# describe the Gauss-Legendre geometry to the job
-job.set_dh_geometry(nlat, nlon)
+print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
+print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would b needed,")
+print("but ducc.sht supports advanced analysis techniques which lower this limit.")
+# Number of iso-latitude rings required.
+nlat = lmax+2
 
 # go from a_lm to map
 t0 = time()
-map = job.alm2map(alm)
+map = ducc0.sht.experimental.synthesis_2d(
+    alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
+    geometry="CC", nthreads=nthreads)
 print("time for map synthesis: {}s".format(time()-t0))
 
-# map is a 1D real-valued array with (nlat*nlon) entries. It can be reshaped
-# to (nlat, nlon) for plotting.
-# Libsharp woks on "1D" maps because it apso supports pixelizations that varying
-# number of pixels on each iso-latitude ring, which cannot be represented by 2D
-# arrays (e.g. Healpix)
-
 t0 = time()
-alm2 = job.map2alm(map)
+alm2 = ducc0.sht.experimental.analysis_2d(
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="CC", nthreads=nthreads)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
