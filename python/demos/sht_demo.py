@@ -11,13 +11,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
-# Elementary demo for the ducc0.sht interface using a Gauss-Legendre grid
-# I'm not sure I have a perfect equivalent for the DH grid(s) at the moment,
-# since they apparently do not include the South Pole. The Clenshaw-Curtis
-# and Fejer quadrature rules are very similar (see the documentation in
-# sharp_geomhelpers.h). An exact analogon to DH can be added easily, I expect.
+# Elementary demo for the ducc0.sht interface using a Gauss-Legendre grid and
+# a Clenshaw-Curtis grid.
+
 
 import ducc0
 import numpy as np
@@ -32,8 +30,8 @@ def _l2error(a, b):
 nthreads = 1
 
 # set maximum multipole moment
-lmax = 4095
-# maximum m. For SHTOOLS this is alway equal to lmax, if I understand correctly.
+lmax = 2047
+# maximum m.
 mmax = lmax
 
 # Number of pixels per ring. Must be >=2*lmax+1, but I'm choosing a larger
@@ -60,7 +58,7 @@ alm[0:lmax+1].imag = 0.
 # transforms with spin!=0 two a_lm sets are required instead of one.
 alm = alm.reshape((1,-1))
 
-print("testing Gauss-Legendre grid")
+print("testing Gauss-Legendre grid with lmax+1 rings")
 
 # Number of iso-latitude rings required for Gauss-Legendre grid
 nlat = lmax+1
@@ -68,16 +66,15 @@ nlat = lmax+1
 # go from a_lm to map
 t0 = time()
 map = ducc0.sht.experimental.synthesis_2d(
-    alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, spin=0,
+    alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
     geometry="GL", nthreads=nthreads)
 print("time for map synthesis: {}s".format(time()-t0))
 
-t0 = time()
-
 # transform back to a_lm
 
-alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, spin=0,
-                                         geometry="GL", nthreads=nthreads)
+t0 = time()
+alm2 = ducc0.sht.experimental.analysis_2d(
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="GL", nthreads=nthreads)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
@@ -85,19 +82,21 @@ print("L2 error: ", _l2error(alm, alm2))
 
 
 print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
-
-# Number of iso-latitude rings required f
+print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would b needed,")
+print("but ducc.sht supports advanced analysis techniques which lower this limit.")
+# Number of iso-latitude rings required.
 nlat = lmax+2
 
 # go from a_lm to map
 t0 = time()
-map = ducc0.sht.experimental.synthesis_2d(alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, spin=0,
-                                          geometry="CC", nthreads=nthreads)
+map = ducc0.sht.experimental.synthesis_2d(
+    alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
+    geometry="CC", nthreads=nthreads)
 print("time for map synthesis: {}s".format(time()-t0))
 
 t0 = time()
-alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, spin=0,
-                                         geometry="CC", nthreads=nthreads)
+alm2 = ducc0.sht.experimental.analysis_2d(
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="CC", nthreads=nthreads)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
