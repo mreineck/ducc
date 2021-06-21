@@ -17,6 +17,7 @@
     which can be used to limit the maximum azimuthal moment of a transform.
     If not supplied, the code assumes that `mmax` is equal to `lmax`.
   - added some unit tests for the new SHT interface.
+  - reduced memory overhead forsome of the `sht.experimental.*2d*` functions.
 
 - misc:
   - added functionality (originally from Planck Level-S) to simulate time
