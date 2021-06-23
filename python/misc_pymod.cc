@@ -28,6 +28,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
+#include <cmath>
+#include <complex>
 
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/transpose.h"
@@ -42,6 +44,55 @@ namespace detail_pymodule_misc {
 
 using namespace std;
 namespace py = pybind11;
+
+
+template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
+  {
+  const auto a = to_fmav<T1>(a_);
+  const auto b = to_fmav<T2>(b_);
+  using Tacc = long double;
+  Tacc acc1=0, acc2=0, acc3=0;
+  a.apply(b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
+    {
+    complex<Tacc> cv1(v1), cv2(v2);
+    acc1 += norm(cv1);
+    acc2 += norm(cv2);
+    acc3 += norm(cv1-cv2);
+    });
+  return double(sqrt(acc3/max(acc1,acc2)));
+  }
+template<typename T1> double Py2_l2error(const py::array &a, const py::array &b)
+  {
+  if (isPyarr<float>(b))
+    return Py3_l2error<float,T1>(b,a);
+  if (isPyarr<double>(b))
+    return Py3_l2error<double,T1>(b,a);
+  if (isPyarr<long double>(b))
+    return Py3_l2error<long double,T1>(b,a);
+  if (isPyarr<complex<float>>(b))
+    return Py3_l2error<T1,complex<float>>(a,b);
+  if (isPyarr<complex<double>>(b))
+    return Py3_l2error<T1,complex<double>>(a,b);
+  if (isPyarr<complex<long double>>(b))
+    return Py3_l2error<T1,complex<long double>>(a,b);
+  MR_fail("type matching failed");
+  }
+double Py_l2error(const py::array &a, const py::array &b)
+  {
+  if (isPyarr<float>(a))
+    return Py2_l2error<float>(a,b);
+  if (isPyarr<double>(a))
+    return Py2_l2error<double>(a,b);
+  if (isPyarr<long double>(a))
+    return Py2_l2error<long double>(a,b);
+  if (isPyarr<complex<float>>(a))
+    return Py2_l2error<complex<float>>(a,b);
+  if (isPyarr<complex<double>>(a))
+    return Py2_l2error<complex<double>>(a,b);
+  if (isPyarr<complex<long double>>(a))
+    return Py2_l2error<complex<long double>>(a,b);
+  MR_fail("type matching failed");
+  }
 
 py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
@@ -284,6 +335,8 @@ void add_misc(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
+
+  m.def("l2error",&Py_l2error, "a"_a, "b"_a);
 
   m.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
