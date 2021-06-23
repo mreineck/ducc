@@ -22,10 +22,6 @@ import numpy as np
 from time import time
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
-
-
 # just run on one thread
 nthreads = 1
 
@@ -78,7 +74,7 @@ alm2 = ducc0.sht.experimental.analysis_2d(
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-print("L2 error: ", _l2error(alm, alm2))
+print("L2 error: ", ducc0.misc.l2error(alm, alm2))
 
 
 print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
@@ -100,4 +96,4 @@ alm2 = ducc0.sht.experimental.analysis_2d(
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
-print("L2 error: ", _l2error(alm, alm2))
+print("L2 error: ", ducc0.misc.l2error(alm, alm2))

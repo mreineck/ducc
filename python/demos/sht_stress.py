@@ -9,10 +9,6 @@ def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b).astype(np.float64)**2)/np.sum(np.abs(a).astype(np.float64)**2))
-
-
 def compress_alm(alm, lmax):
     res = np.empty(2*len(alm)-lmax-1, dtype=np.float64)
     res[0:lmax+1] = alm[0:lmax+1].real
@@ -63,7 +59,7 @@ def test_random_analysis_2d(lmax_max, nthreads_max):
     alm = random_alm(lmax, mmax, spin, ncomp)
     map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
-    err = _l2error(alm2,alm)
+    err = ducc0.misc.l2error(alm2,alm)
     if err>1e-11:
         print("AAAAARGH: L2 error after full round-trip:", err)
         raise RuntimeError
@@ -89,7 +85,7 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     v2 = np.sum([np.vdot(map0[i], map1[i]) for i in range(ncomp)])
-    err = np.abs((v1-v2)/v1)
+    err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
     if err>1e-11:
         print("AAAAARGH: adjointness error:", err)
         raise RuntimeError

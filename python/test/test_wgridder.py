@@ -16,6 +16,7 @@
 from itertools import product
 
 import ducc0.wgridder as ng
+import ducc0
 try:
     import finufft
     have_finufft = True
@@ -39,11 +40,6 @@ def my_vdot(a, b):
     else:
         tmp = (a*b).reshape((-1,))
         return math.fsum(tmp)
-
-
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.maximum(np.sum(np.abs(a)**2),
-                                                     np.sum(np.abs(b)**2)))
 
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
@@ -235,7 +231,7 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                         0, mask).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask)
-    assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
 
     dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
@@ -243,10 +239,10 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
                                      mask=mask).astype("f8")
-    assert_allclose(_l2error(dirty2, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
 
     if wstacking or (not have_finufft):
         return
     dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, mask, epsilon)
-    assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)

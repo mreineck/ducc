@@ -51,10 +51,6 @@ def myalmdot(a1, a2, lmax):
     return np.vdot(compress_alm(a1, lmax).astype(np.float64), compress_alm((a2), lmax).astype(np.float64))
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b).astype(np.float64)**2)/np.sum(np.abs(a).astype(np.float64)**2))
-
-
 @pmp('params', [(511, 511, 512, 1024),
                 (511, 2, 512, 5),
                 (511, 0, 512, 1)])
@@ -175,7 +171,7 @@ def test_2d_roundtrip(lmax, geometry, spin, nthreads):
     alm = random_alm(lmax, lmax, spin, ncomp, rng)
     map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
-    assert_(_l2error(alm2,alm)<1e-12)
+    assert_(ducc0.misc.l2error(alm2,alm)<1e-12)
 
 
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))

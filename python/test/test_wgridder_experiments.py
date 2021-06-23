@@ -14,17 +14,13 @@
 # Copyright(C) 2020 Max-Planck-Society
 
 
+import ducc0
 import ducc0.wgridder as ng
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
-
-
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.maximum(np.sum(np.abs(a)**2),
-                                                     np.sum(np.abs(b)**2)))
 
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
@@ -90,4 +86,4 @@ def test_ms2dirty_against_wdft2(nxdirty, nydirty, nrow, nchan, epsilon,
         pytest.skip()
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking)
-    assert_allclose(_l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)

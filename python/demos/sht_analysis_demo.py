@@ -9,10 +9,6 @@ def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
-
-
 def random_alm(lmax, mmax, spin, ncomp):
     res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
      + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
@@ -45,7 +41,7 @@ def test(lmax, geometry, spin, nthreads=1):
     map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, spin=spin, map=map, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.analysis_2d(alm=alm2, map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
     print(time()-t0)
-    print("L2 error after full round-trip:", _l2error(alm2,alm))
+    print("L2 error after full round-trip:", ducc0.misc.l2error(alm2,alm))
 
 nthr=8
 for l0 in [4095]:

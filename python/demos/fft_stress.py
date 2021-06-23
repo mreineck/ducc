@@ -15,6 +15,7 @@
 
 
 import numpy as np
+import ducc0
 import ducc0.fft as fft
 
 
@@ -22,7 +23,7 @@ rng = np.random.default_rng(42)
 
 
 def _l2error(a, b, axes):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))/np.log2(np.max([2, np.prod(np.take(a.shape, axes))]))
+    return ducc0.misc.l2error(a,b)/np.log2(np.max([2, np.prod(np.take(a.shape, axes))]))
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):

@@ -15,6 +15,7 @@
 
 
 import ducc0.fft as fft
+from ducc0.misc import l2error as l2error
 # import pyfftw
 import numpy as np
 import pytest
@@ -33,12 +34,8 @@ shapes = shapes1D+shapes2D+shapes3D
 len1D = list(range(1, 2048)) + [137*137]
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
-
-
 def _assert_close(a, b, epsilon):
-    err = _l2error(a, b)
+    err = l2error(a, b)
     if (err >= epsilon):
         print("Error: {} > {}".format(err, epsilon))
     assert_(err < epsilon)
@@ -110,18 +107,18 @@ def test1D(len, inorm, dtype):
     a = rng.random(len)-0.5 + 1j*rng.random(len)-0.5j
     a = a.astype(ctype[dtype])
     eps = tol[dtype]
-    assert_(_l2error(a, ifftn(fftn(a, inorm=inorm), inorm=2-inorm)) < eps)
-    assert_(_l2error(a.real, ifftn(fftn(a.real, inorm=inorm), inorm=2-inorm))
+    assert_(l2error(a, ifftn(fftn(a, inorm=inorm), inorm=2-inorm)) < eps)
+    assert_(l2error(a.real, ifftn(fftn(a.real, inorm=inorm), inorm=2-inorm))
             < eps)
-    assert_(_l2error(a.real, fftn(ifftn(a.real, inorm=inorm), inorm=2-inorm))
+    assert_(l2error(a.real, fftn(ifftn(a.real, inorm=inorm), inorm=2-inorm))
             < eps)
-    assert_(_l2error(a.real, irfftn(rfftn(a.real, inorm=inorm),
+    assert_(l2error(a.real, irfftn(rfftn(a.real, inorm=inorm),
                                     inorm=2-inorm, lastsize=len)) < eps)
-    assert_(_l2error(fftn(a.real.astype(ctype[dtype])), fftn(a.real)) < eps)
+    assert_(l2error(fftn(a.real.astype(ctype[dtype])), fftn(a.real)) < eps)
     tmp = a.copy()
     assert_(ifftn(fftn(tmp, out=tmp, inorm=inorm), out=tmp, inorm=2-inorm)
             is tmp)
-    assert_(_l2error(tmp, a) < eps)
+    assert_(l2error(tmp, a) < eps)
 
 
 @pmp("shp", shapes)
@@ -130,10 +127,10 @@ def test1D(len, inorm, dtype):
 def test_fftn(shp, nthreads, inorm):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
-    assert_(_l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
+    assert_(l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
                               nthreads=nthreads, inorm=2-inorm)) < 1e-15)
     a = a.astype(np.complex64)
-    assert_(_l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
+    assert_(l2error(a, ifftn(fftn(a, nthreads=nthreads, inorm=inorm),
                               nthreads=nthreads, inorm=2-inorm)) < 5e-7)
 
 
@@ -143,10 +140,10 @@ def test_fftn(shp, nthreads, inorm):
 def test_fftn2D(shp, axes, inorm):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
-    assert_(_l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
+    assert_(l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
                               axes=axes, inorm=2-inorm)) < 1e-15)
     a = a.astype(np.complex64)
-    assert_(_l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
+    assert_(l2error(a, ifftn(fftn(a, axes=axes, inorm=inorm),
                               axes=axes, inorm=2-inorm)) < 5e-7)
 
 
@@ -157,22 +154,22 @@ def test_rfftn(shp):
     tmp1 = rfftn(a)
     tmp2 = fftn(a)
     part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
-    assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
+    assert_(l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
     tmp1 = rfftn(a)
     tmp2 = fftn(a)
     part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
-    assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
+    assert_(l2error(tmp1, tmp2[part]) < 5e-7)
 
 
 # @pmp("shp", shapes)
 # def test_rfft_scipy(shp):
 #     for i in range(len(shp)):
 #         a = rng.random(shp)-0.5
-#         assert_(_l2error(pyfftw.interfaces.scipy_fftpack.rfft(a, axis=i),
-#                          rfft_scipy(a, axis=i)) < 1e-15)
-#         assert_(_l2error(pyfftw.interfaces.scipy_fftpack.irfft(a, axis=i),
-#                          irfft_scipy(a, axis=i, inorm=2)) < 1e-15)
+#         assert_(l2error(pyfftw.interfaces.scipy_fftpack.rfft(a, axis=i),
+#                         rfft_scipy(a, axis=i)) < 1e-15)
+#         assert_(l2error(pyfftw.interfaces.scipy_fftpack.irfft(a, axis=i),
+#                         irfft_scipy(a, axis=i, inorm=2)) < 1e-15)
 
 
 @pmp("shp", shapes2D)
@@ -183,26 +180,26 @@ def test_rfftn2D(shp, axes):
     tmp1 = rfftn(a, axes=axes)
     tmp2 = fftn(a, axes=axes)
     part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
-    assert_(_l2error(tmp1, tmp2[part]) < 1e-15)
+    assert_(l2error(tmp1, tmp2[part]) < 1e-15)
     a = a.astype(np.float32)
     tmp1 = rfftn(a, axes=axes)
     tmp2 = fftn(a, axes=axes)
     part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
-    assert_(_l2error(tmp1, tmp2[part]) < 5e-7)
+    assert_(l2error(tmp1, tmp2[part]) < 5e-7)
 
 
 @pmp("shp", shapes)
 def test_identity(shp):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
-    assert_(_l2error(ifftn(fftn(a), inorm=2), a) < 1.5e-15)
-    assert_(_l2error(ifftn(fftn(a.real), inorm=2), a.real) < 1.5e-15)
-    assert_(_l2error(fftn(ifftn(a.real), inorm=2), a.real) < 1.5e-15)
+    assert_(l2error(ifftn(fftn(a), inorm=2), a) < 1.5e-15)
+    assert_(l2error(ifftn(fftn(a.real), inorm=2), a.real) < 1.5e-15)
+    assert_(l2error(fftn(ifftn(a.real), inorm=2), a.real) < 1.5e-15)
     tmp = a.copy()
     assert_(ifftn(fftn(tmp, out=tmp), inorm=2, out=tmp) is tmp)
-    assert_(_l2error(tmp, a) < 1.5e-15)
+    assert_(l2error(tmp, a) < 1.5e-15)
     a = a.astype(np.complex64)
-    assert_(_l2error(ifftn(fftn(a), inorm=2), a) < 6e-7)
+    assert_(l2error(ifftn(fftn(a), inorm=2), a) < 6e-7)
 
 
 @pmp("shp", shapes)
@@ -212,10 +209,10 @@ def test_identity_r(shp):
     b = a.astype(np.float32)
     for ax in range(a.ndim):
         n = a.shape[ax]
-        assert_(_l2error(irfftn(rfftn(a, (ax,)), (ax,), lastsize=n, inorm=2),
-                         a) < 1e-15)
-        assert_(_l2error(irfftn(rfftn(b, (ax,)), (ax,), lastsize=n, inorm=2),
-                         b) < 5e-7)
+        assert_(l2error(irfftn(rfftn(a, (ax,)), (ax,), lastsize=n, inorm=2),
+                        a) < 1e-15)
+        assert_(l2error(irfftn(rfftn(b, (ax,)), (ax,), lastsize=n, inorm=2),
+                        b) < 5e-7)
 
 
 @pmp("shp", shapes)
@@ -223,7 +220,7 @@ def test_identity_r2(shp):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5 + 1j*rng.random(shp)-0.5j
     a = rfftn(irfftn(a))
-    assert_(_l2error(rfftn(irfftn(a), inorm=2), a) < 1e-15)
+    assert_(l2error(rfftn(irfftn(a), inorm=2), a) < 1e-15)
 
 
 @pmp("shp", shapes2D+shapes3D)
@@ -233,7 +230,7 @@ def test_genuine_hartley(shp):
     v1 = fft.genuine_hartley(a)
     v2 = fftn(a.astype(np.complex128))
     v2 = v2.real+v2.imag
-    assert_(_l2error(v1, v2) < 1e-15)
+    assert_(l2error(v1, v2) < 1e-15)
 
 
 @pmp("shp", shapes)
@@ -241,7 +238,7 @@ def test_hartley_identity(shp):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     v1 = fft.separable_hartley(fft.separable_hartley(a))/a.size
-    assert_(_l2error(a, v1) < 1e-15)
+    assert_(l2error(a, v1) < 1e-15)
 
 
 @pmp("shp", shapes)
@@ -249,11 +246,11 @@ def test_genuine_hartley_identity(shp):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
     v1 = fft.genuine_hartley(fft.genuine_hartley(a))/a.size
-    assert_(_l2error(a, v1) < 1e-15)
+    assert_(l2error(a, v1) < 1e-15)
     v1 = a.copy()
     assert_(fft.genuine_hartley(
         fft.genuine_hartley(v1, out=v1), inorm=2, out=v1) is v1)
-    assert_(_l2error(a, v1) < 1e-15)
+    assert_(l2error(a, v1) < 1e-15)
 
 
 @pmp("shp", shapes2D+shapes3D)
@@ -261,7 +258,7 @@ def test_genuine_hartley_identity(shp):
 def test_genuine_hartley_2D(shp, axes):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
-    assert_(_l2error(fft.genuine_hartley(fft.genuine_hartley(
+    assert_(l2error(fft.genuine_hartley(fft.genuine_hartley(
         a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
 
 

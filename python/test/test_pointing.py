@@ -14,6 +14,7 @@
 # Copyright(C) 2020 Max-Planck-Society
 
 
+import ducc0
 import ducc0.pointingprovider as pp
 # import pyfftw
 import numpy as np
@@ -21,12 +22,8 @@ import pytest
 from numpy.testing import assert_
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
-
-
 def _assert_close(a, b, epsilon):
-    err = _l2error(a, b)
+    err = ducc0.misc.l2error(a, b)
     if (err >= epsilon):
         print("Error: {} > {}".format(err, epsilon))
     assert_(err < epsilon)

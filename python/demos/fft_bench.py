@@ -15,16 +15,13 @@
 
 
 import numpy as np
-import ducc0.fft as duccfft
+import ducc0
 from time import time
 import matplotlib.pyplot as plt
 
 
 rng = np.random.default_rng(42)
 
-
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
 
 
 def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
@@ -63,7 +60,7 @@ def measure_duccfft(a, nrepeat, nthr):
     b = a.copy()
     for i in range(nrepeat):
         t0 = time()
-        b = duccfft.c2c(a, out=b, forward=True, nthreads=nthr)
+        b = ducc0.fft.c2c(a, out=b, forward=True, nthreads=nthr)
         t1 = time()
         tmin = min(tmin, t1-t0)
     return tmin, b
@@ -125,7 +122,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     for n in range(ntry):
         shp = rng.integers(nmax//3, nmax+1, ndim)
         if nice_sizes:
-            shp = np.array([duccfft.good_size(sz) for sz in shp])
+            shp = np.array([ducc0.fft.good_size(sz) for sz in shp])
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
         a = (rng.random(shp)-0.5 + 1j*(rng.random(shp)-0.5)).astype(tp)
         output = []
@@ -133,7 +130,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
             tmp = func(a, nrepeat, nthr)
             res.append(tmp[0])
             output.append(tmp[1])
-        print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n], results[1][n], results[0][n]/results[1][n], _l2error(output[0], output[1])))
+        print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n], results[1][n], results[0][n]/results[1][n], ducc0.misc.l2error(output[0], output[1])))
     results = np.array(results)
     plt.title("{}: {}D, {}, max_extent={}".format(
         ttl, ndim, str(tp), nmax))

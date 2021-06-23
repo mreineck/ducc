@@ -22,12 +22,11 @@ import ducc0
 pmp = pytest.mark.parametrize
 
 
-def _l2error(a, b):
-    return np.sqrt(np.sum(np.abs(a-b)**2)/np.sum(np.abs(a)**2))
-
-
 def _assert_close(a, b, epsilon):
-    err = _l2error(a, b)
+    if isinstance(a, np.ndarray):
+        err = ducc0.misc.l2error(a, b)
+    else:
+        err = np.abs(a-b)/np.maximum(np.abs(a),np.abs(b))
     if (err >= epsilon):
         print("Error: {} > {}".format(err, epsilon))
     assert_(err < epsilon)
