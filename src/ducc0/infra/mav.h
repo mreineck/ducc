@@ -365,13 +365,13 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.str[idim], other, func);
+          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
       else
         {
         T *d1 = vdata();
         const T2 *d2 = other.cdata();
         for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx=i*str[idim]], d2[idx2+i*other.str[idim]]);
+          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
         }
       }
     template<typename Func, typename T2> void applyHelper(size_t idim,
@@ -380,13 +380,13 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.str[idim], other, func);
+          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
       else
         {
         const T *d1 = cdata();
         const T2 *d2 = other.cdata();
         for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx=i*str[idim]], d2[idx2+i*other.str[idim]]);
+          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
         }
       }
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
@@ -701,13 +701,13 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       if constexpr (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
           applyHelper<idim+1, T2, Func>(idx+i*str[idim],
-                                        idx2+i*other.str[idim], other, func);
+                                        idx2+i*other.stride(idim), other, func);
       else
         {
         T *d2 = vdata();
         const T2 *d3 = other.cdata();
         for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]],d3[idx2+i*other.str[idim]]);
+          func(d2[idx+i*str[idim]],d3[idx2+i*other.stride(idim)]);
         }
       }
 
