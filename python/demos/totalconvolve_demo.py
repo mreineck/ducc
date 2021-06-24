@@ -11,10 +11,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
 
-import ducc0.totalconvolve as totalconvolve
+import ducc0
 import numpy as np
 import time
 
@@ -42,8 +42,7 @@ def compress_alm(alm, lmax):
 
 
 def myalmdot(a1, a2, lmax):
-    return np.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
-
+    return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
 
 lmax = 1024
 kmax = 13
@@ -66,9 +65,9 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 # build interpolator object for slm and blm
-foo = totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                 epsilon=epsilon, ofactor=ofactor,
-                                 nthreads=nthreads)
+foo = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
+                                       epsilon=epsilon, ofactor=ofactor,
+                                       nthreads=nthreads)
 t1 = time.time()-t0
 
 print("Convolving sky and beam with lmax=mmax={}, kmax={}".format(lmax, kmax))
@@ -98,7 +97,7 @@ del foo
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
 t0 = time.time()
 fake = rng.uniform(0., 1., (ncomp2, ptg.shape[0]))
-foo2 = totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2 = ducc0.totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0 = time.time()
 foo2.deinterpol(ptg.reshape((-1, 3)), fake)
 print("Adjoint interpolation: {}s".format(time.time()-t0))
@@ -107,12 +106,12 @@ bla = foo2.getSlm(blm)
 del foo2
 print("Computing s_lm: {}s".format(time.time()-t0))
 v1 = np.sum([myalmdot(slm[i, :], bla[i, :], lmax) for i in range(ncomp)])
-v2 = np.sum([np.vdot(fake[i, :], bar[i, :]) for i in range(ncomp2)])
+v2 = np.sum([ducc0.misc.vdot(fake[i, :], bar[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))
 
 # build interpolator object for slm and blm
 t0 = time.time()
-foo_f = totalconvolve.Interpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo_f = ducc0.totalconvolve.Interpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 print("\nSingle precision convolution/interpolation:")
 print("preparation of interpolation grid: {}s".format(time.time()-t0))
 
@@ -124,7 +123,7 @@ t0 = time.time()
 bar_f = foo_f.interpol(ptgf)
 del foo_f
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
-foo2_f = totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2_f = ducc0.totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
 t0 = time.time()
 foo2_f.deinterpol(ptgf.reshape((-1, 3)), fake_f)
 print("Adjoint interpolation: {}s".format(time.time()-t0))
@@ -133,5 +132,5 @@ bla_f = foo2_f.getSlm(blm.astype(np.complex64))
 del foo2_f
 print("Computing s_lm: {}s".format(time.time()-t0))
 v1 = np.sum([myalmdot(slm[i, :], bla_f[i, :], lmax) for i in range(ncomp)])
-v2 = np.sum([np.vdot(fake_f[i, :], bar_f[i, :]) for i in range(ncomp2)])
+v2 = np.sum([ducc0.misc.vdot(fake_f[i, :], bar_f[i, :]) for i in range(ncomp2)])
 print("Adjointness error: {}".format(v1/v2-1.))

@@ -48,7 +48,7 @@ def compress_alm(alm, lmax):
 
 
 def myalmdot(a1, a2, lmax):
-    return np.vdot(compress_alm(a1, lmax).astype(np.float64), compress_alm((a2), lmax).astype(np.float64))
+    return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm((a2), lmax))
 
 
 @pmp('params', [(511, 511, 512, 1024),
@@ -197,7 +197,7 @@ def test_2d_adjoint(lmax, geometry, spin, nthreads):
 
     map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     map0 = rng.uniform(0., 1., (alm0.shape[0], nrings, nphi))
-    v2 = np.sum([np.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])

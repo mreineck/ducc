@@ -46,6 +46,51 @@ using namespace std;
 namespace py = pybind11;
 
 
+template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, const py::array &b_)
+  {
+  const auto a = to_fmav<T1>(a_);
+  const auto b = to_fmav<T2>(b_);
+  using Tacc = long double;
+  complex<Tacc> acc=0;
+  a.apply(b, [&acc](const T1 &v1, const T2 &v2)
+    {
+    complex<Tacc> cv1(v1), cv2(v2);
+    acc += conj(cv1) * cv2;
+    });
+  return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
+  }
+template<typename T1> py::object Py2_vdot(const py::array &a, const py::array &b)
+  {
+  if (isPyarr<float>(b))
+    return Py3_vdot<float,T1>(b,a);
+  if (isPyarr<double>(b))
+    return Py3_vdot<double,T1>(b,a);
+  if (isPyarr<long double>(b))
+    return Py3_vdot<long double,T1>(b,a);
+  if (isPyarr<complex<float>>(b))
+    return Py3_vdot<T1,complex<float>>(a,b);
+  if (isPyarr<complex<double>>(b))
+    return Py3_vdot<T1,complex<double>>(a,b);
+  if (isPyarr<complex<long double>>(b))
+    return Py3_vdot<T1,complex<long double>>(a,b);
+  MR_fail("type matching failed");
+  }
+py::object Py_vdot(const py::array &a, const py::array &b)
+  {
+  if (isPyarr<float>(a))
+    return Py2_vdot<float>(a,b);
+  if (isPyarr<double>(a))
+    return Py2_vdot<double>(a,b);
+  if (isPyarr<long double>(a))
+    return Py2_vdot<long double>(a,b);
+  if (isPyarr<complex<float>>(a))
+    return Py2_vdot<complex<float>>(a,b);
+  if (isPyarr<complex<double>>(a))
+    return Py2_vdot<complex<double>>(a,b);
+  if (isPyarr<complex<long double>>(a))
+    return Py2_vdot<complex<long double>>(a,b);
+  MR_fail("type matching failed");
+  }
 template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
   {
   const auto a = to_fmav<T1>(a_);
@@ -336,6 +381,7 @@ void add_misc(py::module_ &msup)
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 
+  m.def("vdot",&Py_vdot, "a"_a, "b"_a);
   m.def("l2error",&Py_l2error, "a"_a, "b"_a);
 
   m.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);

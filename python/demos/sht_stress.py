@@ -18,7 +18,7 @@ def compress_alm(alm, lmax):
 
 
 def myalmdot(a1, a2, lmax):
-    return np.vdot(compress_alm(a1, lmax).astype(np.float64), compress_alm((a2), lmax).astype(np.float64))
+    return ducc0.misc.vdot(compress_alm(a1, lmax).astype(np.float64), compress_alm((a2), lmax).astype(np.float64))
 
 
 def random_alm(lmax, mmax, spin, ncomp):
@@ -84,7 +84,7 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    v2 = np.sum([np.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
     if err>1e-11:
         print("AAAAARGH: adjointness error:", err)

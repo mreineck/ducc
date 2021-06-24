@@ -66,7 +66,7 @@ def compress_alm(alm, lmax):
 
 
 def myalmdot(a1, a2, lmax):
-    return np.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
+    return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm(a2, lmax))
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -200,7 +200,7 @@ def test_adjointness(lkmax):
         conv.updateSlm(bla, blm, mbeam, cube2[2*mbeam-1:2*mbeam+1])
 
     v1 = myalmdot(slm, bla, lmax)
-    v2 = np.vdot(fake, inter1)
+    v2 = ducc0.misc.vdot(fake, inter1)
     _assert_close(v1, v2, 1e-13)
 
 
@@ -241,6 +241,6 @@ def test_adjointness2(lkmax, ncomp, separate, single):
     bla = foo2.getSlm(blm).astype("c16")
     v1 = np.sum([myalmdot(slm[c, :], bla[c, :], lmax)
                  for c in range(ncomp)])
-    v2 = np.sum([np.vdot(fake[c, :], inter1[c, :]) for c in range(ncomp2)])
+    v2 = np.sum([ducc0.misc.vdot(fake[c, :], inter1[c, :]) for c in range(ncomp2)])
     epsilon = 1e-4 if single else 1e-12
     _assert_close(v1, v2, epsilon)
