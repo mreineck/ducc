@@ -46,6 +46,27 @@ using namespace std;
 namespace py = pybind11;
 
 
+constexpr const char *Py_vdot_DS = R"""(
+Compute the scalar product of two arrays., i.e. sum_i(conj(a_i)*b_i)
+over all array elements.
+
+Parameters
+----------
+a : numpy.ndarray of any shape; dtype must be a float or complex type
+b : numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
+
+Returns
+-------
+float or complex
+    the scalar product.
+    If the result can be represented by a float value, it will be returned as
+    float, otherwise as complex.
+
+Notes
+-----
+The accumulation is performed in long double precision for good accuracy.
+)""";
+
 template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, const py::array &b_)
   {
   const auto a = to_fmav<T1>(a_);
@@ -91,6 +112,27 @@ py::object Py_vdot(const py::array &a, const py::array &b)
     return Py2_vdot<complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
+
+constexpr const char *Py_l2error_DS = R"""(
+Compute the L2 error between two arrays.
+More specifically, compute
+``sqrt(sum_i(|a_i - b_i|^2) / max(sum_i(|a_i|^2), sum_i(|b_i|^2)))``,
+where i goes over all array elements.
+
+Parameters
+----------
+a : numpy.ndarray of any shape; dtype must be a float or complex type
+b : numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
+
+Returns
+-------
+float
+    the L2 error between the two arrays.
+
+Notes
+-----
+The accumulations are performed in long double precision for good accuracy.
+)""";
 template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
   {
   const auto a = to_fmav<T1>(a_);
@@ -381,8 +423,8 @@ void add_misc(py::module_ &msup)
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 
-  m.def("vdot",&Py_vdot, "a"_a, "b"_a);
-  m.def("l2error",&Py_l2error, "a"_a, "b"_a);
+  m.def("vdot", &Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
+  m.def("l2error", &Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
 
   m.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
