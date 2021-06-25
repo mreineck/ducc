@@ -1024,6 +1024,24 @@ Returns
 numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
     the computed spherical harmonic coefficients
     If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+The maximum ``m`` moment to which this function can analyze its input map is
+``min(lmax, (nphi-1)//2)``.
+
+The maximum ``l``  moment to which this function can analyze its input map
+depends on the geometry, and is
+
+    - ``ntheta-2`` for CC
+    - ``ntheta-1`` for F1, MW, MWflip, and GL
+    - ``(ntheta-2)//2`` for DH
+    - ``(ntheta-1)//2`` for F2
+
+For the CC and F1 geometries this limit is considerably higher than the one
+obtainable by simply applying quadrature weights. This improvement is achieved
+by temporary upsampling along meridians to apply the weights at a higher
+resolution.
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
