@@ -23,7 +23,7 @@ rng = np.random.default_rng(42)
 
 
 def _l2error(a, b, axes):
-    return ducc0.misc.l2error(a,b)/np.log2(np.max([2, np.prod(np.take(a.shape, axes))]))
+    return ducc0.misc.l2error(a,b)/(np.sqrt(np.log2(np.max([2, np.prod(np.take(a.shape, axes))]))))
 
 
 def fftn(a, axes=None, inorm=0, out=None, nthreads=1):
@@ -53,17 +53,14 @@ def update_err(err, name, value, shape):
     if name in err and err[name] >= value:
         return err
     err[name] = value
-    print(shape)
-    for (nm, v) in err.items():
-        print("{}: {}".format(nm, v))
-    print()
     return err
 
 
 def test(err):
+    err_old = err.copy()
     ndim = rng.integers(1, 5)
     axlen = int((2**20)**(1./ndim))
-    shape = rng.integers(1, axlen, ndim)
+    shape = rng.integers(2, axlen+2, ndim)
     axes = np.arange(ndim)
     rng.shuffle(axes)
     nax = rng.integers(1, ndim+1)
@@ -156,8 +153,14 @@ def test(err):
         fft.dst(a_32.real, axes=axes, nthreads=nthreads, type=4),
         axes=axes, type=4, nthreads=nthreads, inorm=2)
     err = update_err(err, "s4maxf", _l2error(a_32.real, b, axes), shape)
+    if err != err_old:
+        print(shape, axes)
+        for (nm, v) in err.items():
+            print("{}: {}".format(nm, v))
+        print()
+    return err
 
 
 err = dict()
 while True:
-    test(err)
+    err = test(err)
