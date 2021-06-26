@@ -262,7 +262,10 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
-#if 0
+// FIXME: open questions
+// - do we build mstart automatically and just take mmax?
+// - phi0, ringstart = None => build assuming phi0=0, rings sequential?
+// - accept scalar nphi, phi0?
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
   const py::array &mstart_, ptrdiff_t lstride, 
@@ -280,7 +283,7 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_mav<T,2>(map_, true);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
-  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP);
   return map_;
   }
 py::array Py_synthesis(const py::array &alm, const py::array &theta,
@@ -297,7 +300,41 @@ py::array Py_synthesis(const py::array &alm, const py::array &theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#endif
+template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
+  py::object &map__, size_t lmax,
+  const py::array &mstart_, ptrdiff_t lstride, 
+  const py::array &theta_, 
+  const py::array &nphi_,
+  const py::array &phi0_, const py::array &ringstart_,
+  ptrdiff_t pixstride, size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, false);
+  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  auto phi0 = to_mav<double,1>(phi0_, false);
+  auto nphi = to_mav<size_t,1>(nphi_, false);
+  auto ringstart = to_mav<size_t,1>(ringstart_, false);
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
+  auto map = to_mav<T,2>(map_, true);
+  MR_assert(map.shape(0)==2, "bad number of components in map array");
+  synthesis(alm, map, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
+  return map_;
+  }
+py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
+  size_t lmax, const py::array &mstart, 
+  const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
+  size_t nthreads, py::object &map)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_synthesis_deriv1<float>(alm, map, lmax, mstart, lstride, theta, 
+      nphi, phi0, ringstart, pixstride, nthreads);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_synthesis_deriv1<double>(alm, map, lmax, mstart, lstride, theta, 
+      nphi, phi0, ringstart, pixstride, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
 
 template<typename T> py::array_t<T> check_build_map(const py::object &map, size_t ncomp, const py::object &ntheta, const py::object &nphi)
   {
@@ -395,7 +432,7 @@ py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string
     return Py2_synthesis_2d_deriv1<double>(alm, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#if 0
+
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   size_t lmax, const py::array &mstart_, ptrdiff_t lstride, 
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
@@ -433,7 +470,6 @@ py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#endif
 
 template<typename T> py::array Py2_analysis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t mmax, size_t nthreads, py::object &alm__)
@@ -1055,6 +1091,16 @@ void add_sht(py::module_ &msup)
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");
   m2.doc() = sht_experimental_DS;
+
+  m2.def("synthesis", &Py_synthesis, py::kw_only(), "alm"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+  m2.def("adjoint_synthesis", &Py_adjoint_synthesis, py::kw_only(), "map"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis_deriv1", &Py_synthesis_deriv1, py::kw_only(), "alm"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
 
   m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
