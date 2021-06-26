@@ -213,7 +213,7 @@ struct ft_partial_sph_isometry_plan
         (int jmin, const vector<double> &c, vector<double> &f) const
         {
         constexpr double eps = 0x1p-52;
-        constexpr double floatmin = 0x1p-1022;
+        constexpr double floatmin = 0x1p-300;
 
         if (n<1)
           {
@@ -235,7 +235,33 @@ struct ft_partial_sph_isometry_plan
             X[i] = Tv(&lambda[j+i*Tv::size()], element_aligned_tag());
             fj[i] = c[n-1];
             }
-          for (int k=n-1; k>0; --k)
+          {
+          int k=n-1;
+          for (; k>2; k-=3)
+            {
+            Tv maxnrm(0);
+            for (size_t i=0; i<N; ++i)
+              {
+              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+              auto vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1 - C[k-1]*vk[i];
+              auto vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2 - C[k-2]*vkm1;
+              vkp1[i] = vkm2;
+              vk[i] = vkm3;
+              nrm[i] += vkm1*vkm1 + vkm2*vkm2 + vkm3*vkm3;
+              maxnrm = max(maxnrm, nrm[i]);
+              fj[i] += vkm1*c[k-1] + vkm2*c[k-2] + vkm3*c[k-3];
+              }
+            if (any_of(maxnrm > eps/floatmin))
+              for (size_t i=0; i<N; ++i)
+                {
+                nrm[i] = Tv(1.0)/sqrt(nrm[i]);
+                vkp1[i] *= nrm[i];
+                vk[i] *= nrm[i];
+                fj[i] *= nrm[i];
+                nrm[i] = 1.0;
+                }
+            }
+          for (; k>0; --k)
             {
             Tv maxnrm(0);
             for (size_t i=0; i<N; ++i)
@@ -257,6 +283,7 @@ struct ft_partial_sph_isometry_plan
                 nrm[i] = 1.0;
                 }
             }
+          }
           for (size_t i=0; i<N; ++i)
             for (size_t q=0; q<vlen; ++q)
               f[j+vlen*i+q] = fj[i][q]*copysign(1.0/sqrt(nrm[i][q]),sign*vk[i][q]);
