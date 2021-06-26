@@ -1273,7 +1273,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && vectorizable<Tfs>) // we can vectorize!
+        if constexpr(false) //is_same<T,Tfs>::value && vectorizable<Tfs>) // we can vectorize!
           {
           using Tfv = native_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
@@ -1340,6 +1340,99 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           }
         else
           {
+// FIXME: special cases for ido==1 (operate on CC, transpose to CH)
+// and l1==1 (operate CC -> CH, apply twiddles)
+          if (ido==1)
+            {
+// parallelize here!
+            for (size_t n=0; n<l1; ++n)
+              {
+              Cmplx<T> *p1=&cc[n*ip], *p2=ch;
+              Cmplx<T> *res = nullptr;
+              for(const auto &pass: passes)
+                {
+                res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf, fwd));
+                if (res==p2) swap (p1,p2);
+                }
+              if (res != &cc[n*ip])
+                // FIXME: use std::copy()
+                for (size_t m=0; m<ip; ++m)
+                  cc[n*ip+m] = res[m];
+              }
+            // transpose
+            size_t nbunch = (l1*ido + bunchsize-1)/bunchsize;
+// parallelize here!
+            for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
+              {
+              size_t ntrans = min(bunchsize, l1-ibunch*bunchsize);
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  {
+                  size_t itrans = ibunch*bunchsize + n;
+                  ch[itrans+m*l1] = cc[m+itrans*ip];
+                  }
+              }
+            return ch;
+            }
+          if (l1==1)
+            {
+            auto cc2 = &buf[0];
+            auto ch2 = &buf[bunchsize*ip];
+            auto buf2 = &buf[(bunchsize+1)*ip];
+            size_t nbunch = (ido + bunchsize-1)/bunchsize;
+
+            auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+              { return ch[a+ido*(b+l1*c)]; };
+            auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
+              { return cc[a+ido*(b+ip*c)]; };
+
+// parallelize here!
+             for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
+              {
+              size_t ntrans = min(bunchsize, ido-ibunch*bunchsize);
+
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  cc2[m+n*ip] = CC(n+ibunch*bunchsize,m,0);
+
+              for (size_t n=0; n<ntrans; ++n)
+                {
+                auto i = n+ibunch*bunchsize;
+                Cmplx<T> *p1=&cc2[n*ip], *p2=ch2;
+                Cmplx<T> *res = nullptr;
+                for(const auto &pass: passes)
+                  {
+                  res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
+                  if (res==p2) swap (p1,p2);
+                  }
+                if (res==&cc2[n*ip]) // no copying necessary
+                  {
+                  if (i!=0)
+                    {
+                    for (size_t m=1; m<ip; ++m)
+                      cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>(WA(m-1,i));
+                    }
+                  }
+                else
+                  {
+                  if (i==0)
+                    for (size_t m=0; m<ip; ++m)
+                      cc2[n*ip+m] = res[m];
+                  else
+                    {
+                    cc2[n*ip] = res[0];
+                    for (size_t m=1; m<ip; ++m)
+                      cc2[n*ip+m] = res[m].template special_mul<fwd>(WA(m-1,i));
+                    }
+                  }
+                }
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  CH(n+ibunch*bunchsize, 0, m) = cc2[m+n*ip];
+              }
+            return ch;
+            }
+
           auto cc2 = &buf[0];
           auto ch2 = &buf[bunchsize*ip];
           auto buf2 = &buf[(bunchsize+1)*ip];
@@ -1350,6 +1443,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
             { return cc[a+ido*(b+ip*c)]; };
 
+// parallelize here!
           for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
             {
             size_t ntrans = min(bunchsize, l1*ido-ibunch*bunchsize);
@@ -1416,6 +1510,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false),
         wa((ip-1)*(ido-1))
       {
+vectorize=false;
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
