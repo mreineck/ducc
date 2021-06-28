@@ -688,6 +688,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
     auto ptr = &src.craw(it.iofs_uni(0,0));
     auto jstr = it.unistride_i();
     auto istr = it.stride_in();
+// FIXME: flip loops to avoid critical strides?
     if (istr==1)
       for (size_t i=0; i<it.length_in(); ++i)
         for (size_t j=0; j<vlen; ++j)
