@@ -58,16 +58,19 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       auto slm = to_mav<complex<T>,1>(slm_);
       auto blm = to_mav<complex<T>,1>(blm_);
       auto planes = to_mav<T,3>(planes_, true);
+      py::gil_scoped_release release;
       getPlane(slm, blm, mbeam, planes);
       }
     void Py_prepPsi(const py::array &subcube_) const
       {
       auto subcube = to_mav<T,3>(subcube_, true);
+      py::gil_scoped_release release;
       prepPsi(subcube);
       }
     void Py_deprepPsi(const py::array &subcube_) const
       {
       auto subcube = to_mav<T,3>(subcube_, true);
+      py::gil_scoped_release release;
       deprepPsi(subcube);
       }
     void Py_interpol(const py::array &cube_, size_t itheta0, size_t iphi0,
@@ -79,6 +82,7 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       auto phi = to_mav<T,1>(phi_, false);
       auto psi = to_mav<T,1>(psi_, false);
       auto signal = to_mav<T,1>(signal_, true);
+      py::gil_scoped_release release;
       interpol(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
     void Py_deinterpol(py::array &cube_, size_t itheta0, size_t iphi0,
@@ -90,6 +94,7 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       auto phi = to_mav<T,1>(phi_, false);
       auto psi = to_mav<T,1>(psi_, false);
       auto signal = to_mav<T,1>(signal_, false);
+      py::gil_scoped_release release;
       deinterpol(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
     void Py_updateSlm(py::array &slm_, const py::array &blm_,
@@ -98,6 +103,7 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       auto slm = to_mav<complex<T>,1>(slm_, true);
       auto blm = to_mav<complex<T>,1>(blm_);
       auto planes = to_mav<T,3>(planes_, true);
+      py::gil_scoped_release release;
       updateSlm(slm, blm, mbeam, planes);
       }
   };
@@ -117,6 +123,7 @@ template<typename T> class Py_Interpolator
       {
       auto vslm = to_mav<complex<T>,2>(slm_);
       auto vblm = to_mav<complex<T>,2>(blm_);
+      py::gil_scoped_release release;
       if (separate)
         for (size_t i=0; i<vslm.shape(0); ++i)
           {
@@ -160,6 +167,7 @@ template<typename T> class Py_Interpolator
       size_t ncomp = cube.shape(0);
       auto res = make_Pyarr<T>({ncomp,ptg2.shape(0)});
       auto res2 = to_mav<T,2>(res,true);
+      py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
         {
         auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
@@ -177,6 +185,7 @@ template<typename T> class Py_Interpolator
       auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
       size_t ncomp = cube.shape(0);
       auto data2 = to_mav<T,2>(data);
+      py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
         {
         auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
@@ -188,6 +197,7 @@ template<typename T> class Py_Interpolator
       {
       size_t lmax=conv.Lmax(), kmax=conv.Kmax();
       auto vblm = to_mav<complex<T>,2>(blm_);
+      py::gil_scoped_release release;
       size_t ncomp = vblm.shape(0);
       bool separate = cube.shape(0)>1;
       if (separate) MR_assert(ncomp==cube.shape(0), "dimension mismatch");
