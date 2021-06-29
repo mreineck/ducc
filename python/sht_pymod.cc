@@ -75,10 +75,12 @@ template<typename T> py::array Py2_rotate_alm(const py::array &alm_, int64_t lma
   auto a1 = to_mav<complex<T>,1>(alm_);
   auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
   auto a2 = to_mav<complex<T>,1>(alm,true);
+  {
   py::gil_scoped_release release;
   for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
   Alm_Base base(lmax,lmax);
   rotate_alm(base, a2, psi, theta, phi, nthreads);
+  }
   return move(alm);
   }
 py::array Py_rotate_alm(const py::array &alm, int64_t lmax,
@@ -169,8 +171,10 @@ template<typename T> py::array Py2_alm2leg(const py::array &alm_, size_t spin, s
   MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride), "bad a_lm array size");
   auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {alm.shape(0),theta.shape(0),mval.shape(0)});
   auto leg = to_mav<complex<T>,3>(leg_, true);
+  {
   py::gil_scoped_release release;
   alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+  }
   return leg_;
   }
 py::array Py_alm2leg(const py::array &alm, size_t lmax, const py::array &theta, size_t spin, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &leg)
@@ -191,8 +195,10 @@ template<typename T> py::array Py2_alm2leg_deriv1(const py::array &alm_, size_t 
   MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride), "bad a_lm array size");
   auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {2,theta.shape(0),mval.shape(0)});
   auto leg = to_mav<complex<T>,3>(leg_, true);
+  {
   py::gil_scoped_release release;
   alm2leg(alm, leg, 0, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP_DERIV1);
+  }
   return leg_;
   }
 py::array Py_alm2leg_deriv1(const py::array &alm, size_t lmax, const py::array &theta, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &leg)
@@ -213,8 +219,10 @@ template<typename T> py::array Py2_leg2alm(const py::array &leg_, const py::arra
   auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {leg.shape(0),min_almdim(lmax, mval, mstart, lstride)});
   auto alm = to_mav<complex<T>,2>(alm_, true);
   MR_assert(alm.shape(0)==leg.shape(0), "bad number of components in a_lm array");
+  {
   py::gil_scoped_release release;
   leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+  }
   return alm_;
   }
 py::array Py_leg2alm(const py::array &leg, size_t lmax, const py::array &theta, size_t spin, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &alm)
@@ -234,8 +242,10 @@ template<typename T> py::array Py2_map2leg(const py::array &map_, const py::arra
   MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride), "bad map array size");
   auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {map.shape(0),nphi.shape(0),mmax+1});
   auto leg = to_mav<complex<T>,3>(leg_, true);
+  {
   py::gil_scoped_release release;
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+  }
   return leg_;
   }
 py::array Py_map2leg(const py::array &map, const py::array &nphi, const py::array &phi0, const py::array &ringstart, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg)
@@ -255,8 +265,10 @@ template<typename T> py::array Py2_leg2map(const py::array &leg_, const py::arra
   auto map_ = get_optional_Pyarr_minshape<T>(map__, {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_mav<T,2>(map_, true);
   MR_assert(map.shape(0)==leg.shape(0), "bad number of components in map array");
+  {
   py::gil_scoped_release release;
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+  }
   return map_;
   }
 py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride, size_t nthreads, py::object &map)
@@ -286,8 +298,10 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_mav<T,2>(map_, true);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
   py::gil_scoped_release release;
   synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  }
   return map_;
   }
 py::array Py_synthesis(const py::array &alm, const py::array &theta,
@@ -350,8 +364,10 @@ template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
   auto map = to_mav<T,3>(map_, true);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
   py::gil_scoped_release release;
   synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  }
   return map_;
   }
 py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
@@ -370,8 +386,10 @@ template<typename T> py::array Py2_adjoint_synthesis_2d(
   auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
   auto alm = to_mav<complex<T>,2>(alm_, true);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
   py::gil_scoped_release release;
   adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  }
   return alm_;
   }
 py::array Py_adjoint_synthesis_2d(
@@ -392,8 +410,10 @@ template<typename T> py::array Py2_synthesis_2d_deriv1(const py::array &alm_,
   auto map_ = check_build_map<T>(map__, 2, ntheta, nphi);
   auto map = to_mav<T,3>(map_, true);
   MR_assert((map.shape(0)==2) && (alm.shape(0)==1), "incorrect number of components");
+  {
   py::gil_scoped_release release;
   synthesis_2d(alm, map, 1, lmax, mmax, geometry, nthreads, ALM2MAP_DERIV1);
+  }
   return map_;
   }
 py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
@@ -424,8 +444,10 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {map.shape(0),min_almdim(lmax, mval, mstart, lstride)});
   auto alm = to_mav<complex<T>,2>(alm_, true);
   MR_assert(alm.shape(0)==map.shape(0), "bad number of components in a_lm array");
+  {
   py::gil_scoped_release release;
   adjoint_synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  }
   return alm_;
   }
 py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
@@ -453,8 +475,10 @@ template<typename T> py::array Py2_analysis_2d(
   auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
   auto alm = to_mav<complex<T>,2>(alm_, true);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
   py::gil_scoped_release release;
   analysis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  }
   return alm_;
   }
 py::array Py_analysis_2d(
@@ -569,8 +593,10 @@ template<typename T> class Py_sharpjob
       a_c_c alm(n_alm());
       auto mr=map.unchecked<1>();
       auto ar=alm.mutable_unchecked<1>();
+      {      
       py::gil_scoped_release release;
       sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, 0, nthreads);
+      }
       return alm;
       }
     a_c_c map2alm (const a_d_c &map) const
@@ -580,8 +606,10 @@ template<typename T> class Py_sharpjob
       a_c_c alm(n_alm());
       auto mr=map.unchecked<1>();
       auto ar=alm.mutable_unchecked<1>();
+      {
       py::gil_scoped_release release;
       sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
+      }
       return alm;
       }
     a_d_c alm2map_spin (const a_c_c &alm, int64_t spin) const
@@ -592,8 +620,10 @@ template<typename T> class Py_sharpjob
         "incorrect size of a_lm array");
       a_d_c map(vector<size_t>{2,size_t(npix_)});
       auto mr=map.mutable_unchecked<2>();
+      {
       py::gil_scoped_release release;
       sharp_alm2map_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, 0, nthreads);
+      }
       return map;
       }
     a_c_c map2alm_spin (const a_d_c &map, int64_t spin) const
@@ -604,8 +634,10 @@ template<typename T> class Py_sharpjob
         "incorrect size of map array");
       a_c_c alm(vector<size_t>{2,size_t(n_alm())});
       auto ar=alm.mutable_unchecked<2>();
+      {
       py::gil_scoped_release release;
       sharp_map2alm_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
+      }
       return alm;
       }
   };
