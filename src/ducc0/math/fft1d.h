@@ -1343,17 +1343,17 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   auto i = itrans*vlen+n;
                   if (i >= ido) break;
                   if (i==0)
-                    CH(0,0,m) = { p1[m].r[n], p1[m].i[n] };
+                    CC(0,m,0) = { p1[m].r[n], p1[m].i[n] };
                   else
                     {
                     if (m==0)
-                     CH(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
+                     CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
                     else
-                      CH(i,0,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
                     }
                   }
               }
-            return ch;
+            return cc;
             }
 
           for (size_t itrans=0; itrans<nvtrans; ++itrans)
@@ -1495,9 +1495,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 }
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<ntrans; ++n)
-                  CH(n+ibunch*bunchsize, 0, m) = cc2[m+n*ip];
+                  CC(n+ibunch*bunchsize, m, 0) = cc2[m+n*ip];
               }
-            return ch;
+            return cc;
             }
 
           auto cc2 = &buf[0];
@@ -1585,7 +1585,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
       // FIXME TBD
-      size_t lim = vectorize ? 1000 : 1000; //~size_t(0);
+      size_t lim = vectorize ? 1000 : 10000; //~size_t(0);
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
