@@ -1407,8 +1407,6 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           }
         else
           {
-// FIXME: special cases for ido==1 (operate on CC, transpose to CH)
-// and l1==1 (operate CC -> CH, apply twiddles)
           if (ido==1)
             {
 // parallelize here!
@@ -1654,6 +1652,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       auto res = any_cast<Tcs *>(spass->exec(cc, reinterpret_cast<Tcs *>(ch2),
         reinterpret_cast<Tcs *>(buf2), fwd));
 // arrange input in SIMD-friendly way
+// FIXME: swap loops?
       for (size_t i=0; i<ip/vlen; ++i)
         for (size_t j=0; j<vlen; ++j)
           {
