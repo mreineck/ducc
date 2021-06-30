@@ -240,14 +240,21 @@ struct ft_partial_sph_isometry_plan
             }
           {
           int k=n-1;
+#define ACCURATE_VERSION
           for (; k>2; k-=3)
             {
             Tv maxnrm(0);
             for (size_t i=0; i<N; ++i)
               {
+#ifndef ACCURATE_VERSION
               auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
               auto vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1 - C[k-1]*vk[i];
               auto vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2 - C[k-2]*vkm1;
+#else
+              auto vkm1 = A[k]*((X[i]+B[k])*vk[i] - C[k]*vkp1[i]);
+              auto vkm2 = A[k-1]*((X[i]+B[k-1])*vkm1 - C[k-1]*vk[i]);
+              auto vkm3 = A[k-2]*((X[i]+B[k-2])*vkm2 - C[k-2]*vkm1);
+#endif
               vkp1[i] = vkm2;
               vk[i] = vkm3;
               nrm[i] += vkm1*vkm1 + vkm2*vkm2 + vkm3*vkm3;
@@ -269,7 +276,11 @@ struct ft_partial_sph_isometry_plan
             Tv maxnrm(0);
             for (size_t i=0; i<N; ++i)
               {
+#ifndef ACCURATE_VERSION
               auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+#else
+              auto vkm1 = A[k]*((X[i]+B[k])*vk[i] - C[k]*vkp1[i]);
+#endif
               vkp1[i] = vk[i];
               vk[i] = vkm1;
               nrm[i] += vkm1*vkm1;
@@ -315,13 +326,22 @@ struct ft_partial_sph_isometry_plan
         if (n>1)
           {
           A[n-1] = 1/T.b[n-2];
+#ifndef ACCURATE_VERSION
           B[n-1] = -T.a[n-1]/T.b[n-2];
+#else
+          B[n-1] = -T.a[n-1];
+#endif
           }
         for (int i=n-2; i>0; i--)
           {
           A[i] = 1/T.b[i-1];
+#ifndef ACCURATE_VERSION
           B[i] = -T.a[i]/T.b[i-1];
           C[i] = T.b[i]/T.b[i-1];
+#else
+          B[i] = -T.a[i];
+          C[i] = T.b[i];
+#endif
           }
         }
 
