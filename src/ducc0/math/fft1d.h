@@ -1347,7 +1347,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   else
                     {
                     if (m==0)
-                     CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
+                      CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
                     else
                       CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
                     }
