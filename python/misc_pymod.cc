@@ -47,13 +47,13 @@ namespace py = pybind11;
 
 
 constexpr const char *Py_vdot_DS = R"""(
-Compute the scalar product of two arrays., i.e. sum_i(conj(a_i)*b_i)
+Compute the scalar product of two arrays or scalars., i.e. sum_i(conj(a_i)*b_i)
 over all array elements.
 
 Parameters
 ----------
-a : numpy.ndarray of any shape; dtype must be a float or complex type
-b : numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
+a : scalar or numpy.ndarray of any shape; dtype must be a float or complex type
+b : scalar or numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
 
 Returns
 -------
@@ -83,11 +83,11 @@ template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, cons
 template<typename T1> py::object Py2_vdot(const py::array &a, const py::array &b)
   {
   if (isPyarr<float>(b))
-    return Py3_vdot<float,T1>(b,a);
+    return Py3_vdot<T1,float>(a,b);
   if (isPyarr<double>(b))
-    return Py3_vdot<double,T1>(b,a);
+    return Py3_vdot<T1,double>(a,b);
   if (isPyarr<long double>(b))
-    return Py3_vdot<long double,T1>(b,a);
+    return Py3_vdot<T1,long double>(a,b);
   if (isPyarr<complex<float>>(b))
     return Py3_vdot<T1,complex<float>>(a,b);
   if (isPyarr<complex<double>>(b))
@@ -96,8 +96,15 @@ template<typename T1> py::object Py2_vdot(const py::array &a, const py::array &b
     return Py3_vdot<T1,complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
-py::object Py_vdot(const py::array &a, const py::array &b)
+py::object Py_vdot(const py::object &a, const py::object &b)
   {
+  if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
+    {
+    auto xa = py::cast<complex<long double>>(a),
+         xb = py::cast<complex<long double>>(b);
+    auto res = conj(xa)*xb;
+    return (res.imag()==0) ? py::cast(res.real()) : py::cast(res);
+    }
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
   if (isPyarr<double>(a))
@@ -114,20 +121,20 @@ py::object Py_vdot(const py::array &a, const py::array &b)
   }
 
 constexpr const char *Py_l2error_DS = R"""(
-Compute the L2 error between two arrays.
+Compute the L2 error between two arrays or scalars.
 More specifically, compute
 ``sqrt(sum_i(|a_i - b_i|^2) / max(sum_i(|a_i|^2), sum_i(|b_i|^2)))``,
 where i goes over all array elements.
 
 Parameters
 ----------
-a : numpy.ndarray of any shape; dtype must be a float or complex type
-b : numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
+a : scalar or numpy.ndarray of any shape; dtype must be a float or complex type
+b : scalar or numpy.ndarray of the same shape as `a`; dtype must be a float or complex type
 
 Returns
 -------
 float
-    the L2 error between the two arrays.
+    the L2 error between the two objects.
 
 Notes
 -----
@@ -164,8 +171,15 @@ template<typename T1> double Py2_l2error(const py::array &a, const py::array &b)
     return Py3_l2error<T1,complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
-double Py_l2error(const py::array &a, const py::array &b)
+double Py_l2error(const py::object &a, const py::object &b)
   {
+  if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
+    {
+    auto xa = py::cast<complex<long double>>(a),
+         xb = py::cast<complex<long double>>(b);
+    auto res = abs(xa-xb)/max(abs(xa), abs(xb));
+    return double(res);
+    }
   if (isPyarr<float>(a))
     return Py2_l2error<float>(a,b);
   if (isPyarr<double>(a))

@@ -1,3 +1,19 @@
+0.16.0:
+- general:
+  - the GIL is now released in many more functions
+
+-fft:
+  - very long 1D transforms now have a lower memory overhead and should be
+    faster
+
+-sht:
+  - a_lm rotation is now much more accurate, but slightly slower
+  - the improved apherical harmonic analysis capabilities are now documented
+
+-misc:
+  - two new convenience functions vdot() and l2error() were added
+
+
 0.15.0:
 - general:
   - the code is now compiled with the "-fvisibility=hidden" flag, which reduces

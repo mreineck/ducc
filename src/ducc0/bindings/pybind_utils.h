@@ -38,6 +38,9 @@ using stride_t=fmav_info::stride_t;
 
 namespace py = pybind11;
 
+bool isPyarr(const py::object &obj)
+  { return py::isinstance<py::array>(obj); }
+
 template<typename T> bool isPyarr(const py::object &obj)
   { return py::isinstance<py::array_t<T>>(obj); }
 

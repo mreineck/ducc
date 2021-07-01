@@ -42,6 +42,7 @@ def test(lmax, geometry, spin, nthreads=1):
     alm2 = ducc0.sht.experimental.analysis_2d(alm=alm2, map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
     print(time()-t0)
     print("L2 error after full round-trip:", ducc0.misc.l2error(alm2,alm))
+    print("L_inf error after full round-trip:", np.max(np.abs(alm2-alm)))
 
 nthr=8
 for l0 in [4095]:
