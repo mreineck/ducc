@@ -169,13 +169,13 @@ struct ft_partial_sph_isometry_plan
 
   static double Y_index_j_eq_i(int l, int i) // l>=0, i>=0, j>=i
     {
-    auto r1 = abs(Gy_index3_a1(l, 2*l-i  , i));
+    auto r1 = abs(Gy_index3_a1(l, 2*l-i, i));
     auto r3 = abs(Gy_index3_a2(l, 2*l-i+2));
     return (r1+r3)*0.25;
     }
   static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
     {
-    auto r1 = Gy_index3_a1(l, 2*l-i  , i)*Gy_index3_a2(l, 2*l-i);
+    auto r1 = Gy_index3_a1(l, 2*l-i, i)*Gy_index3_a2(l, 2*l-i);
     return copysign(sqrt(abs(r1)),r1)*0.25;
     }
   static double Z_index(int l, int i, int j)
