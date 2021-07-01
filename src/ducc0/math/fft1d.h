@@ -1245,16 +1245,15 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
+    static constexpr size_t bunchsize=8;
 
     const size_t l1, ido;
     size_t ip;
     vector<Tcpass<Tfs>> passes;
     size_t bufsz;
     bool need_cpy;
-    aligned_array<Tcs> wa;
-
-    auto WA(size_t x, size_t i) const
-      { return wa[(i-1)*(ip-1)+x]; }
+    size_t rfct;
+    Troots<Tfs> myroots;
 
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf) const
@@ -1288,121 +1287,282 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
             { return cc[a+ido*(b+ip*c)]; };
 
-          for (size_t itrans=0; itrans<nvtrans; ++itrans)
+          if (ido==1)
             {
-            size_t k0=(itrans*vlen)/ido;
-            if (k0==(itrans*vlen+vlen-1)/ido) // k is constant for all vlen transforms
+            for (size_t itrans=0; itrans<nvtrans; ++itrans)
               {
-              size_t i0 = (itrans*vlen)%ido;
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<vlen; ++n)
                   {
-                  cc2[m].r[n] = CC(i0+n,m,k0).r;
-                  cc2[m].i[n] = CC(i0+n,m,k0).i;
+                  size_t k = min(l1-1, itrans*vlen+n);
+                  cc2[m].r[n] = CC(0,m,k).r;
+                  cc2[m].i[n] = CC(0,m,k).i;
+                  }
+
+              Tcv *p1=cc2, *p2=ch2;
+              for(const auto &pass: passes)
+                {
+                auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
+                if (res==p2) swap (p1,p2);
+                }
+
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<vlen; ++n)
+                  {
+                  auto k = min(l1-1, itrans*vlen+n);
+                  CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
                   }
               }
-            else
+            return ch;
+            }
+
+          if (l1==1)
+            {
+            for (size_t itrans=0; itrans<nvtrans; ++itrans)
               {
-              for (size_t n=0; n<vlen; ++n)
-                {
-                auto i = (itrans*vlen+n)%ido;
-                auto k = min(l1-1,(itrans*vlen+n)/ido);
-                for (size_t m=0; m<ip; ++m)
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<vlen; ++n)
                   {
-                  cc2[m].r[n] = CC(i,m,k).r;
-                  cc2[m].i[n] = CC(i,m,k).i;
+                  size_t i = min(ido-1, itrans*vlen+n);
+                  cc2[m].r[n] = CC(i,m,0).r;
+                  cc2[m].i[n] = CC(i,m,0).i;
                   }
+
+              Tcv *p1=cc2, *p2=ch2;
+              for(const auto &pass: passes)
+                {
+                auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
+                if (res==p2) swap (p1,p2);
+                }
+
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<vlen; ++n)
+                  {
+                  auto i = itrans*vlen+n;
+                  if (i >= ido) break;
+                  if (i==0)
+                    CC(0,m,0) = { p1[m].r[n], p1[m].i[n] };
+                  else
+                    {
+                    if (m==0)
+                      CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
+                    else
+                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*m*i]);
+                    }
+                  }
+              }
+            return cc;
+            }
+
+          for (size_t itrans=0; itrans<nvtrans; ++itrans)
+            {
+            array<size_t, vlen> ix, kx;
+            size_t ixcur = (itrans*vlen)%ido;
+            size_t kxcur = (itrans*vlen)/ido;
+            for (size_t n=0; n<vlen; ++n)
+              {
+              ix[n] = ixcur;
+              kx[n] = min(l1-1,kxcur);
+              if (++ixcur==ido)
+                {
+                ixcur=0;
+                ++kxcur;
                 }
               }
+
+            for (size_t m=0; m<ip; ++m)
+              for (size_t n=0; n<vlen; ++n)
+                {
+                cc2[m].r[n] = CC(ix[n],m,kx[n]).r;
+                cc2[m].i[n] = CC(ix[n],m,kx[n]).i;
+                }
+
             Tcv *p1=cc2, *p2=ch2;
             for(const auto &pass: passes)
               {
               auto res = any_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
               if (res==p2) swap (p1,p2);
               }
-            for (size_t n=0; n<vlen; ++n)
-              {
-              auto i = (itrans*vlen+n)%ido;
-              auto k = (itrans*vlen+n)/ido;
-              if (k>=l1) break;
-              if (l1>1)
+
+            for (size_t m=0; m<ip; ++m)
+              for (size_t n=0; n<vlen; ++n)
                 {
+                auto i = ix[n];
+                auto k = kx[n];
+                if (itrans*vlen+n >= l1*ido) break;
                 if (i==0)
-                  for (size_t m=0; m<ip; ++m)
-                    CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
+                  CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
                 else
                   {
-                  CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
-                  for (size_t m=1; m<ip; ++m)
-                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                  if (m==0)
+                    CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
+                  else
+                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
-              else
-                {
-                if (i==0)
-                  for (size_t m=0; m<ip; ++m)
-                    CC(0,m,0) = {p1[m].r[n], p1[m].i[n]};
-                else
-                  {
-                  CC(i,0,0) = Tcs(p1[0].r[n], p1[0].i[n]);
-                  for (size_t m=1; m<ip; ++m)
-                    CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
-                  }
-                }
-              }
             }
-          return (l1>1) ? ch : cc;
+          return ch;
           }
         else
           {
+          if (ido==1)
+            {
+// parallelize here!
+            for (size_t n=0; n<l1; ++n)
+              {
+              Cmplx<T> *p1=&cc[n*ip], *p2=ch;
+              Cmplx<T> *res = nullptr;
+              for(const auto &pass: passes)
+                {
+                res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf, fwd));
+                if (res==p2) swap (p1,p2);
+                }
+              if (res != &cc[n*ip])
+                // FIXME: use std::copy()
+                for (size_t m=0; m<ip; ++m)
+                  cc[n*ip+m] = res[m];
+              }
+            // transpose
+            size_t nbunch = (l1*ido + bunchsize-1)/bunchsize;
+// parallelize here!
+            for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
+              {
+              size_t ntrans = min(bunchsize, l1-ibunch*bunchsize);
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  {
+                  size_t itrans = ibunch*bunchsize + n;
+                  ch[itrans+m*l1] = cc[m+itrans*ip];
+                  }
+              }
+            return ch;
+            }
+          if (l1==1)
+            {
+            auto cc2 = &buf[0];
+            auto ch2 = &buf[bunchsize*ip];
+            auto buf2 = &buf[(bunchsize+1)*ip];
+            size_t nbunch = (ido + bunchsize-1)/bunchsize;
+
+            auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+              { return ch[a+ido*(b+l1*c)]; };
+            auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
+              { return cc[a+ido*(b+ip*c)]; };
+
+// parallelize here!
+             for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
+              {
+              size_t ntrans = min(bunchsize, ido-ibunch*bunchsize);
+
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  cc2[m+n*ip] = CC(n+ibunch*bunchsize,m,0);
+
+              for (size_t n=0; n<ntrans; ++n)
+                {
+                auto i = n+ibunch*bunchsize;
+                Cmplx<T> *p1=&cc2[n*ip], *p2=ch2;
+                Cmplx<T> *res = nullptr;
+                for(const auto &pass: passes)
+                  {
+                  res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
+                  if (res==p2) swap (p1,p2);
+                  }
+                if (res==&cc2[n*ip]) // no copying necessary
+                  {
+                  if (i!=0)
+                    {
+                    for (size_t m=1; m<ip; ++m)
+                      cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>((*myroots)[rfct*m*i]);
+                    }
+                  }
+                else
+                  {
+                  if (i==0)
+                    for (size_t m=0; m<ip; ++m)
+                      cc2[n*ip+m] = res[m];
+                  else
+                    {
+                    cc2[n*ip] = res[0];
+                    for (size_t m=1; m<ip; ++m)
+                      cc2[n*ip+m] = res[m].template special_mul<fwd>((*myroots)[rfct*m*i]);
+                    }
+                  }
+                }
+              for (size_t m=0; m<ip; ++m)
+                for (size_t n=0; n<ntrans; ++n)
+                  CC(n+ibunch*bunchsize, m, 0) = cc2[m+n*ip];
+              }
+            return cc;
+            }
+
           auto cc2 = &buf[0];
-          auto ch2 = &buf[ip];
-          auto buf2 = &buf[2*ip];
+          auto ch2 = &buf[bunchsize*ip];
+          auto buf2 = &buf[(bunchsize+1)*ip];
+          size_t nbunch = (l1*ido + bunchsize-1)/bunchsize;
 
           auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
             { return ch[a+ido*(b+l1*c)]; };
           auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
             { return cc[a+ido*(b+ip*c)]; };
 
-          for (size_t k=0; k<l1; ++k)
-            for (size_t i=0; i<ido; ++i)
+// parallelize here!
+          for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
+            {
+            size_t ntrans = min(bunchsize, l1*ido-ibunch*bunchsize);
+            array<size_t, bunchsize> ix, kx;
+            size_t ixcur = (ibunch*bunchsize)%ido;
+            size_t kxcur = (ibunch*bunchsize)/ido;
+            for (size_t n=0; n<bunchsize; ++n)
               {
-              for (size_t m=0; m<ip; ++m)
-                cc2[m] = CC(i,m,k);
+              ix[n] = ixcur;
+              kx[n] = min(l1-1,kxcur);
+              if (++ixcur==ido)
+                {
+                ixcur=0;
+                ++kxcur;
+                }
+              }
+            for (size_t m=0; m<ip; ++m)
+              for (size_t n=0; n<ntrans; ++n)
+                cc2[m+n*ip] = CC(ix[n],m,kx[n]);
 
-              Cmplx<T> *p1=cc2, *p2=ch2;
+            for (size_t n=0; n<ntrans; ++n)
+              {
+              auto i = ix[n];
+              Cmplx<T> *p1=&cc2[n*ip], *p2=ch2;
+              Cmplx<T> *res = nullptr;
               for(const auto &pass: passes)
                 {
-                auto res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
+                res = any_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
                 if (res==p2) swap (p1,p2);
                 }
-
-              if (l1>1)
+              if (res==&cc2[n*ip]) // no copying necessary
                 {
-                if (i==0)
-                  for (size_t m=0; m<ip; ++m)
-                    CH(0,k,m) = p1[m];
-                else
+                if (i!=0)
                   {
-                  CH(i,k,0) = p1[0];
                   for (size_t m=1; m<ip; ++m)
-                    CH(i,k,m) = p1[m].template special_mul<fwd>(WA(m-1,i));
+                    cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
               else
                 {
                 if (i==0)
                   for (size_t m=0; m<ip; ++m)
-                    CC(0,m,0) = p1[m];
+                    cc2[n*ip+m] = res[m];
                 else
                   {
-                  CC(i,0,0) = p1[0];
+                  cc2[n*ip] = res[0];
                   for (size_t m=1; m<ip; ++m)
-                    CC(i,m,0) = p1[m].template special_mul<fwd>(WA(m-1,i));
+                    cc2[n*ip+m] = res[m].template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
               }
-          return (l1>1) ? ch : cc;
+            for (size_t m=0; m<ip; ++m)
+              for (size_t n=0; n<ntrans; ++n)
+                CH(ix[n], kx[n], m) = cc2[m+n*ip];
+            }
+          return ch;
           }
         }
       }
@@ -1411,24 +1571,21 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
       const Troots<Tfs> &roots, bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false),
-        wa((ip-1)*(ido-1))
+        myroots(roots)
       {
       size_t N=ip*l1*ido;
-      auto rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
       // FIXME TBD
-      size_t lim = vectorize ? 1000 : ~size_t(0);
+      size_t lim = vectorize ? 1000 : 10000; //~size_t(0);
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
         size_t l1l=1;
         for (auto fct: factors)
           {
-          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots, vectorize));
+          passes.push_back(cfftpass<Tfs>::make_pass(l1l, ip/(fct*l1l), fct, roots, false));
           l1l*=fct;
           }
         }
@@ -1454,7 +1611,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       if ((l1!=1)||(ido!=1))
         {
         need_cpy=true;
-        bufsz += 2*ip;
+        bufsz += (bunchsize+1)*ip;
         }
       }
 
@@ -1490,6 +1647,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       auto res = any_cast<Tcs *>(spass->exec(cc, reinterpret_cast<Tcs *>(ch2),
         reinterpret_cast<Tcs *>(buf2), fwd));
 // arrange input in SIMD-friendly way
+// FIXME: swap loops?
       for (size_t i=0; i<ip/vlen; ++i)
         for (size_t j=0; j<vlen; ++j)
           {
