@@ -1252,10 +1252,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     vector<Tcpass<Tfs>> passes;
     size_t bufsz;
     bool need_cpy;
-    aligned_array<Tcs> wa;
-
-    auto WA(size_t x, size_t i) const
-      { return wa[(i-1)*(ip-1)+x]; }
+    size_t rfct;
+    Troots<Tfs> myroots;
 
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf) const
@@ -1349,7 +1347,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                     if (m==0)
                       CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
                     else
-                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*m*i]);
                     }
                   }
               }
@@ -1399,7 +1397,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   if (m==0)
                     CH(i,k,0) = { p1[0].r[n], p1[0].i[n] } ;
                   else
-                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>(WA(m-1,i));
+                    CH(i,k,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
             }
@@ -1475,7 +1473,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   if (i!=0)
                     {
                     for (size_t m=1; m<ip; ++m)
-                      cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>(WA(m-1,i));
+                      cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>((*myroots)[rfct*m*i]);
                     }
                   }
                 else
@@ -1487,7 +1485,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                     {
                     cc2[n*ip] = res[0];
                     for (size_t m=1; m<ip; ++m)
-                      cc2[n*ip+m] = res[m].template special_mul<fwd>(WA(m-1,i));
+                      cc2[n*ip+m] = res[m].template special_mul<fwd>((*myroots)[rfct*m*i]);
                     }
                   }
                 }
@@ -1544,7 +1542,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 if (i!=0)
                   {
                   for (size_t m=1; m<ip; ++m)
-                    cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>(WA(m-1,i));
+                    cc2[n*ip+m] = cc2[n*ip+m].template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
               else
@@ -1556,7 +1554,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   {
                   cc2[n*ip] = res[0];
                   for (size_t m=1; m<ip; ++m)
-                    cc2[n*ip+m] = res[m].template special_mul<fwd>(WA(m-1,i));
+                    cc2[n*ip+m] = res[m].template special_mul<fwd>((*myroots)[rfct*l1*m*i]);
                   }
                 }
               }
@@ -1573,14 +1571,11 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
       const Troots<Tfs> &roots, bool vectorize=false)
       : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false),
-        wa((ip-1)*(ido-1))
+        myroots(roots)
       {
       size_t N=ip*l1*ido;
-      auto rfct = roots->size()/N;
+      rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t i=1; i<ido; ++i)
-        for (size_t j=1; j<ip; ++j)
-          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
 
       // FIXME TBD
       size_t lim = vectorize ? 1000 : 10000; //~size_t(0);
