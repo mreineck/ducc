@@ -171,18 +171,15 @@ struct ft_partial_sph_isometry_plan
     {
     auto r1 = abs(Gy_index3_a1(l, 2*l-i  , i));
     auto r3 = abs(Gy_index3_a2(l, 2*l-i+2));
-//    return (r1+r3)*0.25/double((2*l+1)*(2*l+3));
     return (r1+r3)*0.25;
     }
   static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
     {
     auto r1 = Gy_index3_a1(l, 2*l-i  , i)*Gy_index3_a2(l, 2*l-i);
-//    return copysign(sqrt(abs(r1)),r1)*0.25/double((2*l+1)*(2*l+3));
     return copysign(sqrt(abs(r1)),r1)*0.25;
     }
   static double Z_index(int l, int i, int j)
     {
-//    return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
     return (i==j) ? (j+1)*(2*l+1-j) : 0.0;
     }
 
@@ -247,13 +244,13 @@ struct ft_partial_sph_isometry_plan
             for (size_t i=0; i<N; ++i)
               {
 #ifndef ACCURATE_VERSION
-              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
-              auto vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1 - C[k-1]*vk[i];
-              auto vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2 - C[k-2]*vkm1;
+              auto vkm1 = (A[k  ]*X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i];
+              auto vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1  - C[k-1]*vk[i];
+              auto vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2  - C[k-2]*vkm1;
 #else
-              auto vkm1 = A[k]*((X[i]+B[k])*vk[i] - C[k]*vkp1[i]);
-              auto vkm2 = A[k-1]*((X[i]+B[k-1])*vkm1 - C[k-1]*vk[i]);
-              auto vkm3 = A[k-2]*((X[i]+B[k-2])*vkm2 - C[k-2]*vkm1);
+              auto vkm1 = A[k  ]*((X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i]);
+              auto vkm2 = A[k-1]*((X[i]+B[k-1])*vkm1  - C[k-1]*vk[i]);
+              auto vkm3 = A[k-2]*((X[i]+B[k-2])*vkm2  - C[k-2]*vkm1);
 #endif
               vkp1[i] = vkm2;
               vk[i] = vkm3;
