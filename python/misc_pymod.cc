@@ -98,6 +98,13 @@ template<typename T1> py::object Py2_vdot(const py::array &a, const py::array &b
   }
 py::object Py_vdot(const py::object &a, const py::object &b)
   {
+  if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
+    {
+    auto xa = py::cast<complex<long double>>(a),
+         xb = py::cast<complex<long double>>(b);
+    auto res = conj(xa)*xb;
+    return (res.imag()==0) ? py::cast(res.real()) : py::cast(res);
+    }
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
   if (isPyarr<double>(a))
@@ -110,11 +117,7 @@ py::object Py_vdot(const py::object &a, const py::object &b)
     return Py2_vdot<complex<double>>(a,b);
   if (isPyarr<complex<long double>>(a))
     return Py2_vdot<complex<long double>>(a,b);
-  // no arrays, so we assume a and b are scalars
-  auto xa = py::cast<complex<long double>>(a),
-       xb = py::cast<complex<long double>>(b);
-  auto res = conj(xa)*xb;
-  return (res.imag()==0) ? py::cast(res.real()) : py::cast(res);
+  MR_fail("type matching failed");
   }
 
 constexpr const char *Py_l2error_DS = R"""(
@@ -170,6 +173,13 @@ template<typename T1> double Py2_l2error(const py::array &a, const py::array &b)
   }
 double Py_l2error(const py::object &a, const py::object &b)
   {
+  if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
+    {
+    auto xa = py::cast<complex<long double>>(a),
+         xb = py::cast<complex<long double>>(b);
+    auto res = abs(xa-xb)/max(abs(xa), abs(xb));
+    return double(res);
+    }
   if (isPyarr<float>(a))
     return Py2_l2error<float>(a,b);
   if (isPyarr<double>(a))
@@ -182,11 +192,7 @@ double Py_l2error(const py::object &a, const py::object &b)
     return Py2_l2error<complex<double>>(a,b);
   if (isPyarr<complex<long double>>(a))
     return Py2_l2error<complex<long double>>(a,b);
-  // no arrays, so we assume a and b are scalars
-  auto xa = py::cast<complex<long double>>(a),
-       xb = py::cast<complex<long double>>(b);
-  auto res = abs(xa-xb)/max(abs(xa), abs(xb));
-  return double(res);
+  MR_fail("type matching failed");
   }
 
 py::array Py_GL_weights(size_t nlat, size_t nlon)
