@@ -169,18 +169,18 @@ struct ft_partial_sph_isometry_plan
 
   static double Y_index_j_eq_i(int l, int i) // l>=0, i>=0, j>=i
     {
-    auto r1 = abs(Gy_index3_a1(l, 2*l-i  , i));
+    auto r1 = abs(Gy_index3_a1(l, 2*l-i, i));
     auto r3 = abs(Gy_index3_a2(l, 2*l-i+2));
-    return (r1+r3)*0.25/double((2*l+1)*(2*l+3));
+    return (r1+r3)*0.25;
     }
   static double Y_index_j_eq_i_plus_2(int l, int i) // l>=0, i>=0, j>=i
     {
-    auto r1 = Gy_index3_a1(l, 2*l-i  , i)*Gy_index3_a2(l, 2*l-i);
-    return copysign(sqrt(abs(r1)),r1)*0.25/double((2*l+1)*(2*l+3));
+    auto r1 = Gy_index3_a1(l, 2*l-i, i)*Gy_index3_a2(l, 2*l-i);
+    return copysign(sqrt(abs(r1)),r1)*0.25;
     }
   static double Z_index(int l, int i, int j)
     {
-    return (i==j) ? (j+1)*(2*l+1-j)/double((2*l+1)*(2*l+3)) : 0.0;
+    return (i==j) ? (j+1)*(2*l+1-j) : 0.0;
     }
 
   struct ft_symmetric_tridiagonal
@@ -198,7 +198,7 @@ struct ft_partial_sph_isometry_plan
       }
     };
 
-  class ft_symmetric_tridiagonal_symmetric_eigen
+  template<bool high_accuracy> class ft_symmetric_tridiagonal_symmetric_eigen
     {
     private:
       vector<double> A, B, C;
@@ -242,9 +242,19 @@ struct ft_partial_sph_isometry_plan
             Tv maxnrm(0);
             for (size_t i=0; i<N; ++i)
               {
-              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
-              auto vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1 - C[k-1]*vk[i];
-              auto vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2 - C[k-2]*vkm1;
+              Tv vkm1, vkm2, vkm3;
+              if constexpr(high_accuracy)
+                {
+                vkm1 = A[k  ]*((X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i]);
+                vkm2 = A[k-1]*((X[i]+B[k-1])*vkm1  - C[k-1]*vk[i]);
+                vkm3 = A[k-2]*((X[i]+B[k-2])*vkm2  - C[k-2]*vkm1);
+                }
+              else
+                {
+                vkm1 = (A[k  ]*X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i];
+                vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1  - C[k-1]*vk[i];
+                vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2  - C[k-2]*vkm1;
+                }
               vkp1[i] = vkm2;
               vk[i] = vkm3;
               nrm[i] += vkm1*vkm1 + vkm2*vkm2 + vkm3*vkm3;
@@ -266,7 +276,11 @@ struct ft_partial_sph_isometry_plan
             Tv maxnrm(0);
             for (size_t i=0; i<N; ++i)
               {
-              auto vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+              Tv vkm1;
+              if constexpr(high_accuracy)
+                vkm1 = A[k]*((X[i]+B[k])*vk[i] - C[k]*vkp1[i]);
+              else
+                vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
               vkp1[i] = vk[i];
               vk[i] = vkm1;
               nrm[i] += vkm1*vkm1;
@@ -312,13 +326,24 @@ struct ft_partial_sph_isometry_plan
         if (n>1)
           {
           A[n-1] = 1/T.b[n-2];
-          B[n-1] = -T.a[n-1]/T.b[n-2];
+          if constexpr(high_accuracy)
+            B[n-1] = -T.a[n-1];
+          else
+            B[n-1] = -T.a[n-1]/T.b[n-2];
           }
         for (int i=n-2; i>0; i--)
           {
           A[i] = 1/T.b[i-1];
-          B[i] = -T.a[i]/T.b[i-1];
-          C[i] = T.b[i]/T.b[i-1];
+          if constexpr(high_accuracy)
+            {
+            B[i] = -T.a[i];
+            C[i] = T.b[i];
+            }
+          else
+            {
+            B[i] = -T.a[i]/T.b[i-1];
+            C[i] = T.b[i]/T.b[i-1];
+            }
           }
         }
 
@@ -336,7 +361,7 @@ struct ft_partial_sph_isometry_plan
     };
 
   ft_symmetric_tridiagonal T;
-  ft_symmetric_tridiagonal_symmetric_eigen F11, F21, F12, F22;
+  ft_symmetric_tridiagonal_symmetric_eigen<true> F11, F21, F12, F22;
   int l;
 
   ft_partial_sph_isometry_plan(const int lmax)
