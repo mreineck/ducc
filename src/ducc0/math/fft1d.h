@@ -1282,21 +1282,21 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           auto ch2 = &tbuf[ip];
           auto buf2 = &tbuf[2*ip];
 
-          auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
-            { return ch[a+ido*(b+l1*c)]; };
-          auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
-            { return cc[a+ido*(b+ip*c)]; };
-
           if (ido==1)
             {
+            auto CH = [ch,this](size_t b, size_t c) -> Tc&
+              { return ch[b+l1*c]; };
+            auto CC = [cc,this](size_t b, size_t c) -> const Tc&
+              { return cc[b+ip*c]; };
+
             for (size_t itrans=0; itrans<nvtrans; ++itrans)
               {
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<vlen; ++n)
                   {
                   size_t k = min(l1-1, itrans*vlen+n);
-                  cc2[m].r[n] = CC(0,m,k).r;
-                  cc2[m].i[n] = CC(0,m,k).i;
+                  cc2[m].r[n] = CC(m,k).r;
+                  cc2[m].i[n] = CC(m,k).i;
                   }
 
               Tcv *p1=cc2, *p2=ch2;
@@ -1310,7 +1310,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 for (size_t n=0; n<vlen; ++n)
                   {
                   auto k = min(l1-1, itrans*vlen+n);
-                  CH(0,k,m) = { p1[m].r[n], p1[m].i[n] };
+                  CH(k,m) = { p1[m].r[n], p1[m].i[n] };
                   }
               }
             return ch;
@@ -1318,14 +1318,17 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
           if (l1==1)
             {
+            auto CC = [cc,this](size_t a, size_t b) -> Tc&
+              { return cc[a+ido*b]; };
+
             for (size_t itrans=0; itrans<nvtrans; ++itrans)
               {
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<vlen; ++n)
                   {
                   size_t i = min(ido-1, itrans*vlen+n);
-                  cc2[m].r[n] = CC(i,m,0).r;
-                  cc2[m].i[n] = CC(i,m,0).i;
+                  cc2[m].r[n] = CC(i,m).r;
+                  cc2[m].i[n] = CC(i,m).i;
                   }
 
               Tcv *p1=cc2, *p2=ch2;
@@ -1341,18 +1344,23 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   auto i = itrans*vlen+n;
                   if (i >= ido) break;
                   if (i==0)
-                    CC(0,m,0) = { p1[m].r[n], p1[m].i[n] };
+                    CC(0,m) = { p1[m].r[n], p1[m].i[n] };
                   else
                     {
                     if (m==0)
-                      CC(i,0,0) = { p1[0].r[n], p1[0].i[n] } ;
+                      CC(i,0) = { p1[0].r[n], p1[0].i[n] } ;
                     else
-                      CC(i,m,0) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*m*i]);
+                      CC(i,m) = Tcs(p1[m].r[n],p1[m].i[n]).template special_mul<fwd>((*myroots)[rfct*m*i]);
                     }
                   }
               }
             return cc;
             }
+
+          auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
+            { return ch[a+ido*(b+l1*c)]; };
+          auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
+            { return cc[a+ido*(b+ip*c)]; };
 
           for (size_t itrans=0; itrans<nvtrans; ++itrans)
             {
@@ -1444,10 +1452,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             auto buf2 = &buf[(bunchsize+1)*ip];
             size_t nbunch = (ido + bunchsize-1)/bunchsize;
 
-            auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
-              { return ch[a+ido*(b+l1*c)]; };
-            auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
-              { return cc[a+ido*(b+ip*c)]; };
+            auto CC = [cc,this](size_t a, size_t b) -> Tc&
+              { return cc[a+ido*b]; };
 
 // parallelize here!
              for (size_t ibunch=0; ibunch<nbunch; ++ibunch)
@@ -1456,7 +1462,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<ntrans; ++n)
-                  cc2[m+n*ip] = CC(n+ibunch*bunchsize,m,0);
+                  cc2[m+n*ip] = CC(n+ibunch*bunchsize,m);
 
               for (size_t n=0; n<ntrans; ++n)
                 {
@@ -1491,7 +1497,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 }
               for (size_t m=0; m<ip; ++m)
                 for (size_t n=0; n<ntrans; ++n)
-                  CC(n+ibunch*bunchsize, m, 0) = cc2[m+n*ip];
+                  CC(n+ibunch*bunchsize, m) = cc2[m+n*ip];
               }
             return cc;
             }
