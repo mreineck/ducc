@@ -248,9 +248,9 @@ struct ft_partial_sph_isometry_plan
               Tvl vkm1, vkm2, vkm3;
               if constexpr(high_accuracy)
                 {
-                vkm1 = Tv(A[k  ])*Tv((X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i]);
-                vkm2 = Tv(A[k-1])*Tv((X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i]);
-                vkm3 = Tv(A[k-2])*Tv((X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1);
+                vkm1 = Tvl(Tv(A[k  ]))*((X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i]);
+                vkm2 = Tvl(Tv(A[k-1]))*((X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i]);
+                vkm3 = Tvl(Tv(A[k-2]))*((X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1);
                 }
               else
                 {
@@ -281,7 +281,7 @@ struct ft_partial_sph_isometry_plan
               {
               Tvl vkm1;
               if constexpr(high_accuracy)
-                vkm1 = Tv(A[k])*Tv((X[i]+B[k])*vk[i] - Tvl(Tv(C[k]))*vkp1[i]);
+                vkm1 = Tvl(Tv(A[k]))*((X[i]+B[k])*vk[i] - Tvl(Tv(C[k]))*vkp1[i]);
               else
                 vkm1 = (Tvl(Tv(A[k]))*X[i]+B[k])*vk[i] - Tvl(Tv(C[k]))*vkp1[i];
               vkp1[i] = vk[i];
