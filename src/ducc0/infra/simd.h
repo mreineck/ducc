@@ -150,6 +150,7 @@ template<typename T, size_t len> struct vmask_
     operator Tm() const  { return v; }
     size_t bits() const { return hlp::maskbits(v); }
     vmask_ operator& (const vmask_ &other) const { return hlp::mask_and(v,other.v); }
+    vmask_ operator| (const vmask_ &other) const { return hlp::mask_or(v,other.v); }
   };
 struct element_aligned_tag {};
 template<typename T, size_t len> class vtp
@@ -347,6 +348,7 @@ template<typename T> class helper_<T,1>
     static Tm lt (Tv v1, Tv v2) { return v1<v2; }
     static Tm ne (Tv v1, Tv v2) { return v1!=v2; }
     static Tm mask_and (Tm v1, Tm v2) { return v1&&v2; }
+    static Tm mask_or (Tm v1, Tm v2) { return v1||v2; }
     static size_t maskbits(Tm v) { return v; }
   };
 
@@ -376,6 +378,7 @@ template<> class helper_<double,8>
     static Tm lt (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_LT_OQ); }
     static Tm ne (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_NEQ_OQ); }
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
+    static Tm mask_and (Tm v1, Tm v2) { return v1|v2; }
     static size_t maskbits(Tm v) { return v; }
   };
 template<> constexpr inline bool simd_exists<float,16> = true;
@@ -401,6 +404,7 @@ template<> class helper_<float,16>
     static Tm lt (Tv v1, Tv v2) { return _mm512_cmp_ps_mask(v1,v2,_CMP_LT_OQ); }
     static Tm ne (Tv v1, Tv v2) { return _mm512_cmp_ps_mask(v1,v2,_CMP_NEQ_OQ); }
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
+    static Tm mask_or (Tm v1, Tm v2) { return v1|v2; }
     static size_t maskbits(Tm v) { return v; }
   };
 #endif
@@ -428,6 +432,7 @@ template<> class helper_<double,4>
     static Tm lt (Tv v1, Tv v2) { return _mm256_cmp_pd(v1,v2,_CMP_LT_OQ); }
     static Tm ne (Tv v1, Tv v2) { return _mm256_cmp_pd(v1,v2,_CMP_NEQ_OQ); }
     static Tm mask_and (Tm v1, Tm v2) { return _mm256_and_pd(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return _mm256_or_pd(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm256_movemask_pd(v)); }
   };
 template<> constexpr inline bool simd_exists<float,8> = true;
@@ -453,6 +458,7 @@ template<> class helper_<float,8>
     static Tm lt (Tv v1, Tv v2) { return _mm256_cmp_ps(v1,v2,_CMP_LT_OQ); }
     static Tm ne (Tv v1, Tv v2) { return _mm256_cmp_ps(v1,v2,_CMP_NEQ_OQ); }
     static Tm mask_and (Tm v1, Tm v2) { return _mm256_and_ps(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return _mm256_or_ps(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm256_movemask_ps(v)); }
   };
 #endif
@@ -487,6 +493,7 @@ template<> class helper_<double,2>
     static Tm lt (Tv v1, Tv v2) { return _mm_cmplt_pd(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return _mm_cmpneq_pd(v1,v2); }
     static Tm mask_and (Tm v1, Tm v2) { return _mm_and_pd(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return _mm_or_pd(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_pd(v)); }
   };
 template<> constexpr inline bool simd_exists<float,4> = true;
@@ -519,6 +526,7 @@ template<> class helper_<float,4>
     static Tm lt (Tv v1, Tv v2) { return _mm_cmplt_ps(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return _mm_cmpneq_ps(v1,v2); }
     static Tm mask_and (Tm v1, Tm v2) { return _mm_and_ps(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return _mm_or_ps(v1,v2); }
     static size_t maskbits(Tm v) { return size_t(_mm_movemask_ps(v)); }
   };
 #endif
