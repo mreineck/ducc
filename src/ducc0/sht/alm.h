@@ -223,78 +223,81 @@ struct ft_partial_sph_isometry_plan
           }
         constexpr size_t vlen=Tv::size();
         constexpr size_t step=vlen*N;
+// FIXME: All of the juggling with Tvl and Tv can probably go away once
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99728 is fixed.
+        using Tvl = typename Tv::Tv;
         int j=jmin;
         for (; j+int(step)<=n; j+=int(step))
           {
-          array<Tv, N> vk, vkp1, nrm, X, fj;
+          Tvl vk[N], vkp1[N], nrm[N], X[N], fj[N];
           for (size_t i=0; i<N; ++i)
             {
-            vk[i] = 1;
-            vkp1[i] = 0;
-            nrm[i] = 1;
+            vk[i] = Tv(1);
+            vkp1[i] = Tv(0);
+            nrm[i] = Tv(1);
             X[i] = Tv(&lambda[j+i*Tv::size()], element_aligned_tag());
-            fj[i] = c[n-1];
+            fj[i] = Tv(c[n-1]);
             }
           {
           int k=n-1;
           for (; k>2; k-=3)
             {
-            Tv maxnrm(0);
+            Tvl maxnrm = Tv(0);
             for (size_t i=0; i<N; ++i)
               {
-              Tv vkm1, vkm2, vkm3;
+              Tvl vkm1, vkm2, vkm3;
               if constexpr(high_accuracy)
                 {
-                vkm1 = A[k  ]*((X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i]);
-                vkm2 = A[k-1]*((X[i]+B[k-1])*vkm1  - C[k-1]*vk[i]);
-                vkm3 = A[k-2]*((X[i]+B[k-2])*vkm2  - C[k-2]*vkm1);
+                vkm1 = Tvl(Tv(A[k  ]))*((X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i]);
+                vkm2 = Tvl(Tv(A[k-1]))*((X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i]);
+                vkm3 = Tvl(Tv(A[k-2]))*((X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1);
                 }
               else
                 {
-                vkm1 = (A[k  ]*X[i]+B[k  ])*vk[i] - C[k  ]*vkp1[i];
-                vkm2 = (A[k-1]*X[i]+B[k-1])*vkm1  - C[k-1]*vk[i];
-                vkm3 = (A[k-2]*X[i]+B[k-2])*vkm2  - C[k-2]*vkm1;
+                vkm1 = (Tvl(Tv(A[k  ]))*X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i];
+                vkm2 = (Tvl(Tv(A[k-1]))*X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i];
+                vkm3 = (Tvl(Tv(A[k-2]))*X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1;
                 }
               vkp1[i] = vkm2;
               vk[i] = vkm3;
               nrm[i] += vkm1*vkm1 + vkm2*vkm2 + vkm3*vkm3;
-              maxnrm = max(maxnrm, nrm[i]);
+              maxnrm = max(Tv(maxnrm), Tv(nrm[i]));
               fj[i] += vkm1*c[k-1] + vkm2*c[k-2] + vkm3*c[k-3];
               }
-            if (any_of(maxnrm > eps/floatmin))
+            if (any_of(Tv(maxnrm) > eps/floatmin))
               for (size_t i=0; i<N; ++i)
                 {
-                nrm[i] = Tv(1.0)/sqrt(nrm[i]);
+                nrm[i] = Tv(1.0)/sqrt(Tv(nrm[i]));
                 vkp1[i] *= nrm[i];
                 vk[i] *= nrm[i];
                 fj[i] *= nrm[i];
-                nrm[i] = 1.0;
+                nrm[i] = Tv(1.0);
                 }
             }
           for (; k>0; --k)
             {
-            Tv maxnrm(0);
+            Tvl maxnrm = Tv(0);
             for (size_t i=0; i<N; ++i)
               {
-              Tv vkm1;
+              Tvl vkm1;
               if constexpr(high_accuracy)
-                vkm1 = A[k]*((X[i]+B[k])*vk[i] - C[k]*vkp1[i]);
+                vkm1 = Tvl(Tv(A[k]))*((X[i]+B[k])*vk[i] - Tvl(Tv(C[k]))*vkp1[i]);
               else
-                vkm1 = (A[k]*X[i]+B[k])*vk[i] - C[k]*vkp1[i];
+                vkm1 = (Tvl(Tv(A[k]))*X[i]+B[k])*vk[i] - Tvl(Tv(C[k]))*vkp1[i];
               vkp1[i] = vk[i];
               vk[i] = vkm1;
               nrm[i] += vkm1*vkm1;
-              maxnrm = max(maxnrm, nrm[i]);
+              maxnrm = max(Tv(maxnrm), Tv(nrm[i]));
               fj[i] += vkm1*c[k-1];
               }
-            if (any_of(maxnrm > eps/floatmin))
+            if (any_of(Tv(maxnrm) > eps/floatmin))
               for (size_t i=0; i<N; ++i)
                 {
-                nrm[i] = Tv(1.0)/sqrt(nrm[i]);
+                nrm[i] = Tv(1.0)/sqrt(Tv(nrm[i]));
                 vkp1[i] *= nrm[i];
                 vk[i] *= nrm[i];
                 fj[i] *= nrm[i];
-                nrm[i] = 1.0;
+                nrm[i] = Tv(1.0);
                 }
             }
           }
