@@ -2926,24 +2926,14 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
           auto t1 = res[i];
           auto t2 = res[xi];
           auto rt=(*roots)[rfct*i].conj();
-          {
           auto xe = t1+t2.conj();
-          auto xo = t1-t2.conj();
-          xo = Tcd(xo.i, -xo.r);
-          xo *= rt;
-          xe += xo;
-          rres[2*i-1] = Tfs(0.5)*xe.r;
-          rres[2*i] = Tfs(0.5)*xe.i;
-          }
-          {
-          auto xe = t2+t1.conj();
-          auto xo = t2-t1.conj();
-          xo = Tcd(xo.i, -xo.r);
-          xo *= Tcd(-rt.r, rt.i);
-          xe += xo;
-          rres[2*xi-1] = Tfs(0.5)*xe.r;
-          rres[2*xi] = Tfs(0.5)*xe.i;
-          }
+          auto xo = Tcd(t1.i+t2.i, t2.r-t1.r)*rt;
+          rres[2*i-1] = Tfs(0.5)*(xe.r+xo.r);
+          rres[2*i] = Tfs(0.5)*(xe.i+xo.i);
+          xe.i = -xe.i;
+          xo = Tcd(t1.i+t2.i, t1.r-t2.r) * Tcd(-rt.r, rt.i);
+          rres[2*xi-1] = Tfs(0.5)*(xe.r+xo.r);
+          rres[2*xi] = Tfs(0.5)*(xe.i+xo.i);
           }
         rres[N-1] = res[0].r-res[0].i;
         return rres;
@@ -2956,16 +2946,10 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
           Tcd t1 (cc[2*i-1], cc[2*i]);
           Tcd t2 (cc[2*xi-1], cc[2*xi]);
           auto rt=(*roots)[rfct*i];
-          {
           auto xe = t1+t2.conj();
           auto xo = (t1-t2.conj())*rt;
           cch[i] = (xe + Tcd(-xo.i, xo.r));
-          }
-          {
-          auto xe = t2+t1.conj();
-          auto xo = (t2-t1.conj())*Tcd(-rt.r, rt.i);
-          cch[xi] = (xe + Tcd(-xo.i, xo.r));
-          }
+          cch[xi] = (xe.conj() + Tcd(xo.i, xo.r));
           }
         auto res = any_cast<Tcd *>(pass->exec(cch, ccc, cbuf, false));
         return (res==ccc) ? cc : ch;
