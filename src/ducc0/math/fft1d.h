@@ -2921,15 +2921,29 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
         auto res = any_cast<Tcd *>(pass->exec(ccc, cch, cbuf, true));
         auto rres = (res==ccc) ? ch : cc;
         rres[0] = res[0].r+res[0].i;
-        for (size_t i=1; i<N/2; ++i)
+        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
           {
-          auto xe = res[i]+res[N/2-i].conj();
-          auto xo = res[i]-res[N/2-i].conj();
+          auto t1 = res[i];
+          auto t2 = res[xi];
+          auto rt=(*roots)[rfct*i].conj();
+          {
+          auto xe = t1+t2.conj();
+          auto xo = t1-t2.conj();
           xo = Tcd(xo.i, -xo.r);
-          xo *= (*roots)[rfct*i].conj();
+          xo *= rt;
           xe += xo;
           rres[2*i-1] = Tfs(0.5)*xe.r;
           rres[2*i] = Tfs(0.5)*xe.i;
+          }
+          {
+          auto xe = t2+t1.conj();
+          auto xo = t2-t1.conj();
+          xo = Tcd(xo.i, -xo.r);
+          xo *= Tcd(-rt.r, rt.i);
+          xe += xo;
+          rres[2*xi-1] = Tfs(0.5)*xe.r;
+          rres[2*xi] = Tfs(0.5)*xe.i;
+          }
           }
         rres[N-1] = res[0].r-res[0].i;
         return rres;
@@ -2937,13 +2951,21 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       else
         {
         cch[0] = Tcd(cc[0]+cc[N-1], cc[0]-cc[N-1]);
-        for (size_t i=1; i<N/2; ++i)
+        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
           {
           Tcd t1 (cc[2*i-1], cc[2*i]);
-          Tcd t2 (cc[2*(N/2-i)-1], cc[2*(N/2-i)]);
+          Tcd t2 (cc[2*xi-1], cc[2*xi]);
+          auto rt=(*roots)[rfct*i];
+          {
           auto xe = t1+t2.conj();
-          auto xo = (t1-t2.conj())*(*roots)[rfct*i];
+          auto xo = (t1-t2.conj())*rt;
           cch[i] = (xe + Tcd(-xo.i, xo.r));
+          }
+          {
+          auto xe = t2+t1.conj();
+          auto xo = (t2-t1.conj())*Tcd(-rt.r, rt.i);
+          cch[xi] = (xe + Tcd(-xo.i, xo.r));
+          }
           }
         auto res = any_cast<Tcd *>(pass->exec(cch, ccc, cbuf, false));
         return (res==ccc) ? cc : ch;
