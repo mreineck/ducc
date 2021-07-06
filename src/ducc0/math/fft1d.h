@@ -2972,7 +2972,8 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
-  if ((ip&1)==0) return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
+  if ((ip>1000) && ((ip&1)==0))  // use complex transform
+    return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
   auto factors=rfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
     {
