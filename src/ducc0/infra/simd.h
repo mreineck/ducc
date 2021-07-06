@@ -378,7 +378,7 @@ template<> class helper_<double,8>
     static Tm lt (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_LT_OQ); }
     static Tm ne (Tv v1, Tv v2) { return _mm512_cmp_pd_mask(v1,v2,_CMP_NEQ_OQ); }
     static Tm mask_and (Tm v1, Tm v2) { return v1&v2; }
-    static Tm mask_and (Tm v1, Tm v2) { return v1|v2; }
+    static Tm mask_or (Tm v1, Tm v2) { return v1|v2; }
     static size_t maskbits(Tm v) { return v; }
   };
 template<> constexpr inline bool simd_exists<float,16> = true;
