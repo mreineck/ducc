@@ -2899,6 +2899,72 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
+template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
+  {
+  private:
+    size_t N;
+    Troots<Tfs> roots;
+    size_t rfct;
+    Tcpass<Tfs> pass;
+    size_t l1, ido;
+    static constexpr size_t ip=2;
+
+    template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
+      Tfd * DUCC0_RESTRICT ch, Tfd * buf) const
+      {
+      using Tcd = Cmplx<Tfd>;
+      auto ccc = reinterpret_cast<Tcd *>(cc);
+      auto cch = reinterpret_cast<Tcd *>(ch);
+      auto cbuf = reinterpret_cast<Tcd *>(buf);
+      if constexpr(fwd)
+        {
+        auto res = any_cast<Tcd *>(pass->exec(ccc, cch, cbuf, true));
+        auto rres = (res==ccc) ? ch : cc;
+        rres[0] = res[0].r+res[0].i;
+        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+          {
+          auto xe = res[i]+res[xi].conj();
+          auto xo = Tcd(res[i].i+res[xi].i, res[xi].r-res[i].r)
+                  * (*roots)[rfct*i].conj();
+          rres[2*i-1] = Tfs(0.5)*(xe.r+xo.r);
+          rres[2*i] = Tfs(0.5)*(xe.i+xo.i);
+          rres[2*xi-1] = Tfs(0.5)*(xe.r-xo.r);
+          rres[2*xi] = Tfs(0.5)*(xo.i-xe.i);
+          }
+        rres[N-1] = res[0].r-res[0].i;
+        return rres;
+        }
+      else
+        {
+        cch[0] = Tcd(cc[0]+cc[N-1], cc[0]-cc[N-1]);
+        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+          {
+          Tcd t1 (cc[2*i-1], cc[2*i]);
+          Tcd t2 (cc[2*xi-1], -cc[2*xi]);
+          auto xe = t1+t2;
+          auto xo = (t1-t2)*(*roots)[rfct*i];
+          cch[i] = (xe + Tcd(-xo.i, xo.r));
+          cch[xi] = (xe.conj() + Tcd(xo.i, xo.r));
+          }
+        auto res = any_cast<Tcd *>(pass->exec(cch, ccc, cbuf, false));
+        return (res==ccc) ? cc : ch;
+        }
+      }
+
+  public:
+    rfftp_complexify(size_t N_, const Troots<Tfs> &roots_, bool vectorize=false)
+      : N(N_), roots(roots_), pass(cfftpass<Tfs>::make_pass(N/2, vectorize))
+      {
+      rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      MR_assert((N&1)==0, "N must be even");
+      }
+
+    virtual size_t bufsize() const { return 2*pass->bufsize(); }
+    virtual bool needs_copy() const { return true; }
+
+    POCKETFFT_EXEC_DISPATCH
+  };
 #undef POCKETFFT_EXEC_DISPATCH
 
 template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
@@ -2906,6 +2972,8 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
+  if ((ip>1000) && ((ip&1)==0))  // use complex transform
+    return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
   auto factors=rfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
     {
