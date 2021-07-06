@@ -53,7 +53,6 @@ namespace detail_fft {
 
 using std::vector;
 
-//FIXME: introduce buffer to avoid many small allocations!
 template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
   (const fmav_info &info, size_t axis, size_t len, size_t bufsize)
   {

@@ -1426,9 +1426,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 if (res==p2) swap (p1,p2);
                 }
               if (res != &cc[n*ip])
-                // FIXME: use std::copy()
-                for (size_t m=0; m<ip; ++m)
-                  cc[n*ip+m] = res[m];
+                copy(res, res+ip, cc+n*ip);
               }
             // transpose
             size_t nbunch = (l1*ido + bunchsize-1)/bunchsize;
