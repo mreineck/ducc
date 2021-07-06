@@ -2923,10 +2923,9 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
         rres[0] = res[0].r+res[0].i;
         for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
           {
-          auto t1 = res[i];
-          auto t2 = res[xi];
-          auto xe = t1+t2.conj();
-          auto xo = Tcd(t1.i+t2.i, t2.r-t1.r)*(*roots)[rfct*i].conj();
+          auto xe = res[i]+res[xi].conj();
+          auto xo = Tcd(res[i].i+res[xi].i, res[xi].r-res[i].r)
+                  * (*roots)[rfct*i].conj();
           rres[2*i-1] = Tfs(0.5)*(xe.r+xo.r);
           rres[2*i] = Tfs(0.5)*(xe.i+xo.i);
           rres[2*xi-1] = Tfs(0.5)*(xe.r-xo.r);
