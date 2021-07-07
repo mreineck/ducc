@@ -1123,7 +1123,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
 
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch,
-       Tcd * DUCC0_RESTRICT buf, size_t /*nthreads*/) const
+       Tcd * DUCC0_RESTRICT buf, size_t nthreads) const
       {
       Tcd *akf = &buf[0];
       Tcd *akf2 = &buf[ip2];
@@ -1144,7 +1144,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true));
+          auto res = any_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true, nthreads));
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1158,7 +1158,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
 
           /* inverse FFT */
           res = any_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf,
-            subbuf, false));
+            subbuf, false, nthreads));
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -2718,7 +2718,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
 
     template<bool fwd, typename Tfd> Tfd *exec_
       (Tfd * DUCC0_RESTRICT cc, Tfd * DUCC0_RESTRICT ch,
-       Tfd * DUCC0_RESTRICT buf_, size_t /*nthreads*/) const
+       Tfd * DUCC0_RESTRICT buf_, size_t nthreads) const
       {
       using Tcd = Cmplx<Tfd>;
       auto buf = reinterpret_cast<Tcd *>(buf_);
@@ -2738,7 +2738,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           // copy in
           for (size_t m=0; m<ip; ++m)
             cc2[m] = {CC(0,k,m),Tfd(0)};
-          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd));
+          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
           // copy out
           CH(0,0,k) = res[0].r; 
           for (size_t m=1; m<=ip/2; ++m)
@@ -2759,7 +2759,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               MULPM (cc2[m].r,cc2[m].i,WA(m-1,i-2),WA(m-1,i-1),CC(i-1,k,m),CC(i,k,m));
               MULPM (cc2[ip-m].r,cc2[ip-m].i,WA(ip-m-1,i-2),WA(ip-m-1,i-1),CC(i-1,k,ip-m),CC(i,k,ip-m));
               }
-            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd));
+            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
             CH(i-1,0,k) = res[0].r; 
             CH(i,0,k) = res[0].i; 
             for (size_t m=1; m<ipph; ++m)
@@ -2786,7 +2786,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             cc2[m] = {CC(ido-1,2*m-1,k),CC(0,2*m,k)};
             cc2[ip-m] = {CC(ido-1,2*m-1,k),-CC(0,2*m,k)};
             }
-          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd));
+          auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
           for (size_t m=0; m<ip; ++m)
             CH(0,k,m) = res[m].r;
           }
@@ -2801,7 +2801,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               cc2[m] = {CC(i-1,2*m,k),CC(i,2*m,k)};
               cc2[ip-m] = {CC(ic-1,2*m-1,k),-CC(ic,2*m-1,k)};
               }
-            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd));
+            auto res = any_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
             CH(i-1,k,0) = res[0].r;
             CH(i,k,0) = res[0].i;
             for (size_t m=1; m<ip; ++m)
@@ -2852,7 +2852,7 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     auto WA(size_t x, size_t i) const
       { return wa[(i-1)*(ip-1)+x]; }
 
-    template<bool fwd, typename Tfd> Tfd *exec_(Tfd *cc, Tfd *ch, Tfd *buf, size_t /*nthreads*/) const
+    template<bool fwd, typename Tfd> Tfd *exec_(Tfd *cc, Tfd *ch, Tfd *buf, size_t nthreads) const
       {
       if ((l1==1) && (ido==1))
         {
@@ -2860,13 +2860,13 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
         if constexpr (fwd)
           for (auto it=passes.rbegin(); it!=passes.rend(); ++it)
             {
-            auto res = any_cast<Tfd *>((*it)->exec(p1,p2,buf,fwd));
+            auto res = any_cast<Tfd *>((*it)->exec(p1,p2,buf,fwd,nthreads));
             if (res==p2) swap(p1,p2);
             }
         else
           for (const auto &pass: passes)
             {
-            auto res = any_cast<Tfd *>(pass->exec(p1,p2,buf,fwd));
+            auto res = any_cast<Tfd *>(pass->exec(p1,p2,buf,fwd,nthreads));
             if (res==p2) swap(p1,p2);
             }
         return p1;
