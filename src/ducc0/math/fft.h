@@ -851,14 +851,16 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
 struct ExecC2C
   {
   bool forward;
+  size_t nthreads;
 
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const fmav<Cmplx<T0>> &in,
     fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct) const
     {
+cout <<"ExecC2C:" << nthreads << endl;
     T *buf1=buf, *buf2=buf+plan.bufsize(); 
     copy_input(it, in, buf2);
-    auto res = plan.exec(buf2, buf1, fct, forward);
+    auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
     }
   };
@@ -1223,6 +1225,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
 struct ExecR2R
   {
   bool r2c, forward;
+  size_t nthreads;
 
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
     const Titer &it, const fmav<T0> &in, fmav<T0> &out, T *buf,
@@ -1233,7 +1236,7 @@ struct ExecR2R
     if ((!r2c) && forward)
       for (size_t i=2; i<it.length_out(); i+=2)
         buf2[i] = -buf2[i];
-    auto res = plan.exec(buf2, buf1, fct, r2c);
+    auto res = plan.exec(buf2, buf1, fct, r2c, nthreads);
     if (r2c && (!forward))
       for (size_t i=2; i<it.length_out(); i+=2)
         res[i] = -res[i];
@@ -1266,7 +1269,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in,
   if (in.size()==0) return;
   fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.cdata()), in);
   fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.vdata()), out, out.writable());
-  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
+  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward, axes.size()==1 ? nthreads : 1});
   }
 
 /// Fast Discrete Cosine Transform
@@ -1393,7 +1396,7 @@ template<typename T> DUCC0_NOINLINE void r2r_fftpack(const fmav<T> &in,
   util::sanity_check_onetype(in, out, in.cdata()==out.cdata(), axes);
   if (in.size()==0) return;
   general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
-    ExecR2R{real2hermitian, forward});
+    ExecR2R{real2hermitian, forward, axes.size()==1 ? nthreads : 1});
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in,
