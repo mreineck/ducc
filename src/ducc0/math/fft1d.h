@@ -1258,7 +1258,6 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf, size_t nthreads) const
       {
-//cout <<"entering multipass:" << nthreads<< endl;
       using Tc = Cmplx<T>;
       if ((l1==1) && (ido==1)) // no chance at vectorizing
         {
@@ -1278,7 +1277,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
-cout <<"vectorizing!" << nthreads<< endl;
+
           if (ido==1)
             {
             auto CH = [ch,this](size_t b, size_t c) -> Tc&
