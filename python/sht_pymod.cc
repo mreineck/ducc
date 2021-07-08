@@ -280,7 +280,10 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
 
-#if 0
+// FIXME: open questions
+// - do we build mstart automatically and just take mmax?
+// - phi0, ringstart = None => build assuming phi0=0, rings sequential?
+// - accept scalar nphi, phi0?
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
   const py::array &mstart_, ptrdiff_t lstride, 
@@ -300,7 +303,7 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP);
   }
   return map_;
   }
@@ -318,7 +321,44 @@ py::array Py_synthesis(const py::array &alm, const py::array &theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#endif
+template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
+  py::object &map__, size_t lmax,
+  const py::array &mstart_, ptrdiff_t lstride, 
+  const py::array &theta_, 
+  const py::array &nphi_,
+  const py::array &phi0_, const py::array &ringstart_,
+  ptrdiff_t pixstride, size_t nthreads)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, false);
+  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto theta = to_mav<double,1>(theta_, false);
+  auto phi0 = to_mav<double,1>(phi0_, false);
+  auto nphi = to_mav<size_t,1>(nphi_, false);
+  auto ringstart = to_mav<size_t,1>(ringstart_, false);
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
+  auto map = to_mav<T,2>(map_, true);
+  MR_assert(map.shape(0)==2, "bad number of components in map array");
+  {
+  py::gil_scoped_release release;
+  synthesis(alm, map, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
+  }
+  return map_;
+  }
+py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
+  size_t lmax, const py::array &mstart, 
+  const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
+  size_t nthreads, py::object &map)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_synthesis_deriv1<float>(alm, map, lmax, mstart, lstride, theta, 
+      nphi, phi0, ringstart, pixstride, nthreads);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_synthesis_deriv1<double>(alm, map, lmax, mstart, lstride, theta, 
+      nphi, phi0, ringstart, pixstride, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
 
 template<typename T> py::array_t<T> check_build_map(const py::object &map, size_t ncomp, const py::object &ntheta, const py::object &nphi)
   {
@@ -425,7 +465,7 @@ py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string
     return Py2_synthesis_2d_deriv1<double>(alm, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#if 0
+
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   size_t lmax, const py::array &mstart_, ptrdiff_t lstride, 
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
@@ -466,7 +506,6 @@ py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-#endif
 
 template<typename T> py::array Py2_analysis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t mmax, size_t nthreads, py::object &alm__)
@@ -710,7 +749,7 @@ mval: numpy.ndarray((nm,), dtype = numpy.uint64)
     entries must be unique and <= lmax
 mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with l=0, m=mstart[mi] would be stored, for mi in mval
+    entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
     the index stride in the second dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -747,7 +786,7 @@ mval: numpy.ndarray((nm,), dtype = numpy.uint64)
     entries must be unique and <= lmax
 mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with l=0, m=mstart[mi] would be stored, for mi in mval
+    entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
     the index stride in the second dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -787,7 +826,7 @@ mval: numpy.ndarray((nm,), dtype = numpy.uint64)
     entries must be unique and <= lmax
 mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with l=0, m=mstart[mi] would be stored, for mi in mval
+    entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
     the index stride in the second dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -983,7 +1022,7 @@ numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
 )""";
 
 constexpr const char *adjoint_synthesis_2d_DS = R"""(
-Transforms one or two 2D maps to spherical harmonic coefficients to 2D.
+Transforms one or two 2D maps to spherical harmonic coefficients.
 This is the adjoint operation of `synthesis_2D`.
 
 Parameters
@@ -1029,7 +1068,7 @@ numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
 )""";
 
 constexpr const char *analysis_2d_DS = R"""(
-Transforms one or two 2D maps to spherical harmonic coefficients to 2D.
+Transforms one or two 2D maps to spherical harmonic coefficients.
 This is the inverse operation of `synthesis_2D`.
 
 Parameters
@@ -1092,8 +1131,158 @@ by temporary upsampling along meridians to apply the weights at a higher
 resolution.
 )""";
 
+constexpr const char *synthesis_DS = R"""(
+Transforms one or two sets of spherical harmonic coefficients to maps on the sphere.
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`
+    the map pixel data.
+    The second dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+    if `None`, a new suitable array is allocated
+theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    azimuth (in radians) of the first pixel in every ring
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the second dimension of `alm` on which the
+    entry with (l=0, m) would be stored
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    the index in the second dimension of `map` at which the first pixel of every
+    ring is stored
+lstride: int
+    the index stride in the second dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+pixstride: int
+    the index stride in the second dimension of `map` between two subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`)
+    the map pixel data.
+    If `map` was supplied, this will be the same object
+    If newly allocated, the smallest possible second dimensions will be chosen.
+)""";
+
+constexpr const char *adjoint_synthesis_DS = R"""(
+Transforms one or two maps to spherical harmonic coefficients.
+This is the adjoint operation of `synthesis`.
+
+Parameters
+----------
+alm: None or numpy.ndarray((ncomp, x), dtype=numpy.complex of same precision as `map`)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    if `None`, a new suitable array is allocated
+map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64
+    The second dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    azimuth (in radians) of the first pixel in every ring
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the second dimension of `alm` on which the
+    entry with (l=0, m) would be stored
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    the index in the second dimension of `map` at which the first pixel of every
+    ring is stored
+lstride: int
+    the index stride in the second dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+pixstride: int
+    the index stride in the second dimension of `map` between two subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=numpy.complex of same accuracy as `map`)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If newly allocated, the smallest possible second dimensions will be chosen.
+)""";
+
+constexpr const char *synthesis_deriv1_DS = R"""(
+Transforms a set of spherical harmonic coefficients to two maps containing
+the derivatives with respect to theta and phi.
+
+Parameters
+----------
+alm: numpy.ndarray((1, x), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+map: None or numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`
+    the map pixel data.
+    The second dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+    if `None`, a new suitable array is allocated
+theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    azimuth (in radians) of the first pixel in every ring
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the second dimension of `alm` on which the
+    entry with (l=0, m) would be stored
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    the index in the second dimension of `map` at which the first pixel of every
+    ring is stored
+lstride: int
+    the index stride in the second dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+pixstride: int
+    the index stride in the second dimension of `map` between two subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+
+Returns
+-------
+numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`)
+    the map pixel data.
+    If `map` was supplied, this will be the same object
+    If newly allocated, the smallest possible second dimensions will be chosen.
+)""";
+
 constexpr const char *sharpjob_d_DS = R"""(
 Interface class to some of libsharp2's functionality.
+
+Notes
+-----
+This class is considered obsolescent and will be removed in the future.
 )""";
 
 void add_sht(py::module_ &msup)
@@ -1103,6 +1292,16 @@ void add_sht(py::module_ &msup)
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");
   m2.doc() = sht_experimental_DS;
+
+  m2.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+  m2.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS, py::kw_only(), "map"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS, py::kw_only(), "alm"_a, "theta"_a,
+    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
 
   m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
