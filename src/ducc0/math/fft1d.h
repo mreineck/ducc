@@ -1134,6 +1134,7 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
       auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
         { return cc[a+ido*(b+ip*c)]; };
 
+//FIXME: parallelize here?
       for (size_t k=0; k<l1; ++k)
         for (size_t i=0; i<ido; ++i)
           {
@@ -1255,6 +1256,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     size_t rfct;
     Troots<Tfs> myroots;
 
+// FIXME split into sub-functions. This is too long! 
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf, size_t nthreads) const
       {
@@ -1381,6 +1383,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tc&
             { return cc[a+ido*(b+ip*c)]; };
 
+//FIXME parallelize?
           for (size_t itrans=0; itrans<nvtrans; ++itrans)
             {
             array<size_t, vlen> ix, kx;
