@@ -99,9 +99,22 @@ ducc.sht
 --------
 
 This package provides efficient spherical harmonic trasforms (SHTs). Its code
-is derived from [libsharp](https://arxiv.org/abs/1303.4945), with accelerated
-recurrence algorithms presented in
-<https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf>.
+is derived from [libsharp](https://arxiv.org/abs/1303.4945), but has been
+significantly enhanced.
+
+### Noteworthy features
+- support for any grid based on iso-latitude rings with equidistant pixels in
+  each of the rings
+- support for accurate spherical harmonic analyis on certain sub-classes of
+  grids with equidistant rings at band limits beyond those for which quadrature
+  weights exist. For details see
+  [this note](https://wwwmpa.mpa-garching.mpg.de/~martin/shtnote.pdf).
+- substantially improved transformation speed (up to a factor of 2) on the
+  above mentioned grid geometries for high band limits
+- accelerated recurrences as presented in [Ishioka 2018]
+  (https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf)
+- vector instruction support
+- multi-threading support
 
 The code for rotating spherical harmonic coefficients was taken (with some
 modifications) from Mikael Slevinsky's
