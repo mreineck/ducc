@@ -112,7 +112,7 @@ significantly enhanced.
 - substantially improved transformation speed (up to a factor of 2) on the
   above mentioned grid geometries for high band limits
 - accelerated recurrences as presented in
-  [Ishioka 2018](https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf)
+  [Ishioka (2018)](https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf)
 - vector instruction support
 - multi-threading support
 
