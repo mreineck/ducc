@@ -864,7 +864,8 @@ struct ExecC2C
     if constexpr(is_same<Cmplx<T0>, T>::value)
       if (inplace)
         {
-        copy_input(it, in, out.vdata());
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
         plan.exec_copyback(out.vdata(), buf, fct, forward, nthreads);
         return;
         }
@@ -885,7 +886,8 @@ struct ExecHartley
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
-        copy_input(it, in, out.vdata());
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
         plan.exec_copyback(out.vdata(), buf, fct, nthreads);
         return;
         }
@@ -910,7 +912,8 @@ struct ExecDcst
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
-        copy_input(it, in, out.vdata());
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
         auto res = plan.exec(out.vdata(), buf, fct, ortho, type, cosine, nthreads);
         if (res!=out.vdata())
           copy_n(res, plan.length(), out.vdata());
@@ -1177,7 +1180,8 @@ struct ExecR2R
       if (inplace)
         {
         T *buf1=buf, *buf2=out.vdata();
-        copy_input(it, in, buf2);
+        if (in.cdata()!=buf2)
+          copy_input(it, in, buf2);
         if ((!r2c) && forward)
           for (size_t i=2; i<it.length_out(); i+=2)
             buf2[i] = -buf2[i];
