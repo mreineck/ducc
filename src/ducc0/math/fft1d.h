@@ -311,7 +311,7 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
         {
         auto CH = [ch,this](size_t b, size_t c) -> Tcd&
           { return ch[b+l1*c]; };
-        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+        auto CC = [cc](size_t b, size_t c) -> const Tcd&
           { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
@@ -488,7 +488,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
         {
         auto CH = [ch,this](size_t b, size_t c) -> Tcd&
           { return ch[b+l1*c]; };
-        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+        auto CC = [cc](size_t b, size_t c) -> const Tcd&
           { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
@@ -845,7 +845,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
         {
         auto CH = [ch,this](size_t b, size_t c) -> Tcd&
           { return ch[b+l1*c]; };
-        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+        auto CC = [cc](size_t b, size_t c) -> const Tcd&
           { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
