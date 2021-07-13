@@ -288,39 +288,44 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
     static constexpr size_t ip=2;
     aligned_array<Tcs> wa;
 
-    auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+    auto WA(size_t i) const
+      { return wa[i-1]; }
 
     template<bool fwd, typename Tcd> Tcd *exec_ (Tcd * DUCC0_RESTRICT cc,
       Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
       {
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return cc[a+ido*(b+ip*c)]; };
-
       if (l1==1)
         {
-        PMINPLACE(CC(0,0,0),CC(0,1,0));
+        auto CC = [cc,this](size_t a, size_t b) -> Tcd&
+          { return cc[a+ido*b]; };
+        PMINPLACE(CC(0,0),CC(0,1));
         for (size_t i=1; i<ido; ++i)
           {
-          Tcd t1=CC(i,0,0), t2=CC(i,1,0);
-          CC(i,0,0) = t1+t2;
-          special_mul<fwd>(t1-t2,WA(0,i),CC(i,1,0));
+          Tcd t1=CC(i,0), t2=CC(i,1);
+          CC(i,0) = t1+t2;
+          special_mul<fwd>(t1-t2,WA(i),CC(i,1));
           }
         return cc;
         }
       if (ido==1)
         {
+        auto CH = [ch,this](size_t b, size_t c) -> Tcd&
+          { return ch[b+l1*c]; };
+        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+          { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
-          CH(0,k,0) = CC(0,0,k)+CC(0,1,k);
-          CH(0,k,1) = CC(0,0,k)-CC(0,1,k);
+          CH(k,0) = CC(0,k)+CC(1,k);
+          CH(k,1) = CC(0,k)-CC(1,k);
           }
         return ch;
         }
       else
         {
+        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+          { return ch[a+ido*(b+l1*c)]; };
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
+          { return cc[a+ido*(b+ip*c)]; };
         for (size_t k=0; k<l1; ++k)
           {
           CH(0,k,0) = CC(0,0,k)+CC(0,1,k);
@@ -328,7 +333,7 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
           for (size_t i=1; i<ido; ++i)
             {
             CH(i,k,0) = CC(i,0,k)+CC(i,1,k);
-            special_mul<fwd>(CC(i,0,k)-CC(i,1,k),WA(0,i),CH(i,k,1));
+            special_mul<fwd>(CC(i,0,k)-CC(i,1,k),WA(i),CH(i,k,1));
             }
           }
         return ch;
@@ -342,9 +347,8 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        wa[i-1] = (*roots)[rfct*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
@@ -363,7 +367,7 @@ template <typename Tfs> class cfftp3: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
@@ -428,9 +432,9 @@ template <typename Tfs> class cfftp3: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
@@ -449,27 +453,59 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
  
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
       {
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
-        { return cc[a+ido*(b+ip*c)]; };
-
+      if (l1==1)
+        {
+        auto CC = [cc,this](size_t a, size_t b) -> Tcd&
+          { return cc[a+ido*b]; };
+        {
+        Tcd t1, t2, t3, t4;
+        PM(t2,t1,CC(0,0),CC(0,2));
+        PM(t3,t4,CC(0,1),CC(0,3));
+        ROTX90<fwd>(t4);
+        PM(CC(0,0),CC(0,2),t2,t3);
+        PM(CC(0,1),CC(0,3),t1,t4);
+        }
+        for (size_t i=1; i<ido; ++i)
+          {
+          Tcd t1, t2, t3, t4;
+          Tcd cc0=CC(i,0), cc1=CC(i,1),cc2=CC(i,2),cc3=CC(i,3);
+          PM(t2,t1,cc0,cc2);
+          PM(t3,t4,cc1,cc3);
+          ROTX90<fwd>(t4);
+          CC(i,0) = t2+t3;
+          special_mul<fwd>(t1+t4,WA(0,i),CC(i,1));
+          special_mul<fwd>(t2-t3,WA(1,i),CC(i,2));
+          special_mul<fwd>(t1-t4,WA(2,i),CC(i,3));
+          }
+        return cc;
+        }
       if (ido==1)
+        {
+        auto CH = [ch,this](size_t b, size_t c) -> Tcd&
+          { return ch[b+l1*c]; };
+        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+          { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
           Tcd t1, t2, t3, t4;
-          PM(t2,t1,CC(0,0,k),CC(0,2,k));
-          PM(t3,t4,CC(0,1,k),CC(0,3,k));
+          PM(t2,t1,CC(0,k),CC(2,k));
+          PM(t3,t4,CC(1,k),CC(3,k));
           ROTX90<fwd>(t4);
-          PM(CH(0,k,0),CH(0,k,2),t2,t3);
-          PM(CH(0,k,1),CH(0,k,3),t1,t4);
+          PM(CH(k,0),CH(k,2),t2,t3);
+          PM(CH(k,1),CH(k,3),t1,t4);
           }
+        }
       else
+        {
+        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+          { return ch[a+ido*(b+l1*c)]; };
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
+          { return cc[a+ido*(b+ip*c)]; };
         for (size_t k=0; k<l1; ++k)
           {
           {
@@ -493,6 +529,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
             special_mul<fwd>(t1-t4,WA(2,i),CH(i,k,3));
             }
           }
+        }
       return ch;
       }
 
@@ -503,13 +540,13 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
-    virtual bool needs_copy() const { return true; }
+    virtual bool needs_copy() const { return l1>1; }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -524,7 +561,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
@@ -604,9 +641,9 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
@@ -625,7 +662,7 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
@@ -710,9 +747,9 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
@@ -731,7 +768,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template <bool fwd, typename T> void ROTX45(T &a) const
       {
@@ -753,17 +790,68 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
     template<bool fwd, typename Tcd> Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
       {
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
-        { return cc[a+ido*(b+ip*c)]; };
+      if (l1==1)
+        {
+        auto CC = [cc,this](size_t a, size_t b) -> Tcd&
+          { return cc[a+ido*b]; };
+        {
+        Tcd a0, a1, a2, a3, a4, a5, a6, a7;
+        PM(a1,a5,CC(0,1),CC(0,5));
+        PM(a3,a7,CC(0,3),CC(0,7));
+        PMINPLACE(a1,a3);
+        ROTX90<fwd>(a3);
 
+        ROTX90<fwd>(a7);
+        PMINPLACE(a5,a7);
+        ROTX45<fwd>(a5);
+        ROTX135<fwd>(a7);
+
+        PM(a0,a4,CC(0,0),CC(0,4));
+        PM(a2,a6,CC(0,2),CC(0,6));
+        PM(CC(0,0),CC(0,4),a0+a2,a1);
+        PM(CC(0,2),CC(0,6),a0-a2,a3);
+        ROTX90<fwd>(a6);
+        PM(CC(0,1),CC(0,5),a4+a6,a5);
+        PM(CC(0,3),CC(0,7),a4-a6,a7);
+        }
+        for (size_t i=1; i<ido; ++i)
+          {
+          Tcd a0, a1, a2, a3, a4, a5, a6, a7;
+          PM(a1,a5,CC(i,1),CC(i,5));
+          PM(a3,a7,CC(i,3),CC(i,7));
+          ROTX90<fwd>(a7);
+          PMINPLACE(a1,a3);
+          ROTX90<fwd>(a3);
+          PMINPLACE(a5,a7);
+          ROTX45<fwd>(a5);
+          ROTX135<fwd>(a7);
+          PM(a0,a4,CC(i,0),CC(i,4));
+          PM(a2,a6,CC(i,2),CC(i,6));
+          PMINPLACE(a0,a2);
+          CC(i,0) = a0+a1;
+          special_mul<fwd>(a0-a1,WA(3,i),CC(i,4));
+          special_mul<fwd>(a2+a3,WA(1,i),CC(i,2));
+          special_mul<fwd>(a2-a3,WA(5,i),CC(i,6));
+          ROTX90<fwd>(a6);
+          PMINPLACE(a4,a6);
+          special_mul<fwd>(a4+a5,WA(0,i),CC(i,1));
+          special_mul<fwd>(a4-a5,WA(4,i),CC(i,5));
+          special_mul<fwd>(a6+a7,WA(2,i),CC(i,3));
+          special_mul<fwd>(a6-a7,WA(6,i),CC(i,7));
+          }
+        return cc;
+        }
       if (ido==1)
+        {
+        auto CH = [ch,this](size_t b, size_t c) -> Tcd&
+          { return ch[b+l1*c]; };
+        auto CC = [cc,this](size_t b, size_t c) -> const Tcd&
+          { return cc[b+ip*c]; };
         for (size_t k=0; k<l1; ++k)
           {
           Tcd a0, a1, a2, a3, a4, a5, a6, a7;
-          PM(a1,a5,CC(0,1,k),CC(0,5,k));
-          PM(a3,a7,CC(0,3,k),CC(0,7,k));
+          PM(a1,a5,CC(1,k),CC(5,k));
+          PM(a3,a7,CC(3,k),CC(7,k));
           PMINPLACE(a1,a3);
           ROTX90<fwd>(a3);
 
@@ -772,15 +860,21 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           ROTX45<fwd>(a5);
           ROTX135<fwd>(a7);
 
-          PM(a0,a4,CC(0,0,k),CC(0,4,k));
-          PM(a2,a6,CC(0,2,k),CC(0,6,k));
-          PM(CH(0,k,0),CH(0,k,4),a0+a2,a1);
-          PM(CH(0,k,2),CH(0,k,6),a0-a2,a3);
+          PM(a0,a4,CC(0,k),CC(4,k));
+          PM(a2,a6,CC(2,k),CC(6,k));
+          PM(CH(k,0),CH(k,4),a0+a2,a1);
+          PM(CH(k,2),CH(k,6),a0-a2,a3);
           ROTX90<fwd>(a6);
-          PM(CH(0,k,1),CH(0,k,5),a4+a6,a5);
-          PM(CH(0,k,3),CH(0,k,7),a4-a6,a7);
+          PM(CH(k,1),CH(k,5),a4+a6,a5);
+          PM(CH(k,3),CH(k,7),a4-a6,a7);
           }
+        }
       else
+        {
+        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+          { return ch[a+ido*(b+l1*c)]; };
+        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
+          { return cc[a+ido*(b+ip*c)]; };
         for (size_t k=0; k<l1; ++k)
           {
           {
@@ -829,6 +923,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
             special_mul<fwd>(a6-a7,WA(6,i),CH(i,k,7));
             }
           }
+        }
       return ch;
       }
 
@@ -839,13 +934,13 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
-    virtual bool needs_copy() const { return true; }
+    virtual bool needs_copy() const { return l1>1; }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -860,7 +955,7 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
     aligned_array<Tcs> wa;
 
     auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
+      { return wa[x+(i-1)*(ip-1)]; }
 
     template<bool fwd, typename Tcd> [[gnu::hot]] Tcd *exec_
       (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
@@ -955,9 +1050,9 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
       size_t N=ip*l1*ido;
       auto rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+      for (size_t i=1; i<ido; ++i)
+        for (size_t j=1; j<ip; ++j)
+          wa[(j-1)+(i-1)*(ip-1)] = (*roots)[rfct*j*l1*i];
       }
 
     virtual size_t bufsize() const { return 0; }
@@ -1284,7 +1379,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             {
             auto CH = [ch,this](size_t b, size_t c) -> Tc&
               { return ch[b+l1*c]; };
-            auto CC = [cc,this](size_t b, size_t c) -> const Tc&
+            auto CC = [cc,this](size_t b, size_t c) -> Tc&
               { return cc[b+ip*c]; };
 
             execStatic(nvtrans, nthreads, 0, [&](auto &sched)
@@ -1297,8 +1392,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               while (auto rng=sched.getNext())
                 for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
                   {
-                  for (size_t m=0; m<ip; ++m)
-                    for (size_t n=0; n<vlen; ++n)
+                  for (size_t n=0; n<vlen; ++n)
+                    for (size_t m=0; m<ip; ++m)
                       {
                       size_t k = min(l1-1, itrans*vlen+n);
                       cc2[m].r[n] = CC(m,k).r;
@@ -1373,6 +1468,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             return cc;
             }
 
+//FIXME this code path is currently unused
           aligned_array<Tcv> tbuf(2*ip+bufsize());
           auto cc2 = &tbuf[0];
           auto ch2 = &tbuf[ip];
@@ -1522,6 +1618,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             return cc;
             }
 
+//FIXME this code path is currently unused
           auto cc2 = &buf[0];
           auto ch2 = &buf[bunchsize*ip];
           auto buf2 = &buf[(bunchsize+1)*ip];
@@ -1604,7 +1701,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       MR_assert(roots->size()==N*rfct, "mismatch");
 
       // FIXME TBD
-      size_t lim = vectorize ? 1000 : 10000; //~size_t(0);
+      size_t lim = vectorize ? 10000 : 10000;
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
@@ -1649,6 +1746,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
 #undef POCKETFFT_EXEC_DISPATCH
 
+#if 0  // leaving in for potential future use; but doesn't seem beneficial
 template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
   {
   private:
@@ -1711,11 +1809,13 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
                  : exec_<false>(in1, copy1, buf1, nthreads);
       }
   };
+#endif
 
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
+#if 0
   if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
     {
     constexpr auto vlen = native_simd<Tfs>::size();
@@ -1723,6 +1823,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
       if ((ip&(vlen-1))==0)
         return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
     }
+#endif
 
   if (ip==1) return make_shared<cfftp1<Tfs>>();
   auto factors=cfftpass<Tfs>::factorize(ip);
@@ -1761,18 +1862,20 @@ template<typename Tfs> class pocketfft_c
     using Tcs = Cmplx<Tfs>;
     using Tcv = Cmplx<native_simd<Tfs>>;
     size_t N;
+    size_t critbuf;
     Tcpass<Tfs> plan;
 
   public:
     pocketfft_c(size_t n, bool vectorize=false)
-      : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
+      : N(n), critbuf(((N&1023)==0) ? 16 : 0),
+        plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
-    size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
+    size_t bufsize() const { return N*plan->needs_copy()+2*critbuf+plan->bufsize(); }
     template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      auto res = any_cast<Cmplx<Tfd> *>(plan->exec(in, buf,
-        buf+N*plan->needs_copy(), fwd, nthreads));
+      auto res = any_cast<Cmplx<Tfd> *>(plan->exec(in, buf+critbuf+plan->bufsize(),
+        buf+critbuf, fwd, nthreads));
       if (fct!=Tfs(1))
         for (size_t i=0; i<N; ++i) res[i]*=fct;
       return res;
@@ -2943,6 +3046,7 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
         auto res = any_cast<Tcd *>(pass->exec(ccc, cch, cbuf, true, nthreads));
         auto rres = (res==ccc) ? ch : cc;
         rres[0] = res[0].r+res[0].i;
+//FIXME: parallelize?
         for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
           {
           auto xe = res[i]+res[xi].conj();
@@ -2959,6 +3063,7 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       else
         {
         cch[0] = Tcd(cc[0]+cc[N-1], cc[0]-cc[N-1]);
+//FIXME: parallelize?
         for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
           {
           Tcd t1 (cc[2*i-1], cc[2*i]);
@@ -3066,10 +3171,54 @@ template<typename Tfs> class pocketfft_r
       }
   };
 
+template<typename Tfs> class pocketfft_hartley
+  {
+  private:
+    size_t N;
+    Trpass<Tfs> plan;
+
+  public:
+    pocketfft_hartley(size_t n, bool vectorize=false)
+      : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
+    size_t length() const { return N; }
+    size_t bufsize() const { return N+plan->bufsize(); }
+    template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
+      size_t nthreads=1) const
+      {
+      auto res = any_cast<Tfd *>(plan->exec(in, buf, buf+N, true, nthreads));
+      auto res2 = (res==buf) ? in : buf;
+      res2[0] = fct*res[0];
+      size_t i=1, i1=1, i2=N-1;
+      for (i=1; i<N-1; i+=2, ++i1, --i2)
+        {
+        res2[i1] = fct*(res[i]+res[i+1]);
+        res2[i2] = fct*(res[i]-res[i+1]);
+        }
+      if (i<N)
+      res2[i1] = fct*res[i];
+
+      return res2;
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Tfd *in, Tfd *buf,
+      Tfs fct, size_t nthreads=1) const
+      {
+      auto res = exec(in, buf, fct, nthreads);
+      if (res!=in)
+        copy_n(res, N, in);
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
+      size_t nthreads=1) const
+      {
+      aligned_array<Tfd> buf(N+plan->bufsize());
+      exec_copyback(in, buf.data(), fct, nthreads);
+      }
+  };
+
 }
 
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
+using detail_fft::pocketfft_hartley;
 inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }
 inline size_t good_size_real(size_t n)

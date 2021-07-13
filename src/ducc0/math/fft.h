@@ -611,8 +611,10 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   }
 
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
-  (const fmav_info &info, size_t axsize, size_t bufsize)
+  (const fmav_info &info, size_t axsize, size_t bufsize, bool inplace=false)
   {
+  if (inplace)
+    return aligned_array<T>(bufsize);
   auto othersize = info.size()/axsize;
   constexpr auto vlen = native_simd<T0>::size();
   // FIXME: when switching to C++20, use bit_floor(othersize)
@@ -800,6 +802,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
   {
   std::unique_ptr<Tplan> plan;
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
+  bool inplace = (out.ndim()==1)&&(out.stride(0)==1);
 
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
@@ -811,7 +814,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
       util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
       [&](Scheduler &sched) {
         constexpr auto vlen = native_simd<T0>::size();
-        auto storage = alloc_tmp<T,T0>(in, len, plan->bufsize());
+        auto storage = alloc_tmp<T,T0>(in, len, plan->bufsize(), inplace);
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
@@ -842,7 +845,7 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
         while (it.remaining()>0)
           {
           it.advance(1);
-          exec(it, tin, out, storage.data(), *plan, fct, nth1d);
+          exec(it, tin, out, storage.data(), *plan, fct, nth1d, inplace);
           }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
@@ -855,113 +858,43 @@ struct ExecC2C
 
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const fmav<Cmplx<T0>> &in,
-    fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct, size_t nthreads) const
+    fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct,
+    size_t nthreads, bool inplace=false) const
     {
-    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    if constexpr(is_same<Cmplx<T0>, T>::value)
+      if (inplace)
+        {
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
+        plan.exec_copyback(out.vdata(), buf, fct, forward, nthreads);
+        return;
+        }
+    T *buf1=buf, *buf2=buf+plan.bufsize();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
     }
   };
 
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_hartley(const Titer &it,
-  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::value_type> &dst)
-  {
-  constexpr auto vlen=Tsimd::size();
-  if (it.uniform_o())
-    {
-    auto ptr = &dst.vraw(it.oofs_uni(0,0));
-    auto jstr = it.unistride_o();
-    auto istr = it.stride_out();
-    if (istr==1)
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)*jstr] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j];
-      }
-    else if (jstr==1)
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j) + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j];
-      }
-    else
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)*jstr] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j];
-      }
-    }
-  else
-    {
-    auto ptr = dst.vdata();
-    for (size_t j=0; j<vlen; ++j)
-      ptr[it.oofs(j,0)] = src[0][j];
-    size_t i=1, i1=1, i2=it.length_out()-1;
-    for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-      for (size_t j=0; j<vlen; ++j)
-        {
-        ptr[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
-        ptr[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
-        }
-    if (i<it.length_out())
-      for (size_t j=0; j<vlen; ++j)
-        ptr[it.oofs(j,i1)] = src[i][j];
-    }
-  }
-
-template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
-  const T *DUCC0_RESTRICT src, fmav<T> &dst)
-  {
-  auto ptr = dst.vdata();
-  ptr[it.oofs(0)] = src[0];
-  size_t i=1, i1=1, i2=it.length_out()-1;
-  for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-    {
-    ptr[it.oofs(i1)] = src[i]+src[i+1];
-    ptr[it.oofs(i2)] = src[i]-src[i+1];
-    }
-  if (i<it.length_out())
-    ptr[it.oofs(i1)] = src[i];
-  }
-
 struct ExecHartley
   {
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
     const Titer &it, const fmav<T0> &in, fmav<T0> &out,
-    T *buf, const pocketfft_r<T0> &plan, T0 fct, size_t nthreads) const
+    T *buf, const pocketfft_hartley<T0> &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
     {
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
+        plan.exec_copyback(out.vdata(), buf, fct, nthreads);
+        return;
+        }
     T *buf1=buf, *buf2=buf+plan.bufsize(); 
     copy_input(it, in, buf2);
-    auto res = plan.exec(buf2, buf1, fct, true, nthreads);
-    copy_hartley(it, res, out);
+    auto res = plan.exec(buf2, buf1, fct, nthreads);
+    copy_output(it, res, out);
     }
   };
 
@@ -973,8 +906,19 @@ struct ExecDcst
 
   template <typename T0, typename T, typename Tplan, typename Titer>
   DUCC0_NOINLINE void operator () (const Titer &it, const fmav<T0> &in,
-    fmav <T0> &out, T * buf, const Tplan &plan, T0 fct, size_t nthreads) const
+    fmav <T0> &out, T * buf, const Tplan &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
     {
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
+        auto res = plan.exec(out.vdata(), buf, fct, ortho, type, cosine, nthreads);
+        if (res!=out.vdata())
+          copy_n(res, plan.length(), out.vdata());
+        return;
+        }
     T *buf1=buf, *buf2=buf+plan.bufsize(); 
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine, nthreads);
@@ -1229,8 +1173,25 @@ struct ExecR2R
 
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
     const Titer &it, const fmav<T0> &in, fmav<T0> &out, T *buf,
-    const pocketfft_r<T0> &plan, T0 fct, size_t nthreads) const
+    const pocketfft_r<T0> &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
     {
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        T *buf1=buf, *buf2=out.vdata();
+        if (in.cdata()!=buf2)
+          copy_input(it, in, buf2);
+        if ((!r2c) && forward)
+          for (size_t i=2; i<it.length_out(); i+=2)
+            buf2[i] = -buf2[i];
+        plan.exec_copyback(buf2, buf1, fct, r2c, nthreads);
+        if (r2c && (!forward))
+          for (size_t i=2; i<it.length_out(); i+=2)
+            buf2[i] = -buf2[i];
+        return;
+        }
+
     T *buf1=buf, *buf2=buf+plan.bufsize();
     copy_input(it, in, buf2);
     if ((!r2c) && forward)
@@ -1404,7 +1365,7 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in
   {
   util::sanity_check_onetype(in, out, in.cdata()==out.cdata(), axes);
   if (in.size()==0) return;
-  general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
+  general_nd<pocketfft_hartley<T>>(in, out, axes, fct, nthreads,
     ExecHartley{}, false);
   }
 
