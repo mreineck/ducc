@@ -123,6 +123,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
         shp = rng.integers(nmax//3, nmax+1, ndim)
         if nice_sizes:
             shp = np.array([ducc0.fft.good_size(sz) for sz in shp])
+        shp=((256*1024*1024,))
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
         a = (rng.random(shp)-0.5 + 1j*(rng.random(shp)-0.5)).astype(tp)
         output = []
@@ -142,12 +143,12 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.show()
 
 
-funcs = (measure_duccfft, measure_fftw)
+funcs = (measure_duccfft, measure_mkl_fft)
 ttl = "duccfft/FFTW()"
 ntry = 100
 nthr = 1
 nice_sizes = True
-bench_nd(1, 8192, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+bench_nd(1, 8192, nthr, ntry, "c16", funcs, 1, ttl, "1d.png", nice_sizes)
 bench_nd(2, 2048, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
 bench_nd(3, 256, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
 bench_nd(1, 8192, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)

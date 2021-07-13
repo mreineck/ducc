@@ -857,111 +857,24 @@ struct ExecC2C
     const Titer &it, const fmav<Cmplx<T0>> &in,
     fmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct, size_t nthreads) const
     {
-    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    T *buf1=buf, *buf2=buf+plan.bufsize();
+//FIXME avoid copying if not necessary!
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
     }
   };
 
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_hartley(const Titer &it,
-  const Tsimd *DUCC0_RESTRICT src, fmav<typename Tsimd::value_type> &dst)
-  {
-  constexpr auto vlen=Tsimd::size();
-  if (it.uniform_o())
-    {
-    auto ptr = &dst.vraw(it.oofs_uni(0,0));
-    auto jstr = it.unistride_o();
-    auto istr = it.stride_out();
-    if (istr==1)
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)*jstr] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)] = src[i][j];
-      }
-    else if (jstr==1)
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j) + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j) + ptrdiff_t(i1)*istr] = src[i][j];
-      }
-    else
-      {
-      for (size_t j=0; j<vlen; ++j)
-        ptr[ptrdiff_t(j)*jstr] = src[0][j];
-      size_t i=1, i1=1, i2=it.length_out()-1;
-      for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-        for (size_t j=0; j<vlen; ++j)
-          {
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j]+src[i+1][j];
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i2)*istr] = src[i][j]-src[i+1][j];
-          }
-      if (i<it.length_out())
-        for (size_t j=0; j<vlen; ++j)
-          ptr[ptrdiff_t(j)*jstr + ptrdiff_t(i1)*istr] = src[i][j];
-      }
-    }
-  else
-    {
-    auto ptr = dst.vdata();
-    for (size_t j=0; j<vlen; ++j)
-      ptr[it.oofs(j,0)] = src[0][j];
-    size_t i=1, i1=1, i2=it.length_out()-1;
-    for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-      for (size_t j=0; j<vlen; ++j)
-        {
-        ptr[it.oofs(j,i1)] = src[i][j]+src[i+1][j];
-        ptr[it.oofs(j,i2)] = src[i][j]-src[i+1][j];
-        }
-    if (i<it.length_out())
-      for (size_t j=0; j<vlen; ++j)
-        ptr[it.oofs(j,i1)] = src[i][j];
-    }
-  }
-
-template <typename T, size_t vlen> DUCC0_NOINLINE void copy_hartley(const multi_iter<vlen> &it,
-  const T *DUCC0_RESTRICT src, fmav<T> &dst)
-  {
-  auto ptr = dst.vdata();
-  ptr[it.oofs(0)] = src[0];
-  size_t i=1, i1=1, i2=it.length_out()-1;
-  for (i=1; i<it.length_out()-1; i+=2, ++i1, --i2)
-    {
-    ptr[it.oofs(i1)] = src[i]+src[i+1];
-    ptr[it.oofs(i2)] = src[i]-src[i+1];
-    }
-  if (i<it.length_out())
-    ptr[it.oofs(i1)] = src[i];
-  }
-
 struct ExecHartley
   {
   template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
     const Titer &it, const fmav<T0> &in, fmav<T0> &out,
-    T *buf, const pocketfft_r<T0> &plan, T0 fct, size_t nthreads) const
+    T *buf, const pocketfft_hartley<T0> &plan, T0 fct, size_t nthreads) const
     {
     T *buf1=buf, *buf2=buf+plan.bufsize(); 
     copy_input(it, in, buf2);
-    auto res = plan.exec(buf2, buf1, fct, true, nthreads);
-    copy_hartley(it, res, out);
+    auto res = plan.exec(buf2, buf1, fct, nthreads);
+    copy_output(it, res, out);
     }
   };
 
@@ -1404,7 +1317,7 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in
   {
   util::sanity_check_onetype(in, out, in.cdata()==out.cdata(), axes);
   if (in.size()==0) return;
-  general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
+  general_nd<pocketfft_hartley<T>>(in, out, axes, fct, nthreads,
     ExecHartley{}, false);
   }
 

@@ -119,6 +119,8 @@ def test1D(len, inorm, dtype):
     assert_(ifftn(fftn(tmp, out=tmp, inorm=inorm), out=tmp, inorm=2-inorm)
             is tmp)
     assert_(l2error(tmp, a) < eps)
+    tmp = fftn(a.real, inorm=inorm)
+    assert_(l2error(fft.separable_hartley(a.real,inorm=inorm),tmp.real+tmp.imag) < eps)
 
 
 @pmp("shp", shapes)
