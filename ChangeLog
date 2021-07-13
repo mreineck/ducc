@@ -1,3 +1,19 @@
+0.17.0:
+- general:
+  - more information available on PyPI
+
+- fft:
+  - performance tweaks for 1D FFTs
+  - reduced memory overhead for 1D FFTs
+  - multithreading support for 1D FFTs (this is only advantageous for very long
+    transforms at the moment)
+
+- sht:
+  - interface for fully general SHTs is now accessible from Python; this is not
+    completely finalized, however.
+  - improved a_lm rotation performance
+
+
 0.16.0:
 - general:
   - the GIL is now released in many more functions
