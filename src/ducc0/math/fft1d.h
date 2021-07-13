@@ -3186,7 +3186,7 @@ template<typename Tfs> class pocketfft_hartley
       size_t nthreads=1) const
       {
       auto res = any_cast<Tfd *>(plan->exec(in, buf, buf+N, true, nthreads));
-      auto res2 = (res==buf) ? buf+N : buf;
+      auto res2 = (res==buf) ? in : buf;
       res2[0] = fct*res[0];
       size_t i=1, i1=1, i2=N-1;
       for (i=1; i<N-1; i+=2, ++i1, --i2)
@@ -3200,7 +3200,7 @@ template<typename Tfs> class pocketfft_hartley
       return res2;
       }
     template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Tfd *in, Tfd *buf,
-      Tfs fct, bool fwd, size_t nthreads=1) const
+      Tfs fct, size_t nthreads=1) const
       {
       auto res = exec(in, buf, fct, nthreads);
       if (res!=in)
