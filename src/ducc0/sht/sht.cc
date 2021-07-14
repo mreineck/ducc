@@ -1845,6 +1845,8 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
               tmp.v(im) = fct * (v1-v2);
 //            else
 //              tmp.v(i) += fct * (v1-v2);
+//            if ((im==nfull_in) || (i==im))
+//              tmp.v(i) *= 0.5;
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           // zero padding to full-resolution CC grid
@@ -1857,13 +1859,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
               tmp.v(i) = 0;
             }
-          if (nfull<nfull_in) // truncate
-            {
-            size_t dist = nfull_in-nfull;
-            size_t nmove = nfull/2;
-            for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-              tmp.v(i-dist) = tmp(i);
-            }
+MR_assert(nfull>=nfull_in,"oops");
           plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
@@ -1876,6 +1872,23 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
           if (need_second_resample)
             {
             plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+            if (nfull_out>nfull) // pad
+              {
+cout << "beep" << endl;
+              size_t dist = nfull_out-nfull;
+              size_t nmove = nfull/2;
+              for (size_t i=nfull_out-1; i+1+nmove>nfull_out; --i)
+                tmp.v(i) = tmp(i-dist);
+              for (size_t i=nfull_out-nmove-dist; i+nmove<nfull_out; ++i)
+                tmp.v(i) = 0;
+              }
+            if (nfull_out<nfull) // truncate
+              {
+              size_t dist = nfull-nfull_out;
+              size_t nmove = nfull_out/2;
+              for (size_t i=nfull-nmove; i<nfull; ++i)
+              tmp.v(i-dist) = tmp(i);
+              }
             // shift
             if (!npo)
               for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
@@ -1884,38 +1897,19 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
                   tmp.v(i) *= shift[i];
                 tmp.v(im) *= conj(shift[i]);
                 }
-            if (nfull_out<nfull) // truncate
-              {
-              size_t dist = nfull-nfull_out;
-              size_t nmove = nfull_out/2;
-              for (size_t i=nfull-nmove; i<nfull; ++i)
-              tmp.v(i-dist) = tmp(i);
-              }
             plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
           auto norm = T(1./nfull_in);
           norm *= T(1./(2*(need_second_resample ? nfull_out : 1)));
-#if 1
-            for (size_t i=0; i<nrings_out; ++i)
-              {
-              size_t im = nfull_out-1+npo-i;
-              if (im==nfull_out) im=0;
-            auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-              llego.v(i,2*j) = norm2 * (tmp(i) + fct*tmp(im));
-              if ((2*j+1)<llego.shape(1))
-                llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
-              }
-#else
           for (size_t i=0; i<nrings_out; ++i)
             {
-            size_t im = nfull_out-i;
+            size_t im = nfull_out-1+npo-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-            llego.v(i,2*j  ) = norm2 * (tmp(i) + fct*tmp(im));
+            llego.v(i,2*j) = norm2 * (tmp(i) + fct*tmp(im));
             if ((2*j+1)<llego.shape(1))
               llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
             }
-#endif
           }
         }
       }
@@ -2257,14 +2251,14 @@ template<typename T> void adjoint_analysis_2d(
     for (size_t i=0; i<ntheta_leg; ++i)
       theta_tmp.v(i) = (pi*i)/(ntheta_leg-1);
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
-    for (size_t i=0; i<legi.shape(0); ++i)
-      for (size_t j=0; j<legi.shape(1); ++j)
+    resample_from_prepared_CC(legi, lego, npo, spo, spin, lmax, nthreads);
+    for (size_t i=0; i<lego.shape(0); ++i)
+      for (size_t j=0; j<lego.shape(1); ++j)
         {
         auto wgt1 = T(1./nphi(j));
-        for (size_t k=0; k<legi.shape(2); ++k)
-          legi.v(i,j,k) *= wgt1;
+        for (size_t k=0; k<lego.shape(2); ++k)
+          lego.v(i,j,k) *= wgt1;
         }
-    resample_from_prepared_CC(legi, lego, npo, spo, spin, lmax, nthreads);
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
     return;
     }
