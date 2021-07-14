@@ -1824,7 +1824,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
                  plan_out(need_second_resample ? nfull_out : 1), plan_full(nfull);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    auto tmp(mav<complex<T>,1>::build_noncritical({max(nfull,nfull_in)}, UNINITIALIZED));
+    mav<complex<T>,1> tmp({max(nfull,nfull_in)}, UNINITIALIZED);
     mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
@@ -1843,6 +1843,8 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
 // ADJOINT?
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
+//            else
+//              tmp.v(i) += fct * (v1-v2);
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           // zero padding to full-resolution CC grid
@@ -1862,7 +1864,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
               tmp.v(i-dist) = tmp(i);
             }
-          auto norm = T(1./nfull_in);
+          plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
             tmp.v(i) *= T(wgt(i));
@@ -1874,36 +1876,36 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
           if (need_second_resample)
             {
             plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
-
             // shift
             if (!npo)
               for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
                 {
                 if (i!=im)
-                  tmp.v(i) *= conj(shift[i]);
-                tmp.v(im) *= shift[i];
+                  tmp.v(i) *= shift[i];
+                tmp.v(im) *= conj(shift[i]);
                 }
-  
+            if (nfull_out<nfull) // truncate
+              {
+              size_t dist = nfull-nfull_out;
+              size_t nmove = nfull_out/2;
+              for (size_t i=nfull-nmove; i<nfull; ++i)
+              tmp.v(i-dist) = tmp(i);
+              }
             plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
+          auto norm = T(1./nfull_in);
           norm *= T(1./(2*(need_second_resample ? nfull_out : 1)));
-          for (size_t i=0, im=nfull; i<=im; ++i, --im)
-            {
-            tmp.v(i) *= T(wgt(i));
-            if ((i==0) || (i==im)) tmp.v(i)*=2;
-            if ((im<nfull) && (im!=i))
-              tmp.v(im) *= T(wgt(i));
-            }
-          plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
-          if (nfull_out<nfull) // truncate
-            {
-            size_t dist = nfull-nfull_out;
-            size_t nmove = nfull_out/2;
-            for (size_t i=nfull-nmove; i<nfull; ++i)
-            tmp.v(i-dist) = tmp(i);
-            }
-          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          norm *= T(1./nfull_out);
+#if 1
+            for (size_t i=0; i<nrings_out; ++i)
+              {
+              size_t im = nfull_out-1+npo-i;
+              if (im==nfull_out) im=0;
+            auto norm2 = norm * (T(1)-T(0.5)*(i==im));
+              llego.v(i,2*j) = norm2 * (tmp(i) + fct*tmp(im));
+              if ((2*j+1)<llego.shape(1))
+                llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
+              }
+#else
           for (size_t i=0; i<nrings_out; ++i)
             {
             size_t im = nfull_out-i;
@@ -1913,6 +1915,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             if ((2*j+1)<llego.shape(1))
               llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
             }
+#endif
           }
         }
       }
