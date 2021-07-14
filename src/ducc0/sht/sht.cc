@@ -2026,7 +2026,7 @@ template<typename T> void analysis_2d(
         {
         auto wgt1 = T(1./nphi(j));
         for (size_t k=0; k<legi.shape(2); ++k)
-          leg.v(i,j,k) *= wgt1;
+          legi.v(i,j,k) *= wgt1;
         }
          
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
@@ -2080,4 +2080,111 @@ template<typename T> void analysis_2d(mav<complex<double>,2> &alm,
 template<typename T> void analysis_2d(mav<complex<float>,2> &alm,
   const mav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
   const string &geometry, size_t nthreads);
+
+template<typename T> void adjoint_analysis_2d(
+  const mav<complex<T>,2> &alm, // (ncomp, *)
+  mav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const mav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  const mav<size_t,1> &nphi, // (nrings)
+  const mav<double,1> &phi0, // (nrings)
+  const mav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads)
+  {
+  size_t nrings_min = lmax+1;
+  if (geometry=="CC")
+    nrings_min = lmax+2;
+  else if (geometry=="DH")
+    nrings_min = 2*lmax+2;
+  else if (geometry=="F2")
+    nrings_min = 2*lmax+1;
+  MR_assert(map.shape(1)>=nrings_min,
+    "too few rings for analysis up to requested lmax");
+
+  mav<size_t,1> mval({mstart.shape(0)});
+  for (size_t i=0; i<mstart.shape(0); ++i)
+    mval.v(i) = i;
+  mav<double,1> theta({nphi.shape(0)});
+  get_ringtheta_2d(geometry, theta);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
+  if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
+    {
+    bool npi, spi;
+    if (geometry=="CC")
+      { npi=spi=true; }
+    else if (geometry=="F1")
+      { npi=spi=false; }
+    else if (geometry=="MW")
+      { npi=false; spi=true; }
+    else
+      { npi=true; spi=false; }
+
+    size_t ntheta_min = lmax+2;
+    size_t ntheta_leg = good_size_complex(ntheta_min-1)+1;
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+// OK up to here, I guess
+    auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
+    auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
+
+    mav<double,1> theta_tmp({ntheta_leg});
+    for (size_t i=0; i<ntheta_leg; ++i)
+      theta_tmp.v(i) = (pi*i)/(ntheta_leg-1);
+    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    for (size_t i=0; i<legi.shape(0); ++i)
+      for (size_t j=0; j<legi.shape(1); ++j)
+        {
+        auto wgt1 = T(1./nphi(j));
+        for (size_t k=0; k<legi.shape(2); ++k)
+          legi.v(i,j,k) *= wgt1;
+        }
+//    adjoint_resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
+    leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
+    return;
+    }
+  else
+    {
+    auto wgt = get_gridweights(geometry, theta.shape(0));
+    auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    for (size_t i=0; i<leg.shape(0); ++i)
+      for (size_t j=0; j<leg.shape(1); ++j)
+        {
+        auto wgt1 = T(wgt(j)/nphi(j));
+        for (size_t k=0; k<leg.shape(2); ++k)
+          leg.v(i,j,k) *= wgt1;
+        }
+    leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    }
+  }
+
+template<typename T> void adjoint_analysis_2d(const mav<complex<T>,2> &alm, mav<T,3> &map,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads)
+  {
+  auto nphi = mav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = mav<double,1>::build_uniform({map.shape(1)}, 0.);
+  mav<size_t,1> mstart({mmax+1});
+  for (size_t i=0, ofs=0; i<=mmax; ++i)
+    {
+    mstart.v(i) = ofs-i;
+    ofs += lmax+1-i;
+    }
+  mav<size_t,1> ringstart({map.shape(1)});
+  auto ringstride = map.stride(1);
+  auto pixstride = map.stride(2);
+  for (size_t i=0; i<map.shape(1); ++i)
+    ringstart.v(i) = i*ringstride;
+  mav<T,2> map2(map.vdata(), {map.shape(0), map.shape(1)*map.shape(2)},
+                {map.stride(0), 1}, true);
+  mav<double,1> theta({map.shape(1)});
+  adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0,
+    ringstart, pixstride, nthreads);
+  }
+template void adjoint_analysis_2d(const mav<complex<double>,2> &alm, mav<double,3> &map,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
+template void adjoint_analysis_2d(const mav<complex<float>,2> &alm, mav<float,3> &map,
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
 }}
