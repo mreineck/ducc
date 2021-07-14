@@ -531,6 +531,30 @@ py::array Py_analysis_2d(
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
+template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
+  size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
+  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__)
+  {
+  auto alm = to_mav<complex<T>,2>(alm_, false);
+  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
+  auto map = to_mav<T,3>(map_, true);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
+  py::gil_scoped_release release;
+  adjoint_analysis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  }
+  return map_;
+  }
+py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
+  {
+  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  if (isPyarr<complex<float>>(alm))
+    return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
 
 using a_d = py::array_t<double>;
 using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
@@ -1307,6 +1331,7 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
   m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
+  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);

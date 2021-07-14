@@ -172,6 +172,12 @@ def test_2d_roundtrip(lmax, geometry, spin, nthreads):
     map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
     assert_(ducc0.misc.l2error(alm2,alm)<1e-12)
+#FIXME: temporary
+    if geometry not in ("GL", "DH"):
+        return
+    map = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    alm2 = ducc0.sht.experimental.adjoint_synthesis_2d(map=map, lmax=lmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    assert_(ducc0.misc.l2error(alm2,alm)<1e-12)
 
 
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
@@ -194,11 +200,20 @@ def test_2d_adjoint(lmax, geometry, spin, nthreads):
     nphi=2*lmax+2
 
     alm0 = random_alm(lmax, mmax, spin, ncomp, rng)
+    map0 = rng.uniform(0., 1., (alm0.shape[0], nrings, nphi))
 
     map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    map0 = rng.uniform(0., 1., (alm0.shape[0], nrings, nphi))
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    assert_(np.abs((v1-v2)/v1)<1e-12)
+#FIXME: temporary
+    if geometry not in ("GL", "DH"):
+        return
+    map1 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    del map1
+    alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_(np.abs((v1-v2)/v1)<1e-12)
