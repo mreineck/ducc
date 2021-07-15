@@ -1714,7 +1714,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
                  plan_out(nfull_out), plan_full(nfull);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    auto tmp(mav<complex<T>,1>::build_noncritical({max(nfull,nfull_in)}, UNINITIALIZED));
+    mav<complex<T>,1> tmp({max(nfull,nfull_in)}, UNINITIALIZED);
     mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
@@ -1765,7 +1765,6 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
               }
             plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
-          auto norm = T(1./(2*(need_first_resample ? nfull_in : 1)));
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
             tmp.v(i) *= T(wgt(i));
@@ -1782,7 +1781,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             tmp.v(i-dist) = tmp(i);
             }
           plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
-          norm *= T(1./nfull_out);
+          auto norm = T(.5/(nfull_out*((need_first_resample ? nfull_in : 1))));
           for (size_t i=0; i<nrings_out; ++i)
             {
             size_t im = nfull_out-i;
@@ -1840,13 +1839,8 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             complex<T> v1 = llegi(i,2*j);
             complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
             tmp.v(i) = v1 + v2;
-// ADJOINT?
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
-//            else
-//              tmp.v(i) += fct * (v1-v2);
-//            if ((im==nfull_in) || (i==im))
-//              tmp.v(i) *= 0.5;
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           // zero padding to full-resolution CC grid
@@ -1859,7 +1853,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             for (size_t i=nfull-nmove-dist; i+nmove<nfull; ++i)
               tmp.v(i) = 0;
             }
-MR_assert(nfull>=nfull_in,"oops");
+          MR_assert(nfull>=nfull_in, "must not happen");
           plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
@@ -1874,7 +1868,6 @@ MR_assert(nfull>=nfull_in,"oops");
             plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
             if (nfull_out>nfull) // pad
               {
-cout << "beep" << endl;
               size_t dist = nfull_out-nfull;
               size_t nmove = nfull/2;
               for (size_t i=nfull_out-1; i+1+nmove>nfull_out; --i)
@@ -1887,7 +1880,7 @@ cout << "beep" << endl;
               size_t dist = nfull-nfull_out;
               size_t nmove = nfull_out/2;
               for (size_t i=nfull-nmove; i<nfull; ++i)
-              tmp.v(i-dist) = tmp(i);
+                tmp.v(i-dist) = tmp(i);
               }
             // shift
             if (!npo)
@@ -1899,8 +1892,7 @@ cout << "beep" << endl;
                 }
             plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             }
-          auto norm = T(1./nfull_in);
-          norm *= T(1./(2*(need_second_resample ? nfull_out : 1)));
+          auto norm = T(.5/(nfull_in*((need_second_resample ? nfull_out : 1))));
           for (size_t i=0; i<nrings_out; ++i)
             {
             size_t im = nfull_out-1+npo-i;
