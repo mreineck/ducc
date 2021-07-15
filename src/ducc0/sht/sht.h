@@ -521,6 +521,10 @@ template<typename T> void analysis_2d(mav<complex<T>,2> &alm,
   const mav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
   const string &geometry, size_t nthreads);
 
+template<typename T> void adjoint_analysis_2d(const mav<complex<T>,2> &alm,
+  mav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
+  const string &geometry, size_t nthreads);
+
 }
 
 using detail_sht::SHT_mode;
@@ -537,6 +541,7 @@ using detail_sht::adjoint_synthesis;
 using detail_sht::synthesis_2d;
 using detail_sht::adjoint_synthesis_2d;
 using detail_sht::analysis_2d;
+using detail_sht::adjoint_analysis_2d;
 
 }
 

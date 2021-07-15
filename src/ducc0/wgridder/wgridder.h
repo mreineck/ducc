@@ -1518,6 +1518,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
+  if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
   auto dirty_out(dirty.build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
