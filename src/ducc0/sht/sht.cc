@@ -1467,6 +1467,18 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
     });
   }
 
+template<typename T> void fix_leg(
+  mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  const mav<double,1> &theta) // (nrings)
+  {
+  for (size_t i=0; i<theta.shape(0); ++i)
+    if (abs_approx(theta(i),0.,1e-14) || abs_approx(theta(i),pi,1e-14))
+      for (size_t j=0; j<leg.shape(0); ++j)
+        for (size_t m=0; m<leg.shape(2); ++m)
+          if (m!=spin) leg.v(j,i,m) = 0;
+  }
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const mav<complex<T>,2> &alm, // (ncomp, lmidx)
   mav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1732,6 +1744,8 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             tmp.v(i) = v1 + v2;
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
+            else
+              tmp.v(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
             }
           if (need_first_resample)
             {
@@ -1841,8 +1855,10 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             tmp.v(i) = v1 + v2;
             if ((im<nfull_in) && (i!=im))
               tmp.v(im) = fct * (v1-v2);
+            else
+              tmp.v(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
             }
-          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           // zero padding to full-resolution CC grid
           if (nfull>nfull_in) // pad
             {
@@ -1854,7 +1870,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
               tmp.v(i) = 0;
             }
           MR_assert(nfull>=nfull_in, "must not happen");
-          plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           for (size_t i=0, im=nfull; i<=im; ++i, --im)
             {
             tmp.v(i) *= T(wgt(i));
@@ -1865,7 +1881,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
 
           if (need_second_resample)
             {
-            plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+            plan_full.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
             if (nfull_out>nfull) // pad
               {
               size_t dist = nfull_out-nfull;
@@ -1887,10 +1903,10 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
               for (size_t i=1, im=nfull_out-1; (i<nrings_out+1)&&(i<=im); ++i,--im)
                 {
                 if (i!=im)
-                  tmp.v(i) *= shift[i];
-                tmp.v(im) *= conj(shift[i]);
+                  tmp.v(i) *= conj(shift[i]);
+                tmp.v(im) *= shift[i];
                 }
-            plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+            plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
             }
           auto norm = T(.5/(nfull_in*((need_second_resample ? nfull_out : 1))));
           for (size_t i=0; i<nrings_out; ++i)
@@ -2131,6 +2147,7 @@ template<typename T> void analysis_2d(
     auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+    //fix_leg(legi, spin, theta);
     for (size_t i=0; i<legi.shape(0); ++i)
       for (size_t j=0; j<legi.shape(1); ++j)
         {
@@ -2252,6 +2269,7 @@ template<typename T> void adjoint_analysis_2d(
           lego.v(i,j,k) *= wgt1;
         }
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
+//    fix_leg(lego, spin, theta);
     return;
     }
   else
@@ -2267,6 +2285,7 @@ template<typename T> void adjoint_analysis_2d(
           leg.v(i,j,k) *= wgt1;
         }
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+//    fix_leg(leg, spin, theta);
     }
   }
 
