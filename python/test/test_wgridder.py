@@ -175,7 +175,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
                          mask).astype("f8")
     ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
-                      epsilon, wstacking, nthreads+1, 0, mask).astype("c16")
+                      epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
 
 
@@ -188,7 +188,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
-                                  do_wgridding=wstacking, nthreads=nthreads+1,
+                                  do_wgridding=wstacking, nthreads=nthreads,
                                   mask=mask).astype("c16")
     check(dirty2, ms2)
 
