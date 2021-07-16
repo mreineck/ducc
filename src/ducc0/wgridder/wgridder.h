@@ -1360,6 +1360,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           fftcost *= nplanes;
           gridcost *= supp;
           }
+        // FIXME: heuristics could be improved
+        gridcost /= nthreads;  // assume perfect scaling for now
+        constexpr double max_fft_scaling = 4;
+        auto sigmoid = [](double x, double f) { return f/halfpi*atan(x*halfpi/f); };
+        fftcost /= sigmoid(nthreads,max_fft_scaling);
         double cost = fftcost+gridcost;
         if (cost<mincost)
           {
