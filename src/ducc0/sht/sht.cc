@@ -1392,26 +1392,16 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
-          if (adjoint)
-            for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-              {
-              complex<T> v1 = llegi(i,2*j);
-              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-              tmp.v(i) = v1 + v2;
-              if ((im<nfull_in) && (i!=im))
-                tmp.v(im) = fct * (v1-v2);
-              else
-                tmp.v(i) += fct * (v1-v2); // sic!
-              }
-          else
-            for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-              {
-              complex<T> v1 = llegi(i,2*j);
-              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-              tmp.v(i) = v1 + v2;
-              if ((im<nfull_in) && (i!=im))
-                tmp.v(im) = fct * (v1-v2);
-              }
+          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
+            {
+            complex<T> v1 = llegi(i,2*j);
+            complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
+            tmp.v(i) = v1 + v2;
+            if ((im<nfull_in) && (i!=im))
+              tmp.v(im) = fct * (v1-v2);
+            else
+              tmp.v(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
+            }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
           if (shift!=0)
             for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
@@ -1440,27 +1430,17 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             }
           plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
-          if (adjoint)
-            for (size_t i=0; i<nrings_out; ++i)
-              {
-              size_t im = nfull_out-1+npo-i;
-              if (im==nfull_out) im=0;
-              T fct2 = (im==i) ? T(0.5) : 1;
-              complex<T> v1 = fct2*tmp(i);
-              complex<T> v2 = fct2*fct*tmp(im);
-              llego.v(i,2*j) = norm * (v1 + v2);
-              if ((2*j+1)<llego.shape(1))
-                llego.v(i,2*j+1) = norm * (v1 - v2);
-              }
-          else
-            for (size_t i=0; i<nrings_out; ++i)
-              {
-              size_t im = nfull_out-1+npo-i;
-              if (im==nfull_out) im=0;
-              llego.v(i,2*j) = norm * (tmp(i) + fct*tmp(im));
-              if ((2*j+1)<llego.shape(1))
-                llego.v(i,2*j+1) = norm * (tmp(i) - fct*tmp(im));
-              }
+          for (size_t i=0; i<nrings_out; ++i)
+            {
+            size_t im = nfull_out-1+npo-i;
+            if (im==nfull_out) im=0;
+            T fct2 = (adjoint && (im==i)) ? T(0.5) : 1;
+            complex<T> v1 = fct2*tmp(i);
+            complex<T> v2 = fct2*fct*tmp(im);
+            llego.v(i,2*j) = norm * (v1 + v2);
+            if ((2*j+1)<llego.shape(1))
+              llego.v(i,2*j+1) = norm * (v1 - v2);
+            }
           }
         }
       }
@@ -1746,6 +1726,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
               tmp.v(im) = fct * (v1-v2);
             else
               tmp.v(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
+//              tmp.v(i) = tmp(i)+fct*(v1-v2);
             }
           if (need_first_resample)
             {
@@ -1801,6 +1782,7 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
             size_t im = nfull_out-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
+//            auto norm2 = norm;// * (T(1)-T(0.5)*(i==im));
             llego.v(i,2*j  ) = norm2 * (tmp(i) + fct*tmp(im));
             if ((2*j+1)<llego.shape(1))
               llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
@@ -1857,6 +1839,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
               tmp.v(im) = fct * (v1-v2);
             else
               tmp.v(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
+//              tmp.v(i) = (tmp(i)+fct*(v1-v2));
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
           // zero padding to full-resolution CC grid
@@ -1914,6 +1897,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
             size_t im = nfull_out-1+npo-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
+//            auto norm2 = norm;// * (T(1)-T(0.5)*(i==im));
             llego.v(i,2*j) = norm2 * (tmp(i) + fct*tmp(im));
             if ((2*j+1)<llego.shape(1))
               llego.v(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
