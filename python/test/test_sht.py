@@ -154,7 +154,7 @@ def test_dh(params):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmax', (2, 5, 11, 32, 2048))
+@pmp('lmax', (2, 5, 11, 32, 600))
 def test_2d_roundtrip(lmax, geometry, spin, nthreads):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     ncomp = 1 if spin == 0 else 2
@@ -181,7 +181,7 @@ def test_2d_roundtrip(lmax, geometry, spin, nthreads):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmax', (2, 5, 11, 32, 1024))
+@pmp('lmax', (2, 5, 11, 32, 600))
 def test_2d_adjoint(lmax, geometry, spin, nthreads):
     rng = np.random.default_rng(48)
 
