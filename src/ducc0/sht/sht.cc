@@ -1837,7 +1837,7 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
                  plan_out(need_second_resample ? nfull_out : 1), plan_full(nfull);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
-    mav<complex<T>,1> tmp({max(nfull,nfull_in)}, UNINITIALIZED);
+    mav<complex<T>,1> tmp({max(nfull,nfull_out)}, UNINITIALIZED);
     mav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
