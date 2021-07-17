@@ -1340,6 +1340,7 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
 bool downsampling_ok(const mav<double,1> &theta, size_t lmax,
   bool &npi, bool &spi, size_t &ntheta_out)
   {
+return false;
   size_t ntheta = theta.shape(0);
   if (ntheta<=500) return false; // not worth thinking about shortcuts
   npi = abs_approx(theta(0), 0., 1e-14);
@@ -1378,7 +1379,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
   size_t nfull = max(nfull_in, nfull_out);
   T fct = ((spin&1)==0) ? 1 : -1;
   pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
-  MultiExp<T,complex<T>> phase(shift, (shift==0.) ? 1 : nrings_in+2);
+  MultiExp<T,complex<T>> phase(adjoint ? -shift : shift, (shift==0.) ? 1 : nrings_in+2);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
     mav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
@@ -1402,7 +1403,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             else
               tmp.v(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
             }
-          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), true);
+          plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), !adjoint);
           if (shift!=0)
             for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
               {
@@ -1428,7 +1429,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
             for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
               tmp.v(i-dist) = tmp(i);
             }
-          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), false);
+          plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), adjoint);
           auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
           for (size_t i=0; i<nrings_out; ++i)
             {
@@ -1693,6 +1694,19 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
   bool need_first_resample = !(npi&&spi&&(nrings_in>=2*lmax+2));
   size_t nfull = need_first_resample ? 2*nfull_out : nfull_in;
 
+{
+size_t nrings_full = nfull/2+1;
+cout << "resample_to_prepared_CC " << nrings_in << " " <<nrings_out << " " << nrings_full <<endl;
+mav<complex<T>,3> legfull({legi.shape(0), nrings_full, nm});
+resample_theta(legi, npi, spi, legfull, true, true, spin, nthreads, false);
+auto wgt = get_gridweights("CC", nfull/2+1);
+for (size_t i=0; i<legfull.shape(0); ++i)
+  for (size_t j=0; j<nrings_full; ++j)
+    for (size_t k=0; k<nm; ++k)
+      legfull.v(i,j,k) *= T(wgt(j));
+resample_theta(legfull, true, true, lego, true, true, spin, nthreads, true);
+return;
+}
   vector<complex<T>> shift(npi ? 0 : nrings_in+1);
   if (!npi)
     {
@@ -1806,6 +1820,19 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
   bool need_second_resample = !(npo&&spo&&(nrings_out>=2*lmax+2));
   size_t nfull = need_second_resample ? 2*nfull_in : nfull_out;
 
+{
+size_t nrings_full = nfull/2+1;
+cout << "resample_from_prepared_CC " << nrings_in << " " <<nrings_out << " " << nrings_full <<endl;
+mav<complex<T>,3> legfull({legi.shape(0), nrings_full, nm});
+resample_theta(legi, true, true, legfull, true, true, spin, nthreads, false);
+auto wgt = get_gridweights("CC", nfull/2+1);
+for (size_t i=0; i<legfull.shape(0); ++i)
+  for (size_t j=0; j<nrings_full; ++j)
+    for (size_t k=0; k<nm; ++k)
+      legfull.v(i,j,k) *= T(wgt(j));
+resample_theta(legfull, true, true, lego, npo, spo, spin, nthreads, true);
+return;
+}
   vector<complex<T>> shift(npo ? 0 : nrings_out+1);
   if (!npo)
     {
@@ -2125,8 +2152,7 @@ template<typename T> void analysis_2d(
     else
       { npi=true; spi=false; }
 
-    size_t ntheta_min = lmax+2;
-    size_t ntheta_leg = good_size_complex(ntheta_min-1)+1;
+    size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
     auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
@@ -2214,7 +2240,7 @@ template<typename T> void adjoint_analysis_2d(
   else if (geometry=="F2")
     nrings_min = 2*lmax+1;
   MR_assert(map.shape(1)>=nrings_min,
-    "too few rings for analysis up to requested lmax");
+    "too few rings for adjoint analysis up to requested lmax");
 
   mav<size_t,1> mval({mstart.shape(0)});
   for (size_t i=0; i<mstart.shape(0); ++i)
@@ -2234,8 +2260,7 @@ template<typename T> void adjoint_analysis_2d(
     else
       { npo=true; spo=false; }
 
-    size_t ntheta_min = lmax+2;
-    size_t ntheta_leg = good_size_complex(ntheta_min-1)+1;
+    size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
     auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
