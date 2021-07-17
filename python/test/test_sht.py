@@ -154,7 +154,7 @@ def test_dh(params):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmax', (2, 5, 11, 32))
+@pmp('lmax', (2, 5, 11, 32, 2048))
 def test_2d_roundtrip(lmax, geometry, spin, nthreads):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     ncomp = 1 if spin == 0 else 2
@@ -181,7 +181,7 @@ def test_2d_roundtrip(lmax, geometry, spin, nthreads):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmax', (2, 5, 11, 32))
+@pmp('lmax', (2, 5, 11, 32, 1024))
 def test_2d_adjoint(lmax, geometry, spin, nthreads):
     rng = np.random.default_rng(48)
 
@@ -205,7 +205,15 @@ def test_2d_adjoint(lmax, geometry, spin, nthreads):
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_(np.abs((v1-v2)/v1)<1e-12)
+    assert_(np.abs((v1-v2)/v1)<1e-10)
+
+    # naive version
+    # map1 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    # v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    # del map1
+    # alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    # v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    # assert_(np.abs((v1-v2)/v1)<1e-12)
 
     # create a band limited "map0"; so far the code only works for these maps
     almx = random_alm(lmax, mmax, spin, ncomp, rng)
@@ -217,4 +225,13 @@ def test_2d_adjoint(lmax, geometry, spin, nthreads):
     del map1
     alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_(np.abs((v1-v2)/v1)<1e-12)
+    assert_(np.abs((v1-v2)/v1)<1e-10)
+
+    # alternative version of the test taken from SSHT (test_forward_adjoint)
+    map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    alm1 = random_alm(lmax, mmax, spin, ncomp, rng)
+    map0 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm1, lmax=lmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    del map1
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    assert_(np.abs((v1-v2)/v1)<1e-10)

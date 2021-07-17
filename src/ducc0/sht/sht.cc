@@ -1340,7 +1340,7 @@ mav<double,1> get_gridweights(const string &type, size_t nrings)
 bool downsampling_ok(const mav<double,1> &theta, size_t lmax,
   bool &npi, bool &spi, size_t &ntheta_out)
   {
-return false;
+//return false;
   size_t ntheta = theta.shape(0);
   if (ntheta<=500) return false; // not worth thinking about shortcuts
   npi = abs_approx(theta(0), 0., 1e-14);
@@ -1358,7 +1358,7 @@ return false;
   }
 
 template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi, bool spi,
-  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
+  mav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint, bool adjoint2)
   {
   constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
@@ -1402,6 +1402,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
               tmp.v(im) = fct * (v1-v2);
             else
               tmp.v(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
+//              tmp.v(i) = T(0.5) * (tmp(i) + fct*(v1-v2)); // sic!
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), !adjoint);
           if (shift!=0)
@@ -1430,12 +1431,13 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
               tmp.v(i-dist) = tmp(i);
             }
           plan_out.exec_copyback((Cmplx<T> *)tmp.vdata(), (Cmplx<T> *)buf.vdata(), T(1), adjoint);
-          auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
+          auto norm = T(1./(2*(adjoint2 ? nfull_out : nfull_in)));
           for (size_t i=0; i<nrings_out; ++i)
             {
             size_t im = nfull_out-1+npo-i;
             if (im==nfull_out) im=0;
             T fct2 = (adjoint && (im==i)) ? T(0.5) : 1;
+//            T fct2 = 1;
             complex<T> v1 = fct2*tmp(i);
             complex<T> v2 = fct2*fct*tmp(im);
             llego.v(i,2*j) = norm * (v1 + v2);
@@ -1504,13 +1506,13 @@ template<typename T> void alm2leg(  // associated Legendre transform
       {
       auto leg_tmp(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false, false);
       }
     else
       {
       mav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)});
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false, false);
       }
     return;
     }
@@ -1573,7 +1575,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
     auto leg_tmp(mav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}));
-    resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
+    resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true, true);
     leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
     return;
     }
@@ -1694,17 +1696,18 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
   bool need_first_resample = !(npi&&spi&&(nrings_in>=2*lmax+2));
   size_t nfull = need_first_resample ? 2*nfull_out : nfull_in;
 
+if(false)
 {
 size_t nrings_full = nfull/2+1;
 cout << "resample_to_prepared_CC " << nrings_in << " " <<nrings_out << " " << nrings_full <<endl;
 mav<complex<T>,3> legfull({legi.shape(0), nrings_full, nm});
-resample_theta(legi, npi, spi, legfull, true, true, spin, nthreads, false);
+resample_theta(legi, npi, spi, legfull, true, true, spin, nthreads, false, false);
 auto wgt = get_gridweights("CC", nfull/2+1);
 for (size_t i=0; i<legfull.shape(0); ++i)
   for (size_t j=0; j<nrings_full; ++j)
     for (size_t k=0; k<nm; ++k)
       legfull.v(i,j,k) *= T(wgt(j));
-resample_theta(legfull, true, true, lego, true, true, spin, nthreads, true);
+resample_theta(legfull, true, true, lego, true, true, spin, nthreads, true, true);
 return;
 }
   vector<complex<T>> shift(npi ? 0 : nrings_in+1);
@@ -1820,17 +1823,18 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
   bool need_second_resample = !(npo&&spo&&(nrings_out>=2*lmax+2));
   size_t nfull = need_second_resample ? 2*nfull_in : nfull_out;
 
+if (false)
 {
 size_t nrings_full = nfull/2+1;
 cout << "resample_from_prepared_CC " << nrings_in << " " <<nrings_out << " " << nrings_full <<endl;
 mav<complex<T>,3> legfull({legi.shape(0), nrings_full, nm});
-resample_theta(legi, true, true, legfull, true, true, spin, nthreads, false);
+resample_theta(legi, true, true, legfull, true, true, spin, nthreads, false, false);
 auto wgt = get_gridweights("CC", nfull/2+1);
 for (size_t i=0; i<legfull.shape(0); ++i)
   for (size_t j=0; j<nrings_full; ++j)
     for (size_t k=0; k<nm; ++k)
       legfull.v(i,j,k) *= T(wgt(j));
-resample_theta(legfull, true, true, lego, npo, spo, spin, nthreads, true);
+resample_theta(legfull, true, true, lego, npo, spo, spin, nthreads, true, true);
 return;
 }
   vector<complex<T>> shift(npo ? 0 : nrings_out+1);
@@ -1997,7 +2001,7 @@ template<typename T> void synthesis(
     auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
+    resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false, false);
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
     }
   else
@@ -2069,7 +2073,7 @@ template<typename T> void adjoint_synthesis(
     auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
     auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
-    resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
+    resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true, true);
     leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
     }
   else
