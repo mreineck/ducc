@@ -18,8 +18,8 @@ interface.
   - `g++` 7 or later
   - `clang++`
   - MSVC 2019 or later
-  - Intel icpx (oneAPI compiler series)
-  Note that older Intel compilers (icc/icpc) are not supported.
+  - Intel `icpx` (oneAPI compiler series). (Note that the older `icpc` compilers
+    are not supported.)
 
 ### Sources
 
