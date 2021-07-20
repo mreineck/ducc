@@ -29,7 +29,7 @@
 #include <algorithm>
 #include <memory>
 #include "ducc0/math/math_utils.h"
-#include "ducc0/math/fft1d.h"
+#include "ducc0/fft/fft1d.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
