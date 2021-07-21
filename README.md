@@ -14,8 +14,12 @@ interface.
 - [Python >= 3.6](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
   (only during compiling/installation)
-- a C++17-capable compiler (tested with g++ version 7 or newer, clang++,
-  MSVC 2019 and Intel icpx 2021.1.2)
+- a C++17-capable compiler, e.g.
+  - `g++` 7 or later
+  - `clang++`
+  - MSVC 2019 or later
+  - Intel `icpx` (oneAPI compiler series). (Note that the older `icpc` compilers
+    are not supported.)
 
 ### Sources
 

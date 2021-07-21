@@ -40,7 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
-#include "ducc0/math/fft.h"
+#include "ducc0/fft/fft.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {

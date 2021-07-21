@@ -39,8 +39,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_FFT_H
 #define DUCC0_FFT_H
 
-#include "ducc0/math/fft1d.h"
-
 #include <cmath>
 #include <cstddef>
 #include <numeric>
@@ -58,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/math/unity_roots.h"
+#include "ducc0/fft/fft1d.h"
 
 /** \file fft.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms

@@ -34,7 +34,6 @@
 #include <mutex>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
-#include "ducc0/math/fft1d.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
@@ -44,7 +43,8 @@
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
-#include "ducc0/math/fft.h"
+#include "ducc0/fft/fft1d.h"
+#include "ducc0/fft/fft.h"
 #include "ducc0/math/math_utils.h"
 
 namespace ducc0 {
