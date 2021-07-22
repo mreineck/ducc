@@ -48,6 +48,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/simd.h"
+#include "ducc0/infra/threading.h"
 #include "ducc0/math/unity_roots.h"
 
 namespace ducc0 {
