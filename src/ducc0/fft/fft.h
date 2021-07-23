@@ -897,6 +897,30 @@ struct ExecHartley
     }
   };
 
+struct ExecFFTW
+  {
+  bool forward;
+
+  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
+    const Titer &it, const fmav<T0> &in, fmav<T0> &out,
+    T *buf, const pocketfft_fftw<T0> &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
+    {
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        if (in.cdata()!=out.vdata())
+          copy_input(it, in, out.vdata());
+        plan.exec_copyback(out.vdata(), buf, fct, forward, nthreads);
+        return;
+        }
+    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
+    copy_output(it, res, out);
+    }
+  };
+
 struct ExecDcst
   {
   bool ortho;
@@ -1359,6 +1383,16 @@ template<typename T> DUCC0_NOINLINE void r2r_fftpack(const fmav<T> &in,
     ExecR2R{real2hermitian, forward});
   }
 
+template<typename T> DUCC0_NOINLINE void r2r_fftw(const fmav<T> &in,
+  fmav<T> &out, const shape_t &axes, bool forward,
+  T fct, size_t nthreads=1)
+  {
+  util::sanity_check_onetype(in, out, in.cdata()==out.cdata(), axes);
+  if (in.size()==0) return;
+  general_nd<pocketfft_fftw<T>>(in, out, axes, fct, nthreads,
+    ExecFFTW{forward});
+  }
+
 template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in,
   fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
@@ -1399,6 +1433,7 @@ using detail_fft::c2c;
 using detail_fft::c2r;
 using detail_fft::r2c;
 using detail_fft::r2r_fftpack;
+using detail_fft::r2r_fftw;
 using detail_fft::r2r_separable_hartley;
 using detail_fft::r2r_genuine_hartley;
 using detail_fft::dct;

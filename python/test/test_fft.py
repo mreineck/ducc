@@ -73,7 +73,7 @@ def irfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
                            nthreads=nthreads)
 
 
-def hc2c(inp, otype):
+def hc2c_fftpack(inp, otype):
     n = inp.shape[0]
     n2 = (n-1)//2
     out = np.zeros_like(inp, dtype=otype)
@@ -82,6 +82,18 @@ def hc2c(inp, otype):
         out[n//2] = inp[-1]
     out[1:n2+1] = inp[1:1+2*n2:2] + 1j*inp[2:2+2*n2:2]
     out[-1:-n2-1:-1] = inp[1:1+2*n2:2] - 1j*inp[2:2+2*n2:2]
+    return out
+
+
+def hc2c_fftw(inp, otype):
+    n = inp.shape[0]
+    n2 = (n-1)//2
+    out = np.zeros_like(inp, dtype=otype)
+    out[0] = inp[0]
+    if n % 2 == 0:
+        out[n//2] = inp[n//2]
+    out[1:n2+1] = inp[1:n2+1] + 1j*inp[-1:-n2-1:-1]
+    out[-1:-n2-1:-1] = inp[1:n2+1] - 1j*inp[-1:-n2-1:-1]
     return out
 
 
@@ -283,14 +295,22 @@ def testdcst1D(len, inorm, type, dtype):
 
 @pmp("len", (3, 4, 5, 6, 7, 8, 9, 10))
 @pmp("dtype", dtypes)
-def testfftpack_extra(len, dtype):
+def test_r2r_extra(len, dtype):
     rng = np.random.default_rng(42)
     a = (rng.random(len)-0.5).astype(dtype)
     eps = tol[dtype]
     ref = fft.c2c(a, forward=False)
     test = fft.r2r_fftpack(a, (0,), real2hermitian=True, forward=False)
-    testc = hc2c(test, ctype[dtype])
+    testc = hc2c_fftpack(test, ctype[dtype])
     _assert_close(ref, testc, eps)
     ref = fft.c2c(ref, forward=True)
     test = fft.r2r_fftpack(test, (0,), real2hermitian=False, forward=True)
+    _assert_close(ref, test, eps)
+
+    ref = fft.c2c(a, forward=True)
+    test = fft.r2r_fftw(a, (0,), forward=True)
+    testc = hc2c_fftw(test, ctype[dtype])
+    _assert_close(ref, testc, eps)
+    ref = fft.c2c(ref, forward=False)
+    test = fft.r2r_fftw(test, (0,), forward=False)
     _assert_close(ref, test, eps)

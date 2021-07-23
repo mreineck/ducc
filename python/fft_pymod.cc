@@ -220,6 +220,29 @@ py::array r2r_fftpack(const py::array &in, const py::object &axes_,
     real2hermitian, forward, inorm, out_, nthreads))
   }
 
+template<typename T> py::array r2r_fftw_internal(const py::array &in,
+  const py::object &axes_, bool forward, int inorm,
+  py::object &out_, size_t nthreads)
+  {
+  auto axes = makeaxes(in, axes_);
+  auto ain = to_fmav<T>(in, false);
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
+  auto aout = to_fmav<T>(out, true);
+  {
+  py::gil_scoped_release release;
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  ducc0::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
+  }
+  return std::move(out);
+  }
+
+py::array r2r_fftw(const py::array &in, const py::object &axes_,
+  bool forward, int inorm, py::object &out_, size_t nthreads)
+  {
+  DISPATCH(in, f64, f32, flong, r2r_fftw_internal, (in, axes_,
+    forward, inorm, out_, nthreads))
+  }
+
 template<typename T> py::array dct_internal(const py::array &in,
   const py::object &axes_, int type, int inorm, py::object &out_,
   size_t nthreads)
@@ -484,7 +507,7 @@ numpy.ndarray (real type with same accuracy as `a`)
     entries.
 )""";
 
-const char *r2r_fftpack_DS = R"""(Performs a real-valued FFT using the FFTPACK storage scheme.
+const char *r2r_fftpack_DS = R"""(Performs a real-valued FFT using FFTPACK's halfcomplex storage scheme.
 
 Parameters
 ----------
@@ -497,6 +520,37 @@ real2hermitian : bool
     if True, the input is purely real and the output will have Hermitian
     symmetry and be stored in FFTPACK's halfcomplex ordering, otherwise the
     opposite.
+forward : bool
+    If `True`, a negative sign is used in the exponent, else a positive one.
+inorm : int
+    Normalization type
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
+    where N is the length of `axis`.
+out : numpy.ndarray (same shape and data type as `a`)
+    May be identical to `a`, but if it isn't, it must not overlap with `a`.
+    If None, a new array is allocated to store the output.
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
+
+Returns
+-------
+numpy.ndarray (same shape and data type as `a`)
+    The transformed data. The shape is identical to that of the input array.
+)""";
+
+const char *r2r_fftw_DS = R"""(Performs a real-valued FFT using FFTW's halfcomplex storage scheme.
+
+Parameters
+----------
+a : numpy.ndarray (any real type)
+    The input data
+axes : list of integers
+    The axes along which the FFT is carried out.
+    If not set, all axes will be transformed.
 forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
@@ -706,6 +760,8 @@ void add_fft(py::module_ &msup)
     "forward"_a=true, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("r2r_fftpack", r2r_fftpack, r2r_fftpack_DS, "a"_a, "axes"_a,
     "real2hermitian"_a, "forward"_a, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
+  m.def("r2r_fftw", r2r_fftw, r2r_fftw_DS, "a"_a, "axes"_a,
+    "forward"_a, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("separable_hartley", separable_hartley, separable_hartley_DS, "a"_a,
     "axes"_a=None, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("genuine_hartley", genuine_hartley, genuine_hartley_DS, "a"_a,
