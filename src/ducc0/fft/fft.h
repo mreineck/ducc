@@ -171,11 +171,16 @@ template<typename T0> class T_dct1
         { c[0]*=sqrt2*T0(0.5); c[n-1]*=sqrt2*T0(0.5); }
       return c;
       }
+    template<typename T> DUCC0_NOINLINE void exec_copyback(T c[], T buf[], T0 fct, bool ortho,
+      int /*type*/, bool /*cosine*/, size_t nthreads=1) const
+      {
+      exec(c, buf, fct, ortho, 1, true, nthreads);
+      }
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
       {
       aligned_array<T> buf(bufsize());
-      exec(c, buf.data(), fct, ortho, 1, true, nthreads);
+      exec_copyback(c, buf.data(), fct, ortho, 1, true, nthreads);
       }
 
     size_t length() const { return fftplan.length()/2+1; }
@@ -204,11 +209,16 @@ template<typename T0> class T_dst1
         c[i] = -res[2*i+2];
       return c;
       }
+    template<typename T> DUCC0_NOINLINE void exec_copyback(T c[], T buf[], T0 fct,
+      bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads=1) const
+      {
+      exec(c, buf, fct, true, 1, false, nthreads);
+      }
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads) const
       {
       aligned_array<T> buf(bufsize());
-      exec(c, buf.data(), fct, true, 1, false, nthreads);
+      exec_copyback(c, buf.data(), fct, true, 1, false, nthreads);
       }
 
     size_t length() const { return fftplan.length()/2-1; }
@@ -284,6 +294,11 @@ template<typename T0> class T_dcst23
             c[k] = -c[k];
         }
       return c;
+      }
+    template<typename T> DUCC0_NOINLINE void exec_copyback(T c[], T buf[], T0 fct,
+      bool ortho, int type, bool cosine, size_t nthreads=1) const
+      {
+      exec(c, buf, fct, ortho, type, cosine, nthreads);
       }
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine, size_t nthreads=1) const
@@ -393,7 +408,11 @@ template<typename T0> class T_dcst4
           c[k] = -c[k];
       return c;
       }
-
+    template<typename T> DUCC0_NOINLINE void exec_copyback(T c[], T buf[], T0 fct,
+      bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
+      {
+      exec(c, buf, fct, true, 4, cosine, nthreads);
+      }
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
       {
@@ -937,9 +956,7 @@ struct ExecDcst
         {
         if (in.cdata()!=out.vdata())
           copy_input(it, in, out.vdata());
-        auto res = plan.exec(out.vdata(), buf, fct, ortho, type, cosine, nthreads);
-        if (res!=out.vdata())
-          copy_n(res, plan.length(), out.vdata());
+        plan.exec_copyback(out.vdata(), buf, fct, ortho, type, cosine, nthreads);
         return;
         }
     T *buf1=buf, *buf2=buf+plan.bufsize(); 
