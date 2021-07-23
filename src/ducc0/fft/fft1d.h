@@ -3196,7 +3196,7 @@ template<typename Tfs> class pocketfft_hartley
         res2[i2] = fct*(res[i]-res[i+1]);
         }
       if (i<N)
-      res2[i1] = fct*res[i];
+        res2[i1] = fct*res[i];
 
       return res2;
       }
@@ -3215,11 +3215,74 @@ template<typename Tfs> class pocketfft_hartley
       }
   };
 
+// R2R transforms using FFTW's halfcomplex format
+template<typename Tfs> class pocketfft_fftw
+  {
+  private:
+    size_t N;
+    Trpass<Tfs> plan;
+
+  public:
+    pocketfft_fftw(size_t n, bool vectorize=false)
+      : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
+    size_t length() const { return N; }
+    size_t bufsize() const { return N+plan->bufsize(); }
+    template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
+      bool fwd, size_t nthreads=1) const
+      {
+      auto res = in;
+      auto res2 = buf;
+      if (!fwd) // go to FFTPACK halfcomplex order
+        {
+        res2[0] = fct*res[0];
+        size_t i=1, i1=1, i2=N-1;
+        for (i=1; i<N-1; i+=2, ++i1, --i2)
+          {
+          res2[i] = fct*res[i1];
+          res2[i+1] = fct*res[i2];
+          }
+        if (i<N)
+          res2[i] = fct*res[i1];
+        swap(res, res2);
+        }
+      res = any_cast<Tfd *>(plan->exec(res, res2, buf+N, fwd, nthreads));
+      if (!fwd) return res;
+
+      // go to FFTW halfcomplex order
+      res2 = (res==buf) ? in : buf;
+      res2[0] = fct*res[0];
+      size_t i=1, i1=1, i2=N-1;
+      for (i=1; i<N-1; i+=2, ++i1, --i2)
+        {
+        res2[i1] = fct*res[i];
+        res2[i2] = fct*res[i+1];
+        }
+      if (i<N)
+        res2[i1] = fct*res[i];
+
+      return res2;
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Tfd *in, Tfd *buf,
+      Tfs fct, bool fwd, size_t nthreads=1) const
+      {
+      auto res = exec(in, buf, fct, fwd, nthreads);
+      if (res!=in)
+        copy_n(res, N, in);
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd,
+      size_t nthreads=1) const
+      {
+      aligned_array<Tfd> buf(N+plan->bufsize());
+      exec_copyback(in, buf.data(), fct, fwd, nthreads);
+      }
+  };
+
 }
 
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
 using detail_fft::pocketfft_hartley;
+using detail_fft::pocketfft_fftw;
 inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }
 inline size_t good_size_real(size_t n)
