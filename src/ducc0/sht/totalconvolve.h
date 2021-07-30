@@ -333,10 +333,16 @@ template<typename T> class ConvolverPlan
     // prefetching distance
     static constexpr size_t pfdist=2;
 
-    template<size_t supp> void interpolx(const mav<T,3> &cube,
+    template<size_t supp> void interpolx(size_t supp_, const mav<T,3> &cube,
       size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
+      if constexpr (supp>=8)
+        if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
+      if constexpr (supp>4)
+        if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
+      MR_assert(supp_==supp, "requested support ou of range");
+
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
       MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
       MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
@@ -397,10 +403,16 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    template<size_t supp> void deinterpolx(mav<T,3> &cube,
+    template<size_t supp> void deinterpolx(size_t supp_, mav<T,3> &cube,
       size_t itheta0, size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, const mav<T,1> &signal) const
       {
+      if constexpr (supp>=8)
+        if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
+      if constexpr (supp>4)
+        if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
+      MR_assert(supp_==supp, "requested support ou of range");
+
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
       MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
       MR_assert(psi.shape(0)==theta.shape(0), "array shape mismatch");
@@ -642,54 +654,16 @@ template<typename T> class ConvolverPlan
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, mav<T,1> &signal) const
       {
-      if constexpr(is_same<T,double>::value)
-        switch(kernel->support())
-          {
-          case  9: interpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 10: interpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 11: interpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 12: interpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 13: interpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 14: interpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 15: interpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 16: interpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          }
-      switch(kernel->support())
-        {
-        case 4: interpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 5: interpolx<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 6: interpolx<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 7: interpolx<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 8: interpolx<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        default: MR_fail("must not happen");
-        }
+      constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
+      interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
     void deinterpol(mav<T,3> &cube, size_t itheta0,
       size_t iphi0, const mav<T,1> &theta, const mav<T,1> &phi,
       const mav<T,1> &psi, const mav<T,1> &signal) const
       {
-      if constexpr(is_same<T,double>::value)
-        switch(kernel->support())
-          {
-          case  9: deinterpolx< 9>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 10: deinterpolx<10>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 11: deinterpolx<11>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 12: deinterpolx<12>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 13: deinterpolx<13>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 14: deinterpolx<14>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 15: deinterpolx<15>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          case 16: deinterpolx<16>(cube, itheta0, iphi0, theta, phi, psi, signal); return;
-          }
-      switch(kernel->support())
-        {
-        case 4: deinterpolx<4>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 5: deinterpolx<5>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 6: deinterpolx<6>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 7: deinterpolx<7>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        case 8: deinterpolx<8>(cube, itheta0, iphi0, theta, phi, psi, signal); break;
-        default: MR_fail("must not happen");
-        }
+      constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
+      deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
     void updateSlm(mav<complex<T>,2> &vslm, const mav<complex<T>,2> &vblm,

@@ -935,8 +935,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
-      (mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+      (size_t supp, mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
       {
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+      MR_assert(supp==SUPP, "requested support ou of range");
+
       vector<mutex> locks(nu);
 
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
@@ -1019,33 +1025,19 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       size_t p0, double w0=-1)
       {
       checkShape(grid.shape(), {nu, nv});
-
-      if constexpr (is_same<Tacc, double>::value)
-        switch(supp)
-          {
-          case  9: x2grid_c_helper< 9, wgrid>(grid, p0, w0); return;
-          case 10: x2grid_c_helper<10, wgrid>(grid, p0, w0); return;
-          case 11: x2grid_c_helper<11, wgrid>(grid, p0, w0); return;
-          case 12: x2grid_c_helper<12, wgrid>(grid, p0, w0); return;
-          case 13: x2grid_c_helper<13, wgrid>(grid, p0, w0); return;
-          case 14: x2grid_c_helper<14, wgrid>(grid, p0, w0); return;
-          case 15: x2grid_c_helper<15, wgrid>(grid, p0, w0); return;
-          case 16: x2grid_c_helper<16, wgrid>(grid, p0, w0); return;
-          }
-      switch(supp)
-        {
-        case  4: x2grid_c_helper< 4, wgrid>(grid, p0, w0); return;
-        case  5: x2grid_c_helper< 5, wgrid>(grid, p0, w0); return;
-        case  6: x2grid_c_helper< 6, wgrid>(grid, p0, w0); return;
-        case  7: x2grid_c_helper< 7, wgrid>(grid, p0, w0); return;
-        case  8: x2grid_c_helper< 8, wgrid>(grid, p0, w0); return;
-        default: MR_fail("must not happen");
-        }
+      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      x2grid_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
-      (const mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+      (size_t supp, const mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
       {
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return grid2x_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+      MR_assert(supp==SUPP, "requested support ou of range");
+
       // Loop over sampling points
       execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
@@ -1124,28 +1116,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       size_t p0, double w0=-1)
       {
       checkShape(grid.shape(), {nu, nv});
-
-      if constexpr (is_same<Tcalc, double>::value)
-        switch(supp)
-          {
-          case  9: grid2x_c_helper< 9, wgrid>(grid, p0, w0); return;
-          case 10: grid2x_c_helper<10, wgrid>(grid, p0, w0); return;
-          case 11: grid2x_c_helper<11, wgrid>(grid, p0, w0); return;
-          case 12: grid2x_c_helper<12, wgrid>(grid, p0, w0); return;
-          case 13: grid2x_c_helper<13, wgrid>(grid, p0, w0); return;
-          case 14: grid2x_c_helper<14, wgrid>(grid, p0, w0); return;
-          case 15: grid2x_c_helper<15, wgrid>(grid, p0, w0); return;
-          case 16: grid2x_c_helper<16, wgrid>(grid, p0, w0); return;
-          }
-      switch(supp)
-        {
-        case  4: grid2x_c_helper< 4, wgrid>(grid, p0, w0); return;
-        case  5: grid2x_c_helper< 5, wgrid>(grid, p0, w0); return;
-        case  6: grid2x_c_helper< 6, wgrid>(grid, p0, w0); return;
-        case  7: grid2x_c_helper< 7, wgrid>(grid, p0, w0); return;
-        case  8: grid2x_c_helper< 8, wgrid>(grid, p0, w0); return;
-        default: MR_fail("must not happen");
-        }
+      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      grid2x_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
       }
 
     void apply_global_corrections(mav<Timg,2> &dirty)
