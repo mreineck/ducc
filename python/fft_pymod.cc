@@ -406,13 +406,26 @@ template<typename T> py::array convolve_axis_internal(const py::array &in_,
   return std::move(out_);
   }
 
+template<typename T> py::array convolve_axis_internal_c(const py::array &in_,
+  py::array &out_, size_t axis, const py::array &kernel_, size_t nthreads)
+  {
+  auto in = to_fmav<complex<T>>(in_, false);
+  auto out = to_fmav<complex<T>>(out_, true);
+  auto kernel = to_mav<complex<T>,1>(kernel_, false);
+  {
+  py::gil_scoped_release release;
+  ducc0::convolve_axis(in, out, axis, kernel, nthreads);
+  }
+  return std::move(out_);
+  }
+
 py::array convolve_axis(const py::array &in, py::array &out, size_t axis,
   const py::array &kernel, size_t nthreads)
   {
-  //if (in.dtype().kind() == 'c')
-    //DISPATCH(in, c128, c64, clong, convolve_axis_internal_c, (in, out, axis,
-      //kernel, nthreads))
-  //else
+  if (in.dtype().kind() == 'c')
+    DISPATCH(in, c128, c64, clong, convolve_axis_internal_c, (in, out, axis,
+      kernel, nthreads))
+  else
     DISPATCH(in, f64, f32, flong, convolve_axis_internal, (in, out, axis,
       kernel, nthreads))
   }
@@ -753,6 +766,35 @@ numpy.ndarray (same shape and data type as `a`)
     The transformed data
 )""";
 
+const char *convolve_axis_DS = R"""(Performs a circular convolution along one axis.
+
+Parameters
+----------
+in : numpy.ndarray (any real or complex type)
+    The input data
+out : numpy.ndarray (same type as `in`)
+    The output data. Must have the same shape as `in` except for the axis
+    to be convolved
+axis : integer
+    The axis along which the convolution is carried out.
+kernel : one-dimensional numpy.ndarray (same type as `in`)
+    The kernel to be used for convolution
+    The length of this array must be equal to in.shape[axis]
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
+
+Returns
+-------
+numpy.ndarray (identical to `out`) 
+    The convolved input
+
+Notes
+-----
+If `in.shape[axis]!=out.shape[axis]`, the appropriate amount of zero-padding or
+truncation will be carried out after the convolution step.
+)""";
+
 const char * good_size_DS = R"""(Returns a good length to pad an FFT to.
 
 Parameters
@@ -794,8 +836,8 @@ void add_fft(py::module_ &msup)
     "out"_a=None, "nthreads"_a=1);
   m.def("dst", dst, dst_DS, "a"_a, "type"_a, "axes"_a=None, "inorm"_a=0,
     "out"_a=None, "nthreads"_a=1);
-  m.def("convolve_axis", convolve_axis, "in"_a, "out"_a, "axis"_a,
-    "kernel"_a, "nthreads"_a=1);
+  m.def("convolve_axis", convolve_axis, convolve_axis_DS, "in"_a, "out"_a,
+    "axis"_a, "kernel"_a, "nthreads"_a=1);
 
   static PyMethodDef good_size_meth[] =
     {{"good_size", good_size, METH_VARARGS, good_size_DS}, {0, 0, 0, 0}};
