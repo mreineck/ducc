@@ -768,6 +768,17 @@ numpy.ndarray (same shape and data type as `a`)
 
 const char *convolve_axis_DS = R"""(Performs a circular convolution along one axis.
 
+The result is equivalent to
+
+.. code-block:: Python
+
+    import scipy.ndimage
+    import scipy.signal
+    shift = -in.shape[axis]//2 + in.shape[axis]%2
+    tmp = scipy.ndimage.convolve1d(in, kernel, axis=axis, mode='wrap', origin=shift)
+    out[()] = scipy.signal.resample(tmp, out.shape[axis], axis=axis, domain='time')
+    return out
+
 Parameters
 ----------
 in : numpy.ndarray (any real or complex type)
@@ -793,6 +804,9 @@ Notes
 -----
 If `in.shape[axis]!=out.shape[axis]`, the appropriate amount of zero-padding or
 truncation will be carried out after the convolution step.
+
+`in` and `out` may overlap in memory. If they do, their first elements must
+be at the same memory location, and all their strides must be equal.
 )""";
 
 const char * good_size_DS = R"""(Returns a good length to pad an FFT to.

@@ -1458,7 +1458,7 @@ DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
   std::unique_ptr<Tplan> plan1, plan2;
 
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
-  size_t l_min=std::min(l_in, l_out), l_max=std::max(l_in, l_out);
+  size_t l_max=std::max(l_in, l_out);
   MR_assert(kernel.size()==l_in, "bad kernel size");
   plan1 = std::make_unique<Tplan>(l_in);
   plan2 = std::make_unique<Tplan>(l_out);
@@ -1467,7 +1467,7 @@ DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
   mav<T0,1> fkernel({kernel.shape(0)});
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel.v(i) = kernel(i);
-  plan1->exec(fkernel.vdata(), T0(1), true, nthreads);
+  plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
 
   execParallel(
     util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
@@ -1516,7 +1516,7 @@ DUCC0_NOINLINE void general_convolve_axis_c(const fmav<Cmplx<T>> &in, fmav<Cmplx
   std::unique_ptr<Tplan> plan1, plan2;
 
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
-  size_t l_min=std::min(l_in, l_out), l_max=std::max(l_in, l_out);
+  size_t l_max=std::max(l_in, l_out);
   MR_assert(kernel.size()==l_in, "bad kernel size");
   plan1 = std::make_unique<Tplan>(l_in);
   plan2 = std::make_unique<Tplan>(l_out);
@@ -1525,7 +1525,7 @@ DUCC0_NOINLINE void general_convolve_axis_c(const fmav<Cmplx<T>> &in, fmav<Cmplx
   mav<Cmplx<T0>,1> fkernel({kernel.shape(0)});
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel.v(i) = kernel(i);
-  plan1->exec(fkernel.vdata(), T0(1), true, nthreads);
+  plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
 
   execParallel(
     util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
@@ -1580,34 +1580,34 @@ struct ExecConv1R
            bufsz = max(plan1.bufsize(), plan2.bufsize());
     T *buf1=buf, *buf2=buf+bufsz; 
     copy_input(it, in, buf2);
-    plan1.exec_copyback(buf2, buf1, T0(1./l_in), true);
+    auto res = plan1.exec(buf2, buf1, T0(1), true);
     {
-    buf2[0] *= fkernel(0)*T0(1);
+    res[0] *= fkernel(0);
     size_t i;
     for (i=1; 2*i<l_min; ++i)
       {
-      Cmplx<T> t1(buf2[2*i-1], buf2[2*i]);
+      Cmplx<T> t1(res[2*i-1], res[2*i]);
       Cmplx<T0> t2(fkernel(2*i-1), fkernel(2*i));
       auto t3 = t1*t2;
-      buf2[2*i-1] = t3.r;
-      buf2[2*i] = t3.i;
+      res[2*i-1] = t3.r;
+      res[2*i] = t3.i;
       }
     if (2*i==l_min)
       {
       if (l_min<l_out) // padding
-        buf2[2*i-1] *= fkernel(2*i-1)*T0(0.5);
+        res[2*i-1] *= fkernel(2*i-1)*T0(0.5);
       else if (l_min<l_in) // truncation
         {
-        Cmplx<T> t1(buf2[2*i-1], buf2[2*i]);
+        Cmplx<T> t1(res[2*i-1], res[2*i]);
         Cmplx<T0> t2(fkernel(2*i-1), fkernel(2*i));
-        buf2[2*i-1] = (t1*t2).r*T0(2);
+        res[2*i-1] = (t1*t2).r*T0(2);
         }
       else
-        buf2[2*i-1] *= fkernel(2*i-1);
+        res[2*i-1] *= fkernel(2*i-1);
       }
     }
-    for (size_t i=l_in; i<l_out; ++i) buf2[i] = T(0);
-    auto res = plan2.exec(buf2, buf1, T0(1), false);
+    for (size_t i=l_in; i<l_out; ++i) res[i] = T(0);
+    res = plan2.exec(res, res==buf2 ? buf1 : buf2, T0(1), false);
     copy_output(it, res, out);
     }
   };
@@ -1624,32 +1624,30 @@ struct ExecConv1C
            bufsz = max(plan1.bufsize(), plan2.bufsize());
     Cmplx<T> *buf1=buf, *buf2=buf+bufsz;
     copy_input(it, in, buf2);
-    plan1.exec_copyback(buf2, buf1, T0(1./l_in), true);
+    auto res = plan1.exec(buf2, buf1, T0(1), true);
+    auto res2 = (res==buf2) ? buf1 : buf2;
     {
-    buf2[0] *= fkernel(0)*T0(1);
+    res2[0] = res[0]*fkernel(0);
     size_t i;
     for (i=1; 2*i<l_min; ++i)
       {
-      buf2[i] *= fkernel(i);
-      buf2[l_out-i] = buf2[l_in-i]*fkernel(l_in-i);
+      res2[i] = res[i]*fkernel(i);
+      res2[l_out-i] = res[l_in-i]*fkernel(l_in-i);
       }
     if (2*i==l_min)
       {
       if (l_min<l_out) // padding
-        {
-        buf2[i] *= fkernel(i)*T0(.5);
-        buf2[l_out-i] = buf2[i];
-        }
+        res2[l_out-i] = res2[i] = res[i]*fkernel(i)*T0(.5);
       else if (l_min<l_in) // truncation
-        buf2[i] = buf2[i]*fkernel(i) + buf2[l_in-i]*fkernel(l_in-i);
+        res2[i] = res[i]*fkernel(i) + res[l_in-i]*fkernel(l_in-i);
       else
-        buf2[i] *= fkernel(i);
+        res2[i] = res[i]*fkernel(i);
       ++i;
       }
     for (; 2*i<=l_out; ++i)
-      buf2[i] = buf2[l_out-i] = Cmplx<T>(0,0);
+      res2[i] = res2[l_out-i] = Cmplx<T>(0,0);
     }
-    auto res = plan2.exec(buf2, buf1, T0(1), false);
+    res = plan2.exec(res2, res, T0(1), false);
     copy_output(it, res, out);
     }
   };

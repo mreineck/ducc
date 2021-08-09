@@ -314,3 +314,29 @@ def test_r2r_extra(len, dtype):
     ref = fft.c2c(ref, forward=False)
     test = fft.r2r_fftw(test, (0,), forward=False)
     _assert_close(ref, test, eps)
+
+
+def refconv(a, newlen, axis, k):
+    import scipy.ndimage
+    import scipy.signal
+    shift = -a.shape[axis]//2 + a.shape[axis]%2
+    tmp=scipy.ndimage.convolve1d(a,k,axis=axis,mode='wrap',origin=shift)
+    tmp=scipy.signal.resample(tmp,newlen,axis=axis,domain='time')
+    return tmp
+
+
+@pmp("L1", tuple(range(3,30)))
+@pmp("L2", tuple(range(3,30)))
+@pmp("dtype", (np.float32, np.float64, np.complex64, np.complex128))
+def test_conv(L1,L2,dtype):
+    if issubclass(dtype, np.complexfloating):
+        a = (np.random.random(L1) + 1j*np.random.random(L1)).astype(dtype)
+        k = (np.random.random(L1) + 1j*np.random.random(L1)).astype(dtype)
+    else:
+        a = np.random.random(L1).astype(dtype)
+        k = np.random.random(L1).astype(dtype)
+    b = np.zeros(L2).astype(dtype)
+    x = fft.convolve_axis(a,b,0,k)
+    x2 = refconv(a,L2,0,k)
+    eps = tol[x2.real.dtype.type]
+    _assert_close(x, x2, eps)
