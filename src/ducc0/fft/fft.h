@@ -1450,9 +1450,9 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp_conv_axis
   return aligned_array<T>((len+bufsize)*std::min(vlen, othersize));
   }
 
-template<typename Tplan, typename T, typename T0, typename Exec>
+template<typename Tplan, typename T0, typename T, typename Exec>
 DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
-  const size_t axis, const mav<T0,1> &kernel, size_t nthreads,
+  const size_t axis, const mav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
   std::unique_ptr<Tplan> plan1, plan2;
@@ -1464,7 +1464,7 @@ DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
   plan2 = std::make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
-  mav<T0,1> fkernel({kernel.shape(0)});
+  mav<T,1> fkernel({kernel.shape(0)});
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel.v(i) = kernel(i);
   plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
@@ -1504,64 +1504,6 @@ DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
         {
         it.advance(1);
         auto buf = reinterpret_cast<T *>(storage.data());
-        exec(it, in, out, buf, *plan1, *plan2, fkernel);
-        }
-    });  // end of parallel region
-  }
-template<typename Tplan, typename T, typename T0, typename Exec>
-DUCC0_NOINLINE void general_convolve_axis_c(const fmav<Cmplx<T>> &in, fmav<Cmplx<T>> &out,
-  const size_t axis, const mav<Cmplx<T0>,1> &kernel, size_t nthreads,
-  const Exec &exec)
-  {
-  std::unique_ptr<Tplan> plan1, plan2;
-
-  size_t l_in=in.shape(axis), l_out=out.shape(axis);
-  size_t l_max=std::max(l_in, l_out);
-  MR_assert(kernel.size()==l_in, "bad kernel size");
-  plan1 = std::make_unique<Tplan>(l_in);
-  plan2 = std::make_unique<Tplan>(l_out);
-  size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
-
-  mav<Cmplx<T0>,1> fkernel({kernel.shape(0)});
-  for (size_t i=0; i<kernel.shape(0); ++i)
-    fkernel.v(i) = kernel(i);
-  plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
-
-  execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
-    [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T0>::size();
-      auto storage = alloc_tmp_conv_axis<Cmplx<T>,T0>(in, axis, l_max, bufsz);
-      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-      if constexpr (vlen>1)
-        while (it.remaining()>=vlen)
-          {
-          it.advance(vlen);
-          auto tdatav = reinterpret_cast<Cmplx<add_vec_t<T, vlen>> *>(storage.data());
-          exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
-          }
-      if constexpr (vlen>2)
-        if constexpr (simd_exists<T,vlen/2>)
-          if (it.remaining()>=vlen/2)
-            {
-            it.advance(vlen/2);
-            auto tdatav = reinterpret_cast<Cmplx<add_vec_t<T, vlen/2>> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
-            }
-      if constexpr (vlen>4)
-        if constexpr (simd_exists<T,vlen/4>)
-          if (it.remaining()>=vlen/4)
-            {
-            it.advance(vlen/4);
-            auto tdatav = reinterpret_cast<Cmplx<add_vec_t<T, vlen/4>> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
-            }
-#endif
-      while (it.remaining()>0)
-        {
-        it.advance(1);
-        auto buf = reinterpret_cast<Cmplx<T> *>(storage.data());
         exec(it, in, out, buf, *plan1, *plan2, fkernel);
         }
     });  // end of parallel region
@@ -1615,14 +1557,14 @@ struct ExecConv1C
   {
   template <typename T0, typename T, typename Titer> void operator() (
     const Titer &it, const fmav<Cmplx<T0>> &in, fmav<Cmplx<T0>> &out,
-    Cmplx<T> * buf, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
+    T *buf, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
     const mav<Cmplx<T0>,1> &fkernel) const
     {
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
            l_min = std::min(l_in, l_out),
            bufsz = max(plan1.bufsize(), plan2.bufsize());
-    Cmplx<T> *buf1=buf, *buf2=buf+bufsz;
+    T *buf1=buf, *buf2=buf+bufsz;
     copy_input(it, in, buf2);
     auto res = plan1.exec(buf2, buf1, T0(1), true);
     auto res2 = (res==buf2) ? buf1 : buf2;
@@ -1645,7 +1587,7 @@ struct ExecConv1C
       ++i;
       }
     for (; 2*i<=l_out; ++i)
-      res2[i] = res2[l_out-i] = Cmplx<T>(0,0);
+      res2[i] = res2[l_out-i] = T(0,0);
     }
     res = plan2.exec(res2, res, T0(1), false);
     copy_output(it, res, out);
@@ -1663,7 +1605,7 @@ template<typename T> void convolve_axis(const fmav<T> &in,
     if (i!=axis)
       MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
   if (in.size()==0) return;
-  general_convolve_axis<pocketfft_r<T>>(in, out, axis, kernel, nthreads,
+  general_convolve_axis<pocketfft_r<T>, T>(in, out, axis, kernel, nthreads,
     ExecConv1R());
   }
 template<typename T> void convolve_axis(const fmav<complex<T>> &in,
@@ -1681,7 +1623,7 @@ template<typename T> void convolve_axis(const fmav<complex<T>> &in,
   fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.cdata()), in);
   fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.vdata()), out, out.writable());
   mav<Cmplx<T>,1> kernel2(reinterpret_cast<const Cmplx<T> *>(kernel.cdata()), kernel.shape());
-  general_convolve_axis_c<pocketfft_c<T>>(in2, out2, axis, kernel2, nthreads,
+  general_convolve_axis<pocketfft_c<T>, T>(in2, out2, axis, kernel2, nthreads,
     ExecConv1C());
   }
 

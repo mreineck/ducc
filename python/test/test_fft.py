@@ -340,3 +340,22 @@ def test_conv(L1,L2,dtype):
     x2 = refconv(a,L2,0,k)
     eps = tol[x2.real.dtype.type]
     _assert_close(x, x2, eps)
+
+
+@pmp("L1", tuple(range(3,10)))
+@pmp("L2", tuple(range(3,10)))
+@pmp("dtype", (np.float32, np.float64, np.complex64, np.complex128))
+def test_conv2(L1,L2,dtype):
+    shp = (5,L1,20)
+    shp2 = (5,L2,20)
+    if issubclass(dtype, np.complexfloating):
+        a = (np.random.random(shp) + 1j*np.random.random(shp)).astype(dtype)
+        k = (np.random.random(L1) + 1j*np.random.random(L1)).astype(dtype)
+    else:
+        a = np.random.random(shp).astype(dtype)
+        k = np.random.random(L1).astype(dtype)
+    b = np.zeros(shp2).astype(dtype)
+    x = fft.convolve_axis(a,b,1,k)
+    x2 = refconv(a,L2,1,k)
+    eps = tol[x2.real.dtype.type]
+    _assert_close(x, x2, eps)
