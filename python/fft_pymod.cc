@@ -409,14 +409,7 @@ template<typename T> py::array convolve_axis_internal(const py::array &in_,
 template<typename T> py::array convolve_axis_internal_c(const py::array &in_,
   py::array &out_, size_t axis, const py::array &kernel_, size_t nthreads)
   {
-  auto in = to_fmav<complex<T>>(in_, false);
-  auto out = to_fmav<complex<T>>(out_, true);
-  auto kernel = to_mav<complex<T>,1>(kernel_, false);
-  {
-  py::gil_scoped_release release;
-  ducc0::convolve_axis(in, out, axis, kernel, nthreads);
-  }
-  return std::move(out_);
+  return convolve_axis_internal<complex<T>>(in_, out_, axis, kernel_, nthreads);
   }
 
 py::array convolve_axis(const py::array &in, py::array &out, size_t axis,
