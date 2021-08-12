@@ -17,6 +17,7 @@ from itertools import product
 
 import ducc0.wgridder as ng
 import ducc0
+from ducc0.misc import vdot
 try:
     import finufft
     have_finufft = True
@@ -28,18 +29,6 @@ from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
-
-
-# attempt to write a more accurate version of numpy.vdot()
-def my_vdot(a, b):
-    import math
-    if (np.issubdtype(a.dtype, np.complexfloating)
-            or np.issubdtype(b.dtype, np.complexfloating)):
-        tmp = (np.conj(a)*b).reshape((-1,))
-        return math.fsum(tmp.real)+1j*math.fsum(tmp.imag)
-    else:
-        tmp = (a*b).reshape((-1,))
-        return math.fsum(tmp)
 
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
@@ -166,10 +155,10 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
             wgt = wgt.astype("f4")
 
     def check(d2, m2):
-        ref = max(my_vdot(ms, ms).real, my_vdot(m2, m2).real,
-                  my_vdot(dirty, dirty).real, my_vdot(d2, d2).real)
+        ref = max(vdot(ms, ms).real, vdot(m2, m2).real,
+                  vdot(dirty, dirty).real, vdot(d2, d2).real)
         tol = 3e-5*ref if singleprec else 2e-13*ref
-        assert_allclose(my_vdot(ms, m2).real, my_vdot(d2, dirty), rtol=tol)
+        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=tol)
 
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
