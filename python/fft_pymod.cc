@@ -767,9 +767,10 @@ The result is equivalent to
 
     import scipy.ndimage
     import scipy.signal
-    shift = -in.shape[axis]//2 + in.shape[axis]%2
-    tmp = scipy.ndimage.convolve1d(in, kernel, axis=axis, mode='wrap', origin=shift)
-    out[()] = scipy.signal.resample(tmp, out.shape[axis], axis=axis, domain='time')
+    import scipy.fft
+    kernel = scipy.fft.fftshift(kernel)
+    tmp = scipy.ndimage.convolve1d(in, kernel, axis, mode='wrap')
+    out[()] = scipy.signal.resample(tmp, out.shape[axis], axis=axis)
     return out
 
 Parameters

@@ -319,9 +319,10 @@ def test_r2r_extra(len, dtype):
 def refconv(a, newlen, axis, k):
     import scipy.ndimage
     import scipy.signal
-    shift = -a.shape[axis]//2 + a.shape[axis]%2
-    tmp=scipy.ndimage.convolve1d(a,k,axis=axis,mode='wrap',origin=shift)
-    tmp=scipy.signal.resample(tmp,newlen,axis=axis,domain='time')
+    import scipy.fft
+    k = scipy.fft.fftshift(k)
+    tmp=scipy.ndimage.convolve1d(a,k,axis,mode='wrap')
+    tmp=scipy.signal.resample(tmp,newlen,axis=axis)
     return tmp
 
 
