@@ -1,6 +1,8 @@
 0.19.0:
 - fft:
   - new function `r2r_fftw`, which supports FFTW's halfcomplex storage scheme.
+  - new function `convolve_axis`, which performs efficient convolution of arrays
+    with arbitrary 1D kernels, optionally followed by zero-padding/truncation.
   - C++ sources for FFT calculation now have their own subdirectory.
 
 
