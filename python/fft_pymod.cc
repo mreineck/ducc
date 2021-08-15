@@ -796,6 +796,10 @@ numpy.ndarray (identical to `out`)
 
 Notes
 -----
+The main purpose of this routine is efficiency: the combination of the above
+operations can be carried out more quickly than running the individual
+operations in succession.
+
 If `in.shape[axis]!=out.shape[axis]`, the appropriate amount of zero-padding or
 truncation will be carried out after the convolution step.
 

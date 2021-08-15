@@ -1594,6 +1594,28 @@ struct ExecConv1C
     }
   };
 
+/// Convolution and zero-padding/truncation along one axis
+/** This performs a circular convolution with the kernel \a kernel on axis
+ *  \a axis of \a in, applies the necessary zero-padding/truncation on this
+ *  axis to give it the length \a out.shape(axis),and returns the result
+ *  in \a out.
+ *
+ *  The main purpose of this routine is efficiency: the combination of the above
+ *  operations can be carried out more quickly than running the individual
+ *  operations in succession.
+ * 
+ *  \a in and \a out must have identical shapes, with the possible exception
+ *  of the axis \a axis; they may point to the same memory; in this case all
+ *  of their strides must be identical.
+ *
+ *  \a axis specifies the axis over which the operation is carried out.
+ *
+ *  \a kernel must have the same length as \a in.shape(axis); it must be
+ *  provided in the same domain as \a in (i.e. not pre-transformed).
+ * 
+ *  If \a in has more than one dimension, the computation will
+ *  be distributed over \a nthreads threads.
+ */
 template<typename T> void convolve_axis(const fmav<T> &in,
   fmav<T> &out, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
   {
