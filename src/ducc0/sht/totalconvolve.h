@@ -49,114 +49,6 @@
 
 namespace ducc0 {
 
-namespace detail_fft {
-
-using std::vector;
-
-template<typename T, typename T0> aligned_array<T> alloc_tmp_conv
-  (const fmav_info &info, size_t axis, size_t len, size_t bufsize)
-  {
-  auto othersize = info.size()/info.shape(axis);
-  constexpr auto vlen = native_simd<T0>::size();
-  return aligned_array<T>((len+bufsize)*std::min(vlen, othersize));
-  }
-
-template<typename Tplan, typename T, typename T0, typename Exec>
-DUCC0_NOINLINE void general_convolve(const fmav<T> &in, fmav<T> &out,
-  const size_t axis, const vector<T0> &kernel, size_t nthreads,
-  const Exec &exec)
-  {
-  std::unique_ptr<Tplan> plan1, plan2;
-
-  size_t l_in=in.shape(axis), l_out=out.shape(axis);
-  size_t l_min=std::min(l_in, l_out), l_max=std::max(l_in, l_out);
-  MR_assert(kernel.size()==l_min/2+1, "bad kernel size");
-  plan1 = std::make_unique<Tplan>(l_in);
-  plan2 = std::make_unique<Tplan>(l_out);
-  size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
-
-  execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
-    [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T0>::size();
-      auto storage = alloc_tmp_conv<T,T0>(in, axis, l_max, bufsz);
-      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-      if constexpr (vlen>1)
-        while (it.remaining()>=vlen)
-          {
-          it.advance(vlen);
-          auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
-          exec(it, in, out, tdatav, *plan1, *plan2, kernel);
-          }
-      if constexpr (vlen>2)
-        if constexpr (simd_exists<T,vlen/2>)
-          if (it.remaining()>=vlen/2)
-            {
-            it.advance(vlen/2);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, kernel);
-            }
-      if constexpr (vlen>4)
-        if constexpr (simd_exists<T,vlen/4>)
-          if (it.remaining()>=vlen/4)
-            {
-            it.advance(vlen/4);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, kernel);
-            }
-#endif
-      while (it.remaining()>0)
-        {
-        it.advance(1);
-        auto buf = reinterpret_cast<T *>(storage.data());
-        exec(it, in, out, buf, *plan1, *plan2, kernel);
-        }
-    });  // end of parallel region
-  }
-
-struct ExecConvR1
-  {
-  template <typename T0, typename T, typename Titer> void operator() (
-    const Titer &it, const fmav<T0> &in, fmav<T0> &out,
-    T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
-    const vector<T0> &kernel) const
-    {
-    size_t l_in = plan1.length(),
-           l_out = plan2.length(),
-           l_min = std::min(l_in, l_out),
-           bufsz = max(plan1.bufsize(), plan2.bufsize());
-    T *buf1=buf, *buf2=buf+bufsz; 
-    copy_input(it, in, buf2);
-    plan1.exec_copyback(buf2, buf1, T0(1), true);
-    for (size_t i=0; i<l_min; ++i) buf2[i]*=kernel[(i+1)/2];
-    for (size_t i=l_in; i<l_out; ++i) buf2[i] = T(0);
-    auto res = plan2.exec(buf2, buf1, T0(1), false);
-    copy_output(it, res, out);
-    }
-  };
-
-template<typename T> void convolve_1d(const fmav<T> &in,
-  fmav<T> &out, size_t axis, const vector<T> &kernel, size_t nthreads=1)
-  {
-  MR_assert(axis<in.ndim(), "bad axis number");
-  MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
-  if (in.cdata()==out.cdata())
-    MR_assert(in.stride()==out.stride(), "strides mismatch");
-  for (size_t i=0; i<in.ndim(); ++i)
-    if (i!=axis)
-      MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
-  MR_assert(!((in.shape(axis)&1) || (out.shape(axis)&1)),
-    "input and output axis lengths must be even");
-  if (in.size()==0) return;
-  general_convolve<pocketfft_r<T>>(in, out, axis, kernel, nthreads,
-    ExecConvR1());
-  }
-
-}
-
-using detail_fft::convolve_1d;
-
 namespace detail_totalconvolve {
 
 using namespace std;
@@ -180,6 +72,26 @@ template<typename T> class ConvolverPlan
     size_t nphi, ntheta;
     double phi0, theta0;
 
+    mav<T,1> getKernel(size_t axlen, size_t axlen2) const
+      {
+      auto axlen_big = max(axlen, axlen2);
+      auto axlen_small = min(axlen, axlen2);
+      auto fct = kernel->corfunc(axlen_small/2+1, 1./axlen_big, nthreads);
+      mav<T,1> k2({axlen});
+      k2.fill(T(0));
+      {
+      k2.v(0) = fct[0]/axlen_small;
+      size_t i=1;
+      for (; 2*i<axlen_small; ++i)
+        k2.v(2*i-1) = fct[i]/axlen_small;
+      if (2*i==axlen_small)
+        k2.v(2*i-1) = T(0.5)*fct[i]/axlen_small;
+      }
+      pocketfft_r<T> plan(axlen);
+      plan.exec(k2.vdata(), T(1), false, nthreads);
+      return k2;
+      }
+
     void correct(mav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
@@ -201,10 +113,11 @@ template<typename T> class ConvolverPlan
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> ftmp(tmp);
       fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
-      convolve_1d(ftmp0, ftmp, 0, k2, nthreads);
+      auto kern = getKernel(nphi_s, nphi_b);
+      convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
       fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
       fmav<T> farr(arr);
-      convolve_1d(ftmp2, farr, 1, k2, nthreads);
+      convolve_axis(ftmp2, farr, 1, kern, nthreads);
       }
     void decorrect(mav<T,2> &arr, int spin) const
       {
@@ -215,7 +128,8 @@ template<typename T> class ConvolverPlan
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> farr(arr);
       fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
-      convolve_1d(farr, ftmp2, 1, k2, nthreads);
+      auto kern = getKernel(nphi_b, nphi_s);
+      convolve_axis(farr, ftmp2, 1, kern, nthreads);
       // extend to second half
       for (size_t i=1, i2=nphi_b-1; i+1<ntheta_b; ++i,--i2)
         for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
@@ -225,7 +139,7 @@ template<typename T> class ConvolverPlan
           }
       fmav<T> ftmp(tmp);
       fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
-      convolve_1d(ftmp, ftmp0, 0, k2, nthreads);
+      convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr.v(0,j) = T(0.5)*tmp(0,j);
       for (size_t i=1; i+1<ntheta_s; ++i)
