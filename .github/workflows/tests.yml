@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v2
       - run: python -m pip install --user --upgrade setuptools pybind11 pytest pytest-timeout numpy scipy cibuildwheel
       - env:
-          DUCC0_OPTIMIZZATION: portable
+          DUCC0_OPTIMIZATION: portable
       - run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v2
         with:
