@@ -67,7 +67,7 @@ else:
                                '-Wfloat-conversion',
                                '-W',
                                '-Wall',
-                               '-Wstrict-aliasing=2',
+                               '-Wstrict-aliasing',
                                '-Wwrite-strings',
                                '-Wredundant-decls',
                                '-Woverloaded-virtual',
@@ -78,11 +78,12 @@ else:
     python_module_link_args += ['-Wl,-rpath,$ORIGIN']
     if do_native:
         python_module_link_args += ['-march=native']
+    if not do_debug:
+        python_module_link_args += ['-s']
 
 extra_compile_args += user_cflags
 python_module_link_args += user_lflags
 
-# if you want debugging info, remove the "-s" from python_module_link_args
 depfiles = (_get_files_by_suffix('.', 'h') +
             _get_files_by_suffix('.', 'cc') +
             ['setup.py'])
