@@ -26,6 +26,15 @@ The latest version of DUCC can be obtained by cloning the repository via
 
     git clone https://gitlab.mpcdf.mpg.de/mtr/ducc.git
 
+### Documentation
+
+Online documentation of the most recent Python interface is available at
+https://mtr.pages.mpcdf.de/ducc.
+
+The C++ interface is documented at https://mtr.pages.mpcdf.de/ducc/cpp.
+Please note that this interface is not as well documented as the Python one,
+and that it should not be considered stable.
+
 ### Installation
 
 DUCC can be installed using a simple `pip` invocation:
