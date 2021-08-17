@@ -80,12 +80,12 @@ template<typename T> class ConvolverPlan
       mav<T,1> k2({axlen});
       k2.fill(T(0));
       {
-      k2.v(0) = fct[0]/axlen_small;
+      k2.v(0) = T(fct[0])/axlen_small;
       size_t i=1;
       for (; 2*i<axlen_small; ++i)
-        k2.v(2*i-1) = fct[i]/axlen_small;
+        k2.v(2*i-1) = T(fct[i])/axlen_small;
       if (2*i==axlen_small)
-        k2.v(2*i-1) = T(0.5)*fct[i]/axlen_small;
+        k2.v(2*i-1) = T(0.5)*T(fct[i])/axlen_small;
       }
       pocketfft_r<T> plan(axlen);
       plan.exec(k2.vdata(), T(1), false, nthreads);
