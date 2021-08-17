@@ -37,7 +37,7 @@ However, the performance of the installed package may not be optimal, since
 the wheel has to work on all CPUs of a given architecture (e.g. x86_64) and
 will therefore probably not use all features present in your local CPU.
 
-It is therefore recommended to install from source is possible, using the
+It is therefore recommended to install from source if possible, using the
 command
 
     pip3 install --no-binary ducc0 --user ducc0
