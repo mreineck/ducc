@@ -1,11 +1,11 @@
 name: ducc-wheels
-on: [workflow_dispatch]
+on: [push]
 jobs:
   build-wheels:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-11.0, windows-2019]
+        os: [ubuntu-20.04, macOS-10.15, macos-11.0, windows-2019]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2

@@ -56,9 +56,7 @@ define_macros = [("PKGNAME", pkgname),
 if sys.platform == 'darwin':
     import distutils.sysconfig
     extra_compile_args += ['-mmacosx-version-min=10.14']
-    python_module_link_args += ['-mmacosx-version-min=10.14'] #, '-bundle']
-#    cfg_vars = distutils.sysconfig.get_config_vars()
-#    cfg_vars['LDSHARED'] = cfg_vars['LDSHARED'].replace('-bundle', '')
+    python_module_link_args += ['-mmacosx-version-min=10.14']
 elif sys.platform == 'win32':
     extra_compile_args = ['/EHsc', '/std:c++17']
     if do_optimize:
