@@ -12,9 +12,8 @@ interface.
 ### Requirements
 
 - [Python >= 3.7](https://www.python.org/)
-- [pybind11](https://github.com/pybind/pybind11)
-  (only during compiling/installation)
-- a C++17-capable compiler, e.g.
+- only when compiling from source: [pybind11](https://github.com/pybind/pybind11)
+- only when compiling from source: a C++17-capable compiler, e.g.
   - `g++` 7 or later
   - `clang++`
   - MSVC 2019 or later
@@ -33,18 +32,17 @@ DUCC can be installed using a simple `pip` invocation:
 
     pip3 install --user ducc0
 
-This will download the source package and compile it to a binary that is
-optimized for the host CPU, but will probably not run on other computers
-with slightly different CPUs.
+In most cases this will download and install a binary wheel.
+However, the performance of the installed package may not be optimal, since
+the wheel has to work on all CPUs of a given architecture (e.g. x86_64) and
+will therefore probably not use all features present in your local CPU.
 
-At the cost of performance (typically factors of 1.5 to 2) it is possible to
-generate a binary which will work on all CPUs of a given architecture (e.g.
-x86_64). This can be done via
+It is therefore recommended to install from source is possible, using the
+command
 
-    DUCC0_OPTIMIZATION=portable pip3 install --user ducc0
+    pip3 install --no-binary ducc0 --user ducc0
 
-NOTE: compilation of the code can take a significant amount of time
-(several minutes).
+NOTE: compilation can take a significant amount of time (several minutes).
 
 
 Installing multiple versions simultaneously
