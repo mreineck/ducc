@@ -1,64 +1,40 @@
 name: ducc-tests
-on: [push]
+on: [workflow_dispatch]
 jobs:
-  #test-standard:
-    #runs-on: ${{ matrix.os }}
-    #strategy:
-      #matrix:
-        #os: [ubuntu-20.04, macOS-10.15, macos-11.0, windows-2019]
-    #steps:
-      #- uses: actions/checkout@v2
-      #- uses: actions/setup-python@v2
-      #- run: python -m pip install --user --upgrade setuptools pybind11 pytest numpy scipy
-      #- run: python -m pip install --user .
-      #- run: python -m pytest python/test -x
-  #test-linuxold:
-    #runs-on: ubuntu-18.04
-    #steps:
-      #- uses: actions/checkout@v2
-      #- uses: actions/setup-python@v2
-        #with:
-             #python-version: '3.7'
-      #- run: python -m pip install --user --upgrade setuptools pybind11 pytest scipy
-      #- run: python -m pip install --user .
-      #- run: python -m pytest python/test -x
-  #test-intel:
-    #runs-on: ubuntu-20.04
-    #steps:
-      #- uses: actions/checkout@v2
-      #- uses: actions/setup-python@v2
-      #- run: python -m pip install --user --upgrade setuptools pybind11 pytest scipy
-      #- run: wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      #- run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      #- run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
-      #- run: sudo apt update
-      ## fix this version for now, because the current one has trouble installing
-      #- run: sudo apt install intel-oneapi-compiler-dpcpp-cpp-2021.2.0
-      #- run: |
-          #source /opt/intel/oneapi/setvars.sh intel64
-          #DUCC0_LFLAGS="-lsvml" CC=icpx python3 -m pip install --user .
-          #python -m pytest python/test -x
-  build-wheels:
+  test-standard:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-11.0, windows-2019]
+        os: [ubuntu-20.04, macOS-10.15, macos-11.0, windows-2019]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - run: python -m pip install --user --upgrade setuptools pybind11 pytest pytest-timeout numpy scipy wheel cibuildwheel
-      - run: python -m cibuildwheel --output-dir wheelhouse
-        env:
-          DUCC0_OPTIMIZATION: portable
-          CIBW_SKIP: cp36-*
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_I686_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PPC64LE_IMAGE: manylinux2014
-          CIBW_MANYLINUX_S390X_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux2014
-      - uses: actions/upload-artifact@v2
+      - run: python -m pip install --user --upgrade setuptools pybind11 pytest numpy scipy
+      - run: python -m pip install --user .
+      - run: python -m pytest python/test -x
+  test-linuxold:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
         with:
-          path: ./wheelhouse/*.whl
+             python-version: '3.7'
+      - run: python -m pip install --user --upgrade setuptools pybind11 pytest scipy
+      - run: python -m pip install --user .
+      - run: python -m pytest python/test -x
+  test-intel:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - run: python -m pip install --user --upgrade setuptools pybind11 pytest scipy
+      - run: wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+      - run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+      - run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+      - run: sudo apt update
+      # fix this version for now, because the current one has trouble installing
+      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp-2021.2.0
+      - run: |
+          source /opt/intel/oneapi/setvars.sh intel64
+          DUCC0_LFLAGS="-lsvml" CC=icpx python3 -m pip install --user .
+          python -m pytest python/test -x

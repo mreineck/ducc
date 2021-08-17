@@ -11,7 +11,7 @@ interface.
 
 ### Requirements
 
-- [Python >= 3.6](https://www.python.org/)
+- [Python >= 3.7](https://www.python.org/)
 - [pybind11](https://github.com/pybind/pybind11)
   (only during compiling/installation)
 - a C++17-capable compiler, e.g.
