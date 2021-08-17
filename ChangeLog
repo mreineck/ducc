@@ -1,9 +1,14 @@
 0.19.0:
+- general:
+  - binary wheels can now be built and uploaded to PyPI; the installation
+    instructions have been updated accordingly. Please provide feedback in case
+    of problems!
+
 - fft:
+  - C++ sources for FFT calculation now have their own subdirectory.
   - new function `r2r_fftw`, which supports FFTW's halfcomplex storage scheme.
   - new function `convolve_axis`, which performs efficient convolution of arrays
     with arbitrary 1D kernels, optionally followed by zero-padding/truncation.
-  - C++ sources for FFT calculation now have their own subdirectory.
 
 
 0.18.0:

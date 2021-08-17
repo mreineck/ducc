@@ -8,7 +8,7 @@ from setuptools import setup, Extension
 import pybind11
 
 pkgname = 'ducc0'
-version = '0.18.0'
+version = '0.19.0'
 
 user_cflags = os.getenv("DUCC0_CFLAGS", "").split(" ")
 user_cflags = [x for x in user_cflags if x != ""]
@@ -56,9 +56,7 @@ define_macros = [("PKGNAME", pkgname),
 if sys.platform == 'darwin':
     import distutils.sysconfig
     extra_compile_args += ['-mmacosx-version-min=10.14']
-    python_module_link_args += ['-mmacosx-version-min=10.14', '-bundle']
-    cfg_vars = distutils.sysconfig.get_config_vars()
-    cfg_vars['LDSHARED'] = cfg_vars['LDSHARED'].replace('-bundle', '')
+    python_module_link_args += ['-mmacosx-version-min=10.14']
 elif sys.platform == 'win32':
     extra_compile_args = ['/EHsc', '/std:c++17']
     if do_optimize:
@@ -118,7 +116,7 @@ setup(name=pkgname,
       author='Martin Reinecke',
       author_email='martin@mpa-garching.mpg.de',
       packages=[],
-      python_requires=">=3.6",
+      python_requires=">=3.7",
       ext_modules=extensions,
       install_requires=['numpy>=1.17.0'],
       license="GPLv2+",
