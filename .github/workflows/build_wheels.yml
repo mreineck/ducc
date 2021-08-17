@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - run: python -m pip install --user --upgrade setuptools pybind11 pytest pytest-timeout numpy scipy wheel cibuildwheel
+      - run: python -m pip install --user --upgrade setuptools pybind11 wheel cibuildwheel
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
