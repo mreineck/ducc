@@ -5,7 +5,7 @@
 #---------------------------------------------------------------------------
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "ducc0"
-PROJECT_NUMBER         = 0.10.1
+PROJECT_NUMBER         = 0.19.0
 PROJECT_BRIEF          = Distinctly useful code collection
 PROJECT_LOGO           = ducc.png
 OUTPUT_DIRECTORY       = build
