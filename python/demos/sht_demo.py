@@ -78,7 +78,7 @@ print("L2 error: ", ducc0.misc.l2error(alm, alm2))
 
 
 print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
-print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would b needed,")
+print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would be needed,")
 print("but ducc.sht supports advanced analysis techniques which lower this limit.")
 # Number of iso-latitude rings required.
 nlat = lmax+2

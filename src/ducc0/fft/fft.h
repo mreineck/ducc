@@ -1616,7 +1616,7 @@ struct ExecConv1C
  *  If \a in has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> void convolve_axis(const fmav<T> &in,
+template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<T> &in,
   fmav<T> &out, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
   {
   MR_assert(axis<in.ndim(), "bad axis number");
@@ -1630,7 +1630,7 @@ template<typename T> void convolve_axis(const fmav<T> &in,
   general_convolve_axis<pocketfft_r<T>, T>(in, out, axis, kernel, nthreads,
     ExecConv1R());
   }
-template<typename T> void convolve_axis(const fmav<complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<complex<T>> &in,
   fmav<complex<T>> &out, size_t axis, const mav<complex<T>,1> &kernel,
   size_t nthreads=1)
   {
