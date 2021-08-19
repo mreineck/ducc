@@ -151,7 +151,6 @@ class TimerHierarchy
 
           double total=full_acc();
           os << "\nTotal wall clock time for " << name << ": " << setprecision(4) << total << "s\n";
-//          printf("\nTotal wall clock time for '%s': %1.4fs\n",name.c_str(),total);
 
           int logtime=max(1,int(log10(total)+1));
           report("",logtime+5,slen, os);
@@ -229,6 +228,9 @@ class TimerHierarchy
     /// Writes a fancy timing report to \a os.
     void report(ostream &os) const
       { ostringstream oss; root.report(oss); os<<oss.str(); }
+    /// Returns a string containing a fancy timing report.
+    std::string report() const
+      { ostringstream oss; root.report(oss); return oss.str(); }
   };
 
 }

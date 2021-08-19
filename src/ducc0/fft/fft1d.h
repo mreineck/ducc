@@ -2242,10 +2242,9 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/, size_t /*nthreads*/) const
       {
-      constexpr Tfs hsqt2=Tfs(0.707106781186547524400844362104849L),
-                    sqrt2=Tfs(1.414213562373095048801688724209698L);
       if constexpr(fwd)
         {
+        constexpr Tfs hsqt2=Tfs(0.707106781186547524400844362104849L);
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
           { return cc[a+ido*(b+l1*c)]; };
         auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&
@@ -2287,6 +2286,7 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
         }
       else
         {
+        constexpr Tfs sqrt2=Tfs(1.414213562373095048801688724209698L);
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
           { return cc[a+ido*(b+ip*c)]; };
         auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&

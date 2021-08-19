@@ -715,11 +715,10 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       array<size_t, nd2> nshp;
       array<ptrdiff_t, nd2> nstr;
-      ptrdiff_t nofs;
       size_t n0=0;
       for (auto x:extent) if (x==0) ++n0;
       MR_assert(n0+nd2==ndim, "bad extent");
-      nofs=0;
+      ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
         MR_assert(i0[i]<shp[i], "bad subset");

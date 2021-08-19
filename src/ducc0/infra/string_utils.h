@@ -25,6 +25,8 @@
 #ifndef DUCC0_STRING_UTILS_H
 #define DUCC0_STRING_UTILS_H
 
+// FIXME: most of this will be superseded by C++20 std::format
+
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -83,14 +85,14 @@ std::vector<std::string> parse_words_from_file (const std::string &filename);
 }
 
 using detail_string_utils::trim;
-using detail_string_utils::intToString;
+//using detail_string_utils::intToString;
 using detail_string_utils::dataToString;
 using detail_string_utils::stringToData;
 using detail_string_utils::equal_nocase;
-using detail_string_utils::tolower;
-using detail_string_utils::split;
-using detail_string_utils::tokenize;
-using detail_string_utils::parse_words_from_file;
+//using detail_string_utils::tolower;
+//using detail_string_utils::split;
+//using detail_string_utils::tokenize;
+//using detail_string_utils::parse_words_from_file;
 
 }
 
