@@ -57,6 +57,11 @@ namespace detail_fft {
 
 using namespace std;
 
+template<typename T> constexpr inline size_t fft1d_simdlen
+  = min<size_t>(4, native_simd<T>::size());
+template<typename T> using fft1d_simd = typename simd_select<T,fft1d_simdlen<T>>::type;
+template<typename T> constexpr inline bool fft1d_simd_exists = (fft1d_simdlen<T> > 1);
+
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::any;
 
@@ -1369,9 +1374,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && vectorizable<Tfs>) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && fft1d_simd_exists<Tfs>) // we can vectorize!
           {
-          using Tfv = native_simd<Tfs>;
+          using Tfv = fft1d_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
@@ -1860,8 +1865,6 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
 template<typename Tfs> class pocketfft_c
   {
   private:
-    using Tcs = Cmplx<Tfs>;
-    using Tcv = Cmplx<native_simd<Tfs>>;
     size_t N;
     size_t critbuf;
     Tcpass<Tfs> plan;
