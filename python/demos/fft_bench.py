@@ -140,16 +140,17 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     if filename != "":
         plt.savefig(filename)
     plt.show()
+    plt.close()
 
 
 funcs = (measure_duccfft, measure_fftw)
-ttl = "duccfft/FFTW()"
-ntry = 100
+ttl = "duccfft/FFTW"
+ntry = 10
 nthr = 1
 nice_sizes = True
-bench_nd(1, 8192, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
-bench_nd(2, 2048, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
-bench_nd(3, 256, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
-bench_nd(1, 8192, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
-bench_nd(2, 2048, nthr, ntry, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
-bench_nd(3, 256, nthr, ntry, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
+bench_nd(1, 524288, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+bench_nd(2, 8192, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
+bench_nd(3, 512, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
+bench_nd(1, 524288, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
+bench_nd(2, 8192, nthr, ntry, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
+bench_nd(3, 512, nthr, ntry, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
