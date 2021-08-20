@@ -30,13 +30,13 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     f2 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
     fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr)
     f1[()] = a
-    tmin = 1e38
+    times = []
     for i in range(nrepeat):
         t0 = time()
         fftw()
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, f2
+        times.append(t1-t0)
+    return times, f2
 
 
 def measure_fftw_est(a, nrepeat, nthr):
@@ -46,73 +46,84 @@ def measure_fftw_est(a, nrepeat, nthr):
 def measure_fftw_np_interface(a, nrepeat, nthr):
     import pyfftw
     pyfftw.interfaces.cache.enable()
-    tmin = 1e38
+    times = []
+    b = None
     for i in range(nrepeat):
+        del b
         t0 = time()
         b = pyfftw.interfaces.numpy_fft.fftn(a)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        del b
+        times.append(t1-t0)
+    return times, b
 
 
 def measure_duccfft(a, nrepeat, nthr):
-    tmin = 1e38
+    times = []
     b = a.copy()
     for i in range(nrepeat):
         t0 = time()
         b = ducc0.fft.c2c(a, out=b, forward=True, nthreads=nthr)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        times.append(t1-t0)
+    return times, b
 
 
 def measure_scipy_fftpack(a, nrepeat, nthr):
     import scipy.fftpack
-    tmin = 1e38
+    times = []
     if nthr != 1:
         raise NotImplementedError("scipy.fftpack does not support multiple threads")
+    b = None
     for i in range(nrepeat):
+        del b
         t0 = time()
         b = scipy.fftpack.fftn(a)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        times.append (t1-t0)
+    return times, b
 
 
 def measure_scipy_fft(a, nrepeat, nthr):
     import scipy.fft
-    tmin = 1e38
+    times = []
+    b = None
     for i in range(nrepeat):
+        del b
         t0 = time()
         b = scipy.fft.fftn(a, workers=nthr)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        times.append(t1-t0)
+    return times, b
 
 
 def measure_numpy_fft(a, nrepeat, nthr):
-    tmin = 1e38
     if nthr != 1:
         raise NotImplementedError("numpy.fft does not support multiple threads")
+    times = []
+    b = None
     for i in range(nrepeat):
+        del b
         t0 = time()
         b = np.fft.fftn(a)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        times.append(t1-t0)
+    return times, b
 
 
 def measure_mkl_fft(a, nrepeat, nthr):
     import os
     os.environ['OMP_NUM_THREADS'] = str(nthr)
     import mkl_fft
-    tmin = 1e38
+    times = []
+    b = None
     for i in range(nrepeat):
+        del b
         t0 = time()
         b = mkl_fft.fftn(a)
         t1 = time()
-        tmin = min(tmin, t1-t0)
-    return tmin, b
+        times.append(t1-t0)
+    return times, b
 
 
 def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
@@ -128,7 +139,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
         output = []
         for func, res in zip(funcs, results):
             tmp = func(a, nrepeat, nthr)
-            res.append(tmp[0])
+            res.append(np.average(tmp[0]))
             output.append(tmp[1])
         print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n], results[1][n], results[0][n]/results[1][n], ducc0.misc.l2error(output[0], output[1])))
     results = np.array(results)
@@ -149,8 +160,8 @@ ntry = 10
 nthr = 1
 nice_sizes = True
 bench_nd(1, 524288, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
-bench_nd(2, 8192, nthr, ntry, "c16", funcs, 2, ttl, "2d.png", nice_sizes)
-bench_nd(3, 512, nthr, ntry, "c16", funcs, 2, ttl, "3d.png", nice_sizes)
+bench_nd(2, 8192, nthr, ntry, "c16", funcs, 10, ttl, "2d.png", nice_sizes)
+bench_nd(3, 512, nthr, ntry, "c16", funcs, 10, ttl, "3d.png", nice_sizes)
 bench_nd(1, 524288, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
-bench_nd(2, 8192, nthr, ntry, "c8", funcs, 2, ttl, "2d_single.png", nice_sizes)
-bench_nd(3, 512, nthr, ntry, "c8", funcs, 2, ttl, "3d_single.png", nice_sizes)
+bench_nd(2, 8192, nthr, ntry, "c8", funcs, 10, ttl, "2d_single.png", nice_sizes)
+bench_nd(3, 512, nthr, ntry, "c8", funcs, 10, ttl, "3d_single.png", nice_sizes)
