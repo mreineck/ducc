@@ -74,6 +74,15 @@ namespace ducc0 {
 
 namespace detail_fft {
 
+template<typename T> constexpr inline size_t fft_simdlen
+  = min<size_t>(8, native_simd<T>::size());
+template<> constexpr inline size_t fft_simdlen<double>
+  = min<size_t>(2, native_simd<double>::size());
+template<> constexpr inline size_t fft_simdlen<float>
+  = min<size_t>(4, native_simd<float>::size());
+template<typename T> using fft_simd = typename simd_select<T,fft_simdlen<T>>::type;
+template<typename T> constexpr inline bool fft_simd_exists = (fft_simdlen<T> > 1);
+
 using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
 
@@ -623,7 +632,7 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize)
   {
   auto othersize = info.size()/axsize;
-  constexpr auto vlen = native_simd<T0>::size();
+  constexpr auto vlen = fft_simdlen<T0>;
   // FIXME: when switching to C++20, use bit_floor(othersize)
   return aligned_array<T>(axsize*std::min(vlen, othersize));
   }
@@ -634,7 +643,7 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   if (inplace)
     return aligned_array<T>(bufsize);
   auto othersize = info.size()/axsize;
-  constexpr auto vlen = native_simd<T0>::size();
+  constexpr auto vlen = fft_simdlen<T0>;
   // FIXME: when switching to C++20, use bit_floor(othersize)
   return aligned_array<T>((axsize+bufsize)*std::min(vlen, othersize));
   }
@@ -829,9 +838,9 @@ DUCC0_NOINLINE void general_nd(const fmav<T> &in, fmav<T> &out,
       plan = std::make_unique<Tplan>(len, in.ndim()==1);
 
     execParallel(
-      util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
+      util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
       [&](Scheduler &sched) {
-        constexpr auto vlen = native_simd<T0>::size();
+        constexpr auto vlen = fft_simdlen<T0>;
         auto storage = alloc_tmp<T,T0>(in, len, plan->bufsize(), inplace);
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
@@ -974,9 +983,9 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
   auto plan = std::make_unique<pocketfft_r<T>>(in.shape(axis));
   size_t len=in.shape(axis);
   execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
+    util::thread_count(nthreads, in, axis, fft_simdlen<T>),
     [&](Scheduler &sched) {
-    constexpr auto vlen = native_simd<T>::size();
+    constexpr auto vlen = fft_simdlen<T>;
     auto storage = alloc_tmp<T,T>(in, len, plan->bufsize());
     multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
@@ -984,7 +993,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
       while (it.remaining()>=vlen)
         {
         it.advance(vlen);
-        auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
+        auto tdatav = reinterpret_cast<fft_simd<T> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true, nth1d);
         auto vout = out.vdata();
@@ -1080,9 +1089,9 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
   auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
   size_t len=out.shape(axis);
   execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
+    util::thread_count(nthreads, in, axis, fft_simdlen<T>),
     [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T>::size();
+      constexpr auto vlen = fft_simdlen<T>;
       auto storage = alloc_tmp<T,T>(out, len, plan->bufsize());
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
@@ -1090,7 +1099,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
-          auto tdatav = reinterpret_cast<native_simd<T> *>(storage.data());
+          auto tdatav = reinterpret_cast<fft_simd<T> *>(storage.data());
           for (size_t j=0; j<vlen; ++j)
             tdatav[0][j]=in.craw(it.iofs(j,0)).r;
           {
@@ -1446,7 +1455,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp_conv_axis
   (const fmav_info &info, size_t axis, size_t len, size_t bufsize)
   {
   auto othersize = info.size()/info.shape(axis);
-  constexpr auto vlen = native_simd<T0>::size();
+  constexpr auto vlen = fft_simdlen<T0>;
   return aligned_array<T>((len+bufsize)*std::min(vlen, othersize));
   }
 
@@ -1470,9 +1479,9 @@ DUCC0_NOINLINE void general_convolve_axis(const fmav<T> &in, fmav<T> &out,
   plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
 
   execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
+    util::thread_count(nthreads, in, axis, fft_simdlen<T0>),
     [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T0>::size();
+      constexpr auto vlen = fft_simdlen<T0>;
       auto storage = alloc_tmp_conv_axis<T,T0>(in, axis, l_max, bufsz);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
