@@ -241,6 +241,31 @@ py::array Py_transpose(const py::array &in, py::array &out)
   MR_fail("unsupported datatype");
   }
 
+template<typename T> py::array Py2_make_noncritical(const py::array &in)
+  {
+  auto in2 = to_fmav<T>(in, false);
+  auto out = make_noncritical_Pyarr<T>(in2.shape());
+  auto out2 = to_fmav<T>(out, true);
+  out2.apply(in2, [](T &v1, const T &v2) { v1=v2; });
+  return out;
+  }
+
+py::array Py_make_noncritical(const py::array &in)
+  {
+  if (isPyarr<float>(in))
+    return Py2_make_noncritical<float>(in);
+  if (isPyarr<double>(in))
+    return Py2_make_noncritical<double>(in);
+  if (isPyarr<long double>(in))
+    return Py2_make_noncritical<long double>(in);
+  if (isPyarr<complex<float>>(in))
+    return Py2_make_noncritical<complex<float>>(in);
+  if (isPyarr<complex<double>>(in))
+    return Py2_make_noncritical<complex<double>>(in);
+  if (isPyarr<complex<long double>>(in))
+    return Py2_make_noncritical<complex<long double>>(in);
+  MR_fail("unsupported datatype");
+  }
 
 /*! A numeric filter which produces noise with the power spectrum
 
@@ -443,6 +468,8 @@ void add_misc(py::module_ &msup)
   m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
 
   m.def("transpose",&Py_transpose, "in"_a, "out"_a);
+
+  m.def("make_noncritical",&Py_make_noncritical, "in"_a);
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS, py::module_local())
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,

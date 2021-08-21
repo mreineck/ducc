@@ -28,6 +28,7 @@
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/misc_utils.h"
 
 namespace ducc0 {
 
@@ -102,15 +103,7 @@ template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
-  shape_t shape2(shape);
-  size_t stride = sizeof(T);
-  for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
-    {
-    size_t tstride = stride*shape[xi];
-    if ((tstride&4095)==0)
-      shape2[xi] += 3;
-    stride *= shape2[xi];
-    }
+  auto shape2 = noncritical_shape(shape, sizeof(T));
   py::array_t<T> tarr(shape2);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)

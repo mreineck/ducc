@@ -45,9 +45,27 @@ template<typename T> auto calcShare(size_t nshares, size_t myshare,
 template<typename T> auto calcShare(size_t nshares, size_t myshare, const T &end)
   { return calcShare(nshares, myshare, T(0), end); }
 
+template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
+  {
+  constexpr size_t critstride = 4096; // must be a power of 2
+  auto ndim = in.size();
+  if (ndim==1) return in;
+  shp res(in);
+  size_t stride = elemsz;
+  for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
+    {
+    size_t tstride = stride*in[xi];
+    if ((tstride&(critstride-1))==0)
+       res[xi] += 3;
+    stride *= res[xi];
+    }
+  return res;
+  }
+
 }
 
 using detail_misc_utils::calcShare;
+using detail_misc_utils::noncritical_shape;
 
 }
 

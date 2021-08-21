@@ -35,6 +35,7 @@
 #include <tuple>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
+#include "ducc0/infra/misc_utils.h"
 
 namespace ducc0 {
 
@@ -903,16 +904,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  The array data is default-initialized. */
     static mav build_noncritical(const shape_t &shape)
       {
-      if (ndim==1) return mav(shape);
-      shape_t shape2(shape);
-      size_t stride = sizeof(T);
-      for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
-        {
-        size_t tstride = stride*shape[xi];
-        if ((tstride&4095)==0)
-          shape2[xi] += 3;
-        stride *= shape2[xi];
-        }
+      auto shape2 = noncritical_shape(shape, sizeof(T));
       mav tmp(shape2);
       return tmp.subarray<ndim>(shape_t(), shape);
       }
@@ -924,15 +916,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     static mav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
       if (ndim==1) return mav(shape, UNINITIALIZED);
-      shape_t shape2(shape);
-      size_t stride = sizeof(T);
-      for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
-        {
-        size_t tstride = stride*shape[xi];
-        if ((tstride&4095)==0)
-          shape2[xi] += 3;
-        stride *= shape2[xi];
-        }
+      auto shape2 = noncritical_shape(shape, sizeof(T));
       mav tmp(shape2, UNINITIALIZED);
       return tmp.subarray<ndim>(shape_t(), shape);
       }
