@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 rng = np.random.default_rng(42)
 
 
-
 def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
@@ -67,6 +66,20 @@ def measure_duccfft(a, nrepeat, nthr):
         t1 = time()
         times.append(t1-t0)
     return times, b
+
+
+# ducc0.fft, avoiding critical array strides and using in-place transforms.
+# This is probably the most performant mode for ducc0 with multi-D transforms.
+def measure_duccfft_noncrit_inplace(a, nrepeat, nthr):
+    times = []
+    work = ducc0.misc.make_noncritical(a.copy())
+    for i in range(nrepeat):
+        work[()] = a
+        t0 = time()
+        work = ducc0.fft.c2c(work, out=work, forward=True, nthreads=nthr)
+        t1 = time()
+        times.append(t1-t0)
+    return times, work
 
 
 def measure_scipy_fftpack(a, nrepeat, nthr):
@@ -154,14 +167,16 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.close()
 
 
-funcs = (measure_duccfft, measure_fftw)
+funcs = (measure_duccfft_noncrit_inplace, measure_fftw)
 ttl = "duccfft/FFTW"
 ntry = 10
 nthr = 1
 nice_sizes = True
-bench_nd(1, 524288, nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
-bench_nd(2, 8192, nthr, ntry, "c16", funcs, 10, ttl, "2d.png", nice_sizes)
-bench_nd(3, 512, nthr, ntry, "c16", funcs, 10, ttl, "3d.png", nice_sizes)
-bench_nd(1, 524288, nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
-bench_nd(2, 8192, nthr, ntry, "c8", funcs, 10, ttl, "2d_single.png", nice_sizes)
-bench_nd(3, 512, nthr, ntry, "c8", funcs, 10, ttl, "3d_single.png", nice_sizes)
+#limits = [8192, 2048, 256]
+limits = [524288, 8192, 512]
+bench_nd(1, limits[0], nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+bench_nd(2, limits[1], nthr, ntry, "c16", funcs, 10, ttl, "2d.png", nice_sizes)
+bench_nd(3, limits[2], nthr, ntry, "c16", funcs, 10, ttl, "3d.png", nice_sizes)
+bench_nd(1, limits[0], nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
+bench_nd(2, limits[1], nthr, ntry, "c8", funcs, 10, ttl, "2d_single.png", nice_sizes)
+bench_nd(3, limits[2], nthr, ntry, "c8", funcs, 10, ttl, "3d_single.png", nice_sizes)
