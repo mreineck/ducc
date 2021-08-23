@@ -14,7 +14,6 @@
 # Copyright(C) 2020 Max-Planck-Society
 
 
-import ducc0.sht as sht
 import ducc0
 import numpy as np
 import pytest
@@ -56,7 +55,7 @@ def myalmdot(a1, a2, lmax):
                 (511, 0, 512, 1)])
 def test_GL(params):
     lmax, mmax, nlat, nlon = params
-    job = sht.sharpjob_d()
+    job = ducc0.sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -76,7 +75,7 @@ def test_GL(params):
                 (511, 0, 1024, 1)])
 def test_fejer1(params):
     lmax, mmax, nlat, nlon = params
-    job = sht.sharpjob_d()
+    job = ducc0.sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -96,7 +95,7 @@ def test_fejer1(params):
                 (511, 0, 1025, 1)])
 def test_cc(params):
     lmax, mmax, nlat, nlon = params
-    job = sht.sharpjob_d()
+    job = ducc0.sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -116,7 +115,7 @@ def test_cc(params):
                 (511, 0, 1025, 1)])
 def test_fejer2(params):
     lmax, mmax, nlat, nlon = params
-    job = sht.sharpjob_d()
+    job = ducc0.sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -136,7 +135,7 @@ def test_fejer2(params):
                 (511, 0, 1024, 1)])
 def test_dh(params):
     lmax, mmax, nlat, nlon = params
-    job = sht.sharpjob_d()
+    job = ducc0.sht.sharpjob_d()
     nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
     nalm_r = nalm*2-lmax-1
     rng = np.random.default_rng(np.random.SeedSequence(42))
@@ -238,4 +237,30 @@ def test_2d_adjoint(lmax, geometry, spin, nthreads):
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    assert_(np.abs((v1-v2)/v1)<1e-10)
+
+
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('lmax', (2, 5, 11, 32, 600))
+@pmp('nside', (2, 5, 27, 128))
+def test_healpix_adjoint(lmax, nside, spin, nthreads):
+    rng = np.random.default_rng(48)
+
+    mmax = lmax
+    ncomp = 1 if spin == 0 else 2
+
+    alm0 = random_alm(lmax, mmax, spin, ncomp, rng)
+    map0 = rng.uniform(0., 1., (alm0.shape[0], 12*nside**2))
+
+    base = ducc0.healpix.Healpix_Base(nside, "RING")
+    geom = base.sht_info()
+
+    # test adjointness between synthesis and adjoint_synthesis
+    map1 = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, **geom)
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    del map1
+    alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, **geom)
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    print(nside, lmax, v1, v2, np.abs((v1-v2)/v1))
     assert_(np.abs((v1-v2)/v1)<1e-10)

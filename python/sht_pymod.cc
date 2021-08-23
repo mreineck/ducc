@@ -128,6 +128,19 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
       }
     }
   }
+mav<size_t,1> get_mstart(size_t lmax, const py::object &mstart_)
+  {
+  if (mstart_.is_none())
+    {
+    mav<size_t,1> mstart({lmax+1});
+    for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
+      mstart.v(m) = idx;
+    return mstart;
+    }
+  auto mstart = to_mav<size_t,1>(mstart_);
+  MR_assert(mstart.shape(0)==lmax+1, "bad mstart size");
+  return mstart;
+  }
 
 py::array Py_get_gridweights(const string &type, size_t ntheta)
   {
@@ -286,14 +299,14 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
 // - accept scalar nphi, phi0?
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
-  const py::array &mstart_, ptrdiff_t lstride, 
+  const py::object &mstart_, ptrdiff_t lstride, 
   const py::array &theta_, 
   const py::array &nphi_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
   {
   auto alm = to_mav<complex<T>,2>(alm_, false);
-  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto mstart = get_mstart(lmax, mstart_);
   auto theta = to_mav<double,1>(theta_, false);
   auto phi0 = to_mav<double,1>(phi0_, false);
   auto nphi = to_mav<size_t,1>(nphi_, false);
@@ -308,7 +321,7 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   return map_;
   }
 py::array Py_synthesis(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::array &mstart, 
+  size_t lmax, const py::object &mstart, 
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads, py::object &map)
@@ -323,14 +336,14 @@ py::array Py_synthesis(const py::array &alm, const py::array &theta,
   }
 template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   py::object &map__, size_t lmax,
-  const py::array &mstart_, ptrdiff_t lstride, 
+  const py::object &mstart_, ptrdiff_t lstride, 
   const py::array &theta_, 
   const py::array &nphi_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
   {
   auto alm = to_mav<complex<T>,2>(alm_, false);
-  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto mstart = get_mstart(lmax, mstart_);
   auto theta = to_mav<double,1>(theta_, false);
   auto phi0 = to_mav<double,1>(phi0_, false);
   auto nphi = to_mav<size_t,1>(nphi_, false);
@@ -345,7 +358,7 @@ template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   return map_;
   }
 py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::array &mstart, 
+  size_t lmax, const py::object &mstart, 
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads, py::object &map)
@@ -467,12 +480,12 @@ py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string
   }
 
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
-  size_t lmax, const py::array &mstart_, ptrdiff_t lstride, 
+  size_t lmax, const py::object &mstart_, ptrdiff_t lstride, 
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
   const py::array &nphi_, const py::array &ringstart_, size_t spin, ptrdiff_t pixstride,
   size_t nthreads)
   {
-  auto mstart = to_mav<size_t,1>(mstart_, false);
+  auto mstart = get_mstart(lmax, mstart_);
   auto map = to_mav<T,2>(map_, false);
   auto theta = to_mav<double,1>(theta_, false);
   auto phi0 = to_mav<double,1>(phi0_, false);
@@ -492,7 +505,7 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   }
 py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
  size_t lmax,
-  const py::array &mstart,
+  const py::object &mstart,
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads,
@@ -1177,7 +1190,8 @@ phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with (l=0, m) would be stored
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
@@ -1226,7 +1240,8 @@ phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with (l=0, m) would be stored
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
@@ -1277,7 +1292,8 @@ phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
     the (hypothetical) index in the second dimension of `alm` on which the
-    entry with (l=0, m) would be stored
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
@@ -1318,13 +1334,13 @@ void add_sht(py::module_ &msup)
   m2.doc() = sht_experimental_DS;
 
   m2.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a, "theta"_a,
-    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS, py::kw_only(), "map"_a, "theta"_a,
-    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
   m2.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS, py::kw_only(), "alm"_a, "theta"_a,
-    "lmax"_a, "mstart"_a, "nphi"_a, "phi0"_a, "ringstart"_a,
+    "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
 
   m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);

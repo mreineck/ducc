@@ -203,6 +203,39 @@ class Pyhpbase
         }
       return move(res);
       }
+    py::dict sht_info() const
+      {
+      MR_assert(base.Scheme()==RING, "RING scheme required for SHTs");
+      auto nside = base.Nside();
+      auto nrings = size_t(4*nside-1);
+      auto theta_= make_Pyarr<double>(shape_t({nrings}));
+      auto theta = to_mav<double,1>(theta_, true);
+      auto phi0_ = make_Pyarr<double>(shape_t({nrings}));
+      auto phi0 = to_mav<double,1>(phi0_, true);
+      auto nphi_ = make_Pyarr<size_t>(shape_t({nrings}));
+      auto nphi = to_mav<size_t,1>(nphi_, true);
+      auto ringstart_ = make_Pyarr<size_t>(shape_t({nrings}));
+      auto ringstart = to_mav<size_t,1>(ringstart_, true);
+      for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+        {
+        int64_t startpix, ringpix;
+        double ringtheta;
+        bool shifted;
+        base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
+        theta.v(r) = ringtheta;
+        theta.v(rs) = pi-ringtheta;
+        nphi.v(r) = nphi.v(rs) = size_t(ringpix);
+        phi0.v(r) = phi0.v(rs) = shifted ? (pi/ringpix) : 0.;
+        ringstart.v(r) = size_t(startpix);
+        ringstart.v(rs) = size_t(base.Npix() - startpix - ringpix);
+        }
+      py::dict res;
+      res["theta"] = theta_;
+      res["phi0"] = phi0_;
+      res["nphi"] = nphi_;
+      res["ringstart"] = ringstart_;
+      return res;
+      }
   };
 
 py::array ang2vec (const py::array &ang)
@@ -342,6 +375,25 @@ with last dimension 2; the pixels lying inside the disc are
 [res[0,0] .. res[0,1]); [res[1,0] .. res[1,1]) etc.
 )""";
 
+constexpr const char *sht_info_DS = R"""(
+Returns a dictionary containing information necessary for spherical harmonic
+transforms on a HEALPix grid of the given nside parameter.
+
+The dictionary keys are chosen in such a way that the dictionary can be used
+directly as kwargs in calls to `ducc0.sht.synthesis` and similar.
+
+Returns
+-------
+theta: numpy.ndarray(numpy.float64, shape=(nrings,))
+    the colatitudes of all rings
+nphi: numpy.ndarray(numpy.uint64, shape=(nrings,))
+    the number of pixels for every ring
+phi0: numpy.ndarray(numpy.float64, shape=(nrings,))
+    the azimuth of the first pixel in every ring
+ringstart: numpy.ndarray(numpy.uint64, shape=(nrings,))
+    the index of the first pixel in every ring in a typical HEALPix map array.
+)""";
+
 constexpr const char *ang2vec_DS = R"""(
 Returns a normalized 3-vector for every (co-latitude, longitude)
 tuple in ang. ang must have a last dimension of size 2; the result array
@@ -391,6 +443,7 @@ void add_healpix(py::module_ &msup)
     .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a)
     .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a)
     .def("query_disc", &Pyhpbase::query_disc, query_disc_DS, "ptg"_a,"radius"_a)
+    .def("sht_info", &Pyhpbase::sht_info, sht_info_DS)
     .def("__repr__", &Pyhpbase::repr)
     ;
 
