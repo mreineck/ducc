@@ -494,7 +494,7 @@ void add_misc(py::module_ &msup)
 
   m.def("transpose",&Py_transpose, "in"_a, "out"_a);
 
-  m.def("make_noncritical",&Py_make_noncritical, Py_make_noncritical_DS "in"_a);
+  m.def("make_noncritical",&Py_make_noncritical,Py_make_noncritical_DS,"in"_a);
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS, py::module_local())
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
