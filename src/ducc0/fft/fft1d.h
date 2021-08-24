@@ -225,51 +225,62 @@ template <typename Tfs> class cfftpass
         return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                    : exec_<false>(in1, copy1, buf1, nthreads); \
         } \
-      if (hcin==typeid(Cmplx<native_simd<Tfs>> *).hash_code()) \
-        {  \
-        using Tcv = Cmplx<native_simd<Tfs>>; \
-        auto in1 = any_cast<Tcv *>(in); \
-        auto copy1 = any_cast<Tcv *>(copy); \
-        auto buf1 = any_cast<Tcv *>(buf); \
-        return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                   : exec_<false>(in1, copy1, buf1, nthreads); \
-        } \
-      if constexpr (simd_exists<Tfs,8>) \
-        { \
-        using Tcv = Cmplx<typename simd_select<Tfs,8>::type>; \
-        if (hcin==typeid(Tcv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 1) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
           { \
-          auto in1 = any_cast<Tcv *>(in); \
-          auto copy1 = any_cast<Tcv *>(copy); \
-          auto buf1 = any_cast<Tcv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
+          using Tcv = Cmplx<Tfv>; \
+          if (hcin==typeid(Tcv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tcv *>(in); \
+            auto copy1 = any_cast<Tcv *>(copy); \
+            auto buf1 = any_cast<Tcv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
-      if constexpr (simd_exists<Tfs,4>) \
-        { \
-        using Tcv = Cmplx<typename simd_select<Tfs,4>::type>; \
-        if (hcin==typeid(Tcv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 2) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
           { \
-          auto in1 = any_cast<Tcv *>(in); \
-          auto copy1 = any_cast<Tcv *>(copy); \
-          auto buf1 = any_cast<Tcv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
+          using Tcv = Cmplx<Tfv>; \
+          if (hcin==typeid(Tcv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tcv *>(in); \
+            auto copy1 = any_cast<Tcv *>(copy); \
+            auto buf1 = any_cast<Tcv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
-      if constexpr (simd_exists<Tfs,2>) \
-        { \
-        using Tcv = Cmplx<typename simd_select<Tfs,2>::type>; \
-        if (hcin==typeid(Tcv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 4) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
           { \
-          auto in1 = any_cast<Tcv *>(in); \
-          auto copy1 = any_cast<Tcv *>(copy); \
-          auto buf1 = any_cast<Tcv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
+          using Tcv = Cmplx<Tfv>; \
+          if (hcin==typeid(Tcv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tcv *>(in); \
+            auto copy1 = any_cast<Tcv *>(copy); \
+            auto buf1 = any_cast<Tcv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
+      if constexpr (fft1d_simdlen<Tfs> > 8) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
+          { \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
+          using Tcv = Cmplx<Tfv>; \
+          if (hcin==typeid(Tcv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tcv *>(in); \
+            auto copy1 = any_cast<Tcv *>(copy); \
+            auto buf1 = any_cast<Tcv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
+          } \
       MR_fail("impossible vector length requested"); \
       }
 
@@ -1968,51 +1979,58 @@ template <typename Tfs> class rfftpass
         return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                    : exec_<false>(in1, copy1, buf1, nthreads); \
         } \
-      if (hcin==typeid(native_simd<Tfs> *).hash_code()) \
-        {  \
-        using Tfv = native_simd<Tfs>; \
-        auto in1 = any_cast<Tfv *>(in); \
-        auto copy1 = any_cast<Tfv *>(copy); \
-        auto buf1 = any_cast<Tfv *>(buf); \
-        return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                   : exec_<false>(in1, copy1, buf1, nthreads); \
-        } \
-      if constexpr (simd_exists<Tfs,8>) \
-        { \
-        using Tfv = typename simd_select<Tfs,8>::type; \
-        if (hcin==typeid(Tfv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 1) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
           { \
-          auto in1 = any_cast<Tfv *>(in); \
-          auto copy1 = any_cast<Tfv *>(copy); \
-          auto buf1 = any_cast<Tfv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
+          if (hcin==typeid(Tfv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tfv *>(in); \
+            auto copy1 = any_cast<Tfv *>(copy); \
+            auto buf1 = any_cast<Tfv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
-      if constexpr (simd_exists<Tfs,4>) \
-        { \
-        using Tfv = typename simd_select<Tfs,4>::type; \
-        if (hcin==typeid(Tfv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 2) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
           { \
-          auto in1 = any_cast<Tfv *>(in); \
-          auto copy1 = any_cast<Tfv *>(copy); \
-          auto buf1 = any_cast<Tfv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
+          if (hcin==typeid(Tfv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tfv *>(in); \
+            auto copy1 = any_cast<Tfv *>(copy); \
+            auto buf1 = any_cast<Tfv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
-      if constexpr (simd_exists<Tfs,2>) \
-        { \
-        using Tfv = typename simd_select<Tfs,2>::type; \
-        if (hcin==typeid(Tfv *).hash_code()) \
+      if constexpr (fft1d_simdlen<Tfs> > 4) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
           { \
-          auto in1 = any_cast<Tfv *>(in); \
-          auto copy1 = any_cast<Tfv *>(copy); \
-          auto buf1 = any_cast<Tfv *>(buf); \
-          return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                     : exec_<false>(in1, copy1, buf1, nthreads); \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
+          if (hcin==typeid(Tfv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tfv *>(in); \
+            auto copy1 = any_cast<Tfv *>(copy); \
+            auto buf1 = any_cast<Tfv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
           } \
-        } \
+      if constexpr (fft1d_simdlen<Tfs> > 8) \
+        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
+          { \
+          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
+          if (hcin==typeid(Tfv *).hash_code()) \
+            {  \
+            auto in1 = any_cast<Tfv *>(in); \
+            auto copy1 = any_cast<Tfv *>(copy); \
+            auto buf1 = any_cast<Tfv *>(buf); \
+            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
+                       : exec_<false>(in1, copy1, buf1, nthreads); \
+            } \
+          } \
       MR_fail("impossible vector length requested"); \
       }
 
