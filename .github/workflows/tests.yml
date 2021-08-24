@@ -26,5 +26,5 @@ jobs:
       - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp-2021.2.0
       - run: |
           source /opt/intel/oneapi/setvars.sh intel64
-          DUCC0_LFLAGS="-lsvml" CC=icpx python3 -m pip install --user .
+          CC=icx CXX=icpx python3 -m pip install --user .
           python -m pytest python/test -x
