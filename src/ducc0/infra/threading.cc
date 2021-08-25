@@ -315,10 +315,13 @@ class Distribution
       {
       mode = STATIC;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      if (nthreads_ == 1)
+        return execSingle(nwork, move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? (nwork_+nthreads_-1)/nthreads_
                                  : chunksize;
-      if (chunksize_>=nwork_) return execSingle(nwork_, move(f));
+      if (chunksize_>=nwork_)
+        return execSingle(nwork_, move(f));
       nextstart.resize(nthreads_);
       for (size_t i=0; i<nextstart.size(); ++i)
         nextstart[i] = i*chunksize_;
@@ -329,8 +332,12 @@ class Distribution
       {
       mode = DYNAMIC;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      if (nthreads_ == 1)
+        return execSingle(nwork, move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? 1 : chunksize;
+      if (chunksize_ >= nwork)
+        return execSingle(nwork, move(f));
       if (chunksize_*nthreads_>=nwork_)
         return execStatic(nwork, nthreads, 0, move(f));
       cur_dynamic_ = 0;
@@ -341,6 +348,8 @@ class Distribution
       {
       mode = GUIDED;
       nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      if (nthreads_ == 1)
+        return execSingle(nwork, move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize_min<1) ? 1 : chunksize_min;
       if (chunksize_*nthreads_>=nwork_)
