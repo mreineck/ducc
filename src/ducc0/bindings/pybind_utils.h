@@ -60,13 +60,14 @@ shape_t copy_shape(const py::array &arr)
   return res;
   }
 
-template<typename T> stride_t copy_strides(const py::array &arr)
+template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
   {
   stride_t res(size_t(arr.ndim()));
   constexpr auto st = ptrdiff_t(sizeof(T));
   for (size_t i=0; i<res.size(); ++i)
     {
     auto tmp = arr.strides(int(i));
+    MR_assert((!rw) || (tmp!=0), "detected zero stride in writable array");
     MR_assert((tmp/st)*st==tmp, "bad stride");
     res[i] = tmp/st;
     }
@@ -82,7 +83,7 @@ template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const py::array &ar
   return res;
   }
 
-template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr)
+template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
   {
   MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
   std::array<ptrdiff_t, ndim> res;
@@ -90,6 +91,7 @@ template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(co
   for (size_t i=0; i<ndim; ++i)
     {
     auto tmp = arr.strides(int(i));
+    MR_assert((!rw) || (tmp!=0), "detected zero stride in writable array");
     MR_assert((tmp/st)*st==tmp, "bad stride");
     res[i] = tmp/st;
     }
@@ -161,9 +163,9 @@ template<typename T> fmav<T> to_fmav(const py::object &obj, bool rw=false)
   auto arr = toPyarr<T>(obj);
   if (rw)
     return fmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
-      copy_shape(arr), copy_strides<T>(arr), true);
+      copy_shape(arr), copy_strides<T>(arr, true), true);
   return fmav<T>(reinterpret_cast<const T *>(arr.data()),
-    copy_shape(arr), copy_strides<T>(arr));
+    copy_shape(arr), copy_strides<T>(arr, false));
   }
 
 template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool rw=false)
@@ -171,9 +173,9 @@ template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool 
   auto arr = toPyarr<T>(obj);
   if (rw)
     return mav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
-      copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr), true);
+      copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true), true);
   return mav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
-    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr));
+    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
   }
 
 }
