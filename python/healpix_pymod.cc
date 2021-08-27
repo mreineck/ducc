@@ -52,7 +52,7 @@ using shape_t = fmav_info::shape_t;
 template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
-  MR_assert(s.size()+nd1,"too few input array dimensions");
+  MR_assert(s.size()>=nd1,"too few input array dimensions");
   if constexpr (nd1>0)
     for (size_t i=0; i<nd1; ++i)
       MR_assert(si[i]==s[s.size()-nd1+i], "input dimension mismatch");

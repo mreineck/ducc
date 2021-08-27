@@ -578,7 +578,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           func(*v);
         return;
         }
-      applyHelper<Func>(0, 0,func);
+      applyHelper<Func>(0, 0, func);
       }
     /** Calls \a func for every entry in the array, passing a constant
      *  reference to it. */
@@ -991,7 +991,10 @@ template<typename T, size_t ndim> class MavIter
       }
     size_t shape(size_t i) const { return shp[i]; }
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
-      { return idx_ + getIdx(0, ns...); }
+      {
+      static_assert(ndim==sizeof...(ns), "incorrect number of indices");
+      return idx_ + getIdx(0, ns...);
+      }
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return mav.craw(idx(ns...)); }
     template<typename... Ns> const T &c(Ns... ns) const
