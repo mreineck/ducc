@@ -99,8 +99,8 @@ py::object Py_vdot(const py::object &a, const py::object &b)
   {
   if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
     {
-    auto xa = py::cast<complex<long double>>(a),
-         xb = py::cast<complex<long double>>(b);
+    auto xa = a.cast<complex<long double>>(),
+         xb = b.cast<complex<long double>>();
     auto res = conj(xa)*xb;
     return (res.imag()==0) ? py::cast(res.real()) : py::cast(res);
     }
@@ -174,8 +174,8 @@ double Py_l2error(const py::object &a, const py::object &b)
   {
   if ((!isPyarr(a)) || (py::array(a).ndim()==0)) // scalars
     {
-    auto xa = py::cast<complex<long double>>(a),
-         xb = py::cast<complex<long double>>(b);
+    auto xa = a.cast<complex<long double>>(),
+         xb = b.cast<complex<long double>>();
     auto res = abs(xa-xb)/max(abs(xa), abs(xb));
     return double(res);
     }

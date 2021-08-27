@@ -379,16 +379,16 @@ template<typename T> py::array_t<T> check_build_map(const py::object &map, size_
     {
     MR_assert((!ntheta.is_none()) && (!nphi.is_none()),
       "you need to specify either 'map' or 'ntheta' and 'nphi'");
-    return make_Pyarr<T>({ncomp, py::cast<size_t>(ntheta), py::cast<size_t>(nphi)});
+    return make_Pyarr<T>({ncomp, ntheta.cast<size_t>(), nphi.cast<size_t>()});
     }
   else
     {
     py::array_t<T> tmap = map;
     MR_assert((size_t(tmap.ndim())==3) && (size_t(tmap.shape(0))==ncomp), "map size mismatch");
     if (!ntheta.is_none())
-      MR_assert(size_t(tmap.shape(1))==py::cast<size_t>(ntheta), "ntheta mismatch");
+      MR_assert(size_t(tmap.shape(1))==ntheta.cast<size_t>(), "ntheta mismatch");
     if (!nphi.is_none())
-      MR_assert(size_t(tmap.shape(2))==py::cast<size_t>(nphi), "nphi mismatch");
+      MR_assert(size_t(tmap.shape(2))==nphi.cast<size_t>(), "nphi mismatch");
     return tmap;
     }
   }
@@ -425,7 +425,7 @@ template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   }
 py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
   {
-  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
   else if (isPyarr<complex<double>>(alm))
@@ -448,7 +448,7 @@ template<typename T> py::array Py2_adjoint_synthesis_2d(
 py::array Py_adjoint_synthesis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry, const py::object &mmax_, size_t nthreads, py::object &alm)
   {
-  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
     return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm);
   else if (isPyarr<double>(map))
@@ -471,7 +471,7 @@ template<typename T> py::array Py2_synthesis_2d_deriv1(const py::array &alm_,
   }
 py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
   {
-  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_synthesis_2d_deriv1<float>(alm, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
   else if (isPyarr<complex<double>>(alm))
@@ -536,7 +536,7 @@ template<typename T> py::array Py2_analysis_2d(
 py::array Py_analysis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry, py::object &mmax_, size_t nthreads, py::object &alm)
   {
-  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
     return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm);
   else if (isPyarr<double>(map))
@@ -560,7 +560,7 @@ template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   }
 py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
   {
-  size_t mmax = mmax_.is_none() ? lmax : py::cast<size_t>(mmax_);
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
   else if (isPyarr<complex<double>>(alm))
