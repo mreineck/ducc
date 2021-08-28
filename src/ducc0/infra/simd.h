@@ -105,7 +105,9 @@ using detail_simd::vectorizable;
 #include <cmath>
 #include <algorithm>
 #ifndef DUCC0_NO_SIMD
+#if defined(__SSE2__)  // we are on an x86 platform and we have vector types
 #include <x86intrin.h>
+#endif
 #endif
 
 namespace ducc0 {
