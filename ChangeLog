@@ -1,3 +1,19 @@
+0.20.0:
+- general:
+  - minimum required Python version is now 3.7
+  - tests: retire Ubuntu 18, improve tests with icpx
+  - fix compilation failure on non-x86 platforms
+
+- fft:
+  - allow individual, compile-time, selection of SIMD types to be used
+
+- sht/healpix:
+  - prepare better support for Healpix pixelization
+
+- misc:
+  - convenience function for building numpy arrays without critical strides
+
+
 0.19.0:
 - general:
   - binary wheels can now be built and uploaded to PyPI; the installation
