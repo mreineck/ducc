@@ -583,7 +583,7 @@ template<> class helper_<float,4>
     static constexpr size_t len = 4;
   public:
     using Tv = float32x4_t;
-    using Tm = float32x4_t;
+    using Tm = uint32x4_t;
 
     static Tv loadu(const T *ptr) { return vld1q_f32(ptr); }
     static void storeu(T *ptr, Tv v) { vst1q_f32(ptr, v); }
