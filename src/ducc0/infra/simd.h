@@ -108,9 +108,9 @@ using detail_simd::vectorizable;
 #if defined(__SSE2__)  // we are on an x86 platform and we have vector types
 #include <x86intrin.h>
 #endif
-#if defined(__ARM_NEON)
-#include <arm_neon.h>
-#endif
+//#if defined(__ARM_NEON)
+//#include <arm_neon.h>
+//#endif
 #endif
 
 namespace ducc0 {
@@ -123,11 +123,11 @@ template<typename T> constexpr inline bool vectorizable = false;
 #if defined(__SSE2__)
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
-#elif defined(__ARM_NEON)
-template<> constexpr inline bool vectorizable<float> = true;
-#if defined (__aarch64__)
-template<> constexpr inline bool vectorizable<double> = true;
-#endif
+//#elif defined(__ARM_NEON)
+//template<> constexpr inline bool vectorizable<float> = true;
+//#if defined (__aarch64__)
+//template<> constexpr inline bool vectorizable<double> = true;
+//#endif
 #endif
 #endif
 
@@ -541,6 +541,7 @@ template<> class helper_<float,4>
   };
 #endif
 
+#if 0
 #if defined(__ARM_NEON)
 #if defined (__aarch64__)
 template<> constexpr inline bool simd_exists<double,2> = true;
@@ -614,6 +615,7 @@ template<> class helper_<float,4>
       }
   };
 #endif
+#endif
 
 #if defined(__AVX512F__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,64>>;
@@ -621,8 +623,8 @@ template<typename T> using native_simd = vtp<T,vectorlen<T,64>>;
 template<typename T> using native_simd = vtp<T,vectorlen<T,32>>;
 #elif defined(__SSE2__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
-#elif defined(__ARM_NEON)
-template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
+//#elif defined(__ARM_NEON)
+//template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
