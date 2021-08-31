@@ -608,7 +608,7 @@ template<> class helper_<float,4>
     static Tm mask_or (Tm v1, Tm v2) { return vorrq_u32(v1,v2); }
     static size_t maskbits(Tm v)
       {
-      static constexpr uint32x4_t shift = {0, 1, 2, 3};
+      static constexpr int32x4_t shift = {0, 1, 2, 3};
       auto tmp = vshrq_n_u32(v, 31);
       return vaddvq_u32(vshlq_u32(tmp, shift));
       }
