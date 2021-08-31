@@ -125,7 +125,9 @@ template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
 #elif defined(__ARM_NEON)
 template<> constexpr inline bool vectorizable<float> = true;
+#if defined (__aarch64__)
 template<> constexpr inline bool vectorizable<double> = true;
+#endif
 #endif
 #endif
 
@@ -540,6 +542,7 @@ template<> class helper_<float,4>
 #endif
 
 #if defined(__ARM_NEON)
+#if defined (__aarch64__)
 template<> constexpr inline bool simd_exists<double,2> = true;
 template<> class helper_<double,2>
   {
@@ -571,6 +574,7 @@ template<> class helper_<double,2>
       return vgetq_lane_u64(high_bits, 0) | (vgetq_lane_u64(high_bits, 1) << 1);
       }
   };
+#endif
 template<> constexpr inline bool simd_exists<float,4> = true;
 template<> class helper_<float,4>
   {
