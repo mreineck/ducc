@@ -108,6 +108,9 @@ using detail_simd::vectorizable;
 #if defined(__SSE2__)  // we are on an x86 platform and we have vector types
 #include <x86intrin.h>
 #endif
+//#if defined(__ARM_NEON)
+//#include <arm_neon.h>
+//#endif
 #endif
 
 namespace ducc0 {
@@ -120,6 +123,11 @@ template<typename T> constexpr inline bool vectorizable = false;
 #if defined(__SSE2__)
 template<> constexpr inline bool vectorizable<float> = true;
 template<> constexpr inline bool vectorizable<double> = true;
+//#elif defined(__ARM_NEON)
+//template<> constexpr inline bool vectorizable<float> = true;
+//#if defined (__aarch64__)
+//template<> constexpr inline bool vectorizable<double> = true;
+//#endif
 #endif
 #endif
 
@@ -533,12 +541,90 @@ template<> class helper_<float,4>
   };
 #endif
 
+#if 0
+#if defined(__ARM_NEON)
+#if defined (__aarch64__)
+template<> constexpr inline bool simd_exists<double,2> = true;
+template<> class helper_<double,2>
+  {
+  private:
+    using T = double;
+    static constexpr size_t len = 2;
+  public:
+    using Tv = float64x2_t;
+    using Tm = float64x2_t;
+
+    static Tv loadu(const T *ptr) { return vld1q_f64(ptr); }
+    static void storeu(T *ptr, Tv v) { vst1q_f64(ptr, v); }
+
+    static Tv from_scalar(T v) { return vdupq_n_f64(v); }
+    static Tv abs(Tv v) { return vabsq_f64(v); }
+    static Tv max(Tv v1, Tv v2) { return vmaxq_f64(v1, v2); }
+    static Tv blend(Tm m, Tv v1, Tv v2)
+      { return vbslq_f64(m, v2, v1); }
+    static Tv sqrt(Tv v) { return vsqrtq_f64(v); }
+    static Tm gt (Tv v1, Tv v2) { return vcgtq_f64(v1, v2); }
+    static Tm ge (Tv v1, Tv v2) { return vcgeq_f64(v1,v2); }
+    static Tm lt (Tv v1, Tv v2) { return vcltq_f64(v1,v2); }
+    static Tm ne (Tv v1, Tv v2) { return vmvnq_s32(vceqq_f64(v1,v2)); }
+    static Tm mask_and (Tm v1, Tm v2) { return vandq_s64(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return vorrq_s64(v1,v2); }
+    static size_t maskbits(Tm v)
+      {
+      auto high_bits = vshrq_n_u64(v, 63);
+      return vgetq_lane_u64(high_bits, 0) | (vgetq_lane_u64(high_bits, 1) << 1);
+      }
+  };
+#endif
+template<> constexpr inline bool simd_exists<float,4> = true;
+template<> class helper_<float,4>
+  {
+  private:
+    using T = float;
+    static constexpr size_t len = 4;
+  public:
+    using Tv = float32x4_t;
+    using Tm = uint32x4_t;
+
+    static Tv loadu(const T *ptr) { return vld1q_f32(ptr); }
+    static void storeu(T *ptr, Tv v) { vst1q_f32(ptr, v); }
+
+    static Tv from_scalar(T v) { return vdupq_n_f32(v); }
+    static Tv abs(Tv v) { return vabsq_f32(v); }
+    static Tv max(Tv v1, Tv v2) { return vmaxq_f32(v1, v2); }
+    static Tv blend(Tm m, Tv v1, Tv v2)
+      { return vbslq_f32(m, v2, v1); }
+    static Tv sqrt(Tv v)
+ {
+//return vsqrtq_f32(v); //apparntly only on aarch64
+ Tv res;
+ for (size_t i=0; i<len; ++i) res[i] = std::sqrt(v[i]);
+ return res;
+ }
+    static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1, v2); }
+    static Tm ge (Tv v1, Tv v2) { return vcgeq_f32(v1,v2); }
+    static Tm lt (Tv v1, Tv v2) { return vcltq_f32(v1,v2); }
+    static Tm ne (Tv v1, Tv v2) { return vmvnq_u32(vceqq_f32(v1,v2)); }
+    static Tm mask_and (Tm v1, Tm v2) { return vandq_u32(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return vorrq_u32(v1,v2); }
+    static size_t maskbits(Tm v)
+      {
+      static constexpr int32x4_t shift = {0, 1, 2, 3};
+      auto tmp = vshrq_n_u32(v, 31);
+      return vaddq_u32(vshlq_u32(tmp, shift));
+      }
+  };
+#endif
+#endif
+
 #if defined(__AVX512F__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,64>>;
 #elif defined(__AVX__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,32>>;
 #elif defined(__SSE2__)
 template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
+//#elif defined(__ARM_NEON)
+//template<typename T> using native_simd = vtp<T,vectorlen<T,16>>;
 #else
 template<typename T> using native_simd = vtp<T,1>;
 #endif
