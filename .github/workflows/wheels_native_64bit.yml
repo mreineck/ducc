@@ -13,7 +13,7 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* cp38-* cp310-* pp*
+          CIBW_SKIP: cp36-* pp*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: pytest -x {project}/python/test
