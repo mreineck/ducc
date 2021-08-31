@@ -13,12 +13,11 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* cp38-* cp310-*
+          CIBW_SKIP: cp36-* cp37-* cp38-* cp310-* pp*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: pytest -x {project}/python/test
-          # need to skip the Pypy test on MacOS because of a broken scipy (Polyfit ...)
-          CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp310-* pp*-macosx*
+          CIBW_TEST_SKIP: cp37-* cp38-* cp310-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_I686_IMAGE: manylinux2014
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux2014
