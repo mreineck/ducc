@@ -1,5 +1,5 @@
 name: build_test_standard_64bit-wheels
-on: [workflow_dispatch]
+on: [push]
 jobs:
   build-wheels:
     runs-on: ${{ matrix.os }}
