@@ -610,7 +610,7 @@ template<> class helper_<float,4>
       {
       static constexpr int32x4_t shift = {0, 1, 2, 3};
       auto tmp = vshrq_n_u32(v, 31);
-      return vaddvq_u32(vshlq_u32(tmp, shift));
+      return vaddq_u32(vshlq_u32(tmp, shift));
       }
   };
 #endif
