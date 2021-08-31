@@ -1424,8 +1424,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       {
       timers.push("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
-      MR_assert(bl.Nrows()<(size_t(1)<<32), "too many rows in the MS");
-      MR_assert(bl.Nchannels()<(size_t(1)<<16), "too many channels in the MS");
+      MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
       // adjust for increased error when gridding in 2 or 3 dimensions
       epsilon /= do_wgridding ? 3 : 2;
