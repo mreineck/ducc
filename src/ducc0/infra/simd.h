@@ -603,7 +603,7 @@ template<> class helper_<float,4>
     static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1, v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f32(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f32(v1,v2); }
-    static Tm ne (Tv v1, Tv v2) { return vmvnq_s32(vceqq_f32(v1,v2)); }
+    static Tm ne (Tv v1, Tv v2) { return vmvnq_u32(vceqq_f32(v1,v2)); }
     static Tm mask_and (Tm v1, Tm v2) { return vandq_s32(v1,v2); }
     static Tm mask_or (Tm v1, Tm v2) { return vorrq_s32(v1,v2); }
     static size_t maskbits(Tm v)
