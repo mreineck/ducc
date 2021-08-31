@@ -593,7 +593,13 @@ template<> class helper_<float,4>
     static Tv max(Tv v1, Tv v2) { return vmaxq_f32(v1, v2); }
     static Tv blend(Tm m, Tv v1, Tv v2)
       { return vbslq_f32(m, v2, v1); }
-    static Tv sqrt(Tv v) { return vsqrtq_f32(v); }
+    static Tv sqrt(Tv v)
+ {
+//return vsqrtq_f32(v); //apparntly only on aarch64
+ Tv res;
+ for (size_t i=0; i<len; ++i) res[i] = std::sqrt(v[i]);
+ return res;
+ }
     static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1, v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f32(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f32(v1,v2); }
