@@ -343,7 +343,7 @@ template<typename T> class ConvolverPlan
 
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
-        size_t b_theta=99999999999999, b_phi=9999999999999999;
+        size_t b_theta=~(size_t(0)), b_phi=~(size_t(0));
         WeightHelper<supp> hlp(*this, cube, itheta0, iphi0);
         while (auto rng=sched.getNext()) for(auto ind=rng.lo; ind<rng.hi; ++ind)
           {
