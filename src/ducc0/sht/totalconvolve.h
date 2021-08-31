@@ -161,7 +161,8 @@ template<typename T> class ConvolverPlan
              phi0 = (int(iphi0)-int(nbphi))*dphi;
       double theta_lo=theta0, theta_hi=theta_lo+(patch_ntheta+1)*dtheta;
       double phi_lo=phi0, phi_hi=phi_lo+(patch_nphi+1)*dphi;
-      MR_assert(nct*ncp*ncpsi<(size_t(1)<<32), "key space too large");
+      MR_assert(uint64_t(nct)*uint64_t(ncp)*uint64_t(ncpsi)<(uint64_t(1)<<32),
+        "key space too large");
 
       aligned_array<uint32_t> key(nptg);
       execParallel(nptg, nthreads, [&](size_t lo, size_t hi)

@@ -318,9 +318,12 @@ def test_r2r_extra(len, dtype):
 
 
 def refconv(a, newlen, axis, k):
-    import scipy.ndimage
-    import scipy.signal
-    import scipy.fft
+    try:
+        import scipy.ndimage
+        import scipy.signal
+        import scipy.fft
+    except:
+        pytest.skip()
     k = scipy.fft.fftshift(k)
     tmp=scipy.ndimage.convolve1d(a,k,axis,mode='wrap')
     tmp=scipy.signal.resample(tmp,newlen,axis=axis)
