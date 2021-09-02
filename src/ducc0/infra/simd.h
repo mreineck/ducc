@@ -350,67 +350,7 @@ template<typename T> class pseudoscalar
     const T &operator[] (size_t /*i*/) const { return v; }
     T &operator[](size_t /*i*/) { return v; }
   };
-template<typename T, size_t len> class gnuvec_helper
-  {
-  public:
-    using Tv __attribute__ ((vector_size (len*sizeof(T)))) = T;
-    using Tm = decltype(Tv()<Tv());
 
-    static Tv loadu(const T *ptr)
-      {
-      Tv res;
-      for (size_t i=0; i<len; ++i) res[i] = ptr[i];
-      return res;
-      }
-    static void storeu(T *ptr, Tv v)
-      { for (size_t i=0; i<len; ++i) ptr[i] = v[i]; }
-
-    static Tv from_scalar(T v)
-      {
-      Tv res;
-      for (size_t i=0; i<len; ++i) res[i] = v;
-      return res;
-      }
-    static Tv abs(Tv v)
-      {
-      Tv res;
-      for (size_t i=0; i<len; ++i) res[i] = std::abs(v[i]);
-      return res;
-      }
-    static Tv max(Tv v1, Tv v2)
-      {
-      Tv res;
-      for (size_t i=0; i<len; ++i) res[i] = std::max(v1[i], v2[i]);
-      return res;
-      }
-    static Tv blend(Tm m, Tv v1, Tv v2)
-      { return m ? v1 : v2; }
-    static Tv sqrt(Tv v)
-      {
-      Tv res;
-      for (size_t i=0; i<len; ++i) res[i] = std::sqrt(v[i]);
-      return res;
-      }
-    static Tm gt (Tv v1, Tv v2) { return v1>v2; }
-    static Tm ge (Tv v1, Tv v2) { return v1>=v2; }
-    static Tm lt (Tv v1, Tv v2) { return v1<v2; }
-    static Tm ne (Tv v1, Tv v2) { return v1!=v2; }
-    static Tm mask_and (Tm v1, Tm v2) { return v1&&v2; }
-    static Tm mask_or (Tm v1, Tm v2) { return v1||v2; }
-    static size_t maskbits(Tm v)
-      {
-      size_t res=0;
-      for (size_t i=0; i<len; ++i) res += (v[i]!=0)<<i;
-      return res;
-      }
-    static bool mask_none(Tm v) { return maskbits(v)==0; }
-    static bool mask_any(Tm v) { return maskbits(v)!=0; }
-    static bool mask_all(Tm v)
-      {
-      static constexpr auto fullmask = (size_t(1)<<len)-1;
-      return maskbits(v)==fullmask;
-      }
-  };
 template<typename T> class helper_<T,1>
   {
   private:
@@ -659,6 +599,67 @@ template<> class helper_<float,4>
 #endif
 
 #if defined(DUCC0_USE_SVE)
+template<typename T, size_t len> class gnuvec_helper
+  {
+  public:
+    using Tv __attribute__ ((vector_size (len*sizeof(T)))) = T;
+    using Tm = decltype(Tv()<Tv());
+
+    static Tv loadu(const T *ptr)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = ptr[i];
+      return res;
+      }
+    static void storeu(T *ptr, Tv v)
+      { for (size_t i=0; i<len; ++i) ptr[i] = v[i]; }
+
+    static Tv from_scalar(T v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = v;
+      return res;
+      }
+    static Tv abs(Tv v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::abs(v[i]);
+      return res;
+      }
+    static Tv max(Tv v1, Tv v2)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::max(v1[i], v2[i]);
+      return res;
+      }
+    static Tv blend(Tm m, Tv v1, Tv v2)
+      { return m ? v1 : v2; }
+    static Tv sqrt(Tv v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::sqrt(v[i]);
+      return res;
+      }
+    static Tm gt (Tv v1, Tv v2) { return v1>v2; }
+    static Tm ge (Tv v1, Tv v2) { return v1>=v2; }
+    static Tm lt (Tv v1, Tv v2) { return v1<v2; }
+    static Tm ne (Tv v1, Tv v2) { return v1!=v2; }
+    static Tm mask_and (Tm v1, Tm v2) { return v1&&v2; }
+    static Tm mask_or (Tm v1, Tm v2) { return v1||v2; }
+    static size_t maskbits(Tm v)
+      {
+      size_t res=0;
+      for (size_t i=0; i<len; ++i) res += (v[i]!=0)<<i;
+      return res;
+      }
+    static bool mask_none(Tm v) { return maskbits(v)==0; }
+    static bool mask_any(Tm v) { return maskbits(v)!=0; }
+    static bool mask_all(Tm v)
+      {
+      static constexpr auto fullmask = (size_t(1)<<len)-1;
+      return maskbits(v)==fullmask;
+      }
+  };
 template<> constexpr inline bool simd_exists<double,__ARM_FEATURE_SVE_BITS/64> = true;
 template<> class helper_<double,__ARM_FEATURE_SVE_BITS/64>: public gnuvec_helper<double, __ARM_FEATURE_SVE_BITS/64> {};
 template<> constexpr inline bool simd_exists<float,__ARM_FEATURE_SVE_BITS/32> = true;
