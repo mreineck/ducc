@@ -41,7 +41,6 @@ namespace detail_sht {
 using namespace std;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
-static constexpr double sharp_ftol=0x1p-60;
 static constexpr double sharp_fbighalf=0x1p+400;
 
 struct ringdata
@@ -407,6 +406,8 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
 #endif
 
 using dcmplx = complex<double>;
+
+static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 128/VLEN;
 constexpr size_t nvx = 64/VLEN;
@@ -1510,23 +1511,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
       }
     }
   }
-
-template<typename T> DUCC0_NOINLINE void inner_loop(SHT_mode mode,
-  mav<complex<double>,2> &almtmp,
-  mav<complex<T>,3> &phase, const vector<ringdata> &rdata,
-  Ylmgen &gen, size_t mi)
-  {
-  (mode==MAP2ALM) ? inner_loop_m2a(almtmp, phase, rdata, gen, mi)
-                  : inner_loop_a2m(mode, almtmp, phase, rdata, gen, mi);
-  }
-template void inner_loop(SHT_mode mode,
-  mav<complex<double>,2> &almtmp,
-  mav<complex<double>,3> &phase, const vector<ringdata> &rdata,
-  Ylmgen &gen, size_t mi);
-template void inner_loop(SHT_mode mode,
-  mav<complex<double>,2> &almtmp,
-  mav<complex<float>,3> &phase, const vector<ringdata> &rdata,
-  Ylmgen &gen, size_t mi);
 
 size_t get_mmax(const mav<size_t,1> &mval, size_t lmax)
   {
