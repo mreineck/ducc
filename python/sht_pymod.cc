@@ -747,8 +747,6 @@ template<typename T> class Py_sharpjob
     py::array alm2map_spin (const py::array_t<complex<double>> &alm_, int64_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (alm_.size()==n_alm(),
-        "incorrect size of a_lm array");
       auto map_=make_Pyarr<double>({2, size_t(npix_)});
       auto map=to_mav<double,2>(map_, true);
       auto alm=to_mav<complex<double>,2>(alm_);
@@ -779,7 +777,7 @@ template<typename T> class Py_sharpjob
         }
       else
         {
-        mav<double,3> mr(map.vdata(), {1, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)}, true);
+        mav<double,3> mr(map.vdata(), {2, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)}, true);
         synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
         }
       return map_;
@@ -787,7 +785,7 @@ template<typename T> class Py_sharpjob
     py::array map2alm_spin (const py::array_t<double> &map_, int64_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map_.size()==npix_,"incorrect size of map array");
+      MR_assert (map_.shape(1)==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_mav<complex<double>,2>(alm_, true);
       auto map=to_mav<double,2>(map_);
