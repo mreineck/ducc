@@ -143,6 +143,7 @@ class fmav_info
       {
       auto ndim = shp.size();
       stride_t res(ndim);
+      if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
@@ -152,6 +153,8 @@ class fmav_info
       { return str[dim]*ptrdiff_t(n) + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*ptrdiff_t(n); }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     /// Constructs a 1D object with all extents and strides set to zero.
@@ -160,7 +163,6 @@ class fmav_info
     fmav_info(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
       {
-      MR_assert(shp.size()>0, "at least 1D required");
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
       }
     /// Constructs an object with the given shape and computes the strides
@@ -188,7 +190,7 @@ class fmav_info
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
-      { return (str.back()==1); }
+      { return ((ndim()==0) || (str.back()==1)); }
     /** Returns true iff the object is C-contiguous, i.e. if the stride of the
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
@@ -213,14 +215,58 @@ class fmav_info
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    /// Returns the common broadcast shape of *this and \a shp2
+    shape_t bcast_shape(const shape_t &shp2) const
+      {
+      shape_t res(max(shp.size(), shp2.size()), 1);
+      for (size_t i=0; i<shp.size(); ++i)
+        res[i+res.size()-shp.size()] = shp[i];
+      for (size_t i=0; i<shp2.size(); ++i)
+        {
+        size_t i2 = i+res.size()-shp2.size();
+        if (res[i2]==1)
+          res[i2] = shp2[i];
+        else
+          MR_assert((res[i2]==shp2[i])||(shp2[i]==1),
+            "arrays cannot be broadcast together");
+        }
+      return res;
+      }
+    void bcast_to_shape(const shape_t &shp2)
+      {
+      MR_assert(shp2.size()>=shp.size(), "cannot reduce dimensionallity");
+      stride_t newstr(shp2.size(), 0);
+      for (size_t i=0; i<shp.size(); ++i)
+        {
+        size_t i2 = i+shp2.size()-shp.size();
+        if (shp[i]!=1)
+          {
+          MR_assert(shp[i]==shp2[i2], "arrays cannot be broadcast together");
+          newstr[i2] = str[i];
+          }
+        }
+      shp = shp2;
+      str = newstr;
+      }
+    void prepend_dim()
+      {
+      shape_t shp2(shp.size()+1);
+      stride_t str2(str.size()+1);
+      shp2[0] = 1;
+      str2[0] = 0;
+      for (size_t i=0; i<shp.size(); ++i)
+        {
+        shp2[i+1] = shp[i];
+        str2[i+1] = str[i];
+        }
+      shp = shp2;
+      str = str2;
+      }
   };
 
 /// Helper class containing shape and stride information of a `mav` object
 template<size_t ndim> class mav_info
   {
-  protected:
-    static_assert(ndim>0, "at least 1D required");
-
   public:
     /// Fixed-size array of nonnegative integers for storing the array shape
     using shape_t = array<size_t, ndim>;
@@ -235,6 +281,7 @@ template<size_t ndim> class mav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res;
+      if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
@@ -244,6 +291,8 @@ template<size_t ndim> class mav_info
       { return str[dim]*n + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*n; }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     /// Constructs an object with all extents and strides set to zero.
@@ -278,7 +327,7 @@ template<size_t ndim> class mav_info
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
-      { return (str.back()==1); }
+      { return ((ndim==0) || (str.back()==1)); }
     /** Returns true iff the object is C-contiguous, i.e. if the stride of the
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
@@ -571,7 +620,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         T *d2 = vdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -584,7 +633,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
      *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         const T *d2 = cdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -598,7 +647,10 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func)
       {
       MR_assert(conformable(other), "fmavs are not conformable");
-      applyHelper<Func>(0, 0, 0, other, func);
+      if (ndim() == 0)
+        func(*vdata(), *other.cdata());
+      else
+        applyHelper<Func>(0, 0, 0, other, func);
       }
     /** Calls \a func for every entry in the array and the corresponding entry
      *  in \a other, passing a nonconstant reference to the entry in this array
@@ -606,7 +658,10 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func) const
       {
       MR_assert(conformable(other), "fmavs are not conformable");
-      applyHelper<Func>(0, 0, 0, other, func);
+      if (ndim() == 0)
+        func(*cdata(), *other.cdata());
+      else
+        applyHelper<Func>(0, 0, 0, other, func);
       }
     vector<T> dump() const
       {
@@ -823,7 +878,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         T *d2 = vdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -836,7 +891,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         const T *d2 = cdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -850,7 +905,12 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  and a constant one for the entry in \a other. */
     template<typename T2, typename Func> void apply
       (const mav<T2, ndim> &other,Func func)
-      { applyHelper<0,T2,Func>(0,0,other,func); }
+      {
+      if constexpr (ndim==0)
+        func(*vdata(), *other.cdata());
+      else
+        applyHelper<0,T2,Func>(0,0,other,func);
+      }
     /// Sets every entry of the array to \a val.
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
@@ -915,7 +975,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  The array data is not initialized. */
     static mav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
-      if (ndim==1) return mav(shape, UNINITIALIZED);
+      if (ndim<=1) return mav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       mav tmp(shape2, UNINITIALIZED);
       return tmp.subarray<ndim>(shape_t(), shape);
@@ -956,6 +1016,8 @@ template<typename T, size_t ndim> class MavIter
       { return str[dim]*n + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*n; }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     MavIter(const fmav<T> &mav_)
