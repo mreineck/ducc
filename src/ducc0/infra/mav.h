@@ -125,6 +125,14 @@ template<typename T> class membuf
 
 constexpr size_t MAXIDX=~(size_t(0));
 
+struct slice
+  {
+  size_t lo, hi;
+  slice() : lo(0), hi(MAXIDX) {}
+  slice(size_t idx) : lo(idx), hi(idx) {}
+  slice(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
+  };
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -143,6 +151,7 @@ class fmav_info
       {
       auto ndim = shp.size();
       stride_t res(ndim);
+      if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
@@ -152,6 +161,8 @@ class fmav_info
       { return str[dim]*ptrdiff_t(n) + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*ptrdiff_t(n); }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     /// Constructs a 1D object with all extents and strides set to zero.
@@ -160,7 +171,6 @@ class fmav_info
     fmav_info(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
       {
-      MR_assert(shp.size()>0, "at least 1D required");
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
       }
     /// Constructs an object with the given shape and computes the strides
@@ -188,7 +198,7 @@ class fmav_info
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
-      { return (str.back()==1); }
+      { return ((ndim()==0) || (str.back()==1)); }
     /** Returns true iff the object is C-contiguous, i.e. if the stride of the
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
@@ -213,14 +223,58 @@ class fmav_info
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    /// Returns the common broadcast shape of *this and \a shp2
+    shape_t bcast_shape(const shape_t &shp2) const
+      {
+      shape_t res(max(shp.size(), shp2.size()), 1);
+      for (size_t i=0; i<shp.size(); ++i)
+        res[i+res.size()-shp.size()] = shp[i];
+      for (size_t i=0; i<shp2.size(); ++i)
+        {
+        size_t i2 = i+res.size()-shp2.size();
+        if (res[i2]==1)
+          res[i2] = shp2[i];
+        else
+          MR_assert((res[i2]==shp2[i])||(shp2[i]==1),
+            "arrays cannot be broadcast together");
+        }
+      return res;
+      }
+    void bcast_to_shape(const shape_t &shp2)
+      {
+      MR_assert(shp2.size()>=shp.size(), "cannot reduce dimensionallity");
+      stride_t newstr(shp2.size(), 0);
+      for (size_t i=0; i<shp.size(); ++i)
+        {
+        size_t i2 = i+shp2.size()-shp.size();
+        if (shp[i]!=1)
+          {
+          MR_assert(shp[i]==shp2[i2], "arrays cannot be broadcast together");
+          newstr[i2] = str[i];
+          }
+        }
+      shp = shp2;
+      str = newstr;
+      }
+    void prepend_dim()
+      {
+      shape_t shp2(shp.size()+1);
+      stride_t str2(str.size()+1);
+      shp2[0] = 1;
+      str2[0] = 0;
+      for (size_t i=0; i<shp.size(); ++i)
+        {
+        shp2[i+1] = shp[i];
+        str2[i+1] = str[i];
+        }
+      shp = shp2;
+      str = str2;
+      }
   };
 
 /// Helper class containing shape and stride information of a `mav` object
 template<size_t ndim> class mav_info
   {
-  protected:
-    static_assert(ndim>0, "at least 1D required");
-
   public:
     /// Fixed-size array of nonnegative integers for storing the array shape
     using shape_t = array<size_t, ndim>;
@@ -235,6 +289,7 @@ template<size_t ndim> class mav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res;
+      if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
@@ -244,6 +299,8 @@ template<size_t ndim> class mav_info
       { return str[dim]*n + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*n; }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     /// Constructs an object with all extents and strides set to zero.
@@ -278,7 +335,7 @@ template<size_t ndim> class mav_info
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
-      { return (str.back()==1); }
+      { return ((ndim==0) || (str.back()==1)); }
     /** Returns true iff the object is C-contiguous, i.e. if the stride of the
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
@@ -417,29 +474,28 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
         }
       }
 
-    auto subdata(const shape_t &i0, const shape_t &extent) const
+    auto subdata(const vector<slice> &slices) const
       {
       auto ndim = tinfo::ndim();
       shape_t nshp(ndim);
       stride_t nstr(ndim);
       ptrdiff_t nofs;
-      MR_assert(i0.size()==ndim, "bad dimensionality");
-      MR_assert(extent.size()==ndim, "bad dimensionality");
+      MR_assert(slices.size()==ndim, "incorrect number of slices");
       size_t n0=0;
-      for (auto x:extent) if (x==0) ++n0;
+      for (auto x:slices) if (x.lo==x.hi) ++n0;
       nofs=0;
       nshp.resize(ndim-n0);
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(i0[i]<shp[i], "bad subset");
-        nofs+=i0[i]*str[i];
-        if (extent[i]!=0)
+        MR_assert(slices[i].lo<shp[i], "bad subset");
+        nofs+=slices[i].lo*str[i];
+        if (slices[i].lo!=slices[i].hi)
           {
-          auto ext = extent[i];
-          if (ext==MAXIDX)
-            ext = shp[i]-i0[i];
-          MR_assert(i0[i]+ext<=shp[i], "bad subset");
+          auto ext = slices[i].hi-slices[i].lo;
+          if (slices[i].hi==MAXIDX)
+            ext = shp[i]-slices[i].lo;
+          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
           nshp[i2]=ext; nstr[i2]=str[i];
           ++i2;
           }
@@ -546,32 +602,26 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
 
-    /** Returns an fmav (of the same or smaller dimensionality) representing a
-     *  sub-array of *this. \a i0 indicates the starting indices, and \a extent
-     *  the number of entries along this dimension. If any extent is 0, this
-     *  dimension will be omitted in the output array.
-     *  Specifying an extent of MAXIDX will make the extent as large as possible.
-     *  if *this is writable, the returned fmav will also be writable. */
-    fmav subarray(const shape_t &i0, const shape_t &extent)
+    fmav subarray(const vector<slice> &slices)
       {
-      auto [nshp, nstr, nofs] = subdata(i0, extent);
+      auto [nshp, nstr, nofs] = subdata(slices);
       return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
     /** Returns an fmav (of the same or smaller dimensionality) representing a
-     *  sub-array of *this. \a i0 indicates the starting indices, and \a extent
-     *  the number of entries along this dimension. If any extent is 0, this
+     *  sub-array of *this. \a slices describes the lower and one-past-upper
+     *  indices of the selection. If a slice has zero extent, this
      *  dimension will be omitted in the output array.
-     *  Specifying an extent of MAXIDX will make the extent as large as possible.
+     *  Specifying an upper bound of MAXIDX will make the extent as large as possible.
      *  The returned fmav is read-only. */
-    fmav subarray(const shape_t &i0, const shape_t &extent) const
+    fmav subarray(const vector<slice> &slices) const
       {
-      auto [nshp, nstr, nofs] = subdata(i0, extent);
+      auto [nshp, nstr, nofs] = subdata(slices);
       return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
     /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         T *d2 = vdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -584,7 +634,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
      *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         const T *d2 = cdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -598,7 +648,10 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func)
       {
       MR_assert(conformable(other), "fmavs are not conformable");
-      applyHelper<Func>(0, 0, 0, other, func);
+      if (ndim() == 0)
+        func(*vdata(), *other.cdata());
+      else
+        applyHelper<Func>(0, 0, 0, other, func);
       }
     /** Calls \a func for every entry in the array and the corresponding entry
      *  in \a other, passing a nonconstant reference to the entry in this array
@@ -606,7 +659,10 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func) const
       {
       MR_assert(conformable(other), "fmavs are not conformable");
-      applyHelper<Func>(0, 0, 0, other, func);
+      if (ndim() == 0)
+        func(*cdata(), *other.cdata());
+      else
+        applyHelper<Func>(0, 0, 0, other, func);
       }
     vector<T> dump() const
       {
@@ -624,12 +680,11 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
   };
 
 template<typename T> fmav<T> subarray
-  (fmav<T> &arr, const typename fmav<T>::shape_t &i0, const typename fmav<T>::shape_t &extent)  
-  { return arr.subarray(i0, extent); }
-
+  (fmav<T> &arr, const vector<slice> &slices)  
+  { return arr.subarray(slices); }
 template<typename T> fmav<T> subarray
-  (const fmav<T> &arr, const typename fmav<T>::shape_t &i0, const typename fmav<T>::shape_t &extent)  
-  { return arr.subarray(i0, extent); }
+  (const fmav<T> &arr, const vector<slice> &slices)  
+  { return arr.subarray(slices); }
 
 
 // template<typename Func, typename T0, typename Ts...> void fmav_pointwise_op(Func func, T0 & arg0, Ts&... args)
@@ -712,24 +767,29 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
         }
       }
 
-    template<size_t nd2> auto subdata(const shape_t &i0, const shape_t &extent) const
+    template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
+      MR_assert(slices.size()==ndim, "bad number of slices");
       array<size_t, nd2> nshp;
       array<ptrdiff_t, nd2> nstr;
+
+      // unnecessary, but gcc arns otherwise
+      for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
+
       size_t n0=0;
-      for (auto x:extent) if (x==0) ++n0;
+      for (auto x:slices) if (x.lo==x.hi) ++n0;
       MR_assert(n0+nd2==ndim, "bad extent");
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(i0[i]<shp[i], "bad subset");
-        nofs+=i0[i]*str[i];
-        if (extent[i]!=0)
+        MR_assert(slices[i].lo<shp[i], "bad subset");
+        nofs+=slices[i].lo*str[i];
+        if (slices[i].lo!=slices[i].hi)
           {
-          auto ext = extent[i];
-          if (ext==MAXIDX)
-            ext = shp[i]-i0[i];
-          MR_assert(i0[i]+ext<=shp[i], "bad subset");
+          auto ext = slices[i].hi-slices[i].lo;
+          if (slices[i].hi==MAXIDX)
+            ext = shp[i]-slices[i].lo;
+          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
           nshp[i2]=ext; nstr[i2]=str[i];
           ++i2;
           }
@@ -823,7 +883,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     /** Calls \a func for every entry in the array, passing a reference to it. */
     template<typename Func> void apply(Func func)
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         T *d2 = vdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -836,7 +896,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  reference to it. */
     template<typename Func> void apply(Func func) const
       {
-      if (contiguous())
+      if (contiguous()) // covers 0-d case
         {
         const T *d2 = cdata();
         for (auto v=d2; v!=d2+size(); ++v)
@@ -850,30 +910,23 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  and a constant one for the entry in \a other. */
     template<typename T2, typename Func> void apply
       (const mav<T2, ndim> &other,Func func)
-      { applyHelper<0,T2,Func>(0,0,other,func); }
+      {
+      if constexpr (ndim==0)
+        func(*vdata(), *other.cdata());
+      else
+        applyHelper<0,T2,Func>(0,0,other,func);
+      }
     /// Sets every entry of the array to \a val.
     void fill(const T &val)
       { apply([val](T &v){v=val;}); }
-    /** Returns a mav (of the same or smaller dimensionality) representing a
-     *  sub-array of *this. \a i0 indicates the starting indices, and \a extent
-     *  the number of entries along this dimension. If any extent is 0, this
-     *  dimension will be omitted in the output array.
-     *  Specifying an extent of MAXIDX will make the extent as large as possible.
-     *  if *this is writable, the returned mav will also be writable. */
-    template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent)
+    template<size_t nd2> mav<T,nd2> subarray(const vector<slice> &slices)
       {
-      auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
+      auto [nshp, nstr, nofs] = subdata<nd2> (slices);
       return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
       }
-    /** Returns a mav (of the same or smaller dimensionality) representing a
-     *  sub-array of *this. \a i0 indicates the starting indices, and \a extent
-     *  the number of entries along this dimension. If any extent is 0, this
-     *  dimension will be omitted in the output array.
-     *  Specifying an extent of MAXIDX will make the extent as large as possible.
-     *  The returned mav is read-only. */
-    template<size_t nd2> mav<T,nd2> subarray(const shape_t &i0, const shape_t &extent) const
+    template<size_t nd2> mav<T,nd2> subarray(const vector<slice> &slices) const
       {
-      auto [nshp, nstr, nofs] = subdata<nd2> (i0, extent);
+      auto [nshp, nstr, nofs] = subdata<nd2> (slices);
       return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
       }
 
@@ -906,7 +959,9 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
       mav tmp(shape2);
-      return tmp.subarray<ndim>(shape_t(), shape);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray<ndim>(slc);
       }
     /** Returns a writable mav with the specified shape.
      *  The strides are chosen in such a way that critical strides (multiples
@@ -915,32 +970,21 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  The array data is not initialized. */
     static mav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
-      if (ndim==1) return mav(shape, UNINITIALIZED);
+      if (ndim<=1) return mav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       mav tmp(shape2, UNINITIALIZED);
-      return tmp.subarray<ndim>(shape_t(), shape);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray<ndim>(slc);
       }
   };
 
-/** Returns a mav (of the same or smaller dimensionality) representing a
- *  sub-array of \a arr. \a i0 indicates the starting indices, and \a extent
- *  the number of entries along this dimension. If any extent is 0, this
- *  dimension will be omitted in the output array.
- *  Specifying an extent of MAXIDX will make the extent as large as possible.
- *  if *thi is writable, the returned mav will also be writable. */
 template<size_t nd2, typename T, size_t ndim> mav<T,nd2> subarray
-  (mav<T, ndim> &arr, const typename mav<T, ndim>::shape_t &i0, const typename mav<T, ndim>::shape_t &extent)  
-  { return arr.template subarray<nd2>(i0, extent); }
-
-/** Returns a mav (of the same or smaller dimensionality) representing a
- *  sub-array of \a arr. \a i0 indicates the starting indices, and \a extent
- *  the number of entries along this dimension. If any extent is 0, this
- *  dimension will be omitted in the output array.
- *  Specifying an extent of MAXIDX will make the extent as large as possible.
- *  The returned mav is read-only. */
+  (mav<T, ndim> &arr, const vector<slice> &slices)  
+  { return arr.template subarray<nd2>(slices); }
 template<size_t nd2, typename T, size_t ndim> mav<T,nd2> subarray
-  (const mav<T, ndim> &arr, const typename mav<T, ndim>::shape_t &i0, const typename mav<T, ndim>::shape_t &extent)  
-  { return arr.template subarray<nd2>(i0, extent); }
+  (const mav<T, ndim> &arr, const vector<slice> &slices)  
+  { return arr.template subarray<nd2>(slices); }
 
 template<typename T, size_t ndim> class MavIter
   {
@@ -956,6 +1000,8 @@ template<typename T, size_t ndim> class MavIter
       { return str[dim]*n + getIdx(dim+1, ns...); }
     ptrdiff_t getIdx(size_t dim, size_t n) const
       { return str[dim]*n; }
+    ptrdiff_t getIdx(size_t /*dim*/) const
+      { return 0; }
 
   public:
     MavIter(const fmav<T> &mav_)
@@ -1012,6 +1058,7 @@ using detail_mav::mav_info;
 using detail_mav::mav;
 using detail_mav::FmavIter;
 using detail_mav::MavIter;
+using detail_mav::slice;
 using detail_mav::MAXIDX;
 using detail_mav::subarray;
 

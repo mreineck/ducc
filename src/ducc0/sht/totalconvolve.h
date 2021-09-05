@@ -112,10 +112,10 @@ template<typename T> class ConvolverPlan
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
+      fmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
       auto kern = getKernel(nphi_s, nphi_b);
       convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
-      fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
+      fmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
       fmav<T> farr(arr);
       convolve_axis(ftmp2, farr, 1, kern, nthreads);
       }
@@ -127,7 +127,7 @@ template<typename T> class ConvolverPlan
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
       fmav<T> farr(arr);
-      fmav<T> ftmp2(subarray<2>(tmp, {0,0},{ntheta_b, nphi_s}));
+      fmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
       auto kern = getKernel(nphi_b, nphi_s);
       convolve_axis(farr, ftmp2, 1, kern, nthreads);
       // extend to second half
@@ -138,7 +138,7 @@ template<typename T> class ConvolverPlan
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
       fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(subarray<2>(tmp, {0,0},{nphi_s, nphi_s}));
+      fmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
       convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr.v(0,j) = T(0.5)*tmp(0,j);
@@ -524,11 +524,11 @@ template<typename T> class ConvolverPlan
               }
             }
           }
-      auto subplanes=subarray<3>(planes,{0, nbtheta,nbphi}, {nplanes, ntheta_s, nphi_s});
+      auto subplanes=subarray<3>(planes,{{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
       synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
+        auto m = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
         correct(m,mbeam);
         }
 
@@ -635,10 +635,10 @@ template<typename T> class ConvolverPlan
 
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto m = subarray<2>(planes, {iplane,nbtheta,nbphi},{0,ntheta_b,nphi_b});
+        auto m = subarray<2>(planes, {{iplane}, {nbtheta, nbtheta+ntheta_b}, {nbphi,nbphi+nphi_b}});
         decorrect(m,mbeam);
         }
-      auto subplanes=subarray<3>(planes,{0, nbtheta, nbphi}, {nplanes, ntheta_s, nphi_s});
+      auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
       mav<complex<T>,2> aarr({nplanes, base.Num_Alms()});
       adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
@@ -665,7 +665,7 @@ template<typename T> class ConvolverPlan
     void prepPsi(mav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
-      auto newpart = subarray<3>(subcube, {npsi_s,0,0},{MAXIDX,MAXIDX,MAXIDX});
+      auto newpart = subarray<3>(subcube, {{npsi_s, MAXIDX}, {}, {}});
       newpart.fill(T(0));
       auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
       for (size_t k=0; k<npsi_s; ++k)
