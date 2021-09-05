@@ -72,11 +72,14 @@ template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, cons
   const auto b = to_fmav<T2>(b_);
   using Tacc = long double;
   complex<Tacc> acc=0;
+  {
+  py::gil_scoped_release release;
   a.apply(b, [&acc](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc += conj(cv1) * cv2;
     });
+  }
   return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
   }
 template<typename T1> py::object Py2_vdot(const py::array &a, const py::array &b)
@@ -145,6 +148,8 @@ template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const
   const auto b = to_fmav<T2>(b_);
   using Tacc = long double;
   Tacc acc1=0, acc2=0, acc3=0;
+  {
+  py::gil_scoped_release release;
   a.apply(b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
@@ -152,6 +157,7 @@ template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const
     acc2 += norm(cv2);
     acc3 += norm(cv1-cv2);
     });
+  }
   return double(sqrt(acc3/max(acc1,acc2)));
   }
 template<typename T1> double Py2_l2error(const py::array &a, const py::array &b)
@@ -209,10 +215,14 @@ py::array Py_GL_thetas(size_t nlat)
   {
   auto res = make_Pyarr<double>({nlat});
   auto res2 = to_mav<double,1>(res, true);
+  {
+  py::gil_scoped_release release;
+
   GL_Integrator integ(nlat);
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2.v(i) = acos(-x[i]);
+  }
   return move(res);
   }
 
@@ -220,7 +230,10 @@ template<typename T> py::array Py2_transpose(const py::array &in, py::array &out
   {
   auto in2 = to_fmav<T>(in, false);
   auto out2 = to_fmav<T>(out, true);
+  {
+  py::gil_scoped_release release;
   transpose(in2, out2, [](const T &in, T &out){out=in;});
+  }
   return out;
   }
 
@@ -414,8 +427,12 @@ class Py_OofaNoise
       auto rnd = to_mav<double,1>(rnd_, false);
       auto res_ = make_Pyarr<double>({rnd.shape(0)});
       auto res = to_mav<double,1>(res_, true);
+      {
+      py::gil_scoped_release release;
+
       res.apply(rnd, [](double &out, double in) {out=in;});
       gen.filterGaussian(res);
+      }
       return res_;
       }
   };
