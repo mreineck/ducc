@@ -140,29 +140,29 @@ template<typename T> class Py_Interpolator
       if (separate)
         for (size_t i=0; i<vslm.shape(0); ++i)
           {
-          auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
-          auto vslmi = subarray<2>(vslm, {i,0},{1,MAXIDX});
-          auto vblmi = subarray<2>(vblm, {i,0},{1,MAXIDX});
+          auto planes = subarray<3>(cube, {{i},{0,1},{},{}});
+          auto vslmi = subarray<2>(vslm, {{i,i+1},{}});
+          auto vblmi = subarray<2>(vblm, {{i,i+1},{}});
           conv.getPlane(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto planes = subarray<3>(cube, {i,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+            auto planes = subarray<3>(cube, {{i},{2*k-1, 2*k+1},{},{}});
             conv.getPlane(vslmi, vblmi, k, planes);
             }
           }
       else
         {
-        auto planes = subarray<3>(cube, {0,0,0,0},{0, 1, MAXIDX, MAXIDX});
+        auto planes = subarray<3>(cube, {{0},{0,1},{},{}});
         conv.getPlane(vslm, vblm, 0, planes);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto planes = subarray<3>(cube, {0,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+          auto planes = subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}});
           conv.getPlane(vslm, vblm, k, planes);
           }
         }
       for (size_t i=0; i<cube.shape(0); ++i)
         {
-        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
+        auto subcube = subarray<3>(cube, {{i},{},{},{}});
         conv.prepPsi(subcube);
         }
       }
@@ -175,9 +175,9 @@ template<typename T> class Py_Interpolator
     py::array Py_Interpol(const py::array &ptg) const
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto ptheta = subarray<1>(ptg2, {0,0},{MAXIDX,0});
-      auto pphi = subarray<1>(ptg2, {0,1},{MAXIDX,0});
-      auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
+      auto ptheta = subarray<1>(ptg2, {{},{0}});
+      auto pphi = subarray<1>(ptg2, {{},{1}});
+      auto ppsi = subarray<1>(ptg2, {{},{2}});
       size_t ncomp = cube.shape(0);
       auto res = make_Pyarr<T>({ncomp,ptg2.shape(0)});
       auto res2 = to_mav<T,2>(res,true);
@@ -185,8 +185,8 @@ template<typename T> class Py_Interpolator
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
         {
-        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
-        auto subres = subarray<1>(res2, {i,0},{0,MAXIDX});
+        auto subcube = subarray<3>(cube, {{i},{},{},{}});
+        auto subres = subarray<1>(res2, {{i},{}});
         conv.interpol(subcube, 0, 0, ptheta, pphi, ppsi, subres);
         }
       }
@@ -196,17 +196,17 @@ template<typename T> class Py_Interpolator
     void Py_deinterpol(const py::array &ptg, const py::array &data)
       {
       auto ptg2 = to_mav<T,2>(ptg);
-      auto ptheta = subarray<1>(ptg2, {0,0},{MAXIDX,0});
-      auto pphi = subarray<1>(ptg2, {0,1},{MAXIDX,0});
-      auto ppsi = subarray<1>(ptg2, {0,2},{MAXIDX,0});
+      auto ptheta = subarray<1>(ptg2, {{},{0}});
+      auto pphi = subarray<1>(ptg2, {{},{1}});
+      auto ppsi = subarray<1>(ptg2, {{},{2}});
       size_t ncomp = cube.shape(0);
       auto data2 = to_mav<T,2>(data);
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
         {
-        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
-        auto subdata = subarray<1>(data2, {i,0},{0,MAXIDX});
+        auto subcube = subarray<3>(cube, {{i},{},{},{}});
+        auto subdata = subarray<1>(data2, {{i},{}});
         conv.deinterpol(subcube, 0, 0, ptheta, pphi, ppsi, subdata);
         }
       }
@@ -222,7 +222,7 @@ template<typename T> class Py_Interpolator
       py::gil_scoped_release release;
       for (size_t i=0; i<cube.shape(0); ++i)
         {
-        auto subcube = subarray<3>(cube, {i,0,0,0},{0, MAXIDX, MAXIDX, MAXIDX});
+        auto subcube = subarray<3>(cube, {{i},{},{},{}});
         conv.deprepPsi(subcube);
         }
       }
@@ -234,23 +234,23 @@ template<typename T> class Py_Interpolator
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
-          auto planes = subarray<3>(cube, {i,0,0,0},{0, 1, MAXIDX, MAXIDX});
-          auto vslmi = subarray<2>(vslm, {i,0},{1,MAXIDX});
-          auto vblmi = subarray<2>(vblm, {i,0},{1,MAXIDX});
+          auto planes = subarray<3>(cube, {{i},{0,1},{},{}});
+          auto vslmi = subarray<2>(vslm, {{i,i+1},{}});
+          auto vblmi = subarray<2>(vblm, {{i,i+1},{}});
           conv.updateSlm(vslmi, vblmi, 0, planes);
           for (size_t k=1; k<kmax+1; ++k)
             {
-            auto planes = subarray<3>(cube, {i,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+            auto planes = subarray<3>(cube, {{i},{2*k-1,2*k+1},{},{}});
             conv.updateSlm(vslmi, vblmi, k, planes);
             }
           }
       else
         {
-        auto planes = subarray<3>(cube, {0,0,0,0},{0, 1, MAXIDX, MAXIDX});
+        auto planes = subarray<3>(cube, {{0},{0,1},{},{}});
         conv.updateSlm(vslm, vblm, 0, planes);
         for (size_t k=1; k<kmax+1; ++k)
           {
-          auto planes = subarray<3>(cube, {0,2*k-1,0,0},{0, 2, MAXIDX, MAXIDX});
+          auto planes = subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}});
           conv.updateSlm(vslm, vblm, k, planes);
           }
         }

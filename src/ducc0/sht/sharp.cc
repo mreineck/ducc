@@ -101,7 +101,7 @@ class sharp_job
         auto lmin=(m<spin) ? spin : m;
         for (size_t i=0; i<nalm_; ++i)
           {
-          auto sub = subarray<1>(almtmp, {0,i},{MAXIDX,0});
+          auto sub = subarray<1>(almtmp, {{},{i}});
           ainfo.get_alm(mi, alm[i], sub);
           }
         for (auto l=m; l<lmin; ++l)
@@ -133,14 +133,14 @@ class sharp_job
           for (size_t i=0; i<nalm_; ++i)
             almtmp.v(l,i) *= norm_l[l];
       for (size_t i=0; i<nalm_; ++i)
-        ainfo.add_alm(mi, subarray<1>(almtmp, {0,i},{MAXIDX,0}), alm[i]);
+        ainfo.add_alm(mi, subarray<1>(almtmp, {{},{i}}), alm[i]);
       }
 
     DUCC0_NOINLINE void ringtmp2ring (size_t iring,
       const mav<double,2> &ringtmp)
       {
       for (size_t i=0; i<nmaps(); ++i)
-        ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, subarray<1>(ringtmp, {i,1},{0,MAXIDX}), map[i]);
+        ginfo.add_ring(flags&SHARP_USE_WEIGHTS, iring, subarray<1>(ringtmp, {{i},{1,MAXIDX}}), map[i]);
       }
 
     DUCC0_NOINLINE void ring2ringtmp (size_t iring,
@@ -148,7 +148,7 @@ class sharp_job
       {
       for (size_t i=0; i<nmaps(); ++i)
         {
-        auto rtmp = subarray<1>(ringtmp, {i,1},{0,MAXIDX});
+        auto rtmp = subarray<1>(ringtmp, {{i},{1,MAXIDX}});
         ginfo.get_ring(flags&SHARP_USE_WEIGHTS, iring, map[i], rtmp);
         }
       }
@@ -169,8 +169,8 @@ class sharp_job
           ring2ringtmp(iring,ringtmp);
           for (size_t i=0; i<nmaps(); ++i)
             {
-            auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-            auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
+            auto rtmp = subarray<1>(ringtmp, {{i},{}});
+            auto ptmp = subarray<1>(phase, {{i}, {2*(ith-llim)}, {}});
             helper.ring2phase (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
             }
           if (ginfo.pair(ith).r2!=~size_t(0))
@@ -179,8 +179,8 @@ class sharp_job
             ring2ringtmp(iring,ringtmp);
             for (size_t i=0; i<nmaps(); ++i)
               {
-              auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-              auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
+              auto rtmp = subarray<1>(ringtmp, {{i},{}});
+              auto ptmp = subarray<1>(phase, {{i}, {2*(ith-llim)+1}, {}});
               helper.ring2phase (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
               }
             }
@@ -202,8 +202,8 @@ class sharp_job
           size_t iring = ginfo.pair(ith).r1;
           for (size_t i=0; i<nmaps(); ++i)
             {
-            auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-            auto ptmp = subarray<1>(phase, {i, 2*(ith-llim), 0}, {0, 0, MAXIDX});
+            auto rtmp = subarray<1>(ringtmp, {{i},{}});
+            auto ptmp = subarray<1>(phase, {{i}, {2*(ith-llim)}, {}});
             helper.phase2ring (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
             }
           ringtmp2ring(iring,ringtmp);
@@ -212,8 +212,8 @@ class sharp_job
             size_t iring = ginfo.pair(ith).r2;
             for (size_t i=0; i<nmaps(); ++i)
               {
-              auto rtmp = subarray<1>(ringtmp, {i,0}, {0,MAXIDX});
-              auto ptmp = subarray<1>(phase, {i, 2*(ith-llim)+1, 0}, {0, 0, MAXIDX});
+              auto rtmp = subarray<1>(ringtmp, {{i},{}});
+              auto ptmp = subarray<1>(phase, {{i}, {2*(ith-llim)+1}, {}});
               helper.phase2ring (ginfo.nph(iring),ginfo.phi0(iring),rtmp,mmax,ptmp);
               }
             ringtmp2ring(iring,ringtmp);

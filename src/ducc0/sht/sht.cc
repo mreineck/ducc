@@ -1386,8 +1386,8 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(legi.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        auto llego(lego.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
+        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
+        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1488,7 +1488,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
       theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
     if (ntheta_tmp<=nrings)
       {
-      auto leg_tmp(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
+      auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
@@ -1620,7 +1620,7 @@ template<typename T> void leg2map(  // FFT
       {
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
-        auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
+        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
         helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         for (size_t i=0; i<nphi(ith); ++i)
           map.v(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
@@ -1659,7 +1659,7 @@ template<typename T> void map2leg(  // FFT
         {
         for (size_t i=0; i<nphi(ith); ++i)
           ringtmp.v(i+1) = map(icomp,ringstart(ith)+i*pixstride);
-        auto ltmp = subarray<1>(leg, {icomp, ith, 0}, {0, 0, MAXIDX});
+        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
         helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
         }
       }
@@ -1699,8 +1699,8 @@ template<typename T> void resample_to_prepared_CC(const mav<complex<T>,3> &legi,
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(legi.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        auto llego(lego.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
+        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
+        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1810,8 +1810,8 @@ template<typename T> void resample_from_prepared_CC(const mav<complex<T>,3> &leg
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(legi.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
-        auto llego(lego.template subarray<2>({n,0,2*rng.lo},{0,MAXIDX,MAXIDX}));
+        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
+        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1950,8 +1950,8 @@ template<typename T> void synthesis(
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
-    auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
-    auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
+    auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
+    auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
     resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
@@ -2022,8 +2022,8 @@ template<typename T> void adjoint_synthesis(
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp.v(i) = i*pi/(ntheta_tmp-1);
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
-    auto legi(leg.template subarray<3>({0,0,0},{MAXIDX,theta.shape(0),MAXIDX}));
-    auto lego(leg.template subarray<3>({0,0,0},{MAXIDX,ntheta_tmp,MAXIDX}));
+    auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
+    auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
     leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
@@ -2110,8 +2110,8 @@ template<typename T> void analysis_2d(
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
-    auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
-    auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
+    auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
+    auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
     for (size_t i=0; i<legi.shape(0); ++i)
       for (size_t j=0; j<legi.shape(1); ++j)
@@ -2217,8 +2217,8 @@ template<typename T> void adjoint_analysis_2d(
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(mav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
-    auto legi(leg.template subarray<3>({0,0,0}, {MAXIDX,ntheta_leg,MAXIDX}));
-    auto lego(leg.template subarray<3>({0,0,0}, {MAXIDX,theta.shape(0),MAXIDX}));
+    auto legi(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
+    auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
 
     mav<double,1> theta_tmp({ntheta_leg});
     for (size_t i=0; i<ntheta_leg; ++i)
