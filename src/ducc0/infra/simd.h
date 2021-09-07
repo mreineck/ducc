@@ -678,9 +678,6 @@ template<> class helper_<double,2>
   public:
     using Tv = float64x2_t;
     using Tm = uint64x2_t;
-    using Tm2 = uint32x4_t;
-    static inline Tm2 c32(Tm v) { return vreinterpretq_u32_u64(v); }
-    static inline Tm c64(Tm2 v) { return vreinterpretq_u64_u32(v); }
 
     static Tv loadu(const T *ptr) { return vld1q_f64(ptr); }
     static void storeu(T *ptr, Tv v) { vst1q_f64(ptr, v); }
@@ -694,7 +691,8 @@ template<> class helper_<double,2>
     static Tm gt (Tv v1, Tv v2) { return vcgtq_f64(v1,v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f64(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f64(v1,v2); }
-    static Tm ne (Tv v1, Tv v2) { return c64(vmvnq_u32(c32(vceqq_f64(v1,v2)))); }
+    static Tm ne (Tv v1, Tv v2)
+      { return vreinterpretq_u64_u32(vmvnq_u32(vreinterpretq_u32_u64(vceqq_f64(v1,v2)))); }
     static Tm mask_and (Tm v1, Tm v2) { return vandq_u64(v1,v2); }
     static Tm mask_or (Tm v1, Tm v2) { return vorrq_u64(v1,v2); }
     static size_t maskbits(Tm v)
