@@ -695,12 +695,12 @@ template<> class helper_<double,2>
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f64(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f64(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return c64(vmvnq_u32(c32(vceqq_f64(v1,v2)))); }
-    static Tm mask_and (Tm v1, Tm v2) { return c64(vandq_u32(c32(v1),c32(v2))); }
-    static Tm mask_or (Tm v1, Tm v2) { return c64(vorrq_u32(c32(v1),c32(v2))); }
+    static Tm mask_and (Tm v1, Tm v2) { return vandq_u64(v1,v2); }
+    static Tm mask_or (Tm v1, Tm v2) { return vorrq_u64(v1,v2); }
     static size_t maskbits(Tm v)
       {
       auto high_bits = vshrq_n_u64(v, 63);
-      return vgetq_lane_u64(high_bits, 0) | (vgetq_lane_u64(high_bits, 1) << 1);
+      return vgetq_lane_u64(high_bits, 0) | ((vgetq_lane_u64(high_bits, 1)<<1));
       }
     static bool mask_none(Tm v) { return maskbits(v)==0; }
     static bool mask_any(Tm v) { return maskbits(v)!=0; }
