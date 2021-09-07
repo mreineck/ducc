@@ -669,7 +669,7 @@ template<> class helper_<float,__ARM_FEATURE_SVE_BITS/32>: public gnuvec_helper<
 #endif
 
 #if defined(DUCC0_USE_NEON)
-#if 1 // use simple version for now
+#if 0 // use simple version for now
 template<typename T, size_t len> class gnuvec_helper
   {
   public:
@@ -756,7 +756,7 @@ template<> class helper_<double,2>
     static Tv abs(Tv v) { return vabsq_f64(v); }
     static Tv max(Tv v1, Tv v2) { return vmaxq_f64(v1, v2); }
     static Tv blend(Tm m, Tv v1, Tv v2)
-      { return vbslq_f64(m, v2, v1); }
+      { return vbslq_f64(m, v1, v2); }
     static Tv sqrt(Tv v) { return vsqrtq_f64(v); }
     static Tm gt (Tv v1, Tv v2) { return vcgtq_f64(v1,v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f64(v1,v2); }
@@ -794,7 +794,7 @@ template<> class helper_<float,4>
     static Tv from_scalar(T v) { return vdupq_n_f32(v); }
     static Tv abs(Tv v) { return vabsq_f32(v); }
     static Tv max(Tv v1, Tv v2) { return vmaxq_f32(v1, v2); }
-    static Tv blend(Tm m, Tv v1, Tv v2) { return vbslq_f32(m, v2, v1); }
+    static Tv blend(Tm m, Tv v1, Tv v2) { return vbslq_f32(m, v1, v2); }
     static Tv sqrt(Tv v) { return vsqrtq_f32(v); }
     static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1,v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f32(v1,v2); }
