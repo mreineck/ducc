@@ -4,7 +4,6 @@
 #include "ducc0/math/geom_utils.cc"
 #include "ducc0/math/space_filling.cc"
 #include "ducc0/sht/sht.cc"
-#include "ducc0/sht/sharp.cc"
 #include "ducc0/healpix/healpix_tables.cc"
 #include "ducc0/healpix/healpix_base.cc"
 

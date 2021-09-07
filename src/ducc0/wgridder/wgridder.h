@@ -196,9 +196,9 @@ template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
     {
     if (!first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
-    auto flo = subarray(farr, {0,0},{MAXIDX,vlim});
+    auto flo = subarray(farr, {{}, {0,vlim}});
     r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
-    auto fhi = subarray(farr, {0,farr.shape(1)-vlim},{MAXIDX,vlim});
+    auto fhi = subarray(farr, {{}, {farr.shape(1)-vlim, MAXIDX}});
     r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
     if (first_fast)
       r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
@@ -470,9 +470,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         {
         if (!uv_side_fast)
           c2c(inout, inout, {1}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_lo = inout.subarray({0,0},{MAXIDX,vlim});
+        auto inout_lo = inout.subarray({{},{0,vlim}});
         c2c(inout_lo, inout_lo, {0}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{MAXIDX,vlim});
+        auto inout_hi = inout.subarray({{},{inout.shape(1)-vlim,MAXIDX}});
         c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
         if (uv_side_fast)
           c2c(inout, inout, {1}, BACKWARD, Tcalc(1), nthreads);
@@ -492,9 +492,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
@@ -520,9 +520,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {0,nydirty/2}, {nxdirty/2, nv-nydirty+1}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {nxdirty/2,0}, {nu-nxdirty+1, nv}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {nu-nxdirty/2+1, nydirty/2}, {nxdirty/2-1, nv-nydirty+1}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nxdirty/2,nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = lshift-0.5*nxdirty*pixsize_x,
              y0 = mshift-0.5*nydirty*pixsize_y;
@@ -580,9 +580,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         {
         if (uv_side_fast)
           c2c(inout, inout, {1}, FORWARD, Tcalc(1), nthreads);
-        auto inout_lo = inout.subarray({0,0},{MAXIDX,vlim});
+        auto inout_lo = inout.subarray({{}, {0,vlim}});
         c2c(inout_lo, inout_lo, {0}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({0,inout.shape(1)-vlim},{MAXIDX,vlim});
+        auto inout_hi = inout.subarray({{},{inout.shape(1)-vlim, MAXIDX}});
         c2c(inout_hi, inout_hi, {0}, FORWARD, Tcalc(1), nthreads);
         if (!uv_side_fast)
           c2c(inout, inout, {1}, FORWARD, Tcalc(1), nthreads);

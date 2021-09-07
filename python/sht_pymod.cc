@@ -569,21 +569,16 @@ py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
   }
 
 
-using a_d = py::array_t<double>;
-using a_d_c = py::array_t<double, py::array::c_style | py::array::forcecast>;
-using a_c_c = py::array_t<complex<double>,
-  py::array::c_style | py::array::forcecast>;
-
 template<typename T> class Py_sharpjob
   {
   private:
-    unique_ptr<sharp_geom_info> ginfo;
-    unique_ptr<sharp_alm_info> ainfo;
-    int64_t lmax_, mmax_, npix_;
+    int64_t lmax_, mmax_, ntheta_, nphi_, nside_, npix_;
+    string geom;
     int nthreads;
 
   public:
-    Py_sharpjob () : lmax_(0), mmax_(0), npix_(0), nthreads(1) {}
+    Py_sharpjob () : lmax_(0), mmax_(0), ntheta_(0), nphi_(0), nside_(0),
+      npix_(0), nthreads(1) {}
 
     string repr() const
       {
@@ -596,125 +591,207 @@ template<typename T> class Py_sharpjob
     void set_gauss_geometry(int64_t ntheta, int64_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "GL";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "GL");
       }
     void set_healpix_geometry(int64_t nside)
       {
       MR_assert(nside>0,"bad Nside value");
+      geom = "HP";
+      nside_ = nside;
       npix_=12*nside*nside;
-      ginfo = sharp_make_healpix_geom_info (nside, 1);
       }
     void set_fejer1_geometry(int64_t ntheta, int64_t nphi)
       {
-      MR_assert(ntheta>0,"bad ntheta value");
-      MR_assert(nphi>0,"bad nphi value");
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "F1";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "F1");
       }
     void set_fejer2_geometry(int64_t ntheta, int64_t nphi)
       {
-      MR_assert(ntheta>0,"bad ntheta value");
-      MR_assert(nphi>0,"bad nphi value");
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "F2";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "F2");
       }
     void set_cc_geometry(int64_t ntheta, int64_t nphi)
       {
-      MR_assert(ntheta>0,"bad ntheta value");
-      MR_assert(nphi>0,"bad nphi value");
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "CC";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "CC");
       }
     void set_dh_geometry(int64_t ntheta, int64_t nphi)
       {
-      MR_assert(ntheta>1,"bad ntheta value");
-      MR_assert(nphi>0,"bad nphi value");
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "DH";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "DH");
       }
     void set_mw_geometry(int64_t ntheta, int64_t nphi)
       {
-      MR_assert(ntheta>0,"bad ntheta value");
-      MR_assert(nphi>0,"bad nphi value");
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = "MW";
+      ntheta_ = ntheta;
+      nphi_ = nphi;
       npix_=ntheta*nphi;
-      ginfo = sharp_make_2d_geom_info (ntheta, nphi, 0., 1, nphi, "MW", false);
       }
     void set_triangular_alm_info (int64_t lmax, int64_t mmax)
       {
       MR_assert(mmax>=0,"negative mmax");
       MR_assert(mmax<=lmax,"mmax must not be larger than lmax");
       lmax_=lmax; mmax_=mmax;
-      ainfo = sharp_make_triangular_alm_info(lmax,mmax,1);
       }
 
     int64_t n_alm() const
       { return ((mmax_+1)*(mmax_+2))/2 + (mmax_+1)*(lmax_-mmax_); }
 
-    a_d_c alm2map (const a_c_c &alm) const
+    py::array alm2map (const py::array_t<complex<double>> &alm_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (alm.size()==n_alm(),
+      MR_assert (alm_.size()==n_alm(),
         "incorrect size of a_lm array");
-      a_d_c map(npix_);
-      auto mr=map.mutable_unchecked<1>();
-      auto ar=alm.unchecked<1>();
-      sharp_alm2map(&ar[0], &mr[0], *ginfo, *ainfo, 0, nthreads);
-      return map;
+      auto map_=make_Pyarr<double>({size_t(npix_)});
+      auto map=to_mav<double,1>(map_, true);
+      auto alm=to_mav<complex<double>,1>(alm_);
+      mav<complex<double>,2> ar(alm.cdata(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      if (geom=="HP")
+        {
+        auto mstart = get_mstart(lmax_, None);
+        Healpix_Base2 base(nside_, RING, SET_NSIDE);
+        auto nrings = size_t(4*nside_-1);
+        auto theta_= make_Pyarr<double>({nrings});
+        mav<double,1> theta({nrings}), phi0({nrings});
+        mav<size_t,1> nphi({nrings}), ringstart({nrings});
+        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+          {
+          int64_t startpix, ringpix;
+          double ringtheta;
+          bool shifted;
+          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
+          theta.v(r) = ringtheta;
+          theta.v(rs) = pi-ringtheta;
+          nphi.v(r) = nphi.v(rs) = size_t(ringpix);
+          phi0.v(r) = phi0.v(rs) = shifted ? (pi/ringpix) : 0.;
+          ringstart.v(r) = size_t(startpix);
+          ringstart.v(rs) = size_t(base.Npix() - startpix - ringpix);
+          }
+        mav<double,2> mr(map.vdata(), {1, size_t(npix_)}, {0, map.stride(0)}, true);
+        synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        }
+      else
+        {
+        mav<double,3> mr(map.vdata(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)}, true);
+        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+        }
+      return map_;
       }
-    a_c_c alm2map_adjoint (const a_d_c &map) const
+    py::array alm2map_adjoint (const py::array_t<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map.size()==npix_,"incorrect size of map array");
-      a_c_c alm(n_alm());
-      auto mr=map.unchecked<1>();
-      auto ar=alm.mutable_unchecked<1>();
-      {      
-      py::gil_scoped_release release;
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, 0, nthreads);
+      MR_assert (map_.size()==npix_,"incorrect size of map array");
+      auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
+      auto alm=to_mav<complex<double>,1>(alm_, true);
+      mav<complex<double>,2> ar(alm.vdata(), {1, size_t(n_alm())}, {0, alm.stride(0)}, true);
+      auto map=to_mav<double,1>(map_);
+      if (geom=="HP")
+        {
+        auto mstart = get_mstart(lmax_, None);
+        Healpix_Base2 base(nside_, RING, SET_NSIDE);
+        auto nrings = size_t(4*nside_-1);
+        auto theta_= make_Pyarr<double>({nrings});
+        mav<double,1> theta({nrings}), phi0({nrings});
+        mav<size_t,1> nphi({nrings}), ringstart({nrings});
+        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+          {
+          int64_t startpix, ringpix;
+          double ringtheta;
+          bool shifted;
+          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
+          theta.v(r) = ringtheta;
+          theta.v(rs) = pi-ringtheta;
+          nphi.v(r) = nphi.v(rs) = size_t(ringpix);
+          phi0.v(r) = phi0.v(rs) = shifted ? (pi/ringpix) : 0.;
+          ringstart.v(r) = size_t(startpix);
+          ringstart.v(rs) = size_t(base.Npix() - startpix - ringpix);
+          }
+        mav<double,2> mr(map.cdata(), {1, size_t(npix_)}, {0, map.stride(0)});
+        adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        }
+      else
+        {
+        mav<double,3> mr(map.cdata(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)});
+        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+        }
+      return alm_;
       }
-      return alm;
-      }
-    a_c_c map2alm (const a_d_c &map) const
+    py::array map2alm (const py::array_t<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map.size()==npix_,"incorrect size of map array");
-      a_c_c alm(n_alm());
-      auto mr=map.unchecked<1>();
-      auto ar=alm.mutable_unchecked<1>();
-      {
-      py::gil_scoped_release release;
-      sharp_map2alm(&ar[0], &mr[0], *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
+      MR_assert (map_.size()==npix_,"incorrect size of map array");
+      auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
+      auto alm=to_mav<complex<double>,1>(alm_, true);
+      mav<complex<double>,2> ar(alm.vdata(), {1, size_t(n_alm())}, {0, alm.stride(0)}, true);
+      auto map=to_mav<double,1>(map_);
+      mav<double,3> mr(map.cdata(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)});
+      analysis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+      return alm_;
       }
-      return alm;
-      }
-    a_d_c alm2map_spin (const a_c_c &alm, int64_t spin) const
+    py::array alm2map_spin (const py::array_t<complex<double>> &alm_, int64_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      auto ar=alm.unchecked<2>();
-      MR_assert((ar.shape(0)==2)&&(ar.shape(1)==n_alm()),
+      auto map_=make_Pyarr<double>({2, size_t(npix_)});
+      auto map=to_mav<double,2>(map_, true);
+      auto alm=to_mav<complex<double>,2>(alm_);
+      MR_assert((alm.shape(0)==2)&&(alm.shape(1)==size_t(n_alm())),
         "incorrect size of a_lm array");
-      a_d_c map(vector<size_t>{2,size_t(npix_)});
-      auto mr=map.mutable_unchecked<2>();
-      {
-      py::gil_scoped_release release;
-      sharp_alm2map_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, 0, nthreads);
+      if (geom=="HP")
+        {
+        auto mstart = get_mstart(lmax_, None);
+        Healpix_Base2 base(nside_, RING, SET_NSIDE);
+        auto nrings = size_t(4*nside_-1);
+        auto theta_= make_Pyarr<double>({nrings});
+        mav<double,1> theta({nrings}), phi0({nrings});
+        mav<size_t,1> nphi({nrings}), ringstart({nrings});
+        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+          {
+          int64_t startpix, ringpix;
+          double ringtheta;
+          bool shifted;
+          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
+          theta.v(r) = ringtheta;
+          theta.v(rs) = pi-ringtheta;
+          nphi.v(r) = nphi.v(rs) = size_t(ringpix);
+          phi0.v(r) = phi0.v(rs) = shifted ? (pi/ringpix) : 0.;
+          ringstart.v(r) = size_t(startpix);
+          ringstart.v(rs) = size_t(base.Npix() - startpix - ringpix);
+          }
+        synthesis(alm, map, spin, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        }
+      else
+        {
+        mav<double,3> mr(map.vdata(), {2, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)}, true);
+        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
+        }
+      return map_;
       }
-      return map;
-      }
-    a_c_c map2alm_spin (const a_d_c &map, int64_t spin) const
+    py::array map2alm_spin (const py::array_t<double> &map_, int64_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      auto mr=map.unchecked<2>();
-      MR_assert ((mr.shape(0)==2)&&(mr.shape(1)==npix_),
-        "incorrect size of map array");
-      a_c_c alm(vector<size_t>{2,size_t(n_alm())});
-      auto ar=alm.mutable_unchecked<2>();
-      {
-      py::gil_scoped_release release;
-      sharp_map2alm_spin(spin, &ar(0,0), &ar(1,0), &mr(0,0), &mr(1,0), *ginfo, *ainfo, SHARP_USE_WEIGHTS, nthreads);
-      }
-      return alm;
+      MR_assert (map_.shape(1)==npix_,"incorrect size of map array");
+      auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
+      auto alm=to_mav<complex<double>,2>(alm_, true);
+      auto map=to_mav<double,2>(map_);
+      mav<double,3> mr(map.cdata(), {2, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)});
+      analysis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
+      return alm_;
       }
   };
 
