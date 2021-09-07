@@ -733,7 +733,7 @@ template<typename T, size_t len> class gnuvec_helper
   };
 template<> constexpr inline bool simd_exists<double,2> = true;
 template<> class helper_<double,2>: public gnuvec_helper<double,2> {};
-template<> constexpr inline bool simd_exists<float.4> = true;
+template<> constexpr inline bool simd_exists<float,4> = true;
 template<> class helper_<float,4>: public gnuvec_helper<float,4> {};
 #else
 template<> constexpr inline bool simd_exists<double,2> = true;
