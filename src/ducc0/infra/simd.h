@@ -678,7 +678,7 @@ template<> class helper_<double,2>
   public:
     using Tv = float64x2_t;
     using Tm = uint64x2_t;
-    using Tm2 = uint32x2_t;
+    using Tm2 = uint32x4_t;
     static inline Tm2 c32(Tm v) { return reinterpret_cast<Tm2>(v); }
     static inline Tm c64(Tm2 v) { return reinterpret_cast<Tm>(v); }
 
