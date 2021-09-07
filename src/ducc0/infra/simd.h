@@ -669,6 +669,73 @@ template<> class helper_<float,__ARM_FEATURE_SVE_BITS/32>: public gnuvec_helper<
 #endif
 
 #if defined(DUCC0_USE_NEON)
+#if 1 // use simple version for now
+template<typename T, size_t len> class gnuvec_helper
+  {
+  public:
+    using Tv __attribute__ ((vector_size (len*sizeof(T)))) = T;
+    using Tm = decltype(Tv()<Tv());
+
+    static Tv loadu(const T *ptr)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = ptr[i];
+      return res;
+      }
+    static void storeu(T *ptr, Tv v)
+      { for (size_t i=0; i<len; ++i) ptr[i] = v[i]; }
+
+    static Tv from_scalar(T v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = v;
+      return res;
+      }
+    static Tv abs(Tv v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::abs(v[i]);
+      return res;
+      }
+    static Tv max(Tv v1, Tv v2)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::max(v1[i], v2[i]);
+      return res;
+      }
+    static Tv blend(Tm m, Tv v1, Tv v2)
+      { return m ? v1 : v2; }
+    static Tv sqrt(Tv v)
+      {
+      Tv res;
+      for (size_t i=0; i<len; ++i) res[i] = std::sqrt(v[i]);
+      return res;
+      }
+    static Tm gt (Tv v1, Tv v2) { return v1>v2; }
+    static Tm ge (Tv v1, Tv v2) { return v1>=v2; }
+    static Tm lt (Tv v1, Tv v2) { return v1<v2; }
+    static Tm ne (Tv v1, Tv v2) { return v1!=v2; }
+    static Tm mask_and (Tm v1, Tm v2) { return v1&&v2; }
+    static Tm mask_or (Tm v1, Tm v2) { return v1||v2; }
+    static size_t maskbits(Tm v)
+      {
+      size_t res=0;
+      for (size_t i=0; i<len; ++i) res += (v[i]!=0)<<i;
+      return res;
+      }
+    static bool mask_none(Tm v) { return maskbits(v)==0; }
+    static bool mask_any(Tm v) { return maskbits(v)!=0; }
+    static bool mask_all(Tm v)
+      {
+      static constexpr auto fullmask = (size_t(1)<<len)-1;
+      return maskbits(v)==fullmask;
+      }
+  };
+template<> constexpr inline bool simd_exists<double,2> = true;
+template<> class helper_<double,2>: public gnuvec_helper<double,2> {};
+template<> constexpr inline bool simd_exists<float.4> = true;
+template<> class helper_<float,4>: public gnuvec_helper<float,4> {};
+#else
 template<> constexpr inline bool simd_exists<double,2> = true;
 template<> class helper_<double,2>
   {
@@ -691,7 +758,7 @@ template<> class helper_<double,2>
     static Tv blend(Tm m, Tv v1, Tv v2)
       { return vbslq_f64(m, v2, v1); }
     static Tv sqrt(Tv v) { return vsqrtq_f64(v); }
-    static Tm gt (Tv v1, Tv v2) { return vcgtq_f64(v1, v2); }
+    static Tm gt (Tv v1, Tv v2) { return vcgtq_f64(v1,v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f64(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f64(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return c64(vmvnq_u32(c32(vceqq_f64(v1,v2)))); }
@@ -729,7 +796,7 @@ template<> class helper_<float,4>
     static Tv max(Tv v1, Tv v2) { return vmaxq_f32(v1, v2); }
     static Tv blend(Tm m, Tv v1, Tv v2) { return vbslq_f32(m, v2, v1); }
     static Tv sqrt(Tv v) { return vsqrtq_f32(v); }
-    static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1, v2); }
+    static Tm gt (Tv v1, Tv v2) { return vcgtq_f32(v1,v2); }
     static Tm ge (Tv v1, Tv v2) { return vcgeq_f32(v1,v2); }
     static Tm lt (Tv v1, Tv v2) { return vcltq_f32(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return vmvnq_u32(vceqq_f32(v1,v2)); }
@@ -749,6 +816,7 @@ template<> class helper_<float,4>
       return maskbits(v)==fullmask;
       }
   };
+#endif
 #endif
 
 #if defined(__AVX512F__)
