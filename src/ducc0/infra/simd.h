@@ -696,7 +696,7 @@ template<> class helper_<double,2>
     static Tm lt (Tv v1, Tv v2) { return vcltq_f64(v1,v2); }
     static Tm ne (Tv v1, Tv v2) { return c64(vmvnq_u32(c32(vceqq_f64(v1,v2)))); }
     static Tm mask_and (Tm v1, Tm v2) { return c64(vandq_u32(c32(v1),c32(v2))); }
-    static Tm mask_or (Tm v1, Tm v2) { return c64(vorrq_u32(c32(v1),c32(v2)); }
+    static Tm mask_or (Tm v1, Tm v2) { return c64(vorrq_u32(c32(v1),c32(v2))); }
     static size_t maskbits(Tm v)
       {
       auto high_bits = vshrq_n_u64(v, 63);
