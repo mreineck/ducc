@@ -679,8 +679,8 @@ template<> class helper_<double,2>
     using Tv = float64x2_t;
     using Tm = uint64x2_t;
     using Tm2 = uint32x4_t;
-    static inline Tm2 c32(Tm v) { return vreinterpret_u32_u64(v); }
-    static inline Tm c64(Tm2 v) { return vreinterpret_u64_u32(v); }
+    static inline Tm2 c32(Tm v) { return vreinterpretq_u32_u64(v); }
+    static inline Tm c64(Tm2 v) { return vreinterpretq_u64_u32(v); }
 
     static Tv loadu(const T *ptr) { return vld1q_f64(ptr); }
     static void storeu(T *ptr, Tv v) { vst1q_f64(ptr, v); }
