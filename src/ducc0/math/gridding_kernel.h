@@ -600,8 +600,8 @@ bool acceptable(size_t i)
 template<typename T> constexpr inline size_t Wmax()
   { return is_same<T,float>::value ? 8 : 16; }
 
-/*! Returns the best matching 2-parameter ES kernel for the given oversampling
-    factor and error. */
+/*! Returns the 2-parameter ES kernel for the given oversampling factor and
+ *  error that has the smallest support. */
 template<typename T> auto selectKernel(double ofactor, double epsilon)
   {
   size_t Wmin = Wmax<T>();
