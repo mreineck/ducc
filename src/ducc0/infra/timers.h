@@ -216,6 +216,23 @@ class TimerHierarchy
       pop();
       push_internal(name);
       }
+
+    class BlockTimer
+      {
+      private:
+        TimerHierarchy &hierarchy;
+
+      public:
+        BlockTimer() = delete;
+        BlockTimer(const BlockTimer &) = delete;
+        BlockTimer &operator=(const BlockTimer &) const = delete;
+        BlockTimer(const string &name, TimerHierarchy &hierarchy_)
+          : hierarchy(hierarchy_) { hierarchy.push(name); }
+        ~BlockTimer() { hierarchy.pop(); }
+      };
+    BlockTimer blockTimer(const string &name)
+      { return BlockTimer(name, *this); }
+
     /// Returns a dictionary containing all used categories and their
     /// accumulated time.
     map<string, double> get_timings()
