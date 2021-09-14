@@ -29,7 +29,7 @@ test_clang:
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang-11 python3 -m pip install --user . && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && CC=clang-11 CXX=clang++-11 python3 -m pip install --user . && python3 -m pytest -q python/test'
 
 #wgridding_demo:
 #  stage: demos
