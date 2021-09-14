@@ -75,7 +75,7 @@ else:
                                '-Wcast-align',
                                '-Wpointer-arith']
 
-    python_module_link_args += ['-Wl,-rpath,$ORIGIN']
+    python_module_link_args += ['-Wl,-rpath,$ORIGIN', '-pthread']
     if do_native:
         python_module_link_args += ['-march=native']
     if not do_debug:
