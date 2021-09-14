@@ -55,7 +55,7 @@ define_macros = [("PKGNAME", pkgname),
 
 if sys.platform == 'darwin':
     import distutils.sysconfig
-    extra_compile_args += ['-mmacosx-version-min=10.14']
+    extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
     python_module_link_args += ['-mmacosx-version-min=10.14', '-pthread']
 elif sys.platform == 'win32':
     extra_compile_args = ['/EHsc', '/std:c++17']
@@ -74,7 +74,7 @@ else:
                                '-Wcast-qual',
                                '-Wcast-align',
                                '-Wpointer-arith']
-
+    extra_compile_args += ['-pthread']
     python_module_link_args += ['-Wl,-rpath,$ORIGIN', '-pthread']
     if do_native:
         python_module_link_args += ['-march=native']
