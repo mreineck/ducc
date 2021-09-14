@@ -68,12 +68,16 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   }
 
 template<typename T1, typename T2, size_t nd1, size_t nd2, typename Func>
-  py::array doStuff(const py::array &ain, const array<size_t,nd1> &a1, const array<size_t,nd2> &a2, Func func)
+  py::array doStuff(const py::array_t<T1> &ain, const array<size_t,nd1> &a1, const array<size_t,nd2> &a2, Func func)
   {
   auto in = to_fmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
   auto aout = make_Pyarr<T2>(oshp);
   auto out = to_fmav<T2>(aout,true);
+  in.prepend_dim();
+  out.prepend_dim();
+  {
+  py::gil_scoped_release release;
   MavIter<T1,nd1+1> iin(in);
   MavIter<T2,nd2+1> iout(out);
   while (!iin.done())
@@ -81,6 +85,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2, typename Func>
     func(iin, iout);
     iin.inc();iout.inc();
     }
+  }
   return move(aout);
   }
 
@@ -105,7 +110,7 @@ class Pyhpbase
 
     py::array pix2ang (const py::array &pix) const
       {
-      return doStuff<int64_t, double, 0, 1>(pix, {}, {2}, [this](const MavIter<int64_t,1> &iin, MavIter<double,2> &iout)
+      return doStuff<int64_t, double, 0, 1>(pix, {}, {2}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -116,7 +121,7 @@ class Pyhpbase
       }
     py::array ang2pix (const py::array &ang) const
       {
-      return doStuff<double, int64_t, 1, 0>(ang, {2}, {}, [this](const MavIter<double,2> &iin, MavIter<int64_t,1> &iout)
+      return doStuff<double, int64_t, 1, 0>(ang, {2}, {}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.ang2pix(pointing(iin(i,0),iin(i,1)));
@@ -124,7 +129,7 @@ class Pyhpbase
       }
     py::array pix2vec (const py::array &pix) const
       {
-      return doStuff<int64_t, double, 0, 1>(pix, {}, {3}, [this](const MavIter<int64_t,1> &iin, MavIter<double,2> &iout)
+      return doStuff<int64_t, double, 0, 1>(pix, {}, {3}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -135,7 +140,7 @@ class Pyhpbase
       }
     py::array vec2pix (const py::array &vec) const
       {
-      return doStuff<double, int64_t, 1, 0>(vec, {3}, {}, [this](const MavIter<double,2> &iin, MavIter<int64_t,1> &iout)
+      return doStuff<double, int64_t, 1, 0>(vec, {3}, {}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.vec2pix(vec3(iin(i,0),iin(i,1),iin(i,2)));
@@ -143,7 +148,7 @@ class Pyhpbase
       }
     py::array pix2xyf (const py::array &pix) const
       {
-      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {3}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,2> &iout)
+      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {3}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -155,7 +160,7 @@ class Pyhpbase
       }
     py::array xyf2pix (const py::array &xyf) const
       {
-      return doStuff<int64_t, int64_t, 1, 0>(xyf, {3}, {}, [this](const MavIter<int64_t,2> &iin, MavIter<int64_t,1> &iout)
+      return doStuff<int64_t, int64_t, 1, 0>(xyf, {3}, {}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iout.shape(0); ++i)
           iout.v(i)=base.xyf2pix(iin(i,0),iin(i,1),iin(i,2));
@@ -163,7 +168,7 @@ class Pyhpbase
       }
     py::array neighbors (const py::array &pix) const
       {
-      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {8}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,2> &iout)
+      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {8}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           {
@@ -175,7 +180,7 @@ class Pyhpbase
       }
     py::array ring2nest (const py::array &ring) const
       {
-      return doStuff<int64_t, int64_t, 0, 0>(ring, {}, {}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,1> &iout)
+      return doStuff<int64_t, int64_t, 0, 0>(ring, {}, {}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           iout.v(i)=base.ring2nest(iin(i));
@@ -183,7 +188,7 @@ class Pyhpbase
       }
     py::array nest2ring (const py::array &nest) const
       {
-      return doStuff<int64_t, int64_t, 0, 0>(nest, {}, {}, [this](const MavIter<int64_t,1> &iin, MavIter<int64_t,1> &iout)
+      return doStuff<int64_t, int64_t, 0, 0>(nest, {}, {}, [this](const auto &iin, auto &iout)
         {
         for (size_t i=0; i<iin.shape(0); ++i)
           iout.v(i)=base.nest2ring(iin(i));
@@ -242,7 +247,7 @@ class Pyhpbase
 
 py::array ang2vec (const py::array &ang)
   {
-  return doStuff<double, double, 1, 1>(ang, {2}, {3}, [](const MavIter<double,2> &iin, MavIter<double,2> &iout)
+  return doStuff<double, double, 1, 1>(ang, {2}, {3}, [](const auto &iin, auto &iout)
     {
     for (size_t i=0; i<iin.shape(0); ++i)
       {
@@ -253,7 +258,7 @@ py::array ang2vec (const py::array &ang)
   }
 py::array vec2ang (const py::array &vec)
   {
-  return doStuff<double, double, 1, 1>(vec, {3}, {2}, [](const MavIter<double,2> &iin, MavIter<double,2> &iout)
+  return doStuff<double, double, 1, 1>(vec, {3}, {2}, [](const auto &iin, auto &iout)
     {
     for (size_t i=0; i<iin.shape(0); ++i)
       {
