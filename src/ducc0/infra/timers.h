@@ -217,21 +217,21 @@ class TimerHierarchy
       push_internal(name);
       }
 
-    class BlockTimer
+    class ScopeTimer
       {
       private:
         TimerHierarchy &hierarchy;
 
       public:
-        BlockTimer() = delete;
-        BlockTimer(const BlockTimer &) = delete;
-        BlockTimer &operator=(const BlockTimer &) const = delete;
-        BlockTimer(const string &name, TimerHierarchy &hierarchy_)
+        ScopeTimer() = delete;
+        ScopeTimer(const ScopeTimer &) = delete;
+        ScopeTimer &operator=(const ScopeTimer &) const = delete;
+        ScopeTimer(const string &name, TimerHierarchy &hierarchy_)
           : hierarchy(hierarchy_) { hierarchy.push(name); }
-        ~BlockTimer() { hierarchy.pop(); }
+        ~ScopeTimer() { hierarchy.pop(); }
       };
-    BlockTimer blockTimer(const string &name)
-      { return BlockTimer(name, *this); }
+    ScopeTimer scopeTimer(const string &name)
+      { return ScopeTimer(name, *this); }
 
     /// Returns a dictionary containing all used categories and their
     /// accumulated time.
