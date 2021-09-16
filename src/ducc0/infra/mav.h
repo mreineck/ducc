@@ -36,6 +36,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/misc_utils.h"
+#include "ducc0/infra/threading.h"
 
 namespace ducc0 {
 
@@ -417,6 +418,23 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using typename tinfo::stride_t;
 
   protected:
+public:
+    template<typename Func, typename T2, typename T3> void applyHelper(size_t idim,
+      ptrdiff_t idx, ptrdiff_t idx2, ptrdiff_t idx3, const fmav<T2> &other, const fmav<T3> &other2, Func func)
+      {
+      auto ndim = tinfo::ndim();
+      if (idim+1<ndim)
+        for (size_t i=0; i<shp[idim]; ++i)
+          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), idx3+i*other2.stride(idim), other, other2, func);
+      else
+        {
+        T *d1 = vdata();
+        const T2 *d2 = other.cdata();
+        const T3 *d3 = other2.cdata();
+        for (size_t i=0; i<shp[idim]; ++i)
+          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)], d3[idx3+i*other2.stride(idim)]);
+        }
+      }
     template<typename Func, typename T2> void applyHelper(size_t idim,
       ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func)
       {
@@ -447,6 +465,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
         }
       }
+public:
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
       {
       auto ndim = tinfo::ndim();
@@ -460,6 +479,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           func(d2[idx+i*str[idim]]);
         }
       }
+public:
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func) const
       {
       auto ndim = tinfo::ndim();
@@ -1049,6 +1069,155 @@ template<typename T, size_t ndim> class MavIter
       { return mav.vraw(idx(ns...)); }
   };
 
+// various operations involving fmav objects of the same shape -- experimental
+
+auto multiprep(const vector<fmav_info> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    if (info[0].shape(i)!=1) // remove axes of length 1
+      {
+      shp.push_back(info[0].shape(i));
+      for (size_t j=0; j<narr; ++j)
+        str[j].push_back(info[j].stride(i));
+      }
+  // sort dimensions in order of descending stride, as far as possible
+  vector<size_t> strcrit(shp.size(),0);
+  for (const auto &curstr: str)
+    for (size_t i=0; i<curstr.size(); ++i)
+      strcrit[i] = (strcrit[i]==0) ? size_t(abs(curstr[i])) : min(strcrit[i],size_t(abs(curstr[i])));
+
+  for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
+    {
+    auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)-strcrit.begin());
+    if (dim+1!=lastdim)
+      {
+      swap(strcrit[dim], strcrit[lastdim-1]);
+      swap(shp[dim], shp[lastdim-1]);
+      for (auto &curstr: str)
+        swap(curstr[dim], curstr[lastdim-1]);
+      }
+    }
+  // try merging dimensions
+  size_t ndim = shp.size();
+  if (ndim>1)
+    for (size_t d0=ndim-2; d0+1>0; --d0)
+      {
+      bool can_merge = true;
+      for (const auto &curstr: str)
+        can_merge &= curstr[d0] == ptrdiff_t(shp[d0+1])*curstr[d0+1];
+      if (can_merge)
+        {
+        for (auto &curstr: str)
+          curstr.erase(curstr.begin()+d0);
+        shp[d0+1] *= shp[d0];
+        shp.erase(shp.begin()+d0);
+        }
+      }
+  return make_tuple(shp, str);
+  }
+
+template<typename T0, typename Func> void fmav_apply_i(const fmav<T0> &m0, Func func, int nthreads=1)
+  {
+  // shortcut for 0-dim
+  if (m0.ndim()==0)
+    { func(m0()); return; }
+  auto [shp, str] = multiprep({m0});
+  const fmav<T0> m0b(m0.cdata(), shp, str[0]);
+  if (m0b.ndim()==1)
+    {
+    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(m0b(i));
+      });
+    return;
+    }
+  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      m0b.template applyHelper(1, i*m0b.stride(0), func);
+    });
+  }
+template<typename T0, typename Func> void fmav_apply_o(fmav<T0> &m0, Func func, int nthreads=1)
+  {
+  // shortcut for 0-dim
+  if (m0.ndim()==0)
+    { func(m0.v()); return; }
+  auto [shp, str] = multiprep({m0});
+  fmav<T0> m0b(m0.vdata(), shp, str[0], true);
+  if (m0b.ndim()==1)
+    {
+    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(m0b.v(i));
+      });
+    return;
+    }
+  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      m0b.template applyHelper(1, i*m0b.stride(0), func);
+    });
+  }
+template<typename T0, typename T1, typename Func> void fmav_apply_ii(const fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
+  {
+  MR_assert(m0.conformable(m1), "arrays are not conformable");
+  // shortcut for 0-dim
+  if (m0.ndim()==0)
+    { func(m0(), m1()); return; }
+  auto [shp, str] = multiprep({m0, m1});
+  const fmav<T0> m0b(m0.cdata(), shp, str[0]);
+  const fmav<T1> m1b(m1.cdata(), shp, str[1]);
+  if (m0b.ndim()==1)
+    {
+    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(m0b(i), m1b(i));
+      });
+    return;
+    }
+  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      m0b.template applyHelper(1, i*m0b.stride(0), i*m1b.stride(0), m1b, func);
+    });
+  }
+template<typename T0, typename T1, typename T2, typename Func> void fmav_apply_oii(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
+  {
+  MR_assert(m0.conformable(m1), "arrays are not conformable");
+  MR_assert(m0.conformable(m2), "arrays are not conformable");
+  // shortcut for 0-dim
+  if (m0.ndim()==0)
+    { func(m0.v(), m1(), m2()); return; }
+  auto [shp, str] = multiprep({m0, m1, m2});
+  fmav<T0> m0b(m0.vdata(), shp, str[0], true);
+  const fmav<T1> m1b(m1.cdata(), shp, str[1]);
+  const fmav<T2> m2b(m2.cdata(), shp, str[2]);
+  if (m0b.ndim()==1)
+    {
+    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(m0b.v(i), m1b(i), m2b(i));
+      });
+    return;
+    }
+  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      m0b.template applyHelper(1, i*m0b.stride(0), i*m1b.stride(0), i*m2b.stride(0), m1b, m2b, func);
+    });
+  }
+
+
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1061,6 +1230,11 @@ using detail_mav::MavIter;
 using detail_mav::slice;
 using detail_mav::MAXIDX;
 using detail_mav::subarray;
+
+using detail_mav::fmav_apply_i;
+using detail_mav::fmav_apply_o;
+using detail_mav::fmav_apply_ii;
+using detail_mav::fmav_apply_oii;
 
 }
 
