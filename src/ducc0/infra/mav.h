@@ -418,23 +418,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using typename tinfo::stride_t;
 
   protected:
-public:
-    template<typename Func, typename T2, typename T3> void applyHelper(size_t idim,
-      ptrdiff_t idx, ptrdiff_t idx2, ptrdiff_t idx3, const fmav<T2> &other, const fmav<T3> &other2, Func func)
-      {
-      auto ndim = tinfo::ndim();
-      if (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), idx3+i*other2.stride(idim), other, other2, func);
-      else
-        {
-        T *d1 = vdata();
-        const T2 *d2 = other.cdata();
-        const T3 *d3 = other2.cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)], d3[idx3+i*other2.stride(idim)]);
-        }
-      }
     template<typename Func, typename T2> void applyHelper(size_t idim,
       ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func)
       {
@@ -465,7 +448,6 @@ public:
           func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
         }
       }
-public:
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
       {
       auto ndim = tinfo::ndim();
@@ -479,7 +461,6 @@ public:
           func(d2[idx+i*str[idim]]);
         }
       }
-public:
     template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func) const
       {
       auto ndim = tinfo::ndim();
@@ -1071,7 +1052,7 @@ template<typename T, size_t ndim> class MavIter
 
 // various operations involving fmav objects of the same shape -- experimental
 
-auto multiprep(const vector<fmav_info> &info)
+DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
   {
   auto narr = info.size();
   MR_assert(narr>=1, "need at least one array");
@@ -1086,135 +1067,164 @@ auto multiprep(const vector<fmav_info> &info)
       for (size_t j=0; j<narr; ++j)
         str[j].push_back(info[j].stride(i));
       }
-  // sort dimensions in order of descending stride, as far as possible
-  vector<size_t> strcrit(shp.size(),0);
-  for (const auto &curstr: str)
-    for (size_t i=0; i<curstr.size(); ++i)
-      strcrit[i] = (strcrit[i]==0) ? size_t(abs(curstr[i])) : min(strcrit[i],size_t(abs(curstr[i])));
-
-  for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
+  if (shp.size()>1)
     {
-    auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)-strcrit.begin());
-    if (dim+1!=lastdim)
+    // sort dimensions in order of descending stride, as far as possible
+    vector<size_t> strcrit(shp.size(),0);
+    for (const auto &curstr: str)
+      for (size_t i=0; i<curstr.size(); ++i)
+        strcrit[i] = (strcrit[i]==0) ?
+          size_t(abs(curstr[i])) : min(strcrit[i],size_t(abs(curstr[i])));
+  
+    for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
       {
-      swap(strcrit[dim], strcrit[lastdim-1]);
-      swap(shp[dim], shp[lastdim-1]);
-      for (auto &curstr: str)
-        swap(curstr[dim], curstr[lastdim-1]);
-      }
-    }
-  // try merging dimensions
-  size_t ndim = shp.size();
-  if (ndim>1)
-    for (size_t d0=ndim-2; d0+1>0; --d0)
-      {
-      bool can_merge = true;
-      for (const auto &curstr: str)
-        can_merge &= curstr[d0] == ptrdiff_t(shp[d0+1])*curstr[d0+1];
-      if (can_merge)
+      auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)
+                        -strcrit.begin());
+      if (dim+1!=lastdim)
         {
+        swap(strcrit[dim], strcrit[lastdim-1]);
+        swap(shp[dim], shp[lastdim-1]);
         for (auto &curstr: str)
-          curstr.erase(curstr.begin()+d0);
-        shp[d0+1] *= shp[d0];
-        shp.erase(shp.begin()+d0);
+          swap(curstr[dim], curstr[lastdim-1]);
         }
       }
+    // try merging dimensions
+    size_t ndim = shp.size();
+    if (ndim>1)
+      for (size_t d0=ndim-2; d0+1>0; --d0)
+        {
+        bool can_merge = true;
+        for (const auto &curstr: str)
+          can_merge &= curstr[d0] == ptrdiff_t(shp[d0+1])*curstr[d0+1];
+        if (can_merge)
+          {
+          for (auto &curstr: str)
+            curstr.erase(curstr.begin()+d0);
+          shp[d0+1] *= shp[d0];
+          shp.erase(shp.begin()+d0);
+          }
+        }
+    }
   return make_tuple(shp, str);
   }
 
-template<typename T0, typename Func> void fmav_apply_i(const fmav<T0> &m0, Func func, int nthreads=1)
+template<typename T0, typename Func> void applyHelper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, Func func)
   {
-  // shortcut for 0-dim
-  if (m0.ndim()==0)
-    { func(m0()); return; }
-  auto [shp, str] = multiprep({m0});
-  const fmav<T0> m0b(m0.cdata(), shp, str[0]);
-  if (m0b.ndim()==1)
-    {
-    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+  auto len = shp[idim];
+  auto str0 = str[0][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0]);
+ }
+template<typename T0, typename Func> void applyHelper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        func(m0b(i));
+        func(ptr0[i*str[0][0]]);
       });
-    return;
-    }
-  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (size_t i=lo; i<hi; ++i)
-      m0b.template applyHelper(1, i*m0b.stride(0), func);
-    });
-  }
-template<typename T0, typename Func> void fmav_apply_o(fmav<T0> &m0, Func func, int nthreads=1)
-  {
-  // shortcut for 0-dim
-  if (m0.ndim()==0)
-    { func(m0.v()); return; }
-  auto [shp, str] = multiprep({m0});
-  fmav<T0> m0b(m0.vdata(), shp, str[0], true);
-  if (m0b.ndim()==1)
-    {
-    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        func(m0b.v(i));
+        applyHelper(1, shp, str, ptr0+i*str[0][0], func);
       });
-    return;
-    }
-  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (size_t i=lo; i<hi; ++i)
-      m0b.template applyHelper(1, i*m0b.stride(0), func);
-    });
   }
-template<typename T0, typename T1, typename Func> void fmav_apply_ii(const fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
+template<typename T0, typename T1, typename Func> void applyHelper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, Func func)
   {
-  MR_assert(m0.conformable(m1), "arrays are not conformable");
-  // shortcut for 0-dim
-  if (m0.ndim()==0)
-    { func(m0(), m1()); return; }
+  auto len = shp[idim];
+  auto str0 = str[0][idim];
+  auto str1 = str[1][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0], ptr1[i*str1]);
+  }
+template<typename T0, typename T1, typename Func> void applyHelper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0, *ptr1);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(ptr0[i*str[0][0]], ptr1[i*str[1][0]]);
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0], func);
+      });
+  }
+template<typename T0, typename T1, typename T2, typename Func> void applyHelper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim];
+  auto str1 = str[1][idim];
+  auto str2 = str[2][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, ptr2+i*str2, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0], ptr1[i*str1], ptr2[i*str2]);
+  }
+template<typename T0, typename T1, typename T2, typename Func> void applyHelper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0, *ptr1, *ptr2);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(ptr0[i*str[0][0]], ptr1[i*str[1][0]], ptr2[i*str[2][0]]);
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0], ptr2+i*str[2][0], func);
+      });
+  }
+
+template<typename T0, typename Func>
+  void fmav_apply(const fmav<T0> &m0, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0});
+  applyHelper(shp, str, m0.cdata(), func, nthreads);
+  }
+template<typename T0, typename Func>
+  void fmav_apply(fmav<T0> &m0, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0});
+  applyHelper(shp, str, m0.vdata(), func, nthreads);
+  }
+template<typename T0, typename T1, typename Func>
+  void fmav_apply(const fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
+  {
   auto [shp, str] = multiprep({m0, m1});
-  const fmav<T0> m0b(m0.cdata(), shp, str[0]);
-  const fmav<T1> m1b(m1.cdata(), shp, str[1]);
-  if (m0b.ndim()==1)
-    {
-    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        func(m0b(i), m1b(i));
-      });
-    return;
-    }
-  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (size_t i=lo; i<hi; ++i)
-      m0b.template applyHelper(1, i*m0b.stride(0), i*m1b.stride(0), m1b, func);
-    });
+  applyHelper(shp, str, m0.cdata(), m1.cdata(), func, nthreads);
   }
-template<typename T0, typename T1, typename T2, typename Func> void fmav_apply_oii(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
+template<typename T0, typename T1, typename T2, typename Func>
+  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
   {
-  MR_assert(m0.conformable(m1), "arrays are not conformable");
-  MR_assert(m0.conformable(m2), "arrays are not conformable");
-  // shortcut for 0-dim
-  if (m0.ndim()==0)
-    { func(m0.v(), m1(), m2()); return; }
   auto [shp, str] = multiprep({m0, m1, m2});
-  fmav<T0> m0b(m0.vdata(), shp, str[0], true);
-  const fmav<T1> m1b(m1.cdata(), shp, str[1]);
-  const fmav<T2> m2b(m2.cdata(), shp, str[2]);
-  if (m0b.ndim()==1)
-    {
-    execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        func(m0b.v(i), m1b(i), m2b(i));
-      });
-    return;
-    }
-  execParallel(m0b.shape(0), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (size_t i=lo; i<hi; ++i)
-      m0b.template applyHelper(1, i*m0b.stride(0), i*m1b.stride(0), i*m2b.stride(0), m1b, m2b, func);
-    });
+  applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), func, nthreads);
   }
 
 
@@ -1230,11 +1240,7 @@ using detail_mav::MavIter;
 using detail_mav::slice;
 using detail_mav::MAXIDX;
 using detail_mav::subarray;
-
-using detail_mav::fmav_apply_i;
-using detail_mav::fmav_apply_o;
-using detail_mav::fmav_apply_ii;
-using detail_mav::fmav_apply_oii;
+using detail_mav::fmav_apply;
 
 }
 
