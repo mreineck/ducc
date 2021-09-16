@@ -424,7 +424,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
+          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
       else
         {
         T *d1 = vdata();
@@ -439,7 +439,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
+          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
       else
         {
         const T *d1 = cdata();
@@ -453,7 +453,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], func);
+          applyHelper(idim+1, idx+i*str[idim], func);
       else
         {
         T *d2 = vdata();
@@ -466,7 +466,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto ndim = tinfo::ndim();
       if (idim+1<ndim)
         for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<Func>(idim+1, idx+i*str[idim], func);
+          applyHelper(idim+1, idx+i*str[idim], func);
       else
         {
         const T *d2 = cdata();
@@ -629,7 +629,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           func(*v);
         return;
         }
-      applyHelper<Func>(0, 0, func);
+      applyHelper(0, 0, func);
       }
     /** Calls \a func for every entry in the array, passing a constant
      *  reference to it. */
@@ -642,7 +642,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
           func(*v);
         return;
         }
-      applyHelper<Func>(0, 0, func);
+      applyHelper(0, 0, func);
       }
     /** Calls \a func for every entry in the array and the corresponding entry
      *  in \a other, passing constant references. */
@@ -652,7 +652,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       if (ndim() == 0)
         func(*vdata(), *other.cdata());
       else
-        applyHelper<Func>(0, 0, 0, other, func);
+        applyHelper(0, 0, 0, other, func);
       }
     /** Calls \a func for every entry in the array and the corresponding entry
      *  in \a other, passing a nonconstant reference to the entry in this array
@@ -663,7 +663,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       if (ndim() == 0)
         func(*cdata(), *other.cdata());
       else
-        applyHelper<Func>(0, 0, 0, other, func);
+        applyHelper(0, 0, 0, other, func);
       }
     vector<T> dump() const
       {
@@ -1119,12 +1119,14 @@ template<typename T0, typename Func> void applyHelper(size_t idim, const vector<
   else
     for (size_t i=0; i<len; ++i)
       func(ptr0[i*str0]);
- }
+  }
 template<typename T0, typename Func> void applyHelper(const vector<size_t> &shp,
   const vector<vector<ptrdiff_t>> &str, T0 ptr0, Func func, size_t nthreads)
   {
   if (shp.size()==0)
     func(*ptr0);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1142,8 +1144,7 @@ template<typename T0, typename T1, typename Func> void applyHelper(size_t idim, 
   const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, Func func)
   {
   auto len = shp[idim];
-  auto str0 = str[0][idim];
-  auto str1 = str[1][idim];
+  auto str0 = str[0][idim], str1 = str[1][idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
       applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, func);
@@ -1156,6 +1157,8 @@ template<typename T0, typename T1, typename Func> void applyHelper(const vector<
   {
   if (shp.size()==0)
     func(*ptr0, *ptr1);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, ptr1, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1173,9 +1176,7 @@ template<typename T0, typename T1, typename T2, typename Func> void applyHelper(
   const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, Func func)
   {
   auto len = shp[idim];
-  auto str0 = str[0][idim];
-  auto str1 = str[1][idim];
-  auto str2 = str[2][idim];
+  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
       applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, ptr2+i*str2, func);
@@ -1188,6 +1189,8 @@ template<typename T0, typename T1, typename T2, typename Func> void applyHelper(
   {
   if (shp.size()==0)
     func(*ptr0, *ptr1, *ptr2);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, ptr1, ptr2, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
