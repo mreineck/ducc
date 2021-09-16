@@ -1223,6 +1223,12 @@ template<typename T0, typename T1, typename Func>
   auto [shp, str] = multiprep({m0, m1});
   applyHelper(shp, str, m0.cdata(), m1.cdata(), func, nthreads);
   }
+template<typename T0, typename T1, typename Func>
+  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0, m1});
+  applyHelper(shp, str, m0.vdata(), m1.cdata(), func, nthreads);
+  }
 template<typename T0, typename T1, typename T2, typename Func>
   void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
   {

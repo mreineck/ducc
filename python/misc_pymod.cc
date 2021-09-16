@@ -74,7 +74,7 @@ template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, cons
   complex<Tacc> acc=0;
   {
   py::gil_scoped_release release;
-  a.apply(b, [&acc](const T1 &v1, const T2 &v2)
+  fmav_apply(a, b, [&acc](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc += conj(cv1) * cv2;
@@ -150,7 +150,7 @@ template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const
   Tacc acc1=0, acc2=0, acc3=0;
   {
   py::gil_scoped_release release;
-  a.apply(b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
+  fmav_apply(a, b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc1 += norm(cv1);
@@ -284,7 +284,7 @@ template<typename T> py::array Py2_make_noncritical(const py::array &in)
   auto in2 = to_fmav<T>(in, false);
   auto out = make_noncritical_Pyarr<T>(in2.shape());
   auto out2 = to_fmav<T>(out, true);
-  out2.apply(in2, [](T &v1, const T &v2) { v1=v2; });
+  fmav_apply(out2, in2, [](T &v1, const T &v2) { v1=v2; });
   return out;
   }
 
