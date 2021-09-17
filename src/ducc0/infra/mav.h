@@ -366,35 +366,6 @@ template<size_t ndim> class mav_info
   };
 
 
-class FmavIter
-  {
-  private:
-    fmav_info::shape_t pos;
-    fmav_info arr;
-    ptrdiff_t p;
-    size_t rem;
-
-  public:
-    FmavIter(const fmav_info &arr_)
-      : pos(arr_.ndim(), 0), arr(arr_), p(0), rem(arr_.size()) {}
-    void advance()
-      {
-      --rem;
-      for (int i_=int(pos.size())-1; i_>=0; --i_)
-        {
-        auto i = size_t(i_);
-        p += arr.stride(i);
-        if (++pos[i] < arr.shape(i))
-          return;
-        pos[i] = 0;
-        p -= ptrdiff_t(arr.shape(i))*arr.stride(i);
-        }
-      }
-    ptrdiff_t ofs() const { return p; }
-    size_t remaining() const { return rem; }
-  };
-
-
 /// Class for storing (or referring to) multi-dimensional arrays with a
 /// dimensionality that is not known at compile time.
 /** "fmav" stands for "flexible multidimensional array view".
@@ -1098,7 +1069,6 @@ using detail_mav::fmav_info;
 using detail_mav::fmav;
 using detail_mav::mav_info;
 using detail_mav::mav;
-using detail_mav::FmavIter;
 using detail_mav::MavIter;
 using detail_mav::slice;
 using detail_mav::MAXIDX;

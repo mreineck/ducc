@@ -565,69 +565,6 @@ template<size_t N> class multi_iter
     size_t remaining() const { return rem; }
   };
 
-class rev_iter
-  {
-  private:
-    shape_t pos;
-    fmav_info arr;
-    std::vector<char> rev_axis;
-    std::vector<char> rev_jump;
-    size_t last_axis, last_size;
-    shape_t shp;
-    ptrdiff_t p, rp;
-    size_t rem;
-
-  public:
-    rev_iter(const fmav_info &arr_, const shape_t &axes)
-      : pos(arr_.ndim(), 0), arr(arr_), rev_axis(arr_.ndim(), 0),
-        rev_jump(arr_.ndim(), 1), p(0), rp(0)
-      {
-      for (auto ax: axes)
-        rev_axis[ax]=1;
-      last_axis = axes.back();
-      last_size = arr.shape(last_axis)/2 + 1;
-      shp = arr.shape();
-      shp[last_axis] = last_size;
-      rem=1;
-      for (auto i: shp)
-        rem *= i;
-      }
-    void advance()
-      {
-      --rem;
-      for (int i_=int(pos.size())-1; i_>=0; --i_)
-        {
-        auto i = size_t(i_);
-        p += arr.stride(i);
-        if (!rev_axis[i])
-          rp += arr.stride(i);
-        else
-          {
-          rp -= arr.stride(i);
-          if (rev_jump[i])
-            {
-            rp += ptrdiff_t(arr.shape(i))*arr.stride(i);
-            rev_jump[i] = 0;
-            }
-          }
-        if (++pos[i] < shp[i])
-          return;
-        pos[i] = 0;
-        p -= ptrdiff_t(shp[i])*arr.stride(i);
-        if (rev_axis[i])
-          {
-          rp -= ptrdiff_t(arr.shape(i)-shp[i])*arr.stride(i);
-          rev_jump[i] = 1;
-          }
-        else
-          rp -= ptrdiff_t(shp[i])*arr.stride(i);
-        }
-      }
-    ptrdiff_t ofs() const { return p; }
-    ptrdiff_t rev_ofs() const { return rp; }
-    size_t remaining() const { return rem; }
-  };
-
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize)
   {
@@ -1428,6 +1365,55 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in
     ExecHartley{}, false);
   }
 
+template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
+  ptrdiff_t iout0, ptrdiff_t iout1, const fmav<T0> &c,
+  fmav<T1> &r, const shape_t &axes, Func func, size_t /*nthreads*/)
+  {
+  auto cstr=c.stride(idim), str=r.stride(idim);
+  auto len=r.shape(idim);
+
+  if (idim+1==c.ndim())
+    {
+    if (idim==axes.back())
+      for (size_t i=0; i<len/2+1; ++i)
+        {
+        size_t j = (i==0) ? 0 : len-i;
+        size_t io0=iout0+i*str, io1=iout1+j*str;
+        func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
+        }
+    else if (find(axes.begin(), axes.end(), idim) != axes.end())
+      for (size_t i=0; i<len; ++i)
+        {
+        size_t j = (i==0) ? 0 : len-i;
+        size_t io0=iout0+i*str, io1=iout1+j*str;
+        func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
+        }
+    else
+      for (size_t i=0; i<len; ++i)
+        func (c.craw(iin+i*cstr), r.vraw(iout0+i*str), r.vraw(iout1+i*str));
+    }
+  else
+    {
+    if (idim==axes.back())
+      for (size_t i=0; i<len/2+1; ++i)
+        {
+        size_t j = (i==0) ? 0 : len-i;
+        size_t io0=iout0+i*str, io1=iout1+j*str;
+        hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+        }
+    else if (find(axes.begin(), axes.end(), idim) != axes.end())
+      for (size_t i=0; i<len; ++i)
+        {
+        size_t j = (i==0) ? 0 : len-i;
+        size_t io0=iout0+i*str, io1=iout1+j*str;
+        hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+        }
+    else
+      for (size_t i=0; i<len; ++i)
+        hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+    }
+  }
+
 template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
@@ -1439,16 +1425,11 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   tshp[axes.back()] = tshp[axes.back()]/2+1;
   fmav<std::complex<T>> atmp(tshp);
   r2c(in, atmp, axes, true, fct, nthreads);
-  FmavIter iin(atmp);
-  rev_iter iout(out, axes);
-  auto vout = out.vdata();
-  while(iin.remaining()>0)
+  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
-    auto v = atmp.craw(iin.ofs());
-    vout[iout.ofs()] = v.real()+v.imag();
-    vout[iout.rev_ofs()] = v.real()-v.imag();
-    iin.advance(); iout.advance();
-    }
+    r0 = c.real()+c.imag();
+    r1 = c.real()-c.imag();
+    }, nthreads);
   }
 
 template<typename T, typename T0> aligned_array<T> alloc_tmp_conv_axis

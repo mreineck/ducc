@@ -149,13 +149,10 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace ducc0::detail_fft;
-  rev_iter iter(aout, axes);
-  while(iter.remaining()>0)
+  hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const std::complex<T> &c, complex<T> &, complex<T> &c1)
     {
-    auto v = aout.craw(iter.ofs());
-    aout.vraw(iter.rev_ofs()) = conj(v);
-    iter.advance();
-    }
+    c1 = conj(c);
+    }, nthreads);
   }
   return move(out);
   }
