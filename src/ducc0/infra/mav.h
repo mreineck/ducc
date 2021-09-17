@@ -993,6 +993,38 @@ template<typename T0, typename T1, typename T2, typename Func> void applyHelper(
         applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0], ptr2+i*str[2][0], func);
       });
   }
+template<typename T0, typename T1, typename T2, typename T3, typename Func> void applyHelper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim], str3 = str[3][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, ptr2+i*str2, ptr3+i*str3, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0], ptr1[i*str1], ptr2[i*str2], ptr3[i*str3]);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename Func> void applyHelper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0, *ptr1, *ptr2, *ptr3);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, ptr1, ptr2, ptr3, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(ptr0[i*str[0][0]], ptr1[i*str[1][0]], ptr2[i*str[2][0]], ptr3[i*str[3][0]]);
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0], ptr2+i*str[2][0], ptr3+i*str[3][0], func);
+      });
+  }
 
 template<typename T0, typename Func>
   void fmav_apply(const fmav<T0> &m0, Func func, int nthreads=1)
@@ -1023,6 +1055,24 @@ template<typename T0, typename T1, typename T2, typename Func>
   {
   auto [shp, str] = multiprep({m0, m1, m2});
   applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), func, nthreads);
+  }
+template<typename T0, typename T1, typename T2, typename Func>
+  void fmav_apply(fmav<T0> &m0, fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0, m1, m2});
+  applyHelper(shp, str, m0.vdata(), m1.vdata(), m2.cdata(), func, nthreads);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename Func>
+  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, const fmav<T3> &m3, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0, m1, m2, m3});
+  applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), m3.cdata(), func, nthreads);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename Func>
+  void fmav_apply(fmav<T0> &m0, fmav<T1> &m1, fmav<T2> &m2, const fmav<T3> &m3, Func func, int nthreads=1)
+  {
+  auto [shp, str] = multiprep({m0, m1, m2, m3});
+  applyHelper(shp, str, m0.vdata(), m1.vdata(), m2.vdata(), m3.cdata(), func, nthreads);
   }
 
 template<typename T0, size_t ndim, typename Func>
