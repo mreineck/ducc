@@ -430,7 +430,7 @@ class Py_OofaNoise
       {
       py::gil_scoped_release release;
 
-      res.apply(rnd, [](double &out, double in) {out=in;});
+      mav_apply(res, rnd, [](double &out, double in) {out=in;});
       gen.filterGaussian(res);
       }
       return res_;

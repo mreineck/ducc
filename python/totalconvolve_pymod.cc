@@ -230,7 +230,7 @@ template<typename T> class Py_Interpolator
       auto vslm = to_mav<complex<T>,2>(res, true);
       {
       py::gil_scoped_release release;
-      vslm.fill(T(0));
+      mav_apply(vslm, [](complex<T> &v){v=T(0);});
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {

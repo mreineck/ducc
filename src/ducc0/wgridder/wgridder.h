@@ -1209,7 +1209,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (do_wgridding)
         {
         timers.push("zeroing dirty image");
-        dirty_out.fill(0);
+        mav_apply(dirty_out, [](Timg &v){v=Timg(0);}, nthreads);
         timers.poppush("allocating grid");
         auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
@@ -1247,7 +1247,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         {
         timers.push("copying dirty image");
         mav<Timg,2> tdirty({nxdirty,nydirty}, UNINITIALIZED);
-        tdirty.apply(dirty_in, [](Timg &a, Timg b) {a=b;});
+        mav_apply(tdirty, dirty_in, [](Timg &a, const Timg &b) {a=b;}, nthreads);
         timers.pop();
         // correct for w gridding etc.
         apply_global_corrections(tdirty);
@@ -1438,7 +1438,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       scanData();
       if (nvis==0)
         {
-        if (gridding) dirty_out.fill(0);
+        if (gridding) mav_apply(dirty_out, [](Timg &v){v=Timg(0);}, nthreads);
         return;
         }
       auto kidx = getNuNv();

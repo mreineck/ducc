@@ -418,63 +418,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
     using typename tinfo::stride_t;
 
   protected:
-    template<typename Func, typename T2> void applyHelper(size_t idim,
-      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func)
-      {
-      auto ndim = tinfo::ndim();
-      if (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
-      else
-        {
-        T *d1 = vdata();
-        const T2 *d2 = other.cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
-        }
-      }
-    template<typename Func, typename T2> void applyHelper(size_t idim,
-      ptrdiff_t idx, ptrdiff_t idx2, const fmav<T2> &other, Func func) const
-      {
-      auto ndim = tinfo::ndim();
-      if (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper(idim+1, idx+i*str[idim], idx2+i*other.stride(idim), other, func);
-      else
-        {
-        const T *d1 = cdata();
-        const T2 *d2 = other.cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d1[idx+i*str[idim]], d2[idx2+i*other.stride(idim)]);
-        }
-      }
-    template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func)
-      {
-      auto ndim = tinfo::ndim();
-      if (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper(idim+1, idx+i*str[idim], func);
-      else
-        {
-        T *d2 = vdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]]);
-        }
-      }
-    template<typename Func> void applyHelper(size_t idim, ptrdiff_t idx, Func func) const
-      {
-      auto ndim = tinfo::ndim();
-      if (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper(idim+1, idx+i*str[idim], func);
-      else
-        {
-        const T *d2 = cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]]);
-        }
-      }
-
     auto subdata(const vector<slice> &slices) const
       {
       auto ndim = tinfo::ndim();
@@ -619,65 +562,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto [nshp, nstr, nofs] = subdata(slices);
       return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
-    /** Calls \a func for every entry in the array, passing a reference to it. */
-    template<typename Func> void apply(Func func)
-      {
-      if (contiguous()) // covers 0-d case
-        {
-        T *d2 = vdata();
-        for (auto v=d2; v!=d2+size(); ++v)
-          func(*v);
-        return;
-        }
-      applyHelper(0, 0, func);
-      }
-    /** Calls \a func for every entry in the array, passing a constant
-     *  reference to it. */
-    template<typename Func> void apply(Func func) const
-      {
-      if (contiguous()) // covers 0-d case
-        {
-        const T *d2 = cdata();
-        for (auto v=d2; v!=d2+size(); ++v)
-          func(*v);
-        return;
-        }
-      applyHelper(0, 0, func);
-      }
-    /** Calls \a func for every entry in the array and the corresponding entry
-     *  in \a other, passing constant references. */
-    template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func)
-      {
-      MR_assert(conformable(other), "fmavs are not conformable");
-      if (ndim() == 0)
-        func(*vdata(), *other.cdata());
-      else
-        applyHelper(0, 0, 0, other, func);
-      }
-    /** Calls \a func for every entry in the array and the corresponding entry
-     *  in \a other, passing a nonconstant reference to the entry in this array
-     *  and a constant one for the entry in \a other. */
-    template<typename Func, typename T2> void apply(const fmav<T2> &other, Func func) const
-      {
-      MR_assert(conformable(other), "fmavs are not conformable");
-      if (ndim() == 0)
-        func(*cdata(), *other.cdata());
-      else
-        applyHelper(0, 0, 0, other, func);
-      }
-    vector<T> dump() const
-      {
-      vector<T> res(sz);
-      size_t ii=0;
-      apply([&](const T&v){res[ii++]=v;});
-      return res;
-      }
-    void load (const vector<T> &v)
-      {
-      MR_assert(v.size()==sz, "bad input data size");
-      size_t ii=0;
-      apply([&](T &val){val=v[ii++];});
-      }
   };
 
 template<typename T> fmav<T> subarray
@@ -687,19 +571,6 @@ template<typename T> fmav<T> subarray
   (const fmav<T> &arr, const vector<slice> &slices)  
   { return arr.subarray(slices); }
 
-
-// template<typename Func, typename T0, typename Ts...> void fmav_pointwise_op(Func func, T0 & arg0, Ts&... args)
-//   {
-//   MR_assert(multiequal(arg0.shape()==args.shape()...), "fmav shape mismatch");
-//   if (multiequal(true, arg0.stride()==args.stride()...)) // equal strides, we can make simplifications
-//     {
-//     if (arg0.compact()) // even better, we can go through everything in a single loop
-//       {
-//       for (size_t i=0; i<arg0.size(); ++i)
-//         func(arg0.ptr[i], args.ptr[i]...);
-//       }
-//     else
-//   }
 
 /// Class for storing (or referring to) multi-dimensional arrays with a
 /// dimensionality known at compile time.
@@ -725,49 +596,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
     using typename tinfo::stride_t;
 
   protected:
-    template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func)
-      {
-      if constexpr (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<idim+1, Func>(idx+i*str[idim], func);
-      else
-        {
-        T *d2 = vdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]]);
-        }
-      }
-    template<size_t idim, typename Func> void applyHelper(ptrdiff_t idx, Func func) const
-      {
-      if constexpr (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<idim+1, Func>(idx+i*str[idim], func);
-      else
-        {
-        const T *d2 = cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]]);
-        }
-      }
-    template<size_t idim, typename T2, typename Func>
-      void applyHelper(ptrdiff_t idx, ptrdiff_t idx2,
-                       const mav<T2,ndim> &other, Func func)
-      {
-      if constexpr (idim==0)
-        MR_assert(conformable(other), "dimension mismatch");
-      if constexpr (idim+1<ndim)
-        for (size_t i=0; i<shp[idim]; ++i)
-          applyHelper<idim+1, T2, Func>(idx+i*str[idim],
-                                        idx2+i*other.stride(idim), other, func);
-      else
-        {
-        T *d2 = vdata();
-        const T2 *d3 = other.cdata();
-        for (size_t i=0; i<shp[idim]; ++i)
-          func(d2[idx+i*str[idim]],d3[idx2+i*other.stride(idim)]);
-        }
-      }
-
     template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
       MR_assert(slices.size()==ndim, "bad number of slices");
@@ -881,45 +709,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
      *  indices. This call will throw an exception if the mav is read-only. */
     template<typename... Ns> T &v(Ns... ns)
       { return vraw(idx(ns...)); }
-    /** Calls \a func for every entry in the array, passing a reference to it. */
-    template<typename Func> void apply(Func func)
-      {
-      if (contiguous()) // covers 0-d case
-        {
-        T *d2 = vdata();
-        for (auto v=d2; v!=d2+size(); ++v)
-          func(*v);
-        return;
-        }
-      applyHelper<0,Func>(0,func);
-      }
-    /** Calls \a func for every entry in the array, passing a constant
-     *  reference to it. */
-    template<typename Func> void apply(Func func) const
-      {
-      if (contiguous()) // covers 0-d case
-        {
-        const T *d2 = cdata();
-        for (auto v=d2; v!=d2+size(); ++v)
-          func(*v);
-        return;
-        }
-      applyHelper<0,Func>(0,func);
-      }
-    /** Calls \a func for every entry in the array and the corresponding entry
-     *  in \a other, passing a nonconstant reference to the entry in this array
-     *  and a constant one for the entry in \a other. */
-    template<typename T2, typename Func> void apply
-      (const mav<T2, ndim> &other,Func func)
-      {
-      if constexpr (ndim==0)
-        func(*vdata(), *other.cdata());
-      else
-        applyHelper<0,T2,Func>(0,0,other,func);
-      }
-    /// Sets every entry of the array to \a val.
-    void fill(const T &val)
-      { apply([val](T &v){v=val;}); }
     template<size_t nd2> mav<T,nd2> subarray(const vector<slice> &slices)
       {
       auto [nshp, nstr, nofs] = subdata<nd2> (slices);
@@ -1236,6 +1025,21 @@ template<typename T0, typename T1, typename T2, typename Func>
   applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), func, nthreads);
   }
 
+template<typename T0, size_t ndim, typename Func>
+  void mav_apply(const mav<T0, ndim> &m0, Func func, int nthreads=1)
+  { fmav_apply(fmav<T0>(m0), func, nthreads); }
+template<typename T0, size_t ndim, typename Func>
+  void mav_apply(mav<T0, ndim> &m0, Func func, int nthreads=1)
+  {
+  fmav<T0> fm0(m0);
+  fmav_apply(fm0, func, nthreads);
+  }
+template<typename T0, typename T1, size_t ndim, typename Func>
+  void mav_apply(mav<T0, ndim> &m0, const mav<T1, ndim> &m1, Func func, int nthreads=1)
+  {
+  fmav<T0> fm0(m0);
+  fmav_apply(fm0, fmav<T1>(m1), func, nthreads);
+  }
 
 }
 
@@ -1250,6 +1054,7 @@ using detail_mav::slice;
 using detail_mav::MAXIDX;
 using detail_mav::subarray;
 using detail_mav::fmav_apply;
+using detail_mav::mav_apply;
 
 }
 
