@@ -74,11 +74,11 @@ template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, cons
   complex<Tacc> acc=0;
   {
   py::gil_scoped_release release;
-  fmav_apply(a, b, [&acc](const T1 &v1, const T2 &v2)
+  fmav_apply([&acc](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc += conj(cv1) * cv2;
-    });
+    }, 1, a, b);
   }
   return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
   }
@@ -150,13 +150,13 @@ template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const
   Tacc acc1=0, acc2=0, acc3=0;
   {
   py::gil_scoped_release release;
-  fmav_apply(a, b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
+  fmav_apply([&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc1 += norm(cv1);
     acc2 += norm(cv2);
     acc3 += norm(cv1-cv2);
-    });
+    }, 1, a, b);
   }
   return double(sqrt(acc3/max(acc1,acc2)));
   }
@@ -284,7 +284,7 @@ template<typename T> py::array Py2_make_noncritical(const py::array &in)
   auto in2 = to_fmav<T>(in, false);
   auto out = make_noncritical_Pyarr<T>(in2.shape());
   auto out2 = to_fmav<T>(out, true);
-  fmav_apply(out2, in2, [](T &v1, const T &v2) { v1=v2; });
+  fmav_apply([](T &v1, const T &v2) { v1=v2; }, 1, out2, in2);
   return out;
   }
 

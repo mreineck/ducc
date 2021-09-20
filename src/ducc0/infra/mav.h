@@ -121,6 +121,13 @@ template<typename T> class membuf
       MR_assert(rw, "array is not writable");
       return const_cast<T *>(d);
       }
+    const T *data() const
+     { return d; }
+    T *data()
+      {
+      MR_assert(rw, "array is not writable");
+      return const_cast<T *>(d);
+      }
     bool writable() const { return rw; }
   };
 
@@ -419,7 +426,7 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       }
 
   public:
-    using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata;
+    using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata, tbuf::data;
     /// Constructs a 1D fmav with size and stride zero and no data content.
     fmav() {}
     /** Constructs a read-only fmav with its first data entry at \a d
@@ -998,68 +1005,47 @@ template<typename T0, typename T1, typename T2, typename T3, typename Func> void
   }
 
 template<typename T0, typename Func>
-  void fmav_apply(const fmav<T0> &m0, Func func, int nthreads=1)
+  void fmav_apply(Func func, int nthreads, T0 &&m0)
   {
   auto [shp, str] = multiprep({m0});
-  applyHelper(shp, str, m0.cdata(), func, nthreads);
-  }
-template<typename T0, typename Func>
-  void fmav_apply(fmav<T0> &m0, Func func, int nthreads=1)
-  {
-  auto [shp, str] = multiprep({m0});
-  applyHelper(shp, str, m0.vdata(), func, nthreads);
+  applyHelper(shp, str, m0.data(), func, nthreads);
   }
 template<typename T0, typename T1, typename Func>
-  void fmav_apply(const fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
+  void fmav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1)
   {
   auto [shp, str] = multiprep({m0, m1});
-  applyHelper(shp, str, m0.cdata(), m1.cdata(), func, nthreads);
-  }
-template<typename T0, typename T1, typename Func>
-  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, Func func, int nthreads=1)
-  {
-  auto [shp, str] = multiprep({m0, m1});
-  applyHelper(shp, str, m0.vdata(), m1.cdata(), func, nthreads);
+  applyHelper(shp, str, m0.data(), m1.data(), func, nthreads);
   }
 template<typename T0, typename T1, typename T2, typename Func>
-  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
+  void fmav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
   {
-  auto [shp, str] = multiprep({m0, m1, m2});
-  applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), func, nthreads);
+  auto [shp, str] = multiprep({fmav_info(m0), fmav_info (m1), fmav_info (m2)});
+  applyHelper(shp, str, m0.data(), m1.data(), m2.data(), func, nthreads);
   }
-template<typename T0, typename T1, typename T2, typename Func>
-  void fmav_apply(fmav<T0> &m0, fmav<T1> &m1, const fmav<T2> &m2, Func func, int nthreads=1)
-  {
-  auto [shp, str] = multiprep({m0, m1, m2});
-  applyHelper(shp, str, m0.vdata(), m1.vdata(), m2.cdata(), func, nthreads);
-  }
-template<typename T0, typename T1, typename T2, typename T3, typename Func>
-  void fmav_apply(fmav<T0> &m0, const fmav<T1> &m1, const fmav<T2> &m2, const fmav<T3> &m3, Func func, int nthreads=1)
+template<typename T0, typename T1, typename T2, typename T3, typename Func>  void fmav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3)
   {
   auto [shp, str] = multiprep({m0, m1, m2, m3});
-  applyHelper(shp, str, m0.vdata(), m1.cdata(), m2.cdata(), m3.cdata(), func, nthreads);
-  }
-template<typename T0, typename T1, typename T2, typename T3, typename Func>
-  void fmav_apply(fmav<T0> &m0, fmav<T1> &m1, fmav<T2> &m2, const fmav<T3> &m3, Func func, int nthreads=1)
-  {
-  auto [shp, str] = multiprep({m0, m1, m2, m3});
-  applyHelper(shp, str, m0.vdata(), m1.vdata(), m2.vdata(), m3.cdata(), func, nthreads);
+  applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), func, nthreads);
   }
 
 template<typename T0, size_t ndim, typename Func>
   void mav_apply(const mav<T0, ndim> &m0, Func func, int nthreads=1)
-  { fmav_apply(fmav<T0>(m0), func, nthreads); }
+  {
+  const fmav<T0> fm0(m0);
+  fmav_apply(func, nthreads, fm0);
+  }
 template<typename T0, size_t ndim, typename Func>
   void mav_apply(mav<T0, ndim> &m0, Func func, int nthreads=1)
   {
   fmav<T0> fm0(m0);
-  fmav_apply(fm0, func, nthreads);
+  fmav_apply(func, nthreads, fm0);
   }
 template<typename T0, typename T1, size_t ndim, typename Func>
   void mav_apply(mav<T0, ndim> &m0, const mav<T1, ndim> &m1, Func func, int nthreads=1)
   {
   fmav<T0> fm0(m0);
-  fmav_apply(fm0, fmav<T1>(m1), func, nthreads);
+  const fmav<T1> fm1(m1);
+  fmav_apply(func, nthreads, fm0, fm1);
   }
 
 }

@@ -122,12 +122,12 @@ class Pyhpbase
       auto out_ = to_fmav<double>(out, true);
       auto theta = out_.subarray({{},{0}});
       auto phi = out_.subarray({{},{1}});
-      fmav_apply(theta, phi, pix, [&](double &theta, double &phi, const int64_t &pix)
+      fmav_apply([&](double &theta, double &phi, const int64_t &pix)
         {
         pointing ptg = base.pix2ang(pix);
         theta = ptg.theta;
         phi = ptg.phi;
-        }, nthreads);
+        }, nthreads, theta, phi, pix);
       return out;
       }
     py::array ang2pix (const py::array &in, size_t nthreads) const
@@ -137,10 +137,10 @@ class Pyhpbase
       const auto phi = ang.subarray({{},{1}});
       auto out = myprep<double, int64_t, 1, 0>(in, {2}, {});
       auto pix = to_fmav<int64_t>(out, true);
-      fmav_apply(pix, theta, phi, [&](int64_t &pix, const double &theta, const double &phi)
+      fmav_apply([&](int64_t &pix, const double &theta, const double &phi)
         {
         pix=base.ang2pix(pointing(theta,phi));
-        }, nthreads);
+        }, nthreads, pix, theta, phi);
       return out;
       }
     py::array pix2vec (const py::array &in, size_t nthreads) const
@@ -151,11 +151,11 @@ class Pyhpbase
       auto x = out_.subarray({{},{0}});
       auto y = out_.subarray({{},{1}});
       auto z = out_.subarray({{},{2}});
-      fmav_apply(x, y, z, pix, [&](double &x, double &y, double &z, const int64_t &pix)
+      fmav_apply([&](double &x, double &y, double &z, const int64_t &pix)
         {
         auto vec = base.pix2vec(pix);
         x = vec.x; y = vec.y; z = vec.z;
-        }, nthreads);
+        }, nthreads, x, y, z, pix);
       return out;
       }
     py::array vec2pix (const py::array &in, size_t nthreads) const
@@ -166,10 +166,10 @@ class Pyhpbase
       const auto z = vec.subarray({{},{2}});
       auto out = myprep<double, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_fmav<int64_t>(out, true);
-      fmav_apply(pix, x, y, z, [&](int64_t &pix, const double &x, const double &y, const double &z)
+      fmav_apply([&](int64_t &pix, const double &x, const double &y, const double &z)
         {
         pix=base.vec2pix(vec3(x,y,z));
-        }, nthreads);
+        }, nthreads, pix, x, y, z);
       return out;
       }
     py::array pix2xyf (const py::array &in, size_t nthreads) const
@@ -180,12 +180,12 @@ class Pyhpbase
       auto x = out_.subarray({{},{0}});
       auto y = out_.subarray({{},{1}});
       auto f = out_.subarray({{},{2}});
-      fmav_apply(x, y, f, pix, [&](int64_t &x, int64_t &y, int64_t &f, const int64_t &pix)
+      fmav_apply([&](int64_t &x, int64_t &y, int64_t &f, const int64_t &pix)
         {
         int x_,y_,f_;
         base.pix2xyf(pix,x_,y_,f_);
         x=x_; y=y_; f=f_;
-        }, nthreads);
+        }, nthreads, x, y, f, pix);
       return out;
       }
     py::array xyf2pix (const py::array &in, size_t nthreads) const
@@ -196,10 +196,10 @@ class Pyhpbase
       const auto f = xyf.subarray({{},{2}});
       auto out = myprep<int64_t, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_fmav<int64_t>(out, true);
-      fmav_apply(pix, x, y, f, [&](int64_t &pix, const int64_t &x, const int64_t &y, const int64_t &f)
+      fmav_apply([&](int64_t &pix, const int64_t &x, const int64_t &y, const int64_t &f)
         {
         pix=base.xyf2pix(x,y,f);
-        }, nthreads);
+        }, nthreads, pix, x, y, f);
       return out;
       }
     py::array neighbors (const py::array &pix) const
@@ -219,8 +219,8 @@ class Pyhpbase
       const auto ring = to_fmav<int64_t>(in);
       auto out = make_Pyarr<int64_t>(ring.shape());
       auto nest = to_fmav<int64_t>(out, true);
-      fmav_apply(nest, ring, [&](int64_t &nest, const int64_t &ring)
-        { nest = base.ring2nest(ring); }, nthreads);
+      fmav_apply([&](int64_t &nest, const int64_t &ring)
+        { nest = base.ring2nest(ring); }, nthreads, nest, ring);
       return out;
       }
     py::array nest2ring (const py::array &in, size_t nthreads) const
@@ -228,8 +228,8 @@ class Pyhpbase
       const auto nest = to_fmav<int64_t>(in);
       auto out = make_Pyarr<int64_t>(nest.shape());
       auto ring = to_fmav<int64_t>(out, true);
-      fmav_apply(ring, nest, [&](int64_t &ring, const int64_t &nest)
-        { ring = base.nest2ring(nest); }, nthreads);
+      fmav_apply([&](int64_t &ring, const int64_t &nest)
+        { ring = base.nest2ring(nest); }, nthreads, ring, nest);
       return out;
       }
     py::array query_disc(const py::array &ptg, double radius) const
