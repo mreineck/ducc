@@ -78,7 +78,7 @@ template<typename T> class ConvolverPlan
       auto axlen_small = min(axlen, axlen2);
       auto fct = kernel->corfunc(axlen_small/2+1, 1./axlen_big, nthreads);
       mav<T,1> k2({axlen});
-      mav_apply(k2, [](T &v){v=T(0);});
+      mav_apply([](T &v){v=T(0);}, 1, k2);
       {
       k2.v(0) = T(fct[0])/axlen_small;
       size_t i=1;
@@ -666,7 +666,7 @@ template<typename T> class ConvolverPlan
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
       auto newpart = subarray<3>(subcube, {{npsi_s, MAXIDX}, {}, {}});
-      mav_apply(newpart, [](T &v){v=T(0);}, nthreads);
+      mav_apply([](T &v){v=T(0);}, nthreads, newpart);
       auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
       for (size_t k=0; k<npsi_s; ++k)
         {

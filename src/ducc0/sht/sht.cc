@@ -1690,7 +1690,7 @@ template<typename T> void resample_theta(const mav<complex<T>,3> &legi, bool npi
   MR_assert(lego.shape(2)==nm, "dimension mismatch");
   if ((npi==npo)&&(spi==spo)&&(legi.shape(1)==lego.shape(1)))  // shortcut
     {
-    mav_apply(lego, legi, [](complex<T> &a, complex<T> b) {a=b;}, nthreads);
+    mav_apply([](complex<T> &a, complex<T> b) {a=b;}, nthreads, lego, legi);
     return;
     }
   size_t nrings_in = legi.shape(1);

@@ -605,7 +605,7 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       }
 
   public:
-    using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata;
+    using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata, tbuf::data;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
     /// Constructs a mav with size and stride zero in all dimensions and no
@@ -819,21 +819,8 @@ template<typename T, size_t ndim> class MavIter
 
 // various operations involving fmav objects of the same shape -- experimental
 
-DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
+DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::stride_t> &str)
   {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    if (info[0].shape(i)!=1) // remove axes of length 1
-      {
-      shp.push_back(info[0].shape(i));
-      for (size_t j=0; j<narr; ++j)
-        str[j].push_back(info[j].stride(i));
-      }
   if (shp.size()>1)
     {
     // sort dimensions in order of descending stride, as far as possible
@@ -872,6 +859,42 @@ DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
           }
         }
     }
+  }
+
+DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    if (info[0].shape(i)!=1) // remove axes of length 1
+      {
+      shp.push_back(info[0].shape(i));
+      for (size_t j=0; j<narr; ++j)
+        str[j].push_back(info[j].stride(i));
+      }
+  opt_shp_str(shp, str);
+  return make_tuple(shp, str);
+  }
+template<size_t nd> DUCC0_NOINLINE auto mav_multiprep(const vector<mav_info<nd>> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<nd; ++i)
+    if (info[0].shape(i)!=1) // remove axes of length 1
+      {
+      shp.push_back(info[0].shape(i));
+      for (size_t j=0; j<narr; ++j)
+        str[j].push_back(info[j].stride(i));
+      }
+  opt_shp_str(shp, str);
   return make_tuple(shp, str);
   }
 
@@ -1028,24 +1051,23 @@ template<typename T0, typename T1, typename T2, typename T3, typename Func>  voi
   applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), func, nthreads);
   }
 
-template<typename T0, size_t ndim, typename Func>
-  void mav_apply(const mav<T0, ndim> &m0, Func func, int nthreads=1)
+template<typename T0, typename Func>
+  void mav_apply(Func func, int nthreads, T0 &&m0)
   {
-  const fmav<T0> fm0(m0);
-  fmav_apply(func, nthreads, fm0);
+  auto [shp, str] = multiprep({m0});
+  applyHelper(shp, str, m0.data(), func, nthreads);
   }
-template<typename T0, size_t ndim, typename Func>
-  void mav_apply(mav<T0, ndim> &m0, Func func, int nthreads=1)
+template<typename T0, typename T1, typename Func>
+  void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1)
   {
-  fmav<T0> fm0(m0);
-  fmav_apply(func, nthreads, fm0);
+  auto [shp, str] = multiprep({m0, m1});
+  applyHelper(shp, str, m0.data(), m1.data(), func, nthreads);
   }
-template<typename T0, typename T1, size_t ndim, typename Func>
-  void mav_apply(mav<T0, ndim> &m0, const mav<T1, ndim> &m1, Func func, int nthreads=1)
+template<typename T0, typename T1, typename T2, typename Func>
+  void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
   {
-  fmav<T0> fm0(m0);
-  const fmav<T1> fm1(m1);
-  fmav_apply(func, nthreads, fm0, fm1);
+  auto [shp, str] = multiprep({m0, m1, m2});
+  applyHelper(shp, str, m0.data(), m1.data(), m2.data(), func, nthreads);
   }
 
 }
