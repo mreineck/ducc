@@ -1330,7 +1330,7 @@ template<typename T> DUCC0_NOINLINE void c2r(const fmav<std::complex<T>> &in,
     return c2r(in, out, axes[0], forward, fct, nthreads);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
-  fmav<std::complex<T>> atmp(in.shape());
+  auto atmp(fmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
   auto newaxes = shape_t{axes.begin(), --axes.end()};
   c2c(in, atmp, newaxes, forward, T(1), nthreads);
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
@@ -1462,7 +1462,7 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   if (in.size()==0) return;
   shape_t tshp(in.shape());
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  fmav<std::complex<T>> atmp(tshp);
+  auto atmp(fmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {

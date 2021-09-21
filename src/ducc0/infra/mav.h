@@ -540,6 +540,36 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       auto [nshp, nstr, nofs] = subdata(slices);
       return fmav(nshp, nstr, tbuf::d+nofs, *this);
       }
+
+    /** Returns a writable fmav with the specified shape.
+     *  The strides are chosen in such a way that critical strides (multiples
+     *  of 4096 bytes) along any dimension are avoided, by enlarging the
+     *  allocated memory slightly if necessary.
+     *  The array data is default-initialized. */
+    static fmav build_noncritical(const shape_t &shape)
+      {
+      auto ndim = shape.size();
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      fmav tmp(shape2);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray(slc);
+      }
+    /** Returns a writable fmav with the specified shape.
+     *  The strides are chosen in such a way that critical strides (multiples
+     *  of 4096 bytes) along any dimension are avoided, by enlarging the
+     *  allocated memory slightly if necessary.
+     *  The array data is not initialized. */
+    static fmav build_noncritical(const shape_t &shape, uninitialized_dummy)
+      {
+      auto ndim = shape.size();
+      if (ndim<=1) return fmav(shape, UNINITIALIZED);
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      fmav tmp(shape2, UNINITIALIZED);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray(slc);
+      }
   };
 
 template<typename T> fmav<T> subarray
