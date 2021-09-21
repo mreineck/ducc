@@ -1372,7 +1372,7 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
   auto cstr=c.stride(idim), str=r.stride(idim);
   auto len=r.shape(idim);
 
-  if (idim+1==c.ndim())  // last dimension
+  if (idim+1==c.ndim())  // last dimension, not much gain in parallelizing
     {
     if (idim==axes.back())  // halfcomplex axis
       for (size_t i=0; i<len/2+1; ++i)
@@ -1466,8 +1466,13 @@ template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
+#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
+    r0 = c.real()-c.imag();
+    r1 = c.real()+c.imag();
+#else
     r0 = c.real()+c.imag();
     r1 = c.real()-c.imag();
+#endif
     }, nthreads);
   }
 

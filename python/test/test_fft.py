@@ -22,6 +22,7 @@ import pytest
 from numpy.testing import assert_
 import platform
 
+proper_hartley_convention = False #True
 
 pmp = pytest.mark.parametrize
 
@@ -133,7 +134,8 @@ def test1D(len, inorm, dtype):
             is tmp)
     assert_(l2error(tmp, a) < eps)
     tmp = fftn(a.real, inorm=inorm)
-    assert_(l2error(fft.separable_hartley(a.real,inorm=inorm),tmp.real+tmp.imag) < eps)
+    ref = tmp.real-tmp.imag if proper_hartley_convention else tmp.real+tmp.imag
+    assert_(l2error(fft.separable_hartley(a.real,inorm=inorm),ref) < eps)
 
 
 @pmp("shp", shapes)
@@ -245,7 +247,7 @@ def test_genuine_hartley(shp, nthreads):
     a = rng.random(shp)-0.5
     v1 = fft.genuine_hartley(a, nthreads=nthreads)
     v2 = fftn(a.astype(np.complex128))
-    v2 = v2.real+v2.imag
+    v2 = v2.real-v2.imag if proper_hartley_convention else v2.real+v2.imag 
     assert_(l2error(v1, v2) < 1e-15)
 
 

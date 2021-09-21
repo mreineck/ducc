@@ -167,8 +167,13 @@ template<typename T> void complex2hartley
     {
     for(auto u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
+#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
+        grid2.v(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
+                               grid(xu,xv).real()+grid(xu,xv).imag());
+#else
         grid2.v(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
                                grid(xu,xv).real()-grid(xu,xv).imag());
+#endif
     });
   }
 
@@ -182,8 +187,13 @@ template<typename T> void hartley2complex
     {
     for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
+#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
+        grid2.v(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
+                                  T(.5)*(grid(xu,xv)-grid(u,v)));
+#else
         grid2.v(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
                                   T(.5)*(grid(u,v)-grid(xu,xv)));
+#endif
     });
   }
 
