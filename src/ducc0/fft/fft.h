@@ -1367,50 +1367,89 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in
 
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
   ptrdiff_t iout0, ptrdiff_t iout1, const fmav<T0> &c,
-  fmav<T1> &r, const shape_t &axes, Func func, size_t /*nthreads*/)
+  fmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
   {
   auto cstr=c.stride(idim), str=r.stride(idim);
   auto len=r.shape(idim);
 
-  if (idim+1==c.ndim())
+  if (idim+1==c.ndim())  // last dimension
     {
-    if (idim==axes.back())
+    if (idim==axes.back())  // halfcomplex axis
       for (size_t i=0; i<len/2+1; ++i)
         {
         size_t j = (i==0) ? 0 : len-i;
         size_t io0=iout0+i*str, io1=iout1+j*str;
         func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
         }
-    else if (find(axes.begin(), axes.end(), idim) != axes.end())
+    else if (find(axes.begin(), axes.end(), idim) != axes.end())  // FFT axis
       for (size_t i=0; i<len; ++i)
         {
         size_t j = (i==0) ? 0 : len-i;
         size_t io0=iout0+i*str, io1=iout1+j*str;
         func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
         }
-    else
+    else  // non-FFT axis
       for (size_t i=0; i<len; ++i)
         func (c.craw(iin+i*cstr), r.vraw(iout0+i*str), r.vraw(iout1+i*str));
     }
   else
     {
     if (idim==axes.back())
-      for (size_t i=0; i<len/2+1; ++i)
-        {
-        size_t j = (i==0) ? 0 : len-i;
-        size_t io0=iout0+i*str, io1=iout1+j*str;
-        hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-        }
+      {
+      if (nthreads==1)
+        for (size_t i=0; i<len/2+1; ++i)
+          {
+          size_t j = (i==0) ? 0 : len-i;
+          size_t io0=iout0+i*str, io1=iout1+j*str;
+          hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+          }
+      else
+        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            {
+            size_t j = (i==0) ? 0 : len-i;
+            size_t io0=iout0+i*str, io1=iout1+j*str;
+            hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+            }
+          });
+      }
     else if (find(axes.begin(), axes.end(), idim) != axes.end())
-      for (size_t i=0; i<len; ++i)
+      {
+      if (nthreads==1)
         {
-        size_t j = (i==0) ? 0 : len-i;
-        size_t io0=iout0+i*str, io1=iout1+j*str;
-        hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+        for (size_t i=0; i<len; ++i)
+          {
+          size_t j = (i==0) ? 0 : len-i;
+          size_t io0=iout0+i*str, io1=iout1+j*str;
+          hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+          }
         }
+      else
+        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            {
+            size_t j = (i==0) ? 0 : len-i;
+            size_t io0=iout0+i*str, io1=iout1+j*str;
+            hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+            if (i!=j)
+              hermiteHelper(idim+1, iin+j*cstr, io1, io0, c, r, axes, func, 1);
+            }
+          });
+      }
     else
-      for (size_t i=0; i<len; ++i)
-        hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+      {
+      if (nthreads==1)
+        for (size_t i=0; i<len; ++i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+      else
+         execParallel(0, len, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+          });
+      }
     }
   }
 
