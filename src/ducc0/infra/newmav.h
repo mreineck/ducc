@@ -112,7 +112,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
 
 template<typename T> cfmav<T> subarray
   (const cfmav<T> &arr, const vector<slice> &slices)  
-  { return arr.template subarray(slices); }
+  { return arr.subarray(slices); }
 
 template<typename T> class vfmav: public cfmav<T>
   {
@@ -213,7 +213,7 @@ template<typename T> class vfmav: public cfmav<T>
 
 template<typename T> vfmav<T> subarray
   (vfmav<T> &arr, const vector<slice> &slices)  
-  { return arr.template subarray(slices); }
+  { return arr.subarray(slices); }
 
 template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmembuf<T>
   {
