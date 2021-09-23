@@ -207,10 +207,149 @@ template<typename T> class vfmav: public cfmav<T>
       }
   };
 
+template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmembuf<T>
+  {
+  protected:
+    using tinfo = mav_info<ndim>;
+    using tbuf = cmembuf<T>;
+    using tinfo::shp, tinfo::str;
+
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+    using tbuf::raw, tbuf::data;
+    using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
+
+  protected:
+    cmav(const shape_t &shp_)
+      : tinfo(shp_), tbuf(size()) {}
+    cmav(const shape_t &shp_, uninitialized_dummy)
+      : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
+
+  public:
+    cmav() {}
+    cmav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(d_) {}
+    cmav(const T *d_, const shape_t &shp_)
+      : tinfo(shp_), tbuf(d_) {}
+#if defined(_MSC_VER)
+    // MSVC is broken
+    cmav(const cmav &other) : tinfo(other), tbuf(other) {}
+    cmav(cmav &&other): tinfo(other), tbuf(other) {}
+#else
+    cmav(const cmav &other) = default;
+    cmav(cmav &&other) = default;
+#endif
+    void assign(const cmav &other)
+      {
+      mav_info<ndim>::assign(other);
+      cmembuf<T>::assign(other);
+      }
+    cmav(const mav_info<ndim> &info, const T *d_, const cmembuf<T> &mb)
+      : mav_info<ndim>(info), membuf<T>(d_, mb) {}
+    cmav(const shape_t &shp_, const stride_t &str_, const T *d_, const cmembuf<T> &mb)
+      : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
+    operator cfmav<T>() const
+      {
+      return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      }
+    template<typename... Ns> const T &operator()(Ns... ns) const
+      { return raw(idx(ns...)); }
+    template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
+      {
+      auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
+      return cmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
+      }
+
+    static cmav build_uniform(const shape_t &shape, const T &value)
+      {
+      cmembuf<T> buf(1);
+      buf.raw(0) = value;
+      stride_t nstr;
+      nstr.fill(0);
+      return cmav(shape, nstr, buf.cdata(), buf);
+      }
+  };
+
+template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
+  {
+  protected:
+    using parent = cmav<T, ndim>;
+    using tinfo = mav_info<ndim>;
+    using tbuf = cmembuf<T>;
+    using tinfo::shp, tinfo::str;
+
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+    using tbuf::raw, tbuf::data;
+    using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
+
+    vmav() {}
+    vmav(T *d_, const shape_t &shp_, const stride_t &str_)
+      : parent(d_, shp_, str_) {}
+    vmav(T *d_, const shape_t &shp_)
+      : parent(d_, shp_) {}
+    vmav(const shape_t &shp_)
+      : parent(shp_) {}
+    vmav(const shape_t &shp_, uninitialized_dummy)
+      : parent(shp_, UNINITIALIZED) {}
+#if defined(_MSC_VER)
+    // MSVC is broken
+    vmav(const vmav &other) : parent(other) {}
+    vmav(vmav &other): parent(other) {}
+    vmav(vmav &&other): parent(other) {}
+#else
+    vmav(const vmav &other) = default;
+    vmav(vmav &other) = default;
+    vmav(vmav &&other) = default;
+#endif
+    void assign(vmav &other)
+      { parent::assign(other); }
+    operator vfmav<T>()
+      {
+      return vfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      }
+    template<typename... Ns> T &operator()(Ns... ns)
+      { return const_cast<T &>(parent::operator()(ns...)); }
+    template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices)
+      {
+      auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
+      return vmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
+      }
+
+    static vmav build_empty()
+      {
+      shape_t nshp;
+      nshp.fill(0);
+      return vmav(static_cast<T *>(nullptr), nshp);
+      }
+
+    static vmav build_noncritical(const shape_t &shape)
+      {
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      vmav tmp(shape2);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray<ndim>(slc);
+      }
+    static vmav build_noncritical(const shape_t &shape, uninitialized_dummy)
+      {
+      if (ndim<=1) return mav(shape, UNINITIALIZED);
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      vmav tmp(shape2, UNINITIALIZED);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray<ndim>(slc);
+      }
+  };
+
 }
 
 using detail_mav::cfmav;
 using detail_mav::vfmav;
+using detail_mav::cmav;
+using detail_mav::vmav;
 }
 
 #endif
