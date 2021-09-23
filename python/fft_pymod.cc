@@ -50,9 +50,6 @@ namespace detail_pymodule_fft {
 namespace {
 
 using shape_t = ducc0::fmav_info::shape_t;
-using ducc0::fmav;
-using ducc0::to_fmav;
-using ducc0::get_optional_Pyarr;
 using std::size_t;
 using std::ptrdiff_t;
 
@@ -124,9 +121,9 @@ template<typename T> py::array c2c_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<std::complex<T>>(in, false);
+  auto ain = to_cfmav<std::complex<T>>(in);
   auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
-  auto aout = to_fmav<std::complex<T>>(out, true);
+  auto aout = to_vfmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -140,9 +137,9 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
-  auto aout = to_fmav<std::complex<T>>(out, true);
+  auto aout = to_vfmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -173,11 +170,11 @@ template<typename T> py::array r2c_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
   auto out = get_optional_Pyarr<std::complex<T>>(out_, dims_out);
-  auto aout = to_fmav<std::complex<T>>(out, true);
+  auto aout = to_vfmav<std::complex<T>>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -198,9 +195,9 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -222,9 +219,9 @@ template<typename T> py::array r2r_fftw_internal(const py::array &in,
   py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -245,9 +242,9 @@ template<typename T> py::array dct_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
@@ -271,9 +268,9 @@ template<typename T> py::array dst_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
@@ -298,14 +295,14 @@ template<typename T> py::array c2r_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   size_t axis = axes.back();
-  auto ain = to_fmav<std::complex<T>>(in, false);
+  auto ain = to_cfmav<std::complex<T>>(in);
   shape_t dims_out(ain.shape());
   if (lastsize==0) lastsize=2*ain.shape(axis)-1;
   if ((lastsize/2) + 1 != ain.shape(axis))
     throw std::invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
   auto out = get_optional_Pyarr<T>(out_, dims_out);
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
@@ -325,9 +322,9 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -347,9 +344,9 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_fmav<T>(in, false);
+  auto ain = to_cfmav<T>(in);
   auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_fmav<T>(out, true);
+  auto aout = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -393,8 +390,8 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
 template<typename T> py::array convolve_axis_internal(const py::array &in_,
   py::array &out_, size_t axis, const py::array &kernel_, size_t nthreads)
   {
-  auto in = to_fmav<T>(in_, false);
-  auto out = to_fmav<T>(out_, true);
+  auto in = to_cfmav<T>(in_);
+  auto out = to_vfmav<T>(out_);
   auto kernel = to_mav<T,1>(kernel_, false);
   {
   py::gil_scoped_release release;

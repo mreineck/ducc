@@ -56,6 +56,22 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     using typename tinfo::stride_t;
     using tbuf::raw, tbuf::data;
 
+
+  protected:
+    cfmav(const shape_t &shp_, uninitialized_dummy)
+      : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
+    cfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
+      : tinfo(shp_, str_), tbuf(size(), UNINITIALIZED)
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
+    cfmav(const fmav_info &info, const T *d_, const tbuf &buf)
+      : tinfo(info), tbuf(d_, buf) {}
+
+  public:
     cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(d_) {}
     cfmav(const T *d_, const shape_t &shp_)
@@ -105,6 +121,10 @@ template<typename T> class vfmav: public cfmav<T>
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
 
+  protected:
+    vfmav(const fmav_info &info, T *d_, tbuf &buf)
+      : cfmav<T>(info, d_, buf) {}
+
   public:
     using tbuf::raw, tbuf::data, tinfo::ndim;
     vfmav(T *d_, const fmav_info &info)
@@ -136,41 +156,9 @@ template<typename T> class vfmav: public cfmav<T>
     // read access to element #i
     template<typename I> T &raw(I i)
       { return data()[i]; }
-#if 0
-    vfmav(const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(size())
-      {
-      ptrdiff_t ofs=0;
-      for (size_t i=0; i<ndim(); ++i)
-        ofs += (ptrdiff_t(shp[i])-1)*str[i];
-      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
-      }
-    fmav(const T* d_, const tinfo &info)
-      : tinfo(info), tbuf(d_) {}
-    fmav(T* d_, const tinfo &info, bool rw_=false)
-      : tinfo(info), tbuf(d_, rw_) {}
-#if defined(_MSC_VER)
-    // MSVC is broken
-    fmav(const fmav &other) : tinfo(other), tbuf(other) {}
-    fmav(fmav &other) : tinfo(other), tbuf(other) {}
-    fmav(fmav &&other) : tinfo(other), tbuf(other) {}
-#else
-    /** Constructs a read-only fmav with the same shape and strides as \a other,
-     *  pointing to the same memory. Ownership is shared. */
-    fmav(const fmav &other) = default;
-    /** Constructs an fmav with the same read-write status, shape and strides
-     *  as \a other, pointing to the same memory. Ownership is shared. */
-    fmav(fmav &other) = default;
-    fmav(fmav &&other) = default;
-#endif
-    fmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(buf) {}
-//    fmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
-//      : tinfo(shp_, str_), tbuf(buf) {}
-    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
-//    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
-//      : tinfo(shp_, str_), tbuf(d_, buf) {}
+
+    vfmav(const shape_t &shp_, const stride_t &str_, T *d_, tbuf &buf)
+      : cfmav<T>(shp_, str_, d_, buf) {}
 
     void assign(vfmav &other)
       {
@@ -183,22 +171,21 @@ template<typename T> class vfmav: public cfmav<T>
     template<typename... Ns> T &v(Ns... ns)
       { return const_cast<T *>(raw(idx(ns...))); }
 
-    fmav subarray(const vector<slice> &slices)
+    vfmav subarray(const vector<slice> &slices)
       {
-      auto [ninfo, nofs] = subdata(slices);
-      return fmav(ninfo, tbuf::d+nofs, *this);
+      auto [ninfo, nofs] = tinfo::subdata(slices);
+      return vfmav(ninfo, data()+nofs, *this);
       }
-
     /** Returns a writable fmav with the specified shape.
      *  The strides are chosen in such a way that critical strides (multiples
      *  of 4096 bytes) along any dimension are avoided, by enlarging the
      *  allocated memory slightly if necessary.
      *  The array data is default-initialized. */
-    static fmav build_noncritical(const shape_t &shape)
+    static vfmav build_noncritical(const shape_t &shape)
       {
       auto ndim = shape.size();
       auto shape2 = noncritical_shape(shape, sizeof(T));
-      fmav tmp(shape2);
+      vfmav tmp(shape2);
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
@@ -208,17 +195,16 @@ template<typename T> class vfmav: public cfmav<T>
      *  of 4096 bytes) along any dimension are avoided, by enlarging the
      *  allocated memory slightly if necessary.
      *  The array data is not initialized. */
-    static fmav build_noncritical(const shape_t &shape, uninitialized_dummy)
+    static vfmav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
       auto ndim = shape.size();
-      if (ndim<=1) return fmav(shape, UNINITIALIZED);
+      if (ndim<=1) return vfmav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
-      fmav tmp(shape2, UNINITIALIZED);
+      vfmav tmp(shape2, UNINITIALIZED);
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
-#endif
   };
 
 }

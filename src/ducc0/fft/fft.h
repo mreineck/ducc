@@ -914,7 +914,7 @@ struct ExecDcst
   };
 
 template<typename T> DUCC0_NOINLINE void general_r2c(
-  const cfmav<T> &in, fmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
+  const cfmav<T> &in, vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
@@ -934,7 +934,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
         auto tdatav = reinterpret_cast<fft_simd<T> *>(storage.data());
         copy_input(it, in, tdatav);
         plan->exec(tdatav, fct, true, nth1d);
-        auto vout = out.vdata();
+        auto vout = out.data();
         for (size_t j=0; j<vlen; ++j)
           vout[it.oofs(j,0)].Set(tdatav[0][j]);
         size_t i=1, ii=1;
@@ -958,7 +958,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           auto tdatav = reinterpret_cast<typename simd_select<T,vlen/2>::type *>(storage.data());
           copy_input(it, in, tdatav);
           plan->exec(tdatav, fct, true, nth1d);
-          auto vout = out.vdata();
+          auto vout = out.data();
           for (size_t j=0; j<vlen/2; ++j)
             vout[it.oofs(j,0)].Set(tdatav[0][j]);
           size_t i=1, ii=1;
@@ -982,7 +982,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           auto tdatav = reinterpret_cast<typename simd_select<T,vlen/4>::type *>(storage.data());
           copy_input(it, in, tdatav);
           plan->exec(tdatav, fct, true, nth1d);
-          auto vout = out.vdata();
+          auto vout = out.data();
           for (size_t j=0; j<vlen/4; ++j)
             vout[it.oofs(j,0)].Set(tdatav[0][j]);
           size_t i=1, ii=1;
@@ -1005,7 +1005,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
       auto tdata = reinterpret_cast<T *>(storage.data());
       copy_input(it, in, tdata);
       plan->exec(tdata, fct, true, nth1d);
-      auto vout = out.vdata();
+      auto vout = out.data();
       vout[it.oofs(0)].Set(tdata[0]);
       size_t i=1, ii=1;
       if (forward)
@@ -1020,11 +1020,9 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
     });  // end of parallel region
   }
 template<typename T> DUCC0_NOINLINE void general_c2r(
-  const fmav<Cmplx<T>> &in_, fmav<T> &out_, size_t axis, bool forward, T fct,
+  const cfmav<Cmplx<T>> &in, vfmav<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
-cfmav in(in_);
-vfmav out(out_);
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
   auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
   size_t len=out.shape(axis);
@@ -1211,17 +1209,24 @@ struct ExecR2R
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
+template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
+  vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+  T fct, size_t nthreads=1)
+  {
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
+  vfmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
+  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
+  }
+//FIXME temp
 template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in_,
   fmav<std::complex<T>> &out_, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1)
   {
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
   cfmav<std::complex<T>> in(in_);
   vfmav<std::complex<T>> out(out_);
-  cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
-  vfmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
-  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
+  c2c(in, out, axes, forward, fct, nthreads);
   }
 
 /// Fast Discrete Cosine Transform
@@ -1245,14 +1250,12 @@ template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in_,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void dct(const fmav<T> &in_, fmav<T> &out_,
+template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
   const ExecDcst exec{ortho, type, true};
   if (type==1)
     general_nd<T_dct1<T>>(in, out, axes, fct, nthreads, exec);
@@ -1283,15 +1286,13 @@ template<typename T> DUCC0_NOINLINE void dct(const fmav<T> &in_, fmav<T> &out_,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void dst(const fmav<T> &in_, fmav<T> &out_,
+template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
   const ExecDcst exec{ortho, type, false};
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
   if (type==1)
     general_nd<T_dst1<T>>(in, out, axes, fct, nthreads, exec);
   else if (type==4)
@@ -1300,18 +1301,18 @@ template<typename T> DUCC0_NOINLINE void dst(const fmav<T> &in_, fmav<T> &out_,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> DUCC0_NOINLINE void r2c(const fmav<T> &in,
-  fmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
+  vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1)
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
-  fmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.vdata()), out, out.writable());
-  general_r2c(cfmav<T>(in), out2, axis, forward, fct, nthreads);
+  vfmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
+  general_r2c(in, out2, axis, forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void r2c(const fmav<T> &in,
-  fmav<std::complex<T>> &out, const shape_t &axes,
+template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
+  vfmav<std::complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1)
   {
   util::sanity_check_cr(out, in, axes);
@@ -1323,67 +1324,78 @@ template<typename T> DUCC0_NOINLINE void r2c(const fmav<T> &in,
   c2c(out, out, newaxes, forward, T(1), nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r(const fmav<std::complex<T>> &in,
-  fmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
   {
   util::sanity_check_cr(in, out, axis);
   if (in.size()==0) return;
-  fmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.cdata()), in);
+  cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
   general_c2r(in2, out, axis, forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r(const fmav<std::complex<T>> &in,
-  fmav<T> &out, const shape_t &axes, bool forward, T fct,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1)
   {
   if (axes.size()==1)
     return c2r(in, out, axes[0], forward, fct, nthreads);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
-  auto atmp(fmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
+  auto atmp(vfmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
   auto newaxes = shape_t{axes.begin(), --axes.end()};
   c2c(in, atmp, newaxes, forward, T(1), nthreads);
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
+template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
+  T fct, size_t nthreads=1)
+  {
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
+    ExecR2R{real2hermitian, forward});
+  }
+// FIXME temp
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const fmav<T> &in_,
   fmav<T> &out_, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1)
   {
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
   cfmav<T> in(in_);
   vfmav<T> out(out_);
-  general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
-    ExecR2R{real2hermitian, forward});
+  r2r_fftpack(in, out, axes, real2hermitian, forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void r2r_fftw(const fmav<T> &in_,
-  fmav<T> &out_, const shape_t &axes, bool forward,
+template<typename T> DUCC0_NOINLINE void r2r_fftw(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1)
   {
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
   general_nd<pocketfft_fftw<T>>(in, out, axes, fct, nthreads,
     ExecFFTW{forward});
   }
 
-template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in_,
-  fmav<T> &out_, const shape_t &axes, T fct, size_t nthreads=1)
+template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
-  util::sanity_check_onetype(in_, out_, in_.cdata()==out_.cdata(), axes);
-  if (in_.size()==0) return;
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
   general_nd<pocketfft_hartley<T>>(in, out, axes, fct, nthreads,
     ExecHartley{}, false);
   }
+//FIXME temp
+template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in_,
+  fmav<T> &out_, const shape_t &axes, T fct, size_t nthreads=1)
+  {
+  cfmav<T> in(in_);
+  vfmav<T> out(out_);
+  r2r_separable_hartley(in, out, axes, fct, nthreads);
+  }
 
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
-  ptrdiff_t iout0, ptrdiff_t iout1, const fmav<T0> &c,
-  fmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
+  ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
+  vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
   {
   auto cstr=c.stride(idim), str=r.stride(idim);
   auto len=r.shape(idim);
@@ -1395,18 +1407,18 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
         {
         size_t j = (i==0) ? 0 : len-i;
         size_t io0=iout0+i*str, io1=iout1+j*str;
-        func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
+        func (c.raw(iin+i*cstr), r.raw(io0), r.raw(io1));
         }
     else if (find(axes.begin(), axes.end(), idim) != axes.end())  // FFT axis
       for (size_t i=0; i<len; ++i)
         {
         size_t j = (i==0) ? 0 : len-i;
         size_t io0=iout0+i*str, io1=iout1+j*str;
-        func (c.craw(iin+i*cstr), r.vraw(io0), r.vraw(io1));
+        func (c.raw(iin+i*cstr), r.raw(io0), r.raw(io1));
         }
     else  // non-FFT axis
       for (size_t i=0; i<len; ++i)
-        func (c.craw(iin+i*cstr), r.vraw(iout0+i*str), r.vraw(iout1+i*str));
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+i*str));
     }
   else
     {
@@ -1469,16 +1481,16 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     }
   }
 
-template<typename T> void r2r_genuine_hartley(const fmav<T> &in,
-  fmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);
-  util::sanity_check_onetype(in, out, in.cdata()==out.cdata(), axes);
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   shape_t tshp(in.shape());
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  auto atmp(fmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
+  auto atmp(vfmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
@@ -1666,11 +1678,9 @@ struct ExecConv1C
  *  If \a in has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<T> &in_,
-  fmav<T> &out_, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
+template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
+  vfmav<T> &out, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
   {
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
   if (in.data()==out.data())
@@ -1682,12 +1692,17 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<T> &in_,
   general_convolve_axis<pocketfft_r<T>, T>(in, out, axis, kernel, nthreads,
     ExecConv1R());
   }
-template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<complex<T>> &in_,
-  fmav<complex<T>> &out_, size_t axis, const mav<complex<T>,1> &kernel,
+template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<T> &in_,
+  fmav<T> &out_, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
+  {
+  cfmav<T> in(in_);
+  vfmav<T> out(out_);
+  convolve_axis(in, out, axis, kernel, nthreads);
+  }
+template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &in,
+  vfmav<complex<T>> &out, size_t axis, const mav<complex<T>,1> &kernel,
   size_t nthreads=1)
   {
-  cfmav<complex<T>> in(in_);
-  vfmav<complex<T>> out(out_);
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
   if (in.data()==out.data())
