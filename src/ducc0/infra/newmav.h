@@ -44,46 +44,6 @@ namespace ducc0 {
 namespace detail_mav {
 
 using namespace std;
-#if 0
-template<typename T> class cmembuf
-  {
-  protected:
-    shared_ptr<vector<T>> ptr;
-    shared_ptr<aligned_array<T>> rawptr;
-    const T *d;
-
-    cmembuf(const T *d_, const cmembuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(d_) {}
-
-    // externally owned data pointer
-    cmembuf(const T *d_)
-      : d(d_) {}
-    // share another memory buffer, but read-only
-    cmembuf(const cmembuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
-    cmembuf(size_t sz)
-      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
-    cmembuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()) {}
-    // take over another memory buffer
-    cmembuf(cmembuf &&other) = default;
-
-  public:
-    cmembuf() = delete;
-    void assign(const cmembuf &other)
-      {
-      ptr = other.ptr;
-      rawptr = other.rawptr;
-      d = other.d;
-      }
-    // read access to element #i
-    template<typename I> const T &raw(I i) const
-      { return d[i]; }
-    // read access to data area
-    const T *data() const
-     { return d; }
-  };
-#endif
 
 template<typename T> class cfmav: public fmav_info, public cmembuf<T>
   {
