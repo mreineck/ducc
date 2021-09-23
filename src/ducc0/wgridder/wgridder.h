@@ -47,7 +47,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
-#include "ducc0/infra/mav.h"
+#include "ducc0/infra/newmav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
 #include "ducc0/math/gridding_kernel.h"
@@ -67,7 +67,7 @@ template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
 
 template<typename T> T sqr(T val) { return val*val; }
 
-template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
+template<typename T> void quickzero(vmav<T,2> &arr, size_t nthreads)
   {
 #if 0
   arr.fill(T(0));
@@ -80,15 +80,15 @@ template<typename T> void quickzero(mav<T,2> &arr, size_t nthreads)
     if (arr.stride(1)==1)
       {
       if (size_t(arr.stride(0))==arr.shape(1))
-        memset(reinterpret_cast<char *>(&arr.v(lo,0)), 0, sizeof(T)*s1*(hi-lo));
+        memset(reinterpret_cast<char *>(&arr(lo,0)), 0, sizeof(T)*s1*(hi-lo));
       else
         for (auto i=lo; i<hi; ++i)
-          memset(reinterpret_cast<char *>(&arr.v(i,0)), 0, sizeof(T)*s1);
+          memset(reinterpret_cast<char *>(&arr(i,0)), 0, sizeof(T)*s1);
       }
     else
       for (auto i=lo; i<hi; ++i)
         for (size_t j=0; j<s1; ++j)
-          arr.v(i,j) = T(0);
+          arr(i,j) = T(0);
     });
 #endif
   }
@@ -158,7 +158,7 @@ template<size_t ndim> void checkShape
 //
 
 template<typename T> void complex2hartley
-  (const mav<complex<T>, 2> &grid, mav<T,2> &grid2, size_t nthreads)
+  (const cmav<complex<T>, 2> &grid, vmav<T,2> &grid2, size_t nthreads)
   {
   MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -168,17 +168,17 @@ template<typename T> void complex2hartley
     for(auto u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
 #ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
-        grid2.v(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
+        grid2(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
                                grid(xu,xv).real()+grid(xu,xv).imag());
 #else
-        grid2.v(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
+        grid2(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
                                grid(xu,xv).real()-grid(xu,xv).imag());
 #endif
     });
   }
 
 template<typename T> void hartley2complex
-  (const mav<T,2> &grid, mav<complex<T>,2> &grid2, size_t nthreads)
+  (const cmav<T,2> &grid, vmav<complex<T>,2> &grid2, size_t nthreads)
   {
   MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -188,20 +188,20 @@ template<typename T> void hartley2complex
     for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
 #ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
-        grid2.v(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
+        grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
                                   T(.5)*(grid(xu,xv)-grid(u,v)));
 #else
-        grid2.v(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
+        grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
                                   T(.5)*(grid(u,v)-grid(xu,xv)));
 #endif
     });
   }
 
-template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
+template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
   bool first_fast, size_t nthreads)
   {
   size_t nu=arr.shape(0), nv=arr.shape(1);
-  fmav<T> farr(arr);
+  vfmav<T> farr(arr);
   if (2*vlim<nv)
     {
     if (!first_fast)
@@ -225,10 +225,10 @@ template<typename T> void hartley2_2D(mav<T,2> &arr, size_t vlim,
          T b = arr(nu-i,j);
          T c = arr(i,nv-j);
          T d = arr(nu-i,nv-j);
-         arr.v(i,j) = T(0.5)*(a+b+c-d);
-         arr.v(nu-i,j) = T(0.5)*(a+b+d-c);
-         arr.v(i,nv-j) = T(0.5)*(a+c+d-b);
-         arr.v(nu-i,nv-j) = T(0.5)*(b+c+d-a);
+         arr(i,j) = T(0.5)*(a+b+c-d);
+         arr(nu-i,j) = T(0.5)*(a+b+d-c);
+         arr(i,nv-j) = T(0.5)*(a+c+d-b);
+         arr(nu-i,nv-j) = T(0.5)*(b+c+d-a);
          }
      });
   }
@@ -288,8 +288,8 @@ class Baselines
 
   public:
     Baselines() = default;
-    template<typename T> Baselines(const mav<T,2> &coord_,
-      const mav<T,1> &freq, bool negate_v=false)
+    template<typename T> Baselines(const cmav<T,2> &coord_,
+      const cmav<T,1> &freq, bool negate_v=false)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -338,12 +338,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
   private:
     bool gridding;
     TimerHierarchy timers;
-    const mav<complex<Tms>,2> &ms_in;
-    mav<complex<Tms>,2> &ms_out;
-    const mav<Timg,2> &dirty_in;
-    mav<Timg,2> &dirty_out;
-    const mav<Tms,2> &wgt;
-    const mav<uint8_t,2> &mask;
+    const cmav<complex<Tms>,2> &ms_in;
+    vmav<complex<Tms>,2> &ms_out;
+    const cmav<Timg,2> &dirty_in;
+    vmav<Timg,2> &dirty_out;
+    const cmav<Tms,2> &wgt;
+    const cmav<uint8_t,2> &mask;
     double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
     double epsilon;
@@ -392,7 +392,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       return twopi*(phs-floor(phs));
       }
 
-    void grid2dirty_post(mav<Tcalc,2> &tmav, mav<Timg,2> &dirty) const
+    void grid2dirty_post(vmav<Tcalc,2> &tmav, vmav<Timg,2> &dirty) const
       {
       checkShape(dirty.shape(), {nxdirty, nydirty});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -409,12 +409,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-nydirty/2+j;
             if (j2>=nv) j2-=nv;
-            dirty.v(i,j) = Timg(tmav(i2,j2)*cfu[icfu]*cfv[icfv]);
+            dirty(i,j) = Timg(tmav(i2,j2)*cfu[icfu]*cfv[icfv]);
             }
           }
         });
       }
-    void grid2dirty_post2(mav<complex<Tcalc>,2> &tmav, mav<Timg,2> &dirty, double w) const
+    void grid2dirty_post2(vmav<complex<Tcalc>,2> &tmav, vmav<Timg,2> &dirty, double w) const
       {
       checkShape(dirty.shape(), {nxdirty,nydirty});
       double x0 = lshift-0.5*nxdirty*pixsize_x,
@@ -433,8 +433,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-              dirty.v(i,j) += Timg(tmav(ix,jx).real()*phases[j].real()
-                                 - tmav(ix,jx).imag()*phases[j].imag());
+              dirty(i,j) += Timg(tmav(ix,jx).real()*phases[j].real()
+                               - tmav(ix,jx).imag()*phases[j].imag());
           else
             {
             size_t i2 = nxdirty-i;
@@ -445,22 +445,22 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
                 {
                 size_t j2 = min(j, nydirty-j);
                 Tcalc re = phases[j2].real(), im = phases[j2].imag();
-                dirty.v(i ,j) += Timg(tmav(ix ,jx).real()*re - tmav(ix ,jx).imag()*im);
-                dirty.v(i2,j) += Timg(tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im);
+                dirty(i ,j) += Timg(tmav(ix ,jx).real()*re - tmav(ix ,jx).imag()*im);
+                dirty(i2,j) += Timg(tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im);
                 }
             else
               for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
                 {
                 size_t j2 = min(j, nydirty-j);
                 Tcalc re = phases[j2].real(), im = phases[j2].imag();
-                dirty.v(i,j) += Timg(tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im); // lower left
+                dirty(i,j) += Timg(tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im); // lower left
                 }
             }
           }
         });
       }
 
-    void grid2dirty_overwrite(mav<Tcalc,2> &grid, mav<Timg,2> &dirty)
+    void grid2dirty_overwrite(vmav<Tcalc,2> &grid, vmav<Timg,2> &dirty)
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
@@ -471,11 +471,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
     void grid2dirty_c_overwrite_wscreen_add
-      (mav<complex<Tcalc>,2> &grid, mav<Timg,2> &dirty, double w)
+      (vmav<complex<Tcalc>,2> &grid, vmav<Timg,2> &dirty, double w)
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
-      fmav<complex<Tcalc>> inout(grid);
+      vfmav<complex<Tcalc>> inout(grid);
       if (2*vlim<nv)
         {
         if (!uv_side_fast)
@@ -494,7 +494,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       timers.pop();
       }
 
-    void dirty2grid_pre(const mav<Timg,2> &dirty, mav<Tcalc,2> &grid)
+    void dirty2grid_pre(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
       {
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
@@ -518,13 +518,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-nydirty/2+j;
             if (j2>=nv) j2-=nv;
-            grid.v(i2,j2) = dirty(i,j)*Tcalc(cfu[icfu]*cfv[icfv]);
+            grid(i2,j2) = dirty(i,j)*Tcalc(cfu[icfu]*cfv[icfv]);
             }
           }
         });
       timers.pop();
       }
-    void dirty2grid_pre2(const mav<Timg,2> &dirty, mav<complex<Tcalc>,2> &grid, double w)
+    void dirty2grid_pre2(const cmav<Timg,2> &dirty, vmav<complex<Tcalc>,2> &grid, double w)
       {
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
@@ -550,7 +550,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-              grid.v(ix,jx) = Tcalc(dirty(i,j))*phases[j];
+              grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
           else
             {
             size_t i2 = nxdirty-i;
@@ -560,19 +560,19 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
               for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
                 {
                 size_t j2 = min(j, nydirty-j);
-                grid.v(ix ,jx) = Tcalc(dirty(i ,j))*phases[j2]; // lower left
-                grid.v(ix2,jx) = Tcalc(dirty(i2,j))*phases[j2]; // lower right
+                grid(ix ,jx) = Tcalc(dirty(i ,j))*phases[j2]; // lower left
+                grid(ix2,jx) = Tcalc(dirty(i2,j))*phases[j2]; // lower right
                 }
             else
               for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-                grid.v(ix,jx) = Tcalc(dirty(i,j))*phases[min(j, nydirty-j)]; // lower left
+                grid(ix,jx) = Tcalc(dirty(i,j))*phases[min(j, nydirty-j)]; // lower left
             }
           }
         });
       timers.pop();
       }
 
-    void dirty2grid(const mav<Timg,2> &dirty, mav<Tcalc,2> &grid)
+    void dirty2grid(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
       {
       dirty2grid_pre(dirty, grid);
       timers.push("FFT");
@@ -580,12 +580,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       timers.pop();
       }
 
-    void dirty2grid_c_wscreen(const mav<Timg,2> &dirty,
-      mav<complex<Tcalc>,2> &grid, double w)
+    void dirty2grid_c_wscreen(const cmav<Timg,2> &dirty,
+      vmav<complex<Tcalc>,2> &grid, double w)
       {
       dirty2grid_pre2(dirty, grid, w);
       timers.push("FFT");
-      fmav<complex<Tcalc>> inout(grid);
+      vfmav<complex<Tcalc>> inout(grid);
       if (2*vlim<nv)
         {
         if (uv_side_fast)
@@ -750,11 +750,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         static constexpr double xsupp=2./supp;
         const Params *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
-        mav<complex<Tcalc>,2> &grid;
+        vmav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
 
-        mav<Tacc,2> bufr, bufi;
+        vmav<Tacc,2> bufr, bufi;
         Tacc *px0r, *px0i;
         double w0, xdw;
         vector<mutex> &locks;
@@ -774,8 +774,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
-              grid.v(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
-              bufr.v(iu,iv) = bufi.v(iu,iv) = 0;
+              grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
+              bufr(iu,iv) = bufi(iu,iv) = 0;
               if (++idxv>=inv) idxv=0;
               }
             }
@@ -794,14 +794,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           };
         kbuf buf;
 
-        HelperX2g2(const Params *parent_, mav<complex<Tcalc>,2> &grid_,
+        HelperX2g2(const Params *parent_, vmav<complex<Tcalc>,2> &grid_,
           vector<mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.vdata()), px0i(bufi.vdata()),
+            px0r(bufr.data()), px0i(bufi.data()),
             w0(w0_),
             xdw(1./dw_),
             locks(locks_)
@@ -851,11 +851,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         const Params *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
-        const mav<complex<Tcalc>,2> &grid;
+        const cmav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
 
-        mav<Tcalc,2> bufr, bufi;
+        vmav<Tcalc,2> bufr, bufi;
         const Tcalc *px0r, *px0i;
         double w0, xdw;
 
@@ -870,8 +870,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             int idxv = idxv0;
             for (int iv=0; iv<sv; ++iv)
               {
-              bufr.v(iu,iv) = grid(idxu, idxv).real();
-              bufi.v(iu,iv) = grid(idxu, idxv).imag();
+              bufr(iu,iv) = grid(idxu, idxv).real();
+              bufi(iu,iv) = grid(idxu, idxv).imag();
               if (++idxv>=inv) idxv=0;
               }
             if (++idxu>=inu) idxu=0;
@@ -889,14 +889,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           };
         kbuf buf;
 
-        HelperG2x2(const Params *parent_, const mav<complex<Tcalc>,2> &grid_,
+        HelperG2x2(const Params *parent_, const cmav<complex<Tcalc>,2> &grid_,
           double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.cdata()), px0i(bufi.cdata()),
+            px0r(bufr.data()), px0i(bufi.data()),
             w0(w0_),
             xdw(1./dw_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
@@ -945,7 +945,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
-      (size_t supp, mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+      (size_t supp, vmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
@@ -1031,7 +1031,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         });
       }
 
-    template<bool wgrid> void x2grid_c(mav<complex<Tcalc>,2> &grid,
+    template<bool wgrid> void x2grid_c(vmav<complex<Tcalc>,2> &grid,
       size_t p0, double w0=-1)
       {
       checkShape(grid.shape(), {nu, nv});
@@ -1040,7 +1040,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
-      (size_t supp, const mav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+      (size_t supp, const cmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
@@ -1110,9 +1110,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx<Tcalc>(rr,ri);
-                ms_out.v(row, ch) += r;
+                ms_out(row, ch) += r;
                 if (lastplane)
-                  ms_out.v(row, ch) *= shifting ?
+                  ms_out(row, ch) *= shifting ?
                     complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(wgt(row, ch))) :
                     wgt(row, ch);
                 }
@@ -1122,7 +1122,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         });
       }
 
-    template<bool wgrid> void grid2x_c(const mav<complex<Tcalc>,2> &grid,
+    template<bool wgrid> void grid2x_c(const cmav<complex<Tcalc>,2> &grid,
       size_t p0, double w0=-1)
       {
       checkShape(grid.shape(), {nu, nv});
@@ -1130,7 +1130,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       grid2x_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
       }
 
-    void apply_global_corrections(mav<Timg,2> &dirty)
+    void apply_global_corrections(vmav<Timg,2> &dirty)
       {
       timers.push("global corrections");
       double x0 = lshift-0.5*nxdirty*pixsize_x,
@@ -1162,21 +1162,21 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               {
               auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
               fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
-              dirty.v(i,j)*=Timg(fct);
+              dirty(i,j)*=Timg(fct);
               }
             else
               {
               fct *= cfu[nxdirty/2-i]*cfv[nydirty/2-j];
               size_t i2 = nxdirty-i, j2 = nydirty-j;
-              dirty.v(i,j)*=Timg(fct);
+              dirty(i,j)*=Timg(fct);
               if ((i>0)&&(i<i2))
                 {
-                dirty.v(i2,j)*=Timg(fct);
+                dirty(i2,j)*=Timg(fct);
                 if ((j>0)&&(j<j2))
-                  dirty.v(i2,j2)*=Timg(fct);
+                  dirty(i2,j2)*=Timg(fct);
                 }
               if ((j>0)&&(j<j2))
-                dirty.v(i,j2)*=Timg(fct);
+                dirty(i,j2)*=Timg(fct);
               }
             }
           }
@@ -1221,7 +1221,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         timers.push("zeroing dirty image");
         mav_apply([](Timg &v){v=Timg(0);}, nthreads, dirty_out);
         timers.poppush("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
+        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -1239,11 +1239,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
         timers.push("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv});
+        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
         timers.poppush("gridding proper");
         x2grid_c<false>(grid, 0);
         timers.poppush("allocating rgrid");
-        auto rgrid = mav<Tcalc,2>::build_noncritical(grid.shape(), UNINITIALIZED);
+        auto rgrid = vmav<Tcalc,2>::build_noncritical(grid.shape(), UNINITIALIZED);
         timers.poppush("complex2hartley");
         complex2hartley(grid, rgrid, nthreads);
         timers.pop();
@@ -1256,13 +1256,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (do_wgridding)
         {
         timers.push("copying dirty image");
-        mav<Timg,2> tdirty({nxdirty,nydirty}, UNINITIALIZED);
+        vmav<Timg,2> tdirty({nxdirty,nydirty}, UNINITIALIZED);
         mav_apply([](Timg &a, const Timg &b) {a=b;}, nthreads, tdirty, dirty_in);
         timers.pop();
         // correct for w gridding etc.
         apply_global_corrections(tdirty);
         timers.push("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
+        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -1276,11 +1276,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
         timers.push("allocating grid");
-        auto rgrid = mav<Tcalc,2>::build_noncritical({nu,nv}, UNINITIALIZED);
+        auto rgrid = vmav<Tcalc,2>::build_noncritical({nu,nv}, UNINITIALIZED);
         timers.pop();
         dirty2grid(dirty_in, rgrid);
         timers.push("allocating grid");
-        auto grid = mav<complex<Tcalc>,2>::build_noncritical(rgrid.shape());
+        auto grid = vmav<complex<Tcalc>,2>::build_noncritical(rgrid.shape());
         timers.poppush("hartley2complex");
         hartley2complex(rgrid, grid, nthreads);
         timers.poppush("degridding proper");
@@ -1406,10 +1406,10 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       }
 
   public:
-    Params(const mav<double,2> &uvw, const mav<double,1> &freq,
-           const mav<complex<Tms>,2> &ms_in_, mav<complex<Tms>,2> &ms_out_,
-           const mav<Timg,2> &dirty_in_, mav<Timg,2> &dirty_out_,
-           const mav<Tms,2> &wgt_, const mav<uint8_t,2> &mask_,
+    Params(const cmav<double,2> &uvw, const cmav<double,1> &freq,
+           const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
+           const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
+           const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool negate_v_, bool divide_by_n_, double sigma_min_,
@@ -1488,15 +1488,15 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty(const mav<double,2> &uvw,
-  const mav<double,1> &freq, const mav<complex<Tms>,2> &ms,
-  const mav<Tms,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, mav<Timg,2> &dirty, size_t verbosity,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
+  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
-  auto ms_out(ms.build_empty());
-  auto dirty_in(dirty.build_empty());
+  auto ms_out(vmav<complex<Tms>,2>::build_empty());
+  auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
@@ -1504,16 +1504,16 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const mav<double,2> &uvw,
-  const mav<double,1> &freq, const mav<Timg,2> &dirty,
-  const mav<Tms,2> &wgt_, const mav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, mav<complex<Tms>,2> &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
+  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
-  auto dirty_out(dirty.build_empty());
+  auto dirty_out(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,

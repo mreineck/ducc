@@ -110,6 +110,10 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       }
   };
 
+template<typename T> cfmav<T> subarray
+  (const cfmav<T> &arr, const vector<slice> &slices)  
+  { return arr.template subarray(slices); }
+
 template<typename T> class vfmav: public cfmav<T>
   {
   protected:
@@ -207,6 +211,10 @@ template<typename T> class vfmav: public cfmav<T>
       }
   };
 
+template<typename T> vfmav<T> subarray
+  (vfmav<T> &arr, const vector<slice> &slices)  
+  { return arr.template subarray(slices); }
+
 template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmembuf<T>
   {
   protected:
@@ -221,12 +229,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
-    cmav(const shape_t &shp_)
-      : tinfo(shp_), tbuf(size()) {}
     cmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
-    cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(buf) {}
 
   public:
     cmav() {}
@@ -244,6 +248,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
 #endif
     cmav(const tinfo &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
+    cmav(const shape_t &shp_)
+      : tinfo(shp_), tbuf(size()) {}
+    cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
     void assign(const cmav &other)
       {
       mav_info<ndim>::assign(other);
@@ -263,8 +271,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
 
     static cmav build_uniform(const shape_t &shape, const T &value)
       {
-      cmav tmp({1});
-      const_cast<T &>(tmp.raw(0)) = value;
+      array<size_t,1> tshp;
+      tshp[0] = 1;
+      cmav<T,1> tmp(tshp);
+      const_cast<T &>(tmp(0)) = value;
       stride_t nstr;
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
@@ -347,7 +357,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       }
     static vmav build_noncritical(const shape_t &shape, uninitialized_dummy)
       {
-      if (ndim<=1) return mav(shape, UNINITIALIZED);
+      if (ndim<=1) return vmav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, UNINITIALIZED);
       vector<slice> slc(ndim);
