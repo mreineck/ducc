@@ -47,28 +47,66 @@ using namespace std;
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 
-template<typename T> class membuf
+template<typename T> class cmembuf
   {
   protected:
     shared_ptr<vector<T>> ptr;
     shared_ptr<aligned_array<T>> rawptr;
     const T *d;
+
+    cmembuf(const T *d_, const cmembuf &other)
+      : ptr(other.ptr), rawptr(other.rawptr), d(d_) {}
+
+    // externally owned data pointer
+    cmembuf(const T *d_)
+      : d(d_) {}
+    // share another memory buffer, but read-only
+    cmembuf(const cmembuf &other)
+      : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
+    cmembuf(size_t sz)
+      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
+    cmembuf(size_t sz, uninitialized_dummy)
+      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()) {}
+    // take over another memory buffer
+    cmembuf(cmembuf &&other) = default;
+
+  public:
+    cmembuf() = delete;
+    void assign(const cmembuf &other)
+      {
+      ptr = other.ptr;
+      rawptr = other.rawptr;
+      d = other.d;
+      }
+    // read access to element #i
+    template<typename I> const T &raw(I i) const
+      { return d[i]; }
+    // read access to data area
+    const T *data() const
+     { return d; }
+  };
+template<typename T> class membuf: public cmembuf<T>
+  {
+  protected:
+    using parent = cmembuf<T>;
+    using parent::d;
+
     bool rw;
 
     membuf(const T *d_, membuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(d_), rw(other.rw) {}
+      : parent(d_, other), rw(other.rw) {}
     membuf(const T *d_, const membuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(d_), rw(false) {}
+      : parent(d_, other), rw(false) {}
 
     // externally owned data pointer
     membuf(T *d_, bool rw_=false)
-      : d(d_), rw(rw_) {}
+      : parent(d_), rw(rw_) {}
     // externally owned data pointer, nonmodifiable
     membuf(const T *d_)
-      : d(d_), rw(false) {}
+      : parent(d_), rw(false) {}
     // share another memory buffer, but read-only
     membuf(const membuf &other)
-      : ptr(other.ptr), d(other.d), rw(false) {}
+      : parent(other), rw(false) {}
 #if defined(_MSC_VER)
     // MSVC is broken
     membuf(membuf &other)
@@ -84,23 +122,19 @@ template<typename T> class membuf
 
   public:
     // allocate own memory
-    membuf() : d(nullptr), rw(false) {}
+    membuf() : parent(nullptr), rw(false) {}
     membuf(size_t sz)
-      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()), rw(true) {}
+      : parent(sz), rw(true) {}
     membuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()), rw(true) {}
+      : parent(sz, UNINITIALIZED), rw(true) {}
     void assign(membuf &other)
       {
-      ptr = other.ptr;
-      rawptr = other.rawptr;
-      d = other.d;
+      parent::assign(other);
       rw = other.rw;
       }
     void assign(const membuf &other)
       {
-      ptr = other.ptr;
-      rawptr = other.rawptr;
-      d = other.d;
+      parent::assign(other);
       rw = false;
       }
     // read/write access to element #i
@@ -278,6 +312,33 @@ class fmav_info
       shp = shp2;
       str = str2;
       }
+    auto subdata(const vector<slice> &slices) const
+      {
+      auto ndim = shp.size();
+      shape_t nshp(ndim);
+      stride_t nstr(ndim);
+      MR_assert(slices.size()==ndim, "incorrect number of slices");
+      size_t n0=0;
+      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      ptrdiff_t nofs=0;
+      nshp.resize(ndim-n0);
+      nstr.resize(ndim-n0);
+      for (size_t i=0, i2=0; i<ndim; ++i)
+        {
+        MR_assert(slices[i].lo<shp[i], "bad subset");
+        nofs+=slices[i].lo*str[i];
+        if (slices[i].lo!=slices[i].hi)
+          {
+          auto ext = slices[i].hi-slices[i].lo;
+          if (slices[i].hi==MAXIDX)
+            ext = shp[i]-slices[i].lo;
+          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=str[i];
+          ++i2;
+          }
+        }
+      return make_tuple(nshp, nstr, nofs);
+      }
   };
 
 /// Helper class containing shape and stride information of a `mav` object
@@ -372,6 +433,196 @@ template<size_t ndim> class mav_info
       }
   };
 
+
+template<typename T> class cfmav: public fmav_info, public cmembuf<T>
+  {
+  protected:
+    using tbuf = cmembuf<T>;
+    using tinfo = fmav_info;
+
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+    using tbuf::raw, tbuf::data;
+    cfmav() {}
+    cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(d_) {}
+    cfmav(const T *d_, const shape_t &shp_)
+      : tinfo(shp_), tbuf(d_) {}
+    cfmav(const shape_t &shp_)
+      : tinfo(shp_), tbuf(size()) {}
+    cfmav(const T* d_, const tinfo &info)
+      : tinfo(info), tbuf(d_) {}
+    cfmav(const cfmav &other) = default;
+    cfmav(cfmav &&other) = default;
+
+    cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
+    cfmav(const tbuf &buf, const tinfo &info)
+      : tinfo(info), tbuf(buf) {}
+    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
+    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
+
+    void assign(const cfmav &other)
+      {
+      tinfo::assign(other);
+      tbuf::assign(other);
+      }
+
+    /// Returns the data entry at the given set of indices.
+    template<typename... Ns> const T &operator()(Ns... ns) const
+      { return raw(idx(ns...)); }
+    /// Returns the data entry at the given set of indices.
+    template<typename... Ns> const T &c(Ns... ns) const
+      { return raw(idx(ns...)); }
+
+    cfmav subarray(const vector<slice> &slices) const
+      {
+      auto [nshp, nstr, nofs] = subdata(slices);
+      return cfmav(nshp, nstr, tbuf::d+nofs, *this);
+      }
+  };
+
+template<typename T> class vfmav: public cfmav<T>
+  {
+  protected:
+    using tbuf = cmembuf<T>;
+    using tinfo = fmav_info;
+    using tinfo::shp, tinfo::str, tinfo::size;
+
+  public:
+    using typename tinfo::shape_t;
+    using typename tinfo::stride_t;
+
+  public:
+    using tbuf::raw, tbuf::data, tinfo::ndim;
+    vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
+      : cfmav<T>(d_, shp_, str_) {}
+    vfmav(T *d_, const shape_t &shp_)
+      : cfmav<T>(d_, shp_) {}
+    vfmav(const shape_t &shp_)
+      : cfmav<T>(shp_) {}
+    vfmav(const shape_t &shp_, uninitialized_dummy)
+      : cfmav<T>(shp_, UNINITIALIZED) {}
+    vfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
+      : cfmav<T>(shp_, str_, UNINITIALIZED)
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
+    vfmav(tbuf &buf, const tinfo &info)
+      : cfmav<T>(buf, info) {}
+    vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : cfmav<T>(buf, shp_, str_) {}
+    T *data()
+     { return const_cast<T *>(tbuf::d); }
+#if 0
+    vfmav(const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(size())
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
+    fmav(const T* d_, const tinfo &info)
+      : tinfo(info), tbuf(d_) {}
+    fmav(T* d_, const tinfo &info, bool rw_=false)
+      : tinfo(info), tbuf(d_, rw_) {}
+#if defined(_MSC_VER)
+    // MSVC is broken
+    fmav(const fmav &other) : tinfo(other), tbuf(other) {}
+    fmav(fmav &other) : tinfo(other), tbuf(other) {}
+    fmav(fmav &&other) : tinfo(other), tbuf(other) {}
+#else
+    /** Constructs a read-only fmav with the same shape and strides as \a other,
+     *  pointing to the same memory. Ownership is shared. */
+    fmav(const fmav &other) = default;
+    /** Constructs an fmav with the same read-write status, shape and strides
+     *  as \a other, pointing to the same memory. Ownership is shared. */
+    fmav(fmav &other) = default;
+    fmav(fmav &&other) = default;
+#endif
+    fmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
+    fmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
+    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
+    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
+      : tinfo(shp_, str_), tbuf(d_, buf) {}
+
+    operator cfmav<T>() const { return cfmav<T>(*this, *this); }
+
+    void assign(vfmav &other)
+      {
+      fmav_info::assign(other);
+      cmembuf<T>::assign(other);
+      }
+
+    /// Returns the data entry at the given set of indices.
+    template<typename... Ns> const T &operator()(Ns... ns) const
+      { return craw(idx(ns...)); }
+    /// Returns the data entry at the given set of indices.
+    template<typename... Ns> const T &c(Ns... ns) const
+      { return craw(idx(ns...)); }
+    /** Returns a writable reference to the data entry at the given set of
+     *  indices. This call will throw an exception if the fmav is read-only. */
+    template<typename... Ns> T &v(Ns... ns)
+      { return vraw(idx(ns...)); }
+
+    fmav subarray(const vector<slice> &slices)
+      {
+      auto [nshp, nstr, nofs] = subdata(slices);
+      return fmav(nshp, nstr, tbuf::d+nofs, *this);
+      }
+    /** Returns an fmav (of the same or smaller dimensionality) representing a
+     *  sub-array of *this. \a slices describes the lower and one-past-upper
+     *  indices of the selection. If a slice has zero extent, this
+     *  dimension will be omitted in the output array.
+     *  Specifying an upper bound of MAXIDX will make the extent as large as possible.
+     *  The returned fmav is read-only. */
+    fmav subarray(const vector<slice> &slices) const
+      {
+      auto [nshp, nstr, nofs] = subdata(slices);
+      return fmav(nshp, nstr, tbuf::d+nofs, *this);
+      }
+
+    /** Returns a writable fmav with the specified shape.
+     *  The strides are chosen in such a way that critical strides (multiples
+     *  of 4096 bytes) along any dimension are avoided, by enlarging the
+     *  allocated memory slightly if necessary.
+     *  The array data is default-initialized. */
+    static fmav build_noncritical(const shape_t &shape)
+      {
+      auto ndim = shape.size();
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      fmav tmp(shape2);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray(slc);
+      }
+    /** Returns a writable fmav with the specified shape.
+     *  The strides are chosen in such a way that critical strides (multiples
+     *  of 4096 bytes) along any dimension are avoided, by enlarging the
+     *  allocated memory slightly if necessary.
+     *  The array data is not initialized. */
+    static fmav build_noncritical(const shape_t &shape, uninitialized_dummy)
+      {
+      auto ndim = shape.size();
+      if (ndim<=1) return fmav(shape, UNINITIALIZED);
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      fmav tmp(shape2, UNINITIALIZED);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray(slc);
+      }
+#endif
+  };
 
 /// Class for storing (or referring to) multi-dimensional arrays with a
 /// dimensionality that is not known at compile time.
@@ -501,6 +752,8 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : tinfo(shp_, str_), tbuf(d_, buf) {}
     fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
       : tinfo(shp_, str_), tbuf(d_, buf) {}
+    explicit operator cfmav<T>() const { return cfmav<T>(*this, *this); }
+    explicit operator vfmav<T>() { MR_assert(tbuf::writable(), "array is not writable"); return vfmav<T>(*this, *this); }
 
     void assign(fmav &other)
       {
@@ -1114,6 +1367,8 @@ using detail_mav::subarray;
 using detail_mav::fmav_apply;
 using detail_mav::mav_apply;
 
+using detail_mav::cfmav;
+using detail_mav::vfmav;
 }
 
 #endif

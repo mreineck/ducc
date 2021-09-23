@@ -68,8 +68,8 @@ The accumulation is performed in long double precision for good accuracy.
 
 template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, const py::array &b_)
   {
-  const auto a = to_fmav<T1>(a_);
-  const auto b = to_fmav<T2>(b_);
+  const auto a = cfmav<T1>(to_fmav<T1>(a_));
+  const auto b = cfmav<T2>(to_fmav<T2>(b_));
   using Tacc = long double;
   complex<Tacc> acc=0;
   {
@@ -144,8 +144,8 @@ The accumulations are performed in long double precision for good accuracy.
 )""";
 template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
   {
-  const auto a = to_fmav<T1>(a_);
-  const auto b = to_fmav<T2>(b_);
+  const auto a = cfmav<T1>(to_fmav<T1>(a_));
+  const auto b = cfmav<T2>(to_fmav<T2>(b_));
   using Tacc = long double;
   Tacc acc1=0, acc2=0, acc3=0;
   {
@@ -228,8 +228,8 @@ py::array Py_GL_thetas(size_t nlat)
 
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
   {
-  auto in2 = to_fmav<T>(in, false);
-  auto out2 = to_fmav<T>(out, true);
+  auto in2 = cfmav<T>(to_fmav<T>(in, false));
+  auto out2 = vfmav<T>(to_fmav<T>(out, true));
   {
   py::gil_scoped_release release;
   transpose(in2, out2, [](const T &in, T &out){out=in;});
