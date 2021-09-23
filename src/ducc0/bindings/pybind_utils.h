@@ -28,6 +28,7 @@
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/newmav.h"
 #include "ducc0/infra/misc_utils.h"
 
 namespace ducc0 {
@@ -167,6 +168,18 @@ template<typename T> fmav<T> to_fmav(const py::object &obj, bool rw=false)
   return fmav<T>(reinterpret_cast<const T *>(arr.data()),
     copy_shape(arr), copy_strides<T>(arr, false));
   }
+template<typename T> cfmav<T> to_cfmav(const py::object &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
+    copy_shape(arr), copy_strides<T>(arr, false));
+  }
+template<typename T> vfmav<T> to_vfmav(const py::object &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_shape(arr), copy_strides<T>(arr, true));
+  }
 
 template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool rw=false)
   {
@@ -188,6 +201,8 @@ using detail_pybind::get_optional_Pyarr;
 using detail_pybind::get_optional_Pyarr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_fmav;
+using detail_pybind::to_cfmav;
+using detail_pybind::to_vfmav;
 using detail_pybind::to_mav;
 
 }

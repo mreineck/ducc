@@ -55,13 +55,11 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
     using tbuf::raw, tbuf::data;
-//    cfmav() {}
+
     cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(d_) {}
     cfmav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
-//    cfmav(const shape_t &shp_)
-//      : tinfo(shp_), tbuf(size()) {}
     cfmav(const T* d_, const tinfo &info)
       : tinfo(info), tbuf(d_) {}
     cfmav(const cfmav &other) = default;
@@ -71,10 +69,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       : tinfo(shp_, str_), tbuf(buf) {}
     cfmav(const tbuf &buf, const tinfo &info)
       : tinfo(info), tbuf(buf) {}
-//    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
-//      : tinfo(shp_, str_), tbuf(d_, buf) {}
-    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
+
+// FIXME temporary
     cfmav(const fmav<T> &orig)
       : tinfo(orig), tbuf(orig) {}
 

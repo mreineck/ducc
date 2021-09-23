@@ -68,8 +68,8 @@ The accumulation is performed in long double precision for good accuracy.
 
 template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, const py::array &b_)
   {
-  const auto a = cfmav<T1>(to_fmav<T1>(a_));
-  const auto b = cfmav<T2>(to_fmav<T2>(b_));
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<T2>(b_);
   using Tacc = long double;
   complex<Tacc> acc=0;
   {
@@ -144,8 +144,8 @@ The accumulations are performed in long double precision for good accuracy.
 )""";
 template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
   {
-  const auto a = cfmav<T1>(to_fmav<T1>(a_));
-  const auto b = cfmav<T2>(to_fmav<T2>(b_));
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<T2>(b_);
   using Tacc = long double;
   Tacc acc1=0, acc2=0, acc3=0;
   {
@@ -282,9 +282,9 @@ numpy.ndarray (same dtype and content as `in`)
 )""";
 template<typename T> py::array Py2_make_noncritical(const py::array &in)
   {
-  auto in2 = to_fmav<T>(in, false);
+  auto in2 = to_cfmav<T>(in);
   auto out = make_noncritical_Pyarr<T>(in2.shape());
-  auto out2 = to_fmav<T>(out, true);
+  auto out2 = to_vfmav<T>(out);
   fmav_apply([](T &v1, const T &v2) { v1=v2; }, 1, out2, in2);
   return out;
   }
