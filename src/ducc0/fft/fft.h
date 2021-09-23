@@ -1219,15 +1219,6 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
   vfmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
-//FIXME temp
-template<typename T> DUCC0_NOINLINE void c2c(const fmav<std::complex<T>> &in_,
-  fmav<std::complex<T>> &out_, const shape_t &axes, bool forward,
-  T fct, size_t nthreads=1)
-  {
-  cfmav<std::complex<T>> in(in_);
-  vfmav<std::complex<T>> out(out_);
-  c2c(in, out, axes, forward, fct, nthreads);
-  }
 
 /// Fast Discrete Cosine Transform
 /** This executes a DCT on \a in and stores the result in \a out.
@@ -1356,15 +1347,6 @@ template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
   general_nd<pocketfft_r<T>>(in, out, axes, fct, nthreads,
     ExecR2R{real2hermitian, forward});
   }
-// FIXME temp
-template<typename T> DUCC0_NOINLINE void r2r_fftpack(const fmav<T> &in_,
-  fmav<T> &out_, const shape_t &axes, bool real2hermitian, bool forward,
-  T fct, size_t nthreads=1)
-  {
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
-  r2r_fftpack(in, out, axes, real2hermitian, forward, fct, nthreads);
-  }
 
 template<typename T> DUCC0_NOINLINE void r2r_fftw(const cfmav<T> &in,
   vfmav<T> &out, const shape_t &axes, bool forward,
@@ -1383,14 +1365,6 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &i
   if (in.size()==0) return;
   general_nd<pocketfft_hartley<T>>(in, out, axes, fct, nthreads,
     ExecHartley{}, false);
-  }
-//FIXME temp
-template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const fmav<T> &in_,
-  fmav<T> &out_, const shape_t &axes, T fct, size_t nthreads=1)
-  {
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
-  r2r_separable_hartley(in, out, axes, fct, nthreads);
   }
 
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
@@ -1514,7 +1488,7 @@ template<typename T, typename T0> aligned_array<T> alloc_tmp_conv_axis
 
 template<typename Tplan, typename T0, typename T, typename Exec>
 DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
-  const size_t axis, const mav<T,1> &kernel, size_t nthreads,
+  const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
   std::unique_ptr<Tplan> plan1, plan2;
@@ -1526,10 +1500,10 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   plan2 = std::make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
-  mav<T,1> fkernel({kernel.shape(0)});
+  vmav<T,1> fkernel({kernel.shape(0)});
   for (size_t i=0; i<kernel.shape(0); ++i)
-    fkernel.v(i) = kernel(i);
-  plan1->exec(fkernel.vdata(), T0(1)/T0(l_in), true, nthreads);
+    fkernel(i) = kernel(i);
+  plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
 
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T0>),
@@ -1576,7 +1550,7 @@ struct ExecConv1R
   template <typename T0, typename T, typename Titer> void operator() (
     const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
     T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
-    const mav<T0,1> &fkernel) const
+    const cmav<T0,1> &fkernel) const
     {
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
@@ -1620,7 +1594,7 @@ struct ExecConv1C
   template <typename T0, typename T, typename Titer> void operator() (
     const Titer &it, const cfmav<Cmplx<T0>> &in, vfmav<Cmplx<T0>> &out,
     T *buf, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
-    const mav<Cmplx<T0>,1> &fkernel) const
+    const cmav<Cmplx<T0>,1> &fkernel) const
     {
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
@@ -1679,7 +1653,7 @@ struct ExecConv1C
  *  be distributed over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
-  vfmav<T> &out, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
+  vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads=1)
   {
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
@@ -1692,15 +1666,8 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
   general_convolve_axis<pocketfft_r<T>, T>(in, out, axis, kernel, nthreads,
     ExecConv1R());
   }
-template<typename T> DUCC0_NOINLINE void convolve_axis(const fmav<T> &in_,
-  fmav<T> &out_, size_t axis, const mav<T,1> &kernel, size_t nthreads=1)
-  {
-  cfmav<T> in(in_);
-  vfmav<T> out(out_);
-  convolve_axis(in, out, axis, kernel, nthreads);
-  }
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &in,
-  vfmav<complex<T>> &out, size_t axis, const mav<complex<T>,1> &kernel,
+  vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
   size_t nthreads=1)
   {
   MR_assert(axis<in.ndim(), "bad axis number");
@@ -1713,7 +1680,7 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &
   if (in.size()==0) return;
   cfmav<Cmplx<T>> in2(reinterpret_cast<const Cmplx<T> *>(in.data()), in);
   vfmav<Cmplx<T>> out2(reinterpret_cast<Cmplx<T> *>(out.data()), out);
-  mav<Cmplx<T>,1> kernel2(reinterpret_cast<const Cmplx<T> *>(kernel.cdata()), kernel.shape());
+  cmav<Cmplx<T>,1> kernel2(reinterpret_cast<const Cmplx<T> *>(kernel.data()), kernel.shape());
   general_convolve_axis<pocketfft_c<T>, T>(in2, out2, axis, kernel2, nthreads,
     ExecConv1C());
   }

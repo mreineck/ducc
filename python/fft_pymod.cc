@@ -392,7 +392,7 @@ template<typename T> py::array convolve_axis_internal(const py::array &in_,
   {
   auto in = to_cfmav<T>(in_);
   auto out = to_vfmav<T>(out_);
-  auto kernel = to_mav<T,1>(kernel_, false);
+  auto kernel = to_cmav<T,1>(kernel_);
   {
   py::gil_scoped_release release;
   ducc0::convolve_axis(in, out, axis, kernel, nthreads);

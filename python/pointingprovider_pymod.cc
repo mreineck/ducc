@@ -43,7 +43,7 @@ template<typename T> class PointingProvider
     size_t nthreads;
 
   public:
-    PointingProvider(double t0, double freq, const mav<T,2> &quat, size_t nthreads_=1)
+    PointingProvider(double t0, double freq, const cmav<T,2> &quat, size_t nthreads_=1)
       : t0_(t0), freq_(freq), quat_(quat.shape(0)), rangle(quat.shape(0)),
         rxsin(quat.shape(0)), rotflip(quat.shape(0)), nthreads(nthreads_)
       {
@@ -157,7 +157,7 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
 
   public:
     PyPointingProvider(double t0, double freq, const py::array &quat, size_t nthreads_=1)
-      : PointingProvider<T>(t0, freq, to_mav<T,2>(quat), nthreads_) {}
+      : PointingProvider<T>(t0, freq, to_cmav<T,2>(quat), nthreads_) {}
 
     py::array pyget_rotated_quaternions_out(double t0, double freq,
       const py::array &quat, bool rot_left, py::array &out)

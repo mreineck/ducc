@@ -10,7 +10,7 @@
 #include <pybind11/pybind11.h>
 #include "python/sht_pymod.cc"
 #include "python/fft_pymod.cc"
-//#include "python/totalconvolve_pymod.cc"
+#include "python/totalconvolve_pymod.cc"
 #include "python/wgridder_pymod.cc"
 #include "python/healpix_pymod.cc"
 #include "python/misc_pymod.cc"
@@ -28,7 +28,7 @@ PYBIND11_MODULE(PKGNAME, m)
 
   add_fft(m);
   add_sht(m);
-//  add_totalconvolve(m);
+  add_totalconvolve(m);
   add_wgridder(m);
   add_healpix(m);
   add_misc(m);
