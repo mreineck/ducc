@@ -72,12 +72,12 @@ template<typename T> class ConvolverPlan
     size_t nphi, ntheta;
     double phi0, theta0;
 
-    mav<T,1> getKernel(size_t axlen, size_t axlen2) const
+    cmav<T,1> getKernel(size_t axlen, size_t axlen2) const
       {
       auto axlen_big = max(axlen, axlen2);
       auto axlen_small = min(axlen, axlen2);
       auto fct = kernel->corfunc(axlen_small/2+1, 1./axlen_big, nthreads);
-      mav<T,1> k2({axlen});
+      vmav<T,1> k2({axlen});
       mav_apply([](T &v){v=T(0);}, 1, k2);
       {
       k2.v(0) = T(fct[0])/axlen_small;
@@ -92,10 +92,10 @@ template<typename T> class ConvolverPlan
       return k2;
       }
 
-    void correct(mav<T,2> &arr, int spin) const
+    void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      mav<T,2> tmp({nphi_b,nphi_s});
+      vmav<T,2> tmp({nphi_b,nphi_s});
       // copy and extend to second half
       for (size_t j=0; j<nphi_s; ++j)
         tmp.v(0,j) = arr(0,j);
@@ -111,23 +111,23 @@ template<typename T> class ConvolverPlan
       auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
-      fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
+      cfmav<T> ftmp(tmp);
+      vfmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
       auto kern = getKernel(nphi_s, nphi_b);
       convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
-      fmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
-      fmav<T> farr(arr);
+      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
+      vfmav<T> farr(arr);
       convolve_axis(ftmp2, farr, 1, kern, nthreads);
       }
-    void decorrect(mav<T,2> &arr, int spin) const
+    void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      mav<T,2> tmp({nphi_b,nphi_s});
+      vmav<T,2> tmp({nphi_b,nphi_s});
       auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
-      fmav<T> farr(arr);
-      fmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
+      cfmav<T> farr(arr);
+      vfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
       auto kern = getKernel(nphi_b, nphi_s);
       convolve_axis(farr, ftmp2, 1, kern, nthreads);
       // extend to second half
@@ -137,8 +137,8 @@ template<typename T> class ConvolverPlan
           if (j2>=nphi_s) j2-=nphi_s;
           tmp.v(i2,j) = sfct*tmp(i,j2);
           }
-      fmav<T> ftmp(tmp);
-      fmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
+      cfmav<T> ftmp(tmp);
+      vfmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
       convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr.v(0,j) = T(0.5)*tmp(0,j);

@@ -71,7 +71,7 @@ template<typename T> class cmembuf
     cmembuf(cmembuf &&other) = default;
 
   public:
-    cmembuf() = delete;
+    cmembuf(): d(nullptr) {}
     void assign(const cmembuf &other)
       {
       ptr = other.ptr;

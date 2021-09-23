@@ -225,6 +225,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_), tbuf(size()) {}
     cmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
+    cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(buf) {}
 
   public:
     cmav() {}
@@ -240,15 +242,13 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     cmav(const cmav &other) = default;
     cmav(cmav &&other) = default;
 #endif
+    cmav(const tinfo &info, const T *d_, const tbuf &buf)
+      : tinfo(info), tbuf(d_, buf) {}
     void assign(const cmav &other)
       {
       mav_info<ndim>::assign(other);
       cmembuf<T>::assign(other);
       }
-    cmav(const mav_info<ndim> &info, const T *d_, const cmembuf<T> &mb)
-      : mav_info<ndim>(info), membuf<T>(d_, mb) {}
-    cmav(const shape_t &shp_, const stride_t &str_, const T *d_, const cmembuf<T> &mb)
-      : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
     operator cfmav<T>() const
       {
       return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
@@ -263,13 +263,16 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
 
     static cmav build_uniform(const shape_t &shape, const T &value)
       {
-      cmembuf<T> buf(1);
-      buf.raw(0) = value;
+      cmav tmp({1});
+      const_cast<T &>(tmp.raw(0)) = value;
       stride_t nstr;
       nstr.fill(0);
-      return cmav(shape, nstr, buf.cdata(), buf);
+      return cmav(tmp, shape, nstr);
       }
   };
+template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
+  (const cmav<T, ndim> &arr, const vector<slice> &slices)  
+  { return arr.template subarray<nd2>(slices); }
 
 template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   {
@@ -304,6 +307,9 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     vmav(vmav &other) = default;
     vmav(vmav &&other) = default;
 #endif
+    vmav(const tinfo &info, T *d_, tbuf &buf)
+      : parent(info, d_, buf) {}
+
     void assign(vmav &other)
       { parent::assign(other); }
     operator vfmav<T>()
@@ -315,8 +321,14 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices)
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
-      return vmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
+      return vmav<T,nd2> (ninfo, data()+nofs, *this);
       }
+
+    T *data()
+     { return const_cast<T *>(tbuf::d); }
+    // read access to element #i
+    template<typename I> T &raw(I i)
+      { return data()[i]; }
 
     static vmav build_empty()
       {
@@ -343,6 +355,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return tmp.subarray<ndim>(slc);
       }
   };
+
+template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
+  (vmav<T, ndim> &arr, const vector<slice> &slices)  
+  { return arr.template subarray<nd2>(slices); }
 
 }
 
