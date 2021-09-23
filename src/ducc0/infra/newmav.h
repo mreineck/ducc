@@ -111,6 +111,8 @@ template<typename T> class vfmav: public cfmav<T>
 
   public:
     using tbuf::raw, tbuf::data, tinfo::ndim;
+    vfmav(T *d_, const fmav_info &info)
+      : cfmav<T>(d_, info) {}
     vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(d_, shp_, str_) {}
     vfmav(T *d_, const shape_t &shp_)
@@ -135,6 +137,9 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(orig, orig) { MR_assert(orig.writable(), "fmav is not writable()"); }
     T *data()
      { return const_cast<T *>(tbuf::d); }
+    // read access to element #i
+    template<typename I> T &raw(I i)
+      { return data()[i]; }
 #if 0
     vfmav(const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(size())
