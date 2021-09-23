@@ -37,6 +37,7 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/newmav.h"
 
 namespace ducc0 {
 

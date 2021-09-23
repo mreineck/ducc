@@ -312,6 +312,7 @@ class fmav_info
       shp = shp2;
       str = str2;
       }
+
     auto subdata(const vector<slice> &slices) const
       {
       auto ndim = shp.size();
@@ -337,7 +338,7 @@ class fmav_info
           ++i2;
           }
         }
-      return make_tuple(nshp, nstr, nofs);
+      return make_tuple(fmav_info(nshp, nstr), nofs);
       }
   };
 
@@ -431,198 +432,38 @@ template<size_t ndim> class mav_info
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
-  };
 
-
-template<typename T> class cfmav: public fmav_info, public cmembuf<T>
-  {
-  protected:
-    using tbuf = cmembuf<T>;
-    using tinfo = fmav_info;
-
-  public:
-    using typename tinfo::shape_t;
-    using typename tinfo::stride_t;
-    using tbuf::raw, tbuf::data;
-    cfmav() {}
-    cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(d_) {}
-    cfmav(const T *d_, const shape_t &shp_)
-      : tinfo(shp_), tbuf(d_) {}
-    cfmav(const shape_t &shp_)
-      : tinfo(shp_), tbuf(size()) {}
-    cfmav(const T* d_, const tinfo &info)
-      : tinfo(info), tbuf(d_) {}
-    cfmav(const cfmav &other) = default;
-    cfmav(cfmav &&other) = default;
-
-    cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(buf) {}
-    cfmav(const tbuf &buf, const tinfo &info)
-      : tinfo(info), tbuf(buf) {}
-    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
-    cfmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
-
-    void assign(const cfmav &other)
+   template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
-      tinfo::assign(other);
-      tbuf::assign(other);
-      }
+      MR_assert(slices.size()==ndim, "bad number of slices");
+      array<size_t, nd2> nshp;
+      array<ptrdiff_t, nd2> nstr;
 
-    /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &operator()(Ns... ns) const
-      { return raw(idx(ns...)); }
-    /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &c(Ns... ns) const
-      { return raw(idx(ns...)); }
+      // unnecessary, but gcc arns otherwise
+      for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
 
-    cfmav subarray(const vector<slice> &slices) const
-      {
-      auto [nshp, nstr, nofs] = subdata(slices);
-      return cfmav(nshp, nstr, tbuf::d+nofs, *this);
+      size_t n0=0;
+      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      MR_assert(n0+nd2==ndim, "bad extent");
+      ptrdiff_t nofs=0;
+      for (size_t i=0, i2=0; i<ndim; ++i)
+        {
+        MR_assert(slices[i].lo<shp[i], "bad subset");
+        nofs+=slices[i].lo*str[i];
+        if (slices[i].lo!=slices[i].hi)
+          {
+          auto ext = slices[i].hi-slices[i].lo;
+          if (slices[i].hi==MAXIDX)
+            ext = shp[i]-slices[i].lo;
+          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=str[i];
+          ++i2;
+          }
+        }
+      return make_tuple(mav_info<nd2>(nshp, nstr), nofs);
       }
   };
 
-template<typename T> class vfmav: public cfmav<T>
-  {
-  protected:
-    using tbuf = cmembuf<T>;
-    using tinfo = fmav_info;
-    using tinfo::shp, tinfo::str, tinfo::size;
-
-  public:
-    using typename tinfo::shape_t;
-    using typename tinfo::stride_t;
-
-  public:
-    using tbuf::raw, tbuf::data, tinfo::ndim;
-    vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
-      : cfmav<T>(d_, shp_, str_) {}
-    vfmav(T *d_, const shape_t &shp_)
-      : cfmav<T>(d_, shp_) {}
-    vfmav(const shape_t &shp_)
-      : cfmav<T>(shp_) {}
-    vfmav(const shape_t &shp_, uninitialized_dummy)
-      : cfmav<T>(shp_, UNINITIALIZED) {}
-    vfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
-      : cfmav<T>(shp_, str_, UNINITIALIZED)
-      {
-      ptrdiff_t ofs=0;
-      for (size_t i=0; i<ndim(); ++i)
-        ofs += (ptrdiff_t(shp[i])-1)*str[i];
-      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
-      }
-    vfmav(tbuf &buf, const tinfo &info)
-      : cfmav<T>(buf, info) {}
-    vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : cfmav<T>(buf, shp_, str_) {}
-    T *data()
-     { return const_cast<T *>(tbuf::d); }
-#if 0
-    vfmav(const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(size())
-      {
-      ptrdiff_t ofs=0;
-      for (size_t i=0; i<ndim(); ++i)
-        ofs += (ptrdiff_t(shp[i])-1)*str[i];
-      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
-      }
-    fmav(const T* d_, const tinfo &info)
-      : tinfo(info), tbuf(d_) {}
-    fmav(T* d_, const tinfo &info, bool rw_=false)
-      : tinfo(info), tbuf(d_, rw_) {}
-#if defined(_MSC_VER)
-    // MSVC is broken
-    fmav(const fmav &other) : tinfo(other), tbuf(other) {}
-    fmav(fmav &other) : tinfo(other), tbuf(other) {}
-    fmav(fmav &&other) : tinfo(other), tbuf(other) {}
-#else
-    /** Constructs a read-only fmav with the same shape and strides as \a other,
-     *  pointing to the same memory. Ownership is shared. */
-    fmav(const fmav &other) = default;
-    /** Constructs an fmav with the same read-write status, shape and strides
-     *  as \a other, pointing to the same memory. Ownership is shared. */
-    fmav(fmav &other) = default;
-    fmav(fmav &&other) = default;
-#endif
-    fmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(buf) {}
-    fmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(buf) {}
-    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
-    fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
-      : tinfo(shp_, str_), tbuf(d_, buf) {}
-
-    operator cfmav<T>() const { return cfmav<T>(*this, *this); }
-
-    void assign(vfmav &other)
-      {
-      fmav_info::assign(other);
-      cmembuf<T>::assign(other);
-      }
-
-    /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &operator()(Ns... ns) const
-      { return craw(idx(ns...)); }
-    /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &c(Ns... ns) const
-      { return craw(idx(ns...)); }
-    /** Returns a writable reference to the data entry at the given set of
-     *  indices. This call will throw an exception if the fmav is read-only. */
-    template<typename... Ns> T &v(Ns... ns)
-      { return vraw(idx(ns...)); }
-
-    fmav subarray(const vector<slice> &slices)
-      {
-      auto [nshp, nstr, nofs] = subdata(slices);
-      return fmav(nshp, nstr, tbuf::d+nofs, *this);
-      }
-    /** Returns an fmav (of the same or smaller dimensionality) representing a
-     *  sub-array of *this. \a slices describes the lower and one-past-upper
-     *  indices of the selection. If a slice has zero extent, this
-     *  dimension will be omitted in the output array.
-     *  Specifying an upper bound of MAXIDX will make the extent as large as possible.
-     *  The returned fmav is read-only. */
-    fmav subarray(const vector<slice> &slices) const
-      {
-      auto [nshp, nstr, nofs] = subdata(slices);
-      return fmav(nshp, nstr, tbuf::d+nofs, *this);
-      }
-
-    /** Returns a writable fmav with the specified shape.
-     *  The strides are chosen in such a way that critical strides (multiples
-     *  of 4096 bytes) along any dimension are avoided, by enlarging the
-     *  allocated memory slightly if necessary.
-     *  The array data is default-initialized. */
-    static fmav build_noncritical(const shape_t &shape)
-      {
-      auto ndim = shape.size();
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      fmav tmp(shape2);
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray(slc);
-      }
-    /** Returns a writable fmav with the specified shape.
-     *  The strides are chosen in such a way that critical strides (multiples
-     *  of 4096 bytes) along any dimension are avoided, by enlarging the
-     *  allocated memory slightly if necessary.
-     *  The array data is not initialized. */
-    static fmav build_noncritical(const shape_t &shape, uninitialized_dummy)
-      {
-      auto ndim = shape.size();
-      if (ndim<=1) return fmav(shape, UNINITIALIZED);
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      fmav tmp(shape2, UNINITIALIZED);
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray(slc);
-      }
-#endif
-  };
 
 /// Class for storing (or referring to) multi-dimensional arrays with a
 /// dimensionality that is not known at compile time.
@@ -645,38 +486,6 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
-
-  protected:
-    auto subdata(const vector<slice> &slices) const
-      {
-      auto ndim = tinfo::ndim();
-      shape_t nshp(ndim);
-      stride_t nstr(ndim);
-      ptrdiff_t nofs;
-      MR_assert(slices.size()==ndim, "incorrect number of slices");
-      size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
-      nofs=0;
-      nshp.resize(ndim-n0);
-      nstr.resize(ndim-n0);
-      for (size_t i=0, i2=0; i<ndim; ++i)
-        {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
-          {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
-          ++i2;
-          }
-        }
-      return make_tuple(nshp, nstr, nofs);
-      }
-
-  public:
     using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata, tbuf::data;
     /// Constructs a 1D fmav with size and stride zero and no data content.
     fmav() {}
@@ -748,12 +557,14 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
       : tinfo(shp_, str_), tbuf(buf) {}
     fmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
+    fmav(const fmav_info &info, const T *d_, tbuf &buf)
+      : tinfo(info), tbuf(d_, buf) {}
+    fmav(const fmav_info &info, const T *d_, const tbuf &buf)
+      : tinfo(info), tbuf(d_, buf) {}
     fmav(const shape_t &shp_, const stride_t &str_, const T *d_, tbuf &buf)
       : tinfo(shp_, str_), tbuf(d_, buf) {}
     fmav(const shape_t &shp_, const stride_t &str_, const T *d_, const tbuf &buf)
       : tinfo(shp_, str_), tbuf(d_, buf) {}
-    explicit operator cfmav<T>() const { return cfmav<T>(*this, *this); }
-    explicit operator vfmav<T>() { MR_assert(tbuf::writable(), "array is not writable"); return vfmav<T>(*this, *this); }
 
     void assign(fmav &other)
       {
@@ -779,8 +590,8 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
 
     fmav subarray(const vector<slice> &slices)
       {
-      auto [nshp, nstr, nofs] = subdata(slices);
-      return fmav(nshp, nstr, tbuf::d+nofs, *this);
+      auto [ninfo, nofs] = subdata(slices);
+      return fmav(ninfo, tbuf::d+nofs, *this);
       }
     /** Returns an fmav (of the same or smaller dimensionality) representing a
      *  sub-array of *this. \a slices describes the lower and one-past-upper
@@ -790,8 +601,8 @@ template<typename T> class fmav: public fmav_info, public membuf<T>
      *  The returned fmav is read-only. */
     fmav subarray(const vector<slice> &slices) const
       {
-      auto [nshp, nstr, nofs] = subdata(slices);
-      return fmav(nshp, nstr, tbuf::d+nofs, *this);
+      auto [ninfo, nofs] = subdata(slices);
+      return fmav(ninfo, tbuf::d+nofs, *this);
       }
 
     /** Returns a writable fmav with the specified shape.
@@ -855,39 +666,6 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
-
-  protected:
-    template<size_t nd2> auto subdata(const vector<slice> &slices) const
-      {
-      MR_assert(slices.size()==ndim, "bad number of slices");
-      array<size_t, nd2> nshp;
-      array<ptrdiff_t, nd2> nstr;
-
-      // unnecessary, but gcc arns otherwise
-      for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
-
-      size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
-      MR_assert(n0+nd2==ndim, "bad extent");
-      ptrdiff_t nofs=0;
-      for (size_t i=0, i2=0; i<ndim; ++i)
-        {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
-          {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
-          ++i2;
-          }
-        }
-      return make_tuple(nshp, nstr, nofs);
-      }
-
-  public:
     using tbuf::vraw, tbuf::craw, tbuf::vdata, tbuf::cdata, tbuf::data;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
@@ -948,6 +726,10 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       mav_info<ndim>::assign(other);
       membuf<T>::assign(other);
       }
+    mav(const mav_info<ndim> &info, const T *d_, membuf<T> &mb)
+      : mav_info<ndim>(info), membuf<T>(d_, mb) {}
+    mav(const mav_info<ndim> &info, const T *d_, const membuf<T> &mb)
+      : mav_info<ndim>(info), membuf<T>(d_, mb) {}
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, membuf<T> &mb)
       : mav_info<ndim>(shp_, str_), membuf<T>(d_, mb) {}
     mav(const shape_t &shp_, const stride_t &str_, const T *d_, const membuf<T> &mb)
@@ -972,13 +754,13 @@ template<typename T, size_t ndim> class mav: public mav_info<ndim>, public membu
       { return vraw(idx(ns...)); }
     template<size_t nd2> mav<T,nd2> subarray(const vector<slice> &slices)
       {
-      auto [nshp, nstr, nofs] = subdata<nd2> (slices);
-      return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
+      auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
+      return mav<T,nd2> (ninfo, tbuf::d+nofs, *this);
       }
     template<size_t nd2> mav<T,nd2> subarray(const vector<slice> &slices) const
       {
-      auto [nshp, nstr, nofs] = subdata<nd2> (slices);
-      return mav<T,nd2> (nshp, nstr, tbuf::d+nofs, *this);
+      auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
+      return mav<T,nd2> (ninfo, tbuf::d+nofs, *this);
       }
 
     /// Returns a zero-extent mav with no associatd data.
@@ -1366,9 +1148,6 @@ using detail_mav::MAXIDX;
 using detail_mav::subarray;
 using detail_mav::fmav_apply;
 using detail_mav::mav_apply;
-
-using detail_mav::cfmav;
-using detail_mav::vfmav;
 }
 
 #endif

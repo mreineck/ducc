@@ -229,7 +229,8 @@ py::array Py_GL_thetas(size_t nlat)
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
   {
   auto in2 = cfmav<T>(to_fmav<T>(in, false));
-  auto out2 = vfmav<T>(to_fmav<T>(out, true));
+  auto tmp = to_fmav<T>(out, true);
+  auto out2 = vfmav<T>(tmp);
   {
   py::gil_scoped_release release;
   transpose(in2, out2, [](const T &in, T &out){out=in;});
