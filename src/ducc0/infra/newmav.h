@@ -78,8 +78,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       : tinfo(shp_), tbuf(d_) {}
     cfmav(const T* d_, const tinfo &info)
       : tinfo(info), tbuf(d_) {}
-    cfmav(const cfmav &other) = default;
-    cfmav(cfmav &&other) = default;
+//    cfmav(const cfmav &other) = default;
+//    cfmav(cfmav &&other) = default;
 
     cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
@@ -232,14 +232,14 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(d_) {}
     cmav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
-#if defined(_MSC_VER)
-    // MSVC is broken
-    cmav(const cmav &other) : tinfo(other), tbuf(other) {}
-    cmav(cmav &&other): tinfo(other), tbuf(other) {}
-#else
-    cmav(const cmav &other) = default;
-    cmav(cmav &&other) = default;
-#endif
+//#if defined(_MSC_VER)
+    //// MSVC is broken
+    //cmav(const cmav &other) : tinfo(other), tbuf(other) {}
+    //cmav(cmav &&other): tinfo(other), tbuf(other) {}
+//#else
+    //cmav(const cmav &other) = default;
+    //cmav(cmav &&other) = default;
+//#endif
     cmav(const tinfo &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
     cmav(const shape_t &shp_)
@@ -301,16 +301,16 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
-#if defined(_MSC_VER)
-    // MSVC is broken
-    vmav(const vmav &other) : parent(other) {}
-    vmav(vmav &other): parent(other) {}
-    vmav(vmav &&other): parent(other) {}
-#else
-    vmav(const vmav &other) = default;
-    vmav(vmav &other) = default;
-    vmav(vmav &&other) = default;
-#endif
+//#if defined(_MSC_VER)
+    //// MSVC is broken
+    //vmav(const vmav &other) : parent(other) {}
+    //vmav(vmav &other): parent(other) {}
+    //vmav(vmav &&other): parent(other) {}
+//#else
+    //vmav(const vmav &other) = default;
+    //vmav(vmav &other) = default;
+    //vmav(vmav &&other) = default;
+//#endif
     vmav(const tinfo &info, T *d_, tbuf &buf)
       : parent(info, d_, buf) {}
 
