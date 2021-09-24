@@ -53,7 +53,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/mav.h"
-#include "ducc0/infra/newmav.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/math/unity_roots.h"

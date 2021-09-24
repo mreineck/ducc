@@ -31,7 +31,7 @@
 #include <cmath>
 #include <complex>
 
-#include "ducc0/infra/newmav.h"
+#include "ducc0/infra/mav.h"
 #include "ducc0/infra/transpose.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"

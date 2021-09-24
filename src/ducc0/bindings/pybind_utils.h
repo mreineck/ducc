@@ -28,7 +28,6 @@
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
-#include "ducc0/infra/newmav.h"
 #include "ducc0/infra/misc_utils.h"
 
 namespace ducc0 {

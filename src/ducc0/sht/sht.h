@@ -29,7 +29,7 @@
 #include <string>
 #include <complex>
 #include "ducc0/infra/useful_macros.h"
-#include "ducc0/infra/newmav.h"
+#include "ducc0/infra/mav.h"
 
 namespace ducc0 {
 

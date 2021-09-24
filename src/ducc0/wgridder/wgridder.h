@@ -47,7 +47,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
-#include "ducc0/infra/newmav.h"
+#include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
 #include "ducc0/math/gridding_kernel.h"

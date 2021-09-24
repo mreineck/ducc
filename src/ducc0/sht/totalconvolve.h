@@ -36,7 +36,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
-#include "ducc0/infra/newmav.h"
+#include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
