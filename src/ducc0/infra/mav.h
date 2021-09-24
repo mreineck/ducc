@@ -205,7 +205,7 @@ class fmav_info
       }
     void bcast_to_shape(const shape_t &shp2)
       {
-      MR_assert(shp2.size()>=shp.size(), "cannot reduce dimensionallity");
+      MR_assert(shp2.size()>=shp.size(), "cannot reduce dimensionality");
       stride_t newstr(shp2.size(), 0);
       for (size_t i=0; i<shp.size(); ++i)
         {
@@ -218,20 +218,6 @@ class fmav_info
         }
       shp = shp2;
       str = newstr;
-      }
-    void prepend_dim()
-      {
-      shape_t shp2(shp.size()+1);
-      stride_t str2(str.size()+1);
-      shp2[0] = 1;
-      str2[0] = 0;
-      for (size_t i=0; i<shp.size(); ++i)
-        {
-        shp2[i+1] = shp[i];
-        str2[i+1] = str[i];
-        }
-      shp = shp2;
-      str = str2;
       }
 
     auto subdata(const vector<slice> &slices) const
@@ -487,9 +473,12 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(buf, info) {}
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
+
+    using cfmav<T>::data;
     T *data()
      { return const_cast<T *>(tbuf::d); }
     // read access to element #i
+    using cfmav<T>::raw;
     template<typename I> T &raw(I i)
       { return data()[i]; }
 
@@ -502,6 +491,7 @@ template<typename T> class vfmav: public cfmav<T>
       cmembuf<T>::assign(other);
       }
 
+    using cfmav<T>::operator();
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     template<typename... Ns> T &v(Ns... ns)
@@ -940,7 +930,7 @@ template<size_t ndim> auto make_infos(const fmav_info &info)
 
   typename mav_info<ndim>::shape_t shp;
   typename mav_info<ndim>::stride_t str;
-  if constexpr (ndim>0)
+  if constexpr (ndim>0)  // just to silence compiler warnings
     for (size_t i=0; i<ndim; ++i)
       {
       shp[i] = info.shape(iterdim+i);
