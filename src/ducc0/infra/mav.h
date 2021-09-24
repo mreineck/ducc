@@ -221,6 +221,7 @@ class fmav_info
       str = newstr;
       }
 
+  protected:
     auto subdata(const vector<slice> &slices) const
       {
       auto ndim = shp.size();
@@ -342,7 +343,8 @@ template<size_t ndim> class mav_info
       return getIdx(0, ns...);
       }
 
-   template<size_t nd2> auto subdata(const vector<slice> &slices) const
+  protected:
+    template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
       MR_assert(slices.size()==ndim, "bad number of slices");
       array<size_t, nd2> nshp;
@@ -409,8 +411,6 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
 
     cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
-    cfmav(const tbuf &buf, const tinfo &info)
-      : tinfo(info), tbuf(buf) {}
 
     void assign(const cfmav &other)
       {
@@ -468,12 +468,8 @@ template<typename T> class vfmav: public cfmav<T>
         ofs += (ptrdiff_t(shp[i])-1)*str[i];
       MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
       }
-    vfmav(tbuf &buf, const tinfo &info)
-      : cfmav<T>(buf, info) {}
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
-    vfmav(const shape_t &shp_, const stride_t &str_, T *d_, tbuf &buf)
-      : cfmav<T>(shp_, str_, d_, buf) {}
 
     using cfmav<T>::data;
     T *data()
@@ -535,6 +531,9 @@ template<typename T> vfmav<T> subarray
 template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmembuf<T>
   {
   protected:
+    template<typename T2, size_t nd2> friend class cmav;
+    template<typename T2, size_t nd2> friend class vmav;
+
     using tinfo = mav_info<ndim>;
     using tbuf = cmembuf<T>;
     using tinfo::shp, tinfo::str;
@@ -546,22 +545,21 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
+    cmav() {}
     cmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
-
-  public:
-    cmav() {}
-    cmav(const T *d_, const shape_t &shp_, const stride_t &str_)
-      : tinfo(shp_, str_), tbuf(d_) {}
-    cmav(const T *d_, const shape_t &shp_)
-      : tinfo(shp_), tbuf(d_) {}
-
-    cmav(const tinfo &info, const T *d_, const tbuf &buf)
-      : tinfo(info), tbuf(d_, buf) {}
     cmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
+    cmav(const tinfo &info, const T *d_, const tbuf &buf)
+      : tinfo(info), tbuf(d_, buf) {}
+
+  public:
+    cmav(const T *d_, const shape_t &shp_, const stride_t &str_)
+      : tinfo(shp_, str_), tbuf(d_) {}
+    cmav(const T *d_, const shape_t &shp_)
+      : tinfo(shp_), tbuf(d_) {}
     void assign(const cmav &other)
       {
       mav_info<ndim>::assign(other);
@@ -581,10 +579,11 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
 
     static cmav build_uniform(const shape_t &shape, const T &value)
       {
-      array<size_t,1> tshp;
-      tshp[0] = 1;
-      cmav<T,1> tmp(tshp);
-      const_cast<T &>(tmp(0)) = value;
+      // Don't do this at home!
+      shape_t tshp;
+      tshp.fill(1);
+      cmav tmp(tshp);
+      const_cast<T &>(tmp.raw(0)) = value;
       stride_t nstr;
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
@@ -597,6 +596,8 @@ template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
 template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   {
   protected:
+    template<typename T2, size_t nd2> friend class vmav;
+
     using parent = cmav<T, ndim>;
     using tinfo = mav_info<ndim>;
     using tbuf = cmembuf<T>;
@@ -608,6 +609,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using tbuf::raw, tbuf::data;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
+  protected:
+    vmav(const tinfo &info, T *d_, tbuf &buf)
+      : parent(info, d_, buf) {}
+
+  public:
     vmav() {}
     vmav(T *d_, const shape_t &shp_, const stride_t &str_)
       : parent(d_, shp_, str_) {}
@@ -617,8 +623,6 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
-    vmav(const tinfo &info, T *d_, tbuf &buf)
-      : parent(info, d_, buf) {}
 
     void assign(vmav &other)
       { parent::assign(other); }
