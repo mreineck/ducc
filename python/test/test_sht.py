@@ -188,3 +188,20 @@ def test_healpix_adjoint(lmax, nside, spin, nthreads):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     print(nside, lmax, v1, v2, np.abs((v1-v2)/v1))
     assert_(np.abs((v1-v2)/v1)<1e-10)
+
+
+@pmp("lmax", tuple(range(70)))
+@pmp("nthreads", (0,1,2))
+def test_rotation(lmax, nthreads):
+    rng = np.random.default_rng(42)
+    phi, theta, psi = rng.uniform(-2*np.pi, 2*np.pi, (3,))
+
+    alm = random_alm(lmax, lmax, 0, 1, rng)[0,:]
+    alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
+    alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
+    print(ducc0.misc.l2error(alm,alm2))
+    assert_(ducc0.misc.l2error(alm,alm2)<=1e-12)
+    alm = alm.astype(np.complex64)
+    alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
+    alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
+    assert_(ducc0.misc.l2error(alm,alm2)<=1e-6)
