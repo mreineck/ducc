@@ -83,7 +83,7 @@ template<typename T> class cmembuf
       { return d[i]; }
     // read access to data area
     const T *data() const
-     { return d; }
+      { return d; }
   };
 
 constexpr size_t MAXIDX=~(size_t(0));
@@ -132,7 +132,8 @@ class fmav_info
     fmav_info() : shp(1,0), str(1,0), sz(0) {}
     /// Constructs an object with the given shape and stride.
     fmav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
+      : shp(shape_), str(stride_),
+        sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
       {
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
       }
@@ -288,7 +289,8 @@ template<size_t ndim> class mav_info
       }
     /// Constructs an object with the given shape and stride.
     mav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_), sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
+      : shp(shape_), str(stride_),
+        sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     mav_info(const shape_t &shape_)
@@ -419,9 +421,6 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     /// Returns the data entry at the given set of indices.
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
-    /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &c(Ns... ns) const
-      { return raw(idx(ns...)); }
 
     cfmav subarray(const vector<slice> &slices) const
       {
@@ -473,17 +472,15 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(buf, info) {}
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
+    vfmav(const shape_t &shp_, const stride_t &str_, T *d_, tbuf &buf)
+      : cfmav<T>(shp_, str_, d_, buf) {}
 
     using cfmav<T>::data;
     T *data()
      { return const_cast<T *>(tbuf::d); }
-    // read access to element #i
     using cfmav<T>::raw;
     template<typename I> T &raw(I i)
       { return data()[i]; }
-
-    vfmav(const shape_t &shp_, const stride_t &str_, T *d_, tbuf &buf)
-      : cfmav<T>(shp_, str_, d_, buf) {}
 
     void assign(vfmav &other)
       {
@@ -494,8 +491,6 @@ template<typename T> class vfmav: public cfmav<T>
     using cfmav<T>::operator();
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
-    template<typename... Ns> T &v(Ns... ns)
-      { return const_cast<T *>(raw(idx(ns...))); }
 
     vfmav subarray(const vector<slice> &slices)
       {
@@ -634,6 +629,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns)
       { return const_cast<T &>(parent::operator()(ns...)); }
+
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices)
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);

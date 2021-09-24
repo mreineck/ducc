@@ -74,7 +74,8 @@ template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
   return res;
   }
 
-template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const py::array &arr)
+template<size_t ndim>
+  std::array<size_t, ndim> copy_fixshape(const py::array &arr)
   {
   MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
   std::array<size_t, ndim> res;
@@ -83,7 +84,8 @@ template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const py::array &ar
   return res;
   }
 
-template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
+template<typename T, size_t ndim>
+  std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
   {
   MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
   std::array<ptrdiff_t, ndim> res;
@@ -134,8 +136,8 @@ template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   return tmp;
   }
 
-template<typename T> py::array_t<T> get_optional_Pyarr_minshape(py::object &arr_,
-  const shape_t &dims)
+template<typename T> py::array_t<T> get_optional_Pyarr_minshape
+  (py::object &arr_, const shape_t &dims)
   {
   if (arr_.is_none()) return py::array_t<T>(dims);
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
