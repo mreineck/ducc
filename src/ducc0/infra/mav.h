@@ -641,6 +641,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       {
       return vfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns)
       { return const_cast<T &>(parent::operator()(ns...)); }
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices)
@@ -649,9 +650,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return vmav<T,nd2> (ninfo, data()+nofs, *this);
       }
 
+    using parent::data;
     T *data()
      { return const_cast<T *>(tbuf::d); }
     // read access to element #i
+    using parent::raw;
     template<typename I> T &raw(I i)
       { return data()[i]; }
 
