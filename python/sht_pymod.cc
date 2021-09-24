@@ -50,34 +50,34 @@ auto None = py::none();
 py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = wgt[i]*twopi/nlon;
+    res2(i) = wgt[i]*twopi/nlon;
   return move(res);
   }
 
 py::array Py_GL_thetas(size_t nlat)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   GL_Integrator integ(nlat);
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = acos(-x[i]);
+    res2(i) = acos(-x[i]);
   return move(res);
   }
 
 template<typename T> py::array Py2_rotate_alm(const py::array &alm_, int64_t lmax,
   double psi, double theta, double phi, size_t nthreads)
   {
-  auto a1 = to_mav<complex<T>,1>(alm_);
+  auto a1 = to_cmav<complex<T>,1>(alm_);
   auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
-  auto a2 = to_mav<complex<T>,1>(alm,true);
+  auto a2 = to_vmav<complex<T>,1>(alm);
   {
   py::gil_scoped_release release;
-  for (size_t i=0; i<a1.shape(0); ++i) a2.v(i)=a1(i);
+  for (size_t i=0; i<a1.shape(0); ++i) a2(i)=a1(i);
   Alm_Base base(lmax,lmax);
   rotate_alm(base, a2, psi, theta, phi, nthreads);
   }

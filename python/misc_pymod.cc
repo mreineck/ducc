@@ -31,7 +31,7 @@
 #include <cmath>
 #include <complex>
 
-#include "ducc0/infra/mav.h"
+#include "ducc0/infra/newmav.h"
 #include "ducc0/infra/transpose.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
@@ -203,34 +203,33 @@ double Py_l2error(const py::object &a, const py::object &b)
 py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = wgt[i]*twopi/nlon;
+    res2(i) = wgt[i]*twopi/nlon;
   return move(res);
   }
 
 py::array Py_GL_thetas(size_t nlat)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   {
   py::gil_scoped_release release;
 
   GL_Integrator integ(nlat);
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = acos(-x[i]);
+    res2(i) = acos(-x[i]);
   }
   return move(res);
   }
 
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
   {
-  auto in2 = cfmav<T>(to_fmav<T>(in, false));
-  auto tmp = to_fmav<T>(out, true);
-  auto out2 = vfmav<T>(tmp);
+  auto in2 = to_cfmav<T>(in);
+  auto out2 = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   transpose(in2, out2, [](const T &in, T &out){out=in;});
@@ -401,10 +400,10 @@ class OofaNoise
       : filter(slope_, f_min_, f_knee_, f_samp_), sigma(sigmawhite_)
       {}
 
-    void filterGaussian(mav<double,1> &data)
+    void filterGaussian(vmav<double,1> &data)
       {
       for (size_t i=0; i<data.shape(0); ++i)
-        data.v(i) = sigma*filter(data(i));
+        data(i) = sigma*filter(data(i));
       }
 
     void reset()
@@ -425,9 +424,9 @@ class Py_OofaNoise
 
     py::array filterGaussian(const py::array &rnd_)
       {
-      auto rnd = to_mav<double,1>(rnd_, false);
+      auto rnd = to_cmav<double,1>(rnd_);
       auto res_ = make_Pyarr<double>({rnd.shape(0)});
-      auto res = to_mav<double,1>(res_, true);
+      auto res = to_vmav<double,1>(res_);
       {
       py::gil_scoped_release release;
 

@@ -86,10 +86,6 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav(const tbuf &buf, const tinfo &info)
       : tinfo(info), tbuf(buf) {}
 
-// FIXME temporary
-    cfmav(const fmav<T> &orig)
-      : tinfo(orig), tbuf(orig) {}
-
     void assign(const cfmav &other)
       {
       tinfo::assign(other);
@@ -153,8 +149,6 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(buf, info) {}
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
-    vfmav(fmav<T> &orig)
-      : cfmav<T>(orig, orig) { MR_assert(orig.writable(), "fmav is not writable()"); }
     T *data()
      { return const_cast<T *>(tbuf::d); }
     // read access to element #i
@@ -370,12 +364,139 @@ template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
   (vmav<T, ndim> &arr, const vector<slice> &slices)  
   { return arr.template subarray<nd2>(slices); }
 
+
+template<typename T, size_t ndim> class mavref
+  {
+  private:
+    const mav_info<ndim> &info;
+    T *d;
+
+  public:
+    mavref(const mav_info<ndim> &info_, T *d_) : info(info_), d(d_) {}
+    template<typename... Ns> T &operator()(Ns... ns) const
+      { return d[info.idx(ns...)]; }
+  };
+template<typename T, size_t ndim> mavref<T, ndim> make_mavref(const mav_info<ndim> &info_, T *d_)
+  { return mavref<T, ndim>(info_, d_); }
+
+template<size_t ndim> auto make_infos(const fmav_info &info)
+  {
+  MR_assert(ndim<=info.ndim(), "bad dimensionality");
+  auto iterdim = info.ndim()-ndim;
+  fmav_info fout({info.shape().begin(),info.shape().begin()+iterdim},
+                 {info.stride().begin(),info.stride().begin()+iterdim});
+
+  typename mav_info<ndim>::shape_t shp;
+  typename mav_info<ndim>::stride_t str;
+  if constexpr (ndim>0)
+    for (size_t i=0; i<ndim; ++i)
+      {
+      shp[i] = info.shape(iterdim+i);
+      str[i] = info.stride(iterdim+i);
+      }
+  mav_info<ndim> iout(shp, str);
+  return make_tuple(fout, iout);
+  }
+
+
+template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func> void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0, T1 ptr1, const Ti1 &info1, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim], str1 = str[1][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1, info1, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(make_mavref(info0, ptr0+i*str0), make_mavref(info1, ptr1+i*str1));
+  }
+template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func> void fmavIter2Helper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0, T1 ptr1, const Ti1 &info1, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(mavref(info0, ptr0), mavref(info1, ptr1));
+  else if (nthreads==1)
+    fmavIter2Helper(0, shp, str, ptr0, info0, ptr1, info1, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(make_mavref(info0, ptr0+i*str[0][0]), make_mavref(info1, ptr1+i*str[1][0]));
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0, ptr1+i*str[1][0], info1, func);
+      });
+  }
+
+template<typename T0, typename Ti0, typename T1, typename Ti1, typename T2, typename Ti2, typename Func> void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0, T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1, info1, ptr2+i*str2, info2, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(make_mavref(info0, ptr0+i*str0), make_mavref(info1, ptr1+i*str1), make_mavref(info2, ptr2+i*str2));
+  }
+template<typename T0, typename Ti0, typename T1, typename Ti1, typename T2, typename Ti2, typename Func> void fmavIter2Helper(const vector<size_t> &shp,
+  const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0, T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(mavref(info0, ptr0), mavref(info1, ptr1), mavref(info2, ptr2));
+  else if (nthreads==1)
+    fmavIter2Helper(0, shp, str, ptr0, info0, ptr1, info1, ptr2, info2, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(make_mavref(info0, ptr0+i*str[0][0]), make_mavref(info1, ptr1+i*str[1][0]), make_mavref(info2, ptr2+i*str[2][0]));
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0, ptr1+i*str[1][0], info1, ptr2+i*str[2][0], info2, func);
+      });
+  }
+
+template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
+  void fmavIter2(Func func, size_t nthreads, T0 &&m0, T1 &&m1)
+  {
+  MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
+  auto [f0, i0] = make_infos<nd0>(m0);
+  auto [f1, i1] = make_infos<nd1>(m1);
+  vector<fmav_info> iterinfo{f0, f1};
+  auto [shp, str] = multiprep(iterinfo);
+  fmavIter2Helper(shp, str, m0.data(), i0, m1.data(), i1, func, nthreads);
+  }
+
+template<size_t nd0, size_t nd1, size_t nd2, typename T0, typename T1, typename T2, typename Func>
+  void fmavIter2(Func func, size_t nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
+  {
+  MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
+  MR_assert(m0.ndim()-nd0 == m2.ndim()-nd2, "dimensionality mismatch");
+  auto [f0, i0] = make_infos<nd0>(m0);
+  auto [f1, i1] = make_infos<nd1>(m1);
+  auto [f2, i2] = make_infos<nd2>(m2);
+  vector<fmav_info> iterinfo{f0, f1, f2};
+  auto [shp, str] = multiprep(iterinfo);
+  fmavIter2Helper(shp, str, m0.data(), i0, m1.data(), i1, m2.data(), i2, func, nthreads);
+  }
+
 }
 
 using detail_mav::cfmav;
 using detail_mav::vfmav;
 using detail_mav::cmav;
 using detail_mav::vmav;
+using detail_mav::subarray;
+using detail_mav::fmavIter2;
 }
 
 #endif
