@@ -42,7 +42,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <any>
+#include <typeinfo>
+#include <typeindex>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/error_handling.h"
@@ -68,9 +69,6 @@ template<> constexpr inline size_t fft1d_simdlen<float>
 template<typename T> using fft1d_simd = typename simd_select<T,fft1d_simdlen<T>>::type;
 template<typename T> constexpr inline bool fft1d_simd_exists = (fft1d_simdlen<T> > 1);
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
-using std::any;
-
 // Always use std:: for <cmath> functions
 template <typename T> T cos(T) = delete;
 template <typename T> T sin(T) = delete;
@@ -90,6 +88,8 @@ template<bool fwd, typename T, typename T2> void special_mul (const Cmplx<T> &v1
 
 template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
   { auto tmp_= fwd ? -a.r : a.r; a.r = fwd ? a.i : -a.i; a.i=tmp_; }
+
+template<typename T> inline auto tidx() { return type_index(typeid(T)); }
 
 struct util1d // hack to avoid duplicate symbols
   {
@@ -179,7 +179,8 @@ template <typename Tfs> class cfftpass
     // will be provided in "buf"
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual void *exec(any in, void *copy, void *buf, bool fwd, size_t nthreads=1) const = 0;
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads=1) const = 0;
 
     static vector<size_t> factorize(size_t N)
       {
@@ -216,11 +217,13 @@ template <typename Tfs> class cfftpass
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
-    virtual void * exec(any in, void *copy, void *buf, bool fwd, size_t nthreads=1) const \
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf, \
+      bool fwd, size_t nthreads=1) const \
       { \
-      if (in.type()==typeid(Tcs *)) \
+      static const auto tics = tidx<Tcs *>(); \
+      if (ti==tics) \
         { \
-        auto in1 = any_cast<Tcs *>(in); \
+        auto in1 = static_cast<Tcs *>(in); \
         auto copy1 = static_cast<Tcs *>(copy); \
         auto buf1 = static_cast<Tcs *>(buf); \
         return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -231,9 +234,10 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (in.type()==typeid(Tcv *)) \
+          static const auto ticv = tidx<Tcv *>(); \
+          if (ti==ticv) \
             {  \
-            auto in1 = any_cast<Tcv *>(in); \
+            auto in1 = static_cast<Tcv *>(in); \
             auto copy1 = static_cast<Tcv *>(copy); \
             auto buf1 = static_cast<Tcv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -245,9 +249,10 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (in.type()==typeid(Tcv *)) \
+          static const auto ticv = tidx<Tcv *>(); \
+          if (ti==ticv) \
             {  \
-            auto in1 = any_cast<Tcv *>(in); \
+            auto in1 = static_cast<Tcv *>(in); \
             auto copy1 = static_cast<Tcv *>(copy); \
             auto buf1 = static_cast<Tcv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -259,9 +264,10 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (in.type()==typeid(Tcv *)) \
+          static const auto ticv = tidx<Tcv *>(); \
+          if (ti==ticv) \
             {  \
-            auto in1 = any_cast<Tcv *>(in); \
+            auto in1 = static_cast<Tcv *>(in); \
             auto copy1 = static_cast<Tcv *>(copy); \
             auto buf1 = static_cast<Tcv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -273,9 +279,10 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (in.type()==typeid(Tcv *)) \
+          static const auto ticv = tidx<Tcv *>(); \
+          if (ti==ticv) \
             {  \
-            auto in1 = any_cast<Tcv *>(in); \
+            auto in1 = static_cast<Tcv *>(in); \
             auto copy1 = static_cast<Tcv *>(copy); \
             auto buf1 = static_cast<Tcv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -1265,7 +1272,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
           for (size_t m=ip; m<ip2; ++m)
             akf[m]=zero;
 
-          auto res = static_cast<Tcd *>(subplan->exec(akf,akf2,subbuf, true, nthreads));
+          auto res = static_cast<Tcd *>(subplan->exec(tidx<Tcd *>(),akf,akf2,
+            subbuf, true, nthreads));
 
           /* do the convolution */
           res[0] = res[0].template special_mul<!fwd>(bkf[0]);
@@ -1278,8 +1286,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
             res[ip2/2] = res[ip2/2].template special_mul<!fwd>(bkf[ip2/2]);
 
           /* inverse FFT */
-          res = static_cast<Tcd *>(subplan->exec(res,(res==akf) ? akf2 : akf,
-            subbuf, false, nthreads));
+          res = static_cast<Tcd *>(subplan->exec(tidx<Tcd *>(), res,
+            (res==akf) ? akf2 : akf, subbuf, false, nthreads));
 
           /* multiply by b_k and write to output buffer */
           if (l1>1)
@@ -1347,8 +1355,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
       for (size_t m=ip;m<=(ip2-ip);++m)
         tbkf[m].Set(0.,0.);
       aligned_array<Tcs> buf(subplan->bufsize());
-      auto res = static_cast<Tcs *>(subplan->exec(tbkf.data(), tbkf2.data(),
-        buf.data(), true));
+      auto res = static_cast<Tcs *>(subplan->exec(tidx<Tcs *>(), tbkf.data(),
+        tbkf2.data(), buf.data(), true));
       for (size_t i=0; i<ip2/2+1; ++i)
         bkf[i] = res[i];
 
@@ -1386,7 +1394,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         Tc *p1=cc, *p2=ch;
         for(const auto &pass: passes)
           {
-          auto res = static_cast<Tc *>(pass->exec(p1, p2, buf, fwd, nthreads));
+          auto res = static_cast<Tc *>(pass->exec(tidx<Tc *>(), p1, p2, buf,
+            fwd, nthreads));
           if (res==p2) swap (p1,p2);
           }
         return p1;
@@ -1428,7 +1437,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   Tcv *p1=cc2, *p2=ch2;
                   for(const auto &pass: passes)
                     {
-                    auto res = static_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
+                    auto res = static_cast<Tcv *>(pass->exec(tidx<Tcv *>(),
+                      p1, p2, buf2, fwd));
                     if (res==p2) swap (p1,p2);
                     }
 
@@ -1469,7 +1479,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                   Tcv *p1=cc2, *p2=ch2;
                   for(const auto &pass: passes)
                     {
-                    auto res = static_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
+                    auto res = static_cast<Tcv *>(pass->exec(tidx<Tcv *>(),
+                      p1, p2, buf2, fwd));
                     if (res==p2) swap (p1,p2);
                     }
 
@@ -1531,7 +1542,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             Tcv *p1=cc2, *p2=ch2;
             for(const auto &pass: passes)
               {
-              auto res = static_cast<Tcv *>(pass->exec(p1, p2, buf2, fwd));
+              auto res = static_cast<Tcv *>(pass->exec(tidx<Tcv *>(),
+                p1, p2, buf2, fwd));
               if (res==p2) swap (p1,p2);
               }
 
@@ -1565,7 +1577,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               Cmplx<T> *res = nullptr;
               for(const auto &pass: passes)
                 {
-                res = static_cast<Cmplx<T> *>(pass->exec(p1, p2, buf, fwd));
+                res = static_cast<Cmplx<T> *>(pass->exec(tidx<Cmplx<T> *>(),
+                  p1, p2, buf, fwd));
                 if (res==p2) swap (p1,p2);
                 }
               if (res != &cc[n*ip])
@@ -1612,7 +1625,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 Cmplx<T> *res = nullptr;
                 for(const auto &pass: passes)
                   {
-                  res = static_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
+                  res = static_cast<Cmplx<T> *>(pass->exec(tidx<Cmplx<T> *>(),
+                    p1, p2, buf2, fwd));
                   if (res==p2) swap (p1,p2);
                   }
                 if (res==&cc2[n*ip]) // no copying necessary
@@ -1682,7 +1696,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
               Cmplx<T> *res = nullptr;
               for(const auto &pass: passes)
                 {
-                res = static_cast<Cmplx<T> *>(pass->exec(p1, p2, buf2, fwd));
+                res = static_cast<Cmplx<T> *>(pass->exec(tidx<Cmplx<T> *>(),
+                  p1, p2, buf2, fwd));
                 if (res==p2) swap (p1,p2);
                 }
               if (res==&cc2[n*ip]) // no copying necessary
@@ -1793,8 +1808,9 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       auto * ch2 = buf.data()+ip;
       auto * buf2 = buf.data()+2*ip;
 // run scalar pass
-      auto res = static_cast<Tcs *>(spass->exec(cc, reinterpret_cast<Tcs *>(ch2),
-        reinterpret_cast<Tcs *>(buf2), fwd, nthreads));
+      auto res = static_cast<Tcs *>(spass->exec(tidx<Tcs *>(), cc,
+        reinterpret_cast<Tcs *>(ch2), reinterpret_cast<Tcs *>(buf2),
+        fwd, nthreads));
 // arrange input in SIMD-friendly way
 // FIXME: swap loops?
       for (size_t i=0; i<ip/vlen; ++i)
@@ -1805,7 +1821,8 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
           cc2[i].i[j] = res[idx].i;
           }
 // run vector pass
-      auto res2 = static_cast<Tcv *>(vpass->exec(cc2, ch2, buf2, fwd, nthreads));
+      auto res2 = static_cast<Tcv *>(vpass->exec(tidx<Tcv *>(),
+        cc2, ch2, buf2, fwd, nthreads));
 // de-SIMDify
       for (size_t i=0; i<ip/vlen; ++i)
         for (size_t j=0; j<vlen; ++j)
@@ -1824,10 +1841,12 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       }
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
-    virtual void *exec(any in, void *copy, void *buf, bool fwd, size_t nthreads=1) const
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads=1) const
       {
-      MR_assert(in.type()==typeid(Tcs *), "bad input type");
-      auto in1 = any_cast<Tcs *>(in);
+      static const auto tics = tidx<Tcs *>(); 
+      MR_assert(ti==tics, "bad input type");
+      auto in1 = static_cast<Tcs *>(in);
       auto copy1 = static_cast<Tcs *>(copy);
       auto buf1 = static_cast<Tcs *>(buf);
       return fwd ? exec_<true>(in1, copy1, buf1, nthreads)
@@ -1897,8 +1916,8 @@ template<typename Tfs> class pocketfft_c
     template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      auto res = static_cast<Cmplx<Tfd> *>(plan->exec(in, buf+critbuf+plan->bufsize(),
-        buf+critbuf, fwd, nthreads));
+      auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tidx<Cmplx<Tfd> *>(),
+        in, buf+critbuf+plan->bufsize(), buf+critbuf, fwd, nthreads));
       if (fct!=Tfs(1))
         for (size_t i=0; i<N; ++i) res[i]*=fct;
       return res;
@@ -1906,8 +1925,8 @@ template<typename Tfs> class pocketfft_c
     template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      auto res = static_cast<Cmplx<Tfd> *>(plan->exec(in, buf,
-        buf+N*plan->needs_copy(), fwd, nthreads));
+      auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tidx<Cmplx<Tfd> *>(),
+        in, buf, buf+N*plan->needs_copy(), fwd, nthreads));
       if (res==in)
         {
         if (fct!=Tfs(1))
@@ -1937,7 +1956,8 @@ template <typename Tfs> class rfftpass
     // will be provided in "buf"
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual void *exec(any in, void *copy, void *buf, bool fwd, size_t nthreads=1) const = 0;
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads=1) const = 0;
 
     static vector<size_t> factorize(size_t N)
       {
@@ -1972,11 +1992,13 @@ template <typename Tfs> class rfftpass
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
-    virtual void *exec(any in, void *copy, void *buf, bool fwd, size_t nthreads) const \
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf, \
+      bool fwd, size_t nthreads) const \
       { \
-      if (in.type()==typeid(Tfs *)) \
+      static const auto tifs=tidx<Tfs *>(); \
+      if (ti==tifs) \
         { \
-        auto in1 = any_cast<Tfs *>(in); \
+        auto in1 = static_cast<Tfs *>(in); \
         auto copy1 = static_cast<Tfs *>(copy); \
         auto buf1 = static_cast<Tfs *>(buf); \
         return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -1986,9 +2008,10 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
-          if (in.type()==typeid(Tfv *)) \
+          static const auto tifv=tidx<Tfv *>(); \
+          if (ti==tifv) \
             {  \
-            auto in1 = any_cast<Tfv *>(in); \
+            auto in1 = static_cast<Tfv *>(in); \
             auto copy1 = static_cast<Tfv *>(copy); \
             auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -1999,9 +2022,10 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
-          if (in.type()==typeid(Tfv *)) \
+          static const auto tifv=tidx<Tfv *>(); \
+          if (ti==tifv) \
             {  \
-            auto in1 = any_cast<Tfv *>(in); \
+            auto in1 = static_cast<Tfv *>(in); \
             auto copy1 = static_cast<Tfv *>(copy); \
             auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -2012,9 +2036,10 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
-          if (in.type()==typeid(Tfv *)) \
+          static const auto tifv=tidx<Tfv *>(); \
+          if (ti==tifv) \
             {  \
-            auto in1 = any_cast<Tfv *>(in); \
+            auto in1 = static_cast<Tfv *>(in); \
             auto copy1 = static_cast<Tfv *>(copy); \
             auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -2025,9 +2050,10 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
-          if (in.type()==typeid(Tfv *)) \
+          static const auto tifv=tidx<Tfv *>(); \
+          if (ti==tifv) \
             {  \
-            auto in1 = any_cast<Tfv *>(in); \
+            auto in1 = static_cast<Tfv *>(in); \
             auto copy1 = static_cast<Tfv *>(copy); \
             auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
@@ -2877,7 +2903,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           // copy in
           for (size_t m=0; m<ip; ++m)
             cc2[m] = {CC(0,k,m),Tfd(0)};
-          auto res = static_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
+          auto res = static_cast<Tcd *>(cplan->exec(tidx<Tcd *>(), cc2, ch2,
+            subbuf, fwd, nthreads));
           // copy out
           CH(0,0,k) = res[0].r; 
           for (size_t m=1; m<=ip/2; ++m)
@@ -2898,7 +2925,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               MULPM (cc2[m].r,cc2[m].i,WA(m-1,i-2),WA(m-1,i-1),CC(i-1,k,m),CC(i,k,m));
               MULPM (cc2[ip-m].r,cc2[ip-m].i,WA(ip-m-1,i-2),WA(ip-m-1,i-1),CC(i-1,k,ip-m),CC(i,k,ip-m));
               }
-            auto res = static_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
+            auto res = static_cast<Tcd *>(cplan->exec(tidx<Tcd *>(), cc2, ch2,
+              subbuf, fwd, nthreads));
             CH(i-1,0,k) = res[0].r; 
             CH(i,0,k) = res[0].i; 
             for (size_t m=1; m<ipph; ++m)
@@ -2925,7 +2953,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
             cc2[m] = {CC(ido-1,2*m-1,k),CC(0,2*m,k)};
             cc2[ip-m] = {CC(ido-1,2*m-1,k),-CC(0,2*m,k)};
             }
-          auto res = static_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
+          auto res = static_cast<Tcd *>(cplan->exec(tidx<Tcd *>(), cc2, ch2,
+            subbuf, fwd, nthreads));
           for (size_t m=0; m<ip; ++m)
             CH(0,k,m) = res[m].r;
           }
@@ -2940,7 +2969,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               cc2[m] = {CC(i-1,2*m,k),CC(i,2*m,k)};
               cc2[ip-m] = {CC(ic-1,2*m-1,k),-CC(ic,2*m-1,k)};
               }
-            auto res = static_cast<Tcd *>(cplan->exec(cc2, ch2, subbuf, fwd, nthreads));
+            auto res = static_cast<Tcd *>(cplan->exec(tidx<Tcd *>(), cc2, ch2,
+              subbuf, fwd, nthreads));
             CH(i-1,k,0) = res[0].r;
             CH(i,k,0) = res[0].i;
             for (size_t m=1; m<ip; ++m)
@@ -2991,7 +3021,8 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     auto WA(size_t x, size_t i) const
       { return wa[(i-1)*(ip-1)+x]; }
 
-    template<bool fwd, typename Tfd> Tfd *exec_(Tfd *cc, Tfd *ch, Tfd *buf, size_t nthreads) const
+    template<bool fwd, typename Tfd> Tfd *exec_(Tfd *cc, Tfd *ch, Tfd *buf,
+      size_t nthreads) const
       {
       if ((l1==1) && (ido==1))
         {
@@ -2999,13 +3030,15 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
         if constexpr (fwd)
           for (auto it=passes.rbegin(); it!=passes.rend(); ++it)
             {
-            auto res = static_cast<Tfd *>((*it)->exec(p1,p2,buf,fwd,nthreads));
+            auto res = static_cast<Tfd *>((*it)->exec(tidx<Tfd *>(),
+              p1, p2, buf, fwd, nthreads));
             if (res==p2) swap(p1,p2);
             }
         else
           for (const auto &pass: passes)
             {
-            auto res = static_cast<Tfd *>(pass->exec(p1,p2,buf,fwd,nthreads));
+            auto res = static_cast<Tfd *>(pass->exec(tidx<Tfd *>(),
+              p1, p2, buf, fwd, nthreads));
             if (res==p2) swap(p1,p2);
             }
         return p1;
@@ -3076,7 +3109,8 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       auto cbuf = reinterpret_cast<Tcd *>(buf);
       if constexpr(fwd)
         {
-        auto res = static_cast<Tcd *>(pass->exec(ccc, cch, cbuf, true, nthreads));
+        auto res = static_cast<Tcd *>(pass->exec(tidx<Tcd *>(),
+          ccc, cch, cbuf, true, nthreads));
         auto rres = (res==ccc) ? ch : cc;
         rres[0] = res[0].r+res[0].i;
 //FIXME: parallelize?
@@ -3106,7 +3140,8 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
           cch[i] = (xe + Tcd(-xo.i, xo.r));
           cch[xi] = (xe.conj() + Tcd(xo.i, xo.r));
           }
-        auto res = static_cast<Tcd *>(pass->exec(cch, ccc, cbuf, false, nthreads));
+        auto res = static_cast<Tcd *>(pass->exec(tidx<Tcd *>(),
+          cch, ccc, cbuf, false, nthreads));
         return (res==ccc) ? cc : ch;
         }
       }
@@ -3172,7 +3207,7 @@ template<typename Tfs> class pocketfft_r
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       bool fwd, size_t nthreads=1) const
       {
-      auto res = static_cast<Tfd *>(plan->exec(in, buf,
+      auto res = static_cast<Tfd *>(plan->exec(tidx<Tfd *>(), in, buf,
         buf+N*plan->needs_copy(), fwd, nthreads));
       if (fct!=Tfs(1))
         for (size_t i=0; i<N; ++i) res[i]*=fct;
@@ -3181,7 +3216,7 @@ template<typename Tfs> class pocketfft_r
     template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Tfd *in, Tfd *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      auto res = static_cast<Tfd *>(plan->exec(in, buf,
+      auto res = static_cast<Tfd *>(plan->exec(tidx<Tfd *>(), in, buf,
         buf+N*plan->needs_copy(), fwd, nthreads));
       if (res==in)
         {
@@ -3218,7 +3253,8 @@ template<typename Tfs> class pocketfft_hartley
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       size_t nthreads=1) const
       {
-      auto res = static_cast<Tfd *>(plan->exec(in, buf, buf+N, true, nthreads));
+      auto res = static_cast<Tfd *>(plan->exec(tidx<Tfd *>(),
+        in, buf, buf+N, true, nthreads));
       auto res2 = (res==buf) ? in : buf;
       res2[0] = fct*res[0];
       size_t i=1, i1=1, i2=N-1;
@@ -3282,7 +3318,8 @@ template<typename Tfs> class pocketfft_fftw
           res2[i] = fct*res[i1];
         swap(res, res2);
         }
-      res = static_cast<Tfd *>(plan->exec(res, res2, buf+N, fwd, nthreads));
+      res = static_cast<Tfd *>(plan->exec(tidx<Tfd *>(),
+        res, res2, buf+N, fwd, nthreads));
       if (!fwd) return res;
 
       // go to FFTW halfcomplex order
