@@ -218,8 +218,7 @@ template <typename Tfs> class cfftpass
 #define POCKETFFT_EXEC_DISPATCH \
     virtual any exec(any in, any copy, any buf, bool fwd, size_t nthreads=1) const \
       { \
-      auto hcin = in.type().hash_code(); \
-      if (hcin==typeid(Tcs *).hash_code()) \
+      if (in.type()==typeid(Tcs *)) \
         { \
         auto in1 = any_cast<Tcs *>(in); \
         auto copy1 = any_cast<Tcs *>(copy); \
@@ -232,7 +231,7 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (hcin==typeid(Tcv *).hash_code()) \
+          if (in.type()==typeid(Tcv *)) \
             {  \
             auto in1 = any_cast<Tcv *>(in); \
             auto copy1 = any_cast<Tcv *>(copy); \
@@ -246,7 +245,7 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (hcin==typeid(Tcv *).hash_code()) \
+          if (in.type()==typeid(Tcv *)) \
             {  \
             auto in1 = any_cast<Tcv *>(in); \
             auto copy1 = any_cast<Tcv *>(copy); \
@@ -260,7 +259,7 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (hcin==typeid(Tcv *).hash_code()) \
+          if (in.type()==typeid(Tcv *)) \
             {  \
             auto in1 = any_cast<Tcv *>(in); \
             auto copy1 = any_cast<Tcv *>(copy); \
@@ -274,7 +273,7 @@ template <typename Tfs> class cfftpass
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
           using Tcv = Cmplx<Tfv>; \
-          if (hcin==typeid(Tcv *).hash_code()) \
+          if (in.type()==typeid(Tcv *)) \
             {  \
             auto in1 = any_cast<Tcv *>(in); \
             auto copy1 = any_cast<Tcv *>(copy); \
@@ -1935,7 +1934,7 @@ template <typename Tfs> class rfftpass
     // will be provided in "buf"
     virtual size_t bufsize() const = 0;
     virtual bool needs_copy() const = 0;
-    virtual any exec(any in, any copy, any buf, bool fwd, size_t nthreads=1) const = 0;
+    virtual any exec(any in, void *copy, void *buf, bool fwd, size_t nthreads=1) const = 0;
 
     static vector<size_t> factorize(size_t N)
       {
@@ -1970,14 +1969,13 @@ template <typename Tfs> class rfftpass
   };
 
 #define POCKETFFT_EXEC_DISPATCH \
-    virtual any exec(any in, any copy, any buf, bool fwd, size_t nthreads) const \
+    virtual any exec(any in, void *copy, void *buf, bool fwd, size_t nthreads) const \
       { \
-      auto hcin = in.type().hash_code(); \
-      if (hcin==typeid(Tfs *).hash_code()) \
+      if (in.type()==typeid(Tfs *)) \
         { \
         auto in1 = any_cast<Tfs *>(in); \
-        auto copy1 = any_cast<Tfs *>(copy); \
-        auto buf1 = any_cast<Tfs *>(buf); \
+        auto copy1 = static_cast<Tfs *>(copy); \
+        auto buf1 = static_cast<Tfs *>(buf); \
         return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                    : exec_<false>(in1, copy1, buf1, nthreads); \
         } \
@@ -1985,11 +1983,11 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
-          if (hcin==typeid(Tfv *).hash_code()) \
+          if (in.type()==typeid(Tfv *)) \
             {  \
             auto in1 = any_cast<Tfv *>(in); \
-            auto copy1 = any_cast<Tfv *>(copy); \
-            auto buf1 = any_cast<Tfv *>(buf); \
+            auto copy1 = static_cast<Tfv *>(copy); \
+            auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                        : exec_<false>(in1, copy1, buf1, nthreads); \
             } \
@@ -1998,11 +1996,11 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
-          if (hcin==typeid(Tfv *).hash_code()) \
+          if (in.type()==typeid(Tfv *)) \
             {  \
             auto in1 = any_cast<Tfv *>(in); \
-            auto copy1 = any_cast<Tfv *>(copy); \
-            auto buf1 = any_cast<Tfv *>(buf); \
+            auto copy1 = static_cast<Tfv *>(copy); \
+            auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                        : exec_<false>(in1, copy1, buf1, nthreads); \
             } \
@@ -2011,11 +2009,11 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
-          if (hcin==typeid(Tfv *).hash_code()) \
+          if (in.type()==typeid(Tfv *)) \
             {  \
             auto in1 = any_cast<Tfv *>(in); \
-            auto copy1 = any_cast<Tfv *>(copy); \
-            auto buf1 = any_cast<Tfv *>(buf); \
+            auto copy1 = static_cast<Tfv *>(copy); \
+            auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                        : exec_<false>(in1, copy1, buf1, nthreads); \
             } \
@@ -2024,11 +2022,11 @@ template <typename Tfs> class rfftpass
         if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
           { \
           using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
-          if (hcin==typeid(Tfv *).hash_code()) \
+          if (in.type()==typeid(Tfv *)) \
             {  \
             auto in1 = any_cast<Tfv *>(in); \
-            auto copy1 = any_cast<Tfv *>(copy); \
-            auto buf1 = any_cast<Tfv *>(buf); \
+            auto copy1 = static_cast<Tfv *>(copy); \
+            auto buf1 = static_cast<Tfv *>(buf); \
             return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
                        : exec_<false>(in1, copy1, buf1, nthreads); \
             } \
@@ -2049,7 +2047,7 @@ template <typename Tfs> class rfftp1: public rfftpass<Tfs>
     rfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
-    virtual any exec(any in, any /*copy*/, any /*buf*/,
+    virtual any exec(any in, void * /*copy*/, void * /*buf*/,
       bool /*fwd*/, size_t /*nthreads*/) const
       { return in; }
   };
