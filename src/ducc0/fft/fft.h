@@ -688,7 +688,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
     {
-    auto ptr = &dst.raw(it.oofs_uni(0,0));
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
     auto jstr = it.unistride_o();
     auto istr = it.stride_out();
     if (istr==1)
@@ -706,13 +706,15 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
     }
   else
     {
-    auto ptr = dst.data();
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
     for (size_t i=0; i<it.length_out(); ++i)
       for (size_t j=0; j<vlen; ++j)
         ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
     }
   }
 
+// NOTE: gcc 10 seems to pessimize this code by rearrangig loops when -O3 is
+// used instead of -O2.
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd *DUCC0_RESTRICT src, vfmav<typename Tsimd::value_type> &dst)
   {
