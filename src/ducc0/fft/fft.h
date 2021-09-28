@@ -585,6 +585,9 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   return aligned_array<T>((axsize+bufsize)*std::min(vlen, othersize));
   }
 
+// NOTE: gcc 10 seems to pessimize this code by rearranging loops when tree
+// vectorization is on. So I'm currently using an explicit "-fno-tree-vectorize"
+// in setup.py.
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
   {
@@ -596,53 +599,36 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
     auto istr = it.stride_in();
     if (istr==1)
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)*jstr+ptrdiff_t(i)];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     else if (jstr==1)
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)+ptrdiff_t(i)*istr];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     else
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = src.raw(it.iofs_uni(j,i));
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     }
   else
     for (size_t i=0; i<it.length_in(); ++i)
-      {
-      Cmplx<Tsimd> stmp;
       for (size_t j=0; j<vlen; ++j)
         {
-        auto tmp = src.raw(it.iofs(j,i));
-        stmp.r[j] = tmp.r;
-        stmp.i[j] = tmp.i;
+        dst[i].r[j] = src.raw(it.iofs(j,i)).r;
+        dst[i].i[j] = src.raw(it.iofs(j,i)).i;
         }
-      dst[i] = stmp;
-      }
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -682,6 +668,9 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     dst[i] = src.raw(it.iofs(i));
   }
 
+// NOTE: gcc 10 seems to pessimize this code by rearranging loops when tree
+// vectorization is on. So I'm currently using an explicit "-fno-tree-vectorize"
+// in setup.py.
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Cmplx<Tsimd> *DUCC0_RESTRICT src, vfmav<Cmplx<typename Tsimd::value_type>> &dst)
   {
@@ -713,8 +702,6 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
     }
   }
 
-// NOTE: gcc 10 seems to pessimize this code by rearrangig loops when -O3 is
-// used instead of -O2.
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd *DUCC0_RESTRICT src, vfmav<typename Tsimd::value_type> &dst)
   {

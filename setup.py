@@ -41,7 +41,7 @@ else:
     extra_compile_args += ['-g0']
 
 if do_optimize:
-    extra_compile_args += ['-ffast-math', '-O3']
+    extra_compile_args += ['-ffast-math', '-O3', '-fno-tree-vectorize']
 else:
     extra_compile_args += ['-O0']
 
