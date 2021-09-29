@@ -974,7 +974,7 @@ template<size_t ndim> auto make_infos(const fmav_info &info)
 
 
 template<typename T0, typename Ti0, typename Func>
-  void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+  void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     Func func)
   {
@@ -982,20 +982,20 @@ template<typename T0, typename Ti0, typename Func>
   auto str0 = str[0][idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, func);
+      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, func);
   else
     for (size_t i=0; i<len; ++i)
       func(make_mavref(info0, ptr0+i*str0));
   }
 template<typename T0, typename Ti0, typename Func>
-  void fmavIter2Helper(const vector<size_t> &shp,
+  void flexible_mav_applyHelper(const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     Func func, size_t nthreads)
   {
   if (shp.size()==0)
     func(make_mavref(info0, ptr0));
   else if (nthreads==1)
-    fmavIter2Helper(0, shp, str, ptr0, info0, func);
+    flexible_mav_applyHelper(0, shp, str, ptr0, info0, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1006,12 +1006,12 @@ template<typename T0, typename Ti0, typename Func>
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0, func);
+        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0, func);
       });
   }
 
 template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func>
-  void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+  void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     T1 ptr1, const Ti1 &info1, Func func)
   {
@@ -1019,7 +1019,7 @@ template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func>
   auto str0 = str[0][idim], str1 = str[1][idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1,
+      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1,
         info1, func);
   else
     for (size_t i=0; i<len; ++i)
@@ -1027,14 +1027,14 @@ template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func>
   }
 template<typename T0, typename Ti0,
          typename T1, typename Ti1, typename Func>
-  void fmavIter2Helper(const vector<size_t> &shp,
+  void flexible_mav_applyHelper(const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     T1 ptr1, const Ti1 &info1, Func func, size_t nthreads)
   {
   if (shp.size()==0)
     func(mavref(info0, ptr0), mavref(info1, ptr1));
   else if (nthreads==1)
-    fmavIter2Helper(0, shp, str, ptr0, info0, ptr1, info1, func);
+    flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1046,7 +1046,7 @@ template<typename T0, typename Ti0,
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0,
+        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0,
           ptr1+i*str[1][0], info1, func);
       });
   }
@@ -1054,7 +1054,7 @@ template<typename T0, typename Ti0,
 template<typename T0, typename Ti0,
          typename T1, typename Ti1,
          typename T2, typename Ti2, typename Func>
-  void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+  void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func)
   {
@@ -1062,7 +1062,7 @@ template<typename T0, typename Ti0,
   auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1, info1,
+      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1, info1,
         ptr2+i*str2, info2, func);
   else
     for (size_t i=0; i<len; ++i)
@@ -1072,7 +1072,7 @@ template<typename T0, typename Ti0,
 template<typename T0, typename Ti0,
          typename T1, typename Ti1,
          typename T2, typename Ti2, typename Func>
-  void fmavIter2Helper(const vector<size_t> &shp,
+  void flexible_mav_applyHelper(const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
     T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func,
     size_t nthreads)
@@ -1080,7 +1080,7 @@ template<typename T0, typename Ti0,
   if (shp.size()==0)
     func(mavref(info0, ptr0), mavref(info1, ptr1), mavref(info2, ptr2));
   else if (nthreads==1)
-    fmavIter2Helper(0, shp, str, ptr0, info0, ptr1, info1, ptr2, info2, func);
+    flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, ptr2, info2, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1093,34 +1093,34 @@ template<typename T0, typename Ti0,
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0,
+        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0,
                         ptr1+i*str[1][0], info1, ptr2+i*str[2][0], info2, func);
       });
   }
 
 template<size_t nd0, typename T0, typename Func>
-  void fmavIter2(Func func, size_t nthreads, T0 &&m0)
+  void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0)
   {
   auto [f0, i0] = make_infos<nd0>(m0);
   vector<fmav_info> iterinfo{f0};
   auto [shp, str] = multiprep(iterinfo);
-  fmavIter2Helper(shp, str, m0.data(), i0, func, nthreads);
+  flexible_mav_applyHelper(shp, str, m0.data(), i0, func, nthreads);
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
-  void fmavIter2(Func func, size_t nthreads, T0 &&m0, T1 &&m1)
+  void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0, T1 &&m1)
   {
   MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
   auto [f0, i0] = make_infos<nd0>(m0);
   auto [f1, i1] = make_infos<nd1>(m1);
   vector<fmav_info> iterinfo{f0, f1};
   auto [shp, str] = multiprep(iterinfo);
-  fmavIter2Helper(shp, str, m0.data(), i0, m1.data(), i1, func, nthreads);
+  flexible_mav_applyHelper(shp, str, m0.data(), i0, m1.data(), i1, func, nthreads);
   }
 
 template<size_t nd0, size_t nd1, size_t nd2,
          typename T0, typename T1, typename T2, typename Func>
-  void fmavIter2(Func func, size_t nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
+  void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
   {
   MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
   MR_assert(m0.ndim()-nd0 == m2.ndim()-nd2, "dimensionality mismatch");
@@ -1129,7 +1129,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   auto [f2, i2] = make_infos<nd2>(m2);
   vector<fmav_info> iterinfo{f0, f1, f2};
   auto [shp, str] = multiprep(iterinfo);
-  fmavIter2Helper(shp, str, m0.data(), i0, m1.data(), i1, m2.data(), i2,
+  flexible_mav_applyHelper(shp, str, m0.data(), i0, m1.data(), i1, m2.data(), i2,
                   func, nthreads);
   }
 
@@ -1146,7 +1146,7 @@ using detail_mav::cmav;
 using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
-using detail_mav::fmavIter2;
+using detail_mav::flexible_mav_apply;
 }
 
 #endif

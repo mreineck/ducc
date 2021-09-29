@@ -1451,7 +1451,7 @@ template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
   if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
   d.swap_axes(ax0, d.ndim()-2);
   d.swap_axes(ax1, d.ndim()-1);
-  fmavIter2<2>([nthreads](const auto &plane)
+  flexible_mav_apply<2>([nthreads](const auto &plane)
     {
     auto nu=plane.shape(0), nv=plane.shape(1);
     execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
@@ -1485,7 +1485,7 @@ template<typename T> void oscarize3(vfmav<T> &data, size_t ax0, size_t ax1, size
   d.swap_axes(ax0, d.ndim()-3);
   d.swap_axes(ax1, d.ndim()-2);
   d.swap_axes(ax2, d.ndim()-1);
-  fmavIter2<3>([nthreads](const auto &plane)
+  flexible_mav_apply<3>([nthreads](const auto &plane)
     {
     auto nu=plane.shape(0), nv=plane.shape(1), nw=plane.shape(2);
     execParallel((nu+1)/2+1, nthreads, [&](size_t lo, size_t hi)
