@@ -220,17 +220,17 @@ template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
     {
     for(auto i=lo+1; i<hi+1; ++i)
       for(size_t j=1; j<(nv+1)/2; ++j)
-         {
-         T ll = arr(i   ,j   );
-         T hl = arr(nu-i,j   );
-         T lh = arr(i   ,nv-j);
-         T hh = arr(nu-i,nv-j);
-         T v = T(0.5)*(ll+lh+hl+hh);
-         arr(i   ,j   ) = v-hh;
-         arr(nu-i,j   ) = v-lh;
-         arr(i   ,nv-j) = v-hl;
-         arr(nu-i,nv-j) = v-ll;
-         }
+        {
+        T ll = arr(i   ,j   );
+        T hl = arr(nu-i,j   );
+        T lh = arr(i   ,nv-j);
+        T hh = arr(nu-i,nv-j);
+        T v = T(0.5)*(ll+lh+hl+hh);
+        arr(i   ,j   ) = v-hh;
+        arr(nu-i,j   ) = v-lh;
+        arr(i   ,nv-j) = v-hl;
+        arr(nu-i,nv-j) = v-ll;
+        }
      });
   }
 

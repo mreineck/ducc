@@ -60,9 +60,33 @@ def measure_fftw_np_interface(a, nrepeat, nthr):
 def measure_duccfft(a, nrepeat, nthr):
     times = []
     b = a.copy()
+    axes = range(a.ndim-1,-1,-1)
     for i in range(nrepeat):
         t0 = time()
-        b = ducc0.fft.c2c(a, out=b, forward=True, nthreads=nthr)
+        b = ducc0.fft.c2c(a, forward=True, axes=axes, nthreads=nthr)
+        t1 = time()
+        times.append(t1-t0)
+    return times, b
+
+
+def measure_duccfft_noncrit(a, nrepeat, nthr):
+    times = []
+    b = ducc0.misc.make_noncritical(a.copy())
+    axes = range(a.ndim-1,-1,-1)
+    for i in range(nrepeat):
+        t0 = time()
+        b = ducc0.fft.c2c(a, out=b, axes=axes, forward=True, nthreads=nthr)
+        t1 = time()
+        times.append(t1-t0)
+    return times, b
+
+
+def measure_duccfft_axflip(a, nrepeat, nthr):
+    times = []
+    axes = range(a.ndim-1,-1,-1)
+    for i in range(nrepeat):
+        t0 = time()
+        b = ducc0.fft.c2c(a, axes=axes, forward=True, nthreads=nthr)
         t1 = time()
         times.append(t1-t0)
     return times, b
@@ -167,13 +191,13 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.close()
 
 
-funcs = (measure_duccfft_noncrit_inplace, measure_fftw)
+funcs = (measure_duccfft, measure_scipy_fft)
 ttl = "duccfft/FFTW"
 ntry = 10
 nthr = 1
 nice_sizes = True
-#limits = [8192, 2048, 256]
-limits = [524288, 8192, 512]
+limits = [8192, 2048, 256]
+#limits = [524288, 8192, 512]
 bench_nd(1, limits[0], nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
 bench_nd(2, limits[1], nthr, ntry, "c16", funcs, 10, ttl, "2d.png", nice_sizes)
 bench_nd(3, limits[2], nthr, ntry, "c16", funcs, 10, ttl, "3d.png", nice_sizes)

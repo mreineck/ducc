@@ -221,6 +221,14 @@ class fmav_info
       str = newstr;
       }
 
+    void swap_axes(size_t ax0, size_t ax1)
+      {
+      MR_assert(ax0<=ndim() && ax1<=ndim(), "bad axes");
+      if (ax0==ax1) return;
+      swap(shp[ax0], shp[ax1]);
+      swap(str[ax0], str[ax1]);
+      }
+
   protected:
     auto subdata(const vector<slice> &slices) const
       {
@@ -913,9 +921,33 @@ template<typename T, size_t ndim> class mavref
     T *d;
 
   public:
+    using shape_t = typename mav_info<ndim>::shape_t;
+    using stride_t = typename mav_info<ndim>::stride_t;
     mavref(const mav_info<ndim> &info_, T *d_) : info(info_), d(d_) {}
     template<typename... Ns> T &operator()(Ns... ns) const
       { return d[info.idx(ns...)]; }
+    /// Returns the total number of entries in the object.
+    size_t size() const { return info.size(); }
+    /// Returns the shape of the object.
+    const shape_t &shape() const { return info.shape(); }
+    /// Returns the length along dimension \a i.
+    size_t shape(size_t i) const { return info.shape(i); }
+    /// Returns the strides of the object.
+    const stride_t &stride() const { return info.stride(); }
+    /// Returns the stride along dimension \a i.
+    const ptrdiff_t &stride(size_t i) const { return info.stride(i); }
+    /// Returns true iff the last dimension has stride 1.
+    /**  Typically used for optimization purposes. */
+    bool last_contiguous() const
+      { return info.last_contiguous(); }
+    /** Returns true iff the object is C-contiguous, i.e. if the stride of the
+     *  last dimension is 1, the stride for the next-to-last dimension is the
+     *  shape of the last dimension etc. */
+    bool contiguous() const
+      { return info.contiguous(); }
+    /// Returns true iff this->shape and \a other.shape match.
+    bool conformable(const mavref &other) const
+      { return shape()==other.shape(); }
   };
 template<typename T, size_t ndim>
   mavref<T, ndim> make_mavref(const mav_info<ndim> &info_, T *d_)
@@ -940,6 +972,43 @@ template<size_t ndim> auto make_infos(const fmav_info &info)
   return make_tuple(fout, iout);
   }
 
+
+template<typename T0, typename Ti0, typename Func>
+  void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
+    Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      fmavIter2Helper(idim+1, shp, str, ptr0+i*str0, info0, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(make_mavref(info0, ptr0+i*str0));
+  }
+template<typename T0, typename Ti0, typename Func>
+  void fmavIter2Helper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
+    Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(make_mavref(info0, ptr0));
+  else if (nthreads==1)
+    fmavIter2Helper(0, shp, str, ptr0, info0, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(make_mavref(info0, ptr0+i*str[0][0]));
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0, func);
+      });
+  }
 
 template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func>
   void fmavIter2Helper(size_t idim, const vector<size_t> &shp,
@@ -1027,6 +1096,15 @@ template<typename T0, typename Ti0,
         fmavIter2Helper(1, shp, str, ptr0+i*str[0][0], info0,
                         ptr1+i*str[1][0], info1, ptr2+i*str[2][0], info2, func);
       });
+  }
+
+template<size_t nd0, typename T0, typename Func>
+  void fmavIter2(Func func, size_t nthreads, T0 &&m0)
+  {
+  auto [f0, i0] = make_infos<nd0>(m0);
+  vector<fmav_info> iterinfo{f0};
+  auto [shp, str] = multiprep(iterinfo);
+  fmavIter2Helper(shp, str, m0.data(), i0, func, nthreads);
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
