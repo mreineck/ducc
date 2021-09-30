@@ -1503,6 +1503,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             return cc;
             }
 
+MR_fail("must not get here");
+#if 0
 //FIXME this code path is currently unused
           aligned_array<Tcv> tbuf(2*ip+bufsize());
           auto cc2 = &tbuf[0];
@@ -1564,6 +1566,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 }
             }
           return ch;
+#endif
           }
         else
           {
@@ -1657,6 +1660,8 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             return cc;
             }
 
+MR_fail("must not get here");
+#if 0
 //FIXME this code path is currently unused
           auto cc2 = &buf[0];
           auto ch2 = &buf[bunchsize*ip];
@@ -1726,6 +1731,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
                 CH(ix[n], kx[n], m) = cc2[m+n*ip];
             }
           return ch;
+#endif
           }
         }
       }
