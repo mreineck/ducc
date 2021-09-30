@@ -566,15 +566,6 @@ template<size_t N> class multi_iter
   };
 
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
-  (const fmav_info &info, size_t axsize)
-  {
-  auto othersize = info.size()/axsize;
-  constexpr auto vlen = fft_simdlen<T0>;
-  // FIXME: when switching to C++20, use bit_floor(othersize)
-  return aligned_array<T>(axsize*std::min(vlen, othersize));
-  }
-
-template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize, size_t bufsize, bool inplace=false)
   {
   if (inplace)
