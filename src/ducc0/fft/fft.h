@@ -1488,16 +1488,12 @@ template<typename T> void oscarize3(vfmav<T> &data, size_t ax0, size_t ax1, size
   flexible_mav_apply<3>([nthreads](const auto &plane)
     {
     auto nu=plane.shape(0), nv=plane.shape(1), nw=plane.shape(2);
-    execParallel((nu+1)/2+1, nthreads, [&](size_t lo, size_t hi)
+    execParallel(nu/2+1, nthreads, [&](size_t lo, size_t hi)
       {
-      for(auto i=lo; i<hi; ++i)
-        for(size_t j=0; j<=(nv+1)/2; ++j)
-          for(size_t k=0; k<=(nw+1)/2; ++k)
+      for(auto i=lo, xi=(i==0)?0:nu-i; i<hi; ++i, xi=nu-i)
+        for(size_t j=0, xj=0; j<=xj; ++j, xj=nv-j)
+          for(size_t k=0, xk=0; k<=xk; ++k, xk=nw-k)
             {
-            size_t xi = (i==0) ? 0 : nu-i;
-            size_t xj = (j==0) ? 0 : nv-j;
-            size_t xk = (k==0) ? 0 : nw-k;
-            if ((i>xi)||(j>xj)||(k>xk)) continue;
             T lll = plane(i ,j ,k );
             T hll = plane(xi,j ,k );
             T lhl = plane(i ,xj,k );
