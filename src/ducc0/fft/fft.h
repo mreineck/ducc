@@ -1069,7 +1069,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             it.advance(vlen/2);
             auto tdatav = reinterpret_cast<typename simd_select<T,vlen/2>::type *>(storage.data());
             for (size_t j=0; j<vlen/2; ++j)
-              tdatav[0][j]=in.craw(it.iofs(j,0)).r;
+              tdatav[0][j]=in.raw(it.iofs(j,0)).r;
             {
             size_t i=1, ii=1;
             if (forward)
@@ -1088,7 +1088,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
                   }
             if (i<len)
               for (size_t j=0; j<vlen/2; ++j)
-                tdatav[i][j] = in.craw(it.iofs(j,ii)).r;
+                tdatav[i][j] = in.raw(it.iofs(j,ii)).r;
             }
             plan->exec(tdatav, fct, false, nth1d);
             copy_output(it, tdatav, out);
@@ -1100,7 +1100,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             it.advance(vlen/4);
             auto tdatav = reinterpret_cast<typename simd_select<T,vlen/4>::type *>(storage.data());
             for (size_t j=0; j<vlen/4; ++j)
-              tdatav[0][j]=in.craw(it.iofs(j,0)).r;
+              tdatav[0][j]=in.raw(it.iofs(j,0)).r;
             {
             size_t i=1, ii=1;
             if (forward)
