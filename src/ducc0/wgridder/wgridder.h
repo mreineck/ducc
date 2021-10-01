@@ -169,10 +169,10 @@ template<typename T> void complex2hartley
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
 #ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
-                               grid(xu,xv).real()+grid(xu,xv).imag());
+                             grid(xu,xv).real()+grid(xu,xv).imag());
 #else
         grid2(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
-                               grid(xu,xv).real()-grid(xu,xv).imag());
+                             grid(xu,xv).real()-grid(xu,xv).imag());
 #endif
     });
   }
@@ -189,10 +189,10 @@ template<typename T> void hartley2complex
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
 #ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
-                                  T(.5)*(grid(xu,xv)-grid(u,v)));
+                                T(.5)*(grid(xu,xv)-grid(u,v)));
 #else
         grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
-                                  T(.5)*(grid(u,v)-grid(xu,xv)));
+                                T(.5)*(grid(u,v)-grid(xu,xv)));
 #endif
     });
   }
@@ -220,17 +220,17 @@ template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
     {
     for(auto i=lo+1; i<hi+1; ++i)
       for(size_t j=1; j<(nv+1)/2; ++j)
-         {
-         T ll = arr(i   ,j   );
-         T hl = arr(nu-i,j   );
-         T lh = arr(i   ,nv-j);
-         T hh = arr(nu-i,nv-j);
-         T v = T(0.5)*(ll+lh+hl+hh);
-         arr(i   ,j   ) = v-hh;
-         arr(nu-i,j   ) = v-lh;
-         arr(i   ,nv-j) = v-hl;
-         arr(nu-i,nv-j) = v-ll;
-         }
+        {
+        T ll = arr(i   ,j   );
+        T hl = arr(nu-i,j   );
+        T lh = arr(i   ,nv-j);
+        T hh = arr(nu-i,nv-j);
+        T v = T(0.5)*(ll+lh+hl+hh);
+        arr(i   ,j   ) = v-hh;
+        arr(nu-i,j   ) = v-lh;
+        arr(i   ,nv-j) = v-hl;
+        arr(nu-i,nv-j) = v-ll;
+        }
      });
   }
 

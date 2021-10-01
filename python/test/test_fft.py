@@ -247,7 +247,7 @@ def test_genuine_hartley(shp, nthreads):
     a = rng.random(shp)-0.5
     v1 = fft.genuine_hartley(a, nthreads=nthreads)
     v2 = fftn(a.astype(np.complex128))
-    v2 = v2.real-v2.imag if proper_hartley_convention else v2.real+v2.imag 
+    v2 = v2.real-v2.imag if proper_hartley_convention else v2.real+v2.imag
     assert_(l2error(v1, v2) < 1e-15)
 
 

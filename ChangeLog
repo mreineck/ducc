@@ -3,6 +3,13 @@
   - support for more platforms (e.g. Raspberry Pi)
   - rewrite of the classes for multidimensional array views, which allows
     many simplifications, multithreading etc.
+
+- fft:
+  - low-level tweaks which accelerate internal function calls; this especially
+    helps multi-D transforms with short axis lengths
+  - genuine Hartley transforms over 2 and 3 axes no longer require big temporary
+    arrays
+
 - healpix:
   - multithreading support for most functions
 

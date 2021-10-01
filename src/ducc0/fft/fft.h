@@ -566,15 +566,6 @@ template<size_t N> class multi_iter
   };
 
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
-  (const fmav_info &info, size_t axsize)
-  {
-  auto othersize = info.size()/axsize;
-  constexpr auto vlen = fft_simdlen<T0>;
-  // FIXME: when switching to C++20, use bit_floor(othersize)
-  return aligned_array<T>(axsize*std::min(vlen, othersize));
-  }
-
-template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize, size_t bufsize, bool inplace=false)
   {
   if (inplace)
@@ -585,6 +576,9 @@ template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   return aligned_array<T>((axsize+bufsize)*std::min(vlen, othersize));
   }
 
+// NOTE: gcc 10 seems to pessimize this code by rearranging loops when tree
+// vectorization is on. So I'm currently using an explicit "-fno-tree-vectorize"
+// in setup.py.
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
   {
@@ -596,53 +590,36 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
     auto istr = it.stride_in();
     if (istr==1)
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)*jstr+ptrdiff_t(i)];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     else if (jstr==1)
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = ptr[ptrdiff_t(j)+ptrdiff_t(i)*istr];
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     else
       for (size_t i=0; i<it.length_in(); ++i)
-        {
-        Cmplx<Tsimd> stmp;
         for (size_t j=0; j<vlen; ++j)
           {
           auto tmp = src.raw(it.iofs_uni(j,i));
-          stmp.r[j] = tmp.r;
-          stmp.i[j] = tmp.i;
+          dst[i].r[j] = tmp.r;
+          dst[i].i[j] = tmp.i;
           }
-        dst[i] = stmp;
-        }
     }
   else
     for (size_t i=0; i<it.length_in(); ++i)
-      {
-      Cmplx<Tsimd> stmp;
       for (size_t j=0; j<vlen; ++j)
         {
-        auto tmp = src.raw(it.iofs(j,i));
-        stmp.r[j] = tmp.r;
-        stmp.i[j] = tmp.i;
+        dst[i].r[j] = src.raw(it.iofs(j,i)).r;
+        dst[i].i[j] = src.raw(it.iofs(j,i)).i;
         }
-      dst[i] = stmp;
-      }
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -682,13 +659,16 @@ template <typename T, size_t vlen> DUCC0_NOINLINE void copy_input(const multi_it
     dst[i] = src.raw(it.iofs(i));
   }
 
+// NOTE: gcc 10 seems to pessimize this code by rearranging loops when tree
+// vectorization is on. So I'm currently using an explicit "-fno-tree-vectorize"
+// in setup.py.
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Cmplx<Tsimd> *DUCC0_RESTRICT src, vfmav<Cmplx<typename Tsimd::value_type>> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   if (it.uniform_o())
     {
-    auto ptr = &dst.raw(it.oofs_uni(0,0));
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
     auto jstr = it.unistride_o();
     auto istr = it.stride_out();
     if (istr==1)
@@ -706,7 +686,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
     }
   else
     {
-    auto ptr = dst.data();
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
     for (size_t i=0; i<it.length_out(); ++i)
       for (size_t j=0; j<vlen; ++j)
         ptr[it.oofs(j,i)].Set(src[i].r[j],src[i].i[j]);
@@ -1454,11 +1434,95 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     }
   }
 
+template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
+  size_t nthreads)
+  {
+  vfmav d(data);
+  // sort axes to have decreasing strides from ax0 to ax1
+  if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
+  d.swap_axes(ax0, d.ndim()-2);
+  d.swap_axes(ax1, d.ndim()-1);
+  flexible_mav_apply<2>([nthreads](const auto &plane)
+    {
+    auto nu=plane.shape(0), nv=plane.shape(1);
+    execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
+      {
+      for(auto i=lo+1; i<hi+1; ++i)
+        for(size_t j=1; j<(nv+1)/2; ++j)
+          {
+          T ll = plane(i   ,j   );
+          T hl = plane(nu-i,j   );
+          T lh = plane(i   ,nv-j);
+          T hh = plane(nu-i,nv-j);
+          T v = T(0.5)*(ll+lh+hl+hh);
+          plane(i   ,j   ) = v-hh;
+          plane(nu-i,j   ) = v-lh;
+          plane(i   ,nv-j) = v-hl;
+          plane(nu-i,nv-j) = v-ll;
+          }
+      });
+    }, 1, d);
+  }
+
+// Bortfeld & Dinter, IEEE Transactions on Signal Processing 43, 1995, 1306 
+template<typename T> void oscarize3(vfmav<T> &data, size_t ax0, size_t ax1, size_t ax2,
+  size_t nthreads)
+  {
+  vfmav d(data);
+  // sort axes to have decreasing strides from ax0 to ax2
+  if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
+  if (d.stride(ax0)<d.stride(ax2)) swap(ax0, ax2);
+  if (d.stride(ax1)<d.stride(ax2)) swap(ax1, ax2);
+  d.swap_axes(ax0, d.ndim()-3);
+  d.swap_axes(ax1, d.ndim()-2);
+  d.swap_axes(ax2, d.ndim()-1);
+  flexible_mav_apply<3>([nthreads](const auto &plane)
+    {
+    auto nu=plane.shape(0), nv=plane.shape(1), nw=plane.shape(2);
+    execParallel(nu/2+1, nthreads, [&](size_t lo, size_t hi)
+      {
+      for(auto i=lo, xi=(i==0)?0:nu-i; i<hi; ++i, xi=nu-i)
+        for(size_t j=0, xj=0; j<=xj; ++j, xj=nv-j)
+          for(size_t k=0, xk=0; k<=xk; ++k, xk=nw-k)
+            {
+            T lll = plane(i ,j ,k );
+            T hll = plane(xi,j ,k );
+            T lhl = plane(i ,xj,k );
+            T hhl = plane(xi,xj,k );
+            T llh = plane(i ,j ,xk);
+            T hlh = plane(xi,j ,xk);
+            T lhh = plane(i ,xj,xk);
+            T hhh = plane(xi,xj,xk);
+            plane(i ,j ,k ) = T(0.5)*(llh+lhl+hll-hhh);
+            plane(xi,j ,k ) = T(0.5)*(hlh+hhl+lll-lhh);
+            plane(i ,xj,k ) = T(0.5)*(lhh+lll+hhl-hlh);
+            plane(xi,xj,k ) = T(0.5)*(hhh+hll+lhl-llh);
+            plane(i ,j ,xk) = T(0.5)*(lll+lhh+hlh-hhl);
+            plane(xi,j ,xk) = T(0.5)*(hll+hhh+llh-lhl);
+            plane(i ,xj,xk) = T(0.5)*(lhl+llh+hhh-hll);
+            plane(xi,xj,xk) = T(0.5)*(hhl+hlh+lhh-lll);
+            }
+      });
+    }, 1, d);
+  }
+
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);
+  if (axes.size()==2)
+    {
+    r2r_separable_hartley(in, out, axes, fct, nthreads);
+    oscarize(out, axes[0], axes[1], nthreads);
+    return;
+    }
+  if (axes.size()==3)
+    {
+    r2r_separable_hartley(in, out, axes, fct, nthreads);
+    oscarize3(out, axes[0], axes[1], axes[2], nthreads);
+    return;
+    }
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   shape_t tshp(in.shape());
