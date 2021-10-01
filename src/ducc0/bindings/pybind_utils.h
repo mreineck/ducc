@@ -74,7 +74,8 @@ template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
   return res;
   }
 
-template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const py::array &arr)
+template<size_t ndim>
+  std::array<size_t, ndim> copy_fixshape(const py::array &arr)
   {
   MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
   std::array<size_t, ndim> res;
@@ -83,7 +84,8 @@ template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const py::array &ar
   return res;
   }
 
-template<typename T, size_t ndim> std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
+template<typename T, size_t ndim>
+  std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
   {
   MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
   std::array<ptrdiff_t, ndim> res;
@@ -134,8 +136,8 @@ template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   return tmp;
   }
 
-template<typename T> py::array_t<T> get_optional_Pyarr_minshape(py::object &arr_,
-  const shape_t &dims)
+template<typename T> py::array_t<T> get_optional_Pyarr_minshape
+  (py::object &arr_, const shape_t &dims)
   {
   if (arr_.is_none()) return py::array_t<T>(dims);
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
@@ -158,24 +160,30 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
   return tmp;
   }
 
-template<typename T> fmav<T> to_fmav(const py::object &obj, bool rw=false)
+template<typename T> cfmav<T> to_cfmav(const py::object &obj)
   {
   auto arr = toPyarr<T>(obj);
-  if (rw)
-    return fmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
-      copy_shape(arr), copy_strides<T>(arr, true), true);
-  return fmav<T>(reinterpret_cast<const T *>(arr.data()),
+  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
     copy_shape(arr), copy_strides<T>(arr, false));
   }
-
-template<typename T, size_t ndim> mav<T,ndim> to_mav(const py::array &obj, bool rw=false)
+template<typename T> vfmav<T> to_vfmav(const py::object &obj)
   {
   auto arr = toPyarr<T>(obj);
-  if (rw)
-    return mav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
-      copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true), true);
-  return mav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
+  return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_shape(arr), copy_strides<T>(arr, true));
+  }
+
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
     copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
+  }
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true));
   }
 
 }
@@ -187,8 +195,10 @@ using detail_pybind::get_Pyarr;
 using detail_pybind::get_optional_Pyarr;
 using detail_pybind::get_optional_Pyarr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
-using detail_pybind::to_fmav;
-using detail_pybind::to_mav;
+using detail_pybind::to_cfmav;
+using detail_pybind::to_vfmav;
+using detail_pybind::to_cmav;
+using detail_pybind::to_vmav;
 
 }
 

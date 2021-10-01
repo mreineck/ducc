@@ -154,12 +154,12 @@ template<typename T, typename Func> void sthelper2(const T * DUCC0_RESTRICT in,
     }
   }
 
-template<typename T, typename Func> void iter(const fmav<T> &in,
-  fmav<T> &out, size_t dim, ptrdiff_t idxin, ptrdiff_t idxout, Func func)
+template<typename T, typename Func> void iter(const cfmav<T> &in,
+  vfmav<T> &out, size_t dim, ptrdiff_t idxin, ptrdiff_t idxout, Func func)
   {
   size_t ndim = in.ndim();
   if (dim+2==ndim)
-    sthelper2(in.cdata()+idxin, out.vdata()+idxout, in.shape(ndim-2), in.shape(ndim-1),
+    sthelper2(in.data()+idxin, out.data()+idxout, in.shape(ndim-2), in.shape(ndim-1),
       in.stride(ndim-2), in.stride(ndim-1), out.stride(ndim-2),
       out.stride(ndim-1), func);
   else
@@ -167,19 +167,20 @@ template<typename T, typename Func> void iter(const fmav<T> &in,
       iter(in, out, dim+1, idxin+i*in.stride(dim), idxout+i*out.stride(dim), func);
   }
 
-template<typename T, typename Func> void transpose(const fmav<T> &in,
-  fmav<T> &out, Func func)
+template<typename T, typename Func> void transpose(const cfmav<T> &in,
+  vfmav<T> &out, Func func)
   {
   auto [shp, si, so] = prep(in, out);
-  fmav<T> in2(in, shp, si), out2(out, shp, so);
+  cfmav<T> in2(in, shp, si);
+  vfmav<T> out2(out, shp, so);
   if (in2.ndim()==1)  // 1D, just iterate
     {
-    sthelper1(in2.cdata(), out2.vdata(), in2.shape(0), in2.stride(0), out2.stride(0), func);
+    sthelper1(in2.data(), out2.data(), in2.shape(0), in2.stride(0), out2.stride(0), func);
     return;
     }
   iter(in2, out2, 0, 0, 0, func);
   }
-template<typename T> void transpose(const fmav<T> &in, fmav<T> &out)
+template<typename T> void transpose(const cfmav<T> &in, vfmav<T> &out)
   { transpose(in, out, [](const T &in, T&out) { out=in; }); }
 
 }

@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
 from itertools import product
 
@@ -234,4 +234,43 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
         return
     dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, mask, epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+
+
+@pmp('nxdirty', [16, 64])
+@pmp('nydirty', [64])
+@pmp("nrow", (1, 100))
+@pmp("nchan", (1, 7))
+@pmp("epsilon", list(10.**np.linspace(-2., -12., 100)))
+@pmp("singleprec", (False,))
+@pmp("wstacking", (True,))
+@pmp("use_wgt", (True,))
+@pmp("nthreads", (1, 10))
+@pmp("fov", (10.,))
+def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
+                                singleprec, wstacking, use_wgt, fov, nthreads):
+    if singleprec and epsilon < 5e-5:
+        return
+    rng = np.random.default_rng(42)
+    pixsizex = fov*np.pi/180/nxdirty
+    pixsizey = fov*np.pi/180/nydirty*1.1
+    speedoflight, f0 = 299792458., 1e9
+    freq = f0 + np.arange(nchan)*(f0/nchan)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.random((nrow, 1)) if use_wgt else None
+    wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
+    if singleprec:
+        ms = ms.astype("c8")
+        if wgt is not None:
+            wgt = wgt.astype("f4")
+    try:
+        dirty = ng.ms2dirty(
+            uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+            pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
+    except:
+        # no matching kernel was found
+        pytest.skip()
+    ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                           pixsizey, wstacking, None)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)

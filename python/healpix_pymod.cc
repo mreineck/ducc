@@ -67,26 +67,12 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   return snew;
   }
 
-template<typename T1, typename T2, size_t nd1, size_t nd2, typename Func>
-  py::array doStuff(const py::array_t<T1> &ain, const array<size_t,nd1> &a1, const array<size_t,nd2> &a2, Func func)
+template<typename T1, typename T2, size_t nd1, size_t nd2>
+  py::array myprep(const py::array_t<T1> &ain, const array<size_t,nd1> &a1, const array<size_t,nd2> &a2)
   {
-  auto in = to_fmav<T1>(ain);
+  auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  auto aout = make_Pyarr<T2>(oshp);
-  auto out = to_fmav<T2>(aout,true);
-  in.prepend_dim();
-  out.prepend_dim();
-  {
-  py::gil_scoped_release release;
-  MavIter<T1,nd1+1> iin(in);
-  MavIter<T2,nd2+1> iout(out);
-  while (!iin.done())
-    {
-    func(iin, iout);
-    iin.inc();iout.inc();
-    }
-  }
-  return move(aout);
+  return make_Pyarr<T2>(oshp);
   }
 
 class Pyhpbase
@@ -108,98 +94,114 @@ class Pyhpbase
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 
-    py::array pix2ang (const py::array &pix) const
+    py::array pix2ang (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, double, 0, 1>(pix, {}, {2}, [this](const auto &iin, auto &iout)
+      const auto pix = to_cfmav<int64_t>(in);
+      auto out = myprep<int64_t, double, 0, 1>(in, {}, {2});
+      auto ang = to_vfmav<double>(out);
+      fmavIter2<0,1>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          {
-          pointing ptg=base.pix2ang(iin(i));
-          iout.v(i,0) = ptg.theta; iout.v(i,1) = ptg.phi;
-          }
-        });
+        pointing ptg = base.pix2ang(in());
+        out(0) = ptg.theta;
+        out(1) = ptg.phi;
+        }, nthreads, pix, ang);
+      return out;
       }
-    py::array ang2pix (const py::array &ang) const
+    py::array ang2pix (const py::array &in, size_t nthreads) const
       {
-      return doStuff<double, int64_t, 1, 0>(ang, {2}, {}, [this](const auto &iin, auto &iout)
+      const auto ang = to_cfmav<double>(in);
+      auto out = myprep<double, int64_t, 1, 0>(in, {2}, {});
+      auto pix = to_vfmav<int64_t>(out);
+      fmavIter2<1,0>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iout.shape(0); ++i)
-          iout.v(i)=base.ang2pix(pointing(iin(i,0),iin(i,1)));
-        });
+        out()=base.ang2pix(pointing(in(0),in(1)));
+        }, nthreads, ang, pix);
+      return out;
       }
-    py::array pix2vec (const py::array &pix) const
+    py::array pix2vec (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, double, 0, 1>(pix, {}, {3}, [this](const auto &iin, auto &iout)
+      const auto pix = to_cfmav<int64_t>(in);
+      auto out = myprep<int64_t, double, 0, 1>(in, {}, {3});
+      auto vec = to_vfmav<double>(out);
+      fmavIter2<0,1>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          {
-          vec3 v=base.pix2vec(iin(i));
-          iout.v(i,0)=v.x; iout.v(i,1)=v.y; iout.v(i,2)=v.z;
-          }
-        });
+        auto vec = base.pix2vec(in());
+        out(0)=vec.x; out(1)=vec.y; out(2)=vec.z;
+        }, nthreads, pix, vec);
+      return out;
       }
-    py::array vec2pix (const py::array &vec) const
+    py::array vec2pix (const py::array &in, size_t nthreads) const
       {
-      return doStuff<double, int64_t, 1, 0>(vec, {3}, {}, [this](const auto &iin, auto &iout)
+      const auto vec = to_cfmav<double>(in);
+      auto out = myprep<double, int64_t, 1, 0>(in, {3}, {});
+      auto pix = to_vfmav<int64_t>(out);
+      fmavIter2<1,0>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iout.shape(0); ++i)
-          iout.v(i)=base.vec2pix(vec3(iin(i,0),iin(i,1),iin(i,2)));
-        });
+        out()=base.vec2pix(vec3(in(0), in(1), in(2)));
+        }, nthreads, vec, pix);
+      return out;
       }
-    py::array pix2xyf (const py::array &pix) const
+    py::array pix2xyf (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {3}, [this](const auto &iin, auto &iout)
+      const auto pix = to_cfmav<int64_t>(in);
+      auto out = myprep<int64_t, int64_t, 0, 1>(in, {}, {3});
+      auto xyf = to_vfmav<int64_t>(out);
+      fmavIter2<0,1>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          {
-          int x,y,f;
-          base.pix2xyf(iin(i),x,y,f);
-          iout.v(i,0)=x; iout.v(i,1)=y; iout.v(i,2)=f;
-          }
-        });
+        int x_,y_,f_;
+        base.pix2xyf(in(),x_,y_,f_);
+        out(0)=x_; out(1)=y_; out(2)=f_;
+        }, nthreads, pix, xyf);
+      return out;
       }
-    py::array xyf2pix (const py::array &xyf) const
+    py::array xyf2pix (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, int64_t, 1, 0>(xyf, {3}, {}, [this](const auto &iin, auto &iout)
+      const auto xyf = to_cfmav<int64_t>(in);
+      auto out = myprep<int64_t, int64_t, 1, 0>(in, {3}, {});
+      auto pix = to_vfmav<int64_t>(out);
+      fmavIter2<1,0>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iout.shape(0); ++i)
-          iout.v(i)=base.xyf2pix(iin(i,0),iin(i,1),iin(i,2));
-        });
+        out()=base.xyf2pix(in(0), in(1), in(2));
+        }, nthreads, xyf, pix);
+      return out;
       }
-    py::array neighbors (const py::array &pix) const
+    py::array neighbors (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, int64_t, 0, 1>(pix, {}, {8}, [this](const auto &iin, auto &iout)
+      const auto pix = to_cfmav<int64_t>(in);
+      auto out = myprep<int64_t, int64_t, 0, 1>(in, {}, {8});
+      auto neigh = to_vfmav<int64_t>(out);
+      fmavIter2<0,1>([&](const auto &in, const auto &out)
         {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          {
-          array<int64_t,8> res;
-          base.neighbors(iin(i),res);
-          for (size_t j=0; j<8; ++j) iout.v(i,j)=res[j];
-          }
-        });
+        array<int64_t,8> res;
+        base.neighbors(in(),res);
+        for (size_t j=0; j<8; ++j) out(j)=res[j];
+        }, nthreads, pix, neigh);
+      return out;
       }
-    py::array ring2nest (const py::array &ring) const
+    py::array ring2nest (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, int64_t, 0, 0>(ring, {}, {}, [this](const auto &iin, auto &iout)
-        {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          iout.v(i)=base.ring2nest(iin(i));
-        });
+      const auto ring = to_cfmav<int64_t>(in);
+      auto out = make_Pyarr<int64_t>(ring.shape());
+      auto nest = to_vfmav<int64_t>(out);
+      fmavIter2<0,0>([&](const auto &in, const auto &out)
+        { out() = base.ring2nest(in()); }, nthreads, ring, nest);
+      return out;
       }
-    py::array nest2ring (const py::array &nest) const
+    py::array nest2ring (const py::array &in, size_t nthreads) const
       {
-      return doStuff<int64_t, int64_t, 0, 0>(nest, {}, {}, [this](const auto &iin, auto &iout)
-        {
-        for (size_t i=0; i<iin.shape(0); ++i)
-          iout.v(i)=base.nest2ring(iin(i));
-        });
+      const auto nest = to_cfmav<int64_t>(in);
+      auto out = make_Pyarr<int64_t>(nest.shape());
+      auto ring = to_vfmav<int64_t>(out);
+      fmavIter2<0,0>([&](const auto &in, const auto &out)
+        { out() = base.nest2ring(in()); }, nthreads, nest,ring);
+      return out;
       }
     py::array query_disc(const py::array &ptg, double radius) const
       {
       MR_assert((ptg.ndim()==1)&&(ptg.shape(0)==2),
         "ptg must be a 1D array with 2 values");
       rangeset<int64_t> pixset;
-      auto ptg2 = to_mav<double,1>(ptg);
+      auto ptg2 = to_cmav<double,1>(ptg);
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
       auto oref=res.mutable_unchecked<2>();
@@ -216,25 +218,25 @@ class Pyhpbase
       auto nside = base.Nside();
       auto nrings = size_t(4*nside-1);
       auto theta_= make_Pyarr<double>(shape_t({nrings}));
-      auto theta = to_mav<double,1>(theta_, true);
+      auto theta = to_vmav<double,1>(theta_);
       auto phi0_ = make_Pyarr<double>(shape_t({nrings}));
-      auto phi0 = to_mav<double,1>(phi0_, true);
+      auto phi0 = to_vmav<double,1>(phi0_);
       auto nphi_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto nphi = to_mav<size_t,1>(nphi_, true);
+      auto nphi = to_vmav<size_t,1>(nphi_);
       auto ringstart_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto ringstart = to_mav<size_t,1>(ringstart_, true);
+      auto ringstart = to_vmav<size_t,1>(ringstart_);
       for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
         {
         int64_t startpix, ringpix;
         double ringtheta;
         bool shifted;
         base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
-        theta.v(r) = ringtheta;
-        theta.v(rs) = pi-ringtheta;
-        nphi.v(r) = nphi.v(rs) = size_t(ringpix);
-        phi0.v(r) = phi0.v(rs) = shifted ? (pi/ringpix) : 0.;
-        ringstart.v(r) = size_t(startpix);
-        ringstart.v(rs) = size_t(base.Npix() - startpix - ringpix);
+        theta(r) = ringtheta;
+        theta(rs) = pi-ringtheta;
+        nphi(r) = nphi(rs) = size_t(ringpix);
+        phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
+        ringstart(r) = size_t(startpix);
+        ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
         }
       py::dict res;
       res["theta"] = theta_;
@@ -245,45 +247,42 @@ class Pyhpbase
       }
   };
 
-py::array ang2vec (const py::array &ang)
+py::array ang2vec (const py::array &in, size_t nthreads)
   {
-  return doStuff<double, double, 1, 1>(ang, {2}, {3}, [](const auto &iin, auto &iout)
+  auto ang = to_cfmav<double>(in);
+  auto out = myprep<double, double, 1, 1>(in, {2}, {3});
+  auto vec = to_vfmav<double>(out);
+  fmavIter2<1,1>([&](const auto &in, const auto &out)
     {
-    for (size_t i=0; i<iin.shape(0); ++i)
-      {
-      vec3 v (pointing(iin(i,0),iin(i,1)));
-      iout.v(i,0)=v.x; iout.v(i,1)=v.y; iout.v(i,2)=v.z;
-      }
-    });
+    vec3 v (pointing(in(0),in(1)));
+    out(0)=v.x; out(1)=v.y; out(2)=v.z;
+    }, nthreads, ang, vec);
+  return out;
   }
-py::array vec2ang (const py::array &vec)
+py::array vec2ang (const py::array &in, size_t nthreads)
   {
-  return doStuff<double, double, 1, 1>(vec, {3}, {2}, [](const auto &iin, auto &iout)
+  auto vec = to_cfmav<double>(in);
+  auto out = myprep<double, double, 1, 1>(in, {3}, {2});
+  auto ang = to_vfmav<double>(out);
+  fmavIter2<1,1>([&](const auto &in, const auto &out)
     {
-    for (size_t i=0; i<iin.shape(0); ++i)
-      {
-      pointing ptg (vec3(iin(i,0),iin(i,1),iin(i,2)));
-      iout.v(i,0)=ptg.theta; iout.v(i,1)=ptg.phi;
-      }
-    });
+    pointing ptg (vec3(in(0),in(1),in(2)));
+    out(0)=ptg.theta; out(1)=ptg.phi;
+    }, nthreads, vec, ang);
+  return out;
   }
-py::array local_v_angle (const py::array &v1, const py::array &v2)
+py::array local_v_angle (const py::array &in1, const py::array &in2, size_t nthreads)
   {
-  auto v12 = to_fmav<double>(v1);
-  auto v22 = to_fmav<double>(v2);
-  MR_assert(v12.shape()==v22.shape(), "shape mismatch");
-  auto angle = make_Pyarr<double>(repl_dim<1,0>(v12.shape(),{3},{}));
-  auto angle2 = to_fmav<double>(angle,true);
-  MavIter<double,2> ii1(v12), ii2(v22);
-  MavIter<double,1> iout(angle2);
-  while (!iout.done())
+  auto vec1 = to_cfmav<double>(in1);
+  auto vec2 = to_cfmav<double>(in2);
+  auto out = myprep<double, double, 1, 0>(in1, {3}, {});
+  auto angle = to_vfmav<double>(out);
+  fmavIter2<1,1,0>([&](const auto &in0, const auto &in1, const auto &out)
     {
-    for (size_t i=0; i<iout.shape(0); ++i)
-      iout.v(i)=v_angle(vec3(ii1(i,0),ii1(i,1),ii1(i,2)),
-                        vec3(ii2(i,0),ii2(i,1),ii2(i,2)));
-    ii1.inc();ii2.inc();iout.inc();
-    }
-  return move(angle);
+    out()=v_angle(vec3(in0(0),in0(1),in0(2)),
+                  vec3(in1(0),in1(1),in1(2)));
+    }, nthreads, vec1, vec2, angle);
+  return out;
   }
 
 constexpr const char *healpix_DS = R"""(
@@ -440,23 +439,23 @@ void add_healpix(py::module_ &msup)
       { return 4*pi/self.base.Npix(); }, pix_area_DS)
     .def("max_pixrad", [](Pyhpbase &self)
       { return self.base.max_pixrad(); }, max_pixrad_DS)
-    .def("pix2ang", &Pyhpbase::pix2ang, pix2ang_DS, "pix"_a)
-    .def("ang2pix", &Pyhpbase::ang2pix, ang2pix_DS, "ang"_a)
-    .def("pix2vec", &Pyhpbase::pix2vec, pix2vec_DS, "pix"_a)
-    .def("vec2pix", &Pyhpbase::vec2pix, vec2pix_DS, "vec"_a)
-    .def("pix2xyf", &Pyhpbase::pix2xyf, "pix"_a)
-    .def("xyf2pix", &Pyhpbase::xyf2pix, "xyf"_a)
-    .def("neighbors", &Pyhpbase::neighbors,"pix"_a)
-    .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a)
-    .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a)
+    .def("pix2ang", &Pyhpbase::pix2ang, pix2ang_DS, "pix"_a, "nthreads"_a=1)
+    .def("ang2pix", &Pyhpbase::ang2pix, ang2pix_DS, "ang"_a, "nthreads"_a=1)
+    .def("pix2vec", &Pyhpbase::pix2vec, pix2vec_DS, "pix"_a, "nthreads"_a=1)
+    .def("vec2pix", &Pyhpbase::vec2pix, vec2pix_DS, "vec"_a, "nthreads"_a=1)
+    .def("pix2xyf", &Pyhpbase::pix2xyf, "pix"_a, "nthreads"_a=1)
+    .def("xyf2pix", &Pyhpbase::xyf2pix, "xyf"_a, "nthreads"_a=1)
+    .def("neighbors", &Pyhpbase::neighbors,"pix"_a, "nthreads"_a=1)
+    .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a, "nthreads"_a=1)
+    .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a, "nthreads"_a=1)
     .def("query_disc", &Pyhpbase::query_disc, query_disc_DS, "ptg"_a,"radius"_a)
     .def("sht_info", &Pyhpbase::sht_info, sht_info_DS)
     .def("__repr__", &Pyhpbase::repr)
     ;
 
-  m.def("ang2vec",&ang2vec, ang2vec_DS, "ang"_a);
-  m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a);
-  m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a);
+  m.def("ang2vec",&ang2vec, ang2vec_DS, "ang"_a, "nthreads"_a=1);
+  m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a, "nthreads"_a=1);
+  m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a, "nthreads"_a=1);
   }
 
 }

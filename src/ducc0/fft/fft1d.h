@@ -51,6 +51,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/unity_roots.h"
 
+//#define DUCC0_USE_PROPER_HARTLEY_CONVENTION
+
 namespace ducc0 {
 
 namespace detail_fft {
@@ -3217,8 +3219,13 @@ template<typename Tfs> class pocketfft_hartley
       size_t i=1, i1=1, i2=N-1;
       for (i=1; i<N-1; i+=2, ++i1, --i2)
         {
+#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
+        res2[i1] = fct*(res[i]-res[i+1]);
+        res2[i2] = fct*(res[i]+res[i+1]);
+#else
         res2[i1] = fct*(res[i]+res[i+1]);
         res2[i2] = fct*(res[i]-res[i+1]);
+#endif
         }
       if (i<N)
         res2[i1] = fct*res[i];

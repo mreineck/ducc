@@ -155,13 +155,13 @@ class Communicator
     template<typename T> void bcastRaw (T *data, size_t num, int root=0) const
       { bcastRawVoid (data, tidx<T>(), num, root); }
 
-    template<typename T> void redistribute (const fmav<T> &in, fmav<T> &out,
+    template<typename T> void redistribute (const cfmav<T> &in, vfmav<T> &out,
       size_t axin, size_t axout) const
       {
       if (num_ranks()==1)
         transpose(in, out);
       else
-        redistributeRawVoid(in, &in[0], out, &out.vraw(0), axin, axout, tidx<T>());
+        redistributeRawVoid(in, in.data(), out, out.data(), axin, axout, tidx<T>());
       }
   };
 

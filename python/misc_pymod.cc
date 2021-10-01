@@ -68,17 +68,17 @@ The accumulation is performed in long double precision for good accuracy.
 
 template<typename T1, typename T2> py::object Py3_vdot(const py::array &a_, const py::array &b_)
   {
-  const auto a = to_fmav<T1>(a_);
-  const auto b = to_fmav<T2>(b_);
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<T2>(b_);
   using Tacc = long double;
   complex<Tacc> acc=0;
   {
   py::gil_scoped_release release;
-  a.apply(b, [&acc](const T1 &v1, const T2 &v2)
+  mav_apply([&acc](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc += conj(cv1) * cv2;
-    });
+    }, 1, a, b);
   }
   return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
   }
@@ -144,19 +144,19 @@ The accumulations are performed in long double precision for good accuracy.
 )""";
 template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const py::array &b_)
   {
-  const auto a = to_fmav<T1>(a_);
-  const auto b = to_fmav<T2>(b_);
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<T2>(b_);
   using Tacc = long double;
   Tacc acc1=0, acc2=0, acc3=0;
   {
   py::gil_scoped_release release;
-  a.apply(b, [&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
+  mav_apply([&acc1, &acc2, &acc3](const T1 &v1, const T2 &v2)
     {
     complex<Tacc> cv1(v1), cv2(v2);
     acc1 += norm(cv1);
     acc2 += norm(cv2);
     acc3 += norm(cv1-cv2);
-    });
+    }, 1, a, b);
   }
   return double(sqrt(acc3/max(acc1,acc2)));
   }
@@ -203,33 +203,33 @@ double Py_l2error(const py::object &a, const py::object &b)
 py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = wgt[i]*twopi/nlon;
+    res2(i) = wgt[i]*twopi/nlon;
   return move(res);
   }
 
 py::array Py_GL_thetas(size_t nlat)
   {
   auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_mav<double,1>(res, true);
+  auto res2 = to_vmav<double,1>(res);
   {
   py::gil_scoped_release release;
 
   GL_Integrator integ(nlat);
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
-    res2.v(i) = acos(-x[i]);
+    res2(i) = acos(-x[i]);
   }
   return move(res);
   }
 
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
   {
-  auto in2 = to_fmav<T>(in, false);
-  auto out2 = to_fmav<T>(out, true);
+  auto in2 = to_cfmav<T>(in);
+  auto out2 = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
   transpose(in2, out2, [](const T &in, T &out){out=in;});
@@ -281,10 +281,10 @@ numpy.ndarray (same dtype and content as `in`)
 )""";
 template<typename T> py::array Py2_make_noncritical(const py::array &in)
   {
-  auto in2 = to_fmav<T>(in, false);
+  auto in2 = to_cfmav<T>(in);
   auto out = make_noncritical_Pyarr<T>(in2.shape());
-  auto out2 = to_fmav<T>(out, true);
-  out2.apply(in2, [](T &v1, const T &v2) { v1=v2; });
+  auto out2 = to_vfmav<T>(out);
+  mav_apply([](T &v1, const T &v2) { v1=v2; }, 1, out2, in2);
   return out;
   }
 
@@ -400,10 +400,10 @@ class OofaNoise
       : filter(slope_, f_min_, f_knee_, f_samp_), sigma(sigmawhite_)
       {}
 
-    void filterGaussian(mav<double,1> &data)
+    void filterGaussian(vmav<double,1> &data)
       {
       for (size_t i=0; i<data.shape(0); ++i)
-        data.v(i) = sigma*filter(data(i));
+        data(i) = sigma*filter(data(i));
       }
 
     void reset()
@@ -424,13 +424,13 @@ class Py_OofaNoise
 
     py::array filterGaussian(const py::array &rnd_)
       {
-      auto rnd = to_mav<double,1>(rnd_, false);
+      auto rnd = to_cmav<double,1>(rnd_);
       auto res_ = make_Pyarr<double>({rnd.shape(0)});
-      auto res = to_mav<double,1>(res_, true);
+      auto res = to_vmav<double,1>(res_);
       {
       py::gil_scoped_release release;
 
-      res.apply(rnd, [](double &out, double in) {out=in;});
+      mav_apply([](double &out, double in) {out=in;}, 1, res, rnd);
       gen.filterGaussian(res);
       }
       return res_;

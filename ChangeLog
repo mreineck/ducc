@@ -1,3 +1,12 @@
+0.21.0:
+- general:
+  - support for more platforms (e.g. Raspberry Pi)
+  - rewrite of the classes for multidimensional array views, which allows
+    many simplifications, multithreading etc.
+- healpix:
+  - multithreading support for most functions
+
+
 0.20.0:
 - general:
   - minimum required Python version is now 3.7

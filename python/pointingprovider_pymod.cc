@@ -43,7 +43,7 @@ template<typename T> class PointingProvider
     size_t nthreads;
 
   public:
-    PointingProvider(double t0, double freq, const mav<T,2> &quat, size_t nthreads_=1)
+    PointingProvider(double t0, double freq, const cmav<T,2> &quat, size_t nthreads_=1)
       : t0_(t0), freq_(freq), quat_(quat.shape(0)), rangle(quat.shape(0)),
         rxsin(quat.shape(0)), rotflip(quat.shape(0)), nthreads(nthreads_)
       {
@@ -63,8 +63,8 @@ template<typename T> class PointingProvider
         }
       }
 
-    void get_rotated_quaternions(double t0, double freq, const mav<T,1> &rot,
-      mav<T,2> &out, bool rot_left)
+    void get_rotated_quaternions(double t0, double freq, const cmav<T,1> &rot,
+      vmav<T,2> &out, bool rot_left)
       {
       using Tsimd = native_simd<T>;
       constexpr size_t vlen = Tsimd::size();
@@ -117,10 +117,10 @@ template<typename T> class PointingProvider
           q = rot_left ? rots_*q : q*rots_;
           for (size_t ii=0; ii<vlen; ++ii)
             {
-            out.v(i+ii,0) = q.x[ii];
-            out.v(i+ii,1) = q.y[ii];
-            out.v(i+ii,2) = q.z[ii];
-            out.v(i+ii,3) = q.w[ii];
+            out(i+ii,0) = q.x[ii];
+            out(i+ii,1) = q.y[ii];
+            out(i+ii,2) = q.z[ii];
+            out(i+ii,3) = q.w[ii];
             }
           }
         for (; i<hi; ++i)
@@ -141,10 +141,10 @@ template<typename T> class PointingProvider
                             w1*q1.z + w2*q2.z,
                             w1*q1.w + w2*q2.w);
           q = rot_left ? rot_*q : q*rot_;
-          out.v(i,0) = q.x;
-          out.v(i,1) = q.y;
-          out.v(i,2) = q.z;
-          out.v(i,3) = q.w;
+          out(i,0) = q.x;
+          out(i,1) = q.y;
+          out(i,2) = q.z;
+          out(i,3) = q.w;
           }
         });
       }
@@ -157,13 +157,13 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
 
   public:
     PyPointingProvider(double t0, double freq, const py::array &quat, size_t nthreads_=1)
-      : PointingProvider<T>(t0, freq, to_mav<T,2>(quat), nthreads_) {}
+      : PointingProvider<T>(t0, freq, to_cmav<T,2>(quat), nthreads_) {}
 
     py::array pyget_rotated_quaternions_out(double t0, double freq,
       const py::array &quat, bool rot_left, py::array &out)
       {
-      auto res2 = to_mav<T,2>(out,true);
-      auto quat2 = to_mav<T,1>(quat);
+      auto res2 = to_vmav<T,2>(out);
+      auto quat2 = to_cmav<T,1>(quat);
       {
       py::gil_scoped_release release;
       get_rotated_quaternions(t0, freq, quat2, res2, rot_left);
