@@ -217,6 +217,9 @@ class TimerHierarchy
       push_internal(name);
       }
 
+    void reset(const string &name="<root>")
+      { *this = TimerHierarchy(name); }
+
     class ScopeTimer
       {
       private:
