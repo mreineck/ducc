@@ -565,6 +565,56 @@ template<size_t N> class multi_iter
     size_t remaining() const { return rem; }
   };
 
+template<typename T, typename T0> class TmpStorage
+  {
+  private:
+    aligned_array<T> d;
+    size_t dofs, dstride;
+
+  public:
+    TmpStorage(const fmav_info &info, size_t axsize, size_t bufsize,
+               size_t nvec, bool inplace)
+      {
+      if (inplace)
+        {
+        d.resize(bufsize);
+        return;
+        }
+      constexpr auto vlen = fft_simdlen<T0>;
+      auto othersize = info.size()/axsize;
+      // FIXME: when switching to C++20, use bit_floor(othersize)
+      size_t buffct = std::min(vlen, othersize);
+      size_t datafct = std::min(vlen, othersize);
+      if (othersize>=nvec*vlen) datafct = nvec*vlen;
+      dstride = axsize;
+      // critical stride avoidance
+      if ((dstride&256)==0) dstride+=3;
+      d.resize(buffct*(bufsize+17) + datafct*dstride);
+      dofs = bufsize + 17;
+      }
+
+    template<typename T2> T2 *transformBuf()
+      { return reinterpret_cast<T2 *>(d.data()); }
+    template<typename T2> T2 *dataBuf()
+      { return reinterpret_cast<T2 *>(d.data()) + dofs; }
+    size_t data_stride() const
+      { return dstride; }
+  };
+
+template<typename T2, typename T, typename T0> class TmpStorage2
+  {
+  private:
+    TmpStorage<T, T0> &stg;
+
+  public:
+    using datatype = T2;
+    TmpStorage2(TmpStorage<T,T0> &stg_): stg(stg_) {}
+
+    T2 *transformBuf() { return stg.template transformBuf<T2>(); }
+    T2 *dataBuf() { return stg.template dataBuf<T2>(); }
+    size_t data_stride() const { return stg.data_stride(); }
+  };
+
 template<typename T, typename T0> DUCC0_NOINLINE aligned_array<T> alloc_tmp
   (const fmav_info &info, size_t axsize, size_t bufsize, bool inplace=false)
   {
@@ -758,39 +808,49 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
       util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
       [&](Scheduler &sched) {
         constexpr auto vlen = fft_simdlen<T0>;
-        auto storage = alloc_tmp<T,T0>(in, len, plan->bufsize(), inplace);
+        TmpStorage<T,T0> storage(in, len, plan->bufsize(), 1, inplace);
         const auto &tin(iax==0? in : out);
         multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
         if constexpr (vlen>1)
+          {
+          TmpStorage2<add_vec_t<T, vlen>,T,T0> storage(storage);
           while (it.remaining()>=vlen)
             {
             it.advance(vlen);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
-            exec(it, tin, out, tdatav, *plan, fct, nth1d);
+            exec(it, tin, out, storage2, *plan, fct, nth1d);
             }
+          }
         if constexpr (vlen>2)
           if constexpr (simd_exists<T0,vlen/2>)
+            {
+            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
             if (it.remaining()>=vlen/2)
               {
               it.advance(vlen/2);
-              auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
-              exec(it, tin, out, tdatav, *plan, fct, nth1d);
+              exec(it, tin, out, storage2, *plan, fct, nth1d);
               }
+            }
         if constexpr (vlen>4)
           if constexpr (simd_exists<T0,vlen/4>)
+            {
+            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
             if (it.remaining()>=vlen/4)
               {
               it.advance(vlen/4);
               auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
-              exec(it, tin, out, tdatav, *plan, fct, nth1d);
+              exec(it, tin, out, storage2, *plan, fct, nth1d);
               }
+            }
 #endif
+        {
+        TmpStorage2<T,T,T0> storage2(storage);
         while (it.remaining()>0)
           {
           it.advance(1);
-          exec(it, tin, out, storage.data(), *plan, fct, nth1d, inplace);
+          exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
           }
+        }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
@@ -800,20 +860,21 @@ struct ExecC2C
   {
   bool forward;
 
-  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator() (
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const cfmav<Cmplx<T0>> &in,
-    vfmav<Cmplx<T0>> &out, T *buf, const pocketfft_c<T0> &plan, T0 fct,
+    vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct,
     size_t nthreads, bool inplace=false) const
     {
+    using T = typename Tstorage::datatype;
     if constexpr(is_same<Cmplx<T0>, T>::value)
       if (inplace)
         {
         if (in.data()!=out.data())
           copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), buf, fct, forward, nthreads);
+        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
-    T *buf1=buf, *buf2=buf+plan.bufsize();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
@@ -822,20 +883,21 @@ struct ExecC2C
 
 struct ExecHartley
   {
-  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
-    T *buf, const pocketfft_hartley<T0> &plan, T0 fct, size_t nthreads,
+    Tstorage &storage, const pocketfft_hartley<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
+    using T = typename Tstorage::datatype;
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
         if (in.data()!=out.data())
           copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), buf, fct, nthreads);
+        plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
         return;
         }
-    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, nthreads);
     copy_output(it, res, out);
@@ -846,20 +908,21 @@ struct ExecFFTW
   {
   bool forward;
 
-  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
-    T *buf, const pocketfft_fftw<T0> &plan, T0 fct, size_t nthreads,
+    Tstorage &storage, const pocketfft_fftw<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
+    using T = typename Tstorage::datatype;
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
         if (in.data()!=out.data())
           copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), buf, fct, forward, nthreads);
+        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
-    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
@@ -872,20 +935,21 @@ struct ExecDcst
   int type;
   bool cosine;
 
-  template <typename T0, typename T, typename Tplan, typename Titer>
-  DUCC0_NOINLINE void operator () (const Titer &it, const cfmav<T0> &in,
-    vfmav <T0> &out, T * buf, const Tplan &plan, T0 fct, size_t nthreads,
+  template <typename T0, typename Tstorage, typename Tplan, typename Titer>
+  DUCC0_NOINLINE void operator() (const Titer &it, const cfmav<T0> &in,
+    vfmav <T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
+    using T = typename Tstorage::datatype;
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
         if (in.data()!=out.data())
           copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), buf, fct, ortho, type, cosine, nthreads);
+        plan.exec_copyback(out.data(), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
         return;
         }
-    T *buf1=buf, *buf2=buf+plan.bufsize(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine, nthreads);
     copy_output(it, res, out);
@@ -1137,15 +1201,16 @@ struct ExecR2R
   {
   bool r2c, forward;
 
-  template <typename T0, typename T, typename Titer> DUCC0_NOINLINE void operator () (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out, T *buf,
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
+    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out, Tstorage &storage,
     const pocketfft_r<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
+    using T = typename Tstorage::datatype;
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
-        T *buf1=buf, *buf2=out.data();
+        T *buf1=storage.transformBuf(), *buf2=out.data();
         if (in.data()!=buf2)
           copy_input(it, in, buf2);
         if ((!r2c) && forward)
@@ -1158,7 +1223,7 @@ struct ExecR2R
         return;
         }
 
-    T *buf1=buf, *buf2=buf+plan.bufsize();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     if ((!r2c) && forward)
       for (size_t i=2; i<it.length_out(); i+=2)
