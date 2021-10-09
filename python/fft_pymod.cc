@@ -39,6 +39,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include <complex>
 
 #include "ducc0/fft/fft.h"
 #include "ducc0/bindings/pybind_utils.h"
@@ -403,7 +404,7 @@ template<typename T> py::array convolve_axis_internal(const py::array &in_,
 template<typename T> py::array convolve_axis_internal_c(const py::array &in_,
   py::array &out_, size_t axis, const py::array &kernel_, size_t nthreads)
   {
-  return convolve_axis_internal<complex<T>>(in_, out_, axis, kernel_, nthreads);
+  return convolve_axis_internal<std::complex<T>>(in_, out_, axis, kernel_, nthreads);
   }
 
 py::array convolve_axis(const py::array &in, py::array &out, size_t axis,
