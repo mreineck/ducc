@@ -446,11 +446,12 @@ template<typename T> class vfmav: public cfmav<T>
   protected:
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
-    using tinfo::shp, tinfo::str, tinfo::size;
+    using tinfo::shp, tinfo::str;
 
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
+    using tinfo::size, tinfo::shape, tinfo::stride;
 
   protected:
     vfmav(const fmav_info &info, T *d_, tbuf &buf)

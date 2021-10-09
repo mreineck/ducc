@@ -1069,7 +1069,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
     [&](Scheduler &sched) {
       constexpr auto vlen = fft_simdlen<T>;
-      TmpStorage<T,T> storage(in.size()/len, len, plan->bufsize(), 1, false);
+      TmpStorage<T,T> storage(out.size()/len, len, plan->bufsize(), 1, false);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
@@ -1641,56 +1641,61 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
     util::thread_count(nthreads, in, axis, fft_simdlen<T0>),
     [&](Scheduler &sched) {
       constexpr auto vlen = fft_simdlen<T0>;
-      auto storage = alloc_tmp_conv_axis<T,T0>(in, axis, l_max, bufsz);
+      TmpStorage<T,T0> storage(in.size()/l_in, 2*l_max+17, bufsz, 1, false);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
+        {
+        TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
-          auto tdatav = reinterpret_cast<add_vec_t<T, vlen> *>(storage.data());
-          exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
+          exec(it, in, out, storage2, *plan1, *plan2, fkernel);
           }
+        }
       if constexpr (vlen>2)
         if constexpr (simd_exists<T,vlen/2>)
           if (it.remaining()>=vlen/2)
             {
+            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
             it.advance(vlen/2);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/2> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
+            exec(it, in, out, storage2, *plan1, *plan2, fkernel);
             }
       if constexpr (vlen>4)
         if constexpr (simd_exists<T,vlen/4>)
           if (it.remaining()>=vlen/4)
             {
+            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
             it.advance(vlen/4);
-            auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
-            exec(it, in, out, tdatav, *plan1, *plan2, fkernel);
+            exec(it, in, out, storage2, *plan1, *plan2, fkernel);
             }
 #endif
+      {
+      TmpStorage2<T,T,T0> storage2(storage);
       while (it.remaining()>0)
         {
         it.advance(1);
-        auto buf = reinterpret_cast<T *>(storage.data());
-        exec(it, in, out, buf, *plan1, *plan2, fkernel);
+        exec(it, in, out, storage2, *plan1, *plan2, fkernel);
         }
+      }
     });  // end of parallel region
   }
 
 struct ExecConv1R
   {
-  template <typename T0, typename T, typename Titer> void operator() (
+  template <typename T0, typename Tstorage, typename Titer> void operator() (
     const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
-    T * buf, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
+    Tstorage &storage, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
     const cmav<T0,1> &fkernel) const
     {
+    using T = typename Tstorage::datatype;
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
-           l_min = std::min(l_in, l_out),
-           bufsz = max(plan1.bufsize(), plan2.bufsize());
-    T *buf1=buf, *buf2=buf+bufsz; 
+           l_min = std::min(l_in, l_out);
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
-    auto res = plan1.exec(buf2, buf1, T0(1), true);
+    plan1.exec_copyback(buf2, buf1, T0(1), true);
+auto res = buf2;
     {
     res[0] *= fkernel(0);
     size_t i;
@@ -1717,25 +1722,27 @@ struct ExecConv1R
       }
     }
     for (size_t i=l_in; i<l_out; ++i) res[i] = T(0);
-    res = plan2.exec(res, res==buf2 ? buf1 : buf2, T0(1), false);
+    res = plan2.exec(res, buf1, T0(1), false);
     copy_output(it, res, out);
     }
   };
 struct ExecConv1C
   {
-  template <typename T0, typename T, typename Titer> void operator() (
+  template <typename T0, typename Tstorage, typename Titer> void operator() (
     const Titer &it, const cfmav<Cmplx<T0>> &in, vfmav<Cmplx<T0>> &out,
-    T *buf, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
+    Tstorage &storage, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
     const cmav<Cmplx<T0>,1> &fkernel) const
     {
+    using T = typename Tstorage::datatype;
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
            l_min = std::min(l_in, l_out),
-           bufsz = max(plan1.bufsize(), plan2.bufsize());
-    T *buf1=buf, *buf2=buf+bufsz;
+           l_max = std::max(l_in, l_out);
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
-    auto res = plan1.exec(buf2, buf1, T0(1), true);
-    auto res2 = (res==buf2) ? buf1 : buf2;
+    plan1.exec_copyback(buf2, buf1, T0(1), true);
+auto res = buf2;
+    auto res2 = buf2+17+l_max;
     {
     res2[0] = res[0]*fkernel(0);
     size_t i;
@@ -1757,7 +1764,7 @@ struct ExecConv1C
     for (; 2*i<=l_out; ++i)
       res2[i] = res2[l_out-i] = T(0,0);
     }
-    res = plan2.exec(res2, res, T0(1), false);
+    res = plan2.exec(res2, buf1, T0(1), false);
     copy_output(it, res, out);
     }
   };
