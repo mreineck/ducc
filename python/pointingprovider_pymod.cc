@@ -272,7 +272,7 @@ void add_pointingprovider(py::module_ &msup)
   m.doc() = pointingprovider_DS;
 
   using pp_d = PyPointingProvider<double>;
-  py::class_<pp_d>(m, "PointingProvider")
+  py::class_<pp_d>(m, "PointingProvider", py::module_local())
     .def(py::init<double, double, const py::array &, size_t>(),
          PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a, "nthreads"_a=1)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
