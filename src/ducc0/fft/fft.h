@@ -962,26 +962,27 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
       {
       TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
       auto dbuf = storage2.dataBuf();
+      auto tbuf = storage2.transformBuf();
       while (it.remaining()>=vlen)
         {
         it.advance(vlen);
         copy_input(it, in, dbuf);
-        plan->exec(dbuf, fct, true, nth1d);
+        auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
         auto vout = out.data();
         for (size_t j=0; j<vlen; ++j)
-          vout[it.oofs(j,0)].Set(dbuf[0][j]);
+          vout[it.oofs(j,0)].Set(res[0][j]);
         size_t i=1, ii=1;
         if (forward)
           for (; i<len-1; i+=2, ++ii)
             for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(dbuf[i][j], dbuf[i+1][j]);
+              vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
         else
           for (; i<len-1; i+=2, ++ii)
             for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(dbuf[i][j], -dbuf[i+1][j]);
+              vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
         if (i<len)
           for (size_t j=0; j<vlen; ++j)
-            vout[it.oofs(j,ii)].Set(dbuf[i][j]);
+            vout[it.oofs(j,ii)].Set(res[i][j]);
         }
       }
     if constexpr (vlen>2)
@@ -990,24 +991,25 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           {
           TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
           auto dbuf = storage2.dataBuf();
+          auto tbuf = storage2.transformBuf();
           it.advance(vlen/2);
           copy_input(it, in, dbuf);
-          plan->exec(dbuf, fct, true, nth1d);
+          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
           auto vout = out.data();
           for (size_t j=0; j<vlen/2; ++j)
-            vout[it.oofs(j,0)].Set(dbuf[0][j]);
+            vout[it.oofs(j,0)].Set(res[0][j]);
           size_t i=1, ii=1;
           if (forward)
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(dbuf[i][j], dbuf[i+1][j]);
+                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
           else
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(dbuf[i][j], -dbuf[i+1][j]);
+                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
           if (i<len)
             for (size_t j=0; j<vlen/2; ++j)
-              vout[it.oofs(j,ii)].Set(dbuf[i][j]);
+              vout[it.oofs(j,ii)].Set(res[i][j]);
           }
     if constexpr (vlen>4)
       if constexpr( simd_exists<T,vlen/4>)
@@ -1015,45 +1017,47 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
           {
           TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
           auto dbuf = storage2.dataBuf();
+          auto tbuf = storage2.transformBuf();
           it.advance(vlen/4);
           copy_input(it, in, dbuf);
-          plan->exec(dbuf, fct, true, nth1d);
+          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
           auto vout = out.data();
           for (size_t j=0; j<vlen/4; ++j)
-            vout[it.oofs(j,0)].Set(dbuf[0][j]);
+            vout[it.oofs(j,0)].Set(res[0][j]);
           size_t i=1, ii=1;
           if (forward)
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(dbuf[i][j], dbuf[i+1][j]);
+                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
           else
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(dbuf[i][j], -dbuf[i+1][j]);
+                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
           if (i<len)
             for (size_t j=0; j<vlen/4; ++j)
-              vout[it.oofs(j,ii)].Set(dbuf[i][j]);
+              vout[it.oofs(j,ii)].Set(res[i][j]);
           }
 #endif
     {
     TmpStorage2<T,T,T> storage2(storage);
     auto dbuf = storage2.dataBuf();
+    auto tbuf = storage2.transformBuf();
     while (it.remaining()>0)
       {
       it.advance(1);
       copy_input(it, in, dbuf);
-      plan->exec(dbuf, fct, true, nth1d);
+      auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
       auto vout = out.data();
-      vout[it.oofs(0)].Set(dbuf[0]);
+      vout[it.oofs(0)].Set(res[0]);
       size_t i=1, ii=1;
       if (forward)
         for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(dbuf[i], dbuf[i+1]);
+          vout[it.oofs(ii)].Set(res[i], res[i+1]);
       else
         for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(dbuf[i], -dbuf[i+1]);
+          vout[it.oofs(ii)].Set(res[i], -res[i+1]);
       if (i<len)
-        vout[it.oofs(ii)].Set(dbuf[i]);
+        vout[it.oofs(ii)].Set(res[i]);
       }
     }
     });  // end of parallel region
@@ -1076,6 +1080,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
         {
         TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
         auto dbuf = storage2.dataBuf();
+        auto tbuf = storage2.transformBuf();
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
@@ -1101,8 +1106,8 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             for (size_t j=0; j<vlen; ++j)
               dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
           }
-          plan->exec(dbuf, fct, false, nth1d);
-          copy_output(it, dbuf, out);
+          auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+          copy_output(it, res, out);
           }
         }
       if constexpr (vlen>2)
@@ -1111,6 +1116,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             {
             TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
             auto dbuf = storage2.dataBuf();
+            auto tbuf = storage2.transformBuf();
             it.advance(vlen/2);
             for (size_t j=0; j<vlen/2; ++j)
               dbuf[0][j]=in.raw(it.iofs(j,0)).r;
@@ -1134,8 +1140,8 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
               for (size_t j=0; j<vlen/2; ++j)
                 dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
             }
-            plan->exec(dbuf, fct, false, nth1d);
-            copy_output(it, dbuf, out);
+            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+            copy_output(it, res, out);
             }
       if constexpr (vlen>4)
         if constexpr(simd_exists<T,vlen/4>)
@@ -1143,6 +1149,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             {
             TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
             auto dbuf = storage2.dataBuf();
+            auto tbuf = storage2.transformBuf();
             it.advance(vlen/4);
             for (size_t j=0; j<vlen/4; ++j)
               dbuf[0][j]=in.raw(it.iofs(j,0)).r;
@@ -1166,13 +1173,14 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
               for (size_t j=0; j<vlen/4; ++j)
                 dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
             }
-            plan->exec(dbuf, fct, false, nth1d);
-            copy_output(it, dbuf, out);
+            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+            copy_output(it, res, out);
             }
 #endif
       {
       TmpStorage2<T,T,T> storage2(storage);
       auto dbuf = storage2.dataBuf();
+      auto tbuf = storage2.transformBuf();
       while (it.remaining()>0)
         {
         it.advance(1);
@@ -1194,8 +1202,8 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
         if (i<len)
           dbuf[i] = in.raw(it.iofs(ii)).r;
         }
-        plan->exec(dbuf, fct, false, nth1d);
-        copy_output(it, dbuf, out);
+        auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+        copy_output(it, res, out);
         }
       }
     });  // end of parallel region
@@ -1626,7 +1634,6 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   std::unique_ptr<Tplan> plan1, plan2;
 
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
-  size_t l_max=std::max(l_in, l_out);
   MR_assert(kernel.size()==l_in, "bad kernel size");
   plan1 = std::make_unique<Tplan>(l_in);
   plan2 = std::make_unique<Tplan>(l_out);
@@ -1641,7 +1648,7 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
     util::thread_count(nthreads, in, axis, fft_simdlen<T0>),
     [&](Scheduler &sched) {
       constexpr auto vlen = fft_simdlen<T0>;
-      TmpStorage<T,T0> storage(in.size()/l_in, 2*l_max+17, bufsz, 1, false);
+      TmpStorage<T,T0> storage(in.size()/l_in, l_in+l_out, bufsz, 1, false);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
@@ -1695,7 +1702,7 @@ struct ExecConv1R
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     plan1.exec_copyback(buf2, buf1, T0(1), true);
-auto res = buf2;
+    auto res = buf2;
     {
     res[0] *= fkernel(0);
     size_t i;
@@ -1736,13 +1743,11 @@ struct ExecConv1C
     using T = typename Tstorage::datatype;
     size_t l_in = plan1.length(),
            l_out = plan2.length(),
-           l_min = std::min(l_in, l_out),
-           l_max = std::max(l_in, l_out);
+           l_min = std::min(l_in, l_out);
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
-    plan1.exec_copyback(buf2, buf1, T0(1), true);
-auto res = buf2;
-    auto res2 = buf2+17+l_max;
+    auto res = plan1.exec(buf2, buf1, T0(1), true);
+    auto res2 = buf2+l_in;
     {
     res2[0] = res[0]*fkernel(0);
     size_t i;
