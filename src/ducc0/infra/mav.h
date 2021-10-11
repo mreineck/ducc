@@ -955,7 +955,8 @@ template<typename T, size_t ndim>
 
 template<size_t ndim> auto make_infos(const fmav_info &info)
   {
-  MR_assert(ndim<=info.ndim(), "bad dimensionality");
+  if constexpr(ndim>0)
+    MR_assert(ndim<=info.ndim(), "bad dimensionality");
   auto iterdim = info.ndim()-ndim;
   fmav_info fout({info.shape().begin(),info.shape().begin()+iterdim},
                  {info.stride().begin(),info.stride().begin()+iterdim});
