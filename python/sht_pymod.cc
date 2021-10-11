@@ -1245,6 +1245,60 @@ by temporary upsampling along meridians to apply the weights at a higher
 resolution.
 )""";
 
+constexpr const char *adjoint_analysis_2d_DS = R"""(
+Transforms one or two sets of spherical harmonic coefficients to 2D maps.
+This is the adjoint operation of `analysis_2D`.
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+    storage for the output map.
+    If not supplied, a new array is allocated.
+ntheta, nphi: int > 0
+    dimensions of the output map.
+    If not supplied, `map` must be supplied.
+    If supplied, and `map` is also supplied, must match with the array dimensions
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is assumed to be equal to lmax
+geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
+    the distribution of rings over the theta range
+        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
+        - F1: Fejer's first rule, equidistant, first and last ring half a ring
+          width from the poles
+        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
+          the north pole, last ring on the south pole
+        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
+          north pole, last ring half a ring width from the south pole
+        - GL: Gauss-Legendre, non-equidistant
+        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
+          ring width from the south pole
+        - F2: Fejer's second rule, equidistant, first and last ring one ring width
+          from the poles.
+nthreads: int >= 0
+    the number of threads to use for the computation.
+    If 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+    the computed map. If the map parameter was specified, this is identical with
+    map.
+
+Notes
+-----
+For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
+)""";
+
 constexpr const char *synthesis_DS = R"""(
 Transforms one or two sets of spherical harmonic coefficients to maps on the sphere.
 
@@ -1424,7 +1478,7 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
   m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
-  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
+  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
