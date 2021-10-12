@@ -41,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <numeric>
 #include <stdexcept>
 #include <memory>
@@ -563,6 +564,17 @@ template<size_t N> class multi_iter
     ptrdiff_t stride_in() const { return cstr_i; }
     ptrdiff_t stride_out() const { return cstr_o; }
     size_t remaining() const { return rem; }
+    bool critical_stride_trans(size_t tsz) const
+      {
+      return ((abs<ptrdiff_t>(stride_in() *tsz)&4095)==0)
+          || ((abs<ptrdiff_t>(stride_out()*tsz)&4095)==0);
+      }
+    bool critical_stride_other(size_t tsz) const
+      {
+      if (unistride_i()==0) return false;  // it's just one transform
+      return ((abs<ptrdiff_t>(unistride_i()*tsz)&4095)==0)
+          || ((abs<ptrdiff_t>(unistride_o()*tsz)&4095)==0);
+      }
   };
 
 template<typename T, typename T0> class TmpStorage
@@ -770,6 +782,229 @@ template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_it
   for (size_t i=0; i<it.length_out(); ++i)
     ptr[it.oofs(i)] = src[i];
   }
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> *dst, size_t nvec, size_t vstr)
+  {
+  constexpr auto vlen=Tsimd::size();
+// temp note: in the situation where we call this, the transform will never be
+// along the axis with the smallest stride. Therefore we can assume istr>jstr.
+  auto jstr = it.unistride_i();
+  auto istr = it.stride_in();
+  if (it.uniform_i())
+    {
+    auto ptr = &src.raw(it.iofs_uni(0,0));
+    if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            {
+            auto tmp = ptr[ptrdiff_t(j0*vlen+j1)+ptrdiff_t(i)*istr];
+            dst[j0*vstr+i].r[j1] = tmp.r;
+            dst[j0*vstr+i].i[j1] = tmp.i;
+            }
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            {
+            auto tmp = ptr[ptrdiff_t(j0*vlen+j1)*jstr+ptrdiff_t(i)*istr];
+            dst[j0*vstr+i].r[j1] = tmp.r;
+            dst[j0*vstr+i].i[j1] = tmp.i;
+            }
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        for (size_t j1=0; j1<vlen; ++j1)
+          {
+          dst[j0*vstr+i].r[j1] = src.raw(it.iofs(j0*vlen+j1,i)).r;
+          dst[j0*vstr+i].i[j1] = src.raw(it.iofs(j0*vlen+j1,i)).i;
+          }
+  }
+template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const cfmav<Cmplx<T>> &src, Cmplx<T> *dst, size_t nvec, size_t vstr)
+  {
+// temp note: in the situation where we call this, the transform will never be
+// along the axis with the smallest stride. Therefore we can assume istr>jstr.
+  auto jstr = it.unistride_i();
+  auto istr = it.stride_in();
+  if (it.uniform_i())
+    {
+    auto ptr = &src.raw(it.iofs_uni(0,0));
+    if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          dst[j0*vstr+i] = ptr[ptrdiff_t(j0)+ptrdiff_t(i)*istr];
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          dst[j0*vstr+i] = ptr[ptrdiff_t(j0)*jstr+ptrdiff_t(i)*istr];
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        dst[j0*vstr+i] = src.raw(it.iofs(j0,i));
+  }
+
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const cfmav<typename Tsimd::value_type> &src, Tsimd *dst, size_t nvec, size_t vstr)
+  {
+  constexpr auto vlen=Tsimd::size();
+  auto jstr = it.unistride_i();
+  auto istr = it.stride_in();
+  if (it.uniform_i())
+    {
+    auto ptr = &src.raw(it.iofs_uni(0,0));
+    if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            dst[j0*vstr+i][j1] = ptr[ptrdiff_t(j0*vlen+j1) + ptrdiff_t(i)*istr];
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            dst[j0*vstr+i][j1] = ptr[ptrdiff_t(j0*vlen+j1)*jstr + ptrdiff_t(i)*istr];
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        for (size_t j1=0; j1<vlen; ++j1)
+          dst[j0*vstr+i][j1] = src.raw(it.iofs(j0*vlen+j1,i));
+  }
+
+template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+  const cfmav<T> &src, T *dst, size_t nvec, size_t vstr)
+  {
+  auto jstr = it.unistride_i();
+  auto istr = it.stride_in();
+  if (it.uniform_i())
+    {
+    auto ptr = &src.raw(it.iofs_uni(0,0));
+    if (jstr==1)
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          dst[j0*vstr+i] = ptr[ptrdiff_t(j0) + ptrdiff_t(i)*istr];
+    else
+      for (size_t i=0; i<it.length_in(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          dst[j0*vstr+i] = ptr[ptrdiff_t(j0)*jstr + ptrdiff_t(i)*istr];
+    }
+  else
+    for (size_t i=0; i<it.length_in(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        dst[j0*vstr+i] = src.raw(it.iofs(j0,i));
+  }
+
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const Cmplx<Tsimd> *src, vfmav<Cmplx<typename Tsimd::value_type>> &dst, size_t nvec, size_t vstr)
+  {
+  constexpr auto vlen=Tsimd::size();
+  if (it.uniform_o())
+    {
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            ptr[ptrdiff_t(j0*vlen+j1) + ptrdiff_t(i)*istr].Set(src[j0*vstr+i].r[j1],src[j0*vstr+i].i[j1]);
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            ptr[ptrdiff_t(j0*vlen+j1)*jstr + ptrdiff_t(i)*istr].Set(src[j0*vstr+i].r[j1],src[j0*vstr+i].i[j1]);
+    }
+  else
+    {
+    Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        for (size_t j1=0; j1<vlen; ++j1)
+          ptr[it.oofs(j0*vlen+j1,i)].Set(src[j0*vstr+i].r[j1],src[j0*vstr+i].i[j1]);
+    }
+  }
+template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const Cmplx<T> *src, vfmav<Cmplx<T>> &dst, size_t nvec, size_t vstr)
+  {
+  if (it.uniform_o())
+    {
+    Cmplx<T> * DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          ptr[ptrdiff_t(j0) + ptrdiff_t(i)*istr] = src[j0*vstr+i];
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          ptr[ptrdiff_t(j0)*jstr + ptrdiff_t(i)*istr] = src[j0*vstr+i];
+    }
+  else
+    {
+    Cmplx<T> * DUCC0_RESTRICT ptr = dst.data();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        ptr[it.oofs(j0,i)] = src[j0*vstr+i];
+    }
+  }
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const Tsimd *src, vfmav<typename Tsimd::value_type> &dst, size_t nvec, size_t vstr)
+  {
+  constexpr auto vlen=Tsimd::size();
+  if (it.uniform_o())
+    {
+    typename Tsimd::value_type * DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            ptr[ptrdiff_t(j0*vlen+j1) + ptrdiff_t(i)*istr] = src[j0*vstr+i][j1];
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          for (size_t j1=0; j1<vlen; ++j1)
+            ptr[ptrdiff_t(j0*vlen+j1)*jstr + ptrdiff_t(i)*istr] = src[j0*vstr+i][j1];
+    }
+  else
+    {
+    typename Tsimd::value_type * DUCC0_RESTRICT ptr = dst.data();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        for (size_t j1=0; j1<vlen; ++j1)
+          ptr[it.oofs(j0*vlen+j1,i)] = src[j0*vstr+i][j1];
+    }
+  }
+template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+  const T *src, vfmav<T> &dst, size_t nvec, size_t vstr)
+  {
+  if (it.uniform_o())
+    {
+    T* DUCC0_RESTRICT ptr = &dst.raw(it.oofs_uni(0,0));
+    auto jstr = it.unistride_o();
+    auto istr = it.stride_out();
+    if (jstr==1)
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          ptr[ptrdiff_t(j0) + ptrdiff_t(i)*istr] = src[j0*vstr+i];
+    else
+      for (size_t i=0; i<it.length_out(); ++i)
+        for (size_t j0=0; j0<nvec; ++j0)
+          ptr[ptrdiff_t(j0)*jstr + ptrdiff_t(i)*istr] = src[j0*vstr+i];
+    }
+  else
+    {
+    T * DUCC0_RESTRICT ptr = dst.data();
+    for (size_t i=0; i<it.length_out(); ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        ptr[it.oofs(j0,i)] = src[j0*vstr+i];
+    }
+  }
+
 
 template <typename T, size_t vlen> struct add_vec
   { using type = typename simd_select<T, vlen>::type; };
@@ -796,9 +1031,37 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
       util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
       [&](Scheduler &sched) {
         constexpr auto vlen = fft_simdlen<T0>;
-        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), 1, inplace);
+        constexpr size_t nmax = 16;
         const auto &tin(iax==0? in : out);
-        multi_iter<vlen> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
+        multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
+        size_t nvec = 1;
+        if (it.critical_stride_trans(sizeof(T)))  // do bunches of transforms
+          nvec = nmax/vlen;
+        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), nvec, inplace);
+
+        if (nvec>1)
+          {
+#ifndef DUCC0_NO_SIMD
+          if constexpr (vlen>1)
+            {
+            TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
+            while (it.remaining()>=vlen*nvec)
+              {
+              it.advance(vlen*nvec);
+              exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+              }
+            }
+#endif
+          {
+          TmpStorage2<T,T,T0> storage2(storage);
+          while (it.remaining()>=nvec)
+            {
+            it.advance(nvec);
+            exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+            }
+          }
+          }
+
 #ifndef DUCC0_NO_SIMD
         if constexpr (vlen>1)
           {
@@ -867,6 +1130,19 @@ struct ExecC2C
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
     }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<Cmplx<T0>> &in,
+    vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, forward, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
+    }
   };
 
 struct ExecHartley
@@ -889,6 +1165,19 @@ struct ExecHartley
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, nthreads);
     copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const pocketfft_hartley<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
     }
   };
 
@@ -914,6 +1203,19 @@ struct ExecFFTW
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const pocketfft_fftw<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, forward, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
     }
   };
 
@@ -941,6 +1243,19 @@ struct ExecDcst
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine, nthreads);
     copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Tplan, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, ortho, type, cosine, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
     }
   };
 
@@ -1245,6 +1560,27 @@ struct ExecR2R
       for (size_t i=2; i<it.length_out(); i+=2)
         res[i] = -res[i];
     copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const pocketfft_r<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    if ((!r2c) && forward)
+      for (size_t k=0; k<nvec; ++k)
+        for (size_t i=2; i<it.length_out(); i+=2)
+          buf2[i+k*dstr] = -buf2[i+k*dstr];
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, r2c, nthreads);
+    if (r2c && (!forward))
+      for (size_t k=0; k<nvec; ++k)
+        for (size_t i=2; i<it.length_out(); i+=2)
+          buf2[i+k*dstr] = -buf2[i+k*dstr];
+    copy_output(it, buf2, out, nvec, dstr);
     }
   };
 
