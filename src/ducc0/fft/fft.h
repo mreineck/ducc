@@ -78,9 +78,9 @@ namespace detail_fft {
 template<typename T> constexpr inline size_t fft_simdlen
   = min<size_t>(8, native_simd<T>::size());
 template<> constexpr inline size_t fft_simdlen<double>
-  = min<size_t>(2, native_simd<double>::size());
+  = min<size_t>(4, native_simd<double>::size());
 template<> constexpr inline size_t fft_simdlen<float>
-  = min<size_t>(4, native_simd<float>::size());
+  = min<size_t>(8, native_simd<float>::size());
 template<typename T> using fft_simd = typename simd_select<T,fft_simdlen<T>>::type;
 template<typename T> constexpr inline bool fft_simd_exists = (fft_simdlen<T> > 1);
 
@@ -1717,6 +1717,15 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T> >&>(in));
   auto &out2(reinterpret_cast<vfmav<Cmplx<T> >&>(out));
+  if ((axes.size()>1) && (in.data()!=out.data())) // optimize axis order
+    for (size_t i=1; i<axes.size(); ++i)
+      if ((in.stride(i)==1)&&(out.stride(i)==1))
+        {
+        shape_t axes2(axes);
+        swap(axes2[0],axes2[i]);
+        general_nd<pocketfft_c<T>>(in2, out2, axes2, fct, nthreads, ExecC2C{forward});
+        return;
+        }
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
