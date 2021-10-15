@@ -1525,6 +1525,7 @@ MR_fail("must not get here");
       MR_assert(roots->size()==N*rfct, "mismatch");
 
       // FIXME TBD
+// do we need the vectorize flag at all?
       size_t lim = vectorize ? 100000 : 100000;
       if (ip<=lim)
         {
