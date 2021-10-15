@@ -957,7 +957,6 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
             if (it.remaining()>=vlen/4)
               {
               it.advance(vlen/4);
-              auto tdatav = reinterpret_cast<add_vec_t<T, vlen/4> *>(storage.data());
               exec(it, tin, out, storage2, *plan, fct, nth1d);
               }
             }
