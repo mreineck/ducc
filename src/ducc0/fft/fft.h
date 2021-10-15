@@ -455,7 +455,9 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   static std::array<entry, nmax> cache{{0,0,nullptr}};
   static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
+#ifndef DUCC0_NO_THREADING
   static std::mutex mut;
+#endif
 
   auto find_in_cache = [&]() -> std::shared_ptr<T>
     {
@@ -477,13 +479,17 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
     };
 
   {
+#ifndef DUCC0_NO_THREADING
   std::lock_guard<std::mutex> lock(mut);
+#endif
   auto p = find_in_cache();
   if (p) return p;
   }
   auto plan = std::make_shared<T>(length, vectorize);
   {
+#ifndef DUCC0_NO_THREADING
   std::lock_guard<std::mutex> lock(mut);
+#endif
   auto p = find_in_cache();
   if (p) return p;
 
@@ -687,6 +693,9 @@ template<typename T2, typename T, typename T0> class TmpStorage2
     size_t data_stride() const { return stg.data_stride(); }
   };
 
+// Yes, this looks strange. But this is currently the only way I found to
+// stop compilers from vectorizing the copying loops and messing up the ordering
+// of the memory accesses, which is really important here.
 template <typename Titer, typename Ts> DUCC0_NOINLINE void copy_inputx2(const Titer &it,
   const cfmav<Cmplx<Ts>> &src, Ts *DUCC0_RESTRICT dst, size_t vlen)
   {
@@ -768,7 +777,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
       ptr[it.oofs(j,i)] = src[i][j];
   }
 
-template<typename T, size_t vlen> DUCC0_NOINLINE void copy_output(const multi_iter<vlen> &it,
+template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const T *DUCC0_RESTRICT src, vfmav<T> &dst)
   {
   auto ptr=dst.data();

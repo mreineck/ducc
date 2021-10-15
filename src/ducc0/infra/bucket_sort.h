@@ -101,6 +101,7 @@ template<typename RAidx, typename Tkey, typename Tidx> void subsort
 template<typename RAidx, typename RAkey> void bucket_sort
   (RAkey keys, RAidx res, size_t nval, size_t max_key, size_t nthreads)
   {
+  nthreads = min(nthreads, max_threads());
   using Tidx = typename remove_reference<decltype(*res)>::type;
   using Tkey = typename remove_reference<decltype(*keys)>::type;
   struct vbuf
