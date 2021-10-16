@@ -41,9 +41,9 @@ namespace detail_bucket_sort {
 using namespace std;
 
 template<typename RAidx, typename Tkey, typename Tidx> void subsort
-  (RAidx idx, aligned_array<Tkey> &keys, size_t keybits, size_t lo,
-   size_t hi, vector<Tidx> &numbers, aligned_array<Tidx> &idxbak,
-   aligned_array<Tkey> &keybak)
+  (RAidx idx, quick_array<Tkey> &keys, size_t keybits, size_t lo,
+   size_t hi, vector<Tidx> &numbers, quick_array<Tidx> &idxbak,
+   quick_array<Tkey> &keybak)
   {
   auto nval = hi-lo;
   if (nval<=1) return;
@@ -131,7 +131,7 @@ template<typename RAidx, typename RAkey> void bucket_sort
       numbers[t].v[i]=ofs;
       ofs+=tmp;
       }
-  aligned_array<Tkey> keys2(nval);
+  quick_array<Tkey> keys2(nval);
   execParallel(nval, nthreads, [&](size_t tid, size_t lo, size_t hi)
     {
     auto &mybuf(numbers[tid].v);
@@ -148,8 +148,8 @@ template<typename RAidx, typename RAkey> void bucket_sort
   execDynamic(nkeys, nthreads, 1, [&](Scheduler &sched)
     {
     vector<Tidx> newnumbers;
-    aligned_array<Tkey> keybak;
-    aligned_array<Tidx> idxbak;
+    quick_array<Tkey> keybak;
+    quick_array<Tidx> idxbak;
     while (auto rng=sched.getNext())
       for(auto i=rng.lo; i<rng.hi; ++i)
         subsort(res, keys2, keybits, (i==0) ? 0 : numbers[nthreads-1].v[i-1],

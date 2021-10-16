@@ -51,7 +51,7 @@ template<typename T> class cmembuf
   {
   protected:
     shared_ptr<vector<T>> ptr;
-    shared_ptr<aligned_array<T>> rawptr;
+    shared_ptr<quick_array<T>> rawptr;
     const T *d;
 
     cmembuf(const T *d_, const cmembuf &other)
@@ -66,7 +66,7 @@ template<typename T> class cmembuf
     cmembuf(size_t sz)
       : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
     cmembuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()) {}
+      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
 

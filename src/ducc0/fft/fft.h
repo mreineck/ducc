@@ -195,7 +195,7 @@ template<typename T0> class T_dct1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      quick_array<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, ortho, 1, true, nthreads);
       }
 
@@ -233,7 +233,7 @@ template<typename T0> class T_dst1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads) const
       {
-      aligned_array<T> buf(bufsize());
+      quick_array<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, true, 1, false, nthreads);
       }
 
@@ -319,7 +319,7 @@ template<typename T0> class T_dcst23
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      quick_array<T> buf(bufsize());
       exec(c, &buf[0], fct, ortho, type, cosine, nthreads);
       }
 
@@ -333,7 +333,7 @@ template<typename T0> class T_dcst4
     size_t N;
     std::unique_ptr<pocketfft_c<T0>> fft;
     std::unique_ptr<pocketfft_r<T0>> rfft;
-    aligned_array<Cmplx<T0>> C2;
+    quick_array<Cmplx<T0>> C2;
 
   public:
     DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
@@ -363,7 +363,7 @@ template<typename T0> class T_dcst4
         // and is released under the 3-clause BSD license with friendly
         // permission of Matteo Frigo and Steven G. Johnson.
 
-        aligned_array<T> y(N);
+        quick_array<T> y(N);
         {
         size_t i=0, m=n2;
         for (; m<N; ++i, m+=4)
@@ -377,6 +377,7 @@ template<typename T0> class T_dcst4
         for (; i<N; ++i, m+=4)
           y[i] = c[m-4*N];
         }
+// FIXME unbuffered
         rfft->exec(y.data(), fct, true, nthreads);
         {
         auto SGN = [](size_t i)
@@ -406,12 +407,13 @@ template<typename T0> class T_dcst4
         {
         // even length algorithm from
         // https://www.appletonaudio.com/blog/2013/derivation-of-fast-dct-4-algorithm-based-on-dft/
-        aligned_array<Cmplx<T>> y(n2);
+        quick_array<Cmplx<T>> y(n2);
         for(size_t i=0; i<n2; ++i)
           {
           y[i].Set(c[2*i],c[N-1-2*i]);
           y[i] *= C2[i];
           }
+// FIXME unbuffered
         fft->exec(y.data(), fct, true, nthreads);
         for(size_t i=0, ic=n2-1; i<n2; ++i, --ic)
           {
@@ -432,11 +434,12 @@ template<typename T0> class T_dcst4
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      quick_array<T> buf(bufsize());
       exec(c, &buf[0], fct, true, 4, cosine, nthreads);
       }
 
     size_t length() const { return N; }
+//FIXME: use buffers properly!
     size_t bufsize() const { return 0; }
   };
 

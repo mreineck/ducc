@@ -149,7 +149,7 @@ template<typename T> class ConvolverPlan
         arr(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
       }
 
-    aligned_array<uint32_t> getIdx(const cmav<T,1> &theta, const cmav<T,1> &phi, const cmav<T,1> &psi,
+    quick_array<uint32_t> getIdx(const cmav<T,1> &theta, const cmav<T,1> &phi, const cmav<T,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       size_t nptg = theta.shape(0);
@@ -164,7 +164,7 @@ template<typename T> class ConvolverPlan
       MR_assert(uint64_t(nct)*uint64_t(ncp)*uint64_t(ncpsi)<(uint64_t(1)<<32),
         "key space too large");
 
-      aligned_array<uint32_t> key(nptg);
+      quick_array<uint32_t> key(nptg);
       execParallel(nptg, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -186,7 +186,7 @@ template<typename T> class ConvolverPlan
           key[i] = (itheta*ncp+iphi)*ncpsi+ipsi;
           }
         });
-      aligned_array<uint32_t> res(key.size());
+      quick_array<uint32_t> res(key.size());
       bucket_sort(&key[0], &res[0], key.size(), ncp*nct*ncpsi, nthreads);
       return res;
       }
