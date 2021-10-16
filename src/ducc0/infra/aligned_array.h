@@ -57,7 +57,7 @@ template<typename T, size_t alignment=alignof(T)> class array_base
         if (num==0) return nullptr;
 // FIXME: let's not use aligned_alloc on Apple for the moment,
 // it's only supported from 10.15 on...
-#if 0//((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
         // aligned_alloc requires the allocated size to be a multiple of the
         // requested alignment, so increase size if necessary
         void *res = aligned_alloc(alignment,((num*sizeof(T)+alignment-1)/alignment)*alignment);
@@ -76,7 +76,7 @@ template<typename T, size_t alignment=alignof(T)> class array_base
       if constexpr(alignment<=alignof(max_align_t))
         free(ptr);
       else
-#if 0//((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
         free(ptr);
 #else
         if (ptr) free((reinterpret_cast<void**>(ptr))[-1]);
