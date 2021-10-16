@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-      - run: python -m pip install --user --only-binary scipy setuptools pybind11 pytest numpy scipy
+      - run: python -m pip install --user setuptools pybind11 pytest numpy scipy
       - run: python -m pip install --user .
       - run: python -m pytest python/test -x
   test-intel:
