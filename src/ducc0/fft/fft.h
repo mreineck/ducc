@@ -1868,14 +1868,6 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
     }, nthreads);
   }
 
-template<typename T, typename T0> aligned_array<T> alloc_tmp_conv_axis
-  (const fmav_info &info, size_t axis, size_t len, size_t bufsize)
-  {
-  auto othersize = info.size()/info.shape(axis);
-  constexpr auto vlen = fft_simdlen<T0>;
-  return aligned_array<T>((len+bufsize)*std::min(vlen, othersize));
-  }
-
 template<typename Tplan, typename T0, typename T, typename Exec>
 DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
