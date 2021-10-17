@@ -410,6 +410,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       : tinfo(info), tbuf(d_, buf) {}
 
   public:
+    cfmav() {}
     cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(d_) {}
     cfmav(const T *d_, const shape_t &shp_)
@@ -459,6 +460,7 @@ template<typename T> class vfmav: public cfmav<T>
 
   public:
     using tbuf::raw, tbuf::data, tinfo::ndim;
+    vfmav() {}
     vfmav(T *d_, const fmav_info &info)
       : cfmav<T>(d_, info) {}
     vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
@@ -487,7 +489,7 @@ template<typename T> class vfmav: public cfmav<T>
     template<typename I> T &raw(I i)
       { return data()[i]; }
 
-    void assign(vfmav &other)
+    void assign(const vfmav &other)
       {
       fmav_info::assign(other);
       cmembuf<T>::assign(other);
