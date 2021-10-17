@@ -560,10 +560,10 @@ void execParallel(size_t, std::function<void(Scheduler &)> func)
   }
 void execParallel(size_t work_lo, size_t work_hi, size_t,
   std::function<void(size_t, size_t)> func)
-  { func(lo, hi); }
+  { func(work_lo, work_hi); }
 void execParallel(size_t work_lo, size_t work_hi, size_t,
   std::function<void(size_t, size_t, size_t)> func)
-  { func(0, lo, hi); }
+  { func(0, work_lo, work_hi); }
 
 #endif
 

@@ -51,7 +51,7 @@ template<typename T> class cmembuf
   {
   protected:
     shared_ptr<vector<T>> ptr;
-    shared_ptr<aligned_array<T>> rawptr;
+    shared_ptr<quick_array<T>> rawptr;
     const T *d;
 
     cmembuf(const T *d_, const cmembuf &other)
@@ -66,7 +66,7 @@ template<typename T> class cmembuf
     cmembuf(size_t sz)
       : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
     cmembuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<aligned_array<T>>(sz)), d(rawptr->data()) {}
+      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
 
@@ -410,6 +410,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       : tinfo(info), tbuf(d_, buf) {}
 
   public:
+    cfmav() {}
     cfmav(const T *d_, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(d_) {}
     cfmav(const T *d_, const shape_t &shp_)
@@ -446,11 +447,12 @@ template<typename T> class vfmav: public cfmav<T>
   protected:
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
-    using tinfo::shp, tinfo::str, tinfo::size;
+    using tinfo::shp, tinfo::str;
 
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
+    using tinfo::size, tinfo::shape, tinfo::stride;
 
   protected:
     vfmav(const fmav_info &info, T *d_, tbuf &buf)
@@ -458,6 +460,7 @@ template<typename T> class vfmav: public cfmav<T>
 
   public:
     using tbuf::raw, tbuf::data, tinfo::ndim;
+    vfmav() {}
     vfmav(T *d_, const fmav_info &info)
       : cfmav<T>(d_, info) {}
     vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
@@ -486,7 +489,7 @@ template<typename T> class vfmav: public cfmav<T>
     template<typename I> T &raw(I i)
       { return data()[i]; }
 
-    void assign(vfmav &other)
+    void assign(const vfmav &other)
       {
       fmav_info::assign(other);
       cmembuf<T>::assign(other);
