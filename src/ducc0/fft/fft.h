@@ -334,13 +334,15 @@ template<typename T0> class T_dcst4
     std::unique_ptr<pocketfft_c<T0>> fft;
     std::unique_ptr<pocketfft_r<T0>> rfft;
     quick_array<Cmplx<T0>> C2;
+    size_t bufsz;
 
   public:
     DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
       : N(length),
         fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
         rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),
-        C2((N&1) ? 0 : N/2)
+        C2((N&1) ? 0 : N/2),
+        bufsz((N&1) ? (N+rfft->bufsize()) : (N+2*fft->bufsize()))
       {
       if ((N&1)==0)
         {
@@ -350,7 +352,7 @@ template<typename T0> class T_dcst4
         }
       }
 
-    template<typename T> DUCC0_NOINLINE T *exec(T c[], T /*buf*/[], T0 fct,
+    template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads) const
       {
       size_t n2 = N/2;
@@ -363,7 +365,7 @@ template<typename T0> class T_dcst4
         // and is released under the 3-clause BSD license with friendly
         // permission of Matteo Frigo and Steven G. Johnson.
 
-        quick_array<T> y(N);
+        auto y = buf;
         {
         size_t i=0, m=n2;
         for (; m<N; ++i, m+=4)
@@ -377,27 +379,27 @@ template<typename T0> class T_dcst4
         for (; i<N; ++i, m+=4)
           y[i] = c[m-4*N];
         }
-// FIXME unbuffered
-        rfft->exec(y.data(), fct, true, nthreads);
+
+        auto res = rfft->exec(y, y+N, fct, true, nthreads);
         {
         auto SGN = [](size_t i)
            {
            constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L);
            return (i&2) ? -sqrt2 : sqrt2;
            };
-        c[n2] = y[0]*SGN(n2+1);
+        c[n2] = res[0]*SGN(n2+1);
         size_t i=0, i1=1, k=1;
         for (; k<n2; ++i, ++i1, k+=2)
           {
-          c[i    ] = y[2*k-1]*SGN(i1)     + y[2*k  ]*SGN(i);
-          c[N -i1] = y[2*k-1]*SGN(N -i)   - y[2*k  ]*SGN(N -i1);
-          c[n2-i1] = y[2*k+1]*SGN(n2-i)   - y[2*k+2]*SGN(n2-i1);
-          c[n2+i1] = y[2*k+1]*SGN(n2+i+2) + y[2*k+2]*SGN(n2+i1);
+          c[i    ] = res[2*k-1]*SGN(i1)     + res[2*k  ]*SGN(i);
+          c[N -i1] = res[2*k-1]*SGN(N -i)   - res[2*k  ]*SGN(N -i1);
+          c[n2-i1] = res[2*k+1]*SGN(n2-i)   - res[2*k+2]*SGN(n2-i1);
+          c[n2+i1] = res[2*k+1]*SGN(n2+i+2) + res[2*k+2]*SGN(n2+i1);
           }
         if (k == n2)
           {
-          c[i   ] = y[2*k-1]*SGN(i+1) + y[2*k]*SGN(i);
-          c[N-i1] = y[2*k-1]*SGN(i+2) + y[2*k]*SGN(i1);
+          c[i   ] = res[2*k-1]*SGN(i+1) + res[2*k]*SGN(i);
+          c[N-i1] = res[2*k-1]*SGN(i+2) + res[2*k]*SGN(i1);
           }
         }
 
@@ -407,18 +409,18 @@ template<typename T0> class T_dcst4
         {
         // even length algorithm from
         // https://www.appletonaudio.com/blog/2013/derivation-of-fast-dct-4-algorithm-based-on-dft/
-        quick_array<Cmplx<T>> y(n2);
+        auto y2 = reinterpret_cast<Cmplx<T> *>(buf);
         for(size_t i=0; i<n2; ++i)
           {
-          y[i].Set(c[2*i],c[N-1-2*i]);
-          y[i] *= C2[i];
+          y2[i].Set(c[2*i],c[N-1-2*i]);
+          y2[i] *= C2[i];
           }
-// FIXME unbuffered
-        fft->exec(y.data(), fct, true, nthreads);
+
+        auto res = fft->exec(y2, y2+N/2, fct, true, nthreads);
         for(size_t i=0, ic=n2-1; i<n2; ++i, --ic)
           {
-          c[2*i  ] = T0( 2)*(y[i ].r*C2[i ].r-y[i ].i*C2[i ].i);
-          c[2*i+1] = T0(-2)*(y[ic].i*C2[ic].r+y[ic].r*C2[ic].i);
+          c[2*i  ] = T0( 2)*(res[i ].r*C2[i ].r-res[i ].i*C2[i ].i);
+          c[2*i+1] = T0(-2)*(res[ic].i*C2[ic].r+res[ic].r*C2[ic].i);
           }
         }
       if (!cosine)
@@ -439,8 +441,7 @@ template<typename T0> class T_dcst4
       }
 
     size_t length() const { return N; }
-//FIXME: use buffers properly!
-    size_t bufsize() const { return 0; }
+    size_t bufsize() const { return bufsz; }
   };
 
 
