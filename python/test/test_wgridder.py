@@ -274,3 +274,57 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+
+
+@pmp('nx', [(30, 3), (128, 2)])
+@pmp('ny', [(128, 2), (250, 5)])
+@pmp("nrow", (1, 2, 27))
+@pmp("nchan", (1, 5))
+@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("singleprec", (True, False))
+@pmp("wstacking", (True, False))
+@pmp("use_wgt", (True, False))
+@pmp("use_mask", (False, True))
+@pmp("nthreads", (1, 2, 7))
+def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
+                              singleprec, wstacking, use_wgt, nthreads,
+                              use_mask):
+    (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(42)
+    pixsizex = np.pi/180/60/nxdirty*0.2398
+    pixsizey = np.pi/180/60/nxdirty
+    f0 = 1e9
+    freq = f0 + np.arange(nchan)*(f0/nchan)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/SPEEDOFLIGHT)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
+    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
+        if use_mask else None
+    dirty = rng.random((nxdirty, nydirty))-0.5
+    dirty = dirty +  1j*(rng.random((nxdirty, nydirty))-0.5)
+    nu = nv = 0
+    if singleprec:
+        ms = ms.astype("c8")
+        dirty = dirty.astype("c8")
+        if wgt is not None:
+            wgt = wgt.astype("f4")
+
+    def check(d2, m2):
+        ref = max(vdot(ms, ms).real, vdot(m2, m2).real,
+                  vdot(dirty, dirty).real, vdot(d2, d2).real)
+        tol = 3e-5*ref if singleprec else 2e-13*ref
+        assert_allclose(vdot(ms, m2), vdot(d2, dirty), rtol=tol)
+
+    dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
+                         mask).astype("f8") \
+            +1j * ng.ms2dirty(uvw, freq, -1j*ms, wgt, nxdirty, nydirty, pixsizex,
+                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
+                         mask).astype("f8")
+    ms2 = ng.dirty2ms(uvw, freq, dirty.real, wgt, pixsizex, pixsizey, nu, nv,
+                       epsilon, wstacking, nthreads, 0, mask).astype("c16") \
+          +1j*ng.dirty2ms(uvw, freq, dirty.imag, wgt, pixsizex, pixsizey, nu, nv,
+                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
+    check(dirty2, ms2)
