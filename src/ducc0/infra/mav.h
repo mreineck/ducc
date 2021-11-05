@@ -1008,7 +1008,7 @@ template<typename T0, typename T1, typename T2, typename Func>
 template<typename T0, typename T1, typename T2, typename T3, typename Func>
   void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3)
   {
-  auto [shp, str] = multiprep({m0, m1, m2,m3});
+  auto [shp, str] = multiprep({m0, m1, m2, m3});
   applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), func,
     nthreads);
   }
@@ -1017,7 +1017,7 @@ template<typename T0, typename T1, typename T2, typename T3, typename T4,
   void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3,
     T4 &&m4)
   {
-  auto [shp, str] = multiprep({m0, m1, m2,m3, m4});
+  auto [shp, str] = multiprep({m0, m1, m2, m3, m4});
   applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), m4.data(),
     func, nthreads);
   }
@@ -1026,7 +1026,7 @@ template<typename T0, typename T1, typename T2, typename T3, typename T4,
   void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3,
     T4 &&m4, T5 &&m5)
   {
-  auto [shp, str] = multiprep({m0, m1, m2,m3, m4, m5});
+  auto [shp, str] = multiprep({m0, m1, m2, m3, m4, m5});
   applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), m4.data(),
     m5.data(), func, nthreads);
   }
