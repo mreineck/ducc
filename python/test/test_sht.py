@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2020-2021 Max-Planck-Society
 
 
 import ducc0
@@ -186,7 +186,6 @@ def test_healpix_adjoint(lmax, nside, spin, nthreads):
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, **geom)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    print(nside, lmax, v1, v2, np.abs((v1-v2)/v1))
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
 
@@ -199,7 +198,6 @@ def test_rotation(lmax, nthreads):
     alm = random_alm(lmax, lmax, 0, 1, rng)[0,:]
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
-    print(ducc0.misc.l2error(alm,alm2))
     assert_(ducc0.misc.l2error(alm,alm2)<=1e-12)
     alm = alm.astype(np.complex64)
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
