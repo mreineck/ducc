@@ -1,3 +1,15 @@
+0.22.0:
+- general:
+  - many internal cleanups and consistency improvements
+
+- fft:
+  - re-introduce plan caching. This is possible since plans for large 1D
+    transforms no longer scale with the length of the transform,but only its
+    square root, limiting the memory overhead
+  - code tweaks to improve copying steps for multi-D transforms (basically a
+    workaround for mis-optimizations by gcc)
+
+
 0.21.0:
 - general:
   - support for more platforms (e.g. Raspberry Pi)
