@@ -101,11 +101,12 @@ extensions = [Extension(pkgname,
 this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
-description = """Distinctly useful code collection: contains efficient
-algorithms for Fast Fourier (and related) transforms, spherical harmonic
-transforms involving very general spherical grids, gridding/degridding tools
-for radio interferometry, 4pi spherical convolution operators and much more."""
-
+description = ("Distinctly useful code collection: contains efficient " +
+               "algorithms for Fast Fourier (and related) transforms, " +
+               "spherical harmonic transforms involving very general " +
+               "spherical grids, gridding/degridding tools for radio " +
+               "interferometry, 4pi spherical convolution operators " +
+               "and much more.")
 
 setup(name=pkgname,
       version=version,
