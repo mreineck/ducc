@@ -69,7 +69,7 @@ template<typename ...Args>
 [[noreturn]] DUCC0_NOINLINE void fail__(Args&&... args)
   {
   ::std::ostringstream msg; \
-  ::ducc0::detail_error_handling::streamDump__(msg, args...); \
+  ::ducc0::detail_error_handling::streamDump__(msg, std::forward<Args>(args)...); \
     throw ::std::runtime_error(msg.str()); \
   }
 
