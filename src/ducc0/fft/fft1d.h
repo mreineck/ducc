@@ -1526,7 +1526,7 @@ MR_fail("must not get here");
 
       // FIXME TBD
 // do we need the vectorize flag at all?
-      size_t lim = vectorize ? 100000 : 100000;
+      size_t lim = vectorize ? 10000 : 10000;
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
