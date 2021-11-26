@@ -31,7 +31,7 @@ def random_alm(lmax, mmax, ncomp):
     res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
      + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
     # make a_lm with m==0 real-valued
-    res[0:lmax+1, :].imag = 0.
+    res[:,0:lmax+1].imag = 0.
     return res
 
 
