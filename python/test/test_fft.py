@@ -107,7 +107,8 @@ ctype = {np.float32: np.complex64,
 on_windows = ("microsoft" in platform.uname()[3].lower() or
               platform.system() == "Windows")
 on_arm = ("arm" in platform.machine().lower())
-true_long_double = (np.longfloat != np.float64 and not (on_windows or on_arm))
+on_ppc64le = ("ppc64le" in platform.machine().lower())
+true_long_double = (np.longfloat != np.float64 and not (on_windows or on_arm or on_ppc64le))
 dtypes = [np.float32, np.float64]
 if true_long_double:
     dtypes += [np.longfloat]
