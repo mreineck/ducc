@@ -1,7 +1,7 @@
 0.22.0:
 - general:
   - many internal cleanups and consistency improvements
-  - now also available as package for Alpine Linux
+  - preparations for release as an Alpine Linux package
 
 - fft:
   - re-introduce plan caching. This is possible since plans for large 1D
