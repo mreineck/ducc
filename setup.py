@@ -22,6 +22,16 @@ do_debug = compilation_strategy in ['none-debug', 'portable-debug', 'native-debu
 do_optimize = compilation_strategy not in ['none', 'none-debug']
 do_native = compilation_strategy in ['native', 'native-debug']
 
+def _print_env():
+    import platform
+    print("")
+    print("Build environment:")
+    print("Platform:     ", platform.platform())
+    print("Machine:      ", platform.machine())
+    print("System:       ", platform.system())
+    print("Architecture: ", platform.architecture())
+    print("")
+
 def _get_files_by_suffix(directory, suffix):
     path = directory
     iterable_sources = (iglob(os.path.join(root, '*.'+suffix))
@@ -107,6 +117,8 @@ description = ("Distinctly useful code collection: contains efficient " +
                "spherical grids, gridding/degridding tools for radio " +
                "interferometry, 4pi spherical convolution operators " +
                "and much more.")
+
+_print_env()
 
 setup(name=pkgname,
       version=version,
