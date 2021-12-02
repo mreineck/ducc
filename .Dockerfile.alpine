@@ -1,5 +1,0 @@
-FROM alpine:latest
-
-RUN apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0
-RUN apk add py3-pytest
-RUN python3 -m pytest test/python/
