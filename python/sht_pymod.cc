@@ -69,7 +69,7 @@ py::array Py_GL_thetas(size_t nlat)
   return move(res);
   }
 
-template<typename T> py::array Py2_rotate_alm(const py::array &alm_, int64_t lmax,
+template<typename T> py::array Py2_rotate_alm(const py::array &alm_, size_t lmax,
   double psi, double theta, double phi, size_t nthreads)
   {
   auto a1 = to_cmav<complex<T>,1>(alm_);
@@ -83,7 +83,7 @@ template<typename T> py::array Py2_rotate_alm(const py::array &alm_, int64_t lma
   }
   return move(alm);
   }
-py::array Py_rotate_alm(const py::array &alm, int64_t lmax,
+py::array Py_rotate_alm(const py::array &alm, size_t lmax,
   double psi, double theta, double phi, size_t nthreads)
   {
   if (isPyarr<complex<float>>(alm))
@@ -572,9 +572,9 @@ py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
 template<typename T> class Py_sharpjob
   {
   private:
-    int64_t lmax_, mmax_, ntheta_, nphi_, nside_, npix_;
+    size_t lmax_, mmax_, ntheta_, nphi_, nside_, npix_;
     string geom;
-    int nthreads;
+    size_t nthreads;
 
   public:
     Py_sharpjob () : lmax_(0), mmax_(0), ntheta_(0), nphi_(0), nside_(0),
@@ -586,77 +586,76 @@ template<typename T> class Py_sharpjob
         ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
       }
 
-    void set_nthreads(int64_t nthreads_)
-      { nthreads = int(nthreads_); }
-    void set_gauss_geometry(int64_t ntheta, int64_t nphi)
+    void set_nthreads(size_t nthreads_)
+      { nthreads = nthreads_; }
+    void set_gauss_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "GL";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_= ntheta*nphi;
       }
-    void set_healpix_geometry(int64_t nside)
+    void set_healpix_geometry(size_t nside)
       {
       MR_assert(nside>0,"bad Nside value");
       geom = "HP";
       nside_ = nside;
-      npix_=12*nside*nside;
+      npix_ = 12*nside*nside;
       }
-    void set_fejer1_geometry(int64_t ntheta, int64_t nphi)
+    void set_fejer1_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "F1";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
-    void set_fejer2_geometry(int64_t ntheta, int64_t nphi)
+    void set_fejer2_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "F2";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
-    void set_cc_geometry(int64_t ntheta, int64_t nphi)
+    void set_cc_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "CC";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
-    void set_dh_geometry(int64_t ntheta, int64_t nphi)
+    void set_dh_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "DH";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
-    void set_mw_geometry(int64_t ntheta, int64_t nphi)
+    void set_mw_geometry(size_t ntheta, size_t nphi)
       {
       MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
       geom = "MW";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_=ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
-    void set_triangular_alm_info (int64_t lmax, int64_t mmax)
+    void set_triangular_alm_info (size_t lmax, size_t mmax)
       {
-      MR_assert(mmax>=0,"negative mmax");
       MR_assert(mmax<=lmax,"mmax must not be larger than lmax");
       lmax_=lmax; mmax_=mmax;
       }
 
-    int64_t n_alm() const
+    size_t n_alm() const
       { return ((mmax_+1)*(mmax_+2))/2 + (mmax_+1)*(lmax_-mmax_); }
 
     py::array alm2map (const py::array_t<complex<double>> &alm_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (alm_.size()==n_alm(),
+      MR_assert (size_t(alm_.size())==n_alm(),
         "incorrect size of a_lm array");
       auto map_=make_Pyarr<double>({size_t(npix_)});
       auto map=to_vmav<double,1>(map_);
@@ -688,7 +687,8 @@ template<typename T> class Py_sharpjob
         }
       else
         {
-        vmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)});
+        vmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
         synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
         }
       return map_;
@@ -696,10 +696,10 @@ template<typename T> class Py_sharpjob
     py::array alm2map_adjoint (const py::array_t<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map_.size()==npix_,"incorrect size of map array");
+      MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
-      vmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      vmav<complex<double>,2> ar(alm.data(), {1, n_alm()}, {0, alm.stride(0)});
       auto map=to_cmav<double,1>(map_);
       if (geom=="HP")
         {
@@ -722,12 +722,13 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        cmav<double,2> mr(map.data(), {1, size_t(npix_)}, {0, map.stride(0)});
+        cmav<double,2> mr(map.data(), {1, npix_}, {0, map.stride(0)});
         adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
         }
       else
         {
-        cmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)});
+        cmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
         adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
         }
       return alm_;
@@ -735,16 +736,17 @@ template<typename T> class Py_sharpjob
     py::array map2alm (const py::array_t<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map_.size()==npix_,"incorrect size of map array");
+      MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
       vmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
       auto map=to_cmav<double,1>(map_);
-      cmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)}, {0, map.stride(0)*nphi_, map.stride(0)});
+      cmav<double,3> mr(map.data(), {1, ntheta_, nphi_},
+        {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
       analysis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
       return alm_;
       }
-    py::array alm2map_spin (const py::array_t<complex<double>> &alm_, int64_t spin) const
+    py::array alm2map_spin (const py::array_t<complex<double>> &alm_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       auto map_=make_Pyarr<double>({2, size_t(npix_)});
@@ -777,19 +779,21 @@ template<typename T> class Py_sharpjob
         }
       else
         {
-        vmav<double,3> mr(map.data(), {2, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)});
+        vmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
+          {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
         synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
         }
       return map_;
       }
-    py::array map2alm_spin (const py::array_t<double> &map_, int64_t spin) const
+    py::array map2alm_spin (const py::array_t<double> &map_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      MR_assert (map_.shape(1)==npix_,"incorrect size of map array");
+      MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_vmav<complex<double>,2>(alm_);
       auto map=to_cmav<double,2>(map_);
-      cmav<double,3> mr(map.data(), {2, size_t(ntheta_), size_t(nphi_)}, {map.stride(0), map.stride(1)*nphi_, map.stride(1)});
+      cmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
+        {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
       analysis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
       return alm_;
       }
