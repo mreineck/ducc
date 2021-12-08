@@ -594,7 +594,7 @@ template<typename T> class Py_sharpjob
       geom = "GL";
       ntheta_ = ntheta;
       nphi_ = nphi;
-      npix_= ntheta*nphi;
+      npix_ = ntheta*nphi;
       }
     void set_healpix_geometry(size_t nside)
       {
