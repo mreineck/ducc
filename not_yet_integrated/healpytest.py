@@ -244,7 +244,7 @@ def my_lsmr(op, op_dagger, b, n, damp=0.0, atol=1e-6, btol=1e-6, conlim=1e8,
         # The following tests guard against extremely small values of
         # atol, btol or ctol.  (The user may have set any or all of
         # the parameters atol, btol, conlim  to 0.)
-        # The effect is equivalent to the normAl tests using
+        # The effect is equivalent to the normal tests using
         # atol = eps,  btol = eps,  conlim = 1/eps.
 
         if itn >= maxiter:
@@ -301,7 +301,35 @@ def my_lsmr(op, op_dagger, b, n, damp=0.0, atol=1e-6, btol=1e-6, conlim=1e8,
 
 
 def hp_map_analysis_lsq(map, lmax, mmax, tol=1e-10, maxiter=20):
-    from scipy.sparse.linalg import LinearOperator, lsqr, lsmr
+    """Runs an iterative map analysis up to (lmax, mmax) and returns the result
+    including its quality
+
+    Parameters
+    ----------
+    map : numpy.ndarray(float)
+        The input map
+    lmax, mmax : int
+        The desired lmax and mmax parameters for the analysis
+    tol : float
+        The desired accuracy for the result. Once this is reached, the iteration
+        stops.
+    maxiter : int
+        maximum iteration count after which the minimization is stopped
+
+    Returns
+    -------
+    alm : numpy.ndarray(complex)
+        The reconstructed a_lm coefficients
+    rel_res : float
+        The norm of the residual map (i.e. `map-alm2map(alm)`), divided by the
+        norm of `map`. This is a measure for the fraction of the map signal that
+        could not be modeled by the a_lm
+    iter : int
+        the number of iterations required
+    converged : bool
+        if True, convergence was reached
+    """
+    from scipy.sparse.linalg import LinearOperator, lsmr
     nside = hp.npix2nside(map.shape[0])
 
     # helper functions to convert between real- and complex-valued a_lm
@@ -318,24 +346,25 @@ def hp_map_analysis_lsq(map, lmax, mmax, tol=1e-10, maxiter=20):
    
     def a2m2(x):
         talm = realalm2alm(x)
-        return hp.alm2map(talm, lmax=lmax, nside=nside)
+        return hp.alm2map(talm, lmax=lmax, mmax=mmax, nside=nside)
     def m2a2(x):
-        talm = hp.map2alm(x, lmax=lmax, iter=0)*((12*nside**2)/(4*np.pi))
+        talm = hp.map2alm(x, lmax=lmax, mmax=mmax, iter=0)*((12*nside**2)/(4*np.pi))
         return alm2realalm(talm)
 
     #initial guess
     alm0 = m2a2(map)/len(map)*(4*np.pi)
     op = LinearOperator(matvec=a2m2, rmatvec=m2a2, shape=(len(map),len(alm0)))
- #   res = lsqr(A=op, b=map, n=len(alm0), x0=alm0, atol=tol, btol=tol, iter_lim=maxiter, show=True)
-    res = my_lsmr(a2m2, m2a2, n=len(alm0), b=map, x0=alm0, atol=tol, btol=tol, maxiter=maxiter, show=True)
-    res = lsmr(A=op, b=map, x0=alm0, atol=tol, btol=tol, maxiter=maxiter, show=True)
-    return realalm2alm(res[0])
+    res = lsmr(A=op, b=map, x0=alm0, atol=tol, btol=tol, maxiter=maxiter)
+    istop = res[1]
+    niter = res[2]
+    normres = res[3]
+    return (realalm2alm(res[0]), normres/np.linalg.norm(map), niter, istop<7)
 
 np.random.seed(42)
 nside = 1024
-noise_amplitude = 1e0
+noise_amplitude = 1e2
 lmax = int(2*nside)
-iter = 50
+iter = 20
 
 
 print(f'# nside = {nside}')
@@ -349,10 +378,14 @@ alm.imag[lmax+1:] = np.random.randn(alm.size-lmax-1)
 
 # map is alm2map(alm) plus some white noise
 map = hp.alm2map(alm, nside)
-map += noise_amplitude*np.random.normal(size=len(map))
+map = noise_amplitude*np.random.normal(size=len(map))
 
 # extract a_lm from map using the new algorithm
-alm2_new = hp_map_analysis_lsq(map, lmax, lmax, tol=1e-12, maxiter=iter)
+tmp = hp_map_analysis_lsq(map, lmax, lmax, tol=1e-12, maxiter=iter)
+alm2_new = tmp[0]
+print("analysis finished: relative map residual =",tmp[1], "required", tmp[2], "iterations")
+if not tmp[3]:
+    print("WARNING: iteration limit reached without convergence!")
 map2_new = hp.alm2map(alm2_new, lmax=lmax, nside=nside)
 print("relative residual: ",np.sqrt(np.vdot(map-map2_new,map-map2_new)/np.vdot(map,map)))
 

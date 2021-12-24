@@ -456,7 +456,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
 #else
   constexpr size_t nmax=10;
   struct entry { size_t n; bool vectorize; std::shared_ptr<T> ptr; };
-  static std::array<entry, nmax> cache{{0,0,nullptr}};
+  static std::array<entry, nmax> cache{{{0,0,nullptr}}};
   static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
 #ifndef DUCC0_NO_THREADING
