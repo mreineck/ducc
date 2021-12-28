@@ -105,8 +105,11 @@ The central algorithms are derived from Paul Swarztrauber's
 - has optional multi-threading support for multidimensional transforms
 
 ### Design decisions and performance characteristics
-- there is no internal caching of plans and twiddle factors, making the
-  interface as simple as possible
+- there is no explicit plan management to be done by the user, making the
+  interface as simple as possible.
+  A small number of plans is cached internally, which does not consume much
+  memory, since the storage requirement for a plan only scales with the square
+  root of the FFT length for large lengths.
 - 1D transforms are significantly slower than those provided by FFTW (if FFTW's
   plan generation overhead is ignored)
 - multi-D transforms in double precision perform fairly similar to FFTW with
