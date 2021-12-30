@@ -58,9 +58,6 @@ class YlmBase
     vector<double> mfac;
 
   protected:
-    /* used if s==0 */
-    vector<double> root, iroot;
-
     /* used if s!=0 */
     vector<double> flm1, flm2, inv;
 
@@ -111,8 +108,6 @@ class YlmBase
       : lmax(l_max), mmax(m_max), s(spin),
         powlimit(mmax+s+1),
         mfac((s==0) ? (mmax+1) : 0),
-        root((s==0) ? (2*lmax+8) : 0),
-        iroot((s==0) ? (2*lmax+8) : 0),
         flm1((s==0) ? 0 : (2*lmax+3)),
         flm2((s==0) ? 0 : (2*lmax+3)),
         inv((s==0) ? 0 : (lmax+2)),
@@ -131,11 +126,6 @@ class YlmBase
         mfac[0] = inv_sqrt4pi;
         for (size_t i=1; i<=mmax; ++i)
           mfac[i] = mfac[i-1]*sqrt((2*i+1.)/(2*i));
-        for (size_t i=0; i<2*lmax+8; ++i)
-          {
-          root[i] = sqrt(i);
-          iroot[i] = (i==0) ? 0. : 1./root[i];
-          }
         }
       else
         {
@@ -209,7 +199,7 @@ class Ylmgen: public YlmBase
         {
         eps[m] = 0.;
         for (size_t l=m+1; l<lmax+4; ++l)
-          eps[l] = root[l+m]*root[l-m]*iroot[2*l+1]*iroot[2*l-1];
+          eps[l] = sqrt((double(l+m)*(l-m))/(double(2*l+1)*(2*l-1)));
         alpha[0] = 1./eps[m+1];
         alpha[1] = eps[m+1]/(eps[m+2]*eps[m+3]);
         for (size_t il=1, l=m+2; l<lmax+1; ++il, l+=2)

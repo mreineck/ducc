@@ -192,6 +192,11 @@ class TimerHierarchy
       curnode=&(it->second);
       }
 
+    TimerHierarchy(const TimerHierarchy &) = delete;
+    TimerHierarchy(TimerHierarchy &&) = delete;
+    TimerHierarchy& operator=(const TimerHierarchy &) = delete;
+    TimerHierarchy&operator=(TimerHierarchy &&) = delete;
+
   public:
     TimerHierarchy(const string &name="<root>")
       : last_time(clock::now()), root(name, nullptr), curnode(&root) {}
@@ -218,7 +223,11 @@ class TimerHierarchy
       }
 
     void reset(const string &name="<root>")
-      { *this = TimerHierarchy(name); }
+      {
+      last_time=clock::now();
+      root = tstack_node(name, nullptr);
+      curnode=&root;
+      }
 
     class ScopeTimer
       {

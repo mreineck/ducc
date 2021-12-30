@@ -15,10 +15,11 @@ user_cflags = [x for x in user_cflags if x != ""]
 user_lflags = os.getenv("DUCC0_LFLAGS", "").split(" ")
 user_lflags = [x for x in user_lflags if x != ""]
 
-compilation_strategy = os.getenv('DUCC0_OPTIMIZATION', 'native')
-if compilation_strategy not in ['none', 'none-debug', 'portable', 'portable-debug', 'native', 'native-debug']:
+compilation_strategy = os.getenv('DUCC0_OPTIMIZATION', 'native-strip')
+if compilation_strategy not in ['none', 'none-debug', 'none-strip', 'portable', 'portable-debug', 'portable-strip', 'native', 'native-debug', 'native-strip']:
     raise RuntimeError('unknown compilation strategy')
 do_debug = compilation_strategy in ['none-debug', 'portable-debug', 'native-debug']
+do_strip = compilation_strategy in ['none-strip', 'portable-strip', 'native-strip']
 do_optimize = compilation_strategy not in ['none', 'none-debug']
 do_native = compilation_strategy in ['native', 'native-debug']
 
@@ -88,7 +89,7 @@ else:
     python_module_link_args += ['-Wl,-rpath,$ORIGIN', '-pthread']
     if do_native:
         python_module_link_args += ['-march=native']
-    if not do_debug:
+    if do_strip:
         python_module_link_args += ['-s']
 
 extra_compile_args += user_cflags
