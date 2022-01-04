@@ -246,32 +246,38 @@ template<size_t W, typename Tsimd> class TemplateKernel
         }
       else
         {
+        T zfac;
+        {
+        Tvl tvalx = coeff[0], tvaly = coeff[0];
+        Tvl tvalx2 = coeff[nvec], tvaly2 = coeff[nvec];
         auto ptrz = scoeff+nth;
         auto tvalz = *ptrz, tvalz2 = ptrz[sstride];
-        Tvl tvalx[nvec], tvaly[nvec], tvalx2[nvec], tvaly2[nvec];
-        for (size_t i=0; i<nvec; ++i)
-          {
-          tvalx[i] = coeff[i];
-          tvaly[i] = coeff[i];
-          tvalx2[i] = coeff[i+nvec];
-          tvaly2[i] = coeff[i+nvec];
-          }
         for (size_t j=2; j<D; j+=2)
           {
+          tvalx = tvalx*x2 + Tvl(coeff[j*nvec]);
+          tvaly = tvaly*y2 + Tvl(coeff[j*nvec]);
           tvalz = tvalz*z2 + ptrz[j*sstride];
-          tvalz2 = tvalz2*z2 + ptrz[j*sstride+sstride];
-          for (size_t i=0; i<nvec; ++i)
-            {
-            tvalx[i] = tvalx[i]*x2 + Tvl(coeff[j*nvec+i]);
-            tvalx2[i] = tvalx2[i]*x2 + Tvl(coeff[j*nvec+nvec+i]);
-            tvaly[i] = tvaly[i]*y2 + Tvl(coeff[j*nvec+i]);
-            tvaly2[i] = tvaly2[i]*y2 + Tvl(coeff[j*nvec+nvec+i]);
-            }
+          tvalx2 = tvalx2*x2 + Tvl(coeff[(j+1)*nvec]);
+          tvaly2 = tvaly2*y2 + Tvl(coeff[(j+1)*nvec]);
+          tvalz2 = tvalz2*z2 + ptrz[(j+1)*sstride];
           }
-        for (size_t i=0; i<nvec; ++i)
+        zfac = z*tvalz+tvalz2;
+        res[0] = (x*tvalx+tvalx2)*zfac;
+        res[nvec] = y*tvaly+tvaly2;
+        }
+        for (size_t i=1; i<nvec; ++i)
           {
-          res[i] = (x*tvalx[i]+tvalx2[i])*(z*tvalz+tvalz2);
-          res[i+nvec] = y*tvaly[i]+tvaly2[i];
+          Tvl tvalx = coeff[i], tvaly = coeff[i];
+          Tvl tvalx2 = coeff[i+nvec], tvaly2 = coeff[i+nvec];
+          for (size_t j=2; j<D; j+=2)
+            {
+            tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec]);
+            tvaly = tvaly*y2 + Tvl(coeff[i+j*nvec]);
+            tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
+            tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
+            }
+          res[i] = (x*tvalx+tvalx2)*zfac;
+          res[nvec+i] = y*tvaly+tvaly2;
           }
         }
       }
@@ -293,30 +299,20 @@ template<size_t W, typename Tsimd> class TemplateKernel
         res[1] = y*tvaly+tvaly2;
         }
       else
-        {
-        Tvl tvalx[nvec], tvaly[nvec],
-            tvalx2[nvec], tvaly2[nvec];
         for (size_t i=0; i<nvec; ++i)
           {
-          tvalx[i] = coeff[i];
-          tvaly[i] = coeff[i];
-          tvalx2[i] = coeff[i+nvec];
-          tvaly2[i] = coeff[i+nvec];
-          }
-        for (size_t j=2; j<D; j+=2)
-          for (size_t i=0; i<nvec; ++i)
+          Tvl tvalx = coeff[i], tvaly = coeff[i];
+          Tvl tvalx2 = coeff[i+nvec], tvaly2 = coeff[i+nvec];
+          for (size_t j=2; j<D; j+=2)
             {
-            tvalx[i] = tvalx[i]*x2 + Tvl(coeff[j*nvec+i]);
-            tvalx2[i] = tvalx2[i]*x2 + Tvl(coeff[j*nvec+nvec+i]);
-            tvaly[i] = tvaly[i]*y2 + Tvl(coeff[j*nvec+i]);
-            tvaly2[i] = tvaly2[i]*y2 + Tvl(coeff[j*nvec+nvec+i]);
+            tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec]);
+            tvaly = tvaly*y2 + Tvl(coeff[i+j*nvec]);
+            tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
+            tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
             }
-        for (size_t i=0; i<nvec; ++i)
-          {
-          res[i] = x*tvalx[i]+tvalx2[i];
-          res[i+nvec] = y*tvaly[i]+tvaly2[i];
+          res[i] = x*tvalx+tvalx2;
+          res[nvec+i] = y*tvaly+tvaly2;
           }
-        }
       }
     [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
       {
@@ -340,32 +336,22 @@ template<size_t W, typename Tsimd> class TemplateKernel
         }
       else
         {
-        Tvl tvalx[nvec], tvaly[nvec], tvalz[nvec],
-            tvalx2[nvec], tvaly2[nvec], tvalz2[nvec];
         for (size_t i=0; i<nvec; ++i)
           {
-          tvalx[i] = coeff[i];
-          tvaly[i] = coeff[i];
-          tvalz[i] = coeff[i];
-          tvalx2[i] = coeff[i+nvec];
-          tvaly2[i] = coeff[i+nvec];
-          tvalz2[i] = coeff[i+nvec];
-          }
-        for (size_t j=2; j<D; j+=2)
-          for (size_t i=0; i<nvec; ++i)
+          Tvl tvalx = coeff[i], tvaly = coeff[i], tvalz = coeff[i];
+          Tvl tvalx2 = coeff[i+nvec], tvaly2 = coeff[i+nvec], tvalz2 = coeff[i+nvec];
+          for (size_t j=2; j<D; j+=2)
             {
-            tvalx[i] = tvalx[i]*x2 + Tvl(coeff[j*nvec+i]);
-            tvalx2[i] = tvalx2[i]*x2 + Tvl(coeff[j*nvec+nvec+i]);
-            tvaly[i] = tvaly[i]*y2 + Tvl(coeff[j*nvec+i]);
-            tvaly2[i] = tvaly2[i]*y2 + Tvl(coeff[j*nvec+nvec+i]);
-            tvalz[i] = tvalz[i]*z2 + Tvl(coeff[j*nvec+i]);
-            tvalz2[i] = tvalz2[i]*z2 + Tvl(coeff[j*nvec+nvec+i]);
+            tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec]);
+            tvaly = tvaly*y2 + Tvl(coeff[i+j*nvec]);
+            tvalz = tvalz*z2 + Tvl(coeff[i+j*nvec]);
+            tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
+            tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
+            tvalz2 = tvalz2*z2 + Tvl(coeff[i+(j+1)*nvec]);
             }
-        for (size_t i=0; i<nvec; ++i)
-          {
-          res[i] = x*tvalx[i]+tvalx2[i];
-          res[i+nvec] = y*tvaly[i]+tvaly2[i];
-          res[i+2*nvec] = z*tvalz[i]+tvalz2[i];
+          res[i] = x*tvalx+tvalx2;
+          res[nvec+i] = y*tvaly+tvaly2;
+          res[2*nvec+i] = z*tvalz+tvalz2;
           }
         }
       }
