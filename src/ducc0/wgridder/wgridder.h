@@ -51,6 +51,7 @@
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
 #include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/rangeset.h"
 
 namespace ducc0 {
 
@@ -375,6 +376,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     int maxiu0, maxiv0;
     size_t vlim;
     bool uv_side_fast;
+    vector<rangeset<int>> uranges, vranges;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
@@ -472,24 +474,41 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
     void grid2dirty_c_overwrite_wscreen_add
-      (vmav<complex<Tcalc>,2> &grid, vmav<Timg,2> &dirty, double w)
+      (vmav<complex<Tcalc>,2> &grid, vmav<Timg,2> &dirty, double w, size_t iplane)
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
       vfmav<complex<Tcalc>> inout(grid);
-      if (2*vlim<nv)
+
+      const auto &rsu(uranges[iplane]);
+      const auto &rsv(vranges[iplane]);
+      auto cost_ufirst = nxdirty*log(nv)*nv + rsv.nval()*log(nu)*nu;
+      auto cost_vfirst = nydirty*log(nu)*nu + rsu.nval()*log(nv)*nv;
+      if (cost_ufirst<cost_vfirst)
         {
-        if (!uv_side_fast)
-          c2c(inout, inout, {1}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_lo = inout.subarray({{},{0,vlim}});
-        c2c(inout_lo, inout_lo, {0}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-vlim,MAXIDX}});
-        c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
-        if (uv_side_fast)
-          c2c(inout, inout, {1}, BACKWARD, Tcalc(1), nthreads);
+        for (size_t i=0; i<rsv.nranges(); ++i)
+          {
+          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
+          c2c(inout_tmp, inout_tmp, {0}, BACKWARD, Tcalc(1), nthreads);
+          }
+        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
+        c2c(inout_lo, inout_lo, {1}, BACKWARD, Tcalc(1), nthreads);
+        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
+        c2c(inout_hi, inout_hi, {1}, BACKWARD, Tcalc(1), nthreads);
         }
       else
-        c2c(inout, inout, {0,1}, BACKWARD, Tcalc(1), nthreads);
+        {
+        for (size_t i=0; i<rsu.nranges(); ++i)
+          {
+          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
+          c2c(inout_tmp, inout_tmp, {1}, BACKWARD, Tcalc(1), nthreads);
+          }
+        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
+        c2c(inout_lo, inout_lo, {0}, BACKWARD, Tcalc(1), nthreads);
+        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
+        c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
+        }
+
       timers.poppush("wscreen+grid correction");
       grid2dirty_post2(grid, dirty, w);
       timers.pop();
@@ -582,24 +601,40 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
     void dirty2grid_c_wscreen(const cmav<Timg,2> &dirty,
-      vmav<complex<Tcalc>,2> &grid, double w)
+      vmav<complex<Tcalc>,2> &grid, double w, size_t iplane)
       {
       dirty2grid_pre2(dirty, grid, w);
       timers.push("FFT");
       vfmav<complex<Tcalc>> inout(grid);
-      if (2*vlim<nv)
+
+      const auto &rsu(uranges[iplane]);
+      const auto &rsv(vranges[iplane]);
+      auto cost_ufirst = nydirty*log(nu)*nu + rsu.nval()*log(nv)*nv;
+      auto cost_vfirst = nxdirty*log(nv)*nv + rsv.nval()*log(nu)*nu;
+      if (cost_ufirst<cost_vfirst)
         {
-        if (uv_side_fast)
-          c2c(inout, inout, {1}, FORWARD, Tcalc(1), nthreads);
-        auto inout_lo = inout.subarray({{}, {0,vlim}});
+        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
         c2c(inout_lo, inout_lo, {0}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-vlim, MAXIDX}});
+        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
         c2c(inout_hi, inout_hi, {0}, FORWARD, Tcalc(1), nthreads);
-        if (!uv_side_fast)
-          c2c(inout, inout, {1}, FORWARD, Tcalc(1), nthreads);
+        for (size_t i=0; i<rsu.nranges(); ++i)
+          {
+          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
+          c2c(inout_tmp, inout_tmp, {1}, FORWARD, Tcalc(1), nthreads);
+          }
         }
       else
-        c2c(inout, inout, {0,1}, FORWARD, Tcalc(1), nthreads);
+        {
+        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
+        c2c(inout_lo, inout_lo, {1}, FORWARD, Tcalc(1), nthreads);
+        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
+        c2c(inout_hi, inout_hi, {1}, FORWARD, Tcalc(1), nthreads);
+        for (size_t i=0; i<rsv.nranges(); ++i)
+          {
+          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
+          c2c(inout_tmp, inout_tmp, {0}, FORWARD, Tcalc(1), nthreads);
+          }
+        }
       timers.pop();
       }
 
@@ -734,6 +769,60 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         for (auto &y: x.m)
           for (auto &z: y.second.v)
             ranges.emplace_back(y.first, move(z));
+
+      // compute which grid regions are required
+      if (do_wgridding)
+        {
+        timers.poppush("grid regions");
+        vmav<unsigned char, 2> tmpu({nplanes,(nu>>logsquare)+1}),
+                               tmpv({nplanes,(nv>>logsquare)+1});
+        for (const auto &rng: ranges)
+          for (size_t i=0; i<supp; ++i)
+            {
+            tmpu(rng.first.minplane+i, rng.first.tile_u) = 1;
+            tmpv(rng.first.minplane+i, rng.first.tile_v) = 1;
+            }
+        uranges.resize(nplanes);
+        vranges.resize(nplanes);
+        constexpr int tilesize = 1<<logsquare;
+        for (size_t i=0; i<nplanes; ++i)
+          {
+          auto &rsu(uranges[i]);
+          auto &rsv(vranges[i]);
+          for (size_t j=0; j<tmpu.shape(1); ++j)
+            if (tmpu(i,j))
+              rsu.add(j*tilesize-int(supp/2)-1, (j+1)*tilesize+int(supp/2)+1);
+          // handle wraparound
+          if (!rsu.empty() && rsu.ivbegin(0)<0)
+            {
+            int tmp = rsu.ivbegin(0);
+            rsu.remove(tmp,0);
+            rsu.add(nu+tmp, nu);
+            }
+          if (!rsu.empty() && rsu.ivend(rsu.size()-1)>int(nu))
+            {
+            int tmp = rsu.ivend(rsu.size()-1);
+            rsu.remove(nu,tmp);
+            rsu.add(0, tmp-nu);
+            }
+          for (size_t j=0; j<tmpv.shape(1); ++j)
+            if (tmpv(i,j))
+              rsv.add(j*tilesize-int(supp/2)-1, (j+1)*tilesize+int(supp/2)+1);
+          // handle wraparound
+          if (!rsv.empty() && rsv.ivbegin(0)<0)
+            {
+            int tmp = rsv.ivbegin(0);
+            rsv.remove(tmp,0);
+            rsv.add(nv+tmp, nv);
+            }
+          if (!rsv.empty() && rsv.ivend(rsv.size()-1)>int(nv))
+            {
+            int tmp = rsv.ivend(rsv.size()-1);
+            rsv.remove(nv,tmp);
+            rsv.add(0, tmp-nv);
+            }
+          }
+        }
       timers.pop();
       }
 
@@ -1232,7 +1321,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           timers.poppush("gridding proper");
           x2grid_c<true>(grid, pl, w);
           timers.pop();
-          grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, w);
+          grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, w, pl);
           }
         // correct for w gridding etc.
         apply_global_corrections(dirty_out);
@@ -1268,7 +1357,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
-          dirty2grid_c_wscreen(tdirty, grid, w);
+          dirty2grid_c_wscreen(tdirty, grid, w, pl);
           timers.push("degridding proper");
           grid2x_c<true>(grid, pl, w);
           timers.pop();
