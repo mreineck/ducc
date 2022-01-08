@@ -1150,7 +1150,7 @@ template<typename T0, typename Ti0,
     T1 ptr1, const Ti1 &info1, Func func, size_t nthreads)
   {
   if (shp.size()==0)
-    func(mavref(info0, ptr0), mavref(info1, ptr1));
+    func(make_mavref(info0, ptr0), make_mavref(info1, ptr1));
   else if (nthreads==1)
     flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, func);
   else if (shp.size()==1)
@@ -1196,7 +1196,7 @@ template<typename T0, typename Ti0,
     size_t nthreads)
   {
   if (shp.size()==0)
-    func(mavref(info0, ptr0), mavref(info1, ptr1), mavref(info2, ptr2));
+    func(make_mavref(info0, ptr0), make_mavref(info1, ptr1), make_mavref(info2, ptr2));
   else if (nthreads==1)
     flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, ptr2, info2, func);
   else if (shp.size()==1)

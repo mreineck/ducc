@@ -1764,7 +1764,7 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
 template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
   size_t nthreads)
   {
-  vfmav d(data);
+  vfmav<T> d(data);
   // sort axes to have decreasing strides from ax0 to ax1
   if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
   d.swap_axes(ax0, d.ndim()-2);
@@ -1795,7 +1795,7 @@ template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
 template<typename T> void oscarize3(vfmav<T> &data, size_t ax0, size_t ax1, size_t ax2,
   size_t nthreads)
   {
-  vfmav d(data);
+  vfmav<T> d(data);
   // sort axes to have decreasing strides from ax0 to ax2
   if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
   if (d.stride(ax0)<d.stride(ax2)) swap(ax0, ax2);

@@ -1064,8 +1064,15 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             {
 //bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (const auto &rcr: ranges[ix].second)
+            for (size_t cnt=0; cnt<ranges[ix].second.size(); ++cnt)
               {
+              const auto &rcr(ranges[ix].second[cnt]);
+              if (cnt+1<ranges[ix].second.size())
+                {
+                const auto &nextrcr(ranges[ix].second[cnt+1]);
+                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
+                DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
+                }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               auto imflip = Tcalc(bcoord.FixW());
@@ -1158,8 +1165,15 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             {
             bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (const auto &rcr: ranges[ix].second)
+            for (size_t cnt=0; cnt<ranges[ix].second.size(); ++cnt)
               {
+              const auto &rcr(ranges[ix].second[cnt]);
+              if (cnt+1<ranges[ix].second.size())
+                {
+                const auto &nextrcr(ranges[ix].second[cnt+1]);
+                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
+                DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
+                }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               auto imflip = Tcalc(bcoord.FixW());
