@@ -10,10 +10,14 @@ import pybind11
 pkgname = 'ducc0'
 version = '0.22.0'
 
-user_cflags = os.getenv("DUCC0_CFLAGS", "").split(" ")
-user_cflags = [x for x in user_cflags if x != ""]
-user_lflags = os.getenv("DUCC0_LFLAGS", "").split(" ")
-user_lflags = [x for x in user_lflags if x != ""]
+tmp = os.getenv("DUCC0_CFLAGS", "").split(" ")
+user_cflags = [x for x in tmp if x != ""]
+tmp = os.getenv("DUCC0_LFLAGS", "").split(" ")
+user_lflags = [x for x in tmp if x != ""]
+tmp = os.getenv("DUCC0_FLAGS", "").split(" ")
+tmp = [x for x in tmp if x != ""]
+user_cflags += tmp
+user_lflags += tmp
 
 compilation_strategy = os.getenv('DUCC0_OPTIMIZATION', 'native-strip')
 if compilation_strategy not in ['none', 'none-debug', 'none-strip', 'portable', 'portable-debug', 'portable-strip', 'native', 'native-debug', 'native-strip']:
