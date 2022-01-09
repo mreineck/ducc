@@ -324,6 +324,8 @@ class Baselines
       { return abs(coord[row].w*f_over_c[chan]); }
     UVW baseCoord(size_t row) const
       { return coord[row]; }
+    void prefetchRow(size_t row) const
+      { DUCC0_PREFETCH_R(&coord[row]); }
     double ffact(size_t chan) const
       { return f_over_c[chan];}
     size_t Nrows() const { return nrows; }
@@ -1072,6 +1074,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 const auto &nextrcr(ranges[ix].second[cnt+1]);
                 DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
+                bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
@@ -1172,7 +1175,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 {
                 const auto &nextrcr(ranges[ix].second[cnt+1]);
                 DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
+                DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
+                bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
