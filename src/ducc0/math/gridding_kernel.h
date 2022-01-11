@@ -261,9 +261,9 @@ template<size_t W, typename Tsimd> class TemplateKernel
           tvaly2 = tvaly2*y2 + Tvl(coeff[(j+1)*nvec]);
           tvalz2 = tvalz2*z2 + ptrz[(j+1)*sstride];
           }
-        zfac = z*tvalz+tvalz2;
-        res[0] = (x*tvalx+tvalx2)*zfac;
-        res[nvec] = y*tvaly+tvaly2;
+        zfac = tvalz*z+tvalz2;
+        res[0] = (tvalx*x+tvalx2)*zfac;
+        res[nvec] = tvaly*y+tvaly2;
         }
         for (size_t i=1; i<nvec; ++i)
           {
@@ -276,8 +276,8 @@ template<size_t W, typename Tsimd> class TemplateKernel
             tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
             tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
             }
-          res[i] = (x*tvalx+tvalx2)*zfac;
-          res[nvec+i] = y*tvaly+tvaly2;
+          res[i] = (tvalx*x+tvalx2)*zfac;
+          res[nvec+i] = tvaly*y+tvaly2;
           }
         }
       }
@@ -310,8 +310,8 @@ template<size_t W, typename Tsimd> class TemplateKernel
             tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
             tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
             }
-          res[i] = x*tvalx+tvalx2;
-          res[nvec+i] = y*tvaly+tvaly2;
+          res[i] = tvalx*x+tvalx2;
+          res[nvec+i] = tvaly*y+tvaly2;
           }
       }
     [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
@@ -330,9 +330,9 @@ template<size_t W, typename Tsimd> class TemplateKernel
           tvaly2 = tvaly2*y2 + Tvl(coeff[j+1]);
           tvalz2 = tvalz2*z2 + Tvl(coeff[j+1]);
           }
-        res[0] = x*tvalx+tvalx2;
-        res[1] = y*tvaly+tvaly2;
-        res[2] = z*tvalz+tvalz2;
+        res[0] = tvalx*x+tvalx2;
+        res[1] = tvaly*y+tvaly2;
+        res[2] = tvalz*z+tvalz2;
         }
       else
         {
@@ -349,9 +349,9 @@ template<size_t W, typename Tsimd> class TemplateKernel
             tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec]);
             tvalz2 = tvalz2*z2 + Tvl(coeff[i+(j+1)*nvec]);
             }
-          res[i] = x*tvalx+tvalx2;
-          res[nvec+i] = y*tvaly+tvaly2;
-          res[2*nvec+i] = z*tvalz+tvalz2;
+          res[i] = tvalx*x+tvalx2;
+          res[nvec+i] = tvaly*y+tvaly2;
+          res[2*nvec+i] = tvalz*z+tvalz2;
           }
         }
       }
