@@ -242,8 +242,8 @@ class thread_pool
           {
           lock_t lock(worker.mut);
           worker.work = std::move(work);
-          }
           worker.work_ready.notify_one();
+          }
           return;
           }
 
