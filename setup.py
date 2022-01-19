@@ -24,8 +24,8 @@ if compilation_strategy not in ['none', 'none-debug', 'none-strip', 'portable', 
     raise RuntimeError('unknown compilation strategy')
 do_debug = compilation_strategy in ['none-debug', 'portable-debug', 'native-debug']
 do_strip = compilation_strategy in ['none-strip', 'portable-strip', 'native-strip']
-do_optimize = compilation_strategy not in ['none', 'none-debug']
-do_native = compilation_strategy in ['native', 'native-debug']
+do_optimize = compilation_strategy not in ['none', 'none-debug', 'none-strip']
+do_native = compilation_strategy in ['native', 'native-debug', 'native-strip']
 
 def _print_env():
     import platform
