@@ -1608,6 +1608,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
 // just for shits and giggles: copy some stuff to GPU
+vmav<complex<Tms>,2> msnew(ms.shape());
     sycl::queue q{sycl::default_selector()};
     { // Device buffer scope
       MR_assert(uvw.contiguous());
@@ -1616,12 +1617,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
       sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
       sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
       sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
+      sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size())};
       q.submit([&](sycl::handler &cgh){
           auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+          auto accvis2{bufvis2.template get_access<sycl::access::mode::write>(cgh)};
           // now we could do something useful on the device
+          cgh.parallel_for(sycl::range<1>(ms.size()), [=](sycl::item<1> item){
+            const size_t i{item.get_linear_id()};
+            accvis2[i]=accvis[i]*Tms(2);
+            });
           });
+      q.wait();
+      cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) << endl;
     }
 
 
