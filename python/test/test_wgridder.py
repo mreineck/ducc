@@ -130,9 +130,10 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
+@pmp("gpu", (False, True))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask):
+                              use_mask, gpu):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -178,7 +179,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
-                                  mask=mask).astype("c16")
+                                  mask=mask, gpu=gpu).astype("c16")
     check(dirty2, ms2)
 
 
