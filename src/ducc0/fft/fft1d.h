@@ -59,6 +59,8 @@ namespace ducc0 {
 namespace detail_fft {
 
 using namespace std;
+
+// the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
 template<typename T> constexpr inline size_t fft1d_simdlen

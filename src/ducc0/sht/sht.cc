@@ -39,6 +39,8 @@ namespace ducc0 {
 namespace detail_sht {
 
 using namespace std;
+
+// the nextline is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
