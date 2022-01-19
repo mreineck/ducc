@@ -335,6 +335,9 @@ class Baselines
     size_t Nchannels() const { return nchan; }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
+
+    const vector<UVW> &getUVW_raw() const { return coord; }
+    const vector<double> &get_f_over_c() const { return f_over_c; }
   };
 
 
