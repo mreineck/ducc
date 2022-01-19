@@ -389,7 +389,7 @@ void add_wgridder(py::module_ &msup)
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
     "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None,"sigma_min"_a=1.1,
-    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true, "gpu"_=false);
+    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true, "gpu"_a=false);
 
   m.def("ms2dirty", &Py_ms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,
