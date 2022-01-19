@@ -41,6 +41,9 @@
 #include <x86intrin.h>
 #endif
 
+#include "CL/sycl.hpp"
+using namespace cl;
+
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/fft/fft.h"
@@ -1604,6 +1607,24 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
+// just for shits and giggles: copy some stuff to GPU
+    sycl::queue q{sycl::default_selector()};
+    { // Device buffer scope
+      MR_assert(uvw.contiguous());
+      MR_assert(freq.contiguous());
+      MR_assert(ms.contiguous());
+      sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
+      sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
+      sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
+      q.submit([&](sycl::handler &cgh){
+          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
+          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
+          auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+          // now we could do something useful on the device
+          });
+    }
+
+
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
