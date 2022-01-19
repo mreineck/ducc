@@ -1614,13 +1614,13 @@ vmav<complex<Tms>,2> msnew(ms.shape());
       MR_assert(uvw.contiguous());
       MR_assert(freq.contiguous());
       MR_assert(ms.contiguous());
-      sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
-      sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
+//      sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
+//      sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
       sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
-      sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size())};
+      sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size()), {sycl::property::buffer::use_host_ptr()}};
       q.submit([&](sycl::handler &cgh){
-          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
-          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
+//          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
+//          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis2{bufvis2.template get_access<sycl::access::mode::write>(cgh)};
           // now we could do something useful on the device
@@ -1630,7 +1630,8 @@ vmav<complex<Tms>,2> msnew(ms.shape());
             });
           });
       q.wait();
-      cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) << endl;
+      sycl::host_accessor<complex<Tms>> hacc(bufvis2);
+      cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) <<" " << hacc[0] <<  endl;
     }
 
 
