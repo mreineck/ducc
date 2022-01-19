@@ -59,6 +59,7 @@ namespace ducc0 {
 namespace detail_fft {
 
 using namespace std;
+using std::min, std::max;
 
 template<typename T> constexpr inline size_t fft1d_simdlen
   = min<size_t>(8, native_simd<T>::size());
