@@ -180,7 +180,7 @@ py::array Py_dirty2vis(const py::array &uvw,
   size_t nthreads, size_t verbosity, const py::object &mask,
   bool flip_v, bool divide_by_n, py::object &vis=None, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0., double center_y=0., bool allow_nshift=true,
-  bool gpu)
+  bool gpu=false)
   {
   if (isPyarr<float>(dirty))
     return Py2_dirty2vis<float>(uvw, freq, dirty, wgt, mask,
