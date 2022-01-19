@@ -22,7 +22,7 @@
 #ifndef DUCC0_WGRIDDER_H
 #define DUCC0_WGRIDDER_H
 
-//#include <cstring>
+#include <cstring>
 #include <complex>
 #include <cstdint>
 #include <functional>
