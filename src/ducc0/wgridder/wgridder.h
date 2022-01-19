@@ -1403,6 +1403,52 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         }
       }
 
+    void dirty2x_gpu()
+      {
+      if (do_wgridding)
+        MR_fail("");
+      else
+      {
+        // TODO FFT
+        
+      // sycl::queue q{sycl::default_selector()};
+      // { // Device buffer scope
+      //   //sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
+      //   sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
+      //   q.submit([&](sycl::handler &cgh){
+      //     //auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
+      //     auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
+      //     cgh.parallel_for(sycl::range<1>(freq.size()), [=](sycl::item<1> item){
+      //     }
+      //   }
+      // }
+
+      }
+
+//  // just for shits and giggles: copy some stuff to GPU
+//  vmav<complex<Tms>,2> msnew(ms.shape());
+        //sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
+//        MR_assert(uvw.contiguous());
+//        MR_assert(freq.contiguous());
+//        MR_assert(ms.contiguous());
+//        sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
+//        sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size()), {sycl::property::buffer::use_host_ptr()}};
+//        q.submit([&](sycl::handler &cgh){
+//            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+//            auto accvis2{bufvis2.template get_access<sycl::access::mode::write>(cgh)};
+//            // now we could do something useful on the device
+//            cgh.parallel_for(sycl::range<1>(ms.size()), [=](sycl::item<1> item){
+//              const size_t i{item.get_linear_id()};
+//              accvis2[i]=accvis[i]*Tms(2);
+//              });
+//            });
+//        q.wait();
+//        sycl::host_accessor<complex<Tms>> hacc(bufvis2);
+//        cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) <<" " << hacc[0] <<  endl;
+//      }
+
+      }
+
     auto getNuNv()
       {
       timers.push("parameter calculation");
@@ -1600,7 +1646,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (gpu)
         gridding ? x2dirty() : dirty2x();
       else
-        MR_fail("not implemented");
+        gridding ? MR_fail("not implemented") : dirty2x_gpu();
 
       if (verbosity>0)
         timers.report(cout);
@@ -1614,34 +1660,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true, bool gpu=false)
   {
-// just for shits and giggles: copy some stuff to GPU
-vmav<complex<Tms>,2> msnew(ms.shape());
-    sycl::queue q{sycl::default_selector()};
-    { // Device buffer scope
-      MR_assert(uvw.contiguous());
-      MR_assert(freq.contiguous());
-      MR_assert(ms.contiguous());
-//      sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
-//      sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
-      sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
-      sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size()), {sycl::property::buffer::use_host_ptr()}};
-      q.submit([&](sycl::handler &cgh){
-//          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
-//          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
-          auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-          auto accvis2{bufvis2.template get_access<sycl::access::mode::write>(cgh)};
-          // now we could do something useful on the device
-          cgh.parallel_for(sycl::range<1>(ms.size()), [=](sycl::item<1> item){
-            const size_t i{item.get_linear_id()};
-            accvis2[i]=accvis[i]*Tms(2);
-            });
-          });
-      q.wait();
-      sycl::host_accessor<complex<Tms>> hacc(bufvis2);
-      cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) <<" " << hacc[0] <<  endl;
-    }
-
-
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
