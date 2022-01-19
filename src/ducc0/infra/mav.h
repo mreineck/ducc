@@ -43,7 +43,7 @@ namespace ducc0 {
 namespace detail_mav {
 
 using namespace std;
-
+using std::min, std::max;
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 

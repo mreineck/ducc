@@ -23,7 +23,7 @@
 
 #include <vector>
 #include <cmath>
-#include <cstring>
+//#include <cstring>
 #if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
 #include <x86intrin.h>
 #endif
@@ -39,6 +39,7 @@ namespace ducc0 {
 namespace detail_sht {
 
 using namespace std;
+using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
 static constexpr double sharp_fbighalf=0x1p+400;

@@ -1,3 +1,3 @@
 #!/bin/bash
 HIPSYCL=${HOME}/syclducc/hipSYCL/install
-CC=${HIPSYCL}/bin/syclcc CXX=${HIPSYCL}/bin/syclcc DUCC0_CFLAGS=" --hipsycl-targets='cuda:sm_70' -I${HIPSYCL}/include" DUCC0_OPTIMIZATION=native python3 setup.py install --user -f
+CC=${HIPSYCL}/bin/syclcc CXX=${HIPSYCL}/bin/syclcc DUCC0_FLAGS=" --hipsycl-targets='cuda:sm_70' -I${HIPSYCL}/include -D_FORTIFY_SOURCE=0" DUCC0_OPTIMIZATION=native python3 setup.py install --user -f

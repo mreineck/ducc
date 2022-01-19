@@ -30,7 +30,7 @@ namespace ducc0 {
 namespace detail_pymodule_pointingprovider {
 
 using namespace std;
-
+using std::min, std::max;
 namespace py = pybind11;
 
 template<typename T> class PointingProvider

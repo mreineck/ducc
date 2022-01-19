@@ -35,7 +35,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
-#include <cstring>
+//#include <cstring>
 #include <cctype>
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
