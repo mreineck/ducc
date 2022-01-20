@@ -76,6 +76,14 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   return make_Pyarr<T2>(oshp);
   }
 
+#define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
+  { \
+  if (isPyarr<Ti1>(arr)) return func<To1> args; \
+  if (isPyarr<Ti2>(arr)) return func<To2> args; \
+  MR_fail("type matching failed: '" #arr "' has neither type '" Tni1 \
+          "' nor '" Tni2 "'"); \
+  }
+
 class Pyhpbase
   {
   public:
@@ -95,10 +103,11 @@ class Pyhpbase
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 
-    py::array pix2ang (const py::array &in, size_t nthreads) const
+    template<typename Tin> py::array pix2ang2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto pix = to_cfmav<int64_t>(in);
-      auto out = myprep<int64_t, double, 0, 1>(in, {}, {2});
+      const auto pix = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, double, 0, 1>(in, {}, {2});
       auto ang = to_vfmav<double>(out);
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
@@ -108,10 +117,15 @@ class Pyhpbase
         }, nthreads, pix, ang);
       return out;
       }
-    py::array ang2pix (const py::array &in, size_t nthreads) const
+    py::array pix2ang (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        pix2ang2, (in, nthreads))
+
+    template<typename Tin> py::array ang2pix2 (const py::array_t<Tin> &in,
+      size_t nthreads) const
       {
-      const auto ang = to_cfmav<double>(in);
-      auto out = myprep<double, int64_t, 1, 0>(in, {2}, {});
+      const auto ang = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {2}, {});
       auto pix = to_vfmav<int64_t>(out);
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
@@ -119,10 +133,14 @@ class Pyhpbase
         }, nthreads, ang, pix);
       return out;
       }
-    py::array pix2vec (const py::array &in, size_t nthreads) const
+    py::array ang2pix (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2pix2,
+        (in, nthreads))
+    template<typename Tin> py::array pix2vec2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto pix = to_cfmav<int64_t>(in);
-      auto out = myprep<int64_t, double, 0, 1>(in, {}, {3});
+      const auto pix = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, double, 0, 1>(in, {}, {3});
       auto vec = to_vfmav<double>(out);
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
@@ -131,10 +149,14 @@ class Pyhpbase
         }, nthreads, pix, vec);
       return out;
       }
-    py::array vec2pix (const py::array &in, size_t nthreads) const
+    py::array pix2vec (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        pix2vec2, (in, nthreads))
+    template<typename Tin> py::array vec2pix2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto vec = to_cfmav<double>(in);
-      auto out = myprep<double, int64_t, 1, 0>(in, {3}, {});
+      const auto vec = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_vfmav<int64_t>(out);
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
@@ -142,10 +164,14 @@ class Pyhpbase
         }, nthreads, vec, pix);
       return out;
       }
-    py::array pix2xyf (const py::array &in, size_t nthreads) const
+    py::array vec2pix (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2pix2,
+        (in, nthreads))
+    template<typename Tin> py::array pix2xyf2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto pix = to_cfmav<int64_t>(in);
-      auto out = myprep<int64_t, int64_t, 0, 1>(in, {}, {3});
+      const auto pix = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {3});
       auto xyf = to_vfmav<int64_t>(out);
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
@@ -155,10 +181,14 @@ class Pyhpbase
         }, nthreads, pix, xyf);
       return out;
       }
-    py::array xyf2pix (const py::array &in, size_t nthreads) const
+    py::array pix2xyf (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        pix2xyf2, (in, nthreads))
+    template<typename Tin> py::array xyf2pix2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto xyf = to_cfmav<int64_t>(in);
-      auto out = myprep<int64_t, int64_t, 1, 0>(in, {3}, {});
+      const auto xyf = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_vfmav<int64_t>(out);
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
@@ -166,10 +196,14 @@ class Pyhpbase
         }, nthreads, xyf, pix);
       return out;
       }
-    py::array neighbors (const py::array &in, size_t nthreads) const
+    py::array xyf2pix (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        xyf2pix2, (in, nthreads))
+    template<typename Tin> py::array neighbors2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto pix = to_cfmav<int64_t>(in);
-      auto out = myprep<int64_t, int64_t, 0, 1>(in, {}, {8});
+      const auto pix = to_cfmav<Tin>(in);
+      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {8});
       auto neigh = to_vfmav<int64_t>(out);
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
@@ -179,30 +213,42 @@ class Pyhpbase
         }, nthreads, pix, neigh);
       return out;
       }
-    py::array ring2nest (const py::array &in, size_t nthreads) const
+    py::array neighbors (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        neighbors2, (in, nthreads))
+    template<typename Tin> py::array ring2nest2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto ring = to_cfmav<int64_t>(in);
+      const auto ring = to_cfmav<Tin>(in);
       auto out = make_Pyarr<int64_t>(ring.shape());
       auto nest = to_vfmav<int64_t>(out);
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.ring2nest(in()); }, nthreads, ring, nest);
       return out;
       }
-    py::array nest2ring (const py::array &in, size_t nthreads) const
+    py::array ring2nest (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        ring2nest2, (in, nthreads))
+    template<typename Tin> py::array nest2ring2 (const py::array &in,
+      size_t nthreads) const
       {
-      const auto nest = to_cfmav<int64_t>(in);
+      const auto nest = to_cfmav<Tin>(in);
       auto out = make_Pyarr<int64_t>(nest.shape());
       auto ring = to_vfmav<int64_t>(out);
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.nest2ring(in()); }, nthreads, nest,ring);
       return out;
       }
-    py::array query_disc(const py::array &ptg, double radius) const
+    py::array nest2ring (const py::array &in, size_t nthreads) const
+      DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
+        nest2ring2, (in, nthreads))
+    template<typename Tin> py::array query_disc2(const py::array &ptg,
+      double radius) const
       {
       MR_assert((ptg.ndim()==1)&&(ptg.shape(0)==2),
         "ptg must be a 1D array with 2 values");
       rangeset<int64_t> pixset;
-      auto ptg2 = to_cmav<double,1>(ptg);
+      auto ptg2 = to_cmav<Tin,1>(ptg);
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
       auto oref=res.mutable_unchecked<2>();
@@ -213,6 +259,9 @@ class Pyhpbase
         }
       return move(res);
       }
+    py::array query_disc(const py::array &ptg, double radius) const
+      DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,
+        query_disc2, (ptg, radius))
     py::dict sht_info() const
       {
       MR_assert(base.Scheme()==RING, "RING scheme required for SHTs");
@@ -248,10 +297,10 @@ class Pyhpbase
       }
   };
 
-py::array ang2vec (const py::array &in, size_t nthreads)
+template<typename Tin> py::array ang2vec2 (const py::array &in, size_t nthreads)
   {
-  auto ang = to_cfmav<double>(in);
-  auto out = myprep<double, double, 1, 1>(in, {2}, {3});
+  auto ang = to_cfmav<Tin>(in);
+  auto out = myprep<Tin, double, 1, 1>(in, {2}, {3});
   auto vec = to_vfmav<double>(out);
   flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
     {
@@ -260,10 +309,13 @@ py::array ang2vec (const py::array &in, size_t nthreads)
     }, nthreads, ang, vec);
   return out;
   }
-py::array vec2ang (const py::array &in, size_t nthreads)
+py::array ang2vec (const py::array &in, size_t nthreads)
+  DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2vec2,
+    (in, nthreads))
+template<typename Tin> py::array vec2ang2 (const py::array &in, size_t nthreads)
   {
-  auto vec = to_cfmav<double>(in);
-  auto out = myprep<double, double, 1, 1>(in, {3}, {2});
+  auto vec = to_cfmav<Tin>(in);
+  auto out = myprep<Tin, double, 1, 1>(in, {3}, {2});
   auto ang = to_vfmav<double>(out);
   flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
     {
@@ -272,12 +324,15 @@ py::array vec2ang (const py::array &in, size_t nthreads)
     }, nthreads, vec, ang);
   return out;
   }
-py::array local_v_angle (const py::array &in1, const py::array &in2,
-  size_t nthreads)
+py::array vec2ang (const py::array &in, size_t nthreads)
+  DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2ang2,
+    (in, nthreads))
+template<typename Tin> py::array local_v_angle2 (const py::array &in1,
+  const py::array &in2, size_t nthreads)
   {
-  auto vec1 = to_cfmav<double>(in1);
-  auto vec2 = to_cfmav<double>(in2);
-  auto out = myprep<double, double, 1, 0>(in1, {3}, {});
+  auto vec1 = to_cfmav<Tin>(in1);
+  auto vec2 = to_cfmav<Tin>(in2);
+  auto out = myprep<Tin, double, 1, 0>(in1, {3}, {});
   auto angle = to_vfmav<double>(out);
   flexible_mav_apply<1,1,0>([&](const auto &in0, const auto &in1,
     const auto &out)
@@ -287,6 +342,12 @@ py::array local_v_angle (const py::array &in1, const py::array &in2,
     }, nthreads, vec1, vec2, angle);
   return out;
   }
+py::array local_v_angle (const py::array &in1, const py::array &in2,
+  size_t nthreads)
+  DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in1, local_v_angle2,
+    (in1, in2, nthreads))
+
+#undef DUCC0_DISPATCH
 
 constexpr const char *healpix_DS = R"""(
 Python interface for some of the HEALPix C++ functionality
