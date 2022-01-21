@@ -23,7 +23,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2021 Max-Planck-Society
+ *  Copyright (C) 2017-2022 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
