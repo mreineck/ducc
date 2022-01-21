@@ -67,6 +67,14 @@ using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
+// part of C++20
+template<typename T> constexpr T bit_width(T x) noexcept
+  {
+  T res=0;
+  while((x>>res)!=0) ++res;
+  return res;
+  }
+
 template<typename T> constexpr inline int mysimdlen
   = min<int>(8, native_simd<T>::size());
 
@@ -1475,39 +1483,65 @@ auto lnv = nv;
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(acccfu[icfu]*acccfv[icfv]);
             });
           });
-//          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
-//          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
-        //     cgh.parallel_for(sycl::range<1>(freq.size()), [=](sycl::item<1> item){
-        //     }
-         // });
-  
+// FFT
+// TODO
+
+// build index structure
+
+vector<uint32_t> fullidx;
+vector<uint32_t> blocklimits;
+vector<uint16_t> blocktile_u, blocktile_v;
+
+size_t channelbits=bit_width(bl.Nchannels()-1);
+fullidx.reserve(nvis);
+size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
+constexpr size_t chunksize=1024;
+for (const auto &rng: ranges)
+  {
+  for (const auto &rcr: rng.second)
+    {
+    for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
+      {
+      if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>chunksize))
+        {
+        blocklimits.push_back(fullidx.size());
+        blocktile_u.push_back(curtile_u);
+        blocktile_v.push_back(curtile_v);
+        isamp=0;
+        curtile_u = rng.first.tile_u;
+        curtile_v = rng.first.tile_v;
         }
+      fullidx.push_back((rcr.row<<channelbits)+ichan);
+      }
+    }
+  }
+blocklimits.push_back(fullidx.size());
 
-//  // just for shits and giggles: copy some stuff to GPU
-//  vmav<complex<Tms>,2> msnew(ms.shape());
-        //sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
-//        MR_assert(uvw.contiguous());
-//        MR_assert(freq.contiguous());
-//        MR_assert(ms.contiguous());
-//        sycl::buffer<complex<Tms>, 1> bufvis{ ms.data(), sycl::range<1>(ms.size())};
-//        sycl::buffer<complex<Tms>, 1> bufvis2{ msnew.data(), sycl::range<1>(msnew.size()), {sycl::property::buffer::use_host_ptr()}};
-//        q.submit([&](sycl::handler &cgh){
-//            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-//            auto accvis2{bufvis2.template get_access<sycl::access::mode::write>(cgh)};
-//            // now we could do something useful on the device
-//            cgh.parallel_for(sycl::range<1>(ms.size()), [=](sycl::item<1> item){
-//              const size_t i{item.get_linear_id()};
-//              accvis2[i]=accvis[i]*Tms(2);
-//              });
-//            });
-//        q.wait();
-//        sycl::host_accessor<complex<Tms>> hacc(bufvis2);
-//        cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) <<" " << hacc[0] <<  endl;
-//      }
+sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
+  sycl::range<1>(fullidx.size()),
+  {sycl::property::buffer::use_host_ptr()}};
+sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
+  sycl::range<1>(blocklimits.size()),
+  {sycl::property::buffer::use_host_ptr()}};
 
+        q.submit([&](sycl::handler &cgh)
+          {
+          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
+          auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, 1024), [=](sycl::item<2> item)
+            {
+            auto iblock = item.get_id(0);
+            auto iwork = item.get_id(1);
+            if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
+              return;  // nothing to do for this item
+            auto ivis = accidx[accblocklimits[iblock]+iwork];
+            auto ichan = ivis&((1<<channelbits)-1);
+            auto irow = ivis>>channelbits;
+            });
+          });
         }
       }
-
+  }
     auto getNuNv()
       {
       timers.push("parameter calculation");
