@@ -1441,6 +1441,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sycl::buffer<double, 1> buffreq{freqraw.data(),
           sycl::range<1>(freqraw.size()),
           {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
+          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
+          {sycl::property::buffer::use_host_ptr()}};
 
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
@@ -1523,11 +1526,33 @@ sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
 sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
   sycl::range<1>(blocklimits.size()),
   {sycl::property::buffer::use_host_ptr()}};
+const auto &dcoef(krn->Coeff());
+vector<Tcalc> coef(dcoef.size());
+for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
+  sycl::range<1>(coef.size()),
+  {sycl::property::buffer::use_host_ptr()}};
+
 
         q.submit([&](sycl::handler &cgh)
           {
           auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+          auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
+          auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+          auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
+          auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
+auto lpixsize_x= pixsize_x;
+auto lpixsize_y= pixsize_y;
+auto lushift = ushift;
+auto lvshift = vshift;
+auto lmaxiu0 = maxiu0;
+auto lmaxiv0 = maxiv0;
+auto lnu = nu;
+auto lnv = nv;
+auto lsupp = supp;
+auto degree = krn->degree();
           cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, 1024), [=](sycl::item<2> item)
             {
             auto iblock = item.get_id(0);
@@ -1537,6 +1562,48 @@ sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
             auto ivis = accidx[accblocklimits[iblock]+iwork];
             auto ichan = ivis&((1<<channelbits)-1);
             auto irow = ivis>>channelbits;
+
+            double u = accuvw[irow][0]*accfreq[ichan];
+            double v = accuvw[irow][1]*accfreq[ichan];
+
+      // compute fractional and integer indices in "grid"
+      double ufrac = u*lpixsize_x;
+      ufrac = (ufrac-floor(ufrac))*lnu;
+      int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
+      ufrac -= iu0;
+      double vfrac = v*lpixsize_y;
+      vfrac = (vfrac-floor(vfrac))*lnv;
+      int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
+      vfrac -= iv0;
+          // compute kernel values
+          auto x0 = -ufrac*2+(lsupp-1);
+          auto y0 = -vfrac*2+(lsupp-1);
+
+array<Tcalc, 16> ukrn, vkrn;
+      for (size_t i=0; i<lsupp; ++i)
+        {
+        Tcalc resu=acccoef[i*lsupp], resv=acccoef[i*lsupp];
+        for (size_t j=1; j<=degree; ++j)
+          {
+          resu = resu*x0 + acccoef[i*lsupp+j];
+          resv = resv*y0 + acccoef[i*lsupp+j];
+          }
+        ukrn[i] = resu;
+        vkrn[i] = resv;
+        }
+
+            // loop over supp*supp pixels from "grid"
+      complex<Tcalc> res=0;
+      for (size_t i=0; i<lsupp; ++i)
+        for (size_t j=0; j<lsupp; ++j)
+          {
+          auto realiu = (iu0+i+lnu)%lnu;
+          auto realiv = (iv0+j+lnv)%lnv;
+          res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
+          }
+// apply weight and phase TODO
+
+accvis[irow][ichan] += res;
             });
           });
         }
