@@ -359,6 +359,12 @@ to pi (South Pole).
 All 3-vectors returned by the functions are normalized.
 However, 3-vectors provided as input to the functions need not be normalized.
 
+Floating point input arrays can be provided as numpy.float64 or numpy.float32,
+but the returned floating point arrays will always be of type numpy.float64.
+
+Integer input arrays can be provided as numpy.int64 or numpy.int32,
+but the returned integer arrays will always be of type numpy.int64.
+
 Error conditions are reported by raising exceptions.
 )""";
 
