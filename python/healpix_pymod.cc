@@ -327,12 +327,12 @@ template<typename Tin> py::array vec2ang2 (const py::array &in, size_t nthreads)
 py::array vec2ang (const py::array &in, size_t nthreads)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2ang2,
     (in, nthreads))
-template<typename Tin> py::array local_v_angle2 (const py::array &in1,
-  const py::array &in2, size_t nthreads)
+template<typename Ti1, typename Ti2> py::array local_v_angle2
+  (const py::array &in1, const py::array &in2, size_t nthreads)
   {
-  auto vec1 = to_cfmav<Tin>(in1);
-  auto vec2 = to_cfmav<Tin>(in2);
-  auto out = myprep<Tin, double, 1, 0>(in1, {3}, {});
+  auto vec1 = to_cfmav<Ti1>(in1);
+  auto vec2 = to_cfmav<Ti2>(in2);
+  auto out = myprep<Ti1, double, 1, 0>(in1, {3}, {});
   auto angle = to_vfmav<double>(out);
   flexible_mav_apply<1,1,0>([&](const auto &in0, const auto &in1,
     const auto &out)
@@ -344,8 +344,17 @@ template<typename Tin> py::array local_v_angle2 (const py::array &in1,
   }
 py::array local_v_angle (const py::array &in1, const py::array &in2,
   size_t nthreads)
-  DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in1, local_v_angle2,
-    (in1, in2, nthreads))
+  {
+  if (isPyarr<double>(in1) && isPyarr<double>(in2))
+    return local_v_angle2<double, double> (in1, in2, nthreads);
+  if (isPyarr<double>(in1) && isPyarr<float>(in2))
+    return local_v_angle2<double, float> (in1, in2, nthreads);
+  if (isPyarr<float>(in1) && isPyarr<float>(in2))
+    return local_v_angle2<float, float> (in1, in2, nthreads);
+  if (isPyarr<float>(in1) && isPyarr<double>(in2))
+    return local_v_angle2<double, float> (in2, in1, nthreads);
+  MR_fail("type matching failed: input arrays have neither type 'f8' nor 'f4'");
+  }
 
 #undef DUCC0_DISPATCH
 
