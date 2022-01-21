@@ -37,6 +37,8 @@ nside_nest = list2fixture(pow2)
 nside_ring = list2fixture(pow2+nonpow2)
 
 vlen = list2fixture([1, 10, 100, 1000, 10000])
+ftype = list2fixture([np.float32, np.float64])
+itype = list2fixture([np.int32, np.int64])
 
 
 def random_ptg(rng, vlen):
@@ -47,15 +49,19 @@ def random_ptg(rng, vlen):
     return res
 
 
-def test_pixangpix_nest(vlen, nside_nest):
+def test_pixangpix_nest(vlen, nside_nest, itype):
+    if itype == np.int32 and nside_nest > 8192:
+        return
     base = ph.Healpix_Base(nside_nest, "NEST")
     rng = np.random.default_rng(42)
     inp = rng.integers(low=0, high=12*nside_nest*nside_nest-1, size=vlen)
-    out = base.ang2pix(base.pix2ang(inp))
+    out = base.ang2pix(base.pix2ang(inp.astype(itype)))
     assert_equal(inp, out)
 
 
-def test_pixangpix_ring(vlen, nside_ring):
+def test_pixangpix_ring(vlen, nside_ring, itype):
+    if itype == np.int32 and nside_ring > 8192:
+        return
     base = ph.Healpix_Base(nside_ring, "RING")
     rng = np.random.default_rng(42)
     inp = rng.integers(low=0, high=12*nside_ring*nside_ring-1, size=vlen)
@@ -63,32 +69,38 @@ def test_pixangpix_ring(vlen, nside_ring):
     assert_equal(inp, out)
 
 
-def test_vecpixvec_nest(vlen, nside_nest):
+def test_vecpixvec_nest(vlen, nside_nest, ftype):
+    if ftype == np.float32 and nside_nest > 8192:
+        return
     base = ph.Healpix_Base(nside_nest, "NEST")
     rng = np.random.default_rng(42)
-    inp = ph.ang2vec(random_ptg(rng, vlen))
-    out = base.pix2vec(base.vec2pix(inp))
+    inp = ph.ang2vec(random_ptg(rng, vlen).astype(ftype)).astype(ftype)
+    out = base.pix2vec(base.vec2pix(inp)).astype(ftype)
     assert_equal(np.all(ph.v_angle(inp, out) < base.max_pixrad()), True)
 
 
-def test_vecpixvec_ring(vlen, nside_ring):
+def test_vecpixvec_ring(vlen, nside_ring, ftype):
+    if ftype == np.float32 and nside_ring > 8192:
+        return
     base = ph.Healpix_Base(nside_ring, "RING")
     rng = np.random.default_rng(42)
-    inp = ph.ang2vec(random_ptg(rng, vlen))
-    out = base.pix2vec(base.vec2pix(inp))
+    inp = ph.ang2vec(random_ptg(rng, vlen).astype(ftype)).astype(ftype)
+    out = base.pix2vec(base.vec2pix(inp)).astype(ftype)
     assert_equal(np.all(ph.v_angle(inp, out) < base.max_pixrad()), True)
 
 
-def test_ringnestring(vlen, nside_nest):
+def test_ringnestring(vlen, nside_nest, itype):
+    if itype == np.int32 and nside_nest > 8192:
+        return
     base = ph.Healpix_Base(nside_nest, "NEST")
     rng = np.random.default_rng(42)
     inp = rng.integers(low=0, high=12*nside_nest*nside_nest-1, size=vlen)
-    out = base.ring2nest(base.nest2ring(inp))
+    out = base.ring2nest(base.nest2ring(inp.astype(itype)).astype(itype))
     assert_equal(np.all(out == inp), True)
 
 
-def test_vecangvec(vlen):
+def test_vecangvec(vlen, ftype):
     rng = np.random.default_rng(42)
-    inp = random_ptg(rng, vlen)
+    inp = random_ptg(rng, vlen).astype(ftype)
     out = ph.vec2ang(ph.ang2vec(inp))
     assert_equal(np.all(np.abs(out-inp) < 1e-14), True)
