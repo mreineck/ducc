@@ -41,8 +41,11 @@
 #include <x86intrin.h>
 #endif
 
+#ifdef SYCL_LANGUAGE_VERSION
+#warning SYCL active!
 #include "CL/sycl.hpp"
 using namespace cl;
+#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -1411,22 +1414,74 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (do_wgridding)
         MR_fail("");
       else
-      {
-        // TODO FFT
-        
-      // sycl::queue q{sycl::default_selector()};
-      // { // Device buffer scope
-      //   //sycl::buffer<double, 2> bufuvw{uvw.data(), sycl::range<2>(uvw.shape(0), 3),{sycl::property::buffer::use_host_ptr()}};
-      //   sycl::buffer<double, 1> buffreq{freq.data(), sycl::range<1>(freq.size())};
-      //   q.submit([&](sycl::handler &cgh){
-      //     //auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
-      //     auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
-      //     cgh.parallel_for(sycl::range<1>(freq.size()), [=](sycl::item<1> item){
-      //     }
-      //   }
-      // }
+        {
+        sycl::queue q{sycl::default_selector()};
+        { // Device buffer scope
+        // dirty image
+        MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
+        sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
+          sycl::range<2>(dirty_in.shape(0), dirty_in.shape(1)),
+          {sycl::property::buffer::use_host_ptr()});
+        // grid (only on GPU)
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+        bufgrid.set_write_back(false);
+        const auto &uvwraw(bl.getUVW_raw());
+        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
+          sycl::range<2>(uvwraw.size()/3, 3),
+          {sycl::property::buffer::use_host_ptr()}};
+        const auto &freqraw(bl.get_f_over_c());
+        sycl::buffer<double, 1> buffreq{freqraw.data(),
+          sycl::range<1>(freqraw.size()),
+          {sycl::property::buffer::use_host_ptr()}};
 
-      }
+        // zeroing grid
+        q.submit([&](sycl::handler &cgh)
+          {
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+          cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
+            {
+            accgrid[item.get_id(0)][item.get_id(1)] = Timg(0);
+            });
+          });
+        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
+        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
+        sycl::buffer<double, 1> bufcfu{cfu.data(),
+          sycl::range<1>(cfu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<double, 1> bufcfv{cfv.data(),
+          sycl::range<1>(cfv.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        // copying to grid and applying correction
+        q.submit([&](sycl::handler &cgh)
+          {
+          auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
+          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
+          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+auto lnxdirty=nxdirty;
+auto lnydirty=nydirty;
+auto lnu = nu;
+auto lnv = nv;
+          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [=](sycl::item<2> item)
+            {
+            auto i = item.get_id(0);
+            auto j = item.get_id(1);
+            int icfu = abs(int(lnxdirty/2)-int(i));
+            int icfv = abs(int(lnydirty/2)-int(j));
+            size_t i2 = lnu-lnxdirty/2+i;
+            if (i2>=lnu) i2-=lnu;
+            size_t j2 = lnv-lnydirty/2+j;
+            if (j2>=lnv) j2-=lnv;
+            accgrid[i2][j2] = accdirty[i][j]*Tcalc(acccfu[icfu]*acccfv[icfv]);
+            });
+          });
+//          auto accuvw{bufuvw.get_access<sycl::access::mode::read>(cgh)};
+//          auto accfreq{buffreq.get_access<sycl::access::mode::read>(cgh)};
+        //     cgh.parallel_for(sycl::range<1>(freq.size()), [=](sycl::item<1> item){
+        //     }
+         // });
+  
+        }
 
 //  // just for shits and giggles: copy some stuff to GPU
 //  vmav<complex<Tms>,2> msnew(ms.shape());
@@ -1450,6 +1505,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 //        cerr<<ms(0,0)*Tms(2) << " " << msnew(0,0) <<" " << hacc[0] <<  endl;
 //      }
 
+        }
       }
 
     auto getNuNv()
@@ -1647,9 +1703,12 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       countRanges();
       report();
       if (gpu)
-        gridding ? x2dirty() : dirty2x();
+        if (gridding)
+          MR_fail("not implemented");
+        else
+          dirty2x_gpu();
       else
-        gridding ? MR_fail("not implemented") : dirty2x_gpu();
+        gridding ? x2dirty() : dirty2x();
 
       if (verbosity>0)
         timers.report(cout);
