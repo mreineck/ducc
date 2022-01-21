@@ -125,7 +125,7 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
-@pmp("singleprec", (True, False))
+@pmp("singleprec", [True])
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
