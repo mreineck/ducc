@@ -121,7 +121,7 @@ class Pyhpbase
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         pix2ang2, (in, nthreads))
 
-    template<typename Tin> py::array ang2pix2 (const py::array_t<Tin> &in,
+    template<typename Tin> py::array ang2pix2 (const py::array &in,
       size_t nthreads) const
       {
       const auto ang = to_cfmav<Tin>(in);
