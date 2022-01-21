@@ -41,11 +41,10 @@
 #include <x86intrin.h>
 #endif
 
-#ifdef SYCL_LANGUAGE_VERSION
-#warning SYCL active!
 #include "CL/sycl.hpp"
 using namespace cl;
-#endif
+
+#include <cufft.h>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -1423,6 +1422,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
+
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1486,8 +1486,15 @@ auto lnv = nv;
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(acccfu[icfu]*acccfv[icfv]);
             });
           });
-// FFT
-// TODO
+
+        // FFT
+        if (false) {
+        cufftHandle plan;
+        cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+        auto* cu_d_in = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
+        auto* cu_d_out = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
+        cufftExecC2C(plan, cu_d_in, cu_d_out, CUFFT_FORWARD);
+        }
 
 // build index structure
 

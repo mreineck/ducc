@@ -130,10 +130,9 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-@pmp("gpu", (False, True))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask, gpu):
+                              use_mask):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -168,6 +167,12 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
 
+    ms3 = ng.experimental.dirty2vis(uvw=uvw, freq=freq, dirty=dirty,
+            pixsize_x=pixsizex, pixsize_y=pixsizey,
+                      epsilon=epsilon, do_wgridding=False, gpu=True).astype("c16")
+    check(dirty2, ms3)
+
+    return # TEMPORARY
 
     dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
