@@ -1490,7 +1490,7 @@ auto lnv = nv;
         // FFT
         cufftHandle plan;
         cufftCreate(&plan);
-        if constexpr (is_same<tcalc,double>::value)
+        if constexpr (is_same<Tcalc,double>::value)
           {
           cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
           auto* cu_d_in = reinterpret_cast<cufftDoubleComplex *>(bufgrid.get_pointer(q.get_device()));
