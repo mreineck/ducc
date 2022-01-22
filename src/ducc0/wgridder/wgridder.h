@@ -1490,7 +1490,7 @@ auto lnv = nv;
         // FFT
         cufftHandle plan;
         cufftCreate(&plan);
-        cufftPlan2d(plan, nu, nv, CUFFT_C2C);
+        cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
         auto* cu_d_in = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
         auto* cu_d_out = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
         cufftExecC2C(plan, cu_d_in, cu_d_out, CUFFT_FORWARD);
