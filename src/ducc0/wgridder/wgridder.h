@@ -44,7 +44,7 @@
 #include "CL/sycl.hpp"
 using namespace cl;
 
-#include <cufft.h>
+//#include <cufft.h>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -1422,7 +1422,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
-
+vmav<complex<Tcalc>,2> grid({nu,nv});
+        {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1430,9 +1431,12 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
           sycl::range<2>(dirty_in.shape(0), dirty_in.shape(1)),
           {sycl::property::buffer::use_host_ptr()});
-        // grid (only on GPU)
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-        bufgrid.set_write_back(false);
+//        // grid (only on GPU)
+//        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+//        bufgrid.set_write_back(false);
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
+          sycl::range<2>(nu,nv),
+          {sycl::property::buffer::use_host_ptr()}};
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size()/3, 3),
@@ -1486,7 +1490,12 @@ auto lnv = nv;
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(acccfu[icfu]*acccfv[icfv]);
             });
           });
-
+        }
+}
+#if 1
+vfmav<complex<Tcalc>> fgrid(grid);
+c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
+#else
         // FFT
         cufftHandle plan;
         cufftCreate(&plan);
@@ -1503,7 +1512,26 @@ auto lnv = nv;
           cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
           }
         cufftDestroy(plan);
+#endif
+{
+        sycl::queue q{sycl::default_selector()};
+        { // Device buffer scope
 
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
+          sycl::range<2>(nu,nv),
+          {sycl::property::buffer::use_host_ptr()}};
+        const auto &uvwraw(bl.getUVW_raw());
+        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
+          sycl::range<2>(uvwraw.size()/3, 3),
+          {sycl::property::buffer::use_host_ptr()}};
+        const auto &freqraw(bl.get_f_over_c());
+        sycl::buffer<double, 1> buffreq{freqraw.data(),
+          sycl::range<1>(freqraw.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
+          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
+          {sycl::property::buffer::use_host_ptr()}};
+cout << uvwraw.size() << " " <<freqraw.size() << " " << bl.Nrows()*bl.Nchannels()<<endl;
 // build index structure
 
 vector<uint32_t> fullidx;
@@ -1534,7 +1562,7 @@ for (const auto &rng: ranges)
     }
   }
 blocklimits.push_back(fullidx.size());
-
+cout << fullidx.size() << " " << blocklimits.size() << " " << blocktile_u.size() << endl;
 sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
   sycl::range<1>(fullidx.size()),
   {sycl::property::buffer::use_host_ptr()}};
@@ -1544,6 +1572,7 @@ sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
 const auto &dcoef(krn->Coeff());
 vector<Tcalc> coef(dcoef.size());
 for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+cout << coef.size() << endl;
 sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
   sycl::range<1>(coef.size()),
   {sycl::property::buffer::use_host_ptr()}};
@@ -1622,6 +1651,7 @@ accvis[irow][ichan] += res;
             });
           });
         }
+}
       }
   }
     auto getNuNv()
