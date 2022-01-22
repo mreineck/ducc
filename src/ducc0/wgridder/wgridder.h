@@ -1422,7 +1422,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
-vmav<complex<Tcalc>,2> grid({nu,nv});
+        vmav<complex<Tcalc>,2> grid({nu,nv});
         {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
@@ -1473,10 +1473,10 @@ vmav<complex<Tcalc>,2> grid({nu,nv});
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
-auto lnxdirty=nxdirty;
-auto lnydirty=nydirty;
-auto lnu = nu;
-auto lnv = nv;
+          auto lnxdirty=nxdirty;
+          auto lnydirty=nydirty;
+          auto lnu = nu;
+          auto lnv = nv;
           cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [=](sycl::item<2> item)
             {
             auto i = item.get_id(0);
@@ -1493,8 +1493,8 @@ auto lnv = nv;
         }
 }
 #if 1
-vfmav<complex<Tcalc>> fgrid(grid);
-c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
+        vfmav<complex<Tcalc>> fgrid(grid);
+        c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
 #else
         // FFT
         cufftHandle plan;
@@ -1513,7 +1513,7 @@ c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
           }
         cufftDestroy(plan);
 #endif
-{
+        {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
 
@@ -1531,52 +1531,53 @@ c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
         sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
           {sycl::property::buffer::use_host_ptr()}};
-cout << uvwraw.size() << " " <<freqraw.size() << " " << bl.Nrows()*bl.Nchannels()<<endl;
-// build index structure
 
-vector<uint32_t> fullidx;
-vector<uint32_t> blocklimits;
-vector<uint16_t> blocktile_u, blocktile_v;
-
-size_t channelbits=bit_width(bl.Nchannels()-1);
-fullidx.reserve(nvis);
-size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
-constexpr size_t chunksize=1024;
-for (const auto &rng: ranges)
-  {
-  for (const auto &rcr: rng.second)
-    {
-    for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
-      {
-      if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>chunksize))
-        {
+        cout << uvwraw.size() << " " <<freqraw.size() << " " << bl.Nrows()*bl.Nchannels()<<endl;
+        // build index structure
+        
+        vector<uint32_t> fullidx;
+        vector<uint32_t> blocklimits;
+        vector<uint16_t> blocktile_u, blocktile_v;
+        
+        size_t channelbits=bit_width(bl.Nchannels()-1);
+        fullidx.reserve(nvis);
+        size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
+        constexpr size_t chunksize=1024;
+        for (const auto &rng: ranges)
+          {
+          for (const auto &rcr: rng.second)
+            {
+            for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
+              {
+              if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>chunksize))
+                {
+                blocklimits.push_back(fullidx.size());
+                blocktile_u.push_back(curtile_u);
+                blocktile_v.push_back(curtile_v);
+                isamp=0;
+                curtile_u = rng.first.tile_u;
+                curtile_v = rng.first.tile_v;
+                }
+              fullidx.push_back((rcr.row<<channelbits)+ichan);
+              }
+            }
+          }
         blocklimits.push_back(fullidx.size());
-        blocktile_u.push_back(curtile_u);
-        blocktile_v.push_back(curtile_v);
-        isamp=0;
-        curtile_u = rng.first.tile_u;
-        curtile_v = rng.first.tile_v;
-        }
-      fullidx.push_back((rcr.row<<channelbits)+ichan);
-      }
-    }
-  }
-blocklimits.push_back(fullidx.size());
-cout << fullidx.size() << " " << blocklimits.size() << " " << blocktile_u.size() << endl;
-sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
-  sycl::range<1>(fullidx.size()),
-  {sycl::property::buffer::use_host_ptr()}};
-sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
-  sycl::range<1>(blocklimits.size()),
-  {sycl::property::buffer::use_host_ptr()}};
-const auto &dcoef(krn->Coeff());
-vector<Tcalc> coef(dcoef.size());
-for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-cout << coef.size() << endl;
-sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
-  sycl::range<1>(coef.size()),
-  {sycl::property::buffer::use_host_ptr()}};
-
+        cout << fullidx.size() << " " << blocklimits.size() << " " << blocktile_u.size() << endl;
+        sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
+          sycl::range<1>(fullidx.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
+          sycl::range<1>(blocklimits.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        const auto &dcoef(krn->Coeff());
+        vector<Tcalc> coef(dcoef.size());
+        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+        cout << coef.size() << endl;
+        sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
+          sycl::range<1>(coef.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+       
 
         q.submit([&](sycl::handler &cgh)
           {
@@ -1587,16 +1588,16 @@ sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
-auto lpixsize_x= pixsize_x;
-auto lpixsize_y= pixsize_y;
-auto lushift = ushift;
-auto lvshift = vshift;
-auto lmaxiu0 = maxiu0;
-auto lmaxiv0 = maxiv0;
-auto lnu = nu;
-auto lnv = nv;
-auto lsupp = supp;
-auto degree = krn->degree();
+          auto lpixsize_x= pixsize_x;
+          auto lpixsize_y= pixsize_y;
+          auto lushift = ushift;
+          auto lvshift = vshift;
+          auto lmaxiu0 = maxiu0;
+          auto lmaxiv0 = maxiv0;
+          auto lnu = nu;
+          auto lnv = nv;
+          auto lsupp = supp;
+          auto degree = krn->degree();
           cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, 1024), [=](sycl::item<2> item)
             {
             auto iblock = item.get_id(0);
@@ -1610,50 +1611,51 @@ auto degree = krn->degree();
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
 
-      // compute fractional and integer indices in "grid"
-      double ufrac = u*lpixsize_x;
-      ufrac = (ufrac-floor(ufrac))*lnu;
-      int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
-      ufrac -= iu0;
-      double vfrac = v*lpixsize_y;
-      vfrac = (vfrac-floor(vfrac))*lnv;
-      int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
-      vfrac -= iv0;
-          // compute kernel values
-          auto x0 = -ufrac*2+(lsupp-1);
-          auto y0 = -vfrac*2+(lsupp-1);
+            // compute fractional and integer indices in "grid"
+            double ufrac = u*lpixsize_x;
+            ufrac = (ufrac-floor(ufrac))*lnu;
+            int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
+            ufrac -= iu0;
+            double vfrac = v*lpixsize_y;
+            vfrac = (vfrac-floor(vfrac))*lnv;
+            int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
+            vfrac -= iv0;
+            // compute kernel values
+            auto x0 = -ufrac*2+(lsupp-1);
+            auto y0 = -vfrac*2+(lsupp-1);
 
-array<Tcalc, 16> ukrn, vkrn;
-      for (size_t i=0; i<lsupp; ++i)
-        {
-        Tcalc resu=acccoef[i*lsupp], resv=acccoef[i*lsupp];
-        for (size_t j=1; j<=degree; ++j)
-          {
-          resu = resu*x0 + acccoef[i*lsupp+j];
-          resv = resv*y0 + acccoef[i*lsupp+j];
-          }
-        ukrn[i] = resu;
-        vkrn[i] = resv;
-        }
+            array<Tcalc, 16> ukrn, vkrn;
+            for (size_t i=0; i<lsupp; ++i)
+              {
+              Tcalc resu=acccoef[i*lsupp], resv=acccoef[i*lsupp];
+              for (size_t j=1; j<=degree; ++j)
+                {
+                resu = resu*x0 + acccoef[i*lsupp+j];
+                resv = resv*y0 + acccoef[i*lsupp+j];
+                }
+              ukrn[i] = resu;
+              vkrn[i] = resv;
+              }
 
             // loop over supp*supp pixels from "grid"
-      complex<Tcalc> res=0;
-      for (size_t i=0; i<lsupp; ++i)
-        for (size_t j=0; j<lsupp; ++j)
-          {
-          auto realiu = (iu0+i+lnu)%lnu;
-          auto realiv = (iv0+j+lnv)%lnv;
-          res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
-          }
+            complex<Tcalc> res=0;
+            for (size_t i=0; i<lsupp; ++i)
+              for (size_t j=0; j<lsupp; ++j)
+                {
+                auto realiu = (iu0+i+lnu)%lnu;
+                auto realiv = (iv0+j+lnv)%lnv;
+                res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
+                }
 // apply weight and phase TODO
 
-accvis[irow][ichan] += res;
+            accvis[irow][ichan] += res;
             });
           });
         }
-}
+        }
+        }
       }
-  }
+
     auto getNuNv()
       {
       timers.push("parameter calculation");
