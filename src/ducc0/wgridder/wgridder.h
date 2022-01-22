@@ -1437,17 +1437,17 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
           sycl::range<2>(nu,nv),
           {sycl::property::buffer::use_host_ptr()}};
-        const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
-          sycl::range<2>(uvwraw.size()/3, 3),
-          {sycl::property::buffer::use_host_ptr()}};
-        const auto &freqraw(bl.get_f_over_c());
-        sycl::buffer<double, 1> buffreq{freqraw.data(),
-          sycl::range<1>(freqraw.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
-          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
-          {sycl::property::buffer::use_host_ptr()}};
+//        const auto &uvwraw(bl.getUVW_raw());
+//        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
+//          sycl::range<2>(uvwraw.size(), 3),
+//          {sycl::property::buffer::use_host_ptr()}};
+//        const auto &freqraw(bl.get_f_over_c());
+//        sycl::buffer<double, 1> buffreq{freqraw.data(),
+//          sycl::range<1>(freqraw.size()),
+//          {sycl::property::buffer::use_host_ptr()}};
+//        sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
+//          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
+//          {sycl::property::buffer::use_host_ptr()}};
 
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
@@ -1522,7 +1522,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           {sycl::property::buffer::use_host_ptr()}};
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
-          sycl::range<2>(uvwraw.size()/3, 3),
+          sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
         const auto &freqraw(bl.get_f_over_c());
         sycl::buffer<double, 1> buffreq{freqraw.data(),
@@ -1578,7 +1578,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           sycl::range<1>(coef.size()),
           {sycl::property::buffer::use_host_ptr()}};
        
-
         q.submit([&](sycl::handler &cgh)
           {
           auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
