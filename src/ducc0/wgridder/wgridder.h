@@ -1519,8 +1519,12 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sycl::buffer<double, 1> buffreq{freqraw.data(),
           sycl::range<1>(freqraw.size()),
           {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<complex<Tcalc>, 2> bufvis{ms_out.data(),
+        sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
+          {sycl::property::buffer::use_host_ptr()}};
+bool do_weights = wgt.stride(0)!=0;
+        sycl::buffer<Tms, 2> bufwgt{wgt.data(),
+          do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
           {sycl::property::buffer::use_host_ptr()}};
 
         // build index structure
@@ -1570,6 +1574,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
+          auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
           auto lpixsize_x= pixsize_x;
           auto lpixsize_y= pixsize_y;
@@ -1628,9 +1633,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
                 auto realiv = (iv0+j+lnv)%lnv;
                 res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
                 }
-// apply weight and phase TODO
+// apply phase TODO
 
-            accvis[irow][ichan] += res;
+            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             });
           });
         }
