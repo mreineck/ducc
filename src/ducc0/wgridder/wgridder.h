@@ -1481,7 +1481,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
-#if 1
+#if 0
         }
         }
         //grid has been copied back to CPU when buffer was destroyed
@@ -1499,13 +1499,13 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         cufftCreate(&plan);
         if constexpr (is_same<Tcalc,double>::value)
           {
-          cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+          plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
           auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(bufgrid.get_pointer(q.get_device()));
           cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
           }
         else
           {
-          cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+          plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
           auto* cu_d = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
           cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
           }
