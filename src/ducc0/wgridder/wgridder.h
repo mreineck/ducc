@@ -1513,7 +1513,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
             }
           cufftDestroy(plan);
-          }
+          });
 #endif
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
