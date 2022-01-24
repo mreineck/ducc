@@ -43,7 +43,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     if singleprec and epsilon < 1e-6:
         pytest.skip()
 
-    if wstacking or use_mask or use_wgt:
+    if wstacking or use_wgt:
         pytest.skip()
 
     if nxfacets != 1 or nyfacets != 1:

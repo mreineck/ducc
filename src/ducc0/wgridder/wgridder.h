@@ -1429,8 +1429,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         { // Device buffer scope
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
-MR_assert(nxdirty==dirty_in.shape(0), "oops1");
-MR_assert(nydirty==dirty_in.shape(1), "oops2");
 
         sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
           sycl::range<2>(dirty_in.shape(0), dirty_in.shape(1)),
@@ -1478,8 +1476,6 @@ MR_assert(nydirty==dirty_in.shape(1), "oops2");
             if (i2>=lnu) i2-=lnu;
             size_t j2 = lnv-lnydirty/2+j;
             if (j2>=lnv) j2-=lnv;
-//cout << icfu << endl;
-//if ((icfu<0)||(icfu>=acccfu.get_count())) cout <<" aargh "<< icfu << endl;
             auto fctu = acccfu[icfu];
             auto fctv = acccfv[icfv];
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
@@ -1533,8 +1529,6 @@ MR_assert(nydirty==dirty_in.shape(1), "oops2");
         vector<uint16_t> blocktile_u, blocktile_v;
         
         size_t channelbits=bit_width(bl.Nchannels()-1);
-channelbits+=1;
-cout << bl.Nchannels() << " " << channelbits << endl;
         fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
@@ -1564,7 +1558,6 @@ cout << bl.Nchannels() << " " << channelbits << endl;
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        cout << coef.size() << endl;
         sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
           sycl::range<1>(coef.size()),
           {sycl::property::buffer::use_host_ptr()}};
