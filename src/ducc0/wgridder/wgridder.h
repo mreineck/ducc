@@ -1530,7 +1530,6 @@ bool do_weights = wgt.stride(0)!=0;
         // build index structure
         vector<uint32_t> fullidx;
         vector<uint32_t> blocklimits;
-        vector<uint16_t> blocktile_u, blocktile_v;
         
         size_t channelbits=bit_width(bl.Nchannels()-1);
         fullidx.reserve(nvis);
@@ -1540,11 +1539,10 @@ bool do_weights = wgt.stride(0)!=0;
           for (const auto &rcr: rng.second)
             for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
               {
-              if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>chunksize))
+              ++isamp;
+              if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>=chunksize))
                 {
                 blocklimits.push_back(fullidx.size());
-                blocktile_u.push_back(curtile_u);
-                blocktile_v.push_back(curtile_v);
                 isamp=0;
                 curtile_u = rng.first.tile_u;
                 curtile_v = rng.first.tile_v;

@@ -28,7 +28,7 @@ SPEEDOFLIGHT = 299792458.
 
 @pmp('nx', [(10, 1), (30, 3), (128, 2)])
 @pmp('ny', [(12, 1), (128, 2), (250, 5)])
-@pmp("nrow", (1, 2, 27))
+@pmp("nrow", (1, 2, 2048))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
