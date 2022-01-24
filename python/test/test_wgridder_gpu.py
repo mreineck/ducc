@@ -31,7 +31,7 @@ SPEEDOFLIGHT = 299792458.
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
-@pmp("singleprec", (True,))
+@pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
@@ -43,7 +43,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     if singleprec and epsilon < 1e-6:
         pytest.skip()
 
-    if wstacking or use_mask:
+    if wstacking or use_mask or use_wgt:
         pytest.skip()
 
     if nxfacets != 1 or nyfacets != 1:
