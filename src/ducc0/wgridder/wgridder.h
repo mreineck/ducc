@@ -1479,7 +1479,7 @@ MR_assert(nydirty==dirty_in.shape(1), "oops2");
             size_t j2 = lnv-lnydirty/2+j;
             if (j2>=lnv) j2-=lnv;
 //cout << icfu << endl;
-if ((icfu<0)||(icfu>=acccfu.get_count())) cout <<" aargh "<< icfu << endl;
+//if ((icfu<0)||(icfu>=acccfu.get_count())) cout <<" aargh "<< icfu << endl;
             auto fctu = acccfu[icfu];
             auto fctv = acccfv[icfv];
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
