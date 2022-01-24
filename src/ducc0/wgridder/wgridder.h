@@ -1478,7 +1478,7 @@ MR_assert(nydirty==dirty_in.shape(1), "oops2");
             if (i2>=lnu) i2-=lnu;
             size_t j2 = lnv-lnydirty/2+j;
             if (j2>=lnv) j2-=lnv;
-cout << icfu << endl;
+//cout << icfu << endl;
 if ((icfu<0)||(icfu>=acccfu.get_count())) cout <<" aargh "<< icfu << endl;
             auto fctu = acccfu[icfu];
             auto fctv = acccfv[icfv];
@@ -1616,11 +1616,11 @@ cout << bl.Nchannels() << " " << channelbits << endl;
             array<Tcalc, 16> ukrn, vkrn;
             for (size_t i=0; i<lsupp; ++i)
               {
-              Tcalc resu=acccoef[i*lsupp], resv=acccoef[i*lsupp];
+              Tcalc resu=acccoef[i], resv=acccoef[i];
               for (size_t j=1; j<=degree; ++j)
                 {
-                resu = resu*x0 + acccoef[i*lsupp+j];
-                resv = resv*y0 + acccoef[i*lsupp+j];
+                resu = resu*x0 + acccoef[j*lsupp+i];
+                resv = resv*y0 + acccoef[j*lsupp+i];
                 }
               ukrn[i] = resu;
               vkrn[i] = resv;
