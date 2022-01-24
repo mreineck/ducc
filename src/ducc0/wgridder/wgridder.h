@@ -1495,21 +1495,25 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           {sycl::property::buffer::use_host_ptr()}};
 #else
         // FFT
-        cufftHandle plan;
-        cufftCreate(&plan);
-        if constexpr (is_same<Tcalc,double>::value)
+        q.submit([&](sycl::handler &cgh)
           {
-          plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
-          auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(bufgrid.get_pointer(q.get_device()));
-          cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
+          cufftHandle plan;
+          cufftCreate(&plan);
+         if constexpr (is_same<Tcalc,double>::value)
+            {
+            plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+            auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(accgrid.get_pointer(q.get_device()));
+            cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
+            }
+          else
+            {
+            plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+            auto* cu_d = reinterpret_cast<cufftComplex *>(accgrid.get_pointer(q.get_device()));
+            cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
+            }
+          cufftDestroy(plan);
           }
-        else
-          {
-          plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
-          auto* cu_d = reinterpret_cast<cufftComplex *>(bufgrid.get_pointer(q.get_device()));
-          cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-          }
-        cufftDestroy(plan);
 #endif
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
