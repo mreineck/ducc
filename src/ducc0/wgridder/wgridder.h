@@ -44,7 +44,7 @@
 #include "CL/sycl.hpp"
 using namespace cl;
 
-//#include <cufft.h>
+#include <cufft.h>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -1481,12 +1481,18 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
-        }
-        }
 #if 1
+        }
+        }
         //grid has been copied back to CPU when buffer was destroyed
         vfmav<complex<Tcalc>> fgrid(grid);
         c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
+        {
+        sycl::queue q{sycl::default_selector()};
+        { // Device buffer scope
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
+          sycl::range<2>(nu,nv),
+          {sycl::property::buffer::use_host_ptr()}};
 #else
         // FFT
         cufftHandle plan;
@@ -1505,12 +1511,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           }
         cufftDestroy(plan);
 #endif
-        {
-        sycl::queue q{sycl::default_selector()};
-        { // Device buffer scope
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
-          sycl::range<2>(nu,nv),
-          {sycl::property::buffer::use_host_ptr()}};
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
