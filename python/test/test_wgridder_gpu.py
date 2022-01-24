@@ -26,8 +26,8 @@ pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
 
-@pmp('nx', [(30, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(10, 1), (30, 3), (128, 2)])
+@pmp('ny', [(12, 1), (128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
@@ -44,6 +44,9 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         pytest.skip()
 
     if wstacking or use_mask:
+        pytest.skip()
+
+    if nxfacets != 1 or nyfacets != 1:
         pytest.skip()
 
     rng = np.random.default_rng(42)
