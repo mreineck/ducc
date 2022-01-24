@@ -46,9 +46,6 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     if wstacking:
         pytest.skip()
 
-    if nxfacets != 1 or nyfacets != 1:
-        pytest.skip()
-
     rng = np.random.default_rng(42)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
