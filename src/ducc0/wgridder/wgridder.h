@@ -1636,7 +1636,7 @@ cout << " 7: " << tx() << endl;
             vfrac -= iv0;
             // compute kernel values
             auto x0 = Tcalc(-ufrac)*Tcalc(2)+Tcalc(lsupp-1);
-            auto y0 = Tcalc(-vfrac)*Tcalc(2)+Tcalc(lsupp-1));
+            auto y0 = Tcalc(-vfrac)*Tcalc(2)+Tcalc(lsupp-1);
             array<Tcalc, 16> ukrn, vkrn;
             for (size_t i=0; i<lsupp; ++i)
               {
