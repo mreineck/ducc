@@ -1529,17 +1529,21 @@ cout << " 4: " << tx() << endl;
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
+cout << " 4.1: " << tx() << endl;
         const auto &freqraw(bl.get_f_over_c());
         sycl::buffer<double, 1> buffreq{freqraw.data(),
           sycl::range<1>(freqraw.size()),
           {sycl::property::buffer::use_host_ptr()}};
+cout << " 4.2: " << tx() << endl;
         sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
           {sycl::property::buffer::use_host_ptr()}};
 bool do_weights = wgt.stride(0)!=0;
+cout << " 4.3: " << tx() << endl;
         sycl::buffer<Tms, 2> bufwgt{wgt.data(),
           do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
           {sycl::property::buffer::use_host_ptr()}};
+cout << " 4.4: " << tx() << endl;
 
         // build index structure
         vector<uint32_t> fullidx;
