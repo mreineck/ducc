@@ -1508,7 +1508,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 }
             if constexpr (is_same<Tcalc,double>::value)
               {
-              plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+              cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
               auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
@@ -1516,7 +1516,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               }
             else
               {
-              plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+              cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
               auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
