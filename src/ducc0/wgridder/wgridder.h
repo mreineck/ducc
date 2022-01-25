@@ -1498,21 +1498,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         q.submit([&](sycl::handler &cgh)
           {
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
-            cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
-            // Can extract device pointers from accessors
+          cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
             void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
-            // Can extract stream (note: get_native_queue() may not be
-            // supported on CPU backends)
-            hipStream_t stream = h.get_native_queue<sycl::backend::cuda>();
-            // Can extract HIP device (note: get_native_device() may not be
-            // supported on CPU backends)
-            int dev = h.get_native_device<sycl::backend::cuda>();
-
-            // Can enqueue arbitrary backend operations. This could also be a kernel launch
-            // or a call to a library that enqueues operations on the stream etc
-            //hipMemcpyAsync(target_ptr, native_mem, test_size * sizeof(int),
-                           //hipMemcpyDeviceToHost, stream);
-
             cufftHandle plan;
             cufftCreate(&plan);
             if constexpr (is_same<Tcalc,double>::value)
