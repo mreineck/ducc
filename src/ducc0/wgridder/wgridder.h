@@ -1594,7 +1594,7 @@ bool do_weights = wgt.stride(0)!=0;
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
-          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, 1024), [=](sycl::item<2> item)
+          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
             {
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
@@ -1642,20 +1642,20 @@ bool do_weights = wgt.stride(0)!=0;
                 res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
                 }
 
-              if (lshifting)
-                {
-                // apply phase
-                double fct = u*llshift + v*xlmshift;
-                if constexpr (is_same<double, Tcalc>::value)
-                  fct*=twopi;
-                else
-                  // we are reducing accuracy,
-                  // so let's better do range reduction first
-                  fct = twopi*(fct-floor(fct));
-                complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
-                res *=phase;
-                }
-              accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
+            if (lshifting)
+              {
+              // apply phase
+              double fct = u*llshift + v*xlmshift;
+              if constexpr (is_same<double, Tcalc>::value)
+                fct*=twopi;
+              else
+                // we are reducing accuracy,
+                // so let's better do range reduction first
+                fct = twopi*(fct-floor(fct));
+              complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
+              res *=phase;
+              }
+            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             });
           });
         }
