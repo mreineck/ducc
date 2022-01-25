@@ -125,7 +125,7 @@ struct util // hack to avoid duplicate symbols
     sanity_check_axes(ac.ndim(), axes);
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i)== (i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i),
+      MR_assert(ac.shape(i) == ((i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i)),
         "axis length mismatch");
     }
   DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
@@ -134,7 +134,7 @@ struct util // hack to avoid duplicate symbols
     if (axis>=ac.ndim()) throw std::invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i)== (i==axis) ? (ar.shape(i)/2+1) : ar.shape(i),
+      MR_assert(ac.shape(i) == ((i==axis) ? (ar.shape(i)/2+1) : ar.shape(i)),
         "axis length mismatch");
     }
 

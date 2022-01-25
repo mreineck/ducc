@@ -144,7 +144,11 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
+  // select proper sub-array for FFT
+  auto shp_half = aout.shape();
+  shp_half[axes.back()] = shp_half[axes.back()]/2+1;
+  vfmav<std::complex<T>> aout_half(aout.data(), shp_half, aout.stride());
+  ducc0::r2c(ain, aout_half, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace ducc0::detail_fft;
   hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const std::complex<T> &c, complex<T> &, complex<T> &c1)
