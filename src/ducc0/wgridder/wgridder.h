@@ -1501,14 +1501,18 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
             void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
             cufftHandle plan;
-            cufftCreate(&plan);
+{
+            auto res = cufftCreate(&plan);
+   if (res != CUFFT_SUCCESS)
+     cout << "plan creation failed" << res << endl;
+}
             if constexpr (is_same<Tcalc,double>::value)
               {
               plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
               auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
-                cout << "double precision FFT failed" << endl;
+                cout << "double precision FFT failed" << res << endl;
               }
             else
               {
@@ -1516,7 +1520,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
               auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
-                cout << "double precision FFT failed" << endl;
+                cout << "single precision FFT failed" << res << endl;
               }
             cufftDestroy(plan);
             });
