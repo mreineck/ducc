@@ -1498,21 +1498,37 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         q.submit([&](sycl::handler &cgh)
           {
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
-          cufftHandle plan;
-          cufftCreate(&plan);
-         if constexpr (is_same<Tcalc,double>::value)
-            {
-            plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
-            auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(accgrid.get_pointer(q.get_device()));
-            cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
-            }
-          else
-            {
-            plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
-            auto* cu_d = reinterpret_cast<cufftComplex *>(accgrid.get_pointer(q.get_device()));
-            cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-            }
-          cufftDestroy(plan);
+            cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
+            // Can extract device pointers from accessors
+            void *native_mem = h.get_native_mem<sycl::backend::hip>(accgrid);
+            // Can extract stream (note: get_native_queue() may not be
+            // supported on CPU backends)
+            hipStream_t stream = h.get_native_queue<sycl::backend::hip>();
+            // Can extract HIP device (note: get_native_device() may not be
+            // supported on CPU backends)
+            int dev = h.get_native_device<sycl::backend::hip>();
+
+            // Can enqueue arbitrary backend operations. This could also be a kernel launch
+            // or a call to a library that enqueues operations on the stream etc
+            //hipMemcpyAsync(target_ptr, native_mem, test_size * sizeof(int),
+                           //hipMemcpyDeviceToHost, stream);
+
+            cufftHandle plan;
+            cufftCreate(&plan);
+            if constexpr (is_same<Tcalc,double>::value)
+               {
+               plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
+               cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
+               }
+             else
+               {
+               plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
+               cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
+               }
+             cufftDestroy(plan);
+            });
           });
 #endif
         const auto &uvwraw(bl.getUVW_raw());
