@@ -1508,7 +1508,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 }
             if constexpr (is_same<Tcalc,double>::value)
               {
-              cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+{
+              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+   if (res != CUFFT_SUCCESS)
+     cout << "double precision planning failed" << res << endl;
+}
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
               auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
@@ -1516,7 +1520,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
               }
             else
               {
-              cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+{
+              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+   if (res != CUFFT_SUCCESS)
+     cout << "single precision planning failed" << res << endl;
+}
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
               auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
               if (res != CUFFT_SUCCESS)
