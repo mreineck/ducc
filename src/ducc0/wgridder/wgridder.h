@@ -1433,9 +1433,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
         bufgrid.set_write_back(false);
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
-          sycl::range<2>(nu,nv),
-          {sycl::property::buffer::use_host_ptr()}};
 
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
