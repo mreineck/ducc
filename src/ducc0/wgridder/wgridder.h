@@ -1639,7 +1639,7 @@ bool do_weights = wgt.stride(0)!=0;
               {
               for (size_t j=0, realiv=size_t((iv0+lnv)%lnv);
                    j<lsupp;
-                   ++j realiv = (realiv+1<lnv)?realiv+1 : 0)
+                   ++j, realiv = (realiv+1<lnv)?realiv+1 : 0)
                 res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
               }
 
