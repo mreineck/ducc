@@ -1422,9 +1422,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
+SimpleTimer tx;
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
+cout << " 0: " << tx() << endl;
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
         sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
@@ -1433,6 +1435,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
         bufgrid.set_write_back(false);
+cout << " 1: " << tx() << endl;
 
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
@@ -1441,6 +1444,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
             { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
           });
+cout << " 2: " << tx() << endl;
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
 // FIXME: cast to Timg
@@ -1476,6 +1480,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
+cout << " 3: " << tx() << endl;
 
         // FFT
         q.submit([&](sycl::handler &cgh)
@@ -1516,6 +1521,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             cufftDestroy(plan);
             });
           });
+cout << " 4: " << tx() << endl;
 
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
@@ -1541,6 +1547,7 @@ bool do_weights = wgt.stride(0)!=0;
         fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
+cout << " 4: " << tx() << endl;
         for (const auto &rng: ranges)
           for (const auto &rcr: rng.second)
             for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
@@ -1555,6 +1562,7 @@ bool do_weights = wgt.stride(0)!=0;
                 }
               fullidx.push_back((rcr.row<<channelbits)+ichan);
               }
+cout << " 5: " << tx() << endl;
 
         blocklimits.push_back(fullidx.size());
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
@@ -1660,7 +1668,9 @@ bool do_weights = wgt.stride(0)!=0;
             });
           });
         }
-        }
+ cout << " 6: " << tx() << endl;
+       }
+cout << " 7: " << tx() << endl;
       }
 
     auto getNuNv()
