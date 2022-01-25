@@ -1480,6 +1480,7 @@ cout << " 2: " << tx() << endl;
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
+q.wait();
 cout << " 3: " << tx() << endl;
 
         // FFT
@@ -1521,6 +1522,7 @@ cout << " 3: " << tx() << endl;
             cufftDestroy(plan);
             });
           });
+q.wait();
 cout << " 4: " << tx() << endl;
 
         const auto &uvwraw(bl.getUVW_raw());
@@ -1581,7 +1583,6 @@ cout << " 6: " << tx() << endl;
 cout << " 7: " << tx() << endl;
         q.submit([&](sycl::handler &cgh)
           {
-cout << "beep1" << endl;
           auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
@@ -1590,7 +1591,6 @@ cout << "beep1" << endl;
           auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
           auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
-cout << "beep2" << endl;
           auto lpixsize_x= pixsize_x;
           auto lpixsize_y= pixsize_y;
           auto lushift = ushift;
@@ -1644,12 +1644,12 @@ cout << "beep2" << endl;
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-            for (size_t i=0, realiu=size_t((iu0+lnu)%lnu);
-                 i<lsupp;
+            auto iustart=size_t((iv0+lnv)%lnv);
+            auto ivstart=size_t((iu0+lnu)%lnu);
+            for (size_t i=0, realiu=iustart; i<lsupp;
                  ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
               {
-              for (size_t j=0, realiv=size_t((iv0+lnv)%lnv);
-                   j<lsupp;
+              for (size_t j=0, realiv=ivstart; j<lsupp;
                    ++j, realiv = (realiv+1<lnv)?realiv+1 : 0)
                 res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
               }
@@ -1670,6 +1670,7 @@ cout << "beep2" << endl;
             accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             });
           });
+q.wait();
         }
  cout << " 8: " << tx() << endl;
        }
