@@ -1443,6 +1443,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           });
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
+// FIXME: cast to Timg
         sycl::buffer<double, 1> bufcfu{cfu.data(),
           sycl::range<1>(cfu.size()),
           {sycl::property::buffer::use_host_ptr()}};
@@ -1615,8 +1616,8 @@ bool do_weights = wgt.stride(0)!=0;
             int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
             vfrac -= iv0;
             // compute kernel values
-            auto x0 = -ufrac*2+(lsupp-1);
-            auto y0 = -vfrac*2+(lsupp-1);
+            auto x0 = Tcalc(-ufrac*2+(lsupp-1));
+            auto y0 = Tcalc(-vfrac*2+(lsupp-1));
             array<Tcalc, 16> ukrn, vkrn;
             for (size_t i=0; i<lsupp; ++i)
               {
@@ -1632,13 +1633,15 @@ bool do_weights = wgt.stride(0)!=0;
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-            for (size_t i=0; i<lsupp; ++i)
-              for (size_t j=0; j<lsupp; ++j)
-                {
-                auto realiu = (iu0+i+lnu)%lnu;
-                auto realiv = (iv0+j+lnv)%lnv;
+            for (size_t i=0, realiu=size_t((iu0+lnu)%lnu);
+                 i<lsupp;
+                 ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
+              {
+              for (size_t j=0, realiv=size_t((iv0+lnv)%lnv);
+                   j<lsupp;
+                   ++j realiv = (realiv+1<lnv)?realiv+1 : 0)
                 res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
-                }
+              }
 
             if (lshifting)
               {
@@ -1651,7 +1654,7 @@ bool do_weights = wgt.stride(0)!=0;
                 // so let's better do range reduction first
                 fct = twopi*(fct-floor(fct));
               complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
-              res *=phase;
+              res *= phase;
               }
             accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             });
