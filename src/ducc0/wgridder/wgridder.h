@@ -1418,11 +1418,11 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 
     void dirty2x_gpu()
       {
+SimpleTimer tx;
       if (do_wgridding)
         MR_fail("");
       else
         {
-SimpleTimer tx;
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
