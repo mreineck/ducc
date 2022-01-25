@@ -1422,9 +1422,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
-        // only until we can move the FFT to the GPU; then this will not be needed on CPU any more
-        vmav<complex<Tcalc>,2> grid({nu,nv});
-        {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1433,9 +1430,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
           sycl::range<2>(dirty_in.shape(0), dirty_in.shape(1)),
           {sycl::property::buffer::use_host_ptr()});
-//        // grid (only on GPU)
-//        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-//        bufgrid.set_write_back(false);
+        // grid (only on GPU)
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+        bufgrid.set_write_back(false);
         sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
           sycl::range<2>(nu,nv),
           {sycl::property::buffer::use_host_ptr()}};
@@ -1481,19 +1478,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
-#if 0
-        }
-        }
-        //grid has been copied back to CPU when buffer was destroyed
-        vfmav<complex<Tcalc>> fgrid(grid);
-        c2c(fgrid, fgrid, {0,1}, true, Tcalc(1), nthreads);
-        {
-        sycl::queue q{sycl::default_selector()};
-        { // Device buffer scope
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{grid.data(),
-          sycl::range<2>(nu,nv),
-          {sycl::property::buffer::use_host_ptr()}};
-#else
+
         // FFT
         q.submit([&](sycl::handler &cgh)
           {
@@ -1533,7 +1518,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             cufftDestroy(plan);
             });
           });
-#endif
+
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
@@ -1674,7 +1659,6 @@ bool do_weights = wgt.stride(0)!=0;
             accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             });
           });
-        }
         }
         }
       }
