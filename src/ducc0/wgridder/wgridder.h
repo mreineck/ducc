@@ -1543,7 +1543,7 @@ cout << " 4.2: " << tx() << endl;
 bool do_weights = wgt.stride(0)!=0;
 cout << " 4.3: " << tx() << endl;
 cout << "do_weights: " << do_weights << endl;
-        sycl::buffer<Tms, 2> bufwgt{wgt.data(),
+        sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
           do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
           {sycl::property::buffer::use_host_ptr()}};
 cout << " 4.4: " << tx() << endl;
