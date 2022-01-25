@@ -1423,6 +1423,8 @@ SimpleTimer tx;
         MR_fail("");
       else
         {
+timers.push("GPU degridding");
+{
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1679,6 +1681,8 @@ cout << " 7: " << tx() << endl;
 q.wait();
         }
  cout << " 8: " << tx() << endl;
+}
+timers.pop();
        }
 cout << " 9: " << tx() << endl;
       }
