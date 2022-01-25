@@ -1547,7 +1547,7 @@ bool do_weights = wgt.stride(0)!=0;
         fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
-cout << " 4: " << tx() << endl;
+cout << " 5: " << tx() << endl;
         for (const auto &rng: ranges)
           for (const auto &rcr: rng.second)
             for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
@@ -1562,7 +1562,7 @@ cout << " 4: " << tx() << endl;
                 }
               fullidx.push_back((rcr.row<<channelbits)+ichan);
               }
-cout << " 5: " << tx() << endl;
+cout << " 6: " << tx() << endl;
 
         blocklimits.push_back(fullidx.size());
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
@@ -1578,8 +1578,10 @@ cout << " 5: " << tx() << endl;
           sycl::range<1>(coef.size()),
           {sycl::property::buffer::use_host_ptr()}};
        
+cout << " 7: " << tx() << endl;
         q.submit([&](sycl::handler &cgh)
           {
+cout << "beep1" << endl;
           auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
@@ -1588,6 +1590,7 @@ cout << " 5: " << tx() << endl;
           auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
           auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
+cout << "beep2" << endl;
           auto lpixsize_x= pixsize_x;
           auto lpixsize_y= pixsize_y;
           auto lushift = ushift;
@@ -1668,9 +1671,9 @@ cout << " 5: " << tx() << endl;
             });
           });
         }
- cout << " 6: " << tx() << endl;
+ cout << " 8: " << tx() << endl;
        }
-cout << " 7: " << tx() << endl;
+cout << " 9: " << tx() << endl;
       }
 
     auto getNuNv()
