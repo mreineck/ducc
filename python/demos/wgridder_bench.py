@@ -26,6 +26,8 @@ def main():
     ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.npz', 45., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/G330.89-0.36.npz', 2., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/bigms.npz', 0.0005556*1800, 1800
+    ms, fov_deg, npixdirty = '/data/CYG-ALL-13360-8MHZ.npz', 1., 4000
+
 
     data = np.load(ms)
     uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
@@ -36,7 +38,7 @@ def main():
     pixsize = fov_deg/npixdirty*DEG2RAD
     nthreads = 2
     epsilon = 1e-4
-    do_wgridding = True
+    do_wgridding = False  # TEMPORARY
 
     print('Start gridding...')
     t0 = time()
@@ -54,6 +56,17 @@ def main():
         mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
         do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1,
         flip_v=True)
+    t = time() - t0
+    print("{} s".format(t))
+    print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
+    t0 = time()
+    wgridder.dirty2vis(
+        uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+        mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
+        do_wgridding=do_wgridding,
+        nthreads=nthreads, verbosity=1,
+        flip_v=True,
+        gpu=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
