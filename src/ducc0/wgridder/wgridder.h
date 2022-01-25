@@ -1503,18 +1503,22 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
             cufftHandle plan;
             cufftCreate(&plan);
             if constexpr (is_same<Tcalc,double>::value)
-               {
-               plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
-               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-               cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
-               }
-             else
-               {
-               plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
-               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-               cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-               }
-             cufftDestroy(plan);
+              {
+              plan = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
+              auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
+              auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
+              if (res != CUFFT_SUCCESS)
+                cout << "double precision FFT failed" << endl;
+              }
+            else
+              {
+              plan = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+              auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
+              auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
+              if (res != CUFFT_SUCCESS)
+                cout << "double precision FFT failed" << endl;
+              }
+            cufftDestroy(plan);
             });
           });
 #endif
