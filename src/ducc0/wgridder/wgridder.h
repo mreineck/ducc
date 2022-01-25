@@ -1546,6 +1546,7 @@ bool do_weights = wgt.stride(0)!=0;
         vector<uint32_t> blocklimits;
         
         size_t channelbits=bit_width(bl.Nchannels()-1);
+cout << " 4.5: " << tx() << endl;
         fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
