@@ -1540,6 +1540,7 @@ cout << " 4.2: " << tx() << endl;
           {sycl::property::buffer::use_host_ptr()}};
 bool do_weights = wgt.stride(0)!=0;
 cout << " 4.3: " << tx() << endl;
+cout << "do_weights: " << do_weights << endl;
         sycl::buffer<Tms, 2> bufwgt{wgt.data(),
           do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
           {sycl::property::buffer::use_host_ptr()}};
@@ -1649,8 +1650,8 @@ cout << " 7: " << tx() << endl;
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-            auto iustart=size_t((iv0+lnv)%lnv);
-            auto ivstart=size_t((iu0+lnu)%lnu);
+            auto iustart=size_t((iu0+lnu)%lnu);
+            auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
                  ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
               {
