@@ -1692,7 +1692,7 @@ bool do_weights = wgt.stride(0)!=0;
 if (do_weights)
   {
   auto nchan = bl.Nchannels();
-  execParallel(bl.Nrows(), nthreads, 0, [&](size_t lo, size_t hi)
+  execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
     {
     for (auto irow=lo; irow<hi; ++irow)
       for (size_t ichan=0; ichan<nchan; ++ichan)
