@@ -1439,6 +1439,33 @@ cout << " 0: " << tx() << endl;
         bufgrid.set_write_back(false);
 cout << " 1: " << tx() << endl;
 
+        const auto &uvwraw(bl.getUVW_raw());
+        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
+          sycl::range<2>(uvwraw.size(), 3),
+          {sycl::property::buffer::use_host_ptr()}};
+cout << " 1.1: " << tx() << endl;
+        const auto &freqraw(bl.get_f_over_c());
+        sycl::buffer<double, 1> buffreq{freqraw.data(),
+          sycl::range<1>(freqraw.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+cout << " 1.2: " << tx() << endl;
+        sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
+          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
+          {sycl::property::buffer::use_host_ptr()}};
+bool do_weights = wgt.stride(0)!=0;
+cout << " 1.3: " << tx() << endl;
+cout << "do_weights: " << do_weights << endl;
+        sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
+          do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
+          {sycl::property::buffer::use_host_ptr()}};
+cout << " 1.4: " << tx() << endl;
+        const auto &dcoef(krn->Coeff());
+        vector<Tcalc> coef(dcoef.size());
+        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+        sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
+          sycl::range<1>(coef.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
           {
@@ -1527,27 +1554,6 @@ cout << " 3: " << tx() << endl;
 q.wait();
 cout << " 4: " << tx() << endl;
 
-        const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
-          sycl::range<2>(uvwraw.size(), 3),
-          {sycl::property::buffer::use_host_ptr()}};
-cout << " 4.1: " << tx() << endl;
-        const auto &freqraw(bl.get_f_over_c());
-        sycl::buffer<double, 1> buffreq{freqraw.data(),
-          sycl::range<1>(freqraw.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-cout << " 4.2: " << tx() << endl;
-        sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
-          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
-          {sycl::property::buffer::use_host_ptr()}};
-bool do_weights = wgt.stride(0)!=0;
-cout << " 4.3: " << tx() << endl;
-cout << "do_weights: " << do_weights << endl;
-        sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
-          do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
-          {sycl::property::buffer::use_host_ptr()}};
-cout << " 4.4: " << tx() << endl;
-
         // build index structure
         vector<uint32_t> fullidx;
         vector<uint32_t> blocklimits;
@@ -1582,12 +1588,6 @@ cout << " 6: " << tx() << endl;
           {sycl::property::buffer::use_host_ptr()}};
         sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
           sycl::range<1>(blocklimits.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        const auto &dcoef(krn->Coeff());
-        vector<Tcalc> coef(dcoef.size());
-        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
-          sycl::range<1>(coef.size()),
           {sycl::property::buffer::use_host_ptr()}};
        
 cout << " 7: " << tx() << endl;
@@ -1659,9 +1659,11 @@ cout << " 7: " << tx() << endl;
             for (size_t i=0, realiu=iustart; i<lsupp;
                  ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
               {
+              complex<Tcalc> tmp = 0;
               for (size_t j=0, realiv=ivstart; j<lsupp;
                    ++j, realiv = (realiv+1<lnv)?realiv+1 : 0)
-                res += ukrn[i]*vkrn[j]*accgrid[realiu][realiv];
+                tmp += vkrn[j]*accgrid[realiu][realiv];
+              res += ukrn[i]*tmp;
               }
 
             if (lshifting)
