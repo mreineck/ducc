@@ -1545,6 +1545,7 @@ timers.push("GPU degridding");
           });
 
         // build index structure
+        timers.push("index creation");
         vector<uint32_t> fullidx;
         vector<uint32_t> blocklimits;
         
@@ -1566,8 +1567,9 @@ timers.push("GPU degridding");
                 }
               fullidx.push_back((rcr.row<<channelbits)+ichan);
               }
-
         blocklimits.push_back(fullidx.size());
+        timers.pop();
+
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
           sycl::range<1>(fullidx.size()),
           {sycl::property::buffer::use_host_ptr()}};
