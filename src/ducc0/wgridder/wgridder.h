@@ -1598,7 +1598,7 @@ cout << " 7: " << tx() << endl;
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
-          auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
+          auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
 //          auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
           auto lpixsize_x= pixsize_x;
@@ -1680,7 +1680,7 @@ cout << " 7: " << tx() << endl;
               res *= phase;
               }
 //            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
-            accvis[irow][ichan] += res;
+            accvis[irow][ichan] = res;
             });
           });
 q.wait();
