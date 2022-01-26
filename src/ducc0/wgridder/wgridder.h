@@ -1418,7 +1418,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 
     void dirty2x_gpu()
       {
-SimpleTimer tx;
       if (do_wgridding)
         MR_fail("");
       else
@@ -1428,7 +1427,6 @@ timers.push("GPU degridding");
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
-cout << " 0: " << tx() << endl;
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
         sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
@@ -1437,22 +1435,18 @@ cout << " 0: " << tx() << endl;
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
 //        bufgrid.set_write_back(false);
-cout << " 1: " << tx() << endl;
 
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
-cout << " 1.1: " << tx() << endl;
         const auto &freqraw(bl.get_f_over_c());
         sycl::buffer<double, 1> buffreq{freqraw.data(),
           sycl::range<1>(freqraw.size()),
           {sycl::property::buffer::use_host_ptr()}};
-cout << " 1.2: " << tx() << endl;
         sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
           {sycl::property::buffer::use_host_ptr()}};
-cout << " 1.4: " << tx() << endl;
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
@@ -1467,7 +1461,6 @@ cout << " 1.4: " << tx() << endl;
           cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
             { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
           });
-cout << " 2: " << tx() << endl;
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
 // FIXME: cast to Timg
@@ -1503,8 +1496,6 @@ cout << " 2: " << tx() << endl;
             accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
             });
           });
-q.wait();
-cout << " 3: " << tx() << endl;
 
         // FFT
         q.submit([&](sycl::handler &cgh)
@@ -1545,19 +1536,15 @@ cout << " 3: " << tx() << endl;
             cufftDestroy(plan);
             });
           });
-q.wait();
-cout << " 4: " << tx() << endl;
 
         // build index structure
         vector<uint32_t> fullidx;
         vector<uint32_t> blocklimits;
         
         size_t channelbits=bit_width(bl.Nchannels()-1);
-cout << " 4.5: " << tx() << endl;
         fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
-cout << " 5: " << tx() << endl;
         for (const auto &rng: ranges)
           for (const auto &rcr: rng.second)
             for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
@@ -1572,9 +1559,6 @@ cout << " 5: " << tx() << endl;
                 }
               fullidx.push_back((rcr.row<<channelbits)+ichan);
               }
-cout << "fullidx.size()=" << fullidx.size() << endl;
-cout << "blocklimits.size()=" << blocklimits.size() << endl;
-cout << " 6: " << tx() << endl;
 
         blocklimits.push_back(fullidx.size());
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
@@ -1584,7 +1568,6 @@ cout << " 6: " << tx() << endl;
           sycl::range<1>(blocklimits.size()),
           {sycl::property::buffer::use_host_ptr()}};
        
-cout << " 7: " << tx() << endl;
         q.submit([&](sycl::handler &cgh)
           {
           auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
@@ -1675,9 +1658,7 @@ cout << " 7: " << tx() << endl;
             accvis[irow][ichan] = res;
             });
           });
-q.wait();
         }
- cout << " 8: " << tx() << endl;
 }
 timers.poppush("weight application");
 bool do_weights = wgt.stride(0)!=0;
