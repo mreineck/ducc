@@ -1569,6 +1569,12 @@ timers.push("GPU degridding");
               }
         blocklimits.push_back(fullidx.size());
         timers.pop();
+cout << "fullidx size (bytes): " << fullidx.size()*sizeof(uint32_t) << endl;
+size_t rngsz=0;
+for (const auto &rng: ranges)
+  for (const auto &rcr: rng.second)
+    rngsz+=rcr.size();
+cout << "rng size (bytes): "<< rngsz*sizeof(RowchanRange) << endl;
 
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
           sycl::range<1>(fullidx.size()),
