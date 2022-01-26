@@ -1673,8 +1673,7 @@ if (do_weights)
     });
   }
 timers.pop();
-       }
-cout << " 9: " << tx() << endl;
+        }
       }
 
     auto getNuNv()
