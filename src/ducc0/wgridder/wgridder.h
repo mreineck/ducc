@@ -1436,11 +1436,11 @@ cout << " 0: " << tx() << endl;
           {sycl::property::buffer::use_host_ptr()});
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-        bufgrid.set_write_back(false);
+//        bufgrid.set_write_back(false);
 cout << " 1: " << tx() << endl;
 
         const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<const double, 2> bufuvw{reinterpret_cast<const double * const>(uvwraw.data()),
+        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
 cout << " 1.1: " << tx() << endl;
@@ -1452,12 +1452,12 @@ cout << " 1.2: " << tx() << endl;
         sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
           {sycl::property::buffer::use_host_ptr()}};
-bool do_weights = wgt.stride(0)!=0;
-cout << " 1.3: " << tx() << endl;
-cout << "do_weights: " << do_weights << endl;
-        sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
-          do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
-          {sycl::property::buffer::use_host_ptr()}};
+//bool do_weights = wgt.stride(0)!=0;
+//cout << " 1.3: " << tx() << endl;
+//cout << "do_weights: " << do_weights << endl;
+        //sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
+          //do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
+          //{sycl::property::buffer::use_host_ptr()}};
 cout << " 1.4: " << tx() << endl;
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -1599,7 +1599,7 @@ cout << " 7: " << tx() << endl;
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read_write>(cgh)};
-          auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+//          auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
           auto lpixsize_x= pixsize_x;
           auto lpixsize_y= pixsize_y;
@@ -1679,13 +1679,26 @@ cout << " 7: " << tx() << endl;
               complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
               res *= phase;
               }
-            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
+//            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
+            accvis[irow][ichan] += res;
             });
           });
 q.wait();
         }
  cout << " 8: " << tx() << endl;
 }
+timers.poppush("weight application");
+bool do_weights = wgt.stride(0)!=0;
+if (do_weights)
+  {
+  auto nchan = bl.Nchannels();
+  execParallel(bl.Nrows(), nthreads, 0, [&](size_t lo, size_t hi)
+    {
+    for (auto irow=lo; irow<hi; ++irow)
+      for (size_t ichan=0; ichan<nchan; ++ichan)
+        ms_out(irow, ichan) *= wgt(irow, ichan);
+    });
+  }
 timers.pop();
        }
 cout << " 9: " << tx() << endl;
