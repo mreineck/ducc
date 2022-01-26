@@ -1452,12 +1452,6 @@ cout << " 1.2: " << tx() << endl;
         sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
           sycl::range<2>(bl.Nrows(), bl.Nchannels()),
           {sycl::property::buffer::use_host_ptr()}};
-//bool do_weights = wgt.stride(0)!=0;
-//cout << " 1.3: " << tx() << endl;
-//cout << "do_weights: " << do_weights << endl;
-        //sycl::buffer<Tms, 2> bufwgt{const_cast<Tms *>(wgt.data()),
-          //do_weights ? sycl::range<2>(bl.Nrows(), bl.Nchannels()) : sycl::range<2>(1,1),
-          //{sycl::property::buffer::use_host_ptr()}};
 cout << " 1.4: " << tx() << endl;
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -1599,7 +1593,6 @@ cout << " 7: " << tx() << endl;
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-//          auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
           auto lpixsize_x= pixsize_x;
           auto lpixsize_y= pixsize_y;
@@ -1679,7 +1672,6 @@ cout << " 7: " << tx() << endl;
               complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
               res *= phase;
               }
-//            accvis[irow][ichan] += do_weights ? accwgt[irow][ichan]*res : res;
             accvis[irow][ichan] = res;
             });
           });
