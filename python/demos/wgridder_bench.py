@@ -23,11 +23,11 @@ import numpy as np
 def main():
 #    ms, fov_deg, npixdirty = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/1052736496-averaged.npz', 25., 2048
-    ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.npz', 45., 1200
+#    ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.npz', 45., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/G330.89-0.36.npz', 2., 1200
 #    ms, fov_deg, npixdirty = '/home/martin/ms/bigms.npz', 0.0005556*1800, 1800
     ms, fov_deg, npixdirty = '/data/CYG-ALL-13360-8MHZ.npz', 1., 4000
-
+    ms, fov_deg, npixdirty = '/data/L_UV_DATA-IF1.npz', 1., 4000
 
     data = np.load(ms)
     uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
@@ -40,6 +40,8 @@ def main():
     epsilon = 1e-4
     do_wgridding = False  # TEMPORARY
 
+    ntries_gpu = 5
+
     print('Start gridding...')
     t0 = time()
     dirty = wgridder.vis2dirty(
@@ -50,6 +52,7 @@ def main():
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
+
     t0 = time()
     wgridder.dirty2vis(
         uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
@@ -59,17 +62,20 @@ def main():
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
+
     t0 = time()
-    wgridder.dirty2vis(
-        uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
-        mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
-        do_wgridding=do_wgridding,
-        nthreads=nthreads, verbosity=1,
-        flip_v=True,
-        gpu=True)
-    t = time() - t0
+    for _ in range(ntries_gpu):
+        wgridder.dirty2vis(
+            uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+            mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
+            do_wgridding=do_wgridding,
+            nthreads=nthreads, verbosity=1,
+            flip_v=True,
+            gpu=True)
+    t = (time() - t0)/ntried_gpu
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
+
     plt.imshow(dirty.T, origin='lower')
     plt.show()
 
