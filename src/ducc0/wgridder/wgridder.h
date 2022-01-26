@@ -1454,6 +1454,13 @@ timers.push("GPU degridding");
           sycl::range<1>(coef.size()),
           {sycl::property::buffer::use_host_ptr()}};
 
+        // zeroing vis
+        q.submit([&](sycl::handler &cgh)
+          {
+          auto accvis{bufvis.template get_access<sycl::access::mode::discard_write>(cgh)};
+          cgh.parallel_for(sycl::range<2>(bl.Nrows(), bl.Nchannels()), [=](sycl::item<2> item)
+            { accvis[item.get_id(0)][item.get_id(1)] = Tcalc(0); });
+          });
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
           {
