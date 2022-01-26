@@ -1440,7 +1440,7 @@ cout << " 0: " << tx() << endl;
 cout << " 1: " << tx() << endl;
 
         const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
+        sycl::buffer<const double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
 cout << " 1.1: " << tx() << endl;
