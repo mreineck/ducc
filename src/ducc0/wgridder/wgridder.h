@@ -1423,7 +1423,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
 timers.push("GPU degridding");
-{
+        {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1511,52 +1511,61 @@ timers.push("GPU degridding");
           cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
             void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
             cufftHandle plan;
-{
-            auto res = cufftCreate(&plan);
-   if (res != CUFFT_SUCCESS)
-     cout << "plan creation failed" << res << endl;
-}
+#define DUCC0_CUDACHECK(cmd, err) { auto res = cmd; MR_assert(res==CUFFT_SUCCESS, err); }
+
+//{
+            DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
+//   if (res != CUFFT_SUCCESS)
+//     cout << "plan creation failed" << res << endl;
+//}
             if constexpr (is_same<Tcalc,double>::value)
               {
-{
-              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
-   if (res != CUFFT_SUCCESS)
-     cout << "double precision planning failed" << res << endl;
-}
+//{
+              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z),
+                "double precision planning failed")
+//   if (res != CUFFT_SUCCESS)
+//     cout << "double precision planning failed" << res << endl;
+//}
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-              auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
-              if (res != CUFFT_SUCCESS)
-                cout << "double precision FFT failed" << res << endl;
+              DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD),
+                "double precision FFT failed")
+//              auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
+//              if (res != CUFFT_SUCCESS)
+//                cout << "double precision FFT failed" << res << endl;
               }
             else
               {
-{
-              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
-   if (res != CUFFT_SUCCESS)
-     cout << "single precision planning failed" << res << endl;
-}
+//{
+//              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
+              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_C2C),
+                "single precision planning failed")
+//   if (res != CUFFT_SUCCESS)
+//     cout << "single precision planning failed" << res << endl;
+//}
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-              auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-              if (res != CUFFT_SUCCESS)
-                cout << "single precision FFT failed" << res << endl;
+              DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD),
+                "single precision FFT failed")
+//              auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
+//              if (res != CUFFT_SUCCESS)
+//                cout << "single precision FFT failed" << res << endl;
               }
-            cufftDestroy(plan);
+            DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
             });
           });
 
         // build index structure
         timers.push("index creation");
-        constexpr size_t chunksize=1024;
+        size_t chunksize=max<size_t>(1024, bl.Nchannels());
         vector<uint32_t> row_gpu;
         vector<uint16_t> chbegin_gpu;
         vector<size_t> vissum_gpu;
         vector<uint32_t> blocklimits;
-        size_t rngsz=0;
+        size_t nranges=0;
         for (const auto &rng: ranges)
-          rngsz+=rng.second.size();
-        row_gpu.reserve(rngsz);
-        chbegin_gpu.reserve(rngsz);
-        vissum_gpu.reserve(rngsz+1);
+          nranges+=rng.second.size();
+        row_gpu.reserve(nranges);
+        chbegin_gpu.reserve(nranges);
+        vissum_gpu.reserve(nranges+1);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         size_t accum=0;
         for (const auto &rng: ranges)
@@ -1568,11 +1577,9 @@ timers.push("GPU degridding");
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
             }
-MR_assert(!rng.second.empty(), "oops");
           for (const auto &rcr: rng.second)
             {
             auto nchan = rcr.ch_end-rcr.ch_begin;
-MR_assert(nchan>0, "oops2");
             MR_assert(nchan<=chunksize, "channel range too big!");
             if (isamp+nchan>=chunksize)  // need to start a new chunk
               {
@@ -1632,12 +1639,12 @@ MR_assert(nchan>0, "oops2");
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
 
-            size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
-            if (wanted>=accvissum[accblocklimits[iblock+1]])
-              return;  // nothing to do for this item
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
-            while (xlo+1<xhi)
+            size_t wanted = accvissum[xlo]+iwork;
+            if (wanted>=accvissum[xhi])
+              return;  // nothing to do for this item
+            while (xlo+1<xhi)  // bisection search
               {
               auto xmid = (xlo+xhi)/2;
               if (accvissum[xmid]<=wanted)
@@ -1645,15 +1652,8 @@ MR_assert(nchan>0, "oops2");
               else
                 xhi = xmid;
               }
-//            while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
             auto irow = accrow[xlo];
             auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
-
-            //if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
-              //return;  // nothing to do for this item
-            //auto ivis = accidx[accblocklimits[iblock]+iwork];
-            //auto ichan = ivis&((1<<channelbits)-1);
-            //auto irow = ivis>>channelbits;
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
@@ -1714,20 +1714,20 @@ MR_assert(nchan>0, "oops2");
             });
           });
         }
-}
-timers.poppush("weight application");
-bool do_weights = wgt.stride(0)!=0;
-if (do_weights)
-  {
-  auto nchan = bl.Nchannels();
-  execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (auto irow=lo; irow<hi; ++irow)
-      for (size_t ichan=0; ichan<nchan; ++ichan)
-        ms_out(irow, ichan) *= wgt(irow, ichan);
-    });
-  }
-timers.pop();
+        }
+        timers.poppush("weight application");
+        bool do_weights = wgt.stride(0)!=0;
+        if (do_weights)
+          {
+          auto nchan = bl.Nchannels();
+          execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
+            {
+            for (auto irow=lo; irow<hi; ++irow)
+              for (size_t ichan=0; ichan<nchan; ++ichan)
+                ms_out(irow, ichan) *= wgt(irow, ichan);
+            });
+          }
+        timers.pop();
         }
       }
 
