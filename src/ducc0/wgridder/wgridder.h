@@ -1645,7 +1645,7 @@ MR_assert(nchan>0, "oops2");
               else
                 xhi = xmid;
               }
-            while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
+//            while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
             auto irow = accrow[xlo];
             auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
 
