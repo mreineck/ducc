@@ -1642,6 +1642,8 @@ timers.push("GPU degridding");
               else
                 xhi = xmid;
               }
+            if (accvissum[xhi]<=wanted)
+              xlo = xhi;
             auto irow = accrow[xlo];
             auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
 
