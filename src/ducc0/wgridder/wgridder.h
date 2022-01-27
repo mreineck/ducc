@@ -1511,45 +1511,26 @@ timers.push("GPU degridding");
           cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
             void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
             cufftHandle plan;
-#define DUCC0_CUDACHECK(cmd, err) { auto res = cmd; MR_assert(res==CUFFT_SUCCESS, err); }
-
-//{
+#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
             DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
-//   if (res != CUFFT_SUCCESS)
-//     cout << "plan creation failed" << res << endl;
-//}
             if constexpr (is_same<Tcalc,double>::value)
               {
-//{
               DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z),
                 "double precision planning failed")
-//   if (res != CUFFT_SUCCESS)
-//     cout << "double precision planning failed" << res << endl;
-//}
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
               DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD),
                 "double precision FFT failed")
-//              auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
-//              if (res != CUFFT_SUCCESS)
-//                cout << "double precision FFT failed" << res << endl;
               }
             else
               {
-//{
-//              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
               DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_C2C),
                 "single precision planning failed")
-//   if (res != CUFFT_SUCCESS)
-//     cout << "single precision planning failed" << res << endl;
-//}
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
               DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD),
                 "single precision FFT failed")
-//              auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-//              if (res != CUFFT_SUCCESS)
-//                cout << "single precision FFT failed" << res << endl;
               }
             DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
+#iundef DUCC0_CUDACHECK
             });
           });
 
