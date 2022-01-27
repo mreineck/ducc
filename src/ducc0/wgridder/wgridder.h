@@ -1548,6 +1548,7 @@ timers.push("GPU degridding");
         timers.push("index creation");
 timers.push("newalgp");
 {
+constexpr size_t chunksize=1024;
 vector<RowchanRange> rcr_gpu;
 vector<size_t> vissum_gpu;
 vector<uint32_t> blocklimits;
