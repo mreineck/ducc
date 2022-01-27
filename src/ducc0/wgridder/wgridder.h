@@ -1541,6 +1541,7 @@ timers.push("GPU degridding");
         vector<uint16_t> chbegin_gpu;
         vector<size_t> vissum_gpu;
         vector<uint32_t> blocklimits;
+        vector<size_t> blockstartidx;
         size_t nranges=0;
         for (const auto &rng: ranges)
           nranges+=rng.second.size();
@@ -1554,6 +1555,7 @@ timers.push("GPU degridding");
           if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
             {
             blocklimits.push_back(row_gpu.size());
+            blockstartidx.push_back(accum);
             isamp=0;
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
@@ -1561,20 +1563,23 @@ timers.push("GPU degridding");
           for (const auto &rcr: rng.second)
             {
             auto nchan = rcr.ch_end-rcr.ch_begin;
-            MR_assert(nchan<=chunksize, "channel range too big!");
-            if (isamp+nchan>=chunksize)  // need to start a new chunk
+            size_t curpos=0;
+            while (curpos+chunksize-isamp<=nchan)
               {
               blocklimits.push_back(row_gpu.size());
+              blockstartidx.push_back(blockstartidx.back()+chunksize);
+              curpos += chunksize-isamp;
               isamp = 0;
               }
+            isamp += nchan-curpos;
             row_gpu.push_back(rcr.row);
             chbegin_gpu.push_back(rcr.ch_begin);
             vissum_gpu.push_back(accum);
             accum += nchan;
-            isamp += nchan;
             }
           }
         blocklimits.push_back(row_gpu.size());
+        blockstartidx.push_back(accum);
         vissum_gpu.push_back(accum);
         timers.pop();
        
@@ -1590,6 +1595,9 @@ timers.push("GPU degridding");
         sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
           sycl::range<1>(blocklimits.size()),
           {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
+          sycl::range<1>(blockstartidx.size()),
+          {sycl::property::buffer::use_host_ptr()}};
        
         q.submit([&](sycl::handler &cgh)
           {
@@ -1597,6 +1605,7 @@ timers.push("GPU degridding");
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+          auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
@@ -1622,8 +1631,8 @@ timers.push("GPU degridding");
 
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
-            size_t wanted = accvissum[xlo]+iwork;
-            if (wanted>=accvissum[xhi])
+            size_t wanted = blockstartidx[iblock]+iwork;
+            if (wanted>=blockstartidx[iblock+1])
               return;  // nothing to do for this item
             while (xlo+1<xhi)  // bisection search
               {
