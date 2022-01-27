@@ -1546,74 +1546,47 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-
-constexpr size_t chunksize=1024;
-vector<uint32_t> row_gpu;
-vector<uint16_t> chbegin_gpu;
-vector<size_t> vissum_gpu;
-vector<uint32_t> blocklimits;
-size_t rngsz=0;
-for (const auto &rng: ranges)
-  rngsz+=rng.second.size();
-row_gpu.reserve(rngsz);
-chbegin_gpu.reserve(rngsz);
-vissum_gpu.reserve(rngsz+1);
-size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
-size_t accum=0;
-for (const auto &rng: ranges)
-  {
-  if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
-    {
-    blocklimits.push_back(row_gpu.size());
-    isamp=0;
-    curtile_u = rng.first.tile_u;
-    curtile_v = rng.first.tile_v;
-    }
-  for (const auto &rcr: rng.second)
-    {
-    auto nchan = rcr.ch_end-rcr.ch_begin;
-    MR_assert(nchan<=chunksize, "channel range too big!");
-    if (isamp+nchan>=chunksize)  // need to start a new chunk
-      {
-      blocklimits.push_back(row_gpu.size());
-      isamp = nchan;
-      }
-    row_gpu.push_back(rcr.row);
-    chbegin_gpu.push_back(rcr.ch_begin);
-    vissum_gpu.push_back(accum);
-    accum += nchan;
-    }
-  }
-blocklimits.push_back(row_gpu.size());
-vissum_gpu.push_back(accum);
-timers.pop();
-
-#if 0
-        vector<uint32_t> fullidx;
-        vector<uint32_t> blocklimits;
-        
-        size_t channelbits=bit_width(bl.Nchannels()-1);
-        fullidx.reserve(nvis);
-        size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
+        vector<uint32_t> row_gpu;
+        vector<uint16_t> chbegin_gpu;
+        vector<size_t> vissum_gpu;
+        vector<uint32_t> blocklimits;
+        size_t rngsz=0;
         for (const auto &rng: ranges)
+          rngsz+=rng.second.size();
+        row_gpu.reserve(rngsz);
+        chbegin_gpu.reserve(rngsz);
+        vissum_gpu.reserve(rngsz+1);
+        size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
+        size_t accum=0;
+        for (const auto &rng: ranges)
+          {
+          if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
+            {
+            blocklimits.push_back(row_gpu.size());
+            isamp=0;
+            curtile_u = rng.first.tile_u;
+            curtile_v = rng.first.tile_v;
+            }
           for (const auto &rcr: rng.second)
-            for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
+            {
+            auto nchan = rcr.ch_end-rcr.ch_begin;
+            MR_assert(nchan<=chunksize, "channel range too big!");
+            row_gpu.push_back(rcr.row);
+            chbegin_gpu.push_back(rcr.ch_begin);
+            vissum_gpu.push_back(accum);
+            accum += nchan;
+            if (isamp+nchan>=chunksize)  // need to start a new chunk
               {
-              ++isamp;
-              if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>=chunksize))
-                {
-                blocklimits.push_back(fullidx.size());
-                isamp=0;
-                curtile_u = rng.first.tile_u;
-                curtile_v = rng.first.tile_v;
-                }
-              fullidx.push_back((rcr.row<<channelbits)+ichan);
+              blocklimits.push_back(row_gpu.size());
+              isamp = nchan;
               }
-        blocklimits.push_back(fullidx.size());
+            }
+          }
+        blocklimits.push_back(row_gpu.size());
+        vissum_gpu.push_back(accum);
         timers.pop();
-#endif
-
+       
         sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
           sycl::range<1>(row_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
