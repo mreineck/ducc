@@ -1536,7 +1536,7 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-        size_t chunksize=max<size_t>(1024, bl.Nchannels());
+        constexpr size_t chunksize=1024;
         vector<uint32_t> row_gpu;
         vector<uint16_t> chbegin_gpu;
         vector<size_t> vissum_gpu;
