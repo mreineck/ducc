@@ -1587,6 +1587,11 @@ vissum_gpu.push_back(accum);
 }
 timers.pop();
 
+        vector<uint32_t> fullidx;
+        vector<uint32_t> blocklimits;
+        
+        size_t channelbits=bit_width(bl.Nchannels()-1);
+        fullidx.reserve(nvis);
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
         for (const auto &rng: ranges)
