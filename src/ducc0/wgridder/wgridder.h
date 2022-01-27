@@ -1636,7 +1636,7 @@ size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
             if (wanted>=accvissum[accblocklimits[iblock+1]])
               return;  // nothing to do for this item
 auto x = accblocklimits[iblock];
-while(accvissum[x+1]<wanted) ++x; // FIXME: must become O(log N)
+while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
 auto irow = accrow[x];
 auto ichan = accchbegin[x] + (wanted-accvissum[x]);
 
