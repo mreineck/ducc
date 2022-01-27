@@ -1572,15 +1572,16 @@ timers.push("GPU degridding");
             {
             auto nchan = rcr.ch_end-rcr.ch_begin;
             MR_assert(nchan<=chunksize, "channel range too big!");
+            if (isamp+nchan>=chunksize)  // need to start a new chunk
+              {
+              blocklimits.push_back(row_gpu.size());
+              isamp = 0;
+              }
             row_gpu.push_back(rcr.row);
             chbegin_gpu.push_back(rcr.ch_begin);
             vissum_gpu.push_back(accum);
             accum += nchan;
-            if (isamp+nchan>=chunksize)  // need to start a new chunk
-              {
-              blocklimits.push_back(row_gpu.size());
-              isamp = nchan;
-              }
+            isamp += nchan;
             }
           }
         blocklimits.push_back(row_gpu.size());
