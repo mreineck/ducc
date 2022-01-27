@@ -1568,9 +1568,11 @@ timers.push("GPU degridding");
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
             }
+MR_assert(!rng.second.empty(), "oops");
           for (const auto &rcr: rng.second)
             {
             auto nchan = rcr.ch_end-rcr.ch_begin;
+MR_assert(nchan>0, "oops2");
             MR_assert(nchan<=chunksize, "channel range too big!");
             if (isamp+nchan>=chunksize)  // need to start a new chunk
               {
@@ -1606,7 +1608,6 @@ timers.push("GPU degridding");
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
-//          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
