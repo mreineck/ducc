@@ -1614,13 +1614,13 @@ timers.pop();
         timers.pop();
 #endif
 
-        sycl::buffer<<uint32_t, 1> bufrow{row_gpu.data(),
+        sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
           sycl::range<1>(row_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<<uint17_t, 1> bufchbegin{chbegin_gpu.data(),
+        sycl::buffer<uint16_t, 1> bufchbegin{chbegin_gpu.data(),
           sycl::range<1>(chbegin_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<<size_t, 1> bufvissum(vissum_gpu.data(),
+        sycl::buffer<size_t, 1> bufvissum(vissum_gpu.data(),
           sycl::range<1>(vissum_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
         sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
