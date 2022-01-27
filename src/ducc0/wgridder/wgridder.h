@@ -1632,7 +1632,7 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
             auto iblock = item.get_global_id(0);
             auto iwork = item.get_local_id(1);
 // preparation
-constexpr size_t sidelen = lsupp+(1<<logsquare);
+size_t sidelen = lsupp+(1<<logsquare);
 local_accessor<complex<Tcalc>> tile{sidelen,sidelen};
 if (iwork==0)
   {
