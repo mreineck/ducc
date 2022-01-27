@@ -1530,7 +1530,7 @@ timers.push("GPU degridding");
                 "single precision FFT failed")
               }
             DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
-#iundef DUCC0_CUDACHECK
+#undef DUCC0_CUDACHECK
             });
           });
 
