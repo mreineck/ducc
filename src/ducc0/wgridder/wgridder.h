@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2022 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_H
@@ -1423,7 +1423,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
 timers.push("GPU degridding");
-{
+        {
         sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
         // dirty image
@@ -1464,7 +1464,7 @@ timers.push("GPU degridding");
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
           {
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::discard_write>(cgh)};
           cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
             { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
           });
@@ -1511,81 +1511,101 @@ timers.push("GPU degridding");
           cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
             void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
             cufftHandle plan;
-{
-            auto res = cufftCreate(&plan);
-   if (res != CUFFT_SUCCESS)
-     cout << "plan creation failed" << res << endl;
-}
+#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
+            DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
             if constexpr (is_same<Tcalc,double>::value)
               {
-{
-              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z);
-   if (res != CUFFT_SUCCESS)
-     cout << "double precision planning failed" << res << endl;
-}
+              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z),
+                "double precision planning failed")
               auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-              auto res = cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD);
-              if (res != CUFFT_SUCCESS)
-                cout << "double precision FFT failed" << res << endl;
+              DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD),
+                "double precision FFT failed")
               }
             else
               {
-{
-              auto res = cufftPlan2d(&plan, nu, nv, CUFFT_C2C);
-   if (res != CUFFT_SUCCESS)
-     cout << "single precision planning failed" << res << endl;
-}
+              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_C2C),
+                "single precision planning failed")
               auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-              auto res = cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD);
-              if (res != CUFFT_SUCCESS)
-                cout << "single precision FFT failed" << res << endl;
+              DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD),
+                "single precision FFT failed")
               }
-            cufftDestroy(plan);
+            DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
+#undef DUCC0_CUDACHECK
             });
           });
 
         // build index structure
         timers.push("index creation");
-        vector<uint32_t> fullidx;
-        vector<uint32_t> blocklimits;
-        
-        size_t channelbits=bit_width(bl.Nchannels()-1);
-        fullidx.reserve(nvis);
-        size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
+        vector<uint32_t> row_gpu;
+        vector<uint16_t> chbegin_gpu;
+        vector<size_t> vissum_gpu;
+        vector<uint32_t> blocklimits;
+        vector<size_t> blockstartidx;
+        size_t nranges=0;
         for (const auto &rng: ranges)
+          nranges+=rng.second.size();
+        row_gpu.reserve(nranges);
+        chbegin_gpu.reserve(nranges);
+        vissum_gpu.reserve(nranges+1);
+        size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
+        size_t accum=0;
+        for (const auto &rng: ranges)
+          {
+          if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
+            {
+            blocklimits.push_back(row_gpu.size());
+            blockstartidx.push_back(accum);
+            isamp=0;
+            curtile_u = rng.first.tile_u;
+            curtile_v = rng.first.tile_v;
+            }
           for (const auto &rcr: rng.second)
-            for (auto ichan=rcr.ch_begin; ichan<rcr.ch_end; ++ichan)
+            {
+            auto nchan = rcr.ch_end-rcr.ch_begin;
+            size_t curpos=0;
+            while (curpos+chunksize-isamp<=nchan)
               {
-              ++isamp;
-              if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>=chunksize))
-                {
-                blocklimits.push_back(fullidx.size());
-                isamp=0;
-                curtile_u = rng.first.tile_u;
-                curtile_v = rng.first.tile_v;
-                }
-              fullidx.push_back((rcr.row<<channelbits)+ichan);
+              blocklimits.push_back(row_gpu.size());
+              blockstartidx.push_back(blockstartidx.back()+chunksize);
+              curpos += chunksize-isamp;
+              isamp = 0;
               }
-        blocklimits.push_back(fullidx.size());
+            isamp += nchan-curpos;
+            row_gpu.push_back(rcr.row);
+            chbegin_gpu.push_back(rcr.ch_begin);
+            vissum_gpu.push_back(accum);
+            accum += nchan;
+            }
+          }
+        blocklimits.push_back(row_gpu.size());
+        blockstartidx.push_back(accum);
+        vissum_gpu.push_back(accum);
         timers.pop();
-cout << "fullidx size (bytes): " << fullidx.size()*sizeof(uint32_t) << endl;
-size_t rngsz=0;
-for (const auto &rng: ranges)
-  rngsz+=rng.second.size();
-cout << "rng size (bytes): "<< rngsz*sizeof(RowchanRange) << endl;
 
-        sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
-          sycl::range<1>(fullidx.size()),
+        sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
+          sycl::range<1>(row_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<uint16_t, 1> bufchbegin{chbegin_gpu.data(),
+          sycl::range<1>(chbegin_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<size_t, 1> bufvissum{vissum_gpu.data(),
+          sycl::range<1>(vissum_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
         sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
           sycl::range<1>(blocklimits.size()),
           {sycl::property::buffer::use_host_ptr()}};
-       
+        sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
+          sycl::range<1>(blockstartidx.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+
         q.submit([&](sycl::handler &cgh)
           {
-          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
+          auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
+          auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
+          auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+          auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
@@ -1608,11 +1628,24 @@ cout << "rng size (bytes): "<< rngsz*sizeof(RowchanRange) << endl;
             {
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
-            if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
+
+            auto xlo = accblocklimits[iblock];
+            auto xhi = accblocklimits[iblock+1];
+            size_t wanted = accblockstartidx[iblock]+iwork;
+            if (wanted>=accblockstartidx[iblock+1])
               return;  // nothing to do for this item
-            auto ivis = accidx[accblocklimits[iblock]+iwork];
-            auto ichan = ivis&((1<<channelbits)-1);
-            auto irow = ivis>>channelbits;
+            while (xlo+1<xhi)  // bisection search
+              {
+              auto xmid = (xlo+xhi)/2;
+              if (accvissum[xmid]<=wanted)
+                xlo = xmid;
+              else
+                xhi = xmid;
+              }
+            if (accvissum[xhi]<=wanted)
+              xlo = xhi;
+            auto irow = accrow[xlo];
+            auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
@@ -1673,20 +1706,20 @@ cout << "rng size (bytes): "<< rngsz*sizeof(RowchanRange) << endl;
             });
           });
         }
-}
-timers.poppush("weight application");
-bool do_weights = wgt.stride(0)!=0;
-if (do_weights)
-  {
-  auto nchan = bl.Nchannels();
-  execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
-    {
-    for (auto irow=lo; irow<hi; ++irow)
-      for (size_t ichan=0; ichan<nchan; ++ichan)
-        ms_out(irow, ichan) *= wgt(irow, ichan);
-    });
-  }
-timers.pop();
+        }
+        timers.poppush("weight application");
+        bool do_weights = wgt.stride(0)!=0;
+        if (do_weights)
+          {
+          auto nchan = bl.Nchannels();
+          execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
+            {
+            for (auto irow=lo; irow<hi; ++irow)
+              for (size_t ichan=0; ichan<nchan; ++ichan)
+                ms_out(irow, ichan) *= wgt(irow, ichan);
+            });
+          }
+        timers.pop();
         }
       }
 
