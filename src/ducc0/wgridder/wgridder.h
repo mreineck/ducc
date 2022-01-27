@@ -1548,13 +1548,15 @@ timers.push("GPU degridding");
         timers.push("index creation");
 
 constexpr size_t chunksize=1024;
-vector<RowchanRange> rcr_gpu;
+vector<uint32_t> row_gpu;
+vector<uint16_t> chbegin_gpu;
 vector<size_t> vissum_gpu;
 vector<uint32_t> blocklimits;
 size_t rngsz=0;
 for (const auto &rng: ranges)
   rngsz+=rng.second.size();
-rcr_gpu.reserve(rngsz);
+row_gpu.reserve(rngsz);
+chbegin_gpu.reserve(rngsz);
 vissum_gpu.reserve(rngsz+1);
 size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
 size_t accum=0;
@@ -1562,7 +1564,7 @@ for (const auto &rng: ranges)
   {
   if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
     {
-    blocklimits.push_back(rcr_gpu.size());
+    blocklimits.push_back(row_gpu.size());
     isamp=0;
     curtile_u = rng.first.tile_u;
     curtile_v = rng.first.tile_v;
@@ -1573,15 +1575,16 @@ for (const auto &rng: ranges)
     MR_assert(nchan<=chunksize, "channel range too big!");
     if (isamp+nchan>=chunksize)  // need to start a new chunk
       {
-      blocklimits.push_back(rcr_gpu.size());
+      blocklimits.push_back(row_gpu.size());
       isamp = nchan;
       }
-    rcr_gpu.push_back(rcr);
+    row_gpu.push_back(rcr.row);
+    chbegin_gpu.push_back(rcr.ch_begin);
     vissum_gpu.push_back(accum);
     accum += nchan;
     }
   }
-blocklimits.push_back(rcr_gpu.size());
+blocklimits.push_back(row_gpu.size());
 vissum_gpu.push_back(accum);
 timers.pop();
 
@@ -1611,8 +1614,11 @@ timers.pop();
         timers.pop();
 #endif
 
-        sycl::buffer<<RowchanRange, 1> bufrcr{rcr_gpu.data(),
-          sycl::range<1>(rcr_gpu.size()),
+        sycl::buffer<<uint32_t, 1> bufrow{row_gpu.data(),
+          sycl::range<1>(row_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<<uint17_t, 1> bufchbegin{chbegin_gpu.data(),
+          sycl::range<1>(chbegin_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
         sycl::buffer<<size_t, 1> bufvissum(vissum_gpu.data(),
           sycl::range<1>(vissum_gpu.size()),
@@ -1623,7 +1629,8 @@ timers.pop();
        
         q.submit([&](sycl::handler &cgh)
           {
-          auto accrcr{bufrcr.template get_access<sycl::access::mode::read>(cgh)};
+          auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
+          auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
 //          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
@@ -1655,8 +1662,8 @@ size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
               return;  // nothing to do for this item
 auto x = accblocklimits[iblock];
 while(accvissum[x+1]<wanted) ++x; // FIXME: must become O(log N)
-auto irow = accrcr[x].row;
-auto ichan = accrcr[x].ch_begin + (wanted-accvissum[x]);
+auto irow = accrow[x];
+auto ichan = accchbegin[x] + (wanted-accvissum[x]);
 
             //if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
               //return;  // nothing to do for this item
