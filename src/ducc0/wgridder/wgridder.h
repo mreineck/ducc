@@ -1658,7 +1658,7 @@ timers.pop();
             auto iwork = item.get_id(1);
 
 size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
-            if (wanted>=vissum[accblocklimits[iblock+1]])
+            if (wanted>=accvissum[accblocklimits[iblock+1]])
               return;  // nothing to do for this item
 auto x = accblocklimits[iblock];
 while(accvissum[x+1]<wanted) ++x; // FIXME: must become O(log N)
