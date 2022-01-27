@@ -1632,13 +1632,22 @@ MR_assert(nchan>0, "oops2");
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
 
-size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
+            size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
             if (wanted>=accvissum[accblocklimits[iblock+1]])
               return;  // nothing to do for this item
-auto x = accblocklimits[iblock];
-while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
-auto irow = accrow[x];
-auto ichan = accchbegin[x] + (wanted-accvissum[x]);
+            auto xlo = accblocklimits[iblock];
+            auto xhi = accblocklimits[iblock+1];
+            while (xlo+1<xhi)
+              {
+              auto xmid = (xlo+xhi)/2;
+              if (accvissum[xmid]<=wanted)
+                xlo = xmid;
+              else
+                xhi = xmid;
+              }
+            while(accvissum[x+1]<=wanted) ++x; // FIXME: must become O(log N)
+            auto irow = accrow[xlo];
+            auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
 
             //if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
               //return;  // nothing to do for this item
