@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2022 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_H
@@ -1546,11 +1546,46 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-        vector<uint32_t> fullidx;
-        vector<uint32_t> blocklimits;
-        
-        size_t channelbits=bit_width(bl.Nchannels()-1);
-        fullidx.reserve(nvis);
+timers.push("newalgp");
+{
+vector<RowchanRange> rcr_gpu;
+vector<size_t> vissum_gpu;
+vector<uint32_t> blocklimits;
+size_t rngsz=0;
+for (const auto &rng: ranges)
+  rngsz+=rng.second.size();
+rcr_gpu.reserve(rngsz);
+vissum_gpu.reserve(rngsz+1);
+size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
+size_t accum=0;
+for (const auto &rng: ranges)
+  {
+  if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>=chunksize))
+    {
+    blocklimits.push_back(rcr_gpu.size());
+    isamp=0;
+    curtile_u = rng.first.tile_u;
+    curtile_v = rng.first.tile_v;
+    }
+  for (const auto &rcr: rng.second)
+    {
+    auto nchan = rcr.ch_end-rcr.ch_begin;
+    MR_assert(nchan<=chunksize, "channel range too big!");
+    if (isamp+nchan>=chunksize)  // need to start a new chunk
+      {
+      blocklimits.push_back(rcr_gpu.size());
+      isamp = nchan;
+      }
+    rcr_gpu.push_back(rcr);
+    vissum_gpu.push_back(accum);
+    accum += nchan;
+    }
+  }
+blocklimits.push_back(rcr_gpu.size());
+vissum_gpu.push_back(accum);
+}
+timers.pop();
+
         size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
         constexpr size_t chunksize=1024;
         for (const auto &rng: ranges)
@@ -1569,11 +1604,6 @@ timers.push("GPU degridding");
               }
         blocklimits.push_back(fullidx.size());
         timers.pop();
-cout << "fullidx size (bytes): " << fullidx.size()*sizeof(uint32_t) << endl;
-size_t rngsz=0;
-for (const auto &rng: ranges)
-  rngsz+=rng.second.size();
-cout << "rng size (bytes): "<< rngsz*sizeof(RowchanRange) << endl;
 
         sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
           sycl::range<1>(fullidx.size()),
