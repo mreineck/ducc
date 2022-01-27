@@ -1582,7 +1582,7 @@ timers.push("GPU degridding");
         blockstartidx.push_back(accum);
         vissum_gpu.push_back(accum);
         timers.pop();
-       
+
         sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
           sycl::range<1>(row_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
@@ -1598,7 +1598,7 @@ timers.push("GPU degridding");
         sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
           sycl::range<1>(blockstartidx.size()),
           {sycl::property::buffer::use_host_ptr()}};
-       
+
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
