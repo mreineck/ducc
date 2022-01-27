@@ -1624,6 +1624,8 @@ timers.push("GPU degridding");
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
+size_t sidelen = lsupp+(1<<logsquare);
+sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
 sycl::range<2> global(blocklimits.size()-1, chunksize);
 sycl::range<2> local(1, chunksize);
 cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
@@ -1632,8 +1634,6 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
             auto iblock = item.get_global_id(0);
             auto iwork = item.get_local_id(1);
 // preparation
-size_t sidelen = lsupp+(1<<logsquare);
-local_accessor<complex<Tcalc>> tile{sidelen,sidelen};
 if (iwork==0)
   {
   for (size_t i=0; i<sidelen; ++i)
