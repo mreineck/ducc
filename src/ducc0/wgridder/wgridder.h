@@ -1464,7 +1464,7 @@ timers.push("GPU degridding");
         // zeroing grid
         q.submit([&](sycl::handler &cgh)
           {
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::discard_write>(cgh)};
           cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
             { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
           });
