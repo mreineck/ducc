@@ -41,10 +41,11 @@
 #include <x86intrin.h>
 #endif
 
+#if (__has_include("CL/sycl.hpp") && (__has_include(<cufft.h>)))
 #include "CL/sycl.hpp"
 using namespace cl;
-
 #include <cufft.h>
+#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -1422,6 +1423,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
+#if (__has_include("CL/sycl.hpp") && (__has_include(<cufft.h>)))
 timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
@@ -1711,6 +1713,9 @@ timers.push("GPU degridding");
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
         timers.pop();
+#else
+        MR_fail("CUDA not found");
+#endif
         }
       }
 
