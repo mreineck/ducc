@@ -1423,9 +1423,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       else
         {
 timers.push("GPU degridding");
-        {
-        sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
+        sycl::queue q{sycl::default_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
@@ -1434,7 +1433,6 @@ timers.push("GPU degridding");
           {sycl::property::buffer::use_host_ptr()});
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-//        bufgrid.set_write_back(false);
 
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
@@ -1705,8 +1703,7 @@ timers.push("GPU degridding");
             accvis[irow][ichan] = res;
             });
           });
-        }
-        }
+        }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
         bool do_weights = wgt.stride(0)!=0;
         if (do_weights)
