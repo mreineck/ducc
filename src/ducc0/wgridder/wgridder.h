@@ -1546,8 +1546,7 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-timers.push("newalgp");
-{
+
 constexpr size_t chunksize=1024;
 vector<RowchanRange> rcr_gpu;
 vector<size_t> vissum_gpu;
@@ -1561,7 +1560,7 @@ size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0);
 size_t accum=0;
 for (const auto &rng: ranges)
   {
-  if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)||(isamp>=chunksize))
+  if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v))
     {
     blocklimits.push_back(rcr_gpu.size());
     isamp=0;
@@ -1584,9 +1583,9 @@ for (const auto &rng: ranges)
   }
 blocklimits.push_back(rcr_gpu.size());
 vissum_gpu.push_back(accum);
-}
 timers.pop();
 
+#if 0
         vector<uint32_t> fullidx;
         vector<uint32_t> blocklimits;
         
@@ -1610,9 +1609,13 @@ timers.pop();
               }
         blocklimits.push_back(fullidx.size());
         timers.pop();
+#endif
 
-        sycl::buffer<uint32_t, 1> bufidx{fullidx.data(),
-          sycl::range<1>(fullidx.size()),
+        sycl::buffer<<RowchanRange, 1> bufrcr{rcr_gpu.data(),
+          sycl::range<1>(rcr_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<<size_t, 1> bufvissum(vissum_gpu.data(),
+          sycl::range<1>(vissum_gpu.size()),
           {sycl::property::buffer::use_host_ptr()}};
         sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
           sycl::range<1>(blocklimits.size()),
@@ -1620,7 +1623,9 @@ timers.pop();
        
         q.submit([&](sycl::handler &cgh)
           {
-          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
+          auto accrcr{bufrcr.template get_access<sycl::access::mode::read>(cgh)};
+          auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
+//          auto accidx{bufidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
@@ -1644,11 +1649,20 @@ timers.pop();
             {
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
-            if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
+
+size_t wanted = accvissum[accblocklimits[iblock]]+iwork;
+            if (wanted>=vissum[accblocklimits[iblock+1]])
               return;  // nothing to do for this item
-            auto ivis = accidx[accblocklimits[iblock]+iwork];
-            auto ichan = ivis&((1<<channelbits)-1);
-            auto irow = ivis>>channelbits;
+auto x = accblocklimits[iblock];
+while(accvissum[x+1]<wanted) ++x; // FIXME: must become O(log N)
+auto irow = accrcr[x].row;
+auto ichan = accrcr[x].ch_begin + (wanted-accvissum[x]);
+
+            //if (iwork>=accblocklimits[iblock+1]-accblocklimits[iblock])
+              //return;  // nothing to do for this item
+            //auto ivis = accidx[accblocklimits[iblock]+iwork];
+            //auto ichan = ivis&((1<<channelbits)-1);
+            //auto irow = ivis>>channelbits;
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
