@@ -1635,10 +1635,7 @@ timers.push("GPU degridding");
             while (xlo+1<xhi)  // bisection search
               {
               auto xmid = (xlo+xhi)/2;
-              if (accvissum[xmid]<=wanted)
-                xlo = xmid;
-              else
-                xhi = xmid;
+              (accvissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
               }
             if (accvissum[xhi]<=wanted)
               xlo = xhi;
@@ -1705,17 +1702,14 @@ timers.push("GPU degridding");
           });
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
-        bool do_weights = wgt.stride(0)!=0;
-        if (do_weights)
-          {
-          auto nchan = bl.Nchannels();
+        if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
+            auto nchan = bl.Nchannels();
             for (auto irow=lo; irow<hi; ++irow)
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-          }
         timers.pop();
         }
       }
