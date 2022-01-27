@@ -1631,8 +1631,8 @@ timers.push("GPU degridding");
 
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
-            size_t wanted = blockstartidx[iblock]+iwork;
-            if (wanted>=blockstartidx[iblock+1])
+            size_t wanted = accblockstartidx[iblock]+iwork;
+            if (wanted>=accblockstartidx[iblock+1])
               return;  // nothing to do for this item
             while (xlo+1<xhi)  // bisection search
               {
