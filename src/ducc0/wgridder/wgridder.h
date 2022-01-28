@@ -1660,7 +1660,7 @@ auto v_tile = acctilev[iblock];
   for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
     {
     size_t iu = i/sidelen, iv = i%sidelen;
-    tile[iu][jv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
+    tile[iu][iv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
     }
 item.barrier();
 
