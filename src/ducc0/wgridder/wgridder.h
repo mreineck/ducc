@@ -1632,12 +1632,15 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
 size_t sidelen = lsupp+(1<<logsquare);
 sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
 cout << "nblocks: " << blocklimits.size()-1 << endl;
-sycl::range<2> global(blocklimits.size()-1, chunksize);
+for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
+{
+size_t blockend = min(blockofs+1024,blocklimits.size());
+sycl::range<2> global(blockend-blockofs, chunksize);
 sycl::range<2> local(1, chunksize);
 cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 //          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
             {
-            auto iblock = item.get_global_id(0);
+            auto iblock = item.get_global_id(0)+blockofs;
             auto iwork = item.get_local_id(1);
 // preparation
 if (iwork==0)
@@ -1722,6 +1725,7 @@ item.barrier();
               }
             accvis[irow][ichan] = res;
             });
+}
           });
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
