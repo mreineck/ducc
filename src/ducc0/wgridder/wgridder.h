@@ -1604,6 +1604,10 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
           sycl::range<1>(blockstartidx.size()),
           {sycl::property::buffer::use_host_ptr()}};
 
+cout << "nblocks: " << blocklimits.size()-1 << endl;
+for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
+{
+size_t blockend = min(blockofs+1024,blocklimits.size());
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
@@ -1629,14 +1633,10 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
-size_t sidelen = lsupp+(1<<logsquare);
-sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-cout << "nblocks: " << blocklimits.size()-1 << endl;
-for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
-{
-size_t blockend = min(blockofs+1024,blocklimits.size());
 sycl::range<2> global(blockend-blockofs, chunksize);
 sycl::range<2> local(1, chunksize);
+size_t sidelen = lsupp+(1<<logsquare);
+sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
 cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 //          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
             {
@@ -1725,8 +1725,8 @@ item.barrier();
               }
             accvis[irow][ichan] = res;
             });
-}
           });
+}
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
