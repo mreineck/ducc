@@ -1645,10 +1645,36 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 // preparation
 if (iwork==0)
   {
+            auto xlo = accblocklimits[iblock];
+            auto xhi = accblocklimits[iblock+1];
+            size_t wanted = accblockstartidx[iblock]+iwork;
+            if (wanted>=accblockstartidx[iblock+1])
+              return;  // nothing to do for this item
+            while (xlo+1<xhi)  // bisection search
+              {
+              auto xmid = (xlo+xhi)/2;
+              (accvissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
+              }
+            if (accvissum[xhi]<=wanted)
+              xlo = xhi;
+            auto irow = accrow[xlo];
+            auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
+
+            double u = accuvw[irow][0]*accfreq[ichan];
+            double v = accuvw[irow][1]*accfreq[ichan];
+
+            // compute fractional and integer indices in "grid"
+            double ufrac = u*lpixsize_x;
+            ufrac = (ufrac-floor(ufrac))*lnu;
+            int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
+            ufrac -= iu0;
+            double vfrac = v*lpixsize_y;
+            vfrac = (vfrac-floor(vfrac))*lnv;
+            int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
   for (size_t i=0; i<sidelen; ++i)
     for (size_t j=0; j<sidelen; ++j)
       {
-      tile[i][j] = 0;
+      tile[i][j] = accgrid[(iu0+i+lnu)%lnu][(iv0+j+lnv)%lnv];
       }
   }
 item.barrier();
@@ -1698,6 +1724,7 @@ item.barrier();
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
+#if 0
             auto iustart=size_t((iu0+lnu)%lnu);
             auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
@@ -1709,6 +1736,15 @@ item.barrier();
                 tmp += vkrn[j]*accgrid[realiu][realiv];
               res += ukrn[i]*tmp;
               }
+#else
+            for (size_t i=0; i<lsupp; ++i)
+              {
+              complex<Tcalc> tmp = 0;
+              for (size_t j=0; j<lsupp; ++j)
+                tmp += vkrn[j]*tile[i][j];
+              res += ukrn[i]*tmp;
+              }
+#endif
 
             if (lshifting)
               {
