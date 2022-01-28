@@ -1662,7 +1662,6 @@ auto v_tile = acctilev[iblock];
     size_t iu = i/sidelen, iv = i%sidelen;
     tile[iu][jv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
     }
-  }
 item.barrier();
 
             auto xlo = accblocklimits[iblock];
