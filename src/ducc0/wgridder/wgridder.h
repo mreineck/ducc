@@ -1631,6 +1631,7 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
           auto xlmshift = mshift;
 size_t sidelen = lsupp+(1<<logsquare);
 sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+cout << "nblocks: " << blocklimits.size()-1 << endl;
 sycl::range<2> global(blocklimits.size()-1, chunksize);
 sycl::range<2> local(1, chunksize);
 cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
