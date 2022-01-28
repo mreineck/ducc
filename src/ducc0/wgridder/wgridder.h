@@ -1543,7 +1543,7 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
         timers.push("index creation");
         constexpr size_t chunksize=1024;
         vector<uint32_t> row_gpu;
-        vector<uint16_t> chbegin_gpu;
+        vector<uint16_t> chbegin_gpu, tile_u_gpu, tile_v_gpu;
         vector<size_t> vissum_gpu;
         vector<uint32_t> blocklimits;
         vector<size_t> blockstartidx;
@@ -1564,6 +1564,8 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
             isamp=0;
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
+tile_u_gpu.push_back(rng.first.tile_u);
+tile_v_gpu.push_back(rng.first.tile_v);
             }
           for (const auto &rcr: rng.second)
             {
@@ -1573,6 +1575,8 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
               {
               blocklimits.push_back(row_gpu.size());
               blockstartidx.push_back(blockstartidx.back()+chunksize);
+tile_u_gpu.push_back(rng.first.tile_u);
+tile_v_gpu.push_back(rng.first.tile_v);
               curpos += chunksize-isamp;
               isamp = 0;
               }
@@ -1603,6 +1607,12 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
         sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
           sycl::range<1>(blockstartidx.size()),
           {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<uint16_t, 1> buftileu{tile_u_gpu.data(),
+          sycl::range<1>(tile_u_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
+        sycl::buffer<uint16_t, 1> buftilev{tile_v_gpu.data(),
+          sycl::range<1>(tile_v_gpu.size()),
+          {sycl::property::buffer::use_host_ptr()}};
 
 cout << "nblocks: " << blocklimits.size()-1 << endl;
 for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
@@ -1614,6 +1624,8 @@ size_t blockend = min(blockofs+1024,blocklimits.size());
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+          auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
+          auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
@@ -1643,39 +1655,13 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
             auto iblock = item.get_global_id(0)+blockofs;
             auto iwork = item.get_local_id(1);
 // preparation
-if (iwork==0)
-  {
-            auto xlo = accblocklimits[iblock];
-            auto xhi = accblocklimits[iblock+1];
-            size_t wanted = accblockstartidx[iblock]+iwork;
-            if (wanted>=accblockstartidx[iblock+1])
-              return;  // nothing to do for this item
-            while (xlo+1<xhi)  // bisection search
-              {
-              auto xmid = (xlo+xhi)/2;
-              (accvissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
-              }
-            if (accvissum[xhi]<=wanted)
-              xlo = xhi;
-            auto irow = accrow[xlo];
-            auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
-
-            double u = accuvw[irow][0]*accfreq[ichan];
-            double v = accuvw[irow][1]*accfreq[ichan];
-
-            // compute fractional and integer indices in "grid"
-            double ufrac = u*lpixsize_x;
-            ufrac = (ufrac-floor(ufrac))*lnu;
-            int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
-            ufrac -= iu0;
-            double vfrac = v*lpixsize_y;
-            vfrac = (vfrac-floor(vfrac))*lnv;
-            int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
-  for (size_t i=0; i<sidelen; ++i)
-    for (size_t j=0; j<sidelen; ++j)
-      {
-      tile[i][j] = accgrid[(iu0+i+lnu)%lnu][(iv0+j+lnv)%lnv];
-      }
+auto u_tile = acctileu[iblock];
+auto v_tile = acctilev[iblock];
+  for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+    {
+    size_t iu = i/sidelen, iv = i%sidelen;
+    tile[iu][jv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
+    }
   }
 item.barrier();
 
