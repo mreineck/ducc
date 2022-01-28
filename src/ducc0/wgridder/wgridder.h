@@ -1430,7 +1430,7 @@ timers.push("GPU degridding");
 auto device = q.get_device();
 cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
 cout << "max_work_group_size: " << device.template get_info<sycl::info::device::max_work_group_size>() << endl;
-cout << "max_work_item_sizes<0>: " << device.template get_info<sycl::info::device::max_work_item_sizes<0>>() << endl;
+cout << "max_work_item_sizes<1>: " << device.template get_info<sycl::info::device::max_work_item_sizes<1>>() << endl;
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
