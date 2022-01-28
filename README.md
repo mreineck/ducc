@@ -9,6 +9,14 @@ on the sphere and gridding/degridding of radio interferometry data.
 The code is written in C++17, but provides a simple and comprehensive Python
 interface.
 
+### Licensing terms
+- All source code in this package is released under the terms of the GNU
+  General Public License v2 or later.
+- Some files (those constituting the FFT component and its internal
+  dependencies) are also licensed under the BSD-3-clause license. These files
+  contain two sets of licensing headers; the user is free to choose under which
+  of those terms they want to use these sources.
+
 ### Requirements
 
 - [Python >= 3.7](https://www.python.org/)
