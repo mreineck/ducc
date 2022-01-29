@@ -41,12 +41,6 @@
 #include <x86intrin.h>
 #endif
 
-#if (__has_include("CL/sycl.hpp") && (__has_include(<cufft.h>)))
-#include "CL/sycl.hpp"
-using namespace cl;
-#include <cufft.h>
-#endif
-
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/fft/fft.h"
@@ -56,6 +50,7 @@ using namespace cl;
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
+#include "ducc0/infra/sycl_utils.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/rangeset.h"
 
@@ -1423,7 +1418,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
-#if (__has_include("CL/sycl.hpp") && (__has_include(<cufft.h>)))
+#if (defined(DUCC0_HAVE_SYCL) && defined(DUCC0_HAVE_CUFFT))
 timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
@@ -1445,19 +1440,12 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
-        const auto &freqraw(bl.get_f_over_c());
-        sycl::buffer<double, 1> buffreq{freqraw.data(),
-          sycl::range<1>(freqraw.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
-          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto buffreq(make_sycl_buffer(bl.get_f_over_c()));
+        auto bufvis(make_sycl_buffer(ms_out));
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
-          sycl::range<1>(coef.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufcoef(make_sycl_buffer(coef));
 
         // zeroing vis
         q.submit([&](sycl::handler &cgh)
@@ -1476,12 +1464,8 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
 // FIXME: cast to Timg
-        sycl::buffer<double, 1> bufcfu{cfu.data(),
-          sycl::range<1>(cfu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<double, 1> bufcfv{cfv.data(),
-          sycl::range<1>(cfv.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufcfu(make_sycl_buffer(cfu));
+        auto bufcfv(make_sycl_buffer(cfv));
         // copying to grid and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -1592,27 +1576,13 @@ tile_v_gpu.push_back(rng.first.tile_v);
         vissum_gpu.push_back(accum);
         timers.pop();
 
-        sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
-          sycl::range<1>(row_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint16_t, 1> bufchbegin{chbegin_gpu.data(),
-          sycl::range<1>(chbegin_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<size_t, 1> bufvissum{vissum_gpu.data(),
-          sycl::range<1>(vissum_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
-          sycl::range<1>(blocklimits.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
-          sycl::range<1>(blockstartidx.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint16_t, 1> buftileu{tile_u_gpu.data(),
-          sycl::range<1>(tile_u_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint16_t, 1> buftilev{tile_v_gpu.data(),
-          sycl::range<1>(tile_v_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufrow(make_sycl_buffer(row_gpu));
+        auto bufchbegin(make_sycl_buffer(chbegin_gpu));
+        auto bufvissum(make_sycl_buffer(vissum_gpu));
+        auto bufblocklimits(make_sycl_buffer(blocklimits));
+        auto bufblockstartidx(make_sycl_buffer(blockstartidx));
+        auto buftileu(make_sycl_buffer(tile_u_gpu));
+        auto buftilev(make_sycl_buffer(tile_v_gpu));
 
 cout << "nblocks: " << blocklimits.size()-1 << endl;
 for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
@@ -1657,6 +1627,7 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 // preparation
 auto u_tile = acctileu[iblock];
 auto v_tile = acctilev[iblock];
+size_t ofs = lsupp/2+1
   for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
     {
     size_t iu = i/sidelen, iv = i%sidelen;
@@ -1709,7 +1680,7 @@ item.barrier();
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-#if 0
+#if 1
             auto iustart=size_t((iu0+lnu)%lnu);
             auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
