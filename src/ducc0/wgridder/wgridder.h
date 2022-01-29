@@ -1584,10 +1584,10 @@ tile_v_gpu.push_back(rng.first.tile_v);
         auto buftileu(make_sycl_buffer(tile_u_gpu));
         auto buftilev(make_sycl_buffer(tile_v_gpu));
 
-cout << "nblocks: " << blocklimits.size()-1 << endl;
-for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
-{
-size_t blockend = min(blockofs+1024,blocklimits.size());
+//cout << "nblocks: " << blocklimits.size()-1 << endl;
+//for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
+//{
+//size_t blockend = min(blockofs+1024,blocklimits.size());
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
@@ -1615,25 +1615,25 @@ size_t blockend = min(blockofs+1024,blocklimits.size());
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
-sycl::range<2> global(blockend-blockofs, chunksize);
-sycl::range<2> local(1, chunksize);
-size_t sidelen = lsupp+(1<<logsquare);
-sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
-//          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
+//sycl::range<2> global(blockend-blockofs, chunksize);
+//sycl::range<2> local(1, chunksize);
+//size_t sidelen = lsupp+(1<<logsquare);
+//sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+//cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
+          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
             {
-            auto iblock = item.get_global_id(0)+blockofs;
-            auto iwork = item.get_local_id(1);
+            auto iblock = item.get_global_id(0);
+            auto iwork = item.get_global_id(1);
 // preparation
-auto u_tile = acctileu[iblock];
-auto v_tile = acctilev[iblock];
-size_t ofs = lsupp/2+1
-  for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-    {
-    size_t iu = i/sidelen, iv = i%sidelen;
-    tile[iu][iv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
-    }
-item.barrier();
+//auto u_tile = acctileu[iblock];
+//auto v_tile = acctilev[iblock];
+//size_t ofs = lsupp/2+1;
+  //for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+    //{
+    //size_t iu = i/sidelen, iv = i%sidelen;
+    //tile[iu][iv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
+    //}
+//item.barrier();
 
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
@@ -1718,7 +1718,7 @@ item.barrier();
             accvis[irow][ichan] = res;
             });
           });
-}
+//}
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
