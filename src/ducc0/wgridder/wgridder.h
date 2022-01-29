@@ -1594,8 +1594,8 @@ tile_v_gpu.push_back(rng.first.tile_v);
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
-          auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
+//          auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
+//          auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
@@ -1622,8 +1622,8 @@ tile_v_gpu.push_back(rng.first.tile_v);
 //cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
           cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
             {
-            auto iblock = item.get_global_id(0);
-            auto iwork = item.get_global_id(1);
+            auto iblock = item.get_id(0);
+            auto iwork = item.get_id(1);
 // preparation
 //auto u_tile = acctileu[iblock];
 //auto v_tile = acctilev[iblock];
