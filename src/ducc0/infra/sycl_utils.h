@@ -108,7 +108,7 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
 #if 1
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
-  sycl::host_accessor<complex<T>,ndim> acc{buf};
+  sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
   complex<T> *ptr = acc.get_pointer();
   if constexpr(ndim==2)
     {
@@ -140,10 +140,10 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
         else
           MR_fail("unsupported dimensionality");
         auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-          DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, direction),
+        DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, direction),
           "double precision FFT failed")
         }
-      else
+      else if constexpr (is_same<T,float>::value)
         {
         if constexpr(ndim==2)
           {
@@ -156,6 +156,8 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
         DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, direction),
           "single precision FFT failed")
         }
+      else
+        MR_fail("unsupported data type");
       DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
 #undef DUCC0_CUDACHECK
       });
