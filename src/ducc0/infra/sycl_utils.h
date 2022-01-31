@@ -121,6 +121,8 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
 #else
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
+  // This should not be needed, but without it tests fail when optimization is off
+  q.wait();
   q.submit([&](sycl::handler &cgh)
     {
     auto acc{buf.template get_access<sycl::access::mode::read_write>(cgh)};
@@ -129,7 +131,7 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
       cufftHandle plan;
 #define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
       DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
-      DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream");
+//      DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream");
       auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
       if constexpr (is_same<T,double>::value)
         {
@@ -163,6 +165,7 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
 #undef DUCC0_CUDACHECK
       });
     });
+//q.wait();
   }
 #endif
 }
