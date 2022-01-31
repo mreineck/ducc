@@ -105,26 +105,18 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
          {sycl::property::buffer::use_host_ptr()}};
   }
 
-#if 0
-FIXME this is still broken
+#if 1
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
-  q.submit([&](sycl::handler &cgh)
+  sycl::host_accessor<complex<T>,ndim> acc{buf};
+  complex<T> *ptr = acc.get_pointer();
+  if constexpr(ndim==2)
     {
-    auto acc{buf.template get_access<sycl::access::mode::read_write, sycl::access::target::host_buffer>(cgh)};
-// FIXME: single_task?
-    cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
-      complex<T> *ptr = acc.get_pointer();
-//      complex<T> *ptr = h.get_native_mem<sycl::backend::omp>(acc);
-      if constexpr(ndim==2)
-        {
-        vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
-        c2c (arr, arr, {0,1}, forward, T(1));
-        }
-      else
-        MR_fail("unsupported dimensionality");
-      });
-    });
+    vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
+    c2c (arr, arr, {0,1}, forward, T(1));
+    }
+  else
+    MR_fail("unsupported dimensionality");
   }
 #else
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
