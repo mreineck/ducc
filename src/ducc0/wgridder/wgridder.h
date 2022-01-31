@@ -1494,34 +1494,7 @@ cout << "max_work_group_size: " << device.template get_info<sycl::info::device::
           });
 
         // FFT
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
-          cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
-            void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
-            cufftHandle plan;
-#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
-            DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
-            if constexpr (is_same<Tcalc,double>::value)
-              {
-              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z),
-                "double precision planning failed")
-              auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-              DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD),
-                "double precision FFT failed")
-              }
-            else
-              {
-              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_C2C),
-                "single precision planning failed")
-              auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-              DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD),
-                "single precision FFT failed")
-              }
-            DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
-#undef DUCC0_CUDACHECK
-            });
-          });
+        sycl_c2c(q, bufgrid, true);
 
         // build index structure
         timers.push("index creation");

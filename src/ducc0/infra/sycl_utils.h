@@ -36,6 +36,7 @@ using namespace cl;
 #include <vector>
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/fft/fft.h"
 
 namespace ducc0 {
 
@@ -104,9 +105,75 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
          {sycl::property::buffer::use_host_ptr()}};
   }
 
+#if 0
+FIXME this is still broken
+template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+  {
+  q.submit([&](sycl::handler &cgh)
+    {
+    auto acc{buf.template get_access<sycl::access::mode::read_write, sycl::access::target::host_buffer>(cgh)};
+// FIXME: single_task?
+    cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
+      complex<T> *ptr = acc.get_pointer();
+//      complex<T> *ptr = h.get_native_mem<sycl::backend::omp>(acc);
+      if constexpr(ndim==2)
+        {
+        vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
+        c2c (arr, arr, {0,1}, forward, T(1));
+        }
+      else
+        MR_fail("unsupported dimensionality");
+      });
+    });
+  }
+#else
+template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+  {
+  q.submit([&](sycl::handler &cgh)
+    {
+    auto acc{buf.template get_access<sycl::access::mode::read_write>(cgh)};
+    cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
+      void *native_mem = h.get_native_mem<sycl::backend::cuda>(acc);
+      cufftHandle plan;
+#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
+      DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
+      auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
+      if constexpr (is_same<T,double>::value)
+        {
+        if constexpr(ndim==2)
+          {
+          DUCC0_CUDACHECK(cufftPlan2d(&plan, buf.get_range().get(0), buf.get_range().get(1), CUFFT_Z2Z),
+            "double precision planning failed")
+          }
+        else
+          MR_fail("unsupported dimensionality");
+        auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
+          DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, direction),
+          "double precision FFT failed")
+        }
+      else
+        {
+        if constexpr(ndim==2)
+          {
+          DUCC0_CUDACHECK(cufftPlan2d(&plan, buf.get_range().get(0), buf.get_range().get(1), CUFFT_C2C),
+            "double precision planning failed")
+          }
+        else
+          MR_fail("unsupported dimensionality");
+        auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
+        DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, direction),
+          "single precision FFT failed")
+        }
+      DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
+#undef DUCC0_CUDACHECK
+      });
+    });
+  }
+#endif
 }
 
 using detail_sycl_utils::make_sycl_buffer;
+using detail_sycl_utils::sycl_c2c;
 
 }
 
