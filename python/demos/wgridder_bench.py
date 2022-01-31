@@ -16,6 +16,7 @@
 from time import time
 
 import ducc0.wgridder.experimental as wgridder
+import ducc0
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -54,7 +55,7 @@ def main():
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
 
     t0 = time()
-    wgridder.dirty2vis(
+    x0 = wgridder.dirty2vis(
         uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
         mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
         do_wgridding=do_wgridding, nthreads=nthreads, verbosity=1,
@@ -65,17 +66,17 @@ def main():
 
     t0 = time()
     for _ in range(ntries_gpu):
-        wgridder.dirty2vis(
+        x1 = wgridder.dirty2vis(
             uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
             mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
             do_wgridding=do_wgridding,
             nthreads=nthreads, verbosity=1,
             flip_v=True,
             gpu=True)
-    t = (time() - t0)/ntried_gpu
+    t = (time() - t0)/ntries_gpu
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
-
+    print(ducc0.misc.l2error(x0,x1))
     plt.imshow(dirty.T, origin='lower')
     plt.show()
 

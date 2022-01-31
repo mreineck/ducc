@@ -168,10 +168,21 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
     MR_fail("unsupported dimensionality");
   }
 #endif
+
+void print_device_info(const sycl::device &device)
+  {
+  cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
+  cout << "max_work_group_size: " << device.template get_info<sycl::info::device::max_work_group_size>() << endl;
+//using blah = sycl::info::device::max_work_item_sizes<1>;
+//cout << "max_work_item_sizes<1>: " << device.template get_info<blah>() << endl;
+  }
+
+
 }
 
 using detail_sycl_utils::make_sycl_buffer;
 using detail_sycl_utils::sycl_c2c;
+using detail_sycl_utils::print_device_info;
 
 }
 
