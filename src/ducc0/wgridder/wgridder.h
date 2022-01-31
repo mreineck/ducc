@@ -1422,9 +1422,9 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-auto device = q.get_device();
-cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
-cout << "max_work_group_size: " << device.template get_info<sycl::info::device::max_work_group_size>() << endl;
+//auto device = q.get_device();
+//cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
+//cout << "max_work_group_size: " << device.template get_info<sycl::info::device::max_work_group_size>() << endl;
 //using blah = sycl::info::device::max_work_item_sizes<1>;
 //cout << "max_work_item_sizes<1>: " << device.template get_info<blah>() << endl;
         // dirty image

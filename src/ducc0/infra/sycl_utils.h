@@ -105,20 +105,7 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
          {sycl::property::buffer::use_host_ptr()}};
   }
 
-#if 0
-template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
-  {
-  sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
-  complex<T> *ptr = acc.get_pointer();
-  if constexpr(ndim==2)
-    {
-    vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
-    c2c (arr, arr, {0,1}, forward, T(1));
-    }
-  else
-    MR_fail("unsupported dimensionality");
-  }
-#else
+#if (defined (DUCC0_HAVE_CUFFT))
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
   // This should not be needed, but without it tests fail when optimization is off
@@ -166,6 +153,19 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
       });
     });
 //q.wait();
+  }
+#else
+template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+  {
+  sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
+  complex<T> *ptr = acc.get_pointer();
+  if constexpr(ndim==2)
+    {
+    vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
+    c2c (arr, arr, {0,1}, forward, T(1));
+    }
+  else
+    MR_fail("unsupported dimensionality");
   }
 #endif
 }
