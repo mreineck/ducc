@@ -105,7 +105,7 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
          {sycl::property::buffer::use_host_ptr()}};
   }
 
-#if 1
+#if 0
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
   sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
@@ -129,6 +129,7 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
       cufftHandle plan;
 #define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
       DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
+      DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream");
       auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
       if constexpr (is_same<T,double>::value)
         {
