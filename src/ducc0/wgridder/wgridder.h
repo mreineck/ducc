@@ -1595,13 +1595,14 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
             auto iblock = item.get_global_id(0)+blockofs;
             auto iwork = item.get_global_id(1);
 // preparation
+int nsafe = (lsupp+1)/2;
 auto u_tile = acctileu[iblock];
 auto v_tile = acctilev[iblock];
-//size_t ofs = lsupp/2+1;
+//size_t ofs = (lsupp-1)/2;
 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
   {
   size_t iu = i/sidelen, iv = i%sidelen;
-  tile[iu][iv] = accgrid[(iu+lnu)%lnu][(iv+lnv)%lnv];
+  tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
   }
 item.barrier();
 
@@ -1650,7 +1651,7 @@ item.barrier();
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-#if 1
+#if 0
             auto iustart=size_t((iu0+lnu)%lnu);
             auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
@@ -1663,11 +1664,13 @@ item.barrier();
               res += ukrn[i]*tmp;
               }
 #else
+int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
             for (size_t i=0; i<lsupp; ++i)
               {
               complex<Tcalc> tmp = 0;
               for (size_t j=0; j<lsupp; ++j)
-                tmp += vkrn[j]*tile[i][j];
+                tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
               res += ukrn[i]*tmp;
               }
 #endif
