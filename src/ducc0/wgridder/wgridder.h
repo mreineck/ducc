@@ -1672,11 +1672,10 @@ int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
               complex<Tcalc> tmp = 0;
               for (size_t j=0; j<lsupp; ++j)
                 tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
-
-if (flip) tmp=conj(tmp);
               res += ukrn[i]*tmp;
               }
 #endif
+if (flip) res=conj(res);
 
             if (lshifting)
               {
