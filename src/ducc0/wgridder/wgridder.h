@@ -1495,7 +1495,11 @@ timers.push("GPU degridding");
         timers.push("index creation");
         constexpr size_t chunksize=1024;
         vector<uint32_t> row_gpu;
-        vector<uint16_t> chbegin_gpu, tile_u_gpu, tile_v_gpu;
+        vector<uint16_t> chbegin_gpu;
+#define BUFFERING
+#ifdef BUFFERING
+        vector<uint16_t> tile_u_gpu, tile_v_gpu;
+#endif
         vector<size_t> vissum_gpu;
         vector<uint32_t> blocklimits;
         vector<size_t> blockstartidx;
@@ -1516,8 +1520,10 @@ timers.push("GPU degridding");
             isamp=0;
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
-tile_u_gpu.push_back(rng.first.tile_u);
-tile_v_gpu.push_back(rng.first.tile_v);
+#ifdef BUFFERING
+            tile_u_gpu.push_back(rng.first.tile_u);
+            tile_v_gpu.push_back(rng.first.tile_v);
+#endif
             }
           for (const auto &rcr: rng.second)
             {
@@ -1527,8 +1533,10 @@ tile_v_gpu.push_back(rng.first.tile_v);
               {
               blocklimits.push_back(row_gpu.size());
               blockstartidx.push_back(blockstartidx.back()+chunksize);
-tile_u_gpu.push_back(rng.first.tile_u);
-tile_v_gpu.push_back(rng.first.tile_v);
+#ifdef BUFFERING
+              tile_u_gpu.push_back(rng.first.tile_u);
+              tile_v_gpu.push_back(rng.first.tile_v);
+#endif
               curpos += chunksize-isamp;
               isamp = 0;
               }
@@ -1549,20 +1557,27 @@ tile_v_gpu.push_back(rng.first.tile_v);
         auto bufvissum(make_sycl_buffer(vissum_gpu));
         auto bufblocklimits(make_sycl_buffer(blocklimits));
         auto bufblockstartidx(make_sycl_buffer(blockstartidx));
+#ifdef BUFFERING
         auto buftileu(make_sycl_buffer(tile_u_gpu));
         auto buftilev(make_sycl_buffer(tile_v_gpu));
-constexpr size_t blksz = 1024;
-for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
-{
-size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
+#endif
+
+#ifdef BUFFERING
+        constexpr size_t blksz = 1024;
+        for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
+          {
+          size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
+#endif
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+#ifdef BUFFERING
           auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
           auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
+#endif
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
@@ -1582,28 +1597,34 @@ size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
-sycl::range<2> global(blockend-blockofs, chunksize);
-sycl::range<2> local(1, chunksize);
-int nsafe = (lsupp+1)/2;
-size_t sidelen = 2*nsafe+(1<<logsquare);
-sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
-//          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
+#ifdef BUFFERING
+          sycl::range<2> global(blockend-blockofs, chunksize);
+          sycl::range<2> local(1, chunksize);
+          int nsafe = (lsupp+1)/2;
+          size_t sidelen = 2*nsafe+(1<<logsquare);
+          sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+          cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
+#else
+          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
+#endif
             {
-//            auto iblock = item.get_id(0);
-//            auto iwork = item.get_id(1);
+#ifdef BUFFERING
             auto iblock = item.get_global_id(0)+blockofs;
             auto iwork = item.get_local_id(1);
-// preparation
-auto u_tile = acctileu[iblock];
-auto v_tile = acctilev[iblock];
-//size_t ofs = (lsupp-1)/2;
-for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-  {
-  size_t iu = i/sidelen, iv = i%sidelen;
-  tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
-  }
-item.barrier();
+            // preparation
+            auto u_tile = acctileu[iblock];
+            auto v_tile = acctilev[iblock];
+            //size_t ofs = (lsupp-1)/2;
+            for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+              {
+              size_t iu = i/sidelen, iv = i%sidelen;
+              tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
+              }
+            item.barrier();
+#else
+            auto iblock = item.get_id(0);
+            auto iwork = item.get_id(1);
+#endif
 
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
@@ -1622,9 +1643,9 @@ item.barrier();
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
-bool flip = accuvw[irow][2]<0;
-if (flip)
-{    u=-u; v=-v; }
+            bool flip = accuvw[irow][2]<0;
+            if (flip)
+              { u=-u; v=-v; }
             // compute fractional and integer indices in "grid"
             double ufrac = u*lpixsize_x;
             ufrac = (ufrac-floor(ufrac))*lnu;
@@ -1652,7 +1673,17 @@ if (flip)
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-#if 0
+#ifdef BUFFERING
+            int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            for (size_t i=0; i<lsupp; ++i)
+              {
+              complex<Tcalc> tmp = 0;
+              for (size_t j=0; j<lsupp; ++j)
+                tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
+              res += ukrn[i]*tmp;
+              }
+#else
             auto iustart=size_t((iu0+lnu)%lnu);
             auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
@@ -1664,18 +1695,8 @@ if (flip)
                 tmp += vkrn[j]*accgrid[realiu][realiv];
               res += ukrn[i]*tmp;
               }
-#else
-int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            for (size_t i=0; i<lsupp; ++i)
-              {
-              complex<Tcalc> tmp = 0;
-              for (size_t j=0; j<lsupp; ++j)
-                tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
-              res += ukrn[i]*tmp;
-              }
 #endif
-if (flip) res=conj(res);
+            if (flip) res=conj(res);
 
             if (lshifting)
               {
@@ -1693,7 +1714,9 @@ if (flip) res=conj(res);
             accvis[irow][ichan] = res;
             });
           });
+#ifdef BUFFERING
 }
+#endif
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
