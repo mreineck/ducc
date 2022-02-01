@@ -1551,11 +1551,10 @@ tile_v_gpu.push_back(rng.first.tile_v);
         auto bufblockstartidx(make_sycl_buffer(blockstartidx));
         auto buftileu(make_sycl_buffer(tile_u_gpu));
         auto buftilev(make_sycl_buffer(tile_v_gpu));
-
-//cout << "nblocks: " << blocklimits.size()-1 << endl;
-for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=1024)
+constexpr size_t blksz = 1024;
+for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
 {
-size_t blockend = min(blockofs+1024,blocklimits.size()-1);
+size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
@@ -1585,7 +1584,8 @@ size_t blockend = min(blockofs+1024,blocklimits.size()-1);
           auto xlmshift = mshift;
 sycl::range<2> global(blockend-blockofs, chunksize);
 sycl::range<2> local(1, chunksize);
-size_t sidelen = lsupp+(1<<logsquare);
+int nsafe = (lsupp+1)/2;
+size_t sidelen = 2*nsafe+(1<<logsquare);
 sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
 cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 //          cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
@@ -1593,9 +1593,8 @@ cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
 //            auto iblock = item.get_id(0);
 //            auto iwork = item.get_id(1);
             auto iblock = item.get_global_id(0)+blockofs;
-            auto iwork = item.get_global_id(1);
+            auto iwork = item.get_local_id(1);
 // preparation
-int nsafe = (lsupp+1)/2;
 auto u_tile = acctileu[iblock];
 auto v_tile = acctilev[iblock];
 //size_t ofs = (lsupp-1)/2;
@@ -1623,7 +1622,9 @@ item.barrier();
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
-
+bool flip = accuvw[irow][2]<0;
+if (flip)
+{    u=-u; v=-v; }
             // compute fractional and integer indices in "grid"
             double ufrac = u*lpixsize_x;
             ufrac = (ufrac-floor(ufrac))*lnu;
@@ -1671,6 +1672,8 @@ int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
               complex<Tcalc> tmp = 0;
               for (size_t j=0; j<lsupp; ++j)
                 tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
+
+if (flip) tmp=conj(tmp);
               res += ukrn[i]*tmp;
               }
 #endif
