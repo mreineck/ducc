@@ -155,7 +155,7 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
 //q.wait();
   }
 #else
-template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+template<typename T, int ndim> void sycl_c2c(sycl::queue &/*q*/, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
   sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
   complex<T> *ptr = acc.get_pointer();
