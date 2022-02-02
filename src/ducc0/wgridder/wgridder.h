@@ -1451,6 +1451,48 @@ class Baselines_GPU
     size_t Nchannels() const { return nchan; }
   };
 
+class RowchanComputer
+  {
+  protected:
+    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_blocklimits;
+    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_blockstartidx;
+    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_vissum;
+    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_row;
+    sycl::accessor<uint16_t,1,sycl::access::mode::read> acc_chbegin;
+
+  public:
+    RowchanComputer(sycl::buffer<uint32_t,1> &buf_blocklimits,
+                    sycl::buffer<uint32_t,1> &buf_blockstartidx,
+                    sycl::buffer<uint32_t,1> &buf_vissum,
+                    sycl::buffer<uint32_t,1> &buf_row,
+                    sycl::buffer<uint16_t,1> &buf_chbegin,
+                    sycl::handler &cgh)
+      : acc_blocklimits(buf_blocklimits.get_access<sycl::access::mode::read>(cgh)),
+        acc_blockstartidx(buf_blockstartidx.get_access<sycl::access::mode::read>(cgh)),
+        acc_vissum(buf_vissum.get_access<sycl::access::mode::read>(cgh)),
+        acc_row(buf_row.get_access<sycl::access::mode::read>(cgh)),
+        acc_chbegin(buf_chbegin.get_access<sycl::access::mode::read>(cgh))
+      {}
+
+    void getRowChan(size_t iblock, size_t iwork, size_t &irow, size_t &ichan) const
+      {
+      auto xlo = acc_blocklimits[iblock];
+      auto xhi = acc_blocklimits[iblock+1];
+      auto wanted = acc_blockstartidx[iblock]+iwork;
+      if (wanted>=acc_blockstartidx[iblock+1])
+        { irow = ~size_t(0); return; }  // nothing to do for this item
+      while (xlo+1<xhi)  // bisection search
+        {
+        auto xmid = (xlo+xhi)/2;
+        (acc_vissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
+        }
+      if (acc_vissum[xhi]<=wanted)
+        xlo = xhi;
+      irow = acc_row[xlo];
+      ichan = acc_chbegin[xlo] + (wanted-acc_vissum[xlo]);
+      }
+  };
+
 template<typename T> class KernelComputer
   {
   protected:
@@ -1591,9 +1633,9 @@ timers.push("GPU degridding");
 #ifdef BUFFERING
         vector<uint16_t> tile_u_gpu, tile_v_gpu;
 #endif
-        vector<size_t> vissum_gpu;
+        vector<uint32_t> vissum_gpu;
         vector<uint32_t> blocklimits;
-        vector<size_t> blockstartidx;
+        vector<uint32_t> blockstartidx;
         size_t nranges=0;
         for (const auto &rng: ranges)
           nranges+=rng.second.size();
@@ -1664,16 +1706,12 @@ timers.push("GPU degridding");
           Baselines_GPU blloc(bufuvw, buffreq, cgh);
           KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
           CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+          RowchanComputer rccomp(bufblocklimits, bufblockstartidx, bufvissum, bufrow, bufchbegin,cgh);
 
-          auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
-          auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
-          auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
-          auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
 #ifdef BUFFERING
           auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
           auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
 #endif
-          auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
           auto lnu = nu;
@@ -1712,20 +1750,9 @@ timers.push("GPU degridding");
             auto iwork = item.get_id(1);
 #endif
 
-            auto xlo = accblocklimits[iblock];
-            auto xhi = accblocklimits[iblock+1];
-            size_t wanted = accblockstartidx[iblock]+iwork;
-            if (wanted>=accblockstartidx[iblock+1])
-              return;  // nothing to do for this item
-            while (xlo+1<xhi)  // bisection search
-              {
-              auto xmid = (xlo+xhi)/2;
-              (accvissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
-              }
-            if (accvissum[xhi]<=wanted)
-              xlo = xhi;
-            auto irow = accrow[xlo];
-            auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
+            size_t irow, ichan;
+            rccomp.getRowChan(iblock, iwork, irow, ichan);
+            if (irow==~size_t(0)) return;
 
             auto coord = blloc.effectiveCoord(irow, ichan);
             auto imflip = coord.FixW();
