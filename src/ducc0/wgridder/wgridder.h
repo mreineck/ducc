@@ -1451,6 +1451,58 @@ class Baselines_GPU
     size_t Nchannels() const { return nchan; }
   };
 
+template<typename T> class KernelComputer
+  {
+  protected:
+    sycl::accessor<T,1,sycl::access::mode::read> acc_coeff;
+    size_t supp, D;
+
+  public:
+    KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
+      : acc_coeff(buf_coeff.template get_access<sycl::access::mode::read>(cgh)),
+        supp(supp_), D(supp_+3) {}
+    inline void compute_uv(T ufrac, T vfrac, array<T,16> &ku, array<T,16> &kv) const
+      {
+      auto x0 = T(ufrac)*T(-2)+T(supp-1);
+      auto y0 = T(vfrac)*T(-2)+T(supp-1);
+      for (size_t i=0; i<supp; ++i)
+        {
+        Tcalc resu=acc_coeff[i], resv=acc_coeff[i];
+        for (size_t j=1; j<=D; ++j)
+          {
+          resu = resu*x0 + acc_coeff[j*supp+i];
+          resv = resv*y0 + acc_coeff[j*supp+i];
+          }
+        ku[i] = resu;
+        kv[i] = resv;
+        }
+      }
+  };
+
+class CoordCalculator
+  {
+  private:
+    size_t nu, nv;
+    int maxiu0, maxiv0;
+    double pixsize_x, pixsize_y, ushift, vshift;
+
+  public:
+    CoordCalculator (size_t nu_, size_t nv_, int maxiu0_, int maxiv0_, double pixsize_x_, double pixsize_y_, double ushift_, double vshift_)
+      : nu(nu_), nv(nv_), maxiu0(maxiu0_), maxiv0(maxiv0_), pixsize_x(pixsize_x_), pixsize_y(pixsize_y_), ushift(ushift_), vshift(vshift_) {}
+
+    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+      {
+      u = u_in*pixsize_x;
+      u = (u-floor(u))*nu;
+      iu0 = std::min(int(u+ushift)-int(nu), maxiu0);
+      u -= iu0;
+      v = v_in*pixsize_y;
+      v = (v-floor(v))*nv;
+      iv0 = std::min(int(v+vshift)-int(nv), maxiv0);
+      v -= iv0;
+      }
+  };
+
     void dirty2x_gpu()
       {
       if (do_wgridding)
@@ -1610,6 +1662,9 @@ timers.push("GPU degridding");
         q.submit([&](sycl::handler &cgh)
           {
           Baselines_GPU blloc(bufuvw, buffreq, cgh);
+          KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+          CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
@@ -1621,13 +1676,6 @@ timers.push("GPU degridding");
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-          auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
-          auto lpixsize_x= pixsize_x;
-          auto lpixsize_y= pixsize_y;
-          auto lushift = ushift;
-          auto lvshift = vshift;
-          auto lmaxiu0 = maxiu0;
-          auto lmaxiv0 = maxiv0;
           auto lnu = nu;
           auto lnv = nv;
           auto lsupp = supp;
@@ -1683,29 +1731,13 @@ timers.push("GPU degridding");
             auto imflip = coord.FixW();
 
             // compute fractional and integer indices in "grid"
-            double ufrac = coord.u*lpixsize_x;
-            ufrac = (ufrac-floor(ufrac))*lnu;
-            int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
-            ufrac -= iu0;
-            double vfrac = coord.v*lpixsize_y;
-            vfrac = (vfrac-floor(vfrac))*lnv;
-            int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
-            vfrac -= iv0;
+            double ufrac,vfrac;
+            int iu0, iv0;
+            ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+
             // compute kernel values
-            auto x0 = Tcalc(ufrac)*Tcalc(-2)+Tcalc(lsupp-1);
-            auto y0 = Tcalc(vfrac)*Tcalc(-2)+Tcalc(lsupp-1);
             array<Tcalc, 16> ukrn, vkrn;
-            for (size_t i=0; i<lsupp; ++i)
-              {
-              Tcalc resu=acccoef[i], resv=acccoef[i];
-              for (size_t j=1; j<=degree; ++j)
-                {
-                resu = resu*x0 + acccoef[j*lsupp+i];
-                resv = resv*y0 + acccoef[j*lsupp+i];
-                }
-              ukrn[i] = resu;
-              vkrn[i] = resv;
-              }
+            kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
