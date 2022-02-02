@@ -41,11 +41,6 @@
 #include <x86intrin.h>
 #endif
 
-#include "CL/sycl.hpp"
-using namespace cl;
-
-#include <cufft.h>
-
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/fft/fft.h"
@@ -55,6 +50,7 @@ using namespace cl;
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
+#include "ducc0/infra/sycl_utils.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/rangeset.h"
 
@@ -1422,10 +1418,10 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         MR_fail("");
       else
         {
+#if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
-        {
-        sycl::queue q{sycl::default_selector()};
         { // Device buffer scope
+        sycl::queue q{sycl::default_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
@@ -1434,25 +1430,17 @@ timers.push("GPU degridding");
           {sycl::property::buffer::use_host_ptr()});
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-//        bufgrid.set_write_back(false);
 
         const auto &uvwraw(bl.getUVW_raw());
         sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
           sycl::range<2>(uvwraw.size(), 3),
           {sycl::property::buffer::use_host_ptr()}};
-        const auto &freqraw(bl.get_f_over_c());
-        sycl::buffer<double, 1> buffreq{freqraw.data(),
-          sycl::range<1>(freqraw.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<complex<Tms>, 2> bufvis{ms_out.data(),
-          sycl::range<2>(bl.Nrows(), bl.Nchannels()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto buffreq(make_sycl_buffer(bl.get_f_over_c()));
+        auto bufvis(make_sycl_buffer(ms_out));
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        sycl::buffer<Tcalc, 1> bufcoef{coef.data(),
-          sycl::range<1>(coef.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufcoef(make_sycl_buffer(coef));
 
         // zeroing vis
         q.submit([&](sycl::handler &cgh)
@@ -1471,12 +1459,8 @@ timers.push("GPU degridding");
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
 // FIXME: cast to Timg
-        sycl::buffer<double, 1> bufcfu{cfu.data(),
-          sycl::range<1>(cfu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<double, 1> bufcfv{cfv.data(),
-          sycl::range<1>(cfv.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufcfu(make_sycl_buffer(cfu));
+        auto bufcfv(make_sycl_buffer(cfv));
         // copying to grid and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -1505,40 +1489,17 @@ timers.push("GPU degridding");
           });
 
         // FFT
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
-          cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
-            void *native_mem = h.get_native_mem<sycl::backend::cuda>(accgrid);
-            cufftHandle plan;
-#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
-            DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
-            if constexpr (is_same<Tcalc,double>::value)
-              {
-              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_Z2Z),
-                "double precision planning failed")
-              auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-              DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, CUFFT_FORWARD),
-                "double precision FFT failed")
-              }
-            else
-              {
-              DUCC0_CUDACHECK(cufftPlan2d(&plan, nu, nv, CUFFT_C2C),
-                "single precision planning failed")
-              auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-              DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, CUFFT_FORWARD),
-                "single precision FFT failed")
-              }
-            DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
-#undef DUCC0_CUDACHECK
-            });
-          });
+        sycl_c2c(q, bufgrid, true);
 
         // build index structure
         timers.push("index creation");
         constexpr size_t chunksize=1024;
         vector<uint32_t> row_gpu;
         vector<uint16_t> chbegin_gpu;
+#define BUFFERING
+#ifdef BUFFERING
+        vector<uint16_t> tile_u_gpu, tile_v_gpu;
+#endif
         vector<size_t> vissum_gpu;
         vector<uint32_t> blocklimits;
         vector<size_t> blockstartidx;
@@ -1559,6 +1520,10 @@ timers.push("GPU degridding");
             isamp=0;
             curtile_u = rng.first.tile_u;
             curtile_v = rng.first.tile_v;
+#ifdef BUFFERING
+            tile_u_gpu.push_back(rng.first.tile_u);
+            tile_v_gpu.push_back(rng.first.tile_v);
+#endif
             }
           for (const auto &rcr: rng.second)
             {
@@ -1568,6 +1533,10 @@ timers.push("GPU degridding");
               {
               blocklimits.push_back(row_gpu.size());
               blockstartidx.push_back(blockstartidx.back()+chunksize);
+#ifdef BUFFERING
+              tile_u_gpu.push_back(rng.first.tile_u);
+              tile_v_gpu.push_back(rng.first.tile_v);
+#endif
               curpos += chunksize-isamp;
               isamp = 0;
               }
@@ -1583,28 +1552,32 @@ timers.push("GPU degridding");
         vissum_gpu.push_back(accum);
         timers.pop();
 
-        sycl::buffer<uint32_t, 1> bufrow{row_gpu.data(),
-          sycl::range<1>(row_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint16_t, 1> bufchbegin{chbegin_gpu.data(),
-          sycl::range<1>(chbegin_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<size_t, 1> bufvissum{vissum_gpu.data(),
-          sycl::range<1>(vissum_gpu.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<uint32_t, 1> bufblocklimits{blocklimits.data(),
-          sycl::range<1>(blocklimits.size()),
-          {sycl::property::buffer::use_host_ptr()}};
-        sycl::buffer<size_t, 1> bufblockstartidx{blockstartidx.data(),
-          sycl::range<1>(blockstartidx.size()),
-          {sycl::property::buffer::use_host_ptr()}};
+        auto bufrow(make_sycl_buffer(row_gpu));
+        auto bufchbegin(make_sycl_buffer(chbegin_gpu));
+        auto bufvissum(make_sycl_buffer(vissum_gpu));
+        auto bufblocklimits(make_sycl_buffer(blocklimits));
+        auto bufblockstartidx(make_sycl_buffer(blockstartidx));
+#ifdef BUFFERING
+        auto buftileu(make_sycl_buffer(tile_u_gpu));
+        auto buftilev(make_sycl_buffer(tile_v_gpu));
+#endif
 
+#ifdef BUFFERING
+        constexpr size_t blksz = 1024;
+        for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
+          {
+          size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
+#endif
         q.submit([&](sycl::handler &cgh)
           {
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
           auto accblocklimits{bufblocklimits.template get_access<sycl::access::mode::read>(cgh)};
+#ifdef BUFFERING
+          auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
+          auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
+#endif
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
           auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
           auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
@@ -1624,10 +1597,34 @@ timers.push("GPU degridding");
           auto lshifting = shifting;
           auto llshift = lshift;
           auto xlmshift = mshift;
+#ifdef BUFFERING
+          sycl::range<2> global(blockend-blockofs, chunksize);
+          sycl::range<2> local(1, chunksize);
+          int nsafe = (lsupp+1)/2;
+          size_t sidelen = 2*nsafe+(1<<logsquare);
+          sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+          cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
+#else
           cgh.parallel_for(sycl::range<2>(blocklimits.size()-1, chunksize), [=](sycl::item<2> item)
+#endif
             {
+#ifdef BUFFERING
+            auto iblock = item.get_global_id(0)+blockofs;
+            auto iwork = item.get_local_id(1);
+            // preparation
+            auto u_tile = acctileu[iblock];
+            auto v_tile = acctilev[iblock];
+            //size_t ofs = (lsupp-1)/2;
+            for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+              {
+              size_t iu = i/sidelen, iv = i%sidelen;
+              tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
+              }
+            item.barrier();
+#else
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
+#endif
 
             auto xlo = accblocklimits[iblock];
             auto xhi = accblocklimits[iblock+1];
@@ -1637,10 +1634,7 @@ timers.push("GPU degridding");
             while (xlo+1<xhi)  // bisection search
               {
               auto xmid = (xlo+xhi)/2;
-              if (accvissum[xmid]<=wanted)
-                xlo = xmid;
-              else
-                xhi = xmid;
+              (accvissum[xmid]<=wanted) ? xlo=xmid : xhi=xmid;
               }
             if (accvissum[xhi]<=wanted)
               xlo = xhi;
@@ -1649,7 +1643,9 @@ timers.push("GPU degridding");
 
             double u = accuvw[irow][0]*accfreq[ichan];
             double v = accuvw[irow][1]*accfreq[ichan];
-
+            bool flip = accuvw[irow][2]<0;
+            if (flip)
+              { u=-u; v=-v; }
             // compute fractional and integer indices in "grid"
             double ufrac = u*lpixsize_x;
             ufrac = (ufrac-floor(ufrac))*lnu;
@@ -1677,6 +1673,17 @@ timers.push("GPU degridding");
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
+#ifdef BUFFERING
+            int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            for (size_t i=0; i<lsupp; ++i)
+              {
+              complex<Tcalc> tmp = 0;
+              for (size_t j=0; j<lsupp; ++j)
+                tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
+              res += ukrn[i]*tmp;
+              }
+#else
             auto iustart=size_t((iu0+lnu)%lnu);
             auto ivstart=size_t((iv0+lnv)%lnv);
             for (size_t i=0, realiu=iustart; i<lsupp;
@@ -1688,6 +1695,8 @@ timers.push("GPU degridding");
                 tmp += vkrn[j]*accgrid[realiu][realiv];
               res += ukrn[i]*tmp;
               }
+#endif
+            if (flip) res=conj(res);
 
             if (lshifting)
               {
@@ -1705,21 +1714,23 @@ timers.push("GPU degridding");
             accvis[irow][ichan] = res;
             });
           });
-        }
-        }
+#ifdef BUFFERING
+}
+#endif
+        }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
-        bool do_weights = wgt.stride(0)!=0;
-        if (do_weights)
-          {
-          auto nchan = bl.Nchannels();
+        if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
+            auto nchan = bl.Nchannels();
             for (auto irow=lo; irow<hi; ++irow)
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-          }
         timers.pop();
+#else
+        MR_fail("CUDA not found");
+#endif
         }
       }
 
