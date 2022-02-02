@@ -27,6 +27,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
+has_gpu = False  # FIXME Determine this automatically
+
 pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
@@ -122,7 +124,7 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 
 @pmp('nx', [(30, 3), (128, 2)])
 @pmp('ny', [(128, 2), (250, 5)])
-@pmp("nrow", (1, 2, 27))
+@pmp("nrow", (1, 2, 2048))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
@@ -130,9 +132,12 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
+@pmp("gpu", (False, True))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask):
+                              use_mask, gpu):
+    if not has_gpu:
+        pytest.skip()
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -160,25 +165,26 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         tol = 3e-5*ref if singleprec else 2e-13*ref
         assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=tol)
 
-    dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
-                         mask).astype("f8")
-    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
-                      epsilon, wstacking, nthreads, 0, mask).astype("c16")
-    check(dirty2, ms2)
-
+    if not gpu:
+        # FIXME? the old interface does not support gpu yet
+        dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                             pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
+                             mask).astype("f8")
+        ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
+                          epsilon, wstacking, nthreads, 0, mask).astype("c16")
+        check(dirty2, ms2)
 
     dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask).astype("f8")
+                                     mask=mask, gpu=gpu).astype("f8")
     ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
-                                  mask=mask).astype("c16")
+                                  mask=mask, gpu=gpu).astype("c16")
     check(dirty2, ms2)
 
 
