@@ -1412,6 +1412,45 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         }
       }
 
+class Baselines_GPU
+  {
+  protected:
+    sycl::accessor<double,2,sycl::access::mode::read> acc_uvw;
+    sycl::accessor<double,1,sycl::access::mode::read> acc_f_over_c;
+    size_t nrows, nchan;
+
+  public:
+    Baselines_GPU(sycl::buffer<double,2> &bufuvw,
+      sycl::buffer<double,1> &buffreq, sycl::handler &cgh)
+      : acc_uvw(bufuvw.get_access<sycl::access::mode::read>(cgh)),
+        acc_f_over_c(buffreq.get_access<sycl::access::mode::read>(cgh)),
+        nrows(bufuvw.get_range().get(0)),
+        nchan(buffreq.get_range().get(0))
+      {
+      MR_assert(bufuvw.get_range().get(1)==3, "dimension mismatch");
+      }
+
+    UVW effectiveCoord(size_t row, size_t chan) const
+      {
+      double f = acc_f_over_c[chan];
+      return UVW(acc_uvw[row][0]*f,
+                 acc_uvw[row][1]*f,
+                 acc_uvw[row][2]*f);
+      }
+    double absEffectiveW(size_t row, size_t chan) const
+      { return abs(acc_uvw[row][2]*acc_f_over_c[chan]); }
+    UVW baseCoord(size_t row) const
+      {
+      return UVW(acc_uvw[row][0],
+                 acc_uvw[row][1],
+                 acc_uvw[row][2]);
+      }
+    double ffact(size_t chan) const
+      { return acc_f_over_c[chan];}
+    size_t Nrows() const { return nrows; }
+    size_t Nchannels() const { return nchan; }
+  };
+
     void dirty2x_gpu()
       {
       if (do_wgridding)
@@ -1496,7 +1535,7 @@ timers.push("GPU degridding");
         constexpr size_t chunksize=1024;
         vector<uint32_t> row_gpu;
         vector<uint16_t> chbegin_gpu;
-#define BUFFERING
+//#define BUFFERING
 #ifdef BUFFERING
         vector<uint16_t> tile_u_gpu, tile_v_gpu;
 #endif
@@ -1570,6 +1609,7 @@ timers.push("GPU degridding");
 #endif
         q.submit([&](sycl::handler &cgh)
           {
+          Baselines_GPU blloc(bufuvw, buffreq, cgh);
           auto accrow{bufrow.template get_access<sycl::access::mode::read>(cgh)};
           auto accchbegin{bufchbegin.template get_access<sycl::access::mode::read>(cgh)};
           auto accvissum{bufvissum.template get_access<sycl::access::mode::read>(cgh)};
@@ -1579,8 +1619,6 @@ timers.push("GPU degridding");
           auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
 #endif
           auto accblockstartidx{bufblockstartidx.template get_access<sycl::access::mode::read>(cgh)};
-          auto accuvw{bufuvw.template get_access<sycl::access::mode::read>(cgh)};
-          auto accfreq{buffreq.template get_access<sycl::access::mode::read>(cgh)};
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
           auto acccoef{bufcoef.template get_access<sycl::access::mode::read>(cgh)};
@@ -1641,17 +1679,15 @@ timers.push("GPU degridding");
             auto irow = accrow[xlo];
             auto ichan = accchbegin[xlo] + (wanted-accvissum[xlo]);
 
-            double u = accuvw[irow][0]*accfreq[ichan];
-            double v = accuvw[irow][1]*accfreq[ichan];
-            bool flip = accuvw[irow][2]<0;
-            if (flip)
-              { u=-u; v=-v; }
+            auto coord = blloc.effectiveCoord(irow, ichan);
+            auto imflip = coord.FixW();
+
             // compute fractional and integer indices in "grid"
-            double ufrac = u*lpixsize_x;
+            double ufrac = coord.u*lpixsize_x;
             ufrac = (ufrac-floor(ufrac))*lnu;
             int iu0 = min(int(ufrac+lushift)-int(lnu), lmaxiu0);
             ufrac -= iu0;
-            double vfrac = v*lpixsize_y;
+            double vfrac = coord.v*lpixsize_y;
             vfrac = (vfrac-floor(vfrac))*lnv;
             int iv0 = min(int(vfrac+lvshift)-int(lnv), lmaxiv0);
             vfrac -= iv0;
@@ -1696,12 +1732,12 @@ timers.push("GPU degridding");
               res += ukrn[i]*tmp;
               }
 #endif
-            if (flip) res=conj(res);
+            res.imag(res.imag()*imflip);
 
             if (lshifting)
               {
               // apply phase
-              double fct = u*llshift + v*xlmshift;
+              double fct = coord.u*llshift + coord.v*xlmshift;
               if constexpr (is_same<double, Tcalc>::value)
                 fct*=twopi;
               else
@@ -1930,7 +1966,7 @@ timers.push("GPU degridding");
       report();
       if (gpu)
         if (gridding)
-          MR_fail("not implemented");
+          x2dirty(); //MR_fail("not implemented");
         else
           dirty2x_gpu();
       else
