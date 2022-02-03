@@ -1558,9 +1558,7 @@ timers.push("GPU degridding");
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
-        sycl::buffer<Timg, 2> bufdirty(&dirty_in(0,0),
-          sycl::range<2>(dirty_in.shape(0), dirty_in.shape(1)),
-          {sycl::property::buffer::use_host_ptr()});
+        auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
 
