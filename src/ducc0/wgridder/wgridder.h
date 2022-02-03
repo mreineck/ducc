@@ -1550,7 +1550,7 @@ class IndexComputer
     static constexpr size_t chunksize=1024;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
-//#define BUFFERING
+#define BUFFERING
 #ifdef BUFFERING
     vector<uint16_t> tile_u_gpu, tile_v_gpu;
 #endif
@@ -1621,6 +1621,7 @@ class IndexComputer
       {
       if (do_wgridding)
         {
+#if 0
 #if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
           
@@ -1737,7 +1738,7 @@ cout << "plane: " << pl << endl;
 
           // FFT
           sycl_c2c(q, bufgrid, true);
-#if 1
+
 #ifdef BUFFERING
           constexpr size_t blksz = 1024;
           for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
@@ -1863,7 +1864,6 @@ cout << "plane: " << pl << endl;
 #ifdef BUFFERING
 }
 #endif
-#endif
           } // end of loop over planes
         }  // end of device buffer scope, buffers are written back
         timers.poppush("weight application");
@@ -1878,6 +1878,7 @@ cout << "plane: " << pl << endl;
         timers.pop();
 #else
         MR_fail("CUDA not found");
+#endif
 #endif
         }
       else
@@ -1954,9 +1955,9 @@ timers.push("GPU degridding");
 
 #ifdef BUFFERING
         constexpr size_t blksz = 1024;
-        for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
+        for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
           {
-          size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
+          size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
 #endif
         q.submit([&](sycl::handler &cgh)
           {
@@ -1971,22 +1972,16 @@ timers.push("GPU degridding");
 #endif
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-          auto lnu = nu;
-          auto lnv = nv;
-          auto lsupp = supp;
           auto degree = krn->degree();
-          auto lshifting = shifting;
-          auto llshift = lshift;
-          auto xlmshift = mshift;
 #ifdef BUFFERING
-          sycl::range<2> global(blockend-blockofs, chunksize);
-          sycl::range<2> local(1, chunksize);
-          int nsafe = (lsupp+1)/2;
+          sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
+          sycl::range<2> local(1, idxcomp.chunksize);
+          int nsafe = (supp+1)/2;
           size_t sidelen = 2*nsafe+(1<<logsquare);
           sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-          cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
+          cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acctileu,acctilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
 #else
-          cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [=](sycl::item<2> item)
+          cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
 #endif
             {
 #ifdef BUFFERING
@@ -1999,7 +1994,7 @@ timers.push("GPU degridding");
             for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
               {
               size_t iu = i/sidelen, iv = i%sidelen;
-              tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
+              tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv];
               }
             item.barrier();
 #else
@@ -2028,32 +2023,32 @@ timers.push("GPU degridding");
 #ifdef BUFFERING
             int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
             int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            for (size_t i=0; i<lsupp; ++i)
+            for (size_t i=0; i<supp; ++i)
               {
               complex<Tcalc> tmp = 0;
-              for (size_t j=0; j<lsupp; ++j)
+              for (size_t j=0; j<supp; ++j)
                 tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
               res += ukrn[i]*tmp;
               }
 #else
-            auto iustart=size_t((iu0+lnu)%lnu);
-            auto ivstart=size_t((iv0+lnv)%lnv);
-            for (size_t i=0, realiu=iustart; i<lsupp;
-                 ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
+            auto iustart=size_t((iu0+nu)%nu);
+            auto ivstart=size_t((iv0+nv)%nv);
+            for (size_t i=0, realiu=iustart; i<supp;
+                 ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
               {
               complex<Tcalc> tmp = 0;
-              for (size_t j=0, realiv=ivstart; j<lsupp;
-                   ++j, realiv = (realiv+1<lnv)?realiv+1 : 0)
+              for (size_t j=0, realiv=ivstart; j<supp;
+                   ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
                 tmp += vkrn[j]*accgrid[realiu][realiv];
               res += ukrn[i]*tmp;
               }
 #endif
             res.imag(res.imag()*imflip);
 
-            if (lshifting)
+            if (shifting)
               {
               // apply phase
-              double fct = coord.u*llshift + coord.v*xlmshift;
+              double fct = coord.u*lshift + coord.v*mshift;
               if constexpr (is_same<double, Tcalc>::value)
                 fct*=twopi;
               else
