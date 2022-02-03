@@ -1412,6 +1412,19 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         }
       }
 
+class Baselines_GPU_prep
+  {
+  public:
+    sycl::buffer<double,2> buf_uvw;
+    sycl::buffer<double,1> buf_freq;
+
+    Baselines_GPU_prep(const Baselines &bl)
+      : buf_uvw(reinterpret_cast<const double *>(bl.getUVW_raw().data()),
+          sycl::range<2>(bl.Nrows(), 3),
+          {sycl::property::buffer::use_host_ptr()}),
+        buf_freq(make_sycl_buffer(bl.get_f_over_c())) {}
+  };
+
 class Baselines_GPU
   {
   protected:
@@ -1420,14 +1433,13 @@ class Baselines_GPU
     size_t nrows, nchan;
 
   public:
-    Baselines_GPU(sycl::buffer<double,2> &bufuvw,
-      sycl::buffer<double,1> &buffreq, sycl::handler &cgh)
-      : acc_uvw(bufuvw.get_access<sycl::access::mode::read>(cgh)),
-        acc_f_over_c(buffreq.get_access<sycl::access::mode::read>(cgh)),
-        nrows(bufuvw.get_range().get(0)),
-        nchan(buffreq.get_range().get(0))
+    Baselines_GPU(Baselines_GPU_prep &prep, sycl::handler &cgh)
+      : acc_uvw(prep.buf_uvw.template get_access<sycl::access::mode::read>(cgh)),
+        acc_f_over_c(prep.buf_freq.template get_access<sycl::access::mode::read>(cgh)),
+        nrows(acc_uvw.get_range().get(0)),
+        nchan(acc_f_over_c.get_range().get(0))
       {
-      MR_assert(bufuvw.get_range().get(1)==3, "dimension mismatch");
+      MR_assert(acc_uvw.get_range().get(1)==3, "dimension mismatch");
       }
 
     UVW effectiveCoord(size_t row, size_t chan) const
@@ -1621,7 +1633,7 @@ class IndexComputer
       {
       if (do_wgridding)
         {
-#if 0
+#if 1
 #if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
           
@@ -1634,11 +1646,8 @@ timers.push("GPU degridding");
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
 
-        const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
-          sycl::range<2>(uvwraw.size(), 3),
-          {sycl::property::buffer::use_host_ptr()}};
-        auto buffreq(make_sycl_buffer(bl.get_f_over_c()));
+        Baselines_GPU_prep bl_prep(bl);
+        
         auto bufvis(make_sycl_buffer(ms_out));
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -1741,13 +1750,13 @@ cout << "plane: " << pl << endl;
 
 #ifdef BUFFERING
           constexpr size_t blksz = 1024;
-          for (size_t blockofs=0; blockofs<blocklimits.size()-1; blockofs+=blksz)
+          for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
             {
-            size_t blockend = min(blockofs+blksz,blocklimits.size()-1);
+            size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
 #endif
           q.submit([&](sycl::handler &cgh)
             {
-            Baselines_GPU blloc(bufuvw, buffreq, cgh);
+            Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
             RowchanComputer rccomp(bufblocklimits, bufblockstartidx, bufvissum, bufrow, bufchbegin,cgh);
@@ -1767,8 +1776,8 @@ cout << "plane: " << pl << endl;
             auto llshift = lshift;
             auto xlmshift = mshift;
 #ifdef BUFFERING
-            sycl::range<2> global(blockend-blockofs, chunksize);
-            sycl::range<2> local(1, chunksize);
+            sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
+            sycl::range<2> local(1, idxcomp.chunksize);
             int nsafe = (lsupp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
@@ -1894,11 +1903,7 @@ timers.push("GPU degridding");
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
 
-        const auto &uvwraw(bl.getUVW_raw());
-        sycl::buffer<double, 2> bufuvw{reinterpret_cast<const double *>(uvwraw.data()),
-          sycl::range<2>(uvwraw.size(), 3),
-          {sycl::property::buffer::use_host_ptr()}};
-        auto buffreq(make_sycl_buffer(bl.get_f_over_c()));
+        Baselines_GPU_prep bl_prep(bl);
         auto bufvis(make_sycl_buffer(ms_out));
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -1961,7 +1966,7 @@ timers.push("GPU degridding");
 #endif
         q.submit([&](sycl::handler &cgh)
           {
-          Baselines_GPU blloc(bufuvw, buffreq, cgh);
+          Baselines_GPU blloc(bl_prep, cgh);
           KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
           CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
           RowchanComputer rccomp(bufblocklimits, bufblockstartidx, bufvissum, bufrow, bufchbegin,cgh);
