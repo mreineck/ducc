@@ -1463,6 +1463,109 @@ class Baselines_GPU
     size_t Nchannels() const { return nchan; }
   };
 
+class IndexComputer0
+  {
+  public:
+    static constexpr size_t chunksize=1024;
+    vector<uint32_t> row_gpu;
+    vector<uint16_t> chbegin_gpu;
+#define BUFFERING
+#ifdef BUFFERING
+    vector<uint16_t> tile_u_gpu, tile_v_gpu;
+#endif
+    vector<uint16_t> minplane_gpu;
+    vector<uint32_t> vissum_gpu;
+    vector<uint32_t> blocklimits;
+    vector<uint32_t> blockstartidx;
+
+    IndexComputer0(const VVR &ranges,bool do_wgridding)
+      {
+      size_t nranges=0;
+      for (const auto &rng: ranges)
+        nranges+=rng.second.size();
+      row_gpu.reserve(nranges);
+      chbegin_gpu.reserve(nranges);
+      vissum_gpu.reserve(nranges+1);
+      size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0), curminplane=~uint16_t(0);
+      size_t accum=0;
+if (!do_wgridding)
+  minplane_gpu.resize(1); // dummy
+      for (const auto &rng: ranges)
+        {
+        if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)
+          ||(curminplane!=rng.first.minplane))
+          {
+          blocklimits.push_back(row_gpu.size());
+          blockstartidx.push_back(accum);
+          isamp=0;
+          curtile_u = rng.first.tile_u;
+          curtile_v = rng.first.tile_v;
+          curminplane = rng.first.minplane;
+#ifdef BUFFERING
+          tile_u_gpu.push_back(rng.first.tile_u);
+          tile_v_gpu.push_back(rng.first.tile_v);
+#endif
+          if (do_wgridding)
+            minplane_gpu.push_back(rng.first.minplane);
+          }
+        for (const auto &rcr: rng.second)
+          {
+          auto nchan = rcr.ch_end-rcr.ch_begin;
+          size_t curpos=0;
+          while (curpos+chunksize-isamp<=nchan)
+            {
+            blocklimits.push_back(row_gpu.size());
+            blockstartidx.push_back(blockstartidx.back()+chunksize);
+#ifdef BUFFERING
+            tile_u_gpu.push_back(rng.first.tile_u);
+            tile_v_gpu.push_back(rng.first.tile_v);
+#endif
+            if (do_wgridding)
+              minplane_gpu.push_back(rng.first.minplane);
+            curpos += chunksize-isamp;
+            isamp = 0;
+            }
+          isamp += nchan-curpos;
+          row_gpu.push_back(rcr.row);
+          chbegin_gpu.push_back(rcr.ch_begin);
+          vissum_gpu.push_back(accum);
+          accum += nchan;
+          }
+        }
+      blocklimits.push_back(row_gpu.size());
+      blockstartidx.push_back(accum);
+      vissum_gpu.push_back(accum);
+      }
+  };
+class IndexComputer: public IndexComputer0
+  {
+  public:
+    sycl::buffer<uint32_t, 1> buf_row;
+    sycl::buffer<uint16_t, 1> buf_chbegin;
+    sycl::buffer<uint32_t, 1> buf_vissum;
+    sycl::buffer<uint32_t, 1> buf_blocklimits;
+    sycl::buffer<uint32_t, 1> buf_blockstartidx;
+#ifdef BUFFERING
+    sycl::buffer<uint16_t, 1> buf_tileu;
+    sycl::buffer<uint16_t, 1> buf_tilev;
+#endif
+    sycl::buffer<uint16_t, 1> buf_minplane;
+
+    IndexComputer(const VVR &ranges, bool do_wgridding)
+      : IndexComputer0(ranges, do_wgridding),
+        buf_row(make_sycl_buffer(this->row_gpu)),
+        buf_chbegin(make_sycl_buffer(this->chbegin_gpu)),
+        buf_vissum(make_sycl_buffer(this->vissum_gpu)),
+        buf_blocklimits(make_sycl_buffer(this->blocklimits)),
+        buf_blockstartidx(make_sycl_buffer(this->blockstartidx)),
+#ifdef BUFFERING
+        buf_tileu(make_sycl_buffer(this->tile_u_gpu)),
+        buf_tilev(make_sycl_buffer(this->tile_v_gpu)),
+#endif
+        buf_minplane(make_sycl_buffer(this->minplane_gpu))
+        {}
+  };
+
 class RowchanComputer
   {
   protected:
@@ -1473,17 +1576,12 @@ class RowchanComputer
     sycl::accessor<uint16_t,1,sycl::access::mode::read> acc_chbegin;
 
   public:
-    RowchanComputer(sycl::buffer<uint32_t,1> &buf_blocklimits,
-                    sycl::buffer<uint32_t,1> &buf_blockstartidx,
-                    sycl::buffer<uint32_t,1> &buf_vissum,
-                    sycl::buffer<uint32_t,1> &buf_row,
-                    sycl::buffer<uint16_t,1> &buf_chbegin,
-                    sycl::handler &cgh)
-      : acc_blocklimits(buf_blocklimits.get_access<sycl::access::mode::read>(cgh)),
-        acc_blockstartidx(buf_blockstartidx.get_access<sycl::access::mode::read>(cgh)),
-        acc_vissum(buf_vissum.get_access<sycl::access::mode::read>(cgh)),
-        acc_row(buf_row.get_access<sycl::access::mode::read>(cgh)),
-        acc_chbegin(buf_chbegin.get_access<sycl::access::mode::read>(cgh))
+    RowchanComputer(IndexComputer &idxcomp, sycl::handler &cgh)
+      : acc_blocklimits(idxcomp.buf_blocklimits.template get_access<sycl::access::mode::read>(cgh)),
+        acc_blockstartidx(idxcomp.buf_blockstartidx.template get_access<sycl::access::mode::read>(cgh)),
+        acc_vissum(idxcomp.buf_vissum.template get_access<sycl::access::mode::read>(cgh)),
+        acc_row(idxcomp.buf_row.template get_access<sycl::access::mode::read>(cgh)),
+        acc_chbegin(idxcomp.buf_chbegin.template get_access<sycl::access::mode::read>(cgh))
       {}
 
     void getRowChan(size_t iblock, size_t iwork, size_t &irow, size_t &ichan) const
@@ -1556,79 +1654,7 @@ class CoordCalculator
       v -= iv0;
       }
   };
-class IndexComputer
-  {
-  public:
-    static constexpr size_t chunksize=1024;
-    vector<uint32_t> row_gpu;
-    vector<uint16_t> chbegin_gpu;
-#define BUFFERING
-#ifdef BUFFERING
-    vector<uint16_t> tile_u_gpu, tile_v_gpu;
-#endif
-    vector<uint16_t> minplane_gpu;
-    vector<uint32_t> vissum_gpu;
-    vector<uint32_t> blocklimits;
-    vector<uint32_t> blockstartidx;
 
-    IndexComputer(const VVR &ranges,bool do_wgridding)
-      {
-      size_t nranges=0;
-      for (const auto &rng: ranges)
-        nranges+=rng.second.size();
-      row_gpu.reserve(nranges);
-      chbegin_gpu.reserve(nranges);
-      vissum_gpu.reserve(nranges+1);
-      size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0), curminplane=~uint16_t(0);
-      size_t accum=0;
-      for (const auto &rng: ranges)
-        {
-        if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)
-          ||(curminplane!=rng.first.minplane))
-          {
-          blocklimits.push_back(row_gpu.size());
-          blockstartidx.push_back(accum);
-          isamp=0;
-          curtile_u = rng.first.tile_u;
-          curtile_v = rng.first.tile_v;
-          curminplane = rng.first.minplane;
-#ifdef BUFFERING
-          tile_u_gpu.push_back(rng.first.tile_u);
-          tile_v_gpu.push_back(rng.first.tile_v);
-#endif
-          if (do_wgridding)
-            minplane_gpu.push_back(rng.first.minplane);
-          }
-        for (const auto &rcr: rng.second)
-          {
-          auto nchan = rcr.ch_end-rcr.ch_begin;
-          size_t curpos=0;
-          while (curpos+chunksize-isamp<=nchan)
-            {
-            blocklimits.push_back(row_gpu.size());
-            blockstartidx.push_back(blockstartidx.back()+chunksize);
-#ifdef BUFFERING
-            tile_u_gpu.push_back(rng.first.tile_u);
-            tile_v_gpu.push_back(rng.first.tile_v);
-#endif
-            if (do_wgridding)
-              minplane_gpu.push_back(rng.first.minplane);
-            curpos += chunksize-isamp;
-            isamp = 0;
-            }
-          isamp += nchan-curpos;
-          row_gpu.push_back(rcr.row);
-          chbegin_gpu.push_back(rcr.ch_begin);
-          vissum_gpu.push_back(accum);
-          accum += nchan;
-          }
-        }
-      blocklimits.push_back(row_gpu.size());
-      blockstartidx.push_back(accum);
-      vissum_gpu.push_back(accum);
-      }
-
-  };
     void dirty2x_gpu()
       {
       if (do_wgridding)
@@ -1679,16 +1705,6 @@ timers.push("GPU degridding");
         IndexComputer idxcomp(ranges, do_wgridding);
         timers.pop();
 
-        auto bufrow(make_sycl_buffer(idxcomp.row_gpu));
-        auto bufchbegin(make_sycl_buffer(idxcomp.chbegin_gpu));
-        auto bufvissum(make_sycl_buffer(idxcomp.vissum_gpu));
-        auto bufblocklimits(make_sycl_buffer(idxcomp.blocklimits));
-        auto bufblockstartidx(make_sycl_buffer(idxcomp.blockstartidx));
-#ifdef BUFFERING
-        auto buftileu(make_sycl_buffer(idxcomp.tile_u_gpu));
-        auto buftilev(make_sycl_buffer(idxcomp.tile_v_gpu));
-#endif
-        auto bufminplane(make_sycl_buffer(idxcomp.minplane_gpu));
         // applying correction to dirty image on GPU
 
         q.submit([&](sycl::handler &cgh)
@@ -1759,55 +1775,48 @@ cout << "plane: " << pl << endl;
             Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-            RowchanComputer rccomp(bufblocklimits, bufblockstartidx, bufvissum, bufrow, bufchbegin,cgh);
+            RowchanComputer rccomp(idxcomp,cgh);
   
 #ifdef BUFFERING
-            auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
-            auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
 #endif
-            auto accminplane{bufminplane.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-            auto lnu = nu;
-            auto lnv = nv;
-            auto lsupp = supp;
-            auto degree = krn->degree();
-            auto lshifting = shifting;
-            auto llshift = lshift;
-            auto xlmshift = mshift;
 #ifdef BUFFERING
             sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
             sycl::range<2> local(1, idxcomp.chunksize);
-            int nsafe = (lsupp+1)/2;
+            int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-            cgh.parallel_for(sycl::nd_range(global,local), [=](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile](sycl::nd_item<2> item)
 #else
-            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [=](sycl::item<2> item)
+            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane](sycl::item<2> item)
 #endif
               {
 #ifdef BUFFERING
               auto iblock = item.get_global_id(0)+blockofs;
               auto iwork = item.get_local_id(1);
-              auto minplane = accminplane[iblock];
-              if ((pl<minplane) || (pl>=minplane+lsupp))  // plane not in range
+              auto minplane = acc_minplane[iblock];
+              if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                 return;
               // preparation
-              auto u_tile = acctileu[iblock];
-              auto v_tile = acctilev[iblock];
+              auto u_tile = acc_tileu[iblock];
+              auto v_tile = acc_tilev[iblock];
 
-              //size_t ofs = (lsupp-1)/2;
+              //size_t ofs = (supp-1)/2;
               for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;
-                tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+lnu-nsafe)%lnu][(iv+v_tile*(1<<logsquare)+lnv-nsafe)%lnv];
+                tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv];
                 }
               item.barrier();
 #else
               auto iblock = item.get_id(0);
               auto iwork = item.get_id(1);
-              auto minplane = accminplane[iblock];
-              if ((pl<minplane) || (pl>=minplane+lsupp))  // plane not in range
+              auto minplane = acc_minplane[iblock];
+              if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                 return;
 #endif
   
@@ -1832,32 +1841,32 @@ cout << "plane: " << pl << endl;
 #ifdef BUFFERING
               int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
               int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-              for (size_t i=0; i<lsupp; ++i)
+              for (size_t i=0; i<supp; ++i)
                 {
                 complex<Tcalc> tmp = 0;
-                for (size_t j=0; j<lsupp; ++j)
+                for (size_t j=0; j<supp; ++j)
                   tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
                 res += ukrn[i]*tmp;
                 }
 #else
-              auto iustart=size_t((iu0+lnu)%lnu);
-              auto ivstart=size_t((iv0+lnv)%lnv);
-              for (size_t i=0, realiu=iustart; i<lsupp;
-                   ++i, realiu = (realiu+1<lnu)?realiu+1 : 0)
+              auto iustart=size_t((iu0+nu)%nu);
+              auto ivstart=size_t((iv0+nv)%nv);
+              for (size_t i=0, realiu=iustart; i<supp;
+                   ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
                 {
                 complex<Tcalc> tmp = 0;
-                for (size_t j=0, realiv=ivstart; j<lsupp;
-                     ++j, realiv = (realiv+1<lnv)?realiv+1 : 0)
+                for (size_t j=0, realiv=ivstart; j<supp;
+                     ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
                   tmp += vkrn[j]*accgrid[realiu][realiv];
                 res += ukrn[i]*tmp;
                 }
 #endif
               res.imag(res.imag()*imflip);
   
-              if (lshifting)
+              if (shifting)
                 {
                 // apply phase
-                double fct = coord.u*llshift + coord.v*xlmshift;
+                double fct = coord.u*lshift + coord.v*mshift;
                 if constexpr (is_same<double, Tcalc>::value)
                   fct*=twopi;
                 else
@@ -1948,16 +1957,6 @@ timers.push("GPU degridding");
         IndexComputer idxcomp(ranges, do_wgridding);
         timers.pop();
 
-        auto bufrow(make_sycl_buffer(idxcomp.row_gpu));
-        auto bufchbegin(make_sycl_buffer(idxcomp.chbegin_gpu));
-        auto bufvissum(make_sycl_buffer(idxcomp.vissum_gpu));
-        auto bufblocklimits(make_sycl_buffer(idxcomp.blocklimits));
-        auto bufblockstartidx(make_sycl_buffer(idxcomp.blockstartidx));
-#ifdef BUFFERING
-        auto buftileu(make_sycl_buffer(idxcomp.tile_u_gpu));
-        auto buftilev(make_sycl_buffer(idxcomp.tile_v_gpu));
-#endif
-
 #ifdef BUFFERING
         constexpr size_t blksz = 1024;
         for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
@@ -1969,11 +1968,11 @@ timers.push("GPU degridding");
           Baselines_GPU blloc(bl_prep, cgh);
           KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
           CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-          RowchanComputer rccomp(bufblocklimits, bufblockstartidx, bufvissum, bufrow, bufchbegin,cgh);
+          RowchanComputer rccomp(idxcomp, cgh);
 
 #ifdef BUFFERING
-          auto acctileu{buftileu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acctilev{buftilev.template get_access<sycl::access::mode::read>(cgh)};
+          auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
+          auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
 #endif
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
@@ -1984,7 +1983,7 @@ timers.push("GPU degridding");
           int nsafe = (supp+1)/2;
           size_t sidelen = 2*nsafe+(1<<logsquare);
           sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-          cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acctileu,acctilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
+          cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
 #else
           cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
 #endif
@@ -1993,9 +1992,9 @@ timers.push("GPU degridding");
             auto iblock = item.get_global_id(0)+blockofs;
             auto iwork = item.get_local_id(1);
             // preparation
-            auto u_tile = acctileu[iblock];
-            auto v_tile = acctilev[iblock];
-            //size_t ofs = (lsupp-1)/2;
+            auto u_tile = acc_tileu[iblock];
+            auto v_tile = acc_tilev[iblock];
+            //size_t ofs = (supp-1)/2;
             for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
               {
               size_t iu = i/sidelen, iv = i%sidelen;
