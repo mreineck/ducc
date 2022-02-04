@@ -1629,6 +1629,26 @@ template<typename T> class KernelComputer
         kv[i] = resv;
         }
       }
+    inline void compute_uvw(T ufrac, T vfrac, T wval, size_t nth, array<T,16> &ku, array<T,16> &kv) const
+      {
+      auto x0 = T(ufrac)*T(-2)+T(supp-1);
+      auto y0 = T(vfrac)*T(-2)+T(supp-1);
+      auto z0 = T(wval-nth)*T(2)+T(supp-1);
+      Tcalc resw=acc_coeff[nth];
+      for (size_t j=1; j<=D; ++j)
+        resw = resw*z0 + acc_coeff[j*supp+nth];
+      for (size_t i=0; i<supp; ++i)
+        {
+        Tcalc resu=acc_coeff[i], resv=acc_coeff[i];
+        for (size_t j=1; j<=D; ++j)
+          {
+          resu = resu*x0 + acc_coeff[j*supp+i];
+          resv = resv*y0 + acc_coeff[j*supp+i];
+          }
+        ku[i] = resu*resw;
+        kv[i] = resv;
+        }
+      }
   };
 
 class CoordCalculator
@@ -1659,7 +1679,6 @@ class CoordCalculator
       {
       if (do_wgridding)
         {
-#if 1
 #if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
           
@@ -1790,9 +1809,9 @@ cout << "plane: " << pl << endl;
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
 #else
-            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane](sycl::item<2> item)
+            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
 #endif
               {
 #ifdef BUFFERING
@@ -1834,7 +1853,9 @@ cout << "plane: " << pl << endl;
   
               // compute kernel values
               array<Tcalc, 16> ukrn, vkrn;
-              kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
+size_t nth=pl-minplane;
+auto wval=Tcalc((coord.w-w)/dw);
+              kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
   
               // loop over supp*supp pixels from "grid"
               complex<Tcalc> res=0;
@@ -1896,7 +1917,6 @@ cout << "plane: " << pl << endl;
         timers.pop();
 #else
         MR_fail("CUDA not found");
-#endif
 #endif
         }
       else
