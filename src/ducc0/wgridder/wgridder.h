@@ -2204,8 +2204,6 @@ timers.push("GPU gridding");
         for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
           {
           size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
-          cout << "Submit block " << blockofs << " of " << idxcomp.blocklimits.size()-1 << endl;
-
           q.submit([&](sycl::handler &cgh)
             {
             Baselines_GPU blloc(bl_prep, cgh);
@@ -2225,8 +2223,6 @@ timers.push("GPU gridding");
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-            cout << "just before parallel for" << endl;
-            cout << "global " << blockend-blockofs << " " << idxcomp.chunksize << endl;
             cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+blockofs;
@@ -2243,58 +2239,62 @@ timers.push("GPU gridding");
 
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
-              if (irow==~size_t(0)) return;
-
-              auto coord = blloc.effectiveCoord(irow, ichan);
-              auto imflip = coord.FixW();
-
-              // compute fractional and integer indices in "grid"
-              double ufrac,vfrac;
-              int iu0, iv0;
-              ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-
-              // compute kernel values
-              array<Tcalc, 16> ukrn, vkrn;
-              kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
-
-              // loop over supp*supp pixels from "grid"
-              complex<Tcalc> val=accvis[irow][ichan];
-              if (shifting)
+              if (irow==~size_t(0))
                 {
-                // apply phase
-                double fct = coord.u*lshift + coord.v*mshift;
-                if constexpr (is_same<double, Tcalc>::value)
-                  fct*=twopi;
-                else
-                  // we are reducing accuracy,
-                  // so let's better do range reduction first
-                  fct = twopi*(fct-floor(fct));
-                complex<Tcalc> phase(cos(Tcalc(fct)), -sin(Tcalc(fct)));
-                val *= phase;
+                item.barrier();
                 }
-              val.imag(val.imag()*imflip);
-
-              int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-              int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-              for (size_t i=0; i<supp; ++i)
+              else
                 {
-                auto tmp = ukrn[i]*val;
-                for (size_t j=0; j<supp; ++j)
-                  atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
-                }
+                auto coord = blloc.effectiveCoord(irow, ichan);
+                auto imflip = coord.FixW();
 
-              // add local buffer back to global buffer 
-              auto u_tile = acc_tileu[iblock];
-              auto v_tile = acc_tilev[iblock];
-              item.barrier();
-              //size_t ofs = (supp-1)/2;
-              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                {
-                size_t iu = i/sidelen, iv = i%sidelen;
-                atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                // compute fractional and integer indices in "grid"
+                double ufrac,vfrac;
+                int iu0, iv0;
+                ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+
+                // compute kernel values
+                array<Tcalc, 16> ukrn, vkrn;
+                kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
+
+                // loop over supp*supp pixels from "grid"
+                complex<Tcalc> val=accvis[irow][ichan];
+                if (shifting)
+                  {
+                  // apply phase
+                  double fct = coord.u*lshift + coord.v*mshift;
+                  if constexpr (is_same<double, Tcalc>::value)
+                    fct*=twopi;
+                  else
+                    // we are reducing accuracy,
+                    // so let's better do range reduction first
+                    fct = twopi*(fct-floor(fct));
+                  complex<Tcalc> phase(cos(Tcalc(fct)), -sin(Tcalc(fct)));
+                  val *= phase;
+                  }
+                val.imag(val.imag()*imflip);
+
+                int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                for (size_t i=0; i<supp; ++i)
+                  {
+                  auto tmp = ukrn[i]*val;
+                  for (size_t j=0; j<supp; ++j)
+                    atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
+                  }
+
+                // add local buffer back to global buffer
+                auto u_tile = acc_tileu[iblock];
+                auto v_tile = acc_tilev[iblock];
+                item.barrier();
+                //size_t ofs = (supp-1)/2;
+                for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+                  {
+                  size_t iu = i/sidelen, iv = i%sidelen;
+                  atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                  }
                 }
               });
-            cout << "just after parallel for" << endl;
             });
           }
         // FFT
