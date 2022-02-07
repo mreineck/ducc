@@ -2239,11 +2239,7 @@ timers.push("GPU gridding");
 
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
-              if (irow==~size_t(0))
-                {
-                item.barrier();
-                }
-              else
+              if (irow!=~size_t(0))
                 {
                 auto coord = blloc.effectiveCoord(irow, ichan);
                 auto imflip = coord.FixW();
@@ -2282,17 +2278,17 @@ timers.push("GPU gridding");
                   for (size_t j=0; j<supp; ++j)
                     atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
                   }
+                }
 
-                // add local buffer back to global buffer
-                auto u_tile = acc_tileu[iblock];
-                auto v_tile = acc_tilev[iblock];
-                item.barrier();
-                //size_t ofs = (supp-1)/2;
-                for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                  {
-                  size_t iu = i/sidelen, iv = i%sidelen;
-                  atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
-                  }
+              // add local buffer back to global buffer
+              auto u_tile = acc_tileu[iblock];
+              auto v_tile = acc_tilev[iblock];
+              item.barrier();
+              //size_t ofs = (supp-1)/2;
+              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+                {
+                size_t iu = i/sidelen, iv = i%sidelen;
+                atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
                 }
               });
             });
