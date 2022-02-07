@@ -1728,17 +1728,56 @@ timers.push("GPU degridding");
 
         q.submit([&](sycl::handler &cgh)
           {
+#if 0
+for(auto i=lo; i<hi; ++i)
+  {
+  double fx = sqr(x0+i*pixsize_x);
+  for (size_t j=0; j<nyd; ++j)
+    {
+    double fy = sqr(y0+j*pixsize_y);
+    double fct = 0;
+    auto tmp = 1-fx-fy;
+    if (tmp>=0)
+      {
+      auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+      fct = krn->corfunc((nm1+nshift)*dw);
+      if (divide_by_n)
+        fct /= nm1+1;
+      }
+    else // beyond the horizon, don't really know what to do here
+      fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+    auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
+    fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
+    dirty(i,j)*=Timg(fct);
+    }
+  }
+#endif
           auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-          auto lnxdirty=nxdirty;
-          auto lnydirty=nydirty;
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [=](sycl::item<2> item)
+          double x0 = lshift-0.5*nxdirty*pixsize_x,
+                 y0 = mshift-0.5*nydirty*pixsize_y;
+          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv](sycl::item<2> item)
             {
             auto i = item.get_id(0);
             auto j = item.get_id(1);
-            int icfu = abs(int(lnxdirty/2)-int(i));
-            int icfv = abs(int(lnydirty/2)-int(j));
+#if 0
+  double fx = sqr(x0+i*pixsize_x);
+  double fy = sqr(y0+j*pixsize_y);
+  double fct = 0;
+  auto tmp = 1-fx-fy;
+  if (tmp>=0)
+    {
+    auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+    fct = krn->corfunc((nm1+nshift)*dw);
+    if (divide_by_n)
+        fct /= nm1+1;
+      }
+    else // beyond the horizon, don't really know what to do here
+      fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+#endif
+            int icfu = abs(int(nxdirty/2)-int(i));
+            int icfv = abs(int(nydirty/2)-int(j));
             auto fctu = acccfu[icfu];
             auto fctv = acccfv[icfv];
             accdirty[i][j]*=Tcalc(fctu*fctv);
@@ -2105,6 +2144,188 @@ timers.push("GPU degridding");
         }
       }
 
+
+
+template<typename T> static void atomic_add(complex<T> &a, const complex<T> &b)
+  {
+  T *aptr = reinterpret_cast<T *>(&a);
+  sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> re(aptr[0]);
+  re += b.real();
+  sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> im(aptr[1]);
+  im += b.imag();
+  }
+
+    void x2dirty_gpu()
+      {
+      if (do_wgridding)
+        MR_fail("not implementd");
+      else
+        {
+#if (defined(DUCC0_HAVE_SYCL))
+timers.push("GPU gridding");
+        timers.push("weight application");
+        bool do_weights = (wgt.stride(0)!=0);
+        vmav<complex<Tms>,2> ms_tmp({do_weights ? bl.Nrows() : 1, do_weights ? bl.Nchannels() : 1});
+        if (do_weights)
+          mav_apply([](const complex<Tms> &a, const Tms &b, complex<Tms> &c)
+            { c = a*b; }, nthreads, ms_in, wgt, ms_tmp);
+        const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
+        timers.pop();
+
+        { // Device buffer scope
+        sycl::queue q{sycl::default_selector()};
+        // dirty image
+        MR_assert(dirty_out.contiguous(), "dirty image is not contiguous");
+        auto bufdirty(make_sycl_buffer(dirty_out));
+        // grid (only on GPU)
+        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+
+        Baselines_GPU_prep bl_prep(bl);
+        auto bufvis(make_sycl_buffer(ms));
+
+        const auto &dcoef(krn->Coeff());
+        vector<Tcalc> coef(dcoef.size());
+        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+        auto bufcoef(make_sycl_buffer(coef));
+
+        sycl_zero_buffer(q, bufgrid);
+        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
+        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
+// FIXME: cast to Timg
+        auto bufcfu(make_sycl_buffer(cfu));
+        auto bufcfv(make_sycl_buffer(cfv));
+
+        // build index structure
+        timers.push("index creation");
+        IndexComputer idxcomp(ranges, do_wgridding);
+        timers.pop();
+
+        constexpr size_t blksz = 1024;
+        for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
+          {
+          size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
+
+          q.submit([&](sycl::handler &cgh)
+            {
+            Baselines_GPU blloc(bl_prep, cgh);
+            KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+            CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+            RowchanComputer rccomp(idxcomp, cgh);
+
+            auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
+
+            auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+            auto degree = krn->degree();
+
+            sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
+            sycl::range<2> local(1, idxcomp.chunksize);
+            int nsafe = (supp+1)/2;
+            size_t sidelen = 2*nsafe+(1<<logsquare);
+            sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
+              {
+              auto iblock = item.get_global_id(0)+blockofs;
+              auto iwork = item.get_local_id(1);
+
+              // preparation
+              // zero local buffer (FIXME is this needed?)
+              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+                {
+                size_t iu = i/sidelen, iv = i%sidelen;
+                tile[iu][iv] = Tcalc(0);
+                }
+              item.barrier();
+
+              size_t irow, ichan;
+              rccomp.getRowChan(iblock, iwork, irow, ichan);
+              if (irow==~size_t(0)) return;
+
+              auto coord = blloc.effectiveCoord(irow, ichan);
+              auto imflip = coord.FixW();
+
+              // compute fractional and integer indices in "grid"
+              double ufrac,vfrac;
+              int iu0, iv0;
+              ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+
+              // compute kernel values
+              array<Tcalc, 16> ukrn, vkrn;
+              kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
+
+              // loop over supp*supp pixels from "grid"
+              complex<Tcalc> val=accvis[irow][ichan];
+              if (shifting)
+                {
+                // apply phase
+                double fct = coord.u*lshift + coord.v*mshift;
+                if constexpr (is_same<double, Tcalc>::value)
+                  fct*=twopi;
+                else
+                  // we are reducing accuracy,
+                  // so let's better do range reduction first
+                  fct = twopi*(fct-floor(fct));
+                complex<Tcalc> phase(cos(Tcalc(fct)), -sin(Tcalc(fct)));
+                val *= phase;
+                }
+              val.imag(val.imag()*imflip);
+
+              int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+              int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+              for (size_t i=0; i<supp; ++i)
+                {
+                auto tmp = ukrn[i]*val;
+                for (size_t j=0; j<supp; ++j)
+                  atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
+                }
+
+              // add local buffer back to global buffer 
+              auto u_tile = acc_tileu[iblock];
+              auto v_tile = acc_tilev[iblock];
+              item.barrier();
+              //size_t ofs = (supp-1)/2;
+              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
+                {
+                size_t iu = i/sidelen, iv = i%sidelen;
+                atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                }
+              });
+            });
+          }
+        // FFT
+        sycl_c2c(q, bufgrid, false);  // FIXME normalization?
+
+        // copying to dirty image and applying correction
+        q.submit([&](sycl::handler &cgh)
+          {
+          auto accdirty{bufdirty.template get_access<sycl::access::mode::discard_write>(cgh)};
+          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
+          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+          auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=nxdirty,nydirty=nydirty,nu=nu,nv=nv](sycl::item<2> item)
+            {
+            auto i = item.get_id(0);
+            auto j = item.get_id(1);
+            int icfu = abs(int(nxdirty/2)-int(i));
+            int icfv = abs(int(nydirty/2)-int(j));
+            size_t i2 = nu-nxdirty/2+i;
+            if (i2>=nu) i2-=nu;
+            size_t j2 = nv-nydirty/2+j;
+            if (j2>=nv) j2-=nv;
+            auto fctu = acccfu[icfu];
+            auto fctv = acccfv[icfv];
+            accdirty[i][j] = (accgrid[i2][j2]*Tcalc(fctu*fctv)).real();
+            });
+          });
+        }  // end of device buffer scope, buffers are written back
+        timers.pop();
+#else
+        MR_fail("CUDA not found");
+#endif
+        }
+      }
+
     auto getNuNv()
       {
       timers.push("parameter calculation");
@@ -2301,7 +2522,7 @@ timers.push("GPU degridding");
       report();
       if (gpu)
         if (gridding)
-          x2dirty(); //MR_fail("not implemented");
+          x2dirty_gpu();
         else
           dirty2x_gpu();
       else
@@ -2323,6 +2544,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+cout << "GPU: " << gpu << endl;
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift, gpu);
