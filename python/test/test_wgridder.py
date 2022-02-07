@@ -338,6 +338,3 @@ def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
           +1j*ng.dirty2ms(uvw, freq, dirty.imag, wgt, pixsizex, pixsizey, nu, nv,
                        epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
-
-if __name__ == "__main__":
-    test_adjointness_ms2dirty((100, 1), (100, 1), 100, 10, 1e-4, True, False, False, 1, False, True)
