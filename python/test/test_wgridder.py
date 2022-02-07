@@ -28,6 +28,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 has_gpu = False  # FIXME Determine this automatically
+has_gpu = True
 
 pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
@@ -113,6 +114,7 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
         cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
         cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
         facet = dirty[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)]
+        facet = np.ascontiguousarray(facet)
         foo = ng.experimental.dirty2vis(**kwargs, dirty=facet,
                                         center_x=cx, center_y=cy)
         if vis is None:
@@ -128,11 +130,11 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
-@pmp("wstacking", (True, False))
+@pmp("wstacking", (True, False)[1:])  # TEMPORARY
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-@pmp("gpu", (False, True))
+@pmp("gpu", (False, True)[1:])  # TEMPORARY
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask, gpu):
