@@ -1683,7 +1683,7 @@ class CoordCalculator
 timers.push("GPU degridding");
           
         { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
+        sycl::queue q{sycl::host_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
   
@@ -1963,7 +1963,7 @@ auto wval=Tcalc((coord.w-w)/dw);
 #if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
         { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
+        sycl::queue q{sycl::host_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
@@ -2173,7 +2173,7 @@ timers.push("GPU gridding");
         timers.pop();
 
         { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
+        sycl::queue q{sycl::host_selector()};
         // dirty image
         MR_assert(dirty_out.contiguous(), "dirty image is not contiguous");
         auto bufdirty(make_sycl_buffer(dirty_out));
@@ -2204,6 +2204,7 @@ timers.push("GPU gridding");
         for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
           {
           size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
+          cout << "Submit block " << blockofs << " of " << idxcomp.blocklimits.size()-1 << endl;
 
           q.submit([&](sycl::handler &cgh)
             {
@@ -2224,6 +2225,7 @@ timers.push("GPU gridding");
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+            cout << "just before parallel for" << endl;
             cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+blockofs;
@@ -2291,6 +2293,7 @@ timers.push("GPU gridding");
                 atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
                 }
               });
+            cout << "just after parallel for" << endl;
             });
           }
         // FFT

@@ -124,16 +124,18 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
     return vis
 
 
-@pmp('nx', [(30, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
-@pmp("nrow", (1, 2, 2048))
+# @pmp('nx', [(30, 3), (128, 2)])
+# @pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(30, 1), (128, 1)])  # TEMPORARY
+@pmp('ny', [(128, 1), (250, 1)])  # TEMPORARY
+@pmp("nrow", (1, 2, 2048))  # TEMPORARY
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
-@pmp("singleprec", (True, False))
+@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))  # TEMPORARY
+@pmp("singleprec", (True, False)[1:])  # TEMPORARY
 @pmp("wstacking", (True, False)[1:])  # TEMPORARY
-@pmp("use_wgt", (True, False))
-@pmp("use_mask", (False, True))
-@pmp("nthreads", (1, 2, 7))
+@pmp("use_wgt", (True, False)[1:])  # TEMPORARY
+@pmp("use_mask", (False, True)[0:1])  # TEMPORARY
+@pmp("nthreads", (1, 2, 7)[0:1])  # TEMPORARY
 @pmp("gpu", (False, True)[1:])  # TEMPORARY
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
@@ -336,3 +338,6 @@ def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
           +1j*ng.dirty2ms(uvw, freq, dirty.imag, wgt, pixsizex, pixsizey, nu, nv,
                        epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
+
+if __name__ == "__main__":
+    test_adjointness_ms2dirty((100, 1), (100, 1), 100, 10, 1e-4, True, False, False, 1, False, True)

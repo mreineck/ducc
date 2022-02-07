@@ -27,9 +27,11 @@ using namespace cl;
 #endif
 
 #if (defined(DUCC0_HAVE_SYCL))
+#if HIPSYCL_LIBKERNEL_IS_DEVICE_PASS_CUDA
 #if (__has_include(<cufft.h>))
 #include <cufft.h>
 #define DUCC0_HAVE_CUFFT
+#endif
 #endif
 #endif
 
@@ -109,6 +111,7 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
 template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
   // This should not be needed, but without it tests fail when optimization is off
+cout << "CALL CUDA FFT" << endl;
   q.wait();
   q.submit([&](sycl::handler &cgh)
     {
@@ -154,11 +157,15 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
       });
     });
 //q.wait();
+cout << "POP CUDA FFT" << endl;
   }
 #else
-template<typename T, int ndim> void sycl_c2c(sycl::queue &/*q*/, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
   {
+    q.wait();
+cout << "CALL DUCC FFT" << endl;
   sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
+cout << "Got accessor" << endl;
   complex<T> *ptr = acc.get_pointer();
   if constexpr(ndim==2)
     {
@@ -167,6 +174,8 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &/*q*/, sycl::buffer<co
     }
   else
     MR_fail("unsupported dimensionality");
+cout << "POP DUCC FFT" << endl;
+    q.wait();
   }
 #endif
 
