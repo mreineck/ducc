@@ -1683,7 +1683,7 @@ class CoordCalculator
 timers.push("GPU degridding");
           
         { // Device buffer scope
-        sycl::queue q{sycl::host_selector()};
+        sycl::queue q{sycl::default_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
   
@@ -1963,7 +1963,7 @@ auto wval=Tcalc((coord.w-w)/dw);
 #if (defined(DUCC0_HAVE_SYCL))
 timers.push("GPU degridding");
         { // Device buffer scope
-        sycl::queue q{sycl::host_selector()};
+        sycl::queue q{sycl::default_selector()};
         // dirty image
         MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
@@ -2173,7 +2173,7 @@ timers.push("GPU gridding");
         timers.pop();
 
         { // Device buffer scope
-        sycl::queue q{sycl::host_selector()};
+        sycl::queue q{sycl::default_selector()};
         // dirty image
         MR_assert(dirty_out.contiguous(), "dirty image is not contiguous");
         auto bufdirty(make_sycl_buffer(dirty_out));
