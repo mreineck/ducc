@@ -1847,7 +1847,11 @@ cout << "plane: " << pl << endl;
             sycl::range<2> local(1, idxcomp.chunksize);
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
+#ifndef __INTEL_LLVM_COMPILER
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+#else
+            sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
+#endif
             cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
 #else
             cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
@@ -2041,7 +2045,11 @@ timers.push("GPU degridding");
           sycl::range<2> local(1, idxcomp.chunksize);
           int nsafe = (supp+1)/2;
           size_t sidelen = 2*nsafe+(1<<logsquare);
+#ifndef __INTEL_LLVM_COMPILER
           sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+#else
+          sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
+#endif
           cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
 #else
           cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
@@ -2149,10 +2157,17 @@ timers.push("GPU degridding");
 template<typename T> static void atomic_add(complex<T> &a, const complex<T> &b)
   {
   T *aptr = reinterpret_cast<T *>(&a);
+#ifndef __INTEL_LLVM_COMPILER
   sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> re(aptr[0]);
   re += b.real();
   sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> im(aptr[1]);
   im += b.imag();
+#else
+  sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space> re(aptr[0]);
+  re += b.real();
+  sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space> im(aptr[1]);
+  im += b.imag();
+#endif
   }
 
     void x2dirty_gpu()
@@ -2222,7 +2237,11 @@ timers.push("GPU gridding");
             sycl::range<2> local(1, idxcomp.chunksize);
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
+#ifndef __INTEL_LLVM_COMPILER
             sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+#else
+            sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
+#endif
             cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+blockofs;
