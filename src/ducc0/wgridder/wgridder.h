@@ -1937,7 +1937,7 @@ auto wval=Tcalc((coord.w-w)/dw);
                   // we are reducing accuracy,
                   // so let's better do range reduction first
                   fct = twopi*(fct-floor(fct));
-                complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
+                complex<Tcalc> phase(cos(Tcalc(fct)), -imflip*sin(Tcalc(fct)));
                 res *= phase;
                 }
               accvis[irow][ichan] += res;
@@ -2126,7 +2126,7 @@ timers.push("GPU degridding");
                 // we are reducing accuracy,
                 // so let's better do range reduction first
                 fct = twopi*(fct-floor(fct));
-              complex<Tcalc> phase(cos(Tcalc(fct)), sin(Tcalc(fct)));
+              complex<Tcalc> phase(cos(Tcalc(fct)), -imflip*sin(Tcalc(fct)));
               res *= phase;
               }
             accvis[irow][ichan] = res;
@@ -2284,7 +2284,7 @@ timers.push("GPU gridding");
                     // we are reducing accuracy,
                     // so let's better do range reduction first
                     fct = twopi*(fct-floor(fct));
-                  complex<Tcalc> phase(cos(Tcalc(fct)), -sin(Tcalc(fct)));
+                  complex<Tcalc> phase(cos(Tcalc(fct)), imflip*sin(Tcalc(fct)));
                   val *= phase;
                   }
                 val.imag(val.imag()*imflip);
