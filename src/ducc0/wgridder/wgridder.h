@@ -1467,18 +1467,17 @@ class IndexComputer0
   {
   public:
     static constexpr size_t chunksize=1024;
+    bool store_tiles;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
-#define BUFFERING
-#ifdef BUFFERING
     vector<uint16_t> tile_u_gpu, tile_v_gpu;
-#endif
     vector<uint16_t> minplane_gpu;
     vector<uint32_t> vissum_gpu;
     vector<uint32_t> blocklimits;
     vector<uint32_t> blockstartidx;
 
-    IndexComputer0(const VVR &ranges,bool do_wgridding)
+    IndexComputer0(const VVR &ranges, bool do_wgridding, bool store_tiles_)
+      : store_tiles(store_tiles_)
       {
       size_t nranges=0;
       for (const auto &rng: ranges)
@@ -1488,8 +1487,15 @@ class IndexComputer0
       vissum_gpu.reserve(nranges+1);
       size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0), curminplane=~uint16_t(0);
       size_t accum=0;
-if (!do_wgridding)
-  minplane_gpu.resize(1); // dummy
+
+      // if necessary, resize some vectors to size 1, because SYCL is unhappy otherwise
+      if (!do_wgridding)
+        minplane_gpu.resize(1);
+      if (!store_tiles)
+        {
+        tile_u_gpu.resize(1);
+        tile_v_gpu.resize(1);
+        }
       for (const auto &rng: ranges)
         {
         if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)
@@ -1501,25 +1507,27 @@ if (!do_wgridding)
           curtile_u = rng.first.tile_u;
           curtile_v = rng.first.tile_v;
           curminplane = rng.first.minplane;
-#ifdef BUFFERING
-          tile_u_gpu.push_back(rng.first.tile_u);
-          tile_v_gpu.push_back(rng.first.tile_v);
-#endif
+          if (store_tiles)
+            {
+            tile_u_gpu.push_back(rng.first.tile_u);
+            tile_v_gpu.push_back(rng.first.tile_v);
+            }
           if (do_wgridding)
             minplane_gpu.push_back(rng.first.minplane);
           }
         for (const auto &rcr: rng.second)
           {
-          auto nchan = rcr.ch_end-rcr.ch_begin;
+          auto nchan = size_t(rcr.ch_end-rcr.ch_begin);
           size_t curpos=0;
           while (curpos+chunksize-isamp<=nchan)
             {
             blocklimits.push_back(row_gpu.size());
             blockstartidx.push_back(blockstartidx.back()+chunksize);
-#ifdef BUFFERING
-            tile_u_gpu.push_back(rng.first.tile_u);
-            tile_v_gpu.push_back(rng.first.tile_v);
-#endif
+            if (store_tiles)
+              {
+              tile_u_gpu.push_back(rng.first.tile_u);
+              tile_v_gpu.push_back(rng.first.tile_v);
+              }
             if (do_wgridding)
               minplane_gpu.push_back(rng.first.minplane);
             curpos += chunksize-isamp;
@@ -1545,23 +1553,19 @@ class IndexComputer: public IndexComputer0
     sycl::buffer<uint32_t, 1> buf_vissum;
     sycl::buffer<uint32_t, 1> buf_blocklimits;
     sycl::buffer<uint32_t, 1> buf_blockstartidx;
-#ifdef BUFFERING
     sycl::buffer<uint16_t, 1> buf_tileu;
     sycl::buffer<uint16_t, 1> buf_tilev;
-#endif
     sycl::buffer<uint16_t, 1> buf_minplane;
 
-    IndexComputer(const VVR &ranges, bool do_wgridding)
-      : IndexComputer0(ranges, do_wgridding),
+    IndexComputer(const VVR &ranges, bool do_wgridding, bool store_tiles_)
+      : IndexComputer0(ranges, do_wgridding, store_tiles_),
         buf_row(make_sycl_buffer(this->row_gpu)),
         buf_chbegin(make_sycl_buffer(this->chbegin_gpu)),
         buf_vissum(make_sycl_buffer(this->vissum_gpu)),
         buf_blocklimits(make_sycl_buffer(this->blocklimits)),
         buf_blockstartidx(make_sycl_buffer(this->blockstartidx)),
-#ifdef BUFFERING
         buf_tileu(make_sycl_buffer(this->tile_u_gpu)),
         buf_tilev(make_sycl_buffer(this->tile_v_gpu)),
-#endif
         buf_minplane(make_sycl_buffer(this->minplane_gpu))
         {}
   };
@@ -1721,7 +1725,11 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-        IndexComputer idxcomp(ranges, do_wgridding);
+#ifdef BUFFERING
+        IndexComputer idxcomp(ranges, do_wgridding, true);
+#else
+        IndexComputer idxcomp(ranges, do_wgridding, false);
+#endif
         timers.pop();
 
         // applying correction to dirty image on GPU
@@ -2017,7 +2025,11 @@ timers.push("GPU degridding");
 
         // build index structure
         timers.push("index creation");
-        IndexComputer idxcomp(ranges, do_wgridding);
+#ifdef BUFFERING
+        IndexComputer idxcomp(ranges, do_wgridding, true);
+#else
+        IndexComputer idxcomp(ranges, do_wgridding, false);
+#endif
         timers.pop();
 
 #ifdef BUFFERING
@@ -2212,7 +2224,7 @@ timers.push("GPU gridding");
 
         // build index structure
         timers.push("index creation");
-        IndexComputer idxcomp(ranges, do_wgridding);
+        IndexComputer idxcomp(ranges, do_wgridding, true);
         timers.pop();
 
         constexpr size_t blksz = 1024;
