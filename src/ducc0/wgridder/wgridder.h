@@ -1703,20 +1703,9 @@ timers.push("GPU degridding");
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
-        // zeroing vis
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accvis{bufvis.template get_access<sycl::access::mode::discard_write>(cgh)};
-          cgh.parallel_for(sycl::range<2>(bl.Nrows(), bl.Nchannels()), [=](sycl::item<2> item)
-            { accvis[item.get_id(0)][item.get_id(1)] = Tcalc(0); });
-          });
-        // zeroing grid
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::discard_write>(cgh)};
-          cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
-            { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
-          });
+        sycl_zero_buffer(q, bufvis);
+        sycl_zero_buffer(q, bufgrid);
+
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
   // FIXME: cast to Timg
@@ -1765,25 +1754,25 @@ for(auto i=lo; i<hi; ++i)
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
           double x0 = lshift-0.5*nxdirty*pixsize_x,
                  y0 = mshift-0.5*nydirty*pixsize_y;
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv](sycl::item<2> item)
+          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv,pixsize_x=pixsize_x,pixsize_y=pixsize_y,x0,y0,divide_by_n=divide_by_n](sycl::item<2> item)
             {
             auto i = item.get_id(0);
             auto j = item.get_id(1);
-#if 0
-  double fx = sqr(x0+i*pixsize_x);
-  double fy = sqr(y0+j*pixsize_y);
-  double fct = 0;
-  auto tmp = 1-fx-fy;
-  if (tmp>=0)
-    {
-    auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-    fct = krn->corfunc((nm1+nshift)*dw);
-    if (divide_by_n)
-        fct /= nm1+1;
-      }
-    else // beyond the horizon, don't really know what to do here
-      fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
-#endif
+            double fx = sqr(x0+i*pixsize_x);
+            double fy = sqr(y0+j*pixsize_y);
+            double fct = 0;
+            auto tmp = 1-fx-fy;
+            if (tmp>=0)
+              {
+              auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+// FIXME: still need code to compute correction function on GPU
+//              fct = krn->corfunc((nm1+nshift)*dw);
+              if (divide_by_n)
+                fct /= nm1+1;
+              }
+     //       else // beyond the horizon, don't really know what to do here
+     //         fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+
             int icfu = abs(int(nxdirty/2)-int(i));
             int icfv = abs(int(nydirty/2)-int(j));
             auto fctu = acccfu[icfu];
@@ -2552,7 +2541,7 @@ timers.push("GPU gridding");
       countRanges();
       report();
       if (gpu)
-        gridding ? x2dirty_gpu() : dirty2x_gpu();
+        gridding ? x2dirty() : dirty2x_gpu();
       else
         gridding ? x2dirty() : dirty2x();
 
