@@ -2173,7 +2173,7 @@ template<typename T> static void atomic_add(complex<T> &a, const complex<T> &b)
     void x2dirty_gpu()
       {
       if (do_wgridding)
-        MR_fail("not implementd");
+        MR_fail("not implemented");
       else
         {
 #if (defined(DUCC0_HAVE_SYCL))
@@ -2540,10 +2540,7 @@ timers.push("GPU gridding");
       countRanges();
       report();
       if (gpu)
-        if (gridding)
-          x2dirty_gpu();
-        else
-          dirty2x_gpu();
+        gridding ? x2dirty_gpu() : dirty2x_gpu();
       else
         gridding ? x2dirty() : dirty2x();
 
