@@ -134,10 +134,11 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-@pmp("gpu", (False, True))
+@pmp("gpu_grid", (True, False))
+@pmp("gpu_degrid", (True, False))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask, gpu):
+                              use_mask, gpu_grid, gpu_degrid):
     if not has_gpu:
         pytest.skip()
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
@@ -167,7 +168,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         tol = 3e-5*ref if singleprec else 2e-13*ref
         assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=tol)
 
-    if not gpu:
+    if not (gpu_grid or gpu_degrid):
         # FIXME? the old interface does not support gpu yet
         dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                              pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
@@ -181,12 +182,12 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask, gpu=gpu).astype("f8")
+                                     mask=mask, gpu=gpu_grid).astype("f8")
     ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
-                                  mask=mask, gpu=gpu).astype("c16")
+                                  mask=mask, gpu=gpu_degrid).astype("c16")
     check(dirty2, ms2)
 
 
