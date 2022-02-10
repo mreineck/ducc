@@ -26,7 +26,7 @@ template<size_t maxsz> class Wcorrector
       {
       double tmp=0;
       for (size_t i=0; i<n; ++i)
-        tmp += wgtpsi[i]*cos(pi*supp*v*x[i]);
+        tmp += wgtpsi[i]*sycl::cos(pi*supp*v*x[i]);
       return 1./tmp;
       }
   };
@@ -553,7 +553,7 @@ auto wval=Tcalc((coord.w-w)/dw);
                   // we are reducing accuracy,
                   // so let's better do range reduction first
                   fct = twopi*(fct-floor(fct));
-                complex<Tcalc> phase(cos(Tcalc(fct)), -imflip*sin(Tcalc(fct)));
+                complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
                 res *= phase;
                 }
               accvis[irow][ichan] += res;
@@ -745,7 +745,7 @@ timers.push("GPU degridding");
                 // we are reducing accuracy,
                 // so let's better do range reduction first
                 fct = twopi*(fct-floor(fct));
-              complex<Tcalc> phase(cos(Tcalc(fct)), -imflip*sin(Tcalc(fct)));
+              complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
               res *= phase;
               }
             accvis[irow][ichan] = res;
@@ -902,7 +902,7 @@ timers.push("GPU gridding");
                     // we are reducing accuracy,
                     // so let's better do range reduction first
                     fct = twopi*(fct-floor(fct));
-                  complex<Tcalc> phase(cos(Tcalc(fct)), imflip*sin(Tcalc(fct)));
+                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
                   val *= phase;
                   }
                 val.imag(val.imag()*imflip);
