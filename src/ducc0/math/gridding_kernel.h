@@ -140,6 +140,10 @@ class KernelCorrection
         });
       return res;
       }
+
+    const vector<double> &X() const { return x; }
+    const vector<double> &Wgtpsi() const { return wgtpsi; }
+    size_t Supp() const { return supp; }
   };
 
 class GLFullCorrection: public KernelCorrection
@@ -183,6 +187,8 @@ class HornerKernel: public GriddingKernel
 
     const vector<double> &Coeff() const { return coeff; }
     size_t degree() const { return D; }
+
+    const KernelCorrection &Corr() const { return corr; }
   };
 
 template<size_t W, typename Tsimd> class TemplateKernel

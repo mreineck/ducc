@@ -1,6 +1,36 @@
 /* Copyright (C) 2022 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
+template<size_t maxsz> class Wcorrector
+  {
+  private:
+    array<double, maxsz> x, wgtpsi;
+    size_t n, supp;
+
+  public:
+    Wcorrector(const detail_gridding_kernel::KernelCorrection &corr)
+      {
+      const auto &x_ = corr.X();
+      n = x_.size();
+      MR_assert(n<=maxsz, "maxsz too small");
+      const auto &wgtpsi_ = corr.Wgtpsi();
+      supp = corr.Supp();
+      for (size_t i=0; i<n; ++i)
+        {
+        x[i] = x_[i];
+        wgtpsi[i] = wgtpsi_[i];
+        }
+      }
+
+    double corfunc(double v) const
+      {
+      double tmp=0;
+      for (size_t i=0; i<n; ++i)
+        tmp += wgtpsi[i]*cos(pi*supp*v*x[i]);
+      return 1./tmp;
+      }
+  };
+
 class Baselines_GPU_prep
   {
   public:
@@ -338,35 +368,35 @@ for(auto i=lo; i<hi; ++i)
     }
   }
 #endif
+Wcorrector<30> wcorr(krn->Corr());
           auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
           double x0 = lshift-0.5*nxdirty*pixsize_x,
                  y0 = mshift-0.5*nydirty*pixsize_y;
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv,pixsize_x=pixsize_x,pixsize_y=pixsize_y,x0,y0,divide_by_n=divide_by_n](sycl::item<2> item)
+          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv,pixsize_x=pixsize_x,pixsize_y=pixsize_y,x0,y0,divide_by_n=divide_by_n,wcorr,nshift=nshift,dw=dw](sycl::item<2> item)
             {
             auto i = item.get_id(0);
             auto j = item.get_id(1);
             double fx = sqr(x0+i*pixsize_x);
             double fy = sqr(y0+j*pixsize_y);
-            double fct = 0;
+            double fct;
             auto tmp = 1-fx-fy;
             if (tmp>=0)
               {
               auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-// FIXME: still need code to compute correction function on GPU
-//              fct = krn->corfunc((nm1+nshift)*dw);
+              fct = wcorr.corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
-     //       else // beyond the horizon, don't really know what to do here
-     //         fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+            else // beyond the horizon, don't really know what to do here
+              fct = divide_by_n ? 0 : wcorr.corfunc((sqrt(-tmp)-1)*dw);
 
             int icfu = abs(int(nxdirty/2)-int(i));
             int icfv = abs(int(nydirty/2)-int(j));
             auto fctu = acccfu[icfu];
             auto fctv = acccfv[icfv];
-            accdirty[i][j]*=Tcalc(fctu*fctv);
+            accdirty[i][j]*=Tcalc(fct*fctu*fctv);
             });
           });
 
@@ -629,7 +659,6 @@ timers.push("GPU degridding");
 #endif
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-          auto degree = krn->degree();
 #ifdef BUFFERING
           sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
           sycl::range<2> local(1, idxcomp.chunksize);
@@ -821,7 +850,6 @@ timers.push("GPU gridding");
 
             auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-            auto degree = krn->degree();
 
             sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
             sycl::range<2> local(1, idxcomp.chunksize);
