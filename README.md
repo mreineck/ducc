@@ -26,6 +26,14 @@ The latest version of DUCC can be obtained by cloning the repository via
 
     git clone https://gitlab.mpcdf.mpg.de/mtr/ducc.git
 
+### Licensing terms
+- All source code in this package is released under the terms of the GNU
+  General Public License v2 or later.
+- Some files (those constituting the FFT component and its internal
+  dependencies) are also licensed under the 3-clause BSD license. These files
+  contain two sets of licensing headers; the user is free to choose under which
+  of those terms they want to use these sources.
+
 ### Documentation
 
 Online documentation of the most recent Python interface is available at

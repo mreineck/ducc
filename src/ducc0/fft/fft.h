@@ -1,7 +1,7 @@
 /*
-This file is part of pocketfft.
+This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2021 Max-Planck-Society
+Copyright (C) 2010-2022 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
@@ -9,7 +9,11 @@ For the odd-sized DCT-IV transforms:
   Copyright (C) 2003, 2007-14 Massachusetts Institute of Technology
 
 Authors: Martin Reinecke, Peter Bell
+*/
 
+/* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
+
+/*
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -36,6 +40,22 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ *  This code is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This code is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this code; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
 #ifndef DUCC0_FFT_H
 #define DUCC0_FFT_H
 
@@ -48,6 +68,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <complex>
 #include <algorithm>
+#ifndef DUCC0_NO_THREADING
+#include <mutex>
+#endif
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
@@ -125,7 +148,7 @@ struct util // hack to avoid duplicate symbols
     sanity_check_axes(ac.ndim(), axes);
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i)== (i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i),
+      MR_assert(ac.shape(i) == ((i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i)),
         "axis length mismatch");
     }
   DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
@@ -134,7 +157,7 @@ struct util // hack to avoid duplicate symbols
     if (axis>=ac.ndim()) throw std::invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i)== (i==axis) ? (ar.shape(i)/2+1) : ar.shape(i),
+      MR_assert(ac.shape(i) == ((i==axis) ? (ar.shape(i)/2+1) : ar.shape(i)),
         "axis length mismatch");
     }
 
