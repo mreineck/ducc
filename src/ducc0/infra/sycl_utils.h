@@ -27,9 +27,11 @@ using namespace cl;
 #endif
 
 #if (defined(DUCC0_HAVE_SYCL))
+#if HIPSYCL_LIBKERNEL_IS_DEVICE_PASS_CUDA
 #if (__has_include(<cufft.h>))
 #include <cufft.h>
 #define DUCC0_HAVE_CUFFT
+#endif
 #endif
 #endif
 
@@ -113,18 +115,19 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
   q.submit([&](sycl::handler &cgh)
     {
     auto acc{buf.template get_access<sycl::access::mode::read_write>(cgh)};
-    cgh.hipSYCL_enqueue_custom_operation([=](sycl::interop_handle &h) {
+    cgh.hipSYCL_enqueue_custom_operation([acc, forward](sycl::interop_handle &h) {
       void *native_mem = h.get_native_mem<sycl::backend::cuda>(acc);
       cufftHandle plan;
-#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err); }
-      DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
+#define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err, "\nError code: ", res); }
+// cufftCreate() is only needed for "extensible" plans ...
+//      DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
 //      DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream");
       auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
       if constexpr (is_same<T,double>::value)
         {
         if constexpr(ndim==2)
           {
-          DUCC0_CUDACHECK(cufftPlan2d(&plan, buf.get_range().get(0), buf.get_range().get(1), CUFFT_Z2Z),
+          DUCC0_CUDACHECK(cufftPlan2d(&plan, acc.get_range().get(0), acc.get_range().get(1), CUFFT_Z2Z),
             "double precision planning failed")
           }
         else
@@ -137,8 +140,8 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
         {
         if constexpr(ndim==2)
           {
-          DUCC0_CUDACHECK(cufftPlan2d(&plan, buf.get_range().get(0), buf.get_range().get(1), CUFFT_C2C),
-            "double precision planning failed")
+          DUCC0_CUDACHECK(cufftPlan2d(&plan, acc.get_range().get(0), acc.get_range().get(1), CUFFT_C2C),
+            "single precision planning failed")
           }
         else
           MR_fail("unsupported dimensionality");
@@ -169,6 +172,23 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &/*q*/, sycl::buffer<co
   }
 #endif
 
+template<typename T, int ndim> void sycl_zero_buffer(sycl::queue &q, sycl::buffer<T,ndim> &buf)
+  {
+  q.submit([&](sycl::handler &cgh)
+    {
+    auto acc{buf.template get_access<sycl::access::mode::discard_write>(cgh)};
+    if constexpr(ndim==1)
+      cgh.parallel_for(sycl::range<1>(acc.get_range().get(0)), [acc](sycl::item<1> item)
+        { acc[item.get_id(0)] = T(0); });
+    if constexpr(ndim==2)
+       cgh.parallel_for(sycl::range<2>(acc.get_range().get(0), acc.get_range().get(1)), [acc](sycl::item<2> item)
+        { acc[item.get_id(0)][item.get_id(1)] = T(0); });
+    if constexpr(ndim==3)
+       cgh.parallel_for(sycl::range<3>(acc.get_range().get(0), acc.get_range().get(1), acc.get_range().get(2)), [acc](sycl::item<3> item)
+        { acc[item.get_id(0)][item.get_id(1)][item.get_id(2)] = T(0); });
+    });
+  }
+
 void print_device_info(const sycl::device &device)
   {
   cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
@@ -181,6 +201,7 @@ void print_device_info(const sycl::device &device)
 }
 
 using detail_sycl_utils::make_sycl_buffer;
+using detail_sycl_utils::sycl_zero_buffer;
 using detail_sycl_utils::sycl_c2c;
 using detail_sycl_utils::print_device_info;
 
