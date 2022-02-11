@@ -307,15 +307,13 @@ timers.push("GPU degridding");
           
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-        // dirty image
-        MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
   
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
 
         Baselines_GPU_prep bl_prep(bl);
-        
+
         auto bufvis(make_sycl_buffer(ms_out));
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -323,7 +321,6 @@ timers.push("GPU degridding");
         auto bufcoef(make_sycl_buffer(coef));
 
         sycl_zero_buffer(q, bufvis);
-        sycl_zero_buffer(q, bufgrid);
 
         auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
         auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
@@ -340,34 +337,9 @@ timers.push("GPU degridding");
 #endif
         timers.pop();
 
-        // applying correction to dirty image on GPU
-
+        // applying global corrections to dirty image on GPU
         q.submit([&](sycl::handler &cgh)
           {
-#if 0
-for(auto i=lo; i<hi; ++i)
-  {
-  double fx = sqr(x0+i*pixsize_x);
-  for (size_t j=0; j<nyd; ++j)
-    {
-    double fy = sqr(y0+j*pixsize_y);
-    double fct = 0;
-    auto tmp = 1-fx-fy;
-    if (tmp>=0)
-      {
-      auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-      fct = krn->corfunc((nm1+nshift)*dw);
-      if (divide_by_n)
-        fct /= nm1+1;
-      }
-    else // beyond the horizon, don't really know what to do here
-      fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
-    auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
-    fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
-    dirty(i,j)*=Timg(fct);
-    }
-  }
-#endif
 Wcorrector<30> wcorr(krn->Corr());
           auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
@@ -394,24 +366,16 @@ Wcorrector<30> wcorr(krn->Corr());
 
             int icfu = abs(int(nxdirty/2)-int(i));
             int icfv = abs(int(nydirty/2)-int(j));
-            auto fctu = acccfu[icfu];
-            auto fctv = acccfv[icfv];
-            accdirty[i][j]*=Tcalc(fct*fctu*fctv);
+            accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
-cout << "plane: " << pl << endl;
+//cout << "plane: " << pl << endl;
           double w = wmin+pl*dw;
 
-          // zeroing grid
-          q.submit([&](sycl::handler &cgh)
-            {
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::discard_write>(cgh)};
-            cgh.parallel_for(sycl::range<2>(nu, nv), [=](sycl::item<2> item)
-              { accgrid[item.get_id(0)][item.get_id(1)] = Timg(0); });
-            });
+          sycl_zero_buffer(q, bufgrid);
 
           // copying to grid and applying wscreen
           q.submit([&](sycl::handler &cgh)
@@ -468,9 +432,9 @@ cout << "plane: " << pl << endl;
 #else
             sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
 #endif
-            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
 #else
-            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
+            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
 #endif
               {
 #ifdef BUFFERING
@@ -546,7 +510,7 @@ auto wval=Tcalc((coord.w-w)/dw);
               if (shifting)
                 {
                 // apply phase
-                double fct = coord.u*lshift + coord.v*mshift;
+                double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
                 if constexpr (is_same<double, Tcalc>::value)
                   fct*=twopi;
                 else
@@ -584,8 +548,6 @@ auto wval=Tcalc((coord.w-w)/dw);
 timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-        // dirty image
-        MR_assert(dirty_in.contiguous(), "dirty image is not contiguous");
 
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
@@ -809,7 +771,6 @@ timers.push("GPU gridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
         // dirty image
-        MR_assert(dirty_out.contiguous(), "dirty image is not contiguous");
         auto bufdirty(make_sycl_buffer(dirty_out));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
