@@ -1609,7 +1609,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       countRanges();
       report();
       if (gpu)
-        gridding ? x2dirty() : dirty2x_gpu();
+        gridding ? x2dirty_gpu() : dirty2x_gpu();
       else
         gridding ? x2dirty() : dirty2x();
 
