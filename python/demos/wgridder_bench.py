@@ -49,7 +49,7 @@ def main():
         uvw=uvw, freq=freq, vis=vis, wgt=wgt,
         mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
         pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
-        nthreads=nthreads, verbosity=1, flip_v=True)
+        nthreads=nthreads, verbosity=1, flip_v=True, gpu=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
