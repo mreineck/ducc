@@ -477,7 +477,7 @@ Wcorrector<30> wcorr(krn->Corr());
               // compute kernel values
               array<Tcalc, 16> ukrn, vkrn;
 size_t nth=pl-minplane;
-auto wval=Tcalc((coord.w-w)/dw);
+auto wval=Tcalc((w-coord.w)/dw);
               kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
   
               // loop over supp*supp pixels from "grid"

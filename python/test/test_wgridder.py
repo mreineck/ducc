@@ -130,11 +130,11 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
-@pmp("wstacking", (True, False)[1:])  # TEMPORARY
+@pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-@pmp("gpu_grid", (True, False))
+@pmp("gpu_grid", (True, False)[1:])
 @pmp("gpu_degrid", (True, False))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
