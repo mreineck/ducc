@@ -1014,7 +1014,9 @@ timers.push("GPU gridding");
             auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
             auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
 
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+            // FIXME: "read_rite" is the correct access mode, but it seems that hipsycl
+            // only generates working code if we use plain "write"?!
+            auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
 
             sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
