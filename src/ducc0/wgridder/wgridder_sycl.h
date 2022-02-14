@@ -307,7 +307,9 @@ timers.push("GPU degridding");
           
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-  
+q.wait();
+timers.push("prep_global");
+
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
@@ -329,15 +331,17 @@ timers.push("GPU degridding");
         auto bufcfv(make_sycl_buffer(cfv));
 
         // build index structure
-        timers.push("index creation");
+q.wait();
+timers.poppush("index creation");
 #ifdef BUFFERING
         IndexComputer idxcomp(ranges, do_wgridding, true);
 #else
         IndexComputer idxcomp(ranges, do_wgridding, false);
 #endif
-        timers.pop();
 
         // applying global corrections to dirty image on GPU
+q.wait();
+timers.poppush("global corrections");
         q.submit([&](sycl::handler &cgh)
           {
 Wcorrector<30> wcorr(krn->Corr());
@@ -369,13 +373,18 @@ Wcorrector<30> wcorr(krn->Corr());
             accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
-
+q.wait();
+timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
 //cout << "plane: " << pl << endl;
           double w = wmin+pl*dw;
 
+q.wait();
+timers.push("zero_grid");
           sycl_zero_buffer(q, bufgrid);
+q.wait();
+timers.poppush("wscreen");
 
           // copying to grid and applying wscreen
           q.submit([&](sycl::handler &cgh)
@@ -398,9 +407,13 @@ Wcorrector<30> wcorr(krn->Corr());
               accgrid[i2][j2] = complex<Tcalc>(polar(1., myphase))*accdirty[i][j];
               });
             });
+q.wait();
+timers.poppush("FFT");
 
           // FFT
           sycl_c2c(q, bufgrid, true);
+q.wait();
+timers.poppush("degrid");
 
 #ifdef BUFFERING
           constexpr size_t blksz = 1024;
@@ -526,9 +539,11 @@ auto wval=Tcalc((w-coord.w)/dw);
 #ifdef BUFFERING
 }
 #endif
+q.wait();
+timers.pop();
           } // end of loop over planes
         }  // end of device buffer scope, buffers are written back
-        timers.poppush("weight application");
+timers.push("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
@@ -537,7 +552,8 @@ auto wval=Tcalc((w-coord.w)/dw);
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-        timers.pop();
+timers.pop();
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
@@ -549,6 +565,8 @@ timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
 
+q.wait();
+timers.push("prep");
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
@@ -567,6 +585,8 @@ timers.push("GPU degridding");
 // FIXME: cast to Timg
         auto bufcfu(make_sycl_buffer(cfu));
         auto bufcfv(make_sycl_buffer(cfv));
+q.wait();
+timers.poppush("global corrections");
         // copying to grid and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -590,17 +610,21 @@ timers.push("GPU degridding");
             });
           });
 
+q.wait();
+timers.poppush("FFT");
         // FFT
         sycl_c2c(q, bufgrid, true);
+q.wait();
+timers.poppush("index creation");
 
         // build index structure
-        timers.push("index creation");
 #ifdef BUFFERING
         IndexComputer idxcomp(ranges, do_wgridding, true);
 #else
         IndexComputer idxcomp(ranges, do_wgridding, false);
 #endif
-        timers.pop();
+q.wait();
+timers.poppush("degrid");
 
 #ifdef BUFFERING
         constexpr size_t blksz = 1024;
@@ -716,8 +740,10 @@ timers.push("GPU degridding");
 #ifdef BUFFERING
 }
 #endif
+q.wait();
+timers.pop();
         }  // end of device buffer scope, buffers are written back
-        timers.poppush("weight application");
+timers.push("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
@@ -726,7 +752,8 @@ timers.push("GPU degridding");
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-        timers.pop();
+timers.pop();
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
@@ -758,7 +785,8 @@ timers.push("GPU gridding");
         timers.pop();
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-  
+q.wait();
+timers.push("prep_global");
         auto bufdirty(make_sycl_buffer(dirty_out));
         sycl_zero_buffer(q, bufdirty);
 
@@ -780,16 +808,20 @@ timers.push("GPU gridding");
         auto bufcfu(make_sycl_buffer(cfu));
         auto bufcfv(make_sycl_buffer(cfv));
 
+q.wait();
+timers.poppush("index creation");
         // build index structure
-        timers.push("index creation");
         IndexComputer idxcomp(ranges, do_wgridding, true);
-        timers.pop();
+q.wait();
+timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
 //cout << "plane: " << pl << endl;
           double w = wmin+pl*dw;
 
+q.wait();
+timers.push("grid");
           sycl_zero_buffer(q, bufgrid);
 
           constexpr size_t blksz = 1024;
@@ -901,9 +933,13 @@ timers.push("GPU gridding");
                 });
               });
             }
+q.wait();
+timers.poppush("FFT");
           // FFT
           sycl_c2c(q, bufgrid, false);
 
+q.wait();
+timers.poppush("wscreen");
           // applying wscreen and adding to dirty image
           q.submit([&](sycl::handler &cgh)
             {
@@ -925,8 +961,12 @@ timers.push("GPU gridding");
               accdirty[i][j] += (complex<Tcalc>(polar(1., myphase))*accgrid[i2][j2]).real();
               });
             });
+q.wait();
+timers.pop();
           } // end of loop over planes
         // applying global corrections to dirty image on GPU
+q.wait();
+timers.push("global corrections");
         q.submit([&](sycl::handler &cgh)
           {
 Wcorrector<30> wcorr(krn->Corr());
@@ -958,7 +998,10 @@ Wcorrector<30> wcorr(krn->Corr());
             accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
+q.wait();
+timers.pop();
         }  // end of device buffer scope, buffers are written back
+timers.pop();
         }
 #else
         MR_fail("CUDA not found");
@@ -978,6 +1021,8 @@ timers.push("GPU gridding");
 
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
+q.wait();
+timers.push("prep");
         // dirty image
         auto bufdirty(make_sycl_buffer(dirty_out));
         // grid (only on GPU)
@@ -1000,9 +1045,11 @@ timers.push("GPU gridding");
         auto bufcfv(make_sycl_buffer(cfv));
 
         // build index structure
-        timers.push("index creation");
+q.wait();
+timers.poppush("index creation");
         IndexComputer idxcomp(ranges, do_wgridding, true);
-        timers.pop();
+q.wait();
+timers.poppush("grid");
 
         constexpr size_t blksz = 1024;
         for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
@@ -1120,9 +1167,13 @@ timers.push("GPU gridding");
               });
             });
           }
+q.wait();
+timers.poppush("FFT");
         // FFT
         sycl_c2c(q, bufgrid, false);  // FIXME normalization?
 
+q.wait();
+timers.poppush("global corrections");
         // copying to dirty image and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -1145,8 +1196,10 @@ timers.push("GPU gridding");
             accdirty[i][j] = (accgrid[i2][j2]*Tcalc(fctu*fctv)).real();
             });
           });
+q.wait();
+timers.pop();
         }  // end of device buffer scope, buffers are written back
-        timers.pop();
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
