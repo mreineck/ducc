@@ -733,23 +733,13 @@ timers.push("GPU degridding");
         }
       }
 
-
-
-template<typename T> static void atomic_add(complex<T> &a, const complex<T> &b)
-  {
-  T *aptr = reinterpret_cast<T *>(&a);
 #ifndef __INTEL_LLVM_COMPILER
-  sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> re(aptr[0]);
-  re += b.real();
-  sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device> im(aptr[1]);
-  im += b.imag();
+template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device>;
+template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device>;
 #else
-  sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space> re(aptr[0]);
-  re += b.real();
-  sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space> im(aptr[1]);
-  im += b.imag();
+template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
 #endif
-  }
 
     void x2dirty_gpu()
       {
@@ -774,6 +764,7 @@ timers.push("GPU gridding");
 
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+        sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
 
         Baselines_GPU_prep bl_prep(bl);
         auto bufvis(make_sycl_buffer(ms));
@@ -815,18 +806,18 @@ timers.push("GPU gridding");
               auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
               auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
               auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
-              auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
+              auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
               auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
               sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
               sycl::range<2> local(1, idxcomp.chunksize);
               int nsafe = (supp+1)/2;
               size_t sidelen = 2*nsafe+(1<<logsquare);
 #ifndef __INTEL_LLVM_COMPILER
-              sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+              sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 #else
-              sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
+              sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-              cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
                 {
                 auto iblock = item.get_global_id(0)+blockofs;
                 auto iwork = item.get_local_id(1);
@@ -837,7 +828,8 @@ timers.push("GPU gridding");
                 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
                   size_t iu = i/sidelen, iv = i%sidelen;
-                  tile[iu][iv] = Tcalc(0);
+                  tile[iu][iv][0]=Tcalc(0);
+                  tile[iu][iv][1]=Tcalc(0);
                   }
                 item.barrier();
     
@@ -882,7 +874,13 @@ timers.push("GPU gridding");
                     {
                     auto tmp = ukrn[i]*val;
                     for (size_t j=0; j<supp; ++j)
-                      atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
+                      {
+                      auto tmp2 = vkrn[j]*tmp;
+                      my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
+                      rr += tmp2.real();
+                      my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
+                      ri += tmp2.imag();
+                      }
                     }
                   }
 
@@ -893,7 +891,12 @@ timers.push("GPU gridding");
                 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
                   size_t iu = i/sidelen, iv = i%sidelen;
-                  atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                  size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
+                  size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+                  my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
+                  rr += tile[iu][iv][0];
+                  my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
+                  ri += tile[iu][iv][1];
                   }
                 });
               });
@@ -979,6 +982,7 @@ timers.push("GPU gridding");
         auto bufdirty(make_sycl_buffer(dirty_out));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+        sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
 
         Baselines_GPU_prep bl_prep(bl);
         auto bufvis(make_sycl_buffer(ms));
@@ -1016,7 +1020,8 @@ timers.push("GPU gridding");
 
             // FIXME: "read_rite" is the correct access mode, but it seems that hipsycl
             // only generates working code if we use plain "write"?!
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
+            auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
+       //     auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
 
             sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
@@ -1024,11 +1029,11 @@ timers.push("GPU gridding");
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
 #ifndef __INTEL_LLVM_COMPILER
-            sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
+            sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 #else
-            sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
+            sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+blockofs;
               auto iwork = item.get_local_id(1);
@@ -1038,7 +1043,8 @@ timers.push("GPU gridding");
               for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;
-                tile[iu][iv] = Tcalc(0);
+                tile[iu][iv][0] = Tcalc(0);
+                tile[iu][iv][1] = Tcalc(0);
                 }
               item.barrier();
 
@@ -1081,7 +1087,14 @@ timers.push("GPU gridding");
                   {
                   auto tmp = ukrn[i]*val;
                   for (size_t j=0; j<supp; ++j)
-                    atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
+                    {
+                    auto tmp2 = vkrn[j]*tmp;
+                    my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
+                    rr += tmp2.real();
+                    my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
+                    ri += tmp2.imag();
+                    }
+  //                  atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
                   }
                 }
 
@@ -1093,8 +1106,17 @@ timers.push("GPU gridding");
               for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;
-                atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
+                size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+                my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
+                rr += tile[iu][iv][0];
+                my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
+                ri += tile[iu][iv][1];
                 }
+                //{
+                //size_t iu = i/sidelen, iv = i%sidelen;
+                //atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
+                //}
               });
             });
           }
