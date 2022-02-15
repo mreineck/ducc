@@ -27,7 +27,7 @@ using namespace cl;
 #endif
 
 #if (defined(DUCC0_HAVE_SYCL))
-#if HIPSYCL_LIBKERNEL_IS_DEVICE_PASS_CUDA
+#if (defined(__HIPSYCL_ENABLE_CUDA_TARGET__))
 #if (__has_include(<cufft.h>))
 #include <cufft.h>
 #define DUCC0_HAVE_CUFFT
@@ -193,10 +193,10 @@ void print_device_info(const sycl::device &device)
   {
   cout << "max_compute_units: " << device.template get_info<sycl::info::device::max_compute_units>() << endl;
   cout << "max_work_group_size: " << device.template get_info<sycl::info::device::max_work_group_size>() << endl;
+  cout << "max_work_item_dimensions: " << device.template get_info<sycl::info::device::max_work_item_dimensions>() << endl;
 //using blah = sycl::info::device::max_work_item_sizes<1>;
 //cout << "max_work_item_sizes<1>: " << device.template get_info<blah>() << endl;
   }
-
 
 }
 

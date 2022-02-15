@@ -785,6 +785,7 @@ timers.push("GPU gridding");
         timers.pop();
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
+print_device_info(q.get_device());
 q.wait();
 timers.push("prep_global");
         auto bufdirty(make_sycl_buffer(dirty_out));
@@ -821,8 +822,10 @@ timers.pop();
           double w = wmin+pl*dw;
 
 q.wait();
-timers.push("grid");
+timers.push("grid zeroing");
           sycl_zero_buffer(q, bufgrid);
+q.wait();
+timers.poppush("grid");
 
           constexpr size_t blksz = 1024;
           for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
@@ -864,7 +867,7 @@ timers.push("grid");
                   tile[iu][iv][1]=Tcalc(0);
                   }
                 item.barrier();
-    
+
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
                 if (irow!=~size_t(0))
