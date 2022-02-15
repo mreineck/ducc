@@ -785,7 +785,7 @@ timers.push("GPU gridding");
         timers.pop();
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-print_device_info(q.get_device());
+//print_device_info(q.get_device());
 q.wait();
 timers.push("prep_global");
         auto bufdirty(make_sycl_buffer(dirty_out));
@@ -866,7 +866,7 @@ timers.poppush("grid");
                   tile[iu][iv][0]=Tcalc(0);
                   tile[iu][iv][1]=Tcalc(0);
                   }
-                item.barrier();
+                item.barrier(sycl::access::fence_space::local_space);
 
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
@@ -911,10 +911,15 @@ timers.poppush("grid");
                     for (size_t j=0; j<supp; ++j)
                       {
                       auto tmp2 = vkrn[j]*tmp;
+#if 1
                       my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
                       rr += tmp2.real();
                       my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
                       ri += tmp2.imag();
+#else
+                      tile[iu0-bu0+i][iv0-bv0+j][0] += tmp2.real();
+                      tile[iu0-bu0+i][iv0-bv0+j][1] += tmp2.imag();
+#endif
                       }
                     }
                   }
@@ -922,16 +927,21 @@ timers.poppush("grid");
                 // add local buffer back to global buffer
                 auto u_tile = acc_tileu[iblock];
                 auto v_tile = acc_tilev[iblock];
-                item.barrier();
+                item.barrier(sycl::access::fence_space::local_space);
                 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
                   size_t iu = i/sidelen, iv = i%sidelen;
                   size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
                   size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+#if 1
                   my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
                   rr += tile[iu][iv][0];
                   my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
                   ri += tile[iu][iv][1];
+#else
+                  accgridr[igu][igv][0] += tile[iu][iv][0];
+                  accgridr[igu][igv][1] += tile[iu][iv][1];
+#endif
                   }
                 });
               });
