@@ -1048,7 +1048,7 @@ template<typename T0, typename T1, typename T2, typename T3, typename T4,
       {
       for (size_t i=lo; i<hi; ++i)
         func(ptr0[i*str[0][0]], ptr1[i*str[1][0]], ptr2[i*str[2][0]],
-             ptr3[i*str[3][0]], ptr4[i*str[4][0]], ptr5[i*str[5][0]].
+             ptr3[i*str[3][0]], ptr4[i*str[4][0]], ptr5[i*str[5][0]],
              ptr6[i*str[6][0]]);
       });
   else
