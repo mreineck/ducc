@@ -1014,6 +1014,100 @@ template<typename T0, typename T1, typename T2, typename T3, typename T4,
       });
   }
 
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename Func>
+  void applyHelper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3,
+    T4 ptr4, T5 ptr5, T6 ptr6, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim],
+       str3 = str[3][idim], str4 = str[4][idim], str5 = str[5][idim],
+       str6 = str[6][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, ptr2+i*str2,
+        ptr3+i*str3, ptr4+i*str4, ptr5+i*str5, ptr6+i*str6, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0], ptr1[i*str1], ptr2[i*str2], ptr3[i*str3],
+        ptr4[i*str4], ptr5[i*str5], ptr6[i*str6]);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename Func>
+  void applyHelper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3,
+    T4 ptr4, T5 ptr5, T6 ptr6, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0, *ptr1, *ptr2, *ptr3, *ptr4, *ptr5, *ptr6);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, ptr1, ptr2, ptr3, ptr4, ptr5, ptr6, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(ptr0[i*str[0][0]], ptr1[i*str[1][0]], ptr2[i*str[2][0]],
+             ptr3[i*str[3][0]], ptr4[i*str[4][0]], ptr5[i*str[5][0]],
+             ptr6[i*str[6][0]]);
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0],
+          ptr2+i*str[2][0], ptr3+i*str[3][0], ptr4+i*str[4][0],
+          ptr5+i*str[5][0], ptr6+i*str[6][0], func);
+      });
+  }
+
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename T7, typename Func>
+  void applyHelper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3,
+    T4 ptr4, T5 ptr5, T6 ptr6, T7 ptr7, Func func)
+  {
+  auto len = shp[idim];
+  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim],
+       str3 = str[3][idim], str4 = str[4][idim], str5 = str[5][idim],
+       str6 = str[6][idim], str7 = str[7][idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, ptr0+i*str0, ptr1+i*str1, ptr2+i*str2,
+        ptr3+i*str3, ptr4+i*str4, ptr5+i*str5, ptr6+i*str6, ptr7+i*str7, func);
+  else
+    for (size_t i=0; i<len; ++i)
+      func(ptr0[i*str0], ptr1[i*str1], ptr2[i*str2], ptr3[i*str3],
+        ptr4[i*str4], ptr5[i*str5], ptr6[i*str6], ptr7[i*str7]);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename T7, typename Func>
+  void applyHelper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, T0 ptr0, T1 ptr1, T2 ptr2, T3 ptr3,
+    T4 ptr4, T5 ptr5, T6 ptr6, T7 ptr7, Func func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    func(*ptr0, *ptr1, *ptr2, *ptr3, *ptr4, *ptr5, *ptr6, *ptr7);
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptr0, ptr1, ptr2, ptr3, ptr4, ptr5, ptr6, ptr7, func);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        func(ptr0[i*str[0][0]], ptr1[i*str[1][0]], ptr2[i*str[2][0]],
+             ptr3[i*str[3][0]], ptr4[i*str[4][0]], ptr5[i*str[5][0]],
+             ptr6[i*str[6][0]], ptr7[i*str[7][0]]);
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        applyHelper(1, shp, str, ptr0+i*str[0][0], ptr1+i*str[1][0],
+          ptr2+i*str[2][0], ptr3+i*str[3][0], ptr4+i*str[4][0],
+          ptr5+i*str[5][0], ptr6+i*str[6][0], ptr7+i*str[7][0], func);
+      });
+  }
+
 template<typename T0, typename Func>
   void mav_apply(Func func, int nthreads, T0 &&m0)
   {
@@ -1056,6 +1150,24 @@ template<typename T0, typename T1, typename T2, typename T3, typename T4,
   auto [shp, str] = multiprep({m0, m1, m2, m3, m4, m5});
   applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), m4.data(),
     m5.data(), func, nthreads);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename Func>
+  void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3,
+    T4 &&m4, T5 &&m5, T6 &&m6)
+  {
+  auto [shp, str] = multiprep({m0, m1, m2, m3, m4, m5, m6});
+  applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), m4.data(),
+    m5.data(), m6.data(), func, nthreads);
+  }
+template<typename T0, typename T1, typename T2, typename T3, typename T4,
+  typename T5, typename T6, typename T7, typename Func>
+  void mav_apply(Func func, int nthreads, T0 &&m0, T1 &&m1, T2 &&m2, T3 &&m3,
+    T4 &&m4, T5 &&m5, T6 &&m6, T7 &&m7)
+  {
+  auto [shp, str] = multiprep({m0, m1, m2, m3, m4, m5, m6, m7});
+  applyHelper(shp, str, m0.data(), m1.data(), m2.data(), m3.data(), m4.data(),
+    m5.data(), m6.data(), m7.data(), func, nthreads);
   }
 
 template<typename T, size_t ndim> class mavref
