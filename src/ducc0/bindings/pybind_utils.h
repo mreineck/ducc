@@ -102,7 +102,7 @@ template<typename T, size_t ndim>
 
 template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims)
   { return py::array_t<T>(dims); }
-template<typename T, size_t ndim> py::array_t<T> make_Pyarr(const array<size_t,ndim> &dims)
+template<typename T, size_t ndim> py::array_t<T> make_Pyarr(const std::array<size_t,ndim> &dims)
   { return py::array_t<T>(shape_t(dims.begin(), dims.end())); }
 
 template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
