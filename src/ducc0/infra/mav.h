@@ -1000,22 +1000,6 @@ template<size_t nd0, size_t nd1, size_t nd2,
   }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 template<typename Ttuple> constexpr size_t tupsz()
   { return tuple_size_v<remove_reference_t<Ttuple>>; }
 
@@ -1057,15 +1041,6 @@ inline auto tuple_transform_with_index(tuple<Ts...> const& inputs, Function func
   return tuple_transform_with_index_impl(inputs, function,
                                          make_index_sequence<sizeof...(Ts)>{});
   }
-
-template<typename Targ0, typename... Targs> void xpush_infos(vector<fmav_info> &infos,
-Targ0 &&arg0, Targs... args)
-  {
-  infos.push_back(arg0);
-  xpush_infos(infos, args...);
-  }
-template<typename Targ0> void xpush_infos(vector<fmav_info> &infos, Targ0 &&arg0)
-  { infos.push_back(arg0); }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
   { return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; }); }
@@ -1124,7 +1099,7 @@ template<typename Func, typename... Targs>
   void mav_apply(Func &&func, int nthreads, Targs... args)
   {
   vector<fmav_info> infos;
-  xpush_infos(infos, args...);
+  (infos.push_back(args), ...);
   auto [shp, str] = multiprep(infos);
   auto datatuple = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
