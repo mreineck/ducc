@@ -1390,6 +1390,115 @@ template<size_t nd0, size_t nd1, size_t nd2,
                   func, nthreads);
   }
 
+template <typename Func, typename Ttuple, size_t... I>
+inline void internal_helper(Func &&func, const Ttuple& tuple, index_sequence<I...>) {
+//    func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...);
+    func(get<I>(tuple)...);
+}
+
+template<typename Func, typename Ttuple> inline void call_with_tuple (Func && func, Ttuple &&tuple)
+  {
+  internal_helper(forward<Func>(func), tuple, make_index_sequence<tuple_size_v<remove_reference_t<Ttuple>>>());
+  }
+
+template<typename...Ts, typename Function, size_t... Is>
+inline auto transform_impl(tuple<Ts...> const& inputs, Function function, index_sequence<Is...>)
+{
+    return tuple<result_of_t<Function(Ts)>...>{function(get<Is>(inputs))...};
+}
+
+template<typename... Ts, typename Function>
+inline auto tuple_transform(tuple<Ts...> const& inputs, Function function)
+{
+    return transform_impl(inputs, function, make_index_sequence<sizeof...(Ts)>{});
+}
+
+template<typename...Ts, typename Function, size_t... Is>
+inline auto transform_with_index_impl(tuple<Ts...> const& inputs, Function function, index_sequence<Is...>)
+{
+    return tuple<result_of_t<Function(Ts, int)>...>{function(get<Is>(inputs), Is)...};
+}
+
+template<typename... Ts, typename Function>
+inline auto tuple_transform_with_index(tuple<Ts...> const& inputs, Function function)
+{
+    return transform_with_index_impl(inputs, function, make_index_sequence<sizeof...(Ts)>{});
+}
+
+template<typename Targ0, typename... Targs> void xpush_infos(vector<fmav_info> &infos,
+Targ0 &&arg0, Targs... args)
+  {
+  infos.push_back(arg0);
+  xpush_infos(infos, args...);
+  }
+template<typename Targ0> void xpush_infos(vector<fmav_info> &infos,
+Targ0 &&arg0)
+  {
+  infos.push_back(arg0);
+  }
+
+template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
+  { return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; }); }
+
+template<typename Ttuple, typename Func>
+  void xapplyHelper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func)
+  {
+  auto len = shp[idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      {
+      auto datatuplenew = tuple_transform_with_index(datatuple, [i,idim,&str](auto &&ptr, size_t idx)
+        { return ptr + i*str[idx][idim]; });
+      xapplyHelper(idim+1, shp, str, datatuplenew, func);
+      }
+  else
+    for (size_t i=0; i<len; ++i)
+      {
+      auto datatuplenew = tuple_transform_with_index(datatuple, [i,idim,&str](auto &&ptr, size_t idx)
+        { return ptr + i*str[idx][idim]; });
+      call_with_tuple(func, to_ref(datatuplenew));
+      }
+  }
+template<typename Func, typename Ttuple>
+  void xapplyHelper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func, size_t nthreads)
+  {
+  if (shp.size()==0)
+    call_with_tuple(forward<Func>(func), to_ref(datatuple));
+  else if (nthreads==1)
+    xapplyHelper(0, shp, str, datatuple, forward<Func>(func));
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        {
+        auto datatuplenew = tuple_transform_with_index(datatuple, [i,&str](auto &&ptr, size_t idx)
+          { return ptr + i*str[idx][0]; });
+        call_with_tuple(func, to_ref(datatuplenew));
+        }
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        {
+        auto datatuplenew = tuple_transform_with_index(datatuple, [i,&str](auto &&ptr, size_t idx)
+          { return ptr + i*str[idx][0]; });
+        xapplyHelper(1, shp, str, datatuplenew, func);
+        }
+      });
+  }
+template<typename Func, typename... Targs>
+  void xmav_apply(Func &&func, int nthreads, Targs... args)
+  {
+  vector<fmav_info> infos;
+  xpush_infos(infos, args...);
+  auto [shp, str] = multiprep(infos);
+  auto datatuple = tuple_transform(forward_as_tuple(args...), [](auto &&arg){return arg.data();});
+
+  xapplyHelper(shp, str, datatuple, func, nthreads);
+  }
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1403,6 +1512,7 @@ using detail_mav::cmav;
 using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
+using detail_mav::xmav_apply;
 using detail_mav::flexible_mav_apply;
 }
 
