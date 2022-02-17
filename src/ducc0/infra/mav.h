@@ -1006,33 +1006,32 @@ template<typename Ttuple> constexpr size_t tupsz()
 template <typename Func, typename Ttuple, size_t... I>
 inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
   index_sequence<I...>)
-  { func(get<I>(tuple)...); }
-//    func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...);
-
-template<typename Func, typename Ttuple> inline void call_with_tuple (Func && func, Ttuple &&tuple)
+//  { func(get<I>(tuple)...); }
+  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
+template<typename Func, typename Ttuple> inline void call_with_tuple
+  (Func && func, Ttuple &&tuple)
   {
   call_with_tuple_impl(forward<Func>(func), tuple,
-                  make_index_sequence<tupsz<Ttuple>()>());
+                       make_index_sequence<tupsz<Ttuple>()>());
   }
 
 template<typename...Ts, typename Function, size_t... Is>
 inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Function function,
   index_sequence<Is...>)
-  {
-  return tuple<result_of_t<Function(Ts)>...>{function(get<Is>(inputs))...};
-  }
-
+  { return tuple<result_of_t<Function(Ts)>...>{function(get<Is>(inputs))...}; }
 template<typename... Ts, typename Function>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Function function)
   {
-  return tuple_transform_impl(inputs, function, make_index_sequence<sizeof...(Ts)>{});
+  return tuple_transform_impl(inputs, function,
+                              make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename...Ts, typename Function, size_t... Is>
 inline auto tuple_transform_with_index_impl(tuple<Ts...> const& inputs,
    Function function, index_sequence<Is...>)
   {
-  return tuple<result_of_t<Function(Ts, int)>...>{function(get<Is>(inputs), Is)...};
+  return tuple<result_of_t<Function(Ts, int)>...>
+    {function(get<Is>(inputs), Is)...};
   }
 
 template<typename... Ts, typename Function>
@@ -1043,7 +1042,16 @@ inline auto tuple_transform_with_index(tuple<Ts...> const& inputs, Function func
   }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
-  { return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; }); }
+  {
+  return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; });
+  }
+
+template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &tuple,
+  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t i)
+  {
+  return tuple_transform_with_index(tuple, [i,idim,&str](auto &&ptr, size_t idx)
+                                    { return ptr + i*str[idx][idim]; });
+  }
 
 template<typename Ttuple, typename Func>
   void xapplyHelper(size_t idim, const vector<size_t> &shp,
@@ -1052,18 +1060,10 @@ template<typename Ttuple, typename Func>
   auto len = shp[idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      {
-      auto datatuplenew = tuple_transform_with_index(datatuple, [i,idim,&str](auto &&ptr, size_t idx)
-        { return ptr + i*str[idx][idim]; });
-      xapplyHelper(idim+1, shp, str, datatuplenew, func);
-      }
+      xapplyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i), func);
   else
     for (size_t i=0; i<len; ++i)
-      {
-      auto datatuplenew = tuple_transform_with_index(datatuple, [i,idim,&str](auto &&ptr, size_t idx)
-        { return ptr + i*str[idx][idim]; });
-      call_with_tuple(func, to_ref(datatuplenew));
-      }
+      call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
   }
 template<typename Func, typename Ttuple>
   void xapplyHelper(const vector<size_t> &shp,
@@ -1077,21 +1077,13 @@ template<typename Func, typename Ttuple>
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        {
-        auto datatuplenew = tuple_transform_with_index(datatuple, [i,&str](auto &&ptr, size_t idx)
-          { return ptr + i*str[idx][0]; });
-        call_with_tuple(func, to_ref(datatuplenew));
-        }
+        call_with_tuple(func, to_ref(update_pointers(datatuple, str, 0, i)));
       });
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        {
-        auto datatuplenew = tuple_transform_with_index(datatuple, [i,&str](auto &&ptr, size_t idx)
-          { return ptr + i*str[idx][0]; });
-        xapplyHelper(1, shp, str, datatuplenew, func);
-        }
+        xapplyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func);
       });
   }
 
