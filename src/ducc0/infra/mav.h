@@ -1054,25 +1054,25 @@ template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &tuple,
   }
 
 template<typename Ttuple, typename Func>
-  void xapplyHelper(size_t idim, const vector<size_t> &shp,
+  void applyHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func)
   {
   auto len = shp[idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      xapplyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i), func);
+      applyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i), func);
   else
     for (size_t i=0; i<len; ++i)
       call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
   }
 template<typename Func, typename Ttuple>
-  void xapplyHelper(const vector<size_t> &shp,
+  void applyHelper(const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func, size_t nthreads)
   {
   if (shp.size()==0)
     call_with_tuple(forward<Func>(func), to_ref(datatuple));
   else if (nthreads==1)
-    xapplyHelper(0, shp, str, datatuple, forward<Func>(func));
+    applyHelper(0, shp, str, datatuple, forward<Func>(func));
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1083,7 +1083,7 @@ template<typename Func, typename Ttuple>
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        xapplyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func);
+        applyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func);
       });
   }
 
@@ -1095,8 +1095,7 @@ template<typename Func, typename... Targs>
   auto [shp, str] = multiprep(infos);
   auto datatuple = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-
-  xapplyHelper(shp, str, datatuple, func, nthreads);
+  applyHelper(shp, str, datatuple, func, nthreads);
   }
 }
 
