@@ -489,8 +489,8 @@ timers.poppush("degrid");
   
               // compute kernel values
               array<Tcalc, 16> ukrn, vkrn;
-size_t nth=pl-minplane;
-auto wval=Tcalc((w-coord.w)/dw);
+              size_t nth=pl-minplane;
+              auto wval=Tcalc((w-coord.w)/dw);
               kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
   
               // loop over supp*supp pixels from "grid"
@@ -774,6 +774,15 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
 #if (defined(DUCC0_HAVE_SYCL))
         {
 timers.push("GPU gridding");
+   auto exception_handler = [] (sycl::exception_list exceptions) {
+      for (std::exception_ptr const& e : exceptions) {
+         try {
+            std::rethrow_exception(e);
+         } catch(sycl::exception const& e) {
+         std::cout << "Caught asynchronous SYCL exception:\n"
+                   << e.what() << std::endl;
+         }
+      }
               
         timers.push("weight application");
         bool do_weights = (wgt.stride(0)!=0);
@@ -784,7 +793,7 @@ timers.push("GPU gridding");
         const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
         timers.pop();
         { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
+        sycl::queue q{sycl::default_selector(), exception_handler};
 //print_device_info(q.get_device());
 q.wait();
 timers.push("prep_global");
@@ -882,8 +891,8 @@ timers.poppush("grid");
     
                   // compute kernel values
                   array<Tcalc, 16> ukrn, vkrn;
-  size_t nth=pl-minplane;
-  auto wval=Tcalc((w-coord.w)/dw);
+                  size_t nth=pl-minplane;
+                  auto wval=Tcalc((w-coord.w)/dw);
                   kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
     
                   // loop over supp*supp pixels from "grid"
@@ -946,7 +955,13 @@ timers.poppush("grid");
                 });
               });
             }
-q.wait();
+//q.wait();
+   try {
+      q.wait_and_throw();
+   } catch (sycl::exception const& e) {
+      std::cout << "Caught synchronous SYCL exception:\n"
+      << e.what() << std::endl;
+   }
 timers.poppush("FFT");
           // FFT
           sycl_c2c(q, bufgrid, false);
