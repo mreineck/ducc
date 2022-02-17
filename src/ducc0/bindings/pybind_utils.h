@@ -102,6 +102,8 @@ template<typename T, size_t ndim>
 
 template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims)
   { return py::array_t<T>(dims); }
+template<typename T, size_t ndim> py::array_t<T> make_Pyarr(const std::array<size_t,ndim> &dims)
+  { return py::array_t<T>(shape_t(dims.begin(), dims.end())); }
 
 template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   {
@@ -127,7 +129,7 @@ template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims)
 template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   const shape_t &dims)
   {
-  if (arr_.is_none()) return py::array_t<T>(dims);
+  if (arr_.is_none()) return make_Pyarr<T>(dims);
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
   auto tmp = toPyarr<T>(arr_);
   MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
@@ -139,7 +141,7 @@ template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
 template<typename T> py::array_t<T> get_optional_Pyarr_minshape
   (py::object &arr_, const shape_t &dims)
   {
-  if (arr_.is_none()) return py::array_t<T>(dims);
+  if (arr_.is_none()) return make_Pyarr<T>(dims);
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
   auto tmp = toPyarr<T>(arr_);
   MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
