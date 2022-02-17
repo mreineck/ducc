@@ -1000,7 +1000,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   }
 
 
-template<typename Ttuple> constexpr size_t tupsz()
+template<typename Ttuple> constexpr inline size_t tupsz()
   { return tuple_size_v<remove_reference_t<Ttuple>>; }
 
 template <typename Func, typename Ttuple, size_t... I>
@@ -1066,7 +1066,7 @@ template<typename Ttuple, typename Func>
       call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
   }
 template<typename Func, typename Ttuple>
-  void applyHelper(const vector<size_t> &shp,
+  inline void applyHelper(const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func, size_t nthreads)
   {
   if (shp.size()==0)
@@ -1095,7 +1095,7 @@ template<typename Func, typename... Targs>
   auto [shp, str] = multiprep(infos);
   auto datatuple = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, datatuple, func, nthreads);
+  applyHelper(shp, str, datatuple, forward<Func>(func), nthreads);
   }
 }
 
