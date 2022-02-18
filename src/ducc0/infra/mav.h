@@ -1025,6 +1025,15 @@ inline auto tuple_transform(tuple<Ts...> const& inputs, Function function)
   return tuple_transform_impl(inputs, function,
                               make_index_sequence<sizeof...(Ts)>{});
   }
+template<typename...Ts, typename Function, size_t... Is>
+inline void tuple_modify_impl(tuple<Ts...> &tpl, Function function,
+  index_sequence<Is...>)
+  { (function(get<Is>(tpl)), ...); }
+template<typename... Ts, typename Function>
+inline void tuple_modify(tuple<Ts...> &tpl, Function function)
+  {
+  tuple_modify_impl(tpl, function, make_index_sequence<sizeof...(Ts)>{});
+  }
 
 template<typename...Ts, typename Function, size_t... Is>
 inline auto tuple_transform_with_index_impl(tuple<Ts...> const& inputs,
@@ -1040,6 +1049,15 @@ inline auto tuple_transform_with_index(tuple<Ts...> const& inputs, Function func
   return tuple_transform_with_index_impl(inputs, function,
                                          make_index_sequence<sizeof...(Ts)>{});
   }
+template<typename...Ts, typename Function, size_t... Is>
+inline void tuple_modify_with_index_impl(tuple<Ts...> &tpl, Function function,
+  index_sequence<Is...>)
+  { (function(get<Is>(tpl), Is), ...); }
+template<typename... Ts, typename Function>
+inline void tuple_modify_with_index(tuple<Ts...> &tpl, Function function)
+  {
+  tuple_modify_with_index_impl(tpl, function, make_index_sequence<sizeof...(Ts)>{});
+  }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
   {
@@ -1053,37 +1071,70 @@ template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &tuple,
                                     { return ptr + i*str[idx][idim]; });
   }
 
+template<typename Ttuple> inline Ttuple update_pointers_contiguous (const Ttuple &tuple,
+  size_t i)
+  {
+  return tuple_transform(tuple, [i](auto &&ptr) { return ptr+i; });
+  }
+template<typename Ttuple> inline void advance_contiguous (Ttuple &tuple)
+  { tuple_modify(tuple, [](auto &&ptr) { ++ptr; }); }
+template<typename Ttuple> inline void advance (Ttuple &tuple,
+  const vector<vector<ptrdiff_t>> &str, size_t idim)
+  {
+  tuple_modify_with_index(tuple, [idim,&str](auto &&ptr, size_t idx)
+                          { ptr += str[idx][idim]; });
+  }
+
 template<typename Ttuple, typename Func>
   void applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func)
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func,
+    bool last_contiguous)
   {
   auto len = shp[idim];
   if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      applyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i), func);
+      applyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i),
+        func, last_contiguous);
   else
-    for (size_t i=0; i<len; ++i)
-      call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
+    {
+    auto loctuple(datatuple);
+    if (last_contiguous)
+      for (size_t i=0; i<len; ++i, advance_contiguous(loctuple))
+        call_with_tuple(func, to_ref(loctuple));
+//        call_with_tuple(func, to_ref(update_pointers_contiguous(datatuple, i)));
+    else
+      for (size_t i=0; i<len; ++i, advance(loctuple, str, idim))
+        call_with_tuple(func, to_ref(loctuple));
+//        call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
+    }
   }
 template<typename Func, typename Ttuple>
   inline void applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func, size_t nthreads)
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func,
+    size_t nthreads, bool last_contiguous)
   {
   if (shp.size()==0)
     call_with_tuple(forward<Func>(func), to_ref(datatuple));
   else if (nthreads==1)
-    applyHelper(0, shp, str, datatuple, forward<Func>(func));
+    applyHelper(0, shp, str, datatuple, forward<Func>(func), last_contiguous);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
-      for (size_t i=lo; i<hi; ++i)
-        call_with_tuple(func, to_ref(update_pointers(datatuple, str, 0, i)));
+      auto loctuple(datatuple);
+      if (last_contiguous)
+        for (size_t i=lo; i<hi; ++i, advance_contiguous(loctuple))
+          call_with_tuple(func, to_ref(loctuple));
+//          call_with_tuple(func, to_ref(update_pointers_contiguous(datatuple, i)));
+      else
+        for (size_t i=lo; i<hi; ++i)
+          call_with_tuple(func, to_ref(update_pointers(datatuple, str, 0, i)));
       });
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
-        applyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func);
+        applyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func,
+          last_contiguous);
       });
   }
 
@@ -1093,9 +1144,14 @@ template<typename Func, typename... Targs>
   vector<fmav_info> infos;
   (infos.push_back(args), ...);
   auto [shp, str] = multiprep(infos);
+  bool last_contiguous = true;
+  if (shp.size()>0)
+    for (const auto &s:str)
+      last_contiguous &= (s.back()==1);
+
   auto datatuple = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, datatuple, forward<Func>(func), nthreads);
+  applyHelper(shp, str, datatuple, forward<Func>(func), nthreads, last_contiguous);
   }
 }
 
