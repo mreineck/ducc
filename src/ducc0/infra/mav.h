@@ -1072,7 +1072,7 @@ template<typename Ttuple, typename Tdim, typename Func>
   void xflexible_mav_apply(const Ttuple &tuple, const Tdim &dim, Func &&func, size_t nthreads)
   {
   auto fullinfos = tuple_transform2(tuple, dim, [](const auto &arg, const auto &dim)
-                                    { return make_infos<dim.dim>(arg); });
+                                    { return make_infos<remove_reference_t<decltype(dim)>::dim>(fmav_info(arg)); });
   vector<fmav_info> iter_infos;
   tuple_for_each(fullinfos,[&iter_infos](const auto &entry){iter_infos.push_back(get<0>(entry));});
   auto [shp, str] = multiprep(iter_infos);
