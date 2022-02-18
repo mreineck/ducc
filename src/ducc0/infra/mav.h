@@ -1120,7 +1120,7 @@ template<typename Func, typename Ttuple>
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
-      auto loctuple(datatuple);
+      auto loctuple = update_pointers(datatuple, str, 0, lo);
       if (last_contiguous)
         for (size_t i=lo; i<hi; ++i, advance_contiguous(loctuple))
           call_with_tuple(func, to_ref(loctuple));
