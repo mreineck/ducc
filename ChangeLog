@@ -1,3 +1,18 @@
+0.23.0:
+- general:
+  - improved template code for multi-array operations (internal detail)
+
+- fft:
+  - use clear dual-license headers in all files required for the FFT component
+
+- healpix:
+  - input arrays to all functions can now be float32/int32 as well
+
+- wgridder:
+  - performance tweaks to FFT and kernel evaluation parts; performance gain
+    on the order of 10%.
+
+
 0.22.0:
 - general:
   - many internal cleanups and consistency improvements

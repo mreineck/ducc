@@ -782,6 +782,176 @@ DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
   return make_tuple(shp, str);
   }
 
+template<typename Ttuple> constexpr inline size_t tuplelike_size()
+  { return tuple_size_v<remove_reference_t<Ttuple>>; }
+
+template <typename Func, typename Ttuple, size_t... I>
+inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
+  index_sequence<I...>)
+  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
+template<typename Func, typename Ttuple> inline void call_with_tuple
+  (Func &&func, Ttuple &&tuple)
+  {
+  call_with_tuple_impl(forward<Func>(func), tuple,
+                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  }
+template <typename Func, typename Ttuple, size_t... I>
+inline void call_with_tuple2_impl(Func &&func, const Ttuple& tuple,
+  index_sequence<I...>)
+  { func(get<I>(tuple)...); }
+template<typename Func, typename Ttuple> inline void call_with_tuple2
+  (Func &&func, Ttuple &&tuple)
+  {
+  call_with_tuple2_impl(forward<Func>(func), tuple,
+                        make_index_sequence<tuplelike_size<Ttuple>()>());
+  }
+
+template<typename...Ts, typename Function, size_t... Is>
+inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Function function,
+  index_sequence<Is...>)
+  { return tuple<result_of_t<Function(Ts)>...>{function(get<Is>(inputs))...}; }
+template<typename... Ts, typename Function>
+inline auto tuple_transform(tuple<Ts...> const& inputs, Function function)
+  {
+  return tuple_transform_impl(inputs, function,
+                              make_index_sequence<sizeof...(Ts)>{});
+  }
+template<typename...Ts, typename Function, size_t... Is>
+inline void tuple_for_each_impl(tuple<Ts...> &tpl, Function function,
+  index_sequence<Is...>)
+  { (function(get<Is>(tpl)), ...); }
+template<typename... Ts, typename Function>
+inline void tuple_for_each(tuple<Ts...> &tpl, Function function)
+  {
+  tuple_for_each_impl(tpl, function, make_index_sequence<sizeof...(Ts)>{});
+  }
+template<typename...Ts, typename Function, size_t... Is>
+inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Function function,
+  index_sequence<Is...>)
+  { (function(get<Is>(tpl)), ...); }
+template<typename... Ts, typename Function>
+inline void tuple_for_each(const tuple<Ts...> &tpl, Function function)
+  {
+  tuple_for_each_impl(tpl, function, make_index_sequence<sizeof...(Ts)>{});
+  }
+
+template<typename...Ts, typename Function, size_t... Is>
+inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
+   Function function, index_sequence<Is...>)
+  {
+  return tuple<result_of_t<Function(Ts, int)>...>
+    {function(get<Is>(inputs), Is)...};
+  }
+
+template<typename... Ts, typename Function>
+inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Function function)
+  {
+  return tuple_transform_idx_impl(inputs, function,
+                                  make_index_sequence<sizeof...(Ts)>{});
+  }
+template<typename...Ts, typename Function, size_t... Is>
+inline void tuple_for_each_idx_impl(tuple<Ts...> &tpl, Function function,
+  index_sequence<Is...>)
+  { (function(get<Is>(tpl), Is), ...); }
+template<typename... Ts, typename Function>
+inline void tuple_for_each_idx(tuple<Ts...> &tpl, Function function)
+  {
+  tuple_for_each_idx_impl(tpl, function, make_index_sequence<sizeof...(Ts)>{});
+  }
+
+template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
+  {
+  return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; });
+  }
+
+template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &ptrs,
+  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t i)
+  {
+  return tuple_transform_idx(ptrs, [i,idim,&str](auto &&ptr, size_t idx)
+                             { return ptr + i*str[idx][idim]; });
+  }
+
+template<typename Ttuple> inline Ttuple update_pointers_contiguous (const Ttuple &ptrs,
+  size_t i)
+  {
+  return tuple_transform(ptrs, [i](auto &&ptr) { return ptr+i; });
+  }
+template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
+  { tuple_for_each(ptrs, [](auto &&ptr) { ++ptr; }); }
+template<typename Ttuple> inline void advance (Ttuple &ptrs,
+  const vector<vector<ptrdiff_t>> &str, size_t idim)
+  {
+  tuple_for_each_idx(ptrs, [idim,&str](auto &&ptr, size_t idx)
+                     { ptr += str[idx][idim]; });
+  }
+
+template<typename Ttuple, typename Func>
+  void applyHelper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    bool last_contiguous)
+  {
+  auto len = shp[idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      applyHelper(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
+        func, last_contiguous);
+  else
+    {
+    auto locptrs(ptrs);
+    if (last_contiguous)
+      for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
+        call_with_tuple(func, to_ref(locptrs));
+    else
+      for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+        call_with_tuple(func, to_ref(locptrs));
+    }
+  }
+template<typename Func, typename Ttuple>
+  inline void applyHelper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    size_t nthreads, bool last_contiguous)
+  {
+  if (shp.size()==0)
+    call_with_tuple(forward<Func>(func), to_ref(ptrs));
+  else if (nthreads==1)
+    applyHelper(0, shp, str, ptrs, forward<Func>(func), last_contiguous);
+  else if (shp.size()==1)
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      if (last_contiguous)
+        for (size_t i=lo; i<hi; ++i, advance_contiguous(locptrs))
+          call_with_tuple(func, to_ref(locptrs));
+      else
+        for (size_t i=lo; i<hi; ++i, advance(locptrs, str, 0))
+          call_with_tuple(func, to_ref(locptrs));
+      });
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      for (size_t i=lo; i<hi; ++i, advance(locptrs, str, 0))
+        applyHelper(1, shp, str, locptrs, func, last_contiguous);
+      });
+  }
+
+template<typename Func, typename... Targs>
+  void mav_apply(Func &&func, int nthreads, Targs... args)
+  {
+  vector<fmav_info> infos;
+  (infos.push_back(args), ...);
+  auto [shp, str] = multiprep(infos);
+  bool last_contiguous = true;
+  if (shp.size()>0)
+    for (const auto &s:str)
+      last_contiguous &= (s.back()==1);
+
+  auto ptrs = tuple_transform(forward_as_tuple(args...),
+    [](auto &&arg){return arg.data();});
+  applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
+  }
+
+
 template<typename T, size_t ndim> class mavref
   {
   private:
@@ -817,9 +987,28 @@ template<typename T, size_t ndim> class mavref
     bool conformable(const mavref &other) const
       { return shape()==other.shape(); }
   };
+
 template<typename T, size_t ndim>
   mavref<T, ndim> make_mavref(const mav_info<ndim> &info_, T *d_)
   { return mavref<T, ndim>(info_, d_); }
+
+template<typename...Ts, typename ...Qs, typename Function, size_t... Is>
+inline auto tuple_transform2_impl(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
+  Function function, index_sequence<Is...>)
+  { return tuple<result_of_t<Function(Ts, Qs)>...>{function(get<Is>(i1),get<Is>(i2))...}; }
+template<typename... Ts, typename ...Qs, typename Function>
+inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
+  Function function)
+  {
+  return tuple_transform2_impl(i1, i2, function,
+                               make_index_sequence<sizeof...(Ts)>{});
+  }
+template<typename Tptrs, typename Tinfos>
+  auto make_mavrefs(const Tptrs &ptrs, const Tinfos &infos)
+  {
+  return tuple_transform2(ptrs, infos, [](auto &&ptr, auto &&info)
+    { return make_mavref(info, ptr); });
+  }
 
 template<size_t ndim> auto make_infos(const fmav_info &info)
   {
@@ -841,265 +1030,87 @@ template<size_t ndim> auto make_infos(const fmav_info &info)
   return make_tuple(fout, iout);
   }
 
-
-template<typename T0, typename Ti0, typename Func>
+template<typename Tptrs, typename Tinfos, typename Func>
   void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    Func func)
+    const vector<vector<ptrdiff_t>> &str, const Tptrs &ptrs,
+    const Tinfos &infos, Func func)
   {
   auto len = shp[idim];
-  auto str0 = str[0][idim];
+  auto locptrs(ptrs);
   if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i)
-      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, func);
+    for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+      flexible_mav_applyHelper(idim+1, shp, str, locptrs, infos, func);
   else
-    for (size_t i=0; i<len; ++i)
-      func(make_mavref(info0, ptr0+i*str0));
+    for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+      call_with_tuple2(func, make_mavrefs(locptrs, infos));
   }
-template<typename T0, typename Ti0, typename Func>
+template<typename Tptrs, typename Tinfos, typename Func>
   void flexible_mav_applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    Func func, size_t nthreads)
+    const vector<vector<ptrdiff_t>> &str, const Tptrs &ptrs,
+    const Tinfos &infos, Func func, size_t nthreads)
   {
   if (shp.size()==0)
-    func(make_mavref(info0, ptr0));
+    call_with_tuple2(func, make_mavrefs(ptrs, infos));
   else if (nthreads==1)
-    flexible_mav_applyHelper(0, shp, str, ptr0, info0, func);
+    flexible_mav_applyHelper(0, shp, str, ptrs, infos, func);
   else if (shp.size()==1)
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
-      for (size_t i=lo; i<hi; ++i)
-        func(make_mavref(info0, ptr0+i*str[0][0]));
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      for (size_t i=lo; i<hi; ++i, advance(locptrs, str, 0))
+        call_with_tuple2(func, make_mavrefs(locptrs, infos));
       });
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
-      for (size_t i=lo; i<hi; ++i)
-        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0, func);
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      for (size_t i=lo; i<hi; ++i, advance(locptrs, str, 0))
+        flexible_mav_applyHelper(1, shp, str, locptrs, infos, func);
       });
   }
 
-template<typename T0, typename Ti0, typename T1, typename Ti1, typename Func>
-  void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    T1 ptr1, const Ti1 &info1, Func func)
-  {
-  auto len = shp[idim];
-  auto str0 = str[0][idim], str1 = str[1][idim];
-  if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i)
-      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1,
-        info1, func);
-  else
-    for (size_t i=0; i<len; ++i)
-      func(make_mavref(info0, ptr0+i*str0), make_mavref(info1, ptr1+i*str1));
-  }
-template<typename T0, typename Ti0,
-         typename T1, typename Ti1, typename Func>
-  void flexible_mav_applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    T1 ptr1, const Ti1 &info1, Func func, size_t nthreads)
-  {
-  if (shp.size()==0)
-    func(make_mavref(info0, ptr0), make_mavref(info1, ptr1));
-  else if (nthreads==1)
-    flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, func);
-  else if (shp.size()==1)
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        func(make_mavref(info0, ptr0+i*str[0][0]),
-             make_mavref(info1, ptr1+i*str[1][0]));
-      });
-  else
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0,
-          ptr1+i*str[1][0], info1, func);
-      });
-  }
+template<size_t ndim> struct Xdim { static constexpr size_t dim=ndim; };
 
-template<typename T0, typename Ti0,
-         typename T1, typename Ti1,
-         typename T2, typename Ti2, typename Func>
-  void flexible_mav_applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func)
+template<typename Ttuple, typename Tdim, typename Func>
+  void xflexible_mav_apply(const Ttuple &tuple, const Tdim &dim, Func &&func, size_t nthreads)
   {
-  auto len = shp[idim];
-  auto str0 = str[0][idim], str1 = str[1][idim], str2 = str[2][idim];
-  if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i)
-      flexible_mav_applyHelper(idim+1, shp, str, ptr0+i*str0, info0, ptr1+i*str1, info1,
-        ptr2+i*str2, info2, func);
-  else
-    for (size_t i=0; i<len; ++i)
-      func(make_mavref(info0, ptr0+i*str0), make_mavref(info1, ptr1+i*str1),
-        make_mavref(info2, ptr2+i*str2));
-  }
-template<typename T0, typename Ti0,
-         typename T1, typename Ti1,
-         typename T2, typename Ti2, typename Func>
-  void flexible_mav_applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, T0 ptr0, const Ti0 &info0,
-    T1 ptr1, const Ti1 &info1, T2 ptr2, const Ti2 &info2, Func func,
-    size_t nthreads)
-  {
-  if (shp.size()==0)
-    func(make_mavref(info0, ptr0), make_mavref(info1, ptr1), make_mavref(info2, ptr2));
-  else if (nthreads==1)
-    flexible_mav_applyHelper(0, shp, str, ptr0, info0, ptr1, info1, ptr2, info2, func);
-  else if (shp.size()==1)
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        func(make_mavref(info0, ptr0+i*str[0][0]),
-             make_mavref(info1, ptr1+i*str[1][0]),
-             make_mavref(info2, ptr2+i*str[2][0]));
-      });
-  else
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        flexible_mav_applyHelper(1, shp, str, ptr0+i*str[0][0], info0,
-                        ptr1+i*str[1][0], info1, ptr2+i*str[2][0], info2, func);
-      });
+  auto fullinfos = tuple_transform2(tuple, dim, [](const auto &arg, const auto &dim)
+                                    { return make_infos<remove_reference_t<decltype(dim)>::dim>(fmav_info(arg)); });
+  vector<fmav_info> iter_infos;
+  tuple_for_each(fullinfos,[&iter_infos](const auto &entry){iter_infos.push_back(get<0>(entry));});
+  auto [shp, str] = multiprep(iter_infos);
+
+  auto infos2 = tuple_transform(fullinfos, [](const auto &arg)
+                                { return get<1>(arg); });
+  auto ptrs = tuple_transform(tuple, [](auto &&arg){return arg.data();});
+  flexible_mav_applyHelper(shp, str, ptrs, infos2, func, nthreads);
   }
 
 template<size_t nd0, typename T0, typename Func>
   void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0)
   {
-  auto [f0, i0] = make_infos<nd0>(m0);
-  vector<fmav_info> iterinfo{f0};
-  auto [shp, str] = multiprep(iterinfo);
-  flexible_mav_applyHelper(shp, str, m0.data(), i0, func, nthreads);
+  xflexible_mav_apply(forward_as_tuple(m0),
+                      forward_as_tuple(Xdim<nd0>()),
+                      func, nthreads); 
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
   void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0, T1 &&m1)
   {
-  MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
-  auto [f0, i0] = make_infos<nd0>(m0);
-  auto [f1, i1] = make_infos<nd1>(m1);
-  vector<fmav_info> iterinfo{f0, f1};
-  auto [shp, str] = multiprep(iterinfo);
-  flexible_mav_applyHelper(shp, str, m0.data(), i0, m1.data(), i1, func, nthreads);
+  xflexible_mav_apply(forward_as_tuple(m0, m1),
+                      forward_as_tuple(Xdim<nd0>(), Xdim<nd1>()),
+                      func, nthreads); 
   }
 
 template<size_t nd0, size_t nd1, size_t nd2,
          typename T0, typename T1, typename T2, typename Func>
   void flexible_mav_apply(Func func, size_t nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
   {
-  MR_assert(m0.ndim()-nd0 == m1.ndim()-nd1, "dimensionality mismatch");
-  MR_assert(m0.ndim()-nd0 == m2.ndim()-nd2, "dimensionality mismatch");
-  auto [f0, i0] = make_infos<nd0>(m0);
-  auto [f1, i1] = make_infos<nd1>(m1);
-  auto [f2, i2] = make_infos<nd2>(m2);
-  vector<fmav_info> iterinfo{f0, f1, f2};
-  auto [shp, str] = multiprep(iterinfo);
-  flexible_mav_applyHelper(shp, str, m0.data(), i0, m1.data(), i1, m2.data(), i2,
-                  func, nthreads);
+  xflexible_mav_apply(forward_as_tuple(m0, m1, m2),
+                      forward_as_tuple(Xdim<nd0>(), Xdim<nd1>(), Xdim<nd2>()),
+                      func, nthreads); 
   }
 
-
-template<typename Ttuple> constexpr inline size_t tupsz()
-  { return tuple_size_v<remove_reference_t<Ttuple>>; }
-
-template <typename Func, typename Ttuple, size_t... I>
-inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
-  index_sequence<I...>)
-//  { func(get<I>(tuple)...); }
-  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
-template<typename Func, typename Ttuple> inline void call_with_tuple
-  (Func && func, Ttuple &&tuple)
-  {
-  call_with_tuple_impl(forward<Func>(func), tuple,
-                       make_index_sequence<tupsz<Ttuple>()>());
-  }
-
-template<typename...Ts, typename Function, size_t... Is>
-inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Function function,
-  index_sequence<Is...>)
-  { return tuple<result_of_t<Function(Ts)>...>{function(get<Is>(inputs))...}; }
-template<typename... Ts, typename Function>
-inline auto tuple_transform(tuple<Ts...> const& inputs, Function function)
-  {
-  return tuple_transform_impl(inputs, function,
-                              make_index_sequence<sizeof...(Ts)>{});
-  }
-
-template<typename...Ts, typename Function, size_t... Is>
-inline auto tuple_transform_with_index_impl(tuple<Ts...> const& inputs,
-   Function function, index_sequence<Is...>)
-  {
-  return tuple<result_of_t<Function(Ts, int)>...>
-    {function(get<Is>(inputs), Is)...};
-  }
-
-template<typename... Ts, typename Function>
-inline auto tuple_transform_with_index(tuple<Ts...> const& inputs, Function function)
-  {
-  return tuple_transform_with_index_impl(inputs, function,
-                                         make_index_sequence<sizeof...(Ts)>{});
-  }
-
-template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
-  {
-  return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; });
-  }
-
-template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &tuple,
-  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t i)
-  {
-  return tuple_transform_with_index(tuple, [i,idim,&str](auto &&ptr, size_t idx)
-                                    { return ptr + i*str[idx][idim]; });
-  }
-
-template<typename Ttuple, typename Func>
-  void applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func)
-  {
-  auto len = shp[idim];
-  if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i)
-      applyHelper(idim+1, shp, str, update_pointers(datatuple, str, idim, i), func);
-  else
-    for (size_t i=0; i<len; ++i)
-      call_with_tuple(func, to_ref(update_pointers(datatuple, str, idim, i)));
-  }
-template<typename Func, typename Ttuple>
-  inline void applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &datatuple, Func &&func, size_t nthreads)
-  {
-  if (shp.size()==0)
-    call_with_tuple(forward<Func>(func), to_ref(datatuple));
-  else if (nthreads==1)
-    applyHelper(0, shp, str, datatuple, forward<Func>(func));
-  else if (shp.size()==1)
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        call_with_tuple(func, to_ref(update_pointers(datatuple, str, 0, i)));
-      });
-  else
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
-      {
-      for (size_t i=lo; i<hi; ++i)
-        applyHelper(1, shp, str, update_pointers(datatuple, str, 0, i), func);
-      });
-  }
-
-template<typename Func, typename... Targs>
-  void mav_apply(Func &&func, int nthreads, Targs... args)
-  {
-  vector<fmav_info> infos;
-  (infos.push_back(args), ...);
-  auto [shp, str] = multiprep(infos);
-  auto datatuple = tuple_transform(forward_as_tuple(args...),
-    [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, datatuple, forward<Func>(func), nthreads);
-  }
 }
 
 using detail_mav::UNINITIALIZED;
