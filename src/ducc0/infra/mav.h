@@ -833,7 +833,7 @@ inline void tuple_for_each(const tuple<Ts...> &tpl, Function function)
   }
 
 template<typename...Ts, typename Function, size_t... Is>
-inline auto tuple_transform_idx_impl(tuple<Ts...> const& inputs,
+inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
    Function function, index_sequence<Is...>)
   {
   return tuple<result_of_t<Function(Ts, int)>...>
@@ -841,7 +841,7 @@ inline auto tuple_transform_idx_impl(tuple<Ts...> const& inputs,
   }
 
 template<typename... Ts, typename Function>
-inline auto tuple_transform_idx(tuple<Ts...> const& inputs, Function function)
+inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Function function)
   {
   return tuple_transform_idx_impl(inputs, function,
                                   make_index_sequence<sizeof...(Ts)>{});
