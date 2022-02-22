@@ -69,7 +69,7 @@ class Baselines_GPU
                  acc_uvw[row][2]*f);
       }
     double absEffectiveW(size_t row, size_t chan) const
-      { return abs(acc_uvw[row][2]*acc_f_over_c[chan]); }
+      { return sycl::fabs(acc_uvw[row][2]*acc_f_over_c[chan]); }
     UVW baseCoord(size_t row) const
       {
       return UVW(acc_uvw[row][0],
@@ -85,7 +85,7 @@ class Baselines_GPU
 class IndexComputer0
   {
   public:
-    static constexpr size_t chunksize=1024;
+    static constexpr size_t chunksize=512;
     bool store_tiles;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
@@ -236,8 +236,9 @@ template<typename T> class KernelComputer
     KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
       : acc_coeff(buf_coeff.template get_access<sycl::access::mode::read>(cgh)),
         supp(supp_), D(supp_+3) {}
-    inline void compute_uv(T ufrac, T vfrac, array<T,16> &ku, array<T,16> &kv) const
+    template<size_t Supp> inline void compute_uv(T ufrac, T vfrac, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
+//      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       for (size_t i=0; i<supp; ++i)
@@ -252,8 +253,9 @@ template<typename T> class KernelComputer
         kv[i] = resv;
         }
       }
-    inline void compute_uvw(T ufrac, T vfrac, T wval, size_t nth, array<T,16> &ku, array<T,16> &kv) const
+    template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, size_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
+//      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       auto z0 = T(wval-nth)*T(2)+T(supp-1);
@@ -288,11 +290,11 @@ class CoordCalculator
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
       u = u_in*pixsize_x;
-      u = (u-floor(u))*nu;
+      u = (u-sycl::floor(u))*nu;
       iu0 = std::min(int(u+ushift)-int(nu), maxiu0);
       u -= iu0;
       v = v_in*pixsize_y;
-      v = (v-floor(v))*nv;
+      v = (v-sycl::floor(v))*nv;
       iv0 = std::min(int(v+vshift)-int(nv), maxiv0);
       v -= iv0;
       }
@@ -300,15 +302,12 @@ class CoordCalculator
 
     void dirty2x_gpu()
       {
+      timers.push("GPU degridding");
       if (do_wgridding)
         {
 #if (defined(DUCC0_HAVE_SYCL))
-timers.push("GPU degridding");
-          
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-q.wait();
-timers.push("prep_global");
 
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
@@ -331,20 +330,12 @@ timers.push("prep_global");
         auto bufcfv(make_sycl_buffer(cfv));
 
         // build index structure
-q.wait();
-timers.poppush("index creation");
-#ifdef BUFFERING
-        IndexComputer idxcomp(ranges, do_wgridding, true);
-#else
         IndexComputer idxcomp(ranges, do_wgridding, false);
-#endif
 
         // applying global corrections to dirty image on GPU
-q.wait();
-timers.poppush("global corrections");
         q.submit([&](sycl::handler &cgh)
           {
-Wcorrector<30> wcorr(krn->Corr());
+          Wcorrector<30> wcorr(krn->Corr());
           auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
@@ -368,23 +359,17 @@ Wcorrector<30> wcorr(krn->Corr());
             else // beyond the horizon, don't really know what to do here
               fct = divide_by_n ? 0 : wcorr.corfunc((sqrt(-tmp)-1)*dw);
 
-            int icfu = abs(int(nxdirty/2)-int(i));
-            int icfv = abs(int(nydirty/2)-int(j));
+            int icfu = sycl::abs(int(nxdirty/2)-int(i));
+            int icfv = sycl::abs(int(nydirty/2)-int(j));
             accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
-q.wait();
-timers.pop();
+
         for (size_t pl=0; pl<nplanes; ++pl)
           {
-//cout << "plane: " << pl << endl;
           double w = wmin+pl*dw;
 
-q.wait();
-timers.push("zero_grid");
           sycl_zero_buffer(q, bufgrid);
-q.wait();
-timers.poppush("wscreen");
 
           // copying to grid and applying wscreen
           q.submit([&](sycl::handler &cgh)
@@ -404,23 +389,13 @@ timers.poppush("wscreen");
               double fx = sqr(x0+i*pixsize_x);
               double fy = sqr(y0+j*pixsize_y);
               double myphase = phase(fx, fy, w, false, nshift);
-              accgrid[i2][j2] = complex<Tcalc>(polar(1., myphase))*accdirty[i][j];
+              accgrid[i2][j2] = complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accdirty[i][j];
               });
             });
-q.wait();
-timers.poppush("FFT");
 
           // FFT
           sycl_c2c(q, bufgrid, true);
-q.wait();
-timers.poppush("degrid");
 
-#ifdef BUFFERING
-          constexpr size_t blksz = 1024;
-          for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
-            {
-            size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
-#endif
           q.submit([&](sycl::handler &cgh)
             {
             Baselines_GPU blloc(bl_prep, cgh);
@@ -428,52 +403,17 @@ timers.poppush("degrid");
             CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
             RowchanComputer rccomp(idxcomp,cgh);
   
-#ifdef BUFFERING
-            auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
-            auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
-#endif
             auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-#ifdef BUFFERING
-            sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
-            sycl::range<2> local(1, idxcomp.chunksize);
-            int nsafe = (supp+1)/2;
-            size_t sidelen = 2*nsafe+(1<<logsquare);
-#ifndef __INTEL_LLVM_COMPILER
-            sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-#else
-            sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
-#endif
-            cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
-#else
-            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
-#endif
-              {
-#ifdef BUFFERING
-              auto iblock = item.get_global_id(0)+blockofs;
-              auto iwork = item.get_local_id(1);
-              auto minplane = acc_minplane[iblock];
-              if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
-                return;
-              // preparation
-              auto u_tile = acc_tileu[iblock];
-              auto v_tile = acc_tilev[iblock];
 
-              //size_t ofs = (supp-1)/2;
-              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                {
-                size_t iu = i/sidelen, iv = i%sidelen;
-                tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv];
-                }
-              item.barrier();
-#else
+            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
+              {
               auto iblock = item.get_id(0);
               auto iwork = item.get_id(1);
               auto minplane = acc_minplane[iblock];
               if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                 return;
-#endif
   
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
@@ -488,24 +428,13 @@ timers.poppush("degrid");
               ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
   
               // compute kernel values
-              array<Tcalc, 16> ukrn, vkrn;
+              array<Tcalc, 8> ukrn, vkrn;
               size_t nth=pl-minplane;
               auto wval=Tcalc((w-coord.w)/dw);
               kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
   
               // loop over supp*supp pixels from "grid"
               complex<Tcalc> res=0;
-#ifdef BUFFERING
-              int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-              int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-              for (size_t i=0; i<supp; ++i)
-                {
-                complex<Tcalc> tmp = 0;
-                for (size_t j=0; j<supp; ++j)
-                  tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
-                res += ukrn[i]*tmp;
-                }
-#else
               auto iustart=size_t((iu0+nu)%nu);
               auto ivstart=size_t((iv0+nv)%nv);
               for (size_t i=0, realiu=iustart; i<supp;
@@ -517,7 +446,6 @@ timers.poppush("degrid");
                   tmp += vkrn[j]*accgrid[realiu][realiv];
                 res += ukrn[i]*tmp;
                 }
-#endif
               res.imag(res.imag()*imflip);
   
               if (shifting)
@@ -536,14 +464,9 @@ timers.poppush("degrid");
               accvis[irow][ichan] += res;
               });
             });
-#ifdef BUFFERING
-}
-#endif
-q.wait();
-timers.pop();
           } // end of loop over planes
         }  // end of device buffer scope, buffers are written back
-timers.push("weight application");
+
         if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
@@ -552,8 +475,6 @@ timers.push("weight application");
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-timers.pop();
-timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
@@ -561,12 +482,9 @@ timers.pop();
       else
         {
 #if (defined(DUCC0_HAVE_SYCL))
-timers.push("GPU degridding");
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
 
-q.wait();
-timers.push("prep");
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
@@ -585,8 +503,6 @@ timers.push("prep");
 // FIXME: cast to Timg
         auto bufcfu(make_sycl_buffer(cfu));
         auto bufcfv(make_sycl_buffer(cfv));
-q.wait();
-timers.poppush("global corrections");
         // copying to grid and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -598,8 +514,8 @@ timers.poppush("global corrections");
             {
             auto i = item.get_id(0);
             auto j = item.get_id(1);
-            int icfu = abs(int(nxdirty/2)-int(i));
-            int icfv = abs(int(nydirty/2)-int(j));
+            int icfu = sycl::abs(int(nxdirty/2)-int(i));
+            int icfv = sycl::abs(int(nydirty/2)-int(j));
             size_t i2 = nu-nxdirty/2+i;
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-nydirty/2+j;
@@ -610,28 +526,12 @@ timers.poppush("global corrections");
             });
           });
 
-q.wait();
-timers.poppush("FFT");
         // FFT
         sycl_c2c(q, bufgrid, true);
-q.wait();
-timers.poppush("index creation");
 
         // build index structure
-#ifdef BUFFERING
-        IndexComputer idxcomp(ranges, do_wgridding, true);
-#else
         IndexComputer idxcomp(ranges, do_wgridding, false);
-#endif
-q.wait();
-timers.poppush("degrid");
 
-#ifdef BUFFERING
-        constexpr size_t blksz = 1024;
-        for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
-          {
-          size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
-#endif
         q.submit([&](sycl::handler &cgh)
           {
           Baselines_GPU blloc(bl_prep, cgh);
@@ -639,44 +539,12 @@ timers.poppush("degrid");
           CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
           RowchanComputer rccomp(idxcomp, cgh);
 
-#ifdef BUFFERING
-          auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
-#endif
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-#ifdef BUFFERING
-          sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
-          sycl::range<2> local(1, idxcomp.chunksize);
-          int nsafe = (supp+1)/2;
-          size_t sidelen = 2*nsafe+(1<<logsquare);
-#ifndef __INTEL_LLVM_COMPILER
-          sycl::local_accessor<complex<Tcalc>,2> tile({sidelen,sidelen}, cgh);
-#else
-          sycl::accessor<complex<Tcalc>,2,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen}, cgh);
-#endif
-          cgh.parallel_for(sycl::nd_range(global,local), [accgrid,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
-#else
           cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
-#endif
             {
-#ifdef BUFFERING
-            auto iblock = item.get_global_id(0)+blockofs;
-            auto iwork = item.get_local_id(1);
-            // preparation
-            auto u_tile = acc_tileu[iblock];
-            auto v_tile = acc_tilev[iblock];
-            //size_t ofs = (supp-1)/2;
-            for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-              {
-              size_t iu = i/sidelen, iv = i%sidelen;
-              tile[iu][iv] = accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv];
-              }
-            item.barrier();
-#else
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
-#endif
 
             size_t irow, ichan;
             rccomp.getRowChan(iblock, iwork, irow, ichan);
@@ -691,22 +559,11 @@ timers.poppush("degrid");
             ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
 
             // compute kernel values
-            array<Tcalc, 16> ukrn, vkrn;
+            array<Tcalc, 8> ukrn, vkrn;
             kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
 
             // loop over supp*supp pixels from "grid"
             complex<Tcalc> res=0;
-#ifdef BUFFERING
-            int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            for (size_t i=0; i<supp; ++i)
-              {
-              complex<Tcalc> tmp = 0;
-              for (size_t j=0; j<supp; ++j)
-                tmp += vkrn[j]*tile[iu0-bu0+i][iv0-bv0+j];
-              res += ukrn[i]*tmp;
-              }
-#else
             auto iustart=size_t((iu0+nu)%nu);
             auto ivstart=size_t((iv0+nv)%nv);
             for (size_t i=0, realiu=iustart; i<supp;
@@ -718,7 +575,6 @@ timers.poppush("degrid");
                 tmp += vkrn[j]*accgrid[realiu][realiv];
               res += ukrn[i]*tmp;
               }
-#endif
             res.imag(res.imag()*imflip);
 
             if (shifting)
@@ -737,13 +593,7 @@ timers.poppush("degrid");
             accvis[irow][ichan] = res;
             });
           });
-#ifdef BUFFERING
-}
-#endif
-q.wait();
-timers.pop();
         }  // end of device buffer scope, buffers are written back
-timers.push("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
           execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
             {
@@ -752,52 +602,41 @@ timers.push("weight application");
               for (size_t ichan=0; ichan<nchan; ++ichan)
                 ms_out(irow, ichan) *= wgt(irow, ichan);
             });
-timers.pop();
-timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
         }
+      timers.pop();
       }
 
 #ifndef __INTEL_LLVM_COMPILER
 template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
 template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
 #else
-template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+//template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+//template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
 #endif
 
     void x2dirty_gpu()
       {
+      timers.push("GPU gridding");
       if (do_wgridding)
 #if (defined(DUCC0_HAVE_SYCL))
         {
-timers.push("GPU gridding");
-   auto exception_handler = [] (sycl::exception_list exceptions) {
-      for (std::exception_ptr const& e : exceptions) {
-         try {
-            std::rethrow_exception(e);
-         } catch(sycl::exception const& e) {
-         std::cout << "Caught asynchronous SYCL exception:\n"
-                   << e.what() << std::endl;
-         }
-      }
-              
-        timers.push("weight application");
         bool do_weights = (wgt.stride(0)!=0);
         vmav<complex<Tms>,2> ms_tmp({do_weights ? bl.Nrows() : 1, do_weights ? bl.Nchannels() : 1});
         if (do_weights)
           mav_apply([](const complex<Tms> &a, const Tms &b, complex<Tms> &c)
             { c = a*b; }, nthreads, ms_in, wgt, ms_tmp);
         const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
-        timers.pop();
         { // Device buffer scope
-        sycl::queue q{sycl::default_selector(), exception_handler};
-//print_device_info(q.get_device());
-q.wait();
-timers.push("prep_global");
+        sycl::queue q{sycl::default_selector()};
+
         auto bufdirty(make_sycl_buffer(dirty_out));
+        bufdirty.set_write_back(true);
+        bufdirty.set_final_data(dirty_out.data());
         sycl_zero_buffer(q, bufdirty);
 
         // grid (only on GPU)
@@ -818,23 +657,14 @@ timers.push("prep_global");
         auto bufcfu(make_sycl_buffer(cfu));
         auto bufcfv(make_sycl_buffer(cfv));
 
-q.wait();
-timers.poppush("index creation");
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
-q.wait();
-timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
-//cout << "plane: " << pl << endl;
           double w = wmin+pl*dw;
 
-q.wait();
-timers.push("grid zeroing");
           sycl_zero_buffer(q, bufgrid);
-q.wait();
-timers.poppush("grid");
 
           constexpr size_t blksz = 1024;
           for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
@@ -868,6 +698,7 @@ timers.poppush("grid");
                 auto minplane = acc_minplane[iblock];
                 if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                   return;
+
                 // preparation
                 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
@@ -890,7 +721,7 @@ timers.poppush("grid");
                   ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
     
                   // compute kernel values
-                  array<Tcalc, 16> ukrn, vkrn;
+                  array<Tcalc, 8> ukrn, vkrn;
                   size_t nth=pl-minplane;
                   auto wval=Tcalc((w-coord.w)/dw);
                   kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
@@ -920,15 +751,10 @@ timers.poppush("grid");
                     for (size_t j=0; j<supp; ++j)
                       {
                       auto tmp2 = vkrn[j]*tmp;
-#if 1
                       my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
-                      rr += tmp2.real();
+                      rr.fetch_add(tmp2.real());
                       my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
-                      ri += tmp2.imag();
-#else
-                      tile[iu0-bu0+i][iv0-bv0+j][0] += tmp2.real();
-                      tile[iu0-bu0+i][iv0-bv0+j][1] += tmp2.imag();
-#endif
+                      ri.fetch_add(tmp2.imag());
                       }
                     }
                   }
@@ -942,32 +768,19 @@ timers.poppush("grid");
                   size_t iu = i/sidelen, iv = i%sidelen;
                   size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
                   size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
-#if 1
+
                   my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                  rr += tile[iu][iv][0];
+                  rr.fetch_add(tile[iu][iv][0]);
                   my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                  ri += tile[iu][iv][1];
-#else
-                  accgridr[igu][igv][0] += tile[iu][iv][0];
-                  accgridr[igu][igv][1] += tile[iu][iv][1];
-#endif
+                  ri.fetch_add(tile[iu][iv][1]);
                   }
                 });
               });
             }
-//q.wait();
-   try {
-      q.wait_and_throw();
-   } catch (sycl::exception const& e) {
-      std::cout << "Caught synchronous SYCL exception:\n"
-      << e.what() << std::endl;
-   }
-timers.poppush("FFT");
+
           // FFT
           sycl_c2c(q, bufgrid, false);
 
-q.wait();
-timers.poppush("wscreen");
           // applying wscreen and adding to dirty image
           q.submit([&](sycl::handler &cgh)
             {
@@ -986,18 +799,14 @@ timers.poppush("wscreen");
               double fx = sqr(x0+i*pixsize_x);
               double fy = sqr(y0+j*pixsize_y);
               double myphase = phase(fx, fy, w, true, nshift);
-              accdirty[i][j] += (complex<Tcalc>(polar(1., myphase))*accgrid[i2][j2]).real();
+              accdirty[i][j] += (complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accgrid[i2][j2]).real();
               });
             });
-q.wait();
-timers.pop();
           } // end of loop over planes
         // applying global corrections to dirty image on GPU
-q.wait();
-timers.push("global corrections");
         q.submit([&](sycl::handler &cgh)
           {
-Wcorrector<30> wcorr(krn->Corr());
+          Wcorrector<30> wcorr(krn->Corr());
           auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
           auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
           auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
@@ -1021,15 +830,12 @@ Wcorrector<30> wcorr(krn->Corr());
             else // beyond the horizon, don't really know what to do here
               fct = divide_by_n ? 0 : wcorr.corfunc((sqrt(-tmp)-1)*dw);
 
-            int icfu = abs(int(nxdirty/2)-int(i));
-            int icfv = abs(int(nydirty/2)-int(j));
+            int icfu = sycl::abs(int(nxdirty/2)-int(i));
+            int icfv = sycl::abs(int(nydirty/2)-int(j));
             accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
-q.wait();
-timers.pop();
         }  // end of device buffer scope, buffers are written back
-timers.pop();
         }
 #else
         MR_fail("CUDA not found");
@@ -1037,22 +843,19 @@ timers.pop();
       else
         {
 #if (defined(DUCC0_HAVE_SYCL))
-timers.push("GPU gridding");
-        timers.push("weight application");
         bool do_weights = (wgt.stride(0)!=0);
         vmav<complex<Tms>,2> ms_tmp({do_weights ? bl.Nrows() : 1, do_weights ? bl.Nchannels() : 1});
         if (do_weights)
           mav_apply([](const complex<Tms> &a, const Tms &b, complex<Tms> &c)
             { c = a*b; }, nthreads, ms_in, wgt, ms_tmp);
         const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
-        timers.pop();
 
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
-q.wait();
-timers.push("prep");
         // dirty image
         auto bufdirty(make_sycl_buffer(dirty_out));
+        bufdirty.set_write_back(true);
+        bufdirty.set_final_data(dirty_out.data());
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
         sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
@@ -1073,11 +876,7 @@ timers.push("prep");
         auto bufcfv(make_sycl_buffer(cfv));
 
         // build index structure
-q.wait();
-timers.poppush("index creation");
         IndexComputer idxcomp(ranges, do_wgridding, true);
-q.wait();
-timers.poppush("grid");
 
         constexpr size_t blksz = 1024;
         for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
@@ -1093,10 +892,7 @@ timers.poppush("grid");
             auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
             auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
 
-            // FIXME: "read_rite" is the correct access mode, but it seems that hipsycl
-            // only generates working code if we use plain "write"?!
             auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
-       //     auto accgrid{bufgrid.template get_access<sycl::access::mode::read_write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
 
             sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
@@ -1136,7 +932,7 @@ timers.poppush("grid");
                 ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
 
                 // compute kernel values
-                array<Tcalc, 16> ukrn, vkrn;
+                array<Tcalc, 8> ukrn, vkrn;
                 kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
 
                 // loop over supp*supp pixels from "grid"
@@ -1165,11 +961,10 @@ timers.poppush("grid");
                     {
                     auto tmp2 = vkrn[j]*tmp;
                     my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
-                    rr += tmp2.real();
+                    rr.fetch_add(tmp2.real());
                     my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
-                    ri += tmp2.imag();
+                    ri.fetch_add(tmp2.imag());
                     }
-  //                  atomic_add(tile[iu0-bu0+i][iv0-bv0+j], vkrn[j]*tmp);
                   }
                 }
 
@@ -1184,24 +979,17 @@ timers.poppush("grid");
                 size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
                 size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
                 my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                rr += tile[iu][iv][0];
+                rr.fetch_add(tile[iu][iv][0]);
                 my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                ri += tile[iu][iv][1];
+                ri.fetch_add(tile[iu][iv][1]);
                 }
-                //{
-                //size_t iu = i/sidelen, iv = i%sidelen;
-                //atomic_add(accgrid[(iu+u_tile*(1<<logsquare)+nu-nsafe)%nu][(iv+v_tile*(1<<logsquare)+nv-nsafe)%nv], tile[iu][iv]);
-                //}
               });
             });
           }
-q.wait();
-timers.poppush("FFT");
+
         // FFT
         sycl_c2c(q, bufgrid, false);  // FIXME normalization?
 
-q.wait();
-timers.poppush("global corrections");
         // copying to dirty image and applying correction
         q.submit([&](sycl::handler &cgh)
           {
@@ -1213,8 +1001,8 @@ timers.poppush("global corrections");
             {
             auto i = item.get_id(0);
             auto j = item.get_id(1);
-            int icfu = abs(int(nxdirty/2)-int(i));
-            int icfv = abs(int(nydirty/2)-int(j));
+            int icfu = sycl::abs(int(nxdirty/2)-int(i));
+            int icfv = sycl::abs(int(nydirty/2)-int(j));
             size_t i2 = nu-nxdirty/2+i;
             if (i2>=nu) i2-=nu;
             size_t j2 = nv-nydirty/2+j;
@@ -1224,12 +1012,10 @@ timers.poppush("global corrections");
             accdirty[i][j] = (accgrid[i2][j2]*Tcalc(fctu*fctv)).real();
             });
           });
-q.wait();
-timers.pop();
         }  // end of device buffer scope, buffers are written back
-timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
         }
+      timers.pop();
       }

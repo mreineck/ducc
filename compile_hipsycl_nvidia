@@ -1,3 +1,3 @@
 #!/bin/bash
 HIPSYCL=${HOME}/syclducc/hipSYCL/install
-CC=${HIPSYCL}/bin/syclcc CXX=${HIPSYCL}/bin/syclcc DUCC0_FLAGS=" -g --hipsycl-targets='cuda:sm_70' -I${HIPSYCL}/include -D_FORTIFY_SOURCE=0 -L/opt/hipSYCL/cuda/lib64 -I/opt/hipSYCL/cuda/include -lcufft -Wno-return-std-move -Wno-unused-variable -Wno-sign-compare" DUCC0_OPTIMIZATION=native-debug  pip3 install --user .
+CC=${HIPSYCL}/bin/syclcc CXX=${HIPSYCL}/bin/syclcc DUCC0_FLAGS="--hipsycl-targets='cuda:sm_70' -I${HIPSYCL}/include -D_FORTIFY_SOURCE=0 -L/opt/hipSYCL/cuda/lib64 -I/opt/hipSYCL/cuda/include -lcufft -Wno-return-std-move -Wno-unused-variable -Wno-sign-compare" DUCC0_OPTIMIZATION=native-debug  pip3 install --user .

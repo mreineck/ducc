@@ -37,11 +37,11 @@ def main():
     wgt[vis == 0] = 0
     DEG2RAD = np.pi/180
     pixsize = fov_deg/npixdirty*DEG2RAD
-    nthreads = 2
+    nthreads = 8
     epsilon = 1e-4
-    do_wgridding = False  # TEMPORARY
+    do_wgridding = False
 
-    ntries_gpu = 5
+    ntries_gpu = 1
 
     print('Start gridding...')
     t0 = time()
@@ -49,11 +49,25 @@ def main():
         uvw=uvw, freq=freq, vis=vis, wgt=wgt,
         mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
         pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
+        nthreads=nthreads, verbosity=1, flip_v=True, gpu=False)
+    t = time() - t0
+    print("{} s".format(t))
+    print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
+    t0 = time()
+    dirty_g = wgridder.vis2dirty(
+        uvw=uvw, freq=freq, vis=vis, wgt=wgt,
+        mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
+        pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
         nthreads=nthreads, verbosity=1, flip_v=True, gpu=True)
     t = time() - t0
     print("{} s".format(t))
     print("{} visibilities/thread/s".format(np.sum(wgt != 0)/nthreads/t))
-
+    print(ducc0.misc.l2error(dirty,dirty_g))
+    fig, axs = plt.subplots(1,3)
+    axs[0].imshow(dirty.T, origin='lower')
+    axs[1].imshow(dirty_g.T, origin='lower')
+    axs[2].imshow(np.minimum(10.,np.maximum(-10.,dirty_g.T/dirty.T)), origin='lower')
+    plt.show()
     t0 = time()
     x0 = wgridder.dirty2vis(
         uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
