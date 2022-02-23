@@ -1,6 +1,19 @@
 /* Copyright (C) 2022 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
+static double syclphase(double x, double y, double w, bool adjoint, double nshift)
+  {
+  double tmp = 1.-x-y;
+  if (tmp<=0) return 0; // no phase factor beyond the horizon
+  double nm1 = (-x-y)/(sycl::sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
+  double phs = w*(nm1+nshift);
+  if (adjoint) phs *= -1;
+  if constexpr (is_same<Tcalc, double>::value)
+    return twopi*phs;
+  // we are reducing accuracy, so let's better do range reduction first
+  return twopi*(phs-sycl::floor(phs));
+  }
+
 template<size_t maxsz> class Wcorrector
   {
   private:
@@ -49,14 +62,11 @@ class Baselines_GPU
   protected:
     sycl::accessor<double,2,sycl::access::mode::read> acc_uvw;
     sycl::accessor<double,1,sycl::access::mode::read> acc_f_over_c;
-    size_t nrows, nchan;
 
   public:
     Baselines_GPU(Baselines_GPU_prep &prep, sycl::handler &cgh)
       : acc_uvw(prep.buf_uvw.template get_access<sycl::access::mode::read>(cgh)),
-        acc_f_over_c(prep.buf_freq.template get_access<sycl::access::mode::read>(cgh)),
-        nrows(acc_uvw.get_range().get(0)),
-        nchan(acc_f_over_c.get_range().get(0))
+        acc_f_over_c(prep.buf_freq.template get_access<sycl::access::mode::read>(cgh))
       {
       MR_assert(acc_uvw.get_range().get(1)==3, "dimension mismatch");
       }
@@ -78,8 +88,8 @@ class Baselines_GPU
       }
     double ffact(size_t chan) const
       { return acc_f_over_c[chan];}
-    size_t Nrows() const { return nrows; }
-    size_t Nchannels() const { return nchan; }
+    size_t Nrows() const { return acc_uvw.get_range().get(0); }
+    size_t Nchannels() const { return acc_f_over_c.get_range().get(0); }
   };
 
 class IndexComputer0
@@ -335,19 +345,21 @@ class CoordCalculator
             auto tmp = 1-fx-fy;
             if (tmp>=0)
               {
-              auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+              auto nm1 = (-fx-fy)/(sycl::sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
               fct = wcorr.corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : wcorr.corfunc((sqrt(-tmp)-1)*dw);
+              fct = divide_by_n ? 0 : wcorr.corfunc((sycl::sqrt(-tmp)-1)*dw);
 
             int icfu = sycl::abs(int(nxdirty/2)-int(i));
             int icfv = sycl::abs(int(nydirty/2)-int(j));
             accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
             });
           });
+
+        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -372,7 +384,7 @@ class CoordCalculator
               if (j2>=nv) j2-=nv;
               double fx = sqr(x0+i*pixsize_x);
               double fy = sqr(y0+j*pixsize_y);
-              double myphase = phase(fx, fy, w, false, nshift);
+              double myphase = syclphase(fx, fy, w, false, nshift);
               accgrid[i2][j2] = complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accdirty[i][j];
               });
             });
@@ -384,14 +396,13 @@ class CoordCalculator
             {
             Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-            CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
             RowchanComputer rccomp(idxcomp,cgh);
   
             auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
 
-            constexpr size_t n_workitems = 256;
+            constexpr size_t n_workitems = 512;
             sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
             sycl::range<2> local(1, n_workitems);
             cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::nd_item<2> item)
@@ -413,7 +424,7 @@ class CoordCalculator
                 // compute fractional and integer indices in "grid"
                 double ufrac,vfrac;
                 int iu0, iv0;
-                ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+                ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
     
                 // compute kernel values
                 array<Tcalc, 16> ukrn, vkrn;
@@ -445,7 +456,7 @@ class CoordCalculator
                   else
                     // we are reducing accuracy,
                     // so let's better do range reduction first
-                    fct = twopi*(fct-floor(fct));
+                    fct = twopi*(fct-sycl::floor(fct));
                   complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
                   res *= phase;
                   }
@@ -520,18 +531,18 @@ class CoordCalculator
 
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, false);
+        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
         q.submit([&](sycl::handler &cgh)
           {
           Baselines_GPU blloc(bl_prep, cgh);
           KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-          CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
           RowchanComputer rccomp(idxcomp, cgh);
 
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
 
-          constexpr size_t n_workitems = 256;
+          constexpr size_t n_workitems = 1024;
           sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
           sycl::range<2> local(1, n_workitems);
           cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::nd_item<2> item)
@@ -550,7 +561,7 @@ class CoordCalculator
               // compute fractional and integer indices in "grid"
               double ufrac,vfrac;
               int iu0, iv0;
-              ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+              ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
   
               // compute kernel values
               array<Tcalc, 16> ukrn, vkrn;
@@ -580,7 +591,7 @@ class CoordCalculator
                 else
                   // we are reducing accuracy,
                   // so let's better do range reduction first
-                  fct = twopi*(fct-floor(fct));
+                  fct = twopi*(fct-sycl::floor(fct));
                 complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
                 res *= phase;
                 }
@@ -654,6 +665,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
+        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -665,7 +677,6 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
             {
             Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-            CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
             RowchanComputer rccomp(idxcomp,cgh);
 
             auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
@@ -711,7 +722,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                   // compute fractional and integer indices in "grid"
                   double ufrac,vfrac;
                   int iu0, iv0;
-                  ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+                  ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
     
                   // compute kernel values
                   array<Tcalc, 16> ukrn, vkrn;
@@ -730,7 +741,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                     else
                       // we are reducing accuracy,
                       // so let's better do range reduction first
-                      fct = twopi*(fct-floor(fct));
+                      fct = twopi*(fct-sycl::floor(fct));
                     complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
                     val *= phase;
                     }
@@ -738,15 +749,15 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
   
                   int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
                   int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                  for (size_t i=0; i<supp; ++i)
+                  for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
                     {
                     auto tmp = ukrn[i]*val;
-                    for (size_t j=0; j<supp; ++j)
+                    for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                       {
                       auto tmp2 = vkrn[j]*tmp;
-                      my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
+                      my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
                       rr.fetch_add(tmp2.real());
-                      my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
+                      my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
                       ri.fetch_add(tmp2.imag());
                       }
                     }
@@ -793,8 +804,9 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
               if (j2>=nv) j2-=nv;
               double fx = sqr(x0+i*pixsize_x);
               double fy = sqr(y0+j*pixsize_y);
-              double myphase = phase(fx, fy, w, true, nshift);
-              accdirty[i][j] += (complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accgrid[i2][j2]).real();
+              double myphase = syclphase(fx, fy, w, true, nshift);
+              accdirty[i][j] += sycl::cos(myphase)*accgrid[i2][j2].real()
+                               -sycl::sin(myphase)*accgrid[i2][j2].imag();
               });
             });
           } // end of loop over planes
@@ -817,13 +829,13 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
             auto tmp = 1-fx-fy;
             if (tmp>=0)
               {
-              auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+              auto nm1 = (-fx-fy)/(sycl::sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
               fct = wcorr.corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : wcorr.corfunc((sqrt(-tmp)-1)*dw);
+              fct = divide_by_n ? 0 : wcorr.corfunc((sycl::sqrt(-tmp)-1)*dw);
 
             int icfu = sycl::abs(int(nxdirty/2)-int(i));
             int icfv = sycl::abs(int(nydirty/2)-int(j));
@@ -872,12 +884,12 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
+        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
         q.submit([&](sycl::handler &cgh)
           {
           Baselines_GPU blloc(bl_prep, cgh);
           KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-          CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
           RowchanComputer rccomp(idxcomp, cgh);
 
           auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
@@ -885,7 +897,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
           auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
 
-          constexpr size_t n_workitems = 256;
+          constexpr size_t n_workitems = 512;
           sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
           sycl::range<2> local(1, n_workitems);
           int nsafe = (supp+1)/2;
@@ -899,8 +911,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
             {
             auto iblock = item.get_global_id(0);
 
-            // preparation
-            // zero local buffer (FIXME is this needed?)
+            // preparation: zero local buffer
             for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
               {
               size_t iu = i/sidelen, iv = i%sidelen;
@@ -921,7 +932,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                 // compute fractional and integer indices in "grid"
                 double ufrac,vfrac;
                 int iu0, iv0;
-                ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+                ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
 
                 // compute kernel values
                 array<Tcalc, 16> ukrn, vkrn;
@@ -938,7 +949,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                   else
                     // we are reducing accuracy,
                     // so let's better do range reduction first
-                    fct = twopi*(fct-floor(fct));
+                    fct = twopi*(fct-sycl::floor(fct));
                   complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
                   val *= phase;
                   }
@@ -946,15 +957,15 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 
                 int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
                 int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                for (size_t i=0; i<supp; ++i)
+                for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
                   {
                   auto tmp = ukrn[i]*val;
-                  for (size_t j=0; j<supp; ++j)
+                  for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                     {
                     auto tmp2 = vkrn[j]*tmp;
-                    my_atomic_ref_l<Tcalc> rr(tile[iu0-bu0+i][iv0-bv0+j][0]);
+                    my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
                     rr.fetch_add(tmp2.real());
-                    my_atomic_ref_l<Tcalc> ri(tile[iu0-bu0+i][iv0-bv0+j][1]);
+                    my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
                     ri.fetch_add(tmp2.imag());
                     }
                   }
@@ -982,7 +993,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
           });
 
         // FFT
-        sycl_c2c(q, bufgrid, false);  // FIXME normalization?
+        sycl_c2c(q, bufgrid, false);
 
         // copying to dirty image and applying correction
         q.submit([&](sycl::handler &cgh)
