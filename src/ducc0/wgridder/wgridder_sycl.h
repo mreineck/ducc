@@ -87,7 +87,7 @@ class IndexComputer0
   public:
     struct Tileinfo { uint16_t tile_u, tile_v; };
     struct Blockinfo { uint32_t limits, startidx; };
-    static constexpr size_t chunksize=512;
+    static constexpr size_t chunksize=16384;
     bool store_tiles;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
@@ -391,61 +391,66 @@ class CoordCalculator
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
 
-            cgh.parallel_for(sycl::range<2>(idxcomp.blockinfo.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
+            constexpr size_t n_workitems = 256;
+            sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
+            sycl::range<2> local(1, n_workitems);
+            cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::nd_item<2> item)
               {
-              auto iblock = item.get_id(0);
+              auto iblock = item.get_global_id(0);
               auto minplane = acc_minplane[iblock];
               if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                 return;
-              auto iwork = item.get_id(1);
- 
-              size_t irow, ichan;
-              rccomp.getRowChan(iblock, iwork, irow, ichan);
-              if (irow==~size_t(0)) return;
-  
-              auto coord = blloc.effectiveCoord(irow, ichan);
-              auto imflip = coord.FixW();
-  
-              // compute fractional and integer indices in "grid"
-              double ufrac,vfrac;
-              int iu0, iv0;
-              ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-  
-              // compute kernel values
-              array<Tcalc, 16> ukrn, vkrn;
-              size_t nth=pl-minplane;
-              auto wval=Tcalc((w-coord.w)/dw);
-              kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
-  
-              // loop over supp*supp pixels from "grid"
-              complex<Tcalc> res=0;
-              auto iustart=size_t((iu0+nu)%nu);
-              auto ivstart=size_t((iv0+nv)%nv);
-              for (size_t i=0, realiu=iustart; i<supp;
-                   ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
+
+              for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                 {
-                complex<Tcalc> tmp = 0;
-                for (size_t j=0, realiv=ivstart; j<supp;
-                     ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
-                  tmp += vkrn[j]*accgrid[realiu][realiv];
-                res += ukrn[i]*tmp;
+                size_t irow, ichan;
+                rccomp.getRowChan(iblock, iwork, irow, ichan);
+                if (irow==~size_t(0)) return;
+    
+                auto coord = blloc.effectiveCoord(irow, ichan);
+                auto imflip = coord.FixW();
+    
+                // compute fractional and integer indices in "grid"
+                double ufrac,vfrac;
+                int iu0, iv0;
+                ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+    
+                // compute kernel values
+                array<Tcalc, 16> ukrn, vkrn;
+                size_t nth=pl-minplane;
+                auto wval=Tcalc((w-coord.w)/dw);
+                kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
+    
+                // loop over supp*supp pixels from "grid"
+                complex<Tcalc> res=0;
+                auto iustart=size_t((iu0+nu)%nu);
+                auto ivstart=size_t((iv0+nv)%nv);
+                for (size_t i=0, realiu=iustart; i<supp;
+                     ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
+                  {
+                  complex<Tcalc> tmp = 0;
+                  for (size_t j=0, realiv=ivstart; j<supp;
+                       ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
+                    tmp += vkrn[j]*accgrid[realiu][realiv];
+                  res += ukrn[i]*tmp;
+                  }
+                res.imag(res.imag()*imflip);
+    
+                if (shifting)
+                  {
+                  // apply phase
+                  double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
+                  if constexpr (is_same<double, Tcalc>::value)
+                    fct*=twopi;
+                  else
+                    // we are reducing accuracy,
+                    // so let's better do range reduction first
+                    fct = twopi*(fct-floor(fct));
+                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
+                  res *= phase;
+                  }
+                accvis[irow][ichan] += res;
                 }
-              res.imag(res.imag()*imflip);
-  
-              if (shifting)
-                {
-                // apply phase
-                double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
-                if constexpr (is_same<double, Tcalc>::value)
-                  fct*=twopi;
-                else
-                  // we are reducing accuracy,
-                  // so let's better do range reduction first
-                  fct = twopi*(fct-floor(fct));
-                complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
-                res *= phase;
-                }
-              accvis[irow][ichan] += res;
               });
             });
           } // end of loop over planes
@@ -525,56 +530,62 @@ class CoordCalculator
 
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-          cgh.parallel_for(sycl::range<2>(idxcomp.blockinfo.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
+
+          constexpr size_t n_workitems = 256;
+          sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
+          sycl::range<2> local(1, n_workitems);
+          cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::nd_item<2> item)
             {
-            auto iblock = item.get_id(0);
-            auto iwork = item.get_id(1);
+            auto iblock = item.get_global_id(0);
 
-            size_t irow, ichan;
-            rccomp.getRowChan(iblock, iwork, irow, ichan);
-            if (irow==~size_t(0)) return;
-
-            auto coord = blloc.effectiveCoord(irow, ichan);
-            auto imflip = coord.FixW();
-
-            // compute fractional and integer indices in "grid"
-            double ufrac,vfrac;
-            int iu0, iv0;
-            ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-
-            // compute kernel values
-            array<Tcalc, 16> ukrn, vkrn;
-            kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
-
-            // loop over supp*supp pixels from "grid"
-            complex<Tcalc> res=0;
-            auto iustart=size_t((iu0+nu)%nu);
-            auto ivstart=size_t((iv0+nv)%nv);
-            for (size_t i=0, realiu=iustart; i<supp;
-                 ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
+            for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
               {
-              complex<Tcalc> tmp = 0;
-              for (size_t j=0, realiv=ivstart; j<supp;
-                   ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
-                tmp += vkrn[j]*accgrid[realiu][realiv];
-              res += ukrn[i]*tmp;
+              size_t irow, ichan;
+              rccomp.getRowChan(iblock, iwork, irow, ichan);
+              if (irow==~size_t(0)) return;
+  
+              auto coord = blloc.effectiveCoord(irow, ichan);
+              auto imflip = coord.FixW();
+  
+              // compute fractional and integer indices in "grid"
+              double ufrac,vfrac;
+              int iu0, iv0;
+              ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+  
+              // compute kernel values
+              array<Tcalc, 16> ukrn, vkrn;
+              kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
+  
+              // loop over supp*supp pixels from "grid"
+              complex<Tcalc> res=0;
+              auto iustart=size_t((iu0+nu)%nu);
+              auto ivstart=size_t((iv0+nv)%nv);
+              for (size_t i=0, realiu=iustart; i<supp;
+                   ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
+                {
+                complex<Tcalc> tmp = 0;
+                for (size_t j=0, realiv=ivstart; j<supp;
+                     ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
+                  tmp += vkrn[j]*accgrid[realiu][realiv];
+                res += ukrn[i]*tmp;
+                }
+              res.imag(res.imag()*imflip);
+  
+              if (shifting)
+                {
+                // apply phase
+                double fct = coord.u*lshift + coord.v*mshift;
+                if constexpr (is_same<double, Tcalc>::value)
+                  fct*=twopi;
+                else
+                  // we are reducing accuracy,
+                  // so let's better do range reduction first
+                  fct = twopi*(fct-floor(fct));
+                complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
+                res *= phase;
+                }
+              accvis[irow][ichan] = res;
               }
-            res.imag(res.imag()*imflip);
-
-            if (shifting)
-              {
-              // apply phase
-              double fct = coord.u*lshift + coord.v*mshift;
-              if constexpr (is_same<double, Tcalc>::value)
-                fct*=twopi;
-              else
-                // we are reducing accuracy,
-                // so let's better do range reduction first
-                fct = twopi*(fct-floor(fct));
-              complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
-              res *= phase;
-              }
-            accvis[irow][ichan] = res;
             });
           });
         }  // end of device buffer scope, buffers are written back
@@ -650,47 +661,46 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 
           sycl_zero_buffer(q, bufgrid);
 
-          constexpr size_t blksz = 1024;
-          for (size_t blockofs=0; blockofs<idxcomp.blockinfo.size()-1; blockofs+=blksz)
+          q.submit([&](sycl::handler &cgh)
             {
-            size_t blockend = min(blockofs+blksz,idxcomp.blockinfo.size()-1);
-            q.submit([&](sycl::handler &cgh)
-              {
-              Baselines_GPU blloc(bl_prep, cgh);
-              KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-              CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-              RowchanComputer rccomp(idxcomp,cgh);
-    
-              auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
-              auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
-              auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
-              auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-              sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
-              sycl::range<2> local(1, idxcomp.chunksize);
-              int nsafe = (supp+1)/2;
-              size_t sidelen = 2*nsafe+(1<<logsquare);
+            Baselines_GPU blloc(bl_prep, cgh);
+            KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+            CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+            RowchanComputer rccomp(idxcomp,cgh);
+
+            auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
+            auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
+            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+
+            constexpr size_t n_workitems = 256;
+            sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
+            sycl::range<2> local(1, n_workitems);
+            int nsafe = (supp+1)/2;
+            size_t sidelen = 2*nsafe+(1<<logsquare);
 #ifndef __INTEL_LLVM_COMPILER
-              sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+            sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 #else
-              sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
+            sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw](sycl::nd_item<2> item)
+              {
+              auto iblock = item.get_global_id(0);
+              auto minplane = acc_minplane[iblock];
+              if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
+                return;
+
+              // preparation
+              for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_local_range(1))
                 {
-                auto iblock = item.get_global_id(0)+blockofs;
-                auto iwork = item.get_local_id(1);
-                auto minplane = acc_minplane[iblock];
-                if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
-                  return;
+                size_t iu = i/sidelen, iv = i%sidelen;
+                tile[iu][iv][0]=Tcalc(0);
+                tile[iu][iv][1]=Tcalc(0);
+                }
+              item.barrier(sycl::access::fence_space::local_space);
 
-                // preparation
-                for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                  {
-                  size_t iu = i/sidelen, iv = i%sidelen;
-                  tile[iu][iv][0]=Tcalc(0);
-                  tile[iu][iv][1]=Tcalc(0);
-                  }
-                item.barrier(sycl::access::fence_space::local_space);
-
+              for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
+                {
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
                 if (irow!=~size_t(0))
@@ -741,25 +751,27 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                       }
                     }
                   }
+                else
+                  break;
+                }
 
-                // add local buffer back to global buffer
-                auto u_tile = acc_tileinfo[iblock].tile_u;
-                auto v_tile = acc_tileinfo[iblock].tile_v;
-                item.barrier(sycl::access::fence_space::local_space);
-                for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                  {
-                  size_t iu = i/sidelen, iv = i%sidelen;
-                  size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
-                  size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+              // add local buffer back to global buffer
+              auto u_tile = acc_tileinfo[iblock].tile_u;
+              auto v_tile = acc_tileinfo[iblock].tile_v;
+              item.barrier(sycl::access::fence_space::local_space);
+              for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
+                {
+                size_t iu = i/sidelen, iv = i%sidelen;
+                size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
+                size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
 
-                  my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                  rr.fetch_add(tile[iu][iv][0]);
-                  my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                  ri.fetch_add(tile[iu][iv][1]);
-                  }
-                });
+                my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
+                rr.fetch_add(tile[iu][iv][0]);
+                my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
+                ri.fetch_add(tile[iu][iv][1]);
+                }
               });
-            }
+            });
 
           // FFT
           sycl_c2c(q, bufgrid, false);
@@ -861,46 +873,44 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
 
-        constexpr size_t blksz = 1024;
-        for (size_t blockofs=0; blockofs<idxcomp.blockinfo.size()-1; blockofs+=blksz)
+        q.submit([&](sycl::handler &cgh)
           {
-          size_t blockend = min(blockofs+blksz,idxcomp.blockinfo.size()-1);
-          q.submit([&](sycl::handler &cgh)
-            {
-            Baselines_GPU blloc(bl_prep, cgh);
-            KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-            CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-            RowchanComputer rccomp(idxcomp, cgh);
+          Baselines_GPU blloc(bl_prep, cgh);
+          KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+          CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+          RowchanComputer rccomp(idxcomp, cgh);
 
-            auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
+          auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
 
-            auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
-            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+          auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
+          auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
 
-            sycl::range<2> global(blockend-blockofs, idxcomp.chunksize);
-            sycl::range<2> local(1, idxcomp.chunksize);
-            int nsafe = (supp+1)/2;
-            size_t sidelen = 2*nsafe+(1<<logsquare);
+          constexpr size_t n_workitems = 256;
+          sycl::range<2> global(idxcomp.blockinfo.size()-1, n_workitems);
+          sycl::range<2> local(1, n_workitems);
+          int nsafe = (supp+1)/2;
+          size_t sidelen = 2*nsafe+(1<<logsquare);
 #ifndef __INTEL_LLVM_COMPILER
-            sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+          sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 #else
-            sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
+          sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
+          cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen](sycl::nd_item<2> item)
+            {
+            auto iblock = item.get_global_id(0);
+
+            // preparation
+            // zero local buffer (FIXME is this needed?)
+            for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
               {
-              auto iblock = item.get_global_id(0)+blockofs;
-              auto iwork = item.get_local_id(1);
+              size_t iu = i/sidelen, iv = i%sidelen;
+              tile[iu][iv][0] = Tcalc(0);
+              tile[iu][iv][1] = Tcalc(0);
+              }
+            item.barrier();
 
-              // preparation
-              // zero local buffer (FIXME is this needed?)
-              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                {
-                size_t iu = i/sidelen, iv = i%sidelen;
-                tile[iu][iv][0] = Tcalc(0);
-                tile[iu][iv][1] = Tcalc(0);
-                }
-              item.barrier();
-
+            for (auto iwork = item.get_global_id(1); ; iwork+=item.get_global_range(1))
+              {
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
               if (irow!=~size_t(0))
@@ -949,25 +959,27 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                     }
                   }
                 }
+              else
+                break;
+              }
 
-              // add local buffer back to global buffer
-              auto u_tile = acc_tileinfo[iblock].tile_u;
-              auto v_tile = acc_tileinfo[iblock].tile_v;
-              item.barrier();
-              //size_t ofs = (supp-1)/2;
-              for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
-                {
-                size_t iu = i/sidelen, iv = i%sidelen;
-                size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
-                size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
-                my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                rr.fetch_add(tile[iu][iv][0]);
-                my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                ri.fetch_add(tile[iu][iv][1]);
-                }
-              });
+            // add local buffer back to global buffer
+            auto u_tile = acc_tileinfo[iblock].tile_u;
+            auto v_tile = acc_tileinfo[iblock].tile_v;
+            item.barrier();
+            //size_t ofs = (supp-1)/2;
+            for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
+              {
+              size_t iu = i/sidelen, iv = i%sidelen;
+              size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
+              size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+              my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
+              rr.fetch_add(tile[iu][iv][0]);
+              my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
+              ri.fetch_add(tile[iu][iv][1]);
+              }
             });
-          }
+          });
 
         // FFT
         sycl_c2c(q, bufgrid, false);  // FIXME normalization?
