@@ -85,15 +85,16 @@ class Baselines_GPU
 class IndexComputer0
   {
   public:
+    struct Tileinfo { uint16_t tile_u, tile_v; };
+    struct Blockinfo { uint32_t limits, startidx; };
     static constexpr size_t chunksize=512;
     bool store_tiles;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
-    vector<uint16_t> tile_u_gpu, tile_v_gpu;
+    vector<Tileinfo> tileinfo;
     vector<uint16_t> minplane_gpu;
     vector<uint32_t> vissum_gpu;
-    vector<uint32_t> blocklimits;
-    vector<uint32_t> blockstartidx;
+    vector<Blockinfo> blockinfo;
 
     IndexComputer0(const VVR &ranges, bool do_wgridding, bool store_tiles_)
       : store_tiles(store_tiles_)
@@ -111,26 +112,19 @@ class IndexComputer0
       if (!do_wgridding)
         minplane_gpu.resize(1);
       if (!store_tiles)
-        {
-        tile_u_gpu.resize(1);
-        tile_v_gpu.resize(1);
-        }
+        tileinfo.resize(1);
       for (const auto &rng: ranges)
         {
         if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)
           ||(curminplane!=rng.first.minplane))
           {
-          blocklimits.push_back(row_gpu.size());
-          blockstartidx.push_back(accum);
+          blockinfo.push_back({uint32_t(row_gpu.size()), uint32_t(accum)});
           isamp=0;
           curtile_u = rng.first.tile_u;
           curtile_v = rng.first.tile_v;
           curminplane = rng.first.minplane;
           if (store_tiles)
-            {
-            tile_u_gpu.push_back(rng.first.tile_u);
-            tile_v_gpu.push_back(rng.first.tile_v);
-            }
+            tileinfo.push_back({rng.first.tile_u, rng.first.tile_v});
           if (do_wgridding)
             minplane_gpu.push_back(rng.first.minplane);
           }
@@ -140,13 +134,10 @@ class IndexComputer0
           size_t curpos=0;
           while (curpos+chunksize-isamp<=nchan)
             {
-            blocklimits.push_back(row_gpu.size());
-            blockstartidx.push_back(blockstartidx.back()+chunksize);
+            blockinfo.push_back({uint32_t(row_gpu.size()),
+                                 uint32_t(blockinfo.back().startidx+chunksize)});
             if (store_tiles)
-              {
-              tile_u_gpu.push_back(rng.first.tile_u);
-              tile_v_gpu.push_back(rng.first.tile_v);
-              }
+              tileinfo.push_back({rng.first.tile_u, rng.first.tile_v});
             if (do_wgridding)
               minplane_gpu.push_back(rng.first.minplane);
             curpos += chunksize-isamp;
@@ -159,8 +150,7 @@ class IndexComputer0
           accum += nchan;
           }
         }
-      blocklimits.push_back(row_gpu.size());
-      blockstartidx.push_back(accum);
+      blockinfo.push_back({uint32_t(row_gpu.size()), uint32_t(accum)});
       vissum_gpu.push_back(accum);
       }
   };
@@ -170,10 +160,8 @@ class IndexComputer: public IndexComputer0
     sycl::buffer<uint32_t, 1> buf_row;
     sycl::buffer<uint16_t, 1> buf_chbegin;
     sycl::buffer<uint32_t, 1> buf_vissum;
-    sycl::buffer<uint32_t, 1> buf_blocklimits;
-    sycl::buffer<uint32_t, 1> buf_blockstartidx;
-    sycl::buffer<uint16_t, 1> buf_tileu;
-    sycl::buffer<uint16_t, 1> buf_tilev;
+    sycl::buffer<typename IndexComputer0::Blockinfo, 1> buf_blockinfo;
+    sycl::buffer<typename IndexComputer0::Tileinfo, 1> buf_tileinfo;
     sycl::buffer<uint16_t, 1> buf_minplane;
 
     IndexComputer(const VVR &ranges, bool do_wgridding, bool store_tiles_)
@@ -181,10 +169,8 @@ class IndexComputer: public IndexComputer0
         buf_row(make_sycl_buffer(this->row_gpu)),
         buf_chbegin(make_sycl_buffer(this->chbegin_gpu)),
         buf_vissum(make_sycl_buffer(this->vissum_gpu)),
-        buf_blocklimits(make_sycl_buffer(this->blocklimits)),
-        buf_blockstartidx(make_sycl_buffer(this->blockstartidx)),
-        buf_tileu(make_sycl_buffer(this->tile_u_gpu)),
-        buf_tilev(make_sycl_buffer(this->tile_v_gpu)),
+        buf_blockinfo(make_sycl_buffer(this->blockinfo)),
+        buf_tileinfo(make_sycl_buffer(this->tileinfo)),
         buf_minplane(make_sycl_buffer(this->minplane_gpu))
         {}
   };
@@ -192,16 +178,14 @@ class IndexComputer: public IndexComputer0
 class RowchanComputer
   {
   protected:
-    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_blocklimits;
-    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_blockstartidx;
+    sycl::accessor<typename IndexComputer0::Blockinfo,1,sycl::access::mode::read> acc_blockinfo;
     sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_vissum;
     sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_row;
     sycl::accessor<uint16_t,1,sycl::access::mode::read> acc_chbegin;
 
   public:
     RowchanComputer(IndexComputer &idxcomp, sycl::handler &cgh)
-      : acc_blocklimits(idxcomp.buf_blocklimits.template get_access<sycl::access::mode::read>(cgh)),
-        acc_blockstartidx(idxcomp.buf_blockstartidx.template get_access<sycl::access::mode::read>(cgh)),
+      : acc_blockinfo(idxcomp.buf_blockinfo.template get_access<sycl::access::mode::read>(cgh)),
         acc_vissum(idxcomp.buf_vissum.template get_access<sycl::access::mode::read>(cgh)),
         acc_row(idxcomp.buf_row.template get_access<sycl::access::mode::read>(cgh)),
         acc_chbegin(idxcomp.buf_chbegin.template get_access<sycl::access::mode::read>(cgh))
@@ -209,10 +193,10 @@ class RowchanComputer
 
     void getRowChan(size_t iblock, size_t iwork, size_t &irow, size_t &ichan) const
       {
-      auto xlo = acc_blocklimits[iblock];
-      auto xhi = acc_blocklimits[iblock+1];
-      auto wanted = acc_blockstartidx[iblock]+iwork;
-      if (wanted>=acc_blockstartidx[iblock+1])
+      auto xlo = acc_blockinfo[iblock].limits;
+      auto xhi = acc_blockinfo[iblock+1].limits;
+      auto wanted = acc_blockinfo[iblock].startidx+iwork;
+      if (wanted>=acc_blockinfo[iblock+1].startidx)
         { irow = ~size_t(0); return; }  // nothing to do for this item
       while (xlo+1<xhi)  // bisection search
         {
@@ -407,14 +391,14 @@ class CoordCalculator
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
 
-            cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
+            cgh.parallel_for(sycl::range<2>(idxcomp.blockinfo.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw](sycl::item<2> item)
               {
               auto iblock = item.get_id(0);
-              auto iwork = item.get_id(1);
               auto minplane = acc_minplane[iblock];
               if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
                 return;
-  
+              auto iwork = item.get_id(1);
+ 
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
               if (irow==~size_t(0)) return;
@@ -428,7 +412,7 @@ class CoordCalculator
               ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
   
               // compute kernel values
-              array<Tcalc, 8> ukrn, vkrn;
+              array<Tcalc, 16> ukrn, vkrn;
               size_t nth=pl-minplane;
               auto wval=Tcalc((w-coord.w)/dw);
               kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
@@ -541,7 +525,7 @@ class CoordCalculator
 
           auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
           auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-          cgh.parallel_for(sycl::range<2>(idxcomp.blocklimits.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
+          cgh.parallel_for(sycl::range<2>(idxcomp.blockinfo.size()-1, idxcomp.chunksize), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp](sycl::item<2> item)
             {
             auto iblock = item.get_id(0);
             auto iwork = item.get_id(1);
@@ -559,7 +543,7 @@ class CoordCalculator
             ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
 
             // compute kernel values
-            array<Tcalc, 8> ukrn, vkrn;
+            array<Tcalc, 16> ukrn, vkrn;
             kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
 
             // loop over supp*supp pixels from "grid"
@@ -667,9 +651,9 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
           sycl_zero_buffer(q, bufgrid);
 
           constexpr size_t blksz = 1024;
-          for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
+          for (size_t blockofs=0; blockofs<idxcomp.blockinfo.size()-1; blockofs+=blksz)
             {
-            size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
+            size_t blockend = min(blockofs+blksz,idxcomp.blockinfo.size()-1);
             q.submit([&](sycl::handler &cgh)
               {
               Baselines_GPU blloc(bl_prep, cgh);
@@ -677,8 +661,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
               CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
               RowchanComputer rccomp(idxcomp,cgh);
     
-              auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
-              auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
+              auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
               auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
               auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
               auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
@@ -691,7 +674,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 #else
               sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileu,acc_tilev,tile,w,dw=dw](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,blockofs,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw](sycl::nd_item<2> item)
                 {
                 auto iblock = item.get_global_id(0)+blockofs;
                 auto iwork = item.get_local_id(1);
@@ -721,7 +704,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                   ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
     
                   // compute kernel values
-                  array<Tcalc, 8> ukrn, vkrn;
+                  array<Tcalc, 16> ukrn, vkrn;
                   size_t nth=pl-minplane;
                   auto wval=Tcalc((w-coord.w)/dw);
                   kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
@@ -760,8 +743,8 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                   }
 
                 // add local buffer back to global buffer
-                auto u_tile = acc_tileu[iblock];
-                auto v_tile = acc_tilev[iblock];
+                auto u_tile = acc_tileinfo[iblock].tile_u;
+                auto v_tile = acc_tileinfo[iblock].tile_v;
                 item.barrier(sycl::access::fence_space::local_space);
                 for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
@@ -879,9 +862,9 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         IndexComputer idxcomp(ranges, do_wgridding, true);
 
         constexpr size_t blksz = 1024;
-        for (size_t blockofs=0; blockofs<idxcomp.blocklimits.size()-1; blockofs+=blksz)
+        for (size_t blockofs=0; blockofs<idxcomp.blockinfo.size()-1; blockofs+=blksz)
           {
-          size_t blockend = min(blockofs+blksz,idxcomp.blocklimits.size()-1);
+          size_t blockend = min(blockofs+blksz,idxcomp.blockinfo.size()-1);
           q.submit([&](sycl::handler &cgh)
             {
             Baselines_GPU blloc(bl_prep, cgh);
@@ -889,8 +872,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
             CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
             RowchanComputer rccomp(idxcomp, cgh);
 
-            auto acc_tileu{idxcomp.buf_tileu.template get_access<sycl::access::mode::read>(cgh)};
-            auto acc_tilev{idxcomp.buf_tilev.template get_access<sycl::access::mode::read>(cgh)};
+            auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
 
             auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
@@ -904,7 +886,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
 #else
             sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
 #endif
-            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileu,acc_tilev,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,blockofs,nsafe,sidelen](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+blockofs;
               auto iwork = item.get_local_id(1);
@@ -932,7 +914,7 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                 ccalc.getpix( coord.u, coord.v, ufrac, vfrac, iu0, iv0);
 
                 // compute kernel values
-                array<Tcalc, 8> ukrn, vkrn;
+                array<Tcalc, 16> ukrn, vkrn;
                 kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
 
                 // loop over supp*supp pixels from "grid"
@@ -969,8 +951,8 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                 }
 
               // add local buffer back to global buffer
-              auto u_tile = acc_tileu[iblock];
-              auto v_tile = acc_tilev[iblock];
+              auto u_tile = acc_tileinfo[iblock].tile_u;
+              auto v_tile = acc_tileinfo[iblock].tile_v;
               item.barrier();
               //size_t ofs = (supp-1)/2;
               for (size_t i=iwork; i<sidelen*sidelen; i+=item.get_local_range(1))
