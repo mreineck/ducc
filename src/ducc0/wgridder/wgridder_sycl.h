@@ -4,45 +4,35 @@
 class Baselines_GPU_prep
   {
   public:
-    sycl::buffer<double,2> buf_uvw;
+    sycl::buffer<UVW,1> buf_uvw;
     sycl::buffer<double,1> buf_freq;
 
     Baselines_GPU_prep(const Baselines &bl)
-      : buf_uvw(reinterpret_cast<const double *>(bl.getUVW_raw().data()),
-          sycl::range<2>(bl.Nrows(), 3),
-          {sycl::property::buffer::use_host_ptr()}),
+      : buf_uvw(make_sycl_buffer(bl.getUVW_raw())),
         buf_freq(make_sycl_buffer(bl.get_f_over_c())) {}
   };
 
 class Baselines_GPU
   {
   protected:
-    sycl::accessor<double,2,sycl::access::mode::read> acc_uvw;
+    sycl::accessor<UVW,1,sycl::access::mode::read> acc_uvw;
     sycl::accessor<double,1,sycl::access::mode::read> acc_f_over_c;
 
   public:
     Baselines_GPU(Baselines_GPU_prep &prep, sycl::handler &cgh)
       : acc_uvw(prep.buf_uvw.template get_access<sycl::access::mode::read>(cgh)),
         acc_f_over_c(prep.buf_freq.template get_access<sycl::access::mode::read>(cgh))
-      {
-      MR_assert(acc_uvw.get_range().get(1)==3, "dimension mismatch");
-      }
+      {}
 
     UVW effectiveCoord(size_t row, size_t chan) const
       {
       double f = acc_f_over_c[chan];
-      return UVW(acc_uvw[row][0]*f,
-                 acc_uvw[row][1]*f,
-                 acc_uvw[row][2]*f);
+      return acc_uvw[row]*f;
       }
     double absEffectiveW(size_t row, size_t chan) const
-      { return sycl::fabs(acc_uvw[row][2]*acc_f_over_c[chan]); }
+      { return sycl::fabs(acc_uvw[row].w*acc_f_over_c[chan]); }
     UVW baseCoord(size_t row) const
-      {
-      return UVW(acc_uvw[row][0],
-                 acc_uvw[row][1],
-                 acc_uvw[row][2]);
-      }
+      { return acc_uvw[row]; }
     double ffact(size_t chan) const
       { return acc_f_over_c[chan];}
     size_t Nrows() const { return acc_uvw.get_range().get(0); }
@@ -538,11 +528,11 @@ class CoordCalculator
                 auto iustart=size_t((iu0+nu)%nu);
                 auto ivstart=size_t((iv0+nv)%nv);
                 for (size_t i=0, realiu=iustart; i<supp;
-                     ++i, realiu = (realiu+1<nu)?realiu+1 : 0)
+                     ++i, realiu = (realiu+1<nu) ? realiu+1 : 0)
                   {
                   complex<Tcalc> tmp = 0;
                   for (size_t j=0, realiv=ivstart; j<supp;
-                       ++j, realiv = (realiv+1<nv)?realiv+1 : 0)
+                       ++j, realiv = (realiv+1<nv) ? realiv+1 : 0)
                     tmp += vkrn[j]*accgrid[realiu][realiv];
                   res += ukrn[i]*tmp;
                   }
@@ -697,10 +687,8 @@ class CoordCalculator
 template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
 template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
 #else
-template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
-//template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-//template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
 #endif
 
     void x2dirty_gpu()
