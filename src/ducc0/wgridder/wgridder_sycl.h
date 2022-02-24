@@ -1,49 +1,6 @@
 /* Copyright (C) 2022 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
-static double syclphase(double x, double y, double w, bool adjoint, double nshift)
-  {
-  double tmp = 1.-x-y;
-  if (tmp<=0) return 0; // no phase factor beyond the horizon
-  double nm1 = (-x-y)/(sycl::sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-  double phs = w*(nm1+nshift);
-  if (adjoint) phs *= -1;
-  if constexpr (is_same<Tcalc, double>::value)
-    return twopi*phs;
-  // we are reducing accuracy, so let's better do range reduction first
-  return twopi*(phs-sycl::floor(phs));
-  }
-
-template<size_t maxsz> class Wcorrector
-  {
-  private:
-    array<double, maxsz> x, wgtpsi;
-    size_t n, supp;
-
-  public:
-    Wcorrector(const detail_gridding_kernel::KernelCorrection &corr)
-      {
-      const auto &x_ = corr.X();
-      n = x_.size();
-      MR_assert(n<=maxsz, "maxsz too small");
-      const auto &wgtpsi_ = corr.Wgtpsi();
-      supp = corr.Supp();
-      for (size_t i=0; i<n; ++i)
-        {
-        x[i] = x_[i];
-        wgtpsi[i] = wgtpsi_[i];
-        }
-      }
-
-    double corfunc(double v) const
-      {
-      double tmp=0;
-      for (size_t i=0; i<n; ++i)
-        tmp += wgtpsi[i]*sycl::cos(pi*supp*v*x[i]);
-      return 1./tmp;
-      }
-  };
-
 class Baselines_GPU_prep
   {
   public:
@@ -185,6 +142,206 @@ class IndexComputer: public IndexComputer0
         {}
   };
 
+class GlobalCorrector
+  {
+  private:
+    const Params &par;
+    vector<double> cfu, cfv;
+    sycl::buffer<double,1> bufcfu, bufcfv; 
+
+    template<size_t maxsz> class Wcorrector
+      {
+      private:
+        array<double, maxsz> x, wgtpsi;
+        size_t n, supp;
+    
+      public:
+        Wcorrector(const detail_gridding_kernel::KernelCorrection &corr)
+          {
+          const auto &x_ = corr.X();
+          n = x_.size();
+          MR_assert(n<=maxsz, "maxsz too small");
+          const auto &wgtpsi_ = corr.Wgtpsi();
+          supp = corr.Supp();
+          for (size_t i=0; i<n; ++i)
+            {
+            x[i] = x_[i];
+            wgtpsi[i] = wgtpsi_[i];
+            }
+          }
+    
+        double corfunc(double v) const
+          {
+          double tmp=0;
+          for (size_t i=0; i<n; ++i)
+            tmp += wgtpsi[i]*sycl::cos(pi*supp*v*x[i]);
+          return 1./tmp;
+          }
+      };
+   
+    static double syclphase(double x, double y, double w, bool adjoint, double nshift)
+      {
+      double tmp = 1.-x-y;
+      if (tmp<=0) return 0; // no phase factor beyond the horizon
+      double nm1 = (-x-y)/(sycl::sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
+      double phs = w*(nm1+nshift);
+      if (adjoint) phs *= -1;
+      if constexpr (is_same<Tcalc, double>::value)
+        return twopi*phs;
+      // we are reducing accuracy, so let's better do range reduction first
+      return twopi*(phs-sycl::floor(phs));
+      }
+   
+  public:
+    GlobalCorrector(const Params &par_)
+      : par(par_),
+        cfu(par.krn->corfunc(par.nxdirty/2+1, 1./par.nu, par.nthreads)),
+        cfv(par.krn->corfunc(par.nydirty/2+1, 1./par.nv, par.nthreads)),
+        bufcfu(make_sycl_buffer(cfu)),
+        bufcfv(make_sycl_buffer(cfv))
+      {}
+
+    void corr_degrid_narrow_field(sycl::queue &q,
+      sycl::buffer<Tcalc, 2> &bufdirty, sycl::buffer<complex<Tcalc>, 2> &bufgrid)
+      {
+      // copy to grid and apply kernel correction
+      q.submit([&](sycl::handler &cgh)
+        {
+        auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
+        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
+        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+        auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+        cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=par.nxdirty,nydirty=par.nydirty,nu=par.nu,nv=par.nv](sycl::item<2> item)
+          {
+          auto i = item.get_id(0);
+          auto j = item.get_id(1);
+          int icfu = sycl::abs(int(nxdirty/2)-int(i));
+          int icfv = sycl::abs(int(nydirty/2)-int(j));
+          size_t i2 = nu-nxdirty/2+i;
+          if (i2>=nu) i2-=nu;
+          size_t j2 = nv-nydirty/2+j;
+          if (j2>=nv) j2-=nv;
+          auto fctu = acccfu[icfu];
+          auto fctv = acccfv[icfv];
+          accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
+          });
+        });
+      }
+
+    void corr_grid_narrow_field(sycl::queue &q,
+      sycl::buffer<complex<Tcalc>, 2> &bufgrid, sycl::buffer<Tcalc, 2> &bufdirty)
+      {
+      // copy to dirty image and apply kernel correction
+      q.submit([&](sycl::handler &cgh)
+        {
+        auto accdirty{bufdirty.template get_access<sycl::access::mode::discard_write>(cgh)};
+        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
+        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+        auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+        cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=par.nxdirty,nydirty=par.nydirty,nu=par.nu,nv=par.nv](sycl::item<2> item)
+          {
+          auto i = item.get_id(0);
+          auto j = item.get_id(1);
+          int icfu = sycl::abs(int(nxdirty/2)-int(i));
+          int icfv = sycl::abs(int(nydirty/2)-int(j));
+          size_t i2 = nu-nxdirty/2+i;
+          if (i2>=nu) i2-=nu;
+          size_t j2 = nv-nydirty/2+j;
+          if (j2>=nv) j2-=nv;
+          auto fctu = acccfu[icfu];
+          auto fctv = acccfv[icfv];
+          accdirty[i][j] = (accgrid[i2][j2]*Tcalc(fctu*fctv)).real();
+          });
+        });
+      }
+
+    void apply_global_corrections(sycl::queue &q,
+      sycl::buffer<Tcalc, 2> &bufdirty)
+      {
+      // apply global corrections to dirty image on GPU
+      q.submit([&](sycl::handler &cgh)
+        {
+        Wcorrector<30> wcorr(par.krn->Corr());
+        auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
+        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
+        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+        double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
+               y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
+        cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty,nydirty=par.nydirty,accdirty,acccfu,acccfv,pixsize_x=par.pixsize_x,pixsize_y=par.pixsize_y,x0,y0,divide_by_n=par.divide_by_n,wcorr,nshift=par.nshift,dw=par.dw](sycl::item<2> item)
+          {
+          auto i = item.get_id(0);
+          auto j = item.get_id(1);
+          double fx = sqr(x0+i*pixsize_x);
+          double fy = sqr(y0+j*pixsize_y);
+          double fct;
+          auto tmp = 1-fx-fy;
+          if (tmp>=0)
+            {
+            auto nm1 = (-fx-fy)/(sycl::sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+            fct = wcorr.corfunc((nm1+nshift)*dw);
+            if (divide_by_n)
+              fct /= nm1+1;
+            }
+          else // beyond the horizon, don't really know what to do here
+            fct = divide_by_n ? 0 : wcorr.corfunc((sycl::sqrt(-tmp)-1)*dw);
+
+          int icfu = sycl::abs(int(nxdirty/2)-int(i));
+          int icfv = sycl::abs(int(nydirty/2)-int(j));
+          accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
+          });
+        });
+      }
+    void degridding_wscreen(sycl::queue &q, double w,
+      sycl::buffer<Tcalc, 2> &bufdirty, sycl::buffer<complex<Tcalc>, 2> &bufgrid)
+      {
+      // copy to grid and apply wscreen
+      q.submit([&](sycl::handler &cgh)
+        {
+        auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
+        auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+        double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
+               y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
+        cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty, nydirty=par.nydirty, nu=par.nu, nv=par.nv, pixsize_x=par.pixsize_x, pixsize_y=par.pixsize_y,nshift=par.nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
+          {
+          auto i = item.get_id(0);
+          auto j = item.get_id(1);
+          size_t i2 = nu-nxdirty/2+i;
+          if (i2>=nu) i2-=nu;
+          size_t j2 = nv-nydirty/2+j;
+          if (j2>=nv) j2-=nv;
+          double fx = sqr(x0+i*pixsize_x);
+          double fy = sqr(y0+j*pixsize_y);
+          double myphase = syclphase(fx, fy, w, false, nshift);
+          accgrid[i2][j2] = complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accdirty[i][j];
+          });
+        });
+      }
+    void gridding_wscreen(sycl::queue &q, double w,
+      sycl::buffer<complex<Tcalc>, 2> &bufgrid, sycl::buffer<Tcalc, 2> &bufdirty)
+      {
+      q.submit([&](sycl::handler &cgh)
+        {
+        auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
+        auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+        double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
+               y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
+        cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty, nydirty=par.nydirty, nu=par.nu, nv=par.nv, pixsize_x=par.pixsize_x, pixsize_y=par.pixsize_y,nshift=par.nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
+          {
+          auto i = item.get_id(0);
+          auto j = item.get_id(1);
+          size_t i2 = nu-nxdirty/2+i;
+          if (i2>=nu) i2-=nu;
+          size_t j2 = nv-nydirty/2+j;
+          if (j2>=nv) j2-=nv;
+          double fx = sqr(x0+i*pixsize_x);
+          double fy = sqr(y0+j*pixsize_y);
+          double myphase = syclphase(fx, fy, w, true, nshift);
+          accdirty[i][j] += sycl::cos(myphase)*accgrid[i2][j2].real()
+                           -sycl::sin(myphase)*accgrid[i2][j2].imag();
+          });
+        });
+      }
+  };
 class RowchanComputer
   {
   protected:
@@ -317,47 +474,11 @@ class CoordCalculator
 
         sycl_zero_buffer(q, bufvis);
 
-        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-  // FIXME: cast to Timg
-        auto bufcfu(make_sycl_buffer(cfu));
-        auto bufcfv(make_sycl_buffer(cfv));
-
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, false);
-
-        // applying global corrections to dirty image on GPU
-        q.submit([&](sycl::handler &cgh)
-          {
-          Wcorrector<30> wcorr(krn->Corr());
-          auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
-          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-          double x0 = lshift-0.5*nxdirty*pixsize_x,
-                 y0 = mshift-0.5*nydirty*pixsize_y;
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv,pixsize_x=pixsize_x,pixsize_y=pixsize_y,x0,y0,divide_by_n=divide_by_n,wcorr,nshift=nshift,dw=dw](sycl::item<2> item)
-            {
-            auto i = item.get_id(0);
-            auto j = item.get_id(1);
-            double fx = sqr(x0+i*pixsize_x);
-            double fy = sqr(y0+j*pixsize_y);
-            double fct;
-            auto tmp = 1-fx-fy;
-            if (tmp>=0)
-              {
-              auto nm1 = (-fx-fy)/(sycl::sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-              fct = wcorr.corfunc((nm1+nshift)*dw);
-              if (divide_by_n)
-                fct /= nm1+1;
-              }
-            else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : wcorr.corfunc((sycl::sqrt(-tmp)-1)*dw);
-
-            int icfu = sycl::abs(int(nxdirty/2)-int(i));
-            int icfv = sycl::abs(int(nydirty/2)-int(j));
-            accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
-            });
-          });
+        // apply global corrections to dirty image on GPU
+        GlobalCorrector globcorr(*this);
+        globcorr.apply_global_corrections(q, bufdirty);
 
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
@@ -367,27 +488,7 @@ class CoordCalculator
 
           sycl_zero_buffer(q, bufgrid);
 
-          // copying to grid and applying wscreen
-          q.submit([&](sycl::handler &cgh)
-            {
-            auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
-            double x0 = lshift-0.5*nxdirty*pixsize_x,
-                   y0 = mshift-0.5*nydirty*pixsize_y;
-            cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty, nydirty=nydirty, nu=nu, nv=nv, pixsize_x=pixsize_x, pixsize_y=pixsize_y,nshift=nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
-              {
-              auto i = item.get_id(0);
-              auto j = item.get_id(1);
-              size_t i2 = nu-nxdirty/2+i;
-              if (i2>=nu) i2-=nu;
-              size_t j2 = nv-nydirty/2+j;
-              if (j2>=nv) j2-=nv;
-              double fx = sqr(x0+i*pixsize_x);
-              double fy = sqr(y0+j*pixsize_y);
-              double myphase = syclphase(fx, fy, w, false, nshift);
-              accgrid[i2][j2] = complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accdirty[i][j];
-              });
-            });
+          globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
 
           // FFT
           sycl_c2c(q, bufgrid, true);
@@ -498,34 +599,11 @@ class CoordCalculator
 
         sycl_zero_buffer(q, bufvis);
         sycl_zero_buffer(q, bufgrid);
-        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-// FIXME: cast to Timg
-        auto bufcfu(make_sycl_buffer(cfu));
-        auto bufcfv(make_sycl_buffer(cfv));
-        // copying to grid and applying correction
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
-          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=nxdirty,nydirty=nydirty,nu=nu,nv=nv](sycl::item<2> item)
-            {
-            auto i = item.get_id(0);
-            auto j = item.get_id(1);
-            int icfu = sycl::abs(int(nxdirty/2)-int(i));
-            int icfv = sycl::abs(int(nydirty/2)-int(j));
-            size_t i2 = nu-nxdirty/2+i;
-            if (i2>=nu) i2-=nu;
-            size_t j2 = nv-nydirty/2+j;
-            if (j2>=nv) j2-=nv;
-            auto fctu = acccfu[icfu];
-            auto fctv = acccfv[icfv];
-            accgrid[i2][j2] = accdirty[i][j]*Tcalc(fctu*fctv);
-            });
-          });
 
+        {
+        GlobalCorrector globcorr(*this);
+        globcorr.corr_degrid_narrow_field(q, bufdirty, bufgrid);
+        }
         // FFT
         sycl_c2c(q, bufgrid, true);
 
@@ -641,8 +719,6 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         sycl::queue q{sycl::default_selector()};
 
         auto bufdirty(make_sycl_buffer(dirty_out));
-        bufdirty.set_write_back(true);
-        bufdirty.set_final_data(dirty_out.data());
         sycl_zero_buffer(q, bufdirty);
 
         // grid (only on GPU)
@@ -657,15 +733,10 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
-        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-  // FIXME: cast to Timg
-        auto bufcfu(make_sycl_buffer(cfu));
-        auto bufcfv(make_sycl_buffer(cfv));
-
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+        GlobalCorrector globcorr(*this);
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -787,61 +858,11 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
           // FFT
           sycl_c2c(q, bufgrid, false);
 
-          // applying wscreen and adding to dirty image
-          q.submit([&](sycl::handler &cgh)
-            {
-            auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
-            double x0 = lshift-0.5*nxdirty*pixsize_x,
-                   y0 = mshift-0.5*nydirty*pixsize_y;
-            cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty, nydirty=nydirty, nu=nu, nv=nv, pixsize_x=pixsize_x, pixsize_y=pixsize_y,nshift=nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
-              {
-              auto i = item.get_id(0);
-              auto j = item.get_id(1);
-              size_t i2 = nu-nxdirty/2+i;
-              if (i2>=nu) i2-=nu;
-              size_t j2 = nv-nydirty/2+j;
-              if (j2>=nv) j2-=nv;
-              double fx = sqr(x0+i*pixsize_x);
-              double fy = sqr(y0+j*pixsize_y);
-              double myphase = syclphase(fx, fy, w, true, nshift);
-              accdirty[i][j] += sycl::cos(myphase)*accgrid[i2][j2].real()
-                               -sycl::sin(myphase)*accgrid[i2][j2].imag();
-              });
-            });
+          globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
           } // end of loop over planes
-        // applying global corrections to dirty image on GPU
-        q.submit([&](sycl::handler &cgh)
-          {
-          Wcorrector<30> wcorr(krn->Corr());
-          auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
-          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-          double x0 = lshift-0.5*nxdirty*pixsize_x,
-                 y0 = mshift-0.5*nydirty*pixsize_y;
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [nxdirty=nxdirty,nydirty=nydirty,accdirty,acccfu,acccfv,pixsize_x=pixsize_x,pixsize_y=pixsize_y,x0,y0,divide_by_n=divide_by_n,wcorr,nshift=nshift,dw=dw](sycl::item<2> item)
-            {
-            auto i = item.get_id(0);
-            auto j = item.get_id(1);
-            double fx = sqr(x0+i*pixsize_x);
-            double fy = sqr(y0+j*pixsize_y);
-            double fct;
-            auto tmp = 1-fx-fy;
-            if (tmp>=0)
-              {
-              auto nm1 = (-fx-fy)/(sycl::sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-              fct = wcorr.corfunc((nm1+nshift)*dw);
-              if (divide_by_n)
-                fct /= nm1+1;
-              }
-            else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : wcorr.corfunc((sycl::sqrt(-tmp)-1)*dw);
 
-            int icfu = sycl::abs(int(nxdirty/2)-int(i));
-            int icfv = sycl::abs(int(nydirty/2)-int(j));
-            accdirty[i][j]*=Tcalc(fct*acccfu[icfu]*acccfv[icfv]);
-            });
-          });
+        // apply global corrections to dirty image on GPU
+        globcorr.apply_global_corrections(q, bufdirty);
         }  // end of device buffer scope, buffers are written back
         }
 #else
@@ -861,8 +882,6 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         sycl::queue q{sycl::default_selector()};
         // dirty image
         auto bufdirty(make_sycl_buffer(dirty_out));
-        bufdirty.set_write_back(true);
-        bufdirty.set_final_data(dirty_out.data());
         // grid (only on GPU)
         sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
         sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
@@ -876,11 +895,6 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         auto bufcoef(make_sycl_buffer(coef));
 
         sycl_zero_buffer(q, bufgrid);
-        auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-        auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-// FIXME: cast to Timg
-        auto bufcfu(make_sycl_buffer(cfu));
-        auto bufcfv(make_sycl_buffer(cfv));
 
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
@@ -995,28 +1009,10 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
         // FFT
         sycl_c2c(q, bufgrid, false);
 
-        // copying to dirty image and applying correction
-        q.submit([&](sycl::handler &cgh)
-          {
-          auto accdirty{bufdirty.template get_access<sycl::access::mode::discard_write>(cgh)};
-          auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-          auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-          auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
-          cgh.parallel_for(sycl::range<2>(nxdirty, nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=nxdirty,nydirty=nydirty,nu=nu,nv=nv](sycl::item<2> item)
-            {
-            auto i = item.get_id(0);
-            auto j = item.get_id(1);
-            int icfu = sycl::abs(int(nxdirty/2)-int(i));
-            int icfv = sycl::abs(int(nydirty/2)-int(j));
-            size_t i2 = nu-nxdirty/2+i;
-            if (i2>=nu) i2-=nu;
-            size_t j2 = nv-nydirty/2+j;
-            if (j2>=nv) j2-=nv;
-            auto fctu = acccfu[icfu];
-            auto fctv = acccfv[icfv];
-            accdirty[i][j] = (accgrid[i2][j2]*Tcalc(fctu*fctv)).real();
-            });
-          });
+        {
+        GlobalCorrector globcorr(*this);
+        globcorr.corr_grid_narrow_field(q, bufgrid, bufdirty);
+        }
         }  // end of device buffer scope, buffers are written back
 #else
         MR_fail("CUDA not found");
