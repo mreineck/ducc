@@ -785,56 +785,53 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
                 {
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
-                if (irow!=~size_t(0))
-                  {
-                  auto coord = blloc.effectiveCoord(irow, ichan);
-                  auto imflip = coord.FixW();
-    
-                  // compute fractional and integer indices in "grid"
-                  double ufrac,vfrac;
-                  int iu0, iv0;
-                  ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-    
-                  // compute kernel values
-                  array<Tcalc, 16> ukrn, vkrn;
-                  size_t nth=pl-minplane;
-                  auto wval=Tcalc((w-coord.w)/dw);
-                  kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
-    
-                  // loop over supp*supp pixels from "grid"
-                  complex<Tcalc> val=accvis[irow][ichan];
-                  if (shifting)
-                    {
-                    // apply phase
-                    double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
-                    if constexpr (is_same<double, Tcalc>::value)
-                      fct*=twopi;
-                    else
-                      // we are reducing accuracy,
-                      // so let's better do range reduction first
-                      fct = twopi*(fct-sycl::floor(fct));
-                    complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
-                    val *= phase;
-                    }
-                  val.imag(val.imag()*imflip);
+                if (irow==~size_t(0)) break;  // work done 
+
+                auto coord = blloc.effectiveCoord(irow, ichan);
+                auto imflip = coord.FixW();
   
-                  int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                  int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                  for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
+                // compute fractional and integer indices in "grid"
+                double ufrac,vfrac;
+                int iu0, iv0;
+                ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+  
+                // compute kernel values
+                array<Tcalc, 16> ukrn, vkrn;
+                size_t nth=pl-minplane;
+                auto wval=Tcalc((w-coord.w)/dw);
+                kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
+  
+                // loop over supp*supp pixels from "grid"
+                complex<Tcalc> val=accvis[irow][ichan];
+                if (shifting)
+                  {
+                  // apply phase
+                  double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
+                  if constexpr (is_same<double, Tcalc>::value)
+                    fct*=twopi;
+                  else
+                    // we are reducing accuracy,
+                    // so let's better do range reduction first
+                    fct = twopi*(fct-sycl::floor(fct));
+                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
+                  val *= phase;
+                  }
+                val.imag(val.imag()*imflip);
+
+                int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
+                  {
+                  auto tmp = ukrn[i]*val;
+                  for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                     {
-                    auto tmp = ukrn[i]*val;
-                    for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
-                      {
-                      auto tmp2 = vkrn[j]*tmp;
-                      my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
-                      rr.fetch_add(tmp2.real());
-                      my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
-                      ri.fetch_add(tmp2.imag());
-                      }
+                    auto tmp2 = vkrn[j]*tmp;
+                    my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
+                    rr.fetch_add(tmp2.real());
+                    my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
+                    ri.fetch_add(tmp2.imag());
                     }
                   }
-                else
-                  break;
                 }
 
               // add local buffer back to global buffer
@@ -934,58 +931,55 @@ template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_or
               }
             item.barrier();
 
-            for (auto iwork = item.get_global_id(1); ; iwork+=item.get_global_range(1))
+            for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
               {
               size_t irow, ichan;
               rccomp.getRowChan(iblock, iwork, irow, ichan);
-              if (irow!=~size_t(0))
+              if (irow==~size_t(0)) break;  // work done
+
+              auto coord = blloc.effectiveCoord(irow, ichan);
+              auto imflip = coord.FixW();
+
+              // compute fractional and integer indices in "grid"
+              double ufrac,vfrac;
+              int iu0, iv0;
+              ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
+
+              // compute kernel values
+              array<Tcalc, 16> ukrn, vkrn;
+              kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
+
+              // loop over supp*supp pixels from "grid"
+              complex<Tcalc> val=accvis[irow][ichan];
+              if (shifting)
                 {
-                auto coord = blloc.effectiveCoord(irow, ichan);
-                auto imflip = coord.FixW();
+                // apply phase
+                double fct = coord.u*lshift + coord.v*mshift;
+                if constexpr (is_same<double, Tcalc>::value)
+                  fct*=twopi;
+                else
+                  // we are reducing accuracy,
+                  // so let's better do range reduction first
+                  fct = twopi*(fct-sycl::floor(fct));
+                complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
+                val *= phase;
+                }
+              val.imag(val.imag()*imflip);
 
-                // compute fractional and integer indices in "grid"
-                double ufrac,vfrac;
-                int iu0, iv0;
-                ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-
-                // compute kernel values
-                array<Tcalc, 16> ukrn, vkrn;
-                kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
-
-                // loop over supp*supp pixels from "grid"
-                complex<Tcalc> val=accvis[irow][ichan];
-                if (shifting)
+              int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
+              int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+              for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
+                {
+                auto tmp = ukrn[i]*val;
+                for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                   {
-                  // apply phase
-                  double fct = coord.u*lshift + coord.v*mshift;
-                  if constexpr (is_same<double, Tcalc>::value)
-                    fct*=twopi;
-                  else
-                    // we are reducing accuracy,
-                    // so let's better do range reduction first
-                    fct = twopi*(fct-sycl::floor(fct));
-                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
-                  val *= phase;
-                  }
-                val.imag(val.imag()*imflip);
-
-                int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
-                  {
-                  auto tmp = ukrn[i]*val;
-                  for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
-                    {
-                    auto tmp2 = vkrn[j]*tmp;
-                    my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
-                    rr.fetch_add(tmp2.real());
-                    my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
-                    ri.fetch_add(tmp2.imag());
-                    }
+                  auto tmp2 = vkrn[j]*tmp;
+                  my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
+                  rr.fetch_add(tmp2.real());
+                  my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
+                  ri.fetch_add(tmp2.imag());
                   }
                 }
-              else
-                break;
               }
 
             // add local buffer back to global buffer
