@@ -475,7 +475,14 @@ class CoordCalculator
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
-
+          vector<size_t> blidx;
+          for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
+            {
+            auto minpl = idxcomp.minplane_gpu[i];
+            if ((pl>=minpl) && (pl<minpl+supp))
+              blidx.push_back(i);
+            }
+          auto bufblidx(make_sycl_buffer(blidx));
           sycl_zero_buffer(q, bufgrid);
 
           globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
@@ -484,29 +491,27 @@ class CoordCalculator
           sycl_c2c(q, bufgrid, true);
 
           constexpr size_t blksz = 32768;
-          size_t nblock = idxcomp.blockinfo.size()-1;
-          for (size_t ofs=0; ofs<nblock; ofs+= blksz)
+          for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
             q.submit([&](sycl::handler &cgh)
               {
               Baselines_GPU blloc(bl_prep, cgh);
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
-    
+
               auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
+              auto accblidx{bufblidx.template get_access<sycl::access::mode::read>(cgh)};
               auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
               auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
-  
+
               constexpr size_t n_workitems = 32;
-              sycl::range<2> global(min(nblock-ofs,blksz), n_workitems);
+              sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
-              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw,ofs](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
                 {
-                auto iblock = item.get_global_id(0)+ofs;
+                auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = acc_minplane[iblock];
-                if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
-                  return;
-  
+
                 for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                   {
                   size_t irow, ichan;
@@ -560,6 +565,7 @@ class CoordCalculator
                 });
               });
             }
+          q.wait();
           } // end of loop over planes
         }  // end of device buffer scope, buffers are written back
 
@@ -739,12 +745,18 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
+          vector<size_t> blidx;
+          for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
+            {
+            auto minpl = idxcomp.minplane_gpu[i];
+            if ((pl>=minpl) && (pl<minpl+supp))
+              blidx.push_back(i);
+            }
+          auto bufblidx(make_sycl_buffer(blidx));
 
           sycl_zero_buffer(q, bufgrid);
           constexpr size_t blksz = 32768;
-          size_t nblock = idxcomp.blockinfo.size()-1;
-          
-          for (size_t ofs=0; ofs<nblock; ofs+= blksz)
+          for (size_t ofs=0; ofs<blidx.size(); ofs+= blksz)
             {
             q.submit([&](sycl::handler &cgh)
               {
@@ -754,11 +766,12 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
   
               auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
               auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
+              auto accblidx{bufblidx.template get_access<sycl::access::mode::read>(cgh)};
               auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
               auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
   
               constexpr size_t n_workitems = 32;
-              sycl::range<2> global(min(nblock-ofs,blksz), n_workitems);
+              sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
               size_t sidelen = 2*nsafe+(1<<logsquare);
@@ -767,12 +780,10 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
   #else
               sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
   #endif
-              cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs](sycl::nd_item<2> item)
+              cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
                 {
-                auto iblock = item.get_global_id(0)+ofs;
+                auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = acc_minplane[iblock];
-                if ((pl<minplane) || (pl>=minplane+supp))  // plane not in range
-                  return;
   
                 // preparation
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_local_range(1))
@@ -858,6 +869,7 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
           sycl_c2c(q, bufgrid, false);
 
           globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
+          q.wait();
           } // end of loop over planes
 
         // apply global corrections to dirty image on GPU
