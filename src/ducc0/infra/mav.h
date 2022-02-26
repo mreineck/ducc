@@ -423,6 +423,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
 
 
   protected:
+    cfmav(const shape_t &shp_)
+      : tinfo(shp_), tbuf(size()) {}
     cfmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
     cfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
