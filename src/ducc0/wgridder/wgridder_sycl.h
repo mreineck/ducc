@@ -625,7 +625,7 @@ class CoordCalculator
             auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
   
-            constexpr size_t n_workitems = 1024;
+            constexpr size_t n_workitems = 512;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
             cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs](sycl::nd_item<2> item)
@@ -699,14 +699,6 @@ class CoordCalculator
       timers.pop();
       }
 
-#ifndef __INTEL_LLVM_COMPILER
-template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
-#else
-template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
-#endif
-
     void x2dirty_gpu()
       {
       timers.push("GPU gridding");
@@ -775,11 +767,8 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
               size_t sidelen = 2*nsafe+(1<<logsquare);
-  #ifndef __INTEL_LLVM_COMPILER
-              sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
-  #else
-              sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
-  #endif
+              my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+
               cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
@@ -931,11 +920,8 @@ template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sy
             sycl::range<2> local(1, n_workitems);
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
-  #ifndef __INTEL_LLVM_COMPILER
-            sycl::local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
-  #else
-            sycl::accessor<Tcalc,3,sycl::access::mode::read_write, sycl::access::target::local> tile({sidelen,sidelen,2}, cgh);
-  #endif
+            my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+
             cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;

@@ -20,11 +20,13 @@
 #ifndef DUCC0_SYCL_UTILS_H
 #define DUCC0_SYCL_UTILS_H
 
+//#if (defined(SYCL_LANGUAGE_VERSION) && (SYCL_LANGUAGE_VERSION>=202001))
 #if (__has_include("CL/sycl.hpp"))
 #include "CL/sycl.hpp"
 #define DUCC0_HAVE_SYCL
 using namespace cl;
 #endif
+//#endif
 
 #if (defined(DUCC0_HAVE_SYCL))
 #if (defined(__HIPSYCL_ENABLE_CUDA_TARGET__))
@@ -198,12 +200,28 @@ void print_device_info(const sycl::device &device)
 //cout << "max_work_item_sizes<1>: " << device.template get_info<blah>() << endl;
   }
 
+#ifndef __INTEL_LLVM_COMPILER
+template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+#else
+template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
+template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+#endif
+
+#ifndef __INTEL_LLVM_COMPILER
+template<typename T, size_t ndim> using my_local_accessor = sycl::local_accessor<T,ndim>;
+#else
+template<typename T, size_t ndim> using my_local_accessor = sycl::accessor<T,ndim,sycl::access::mode::read_write, sycl::access::target::local>;
+#endif
 }
 
 using detail_sycl_utils::make_sycl_buffer;
 using detail_sycl_utils::sycl_zero_buffer;
 using detail_sycl_utils::sycl_c2c;
 using detail_sycl_utils::print_device_info;
+using detail_sycl_utils::my_atomic_ref;
+using detail_sycl_utils::my_atomic_ref_l;
+using detail_sycl_utils::my_local_accessor;
 
 }
 
