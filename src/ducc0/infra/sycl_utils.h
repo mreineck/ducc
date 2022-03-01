@@ -132,9 +132,17 @@ template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
 template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
   (const vector<T> &arr)
   {
+#if 0
   return sycl::buffer<T, 1> {arr.data(),
          sycl::range<1>(arr.size()),
          {sycl::property::buffer::use_host_ptr()}};
+#else  // hack to avoid unnecessary copies with hipSYCL
+  sycl::buffer<T, 1> res{const_cast<T *>(arr.data()),
+    sycl::range<1>(arr.size()),
+    {sycl::property::buffer::use_host_ptr()}};
+  res.set_write_back(false);
+  return res;
+#endif
   }
 template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
   (vector<T> &arr)

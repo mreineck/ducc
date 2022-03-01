@@ -44,7 +44,7 @@ class IndexComputer0
   public:
     struct Tileinfo { uint16_t tile_u, tile_v; };
     struct Blockinfo { uint32_t limits, startidx; };
-    static constexpr size_t chunksize=16384;
+    static constexpr size_t chunksize=1024;
     bool store_tiles;
     vector<uint32_t> row_gpu;
     vector<uint16_t> chbegin_gpu;
@@ -706,11 +706,6 @@ class CoordCalculator
 #if (defined(DUCC0_HAVE_SYCL))
         {
         bool do_weights = (wgt.stride(0)!=0);
-        vmav<complex<Tms>,2> ms_tmp({do_weights ? bl.Nrows() : 1, do_weights ? bl.Nchannels() : 1});
-        if (do_weights)
-          mav_apply([](const complex<Tms> &a, const Tms &b, complex<Tms> &c)
-            { c = a*b; }, nthreads, ms_in, wgt, ms_tmp);
-        const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
 
@@ -722,7 +717,9 @@ class CoordCalculator
         sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
 
         Baselines_GPU_prep bl_prep(bl);
-        auto bufvis(make_sycl_buffer(ms));
+        auto bufvis(make_sycl_buffer(ms_in));
+        vmav<Tms,2> wgtx({1,1});
+        auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
 
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -761,6 +758,7 @@ class CoordCalculator
               auto accblidx{bufblidx.template get_access<sycl::access::mode::read>(cgh)};
               auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
               auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+              auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
   
               constexpr size_t n_workitems = 32;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
@@ -769,7 +767,7 @@ class CoordCalculator
               size_t sidelen = 2*nsafe+(1<<logsquare);
               my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 
-              cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
+              cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = acc_minplane[iblock];
@@ -805,6 +803,7 @@ class CoordCalculator
     
                   // loop over supp*supp pixels from "grid"
                   complex<Tcalc> val=accvis[irow][ichan];
+                  if (do_weights) val *= accwgt[irow][ichan];
                   if (shifting)
                     {
                     // apply phase
@@ -872,11 +871,6 @@ class CoordCalculator
         {
 #if (defined(DUCC0_HAVE_SYCL))
         bool do_weights = (wgt.stride(0)!=0);
-        vmav<complex<Tms>,2> ms_tmp({do_weights ? bl.Nrows() : 1, do_weights ? bl.Nchannels() : 1});
-        if (do_weights)
-          mav_apply([](const complex<Tms> &a, const Tms &b, complex<Tms> &c)
-            { c = a*b; }, nthreads, ms_in, wgt, ms_tmp);
-        const cmav<complex<Tms>,2> &ms(do_weights ? ms_tmp : ms_in);
 
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
@@ -887,7 +881,9 @@ class CoordCalculator
         sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
 
         Baselines_GPU_prep bl_prep(bl);
-        auto bufvis(make_sycl_buffer(ms));
+        auto bufvis(make_sycl_buffer(ms_in));
+        vmav<Tms,2> wgtx({1,1});
+        auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
 
         const auto &dcoef(krn->Coeff());
         vector<Tcalc> coef(dcoef.size());
@@ -914,6 +910,7 @@ class CoordCalculator
   
             auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
             auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+            auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
   
             constexpr size_t n_workitems = 512;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
@@ -922,7 +919,7 @@ class CoordCalculator
             size_t sidelen = 2*nsafe+(1<<logsquare);
             my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 
-            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;
   
@@ -955,6 +952,7 @@ class CoordCalculator
   
                 // loop over supp*supp pixels from "grid"
                 complex<Tcalc> val=accvis[irow][ichan];
+                if(do_weights) val *= accwgt[irow][ichan];
                 if (shifting)
                   {
                   // apply phase
