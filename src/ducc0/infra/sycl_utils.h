@@ -52,6 +52,7 @@ template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
   (const cmav<T,ndim> &arr)
   {
   MR_assert(arr.contiguous(), "mav must be contiguous");
+#if 0
   if constexpr (ndim==1)
     return sycl::buffer<T, ndim> {arr.data(),
            sycl::range<ndim>(arr.shape(0)),
@@ -68,6 +69,40 @@ template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
     return sycl::buffer<T, ndim> {arr.data(),
            sycl::range<ndim>(arr.shape(0), arr.shape(1), arr.shape(2), arr.shape(3)),
            {sycl::property::buffer::use_host_ptr()}};
+#else  // hack to avoid unnecessary copies with hipSYCL
+  if constexpr (ndim==1)
+    {
+    sycl::buffer<T, ndim> res {const_cast<T *>(arr.data()),
+      sycl::range<ndim>(arr.shape(0)),
+      {sycl::property::buffer::use_host_ptr()}};
+    res.set_write_back(false);
+    return res;
+    }
+  if constexpr (ndim==2)
+    {
+    sycl::buffer<T, ndim> res {const_cast<T *>(arr.data()),
+      sycl::range<ndim>(arr.shape(0), arr.shape(1)),
+      {sycl::property::buffer::use_host_ptr()}};
+    res.set_write_back(false);
+    return res;
+    }
+  if constexpr (ndim==3)
+    {
+    sycl::buffer<T, ndim> res {const_cast<T *>(arr.data()),
+      sycl::range<ndim>(arr.shape(0), arr.shape(1),arr.shape(2)),
+      {sycl::property::buffer::use_host_ptr()}};
+    res.set_write_back(false);
+    return res;
+    }
+  if constexpr (ndim==4)
+    {
+    sycl::buffer<T, ndim> res {const_cast<T *>(arr.data()),
+      sycl::range<ndim>(arr.shape(0), arr.shape(1),arr.shape(2),arr.shape(3)),
+      {sycl::property::buffer::use_host_ptr()}};
+    res.set_write_back(false);
+    return res;
+    }
+#endif
   MR_fail("dimensionality too high");
   }
 
