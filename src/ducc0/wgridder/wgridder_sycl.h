@@ -448,6 +448,7 @@ class CoordCalculator
         {
 #if (defined(DUCC0_HAVE_SYCL))
         { // Device buffer scope
+timers.push("prep");
         sycl::queue q{sycl::default_selector()};
 
         auto bufdirty(make_sycl_buffer(dirty_in));
@@ -462,18 +463,23 @@ class CoordCalculator
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
+q.wait(); timers.poppush("zeroing ms");
         sycl_zero_buffer(q, bufvis);
 
+q.wait(); timers.poppush("indexcomp");
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, false);
         // apply global corrections to dirty image on GPU
+q.wait(); timers.poppush("globcorr");
         GlobalCorrector globcorr(*this);
         globcorr.apply_global_corrections(q, bufdirty);
 
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+q.wait(); timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
+q.wait(); timers.push("plane data structures");
           double w = wmin+pl*dw;
           vector<size_t> blidx;
           for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
@@ -483,13 +489,17 @@ class CoordCalculator
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
+q.wait(); timers.poppush("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
 
+q.wait(); timers.poppush("wscreen");
           globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
 
+q.wait(); timers.poppush("FFT");
           // FFT
           sycl_c2c(q, bufgrid, true);
 
+q.wait(); timers.poppush("degridding proper");
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
@@ -566,17 +576,14 @@ class CoordCalculator
               });
             }
           q.wait();
+timers.pop();
           } // end of loop over planes
+q.wait(); timers.push("copying DtoH");
         }  // end of device buffer scope, buffers are written back
-
+timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
-          execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
-            {
-            auto nchan = bl.Nchannels();
-            for (auto irow=lo; irow<hi; ++irow)
-              for (size_t ichan=0; ichan<nchan; ++ichan)
-                ms_out(irow, ichan) *= wgt(irow, ichan);
-            });
+          mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
@@ -586,6 +593,7 @@ class CoordCalculator
 #if (defined(DUCC0_HAVE_SYCL))
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
+q.wait(); timers.push("prep");
 
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
@@ -598,20 +606,24 @@ class CoordCalculator
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
+q.wait(); timers.poppush("zeroing ms and grid");
         sycl_zero_buffer(q, bufvis);
         sycl_zero_buffer(q, bufgrid);
 
+q.wait(); timers.poppush("globcorr");
         {
         GlobalCorrector globcorr(*this);
         globcorr.corr_degrid_narrow_field(q, bufdirty, bufgrid);
         }
         // FFT
+q.wait(); timers.poppush("FFT");
         sycl_c2c(q, bufgrid, true);
+q.wait(); timers.poppush("indexcomp");
 
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, false);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-
+q.wait(); timers.poppush("degridding proper");
         constexpr size_t blksz = 32768;
         size_t nblock = idxcomp.blockinfo.size()-1;
         for (size_t ofs=0; ofs<nblock; ofs+= blksz)
@@ -683,15 +695,12 @@ class CoordCalculator
               });
             });
           }
+q.wait(); timers.poppush("copying DtoH");
         }  // end of device buffer scope, buffers are written back
+timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
-          execParallel(bl.Nrows(), nthreads, [&](size_t lo, size_t hi)
-            {
-            auto nchan = bl.Nchannels();
-            for (auto irow=lo; irow<hi; ++irow)
-              for (size_t ichan=0; ichan<nchan; ++ichan)
-                ms_out(irow, ichan) *= wgt(irow, ichan);
-            });
+          mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif
@@ -705,6 +714,7 @@ class CoordCalculator
       if (do_wgridding)
 #if (defined(DUCC0_HAVE_SYCL))
         {
+timers.push("prep");
         bool do_weights = (wgt.stride(0)!=0);
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
@@ -726,13 +736,16 @@ class CoordCalculator
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
+q.wait(); timers.poppush("indexcomp");
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, true);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
         GlobalCorrector globcorr(*this);
 
+q.wait(); timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
+q.wait(); timers.push("plane data structures");
           double w = wmin+pl*dw;
           vector<size_t> blidx;
           for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
@@ -743,8 +756,17 @@ class CoordCalculator
             }
           auto bufblidx(make_sycl_buffer(blidx));
 
+q.wait(); timers.poppush("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
           constexpr size_t blksz = 32768;
+q.wait(); timers.poppush("copy HtoD");
+  q.submit([&](sycl::handler &cgh)
+    {
+    auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+    auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+    cgh.single_task([accvis,accwgt](){});
+    });
+q.wait(); timers.poppush("gridding proper");
           for (size_t ofs=0; ofs<blidx.size(); ofs+= blksz)
             {
             q.submit([&](sycl::handler &cgh)
@@ -853,16 +875,22 @@ class CoordCalculator
                 });
               });
             }
+q.wait(); timers.poppush("FFT");
           // FFT
           sycl_c2c(q, bufgrid, false);
 
+q.wait(); timers.poppush("wscreen");
           globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
           q.wait();
+timers.pop();
           } // end of loop over planes
 
+q.wait(); timers.push("globcorr");
         // apply global corrections to dirty image on GPU
         globcorr.apply_global_corrections(q, bufdirty);
+q.wait(); timers.poppush("copy DtoH");
         }  // end of device buffer scope, buffers are written back
+timers.pop();
         }
 #else
         MR_fail("CUDA not found");
@@ -870,6 +898,7 @@ class CoordCalculator
       else
         {
 #if (defined(DUCC0_HAVE_SYCL))
+timers.push("prep");
         bool do_weights = (wgt.stride(0)!=0);
 
         { // Device buffer scope
@@ -890,12 +919,22 @@ class CoordCalculator
         for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
         auto bufcoef(make_sycl_buffer(coef));
 
+q.wait(); timers.poppush("zeroing grid");
         sycl_zero_buffer(q, bufgrid);
 
         // build index structure
+q.wait(); timers.poppush("indexcomp");
         IndexComputer idxcomp(ranges, do_wgridding, true);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
+q.wait(); timers.poppush("copy HtoD");
+  q.submit([&](sycl::handler &cgh)
+    {
+    auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
+    auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+    cgh.single_task([accvis,accwgt](){});
+    });
+q.wait(); timers.poppush("gridding proper");
         constexpr size_t blksz = 32768;
         size_t nblock = idxcomp.blockinfo.size()-1;
         for (size_t ofs=0; ofs<nblock; ofs+= blksz)
@@ -1003,14 +1042,18 @@ class CoordCalculator
             });
           }
 
+q.wait(); timers.poppush("FFT");
         // FFT
         sycl_c2c(q, bufgrid, false);
 
+q.wait(); timers.poppush("globcorr");
         {
         GlobalCorrector globcorr(*this);
         globcorr.corr_grid_narrow_field(q, bufgrid, bufdirty);
         }
+q.wait(); timers.poppush("copy DtoH");
         }  // end of device buffer scope, buffers are written back
+timers.pop();
 #else
         MR_fail("CUDA not found");
 #endif

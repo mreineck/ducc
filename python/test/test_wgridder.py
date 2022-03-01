@@ -128,8 +128,8 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp('ny', [(128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 2048))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5))
-@pmp("singleprec", (True, False)[:1])
+@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
@@ -171,6 +171,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
 
+
     dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
                                      npix_y=nydirty, pixsize_x=pixsizex,
@@ -185,18 +186,18 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
     if has_gpu:
         dirty2g = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
-                                         vis=ms, wgt=wgt, npix_x=nxdirty,
-                                         npix_y=nydirty, pixsize_x=pixsizex,
-                                         pixsize_y=pixsizey, epsilon=epsilon,
-                                         do_wgridding=wstacking, nthreads=nthreads,
-                                         mask=mask, gpu=True).astype("f8")
+                                          vis=ms, wgt=wgt, npix_x=nxdirty,
+                                          npix_y=nydirty, pixsize_x=pixsizex,
+                                          pixsize_y=pixsizey, epsilon=epsilon,
+                                          do_wgridding=wstacking, nthreads=nthreads,
+                                          mask=mask, gpu=True).astype("f8")
         ms2g = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                       dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                       pixsize_y=pixsizey, epsilon=epsilon,
                                       do_wgridding=wstacking, nthreads=nthreads,
                                       mask=mask, gpu=True).astype("c16")
-        assert_allclose(0, ducc0.misc.l2error(dirty2, dirty2g), rtol=0, atol=1e-5 if singleprec else 1e-12)
-        assert_allclose(0, ducc0.misc.l2error(ms2, ms2g), rtol=0, atol=1e-5 if singleprec else 1e-12)
+        assert_allclose(0, ducc0.misc.l2error(dirty2, dirty2g), rtol=0, atol=2e-5 if singleprec else 1e-12)
+        assert_allclose(0, ducc0.misc.l2error(ms2, ms2g), rtol=0, atol=2e-5 if singleprec else 1e-12)
 
 
 @pmp('nx', [(16, 2), (64, 4)])
