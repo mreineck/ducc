@@ -441,6 +441,20 @@ class CoordCalculator
       }
   };
 
+template<typename T> static inline void do_shift(complex<T> &val, const UVW &coord,
+  double lshift, double mshift, double nshift, double flip)
+  {
+  double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
+  if constexpr (is_same<double, T>::value)
+    fct*=twopi;
+  else
+    // we are reducing accuracy,
+    // so let's better do range reduction first
+    fct = twopi*(fct-sycl::floor(fct));
+  complex<T> phase(sycl::cos(T(fct)), T(flip)*sycl::sin(T(fct)));
+  val *= phase;
+  }
+
     void dirty2x_gpu()
       {
       timers.push("GPU degridding");
@@ -450,7 +464,7 @@ class CoordCalculator
         { // Device buffer scope
 timers.push("prep");
         sycl::queue q{sycl::default_selector()};
-print_device_info(q.get_device());
+//print_device_info(q.get_device());
 
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
@@ -559,18 +573,7 @@ q.wait(); timers.poppush("degridding proper");
                   res.imag(res.imag()*imflip);
       
                   if (shifting)
-                    {
-                    // apply phase
-                    double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
-                    if constexpr (is_same<double, Tcalc>::value)
-                      fct*=twopi;
-                    else
-                      // we are reducing accuracy,
-                      // so let's better do range reduction first
-                      fct = twopi*(fct-sycl::floor(fct));
-                    complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
-                    res *= phase;
-                    }
+                    do_shift(res, coord, lshift, mshift, nshift, -imflip);
                   accvis[irow][ichan] += res;
                   }
                 });
@@ -679,18 +682,7 @@ q.wait(); timers.poppush("degridding proper");
                 res.imag(res.imag()*imflip);
     
                 if (shifting)
-                  {
-                  // apply phase
-                  double fct = coord.u*lshift + coord.v*mshift;
-                  if constexpr (is_same<double, Tcalc>::value)
-                    fct*=twopi;
-                  else
-                    // we are reducing accuracy,
-                    // so let's better do range reduction first
-                    fct = twopi*(fct-sycl::floor(fct));
-                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), -imflip*sycl::sin(Tcalc(fct)));
-                  res *= phase;
-                  }
+                  do_shift(res, coord, lshift, mshift, 0., -imflip);
                 accvis[irow][ichan] = res;
                 }
               });
@@ -828,18 +820,7 @@ q.wait(); timers.poppush("gridding proper");
                   complex<Tcalc> val=accvis[irow][ichan];
                   if (do_weights) val *= accwgt[irow][ichan];
                   if (shifting)
-                    {
-                    // apply phase
-                    double fct = coord.u*lshift + coord.v*mshift + coord.w*nshift;
-                    if constexpr (is_same<double, Tcalc>::value)
-                      fct*=twopi;
-                    else
-                      // we are reducing accuracy,
-                      // so let's better do range reduction first
-                      fct = twopi*(fct-sycl::floor(fct));
-                    complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
-                    val *= phase;
-                    }
+                    do_shift(val, coord, lshift, mshift, nshift, imflip);
                   val.imag(val.imag()*imflip);
   
                   int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
@@ -997,18 +978,7 @@ q.wait(); timers.poppush("gridding proper");
                 complex<Tcalc> val=accvis[irow][ichan];
                 if(do_weights) val *= accwgt[irow][ichan];
                 if (shifting)
-                  {
-                  // apply phase
-                  double fct = coord.u*lshift + coord.v*mshift;
-                  if constexpr (is_same<double, Tcalc>::value)
-                    fct*=twopi;
-                  else
-                    // we are reducing accuracy,
-                    // so let's better do range reduction first
-                    fct = twopi*(fct-sycl::floor(fct));
-                  complex<Tcalc> phase(sycl::cos(Tcalc(fct)), imflip*sycl::sin(Tcalc(fct)));
-                  val *= phase;
-                  }
+                  do_shift(val, coord, lshift, mshift, 0., imflip);
                 val.imag(val.imag()*imflip);
   
                 int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
