@@ -20,8 +20,8 @@ class Baselines_GPU
 
   public:
     Baselines_GPU(Baselines_GPU_prep &prep, sycl::handler &cgh)
-      : acc_uvw(prep.buf_uvw.template get_access<sycl::access::mode::read>(cgh)),
-        acc_f_over_c(prep.buf_freq.template get_access<sycl::access::mode::read>(cgh))
+      : acc_uvw(prep.buf_uvw, cgh, sycl::read_only),
+        acc_f_over_c(prep.buf_freq, cgh, sycl::read_only)
       {}
 
     UVW effectiveCoord(size_t row, size_t chan) const
@@ -197,10 +197,10 @@ class GlobalCorrector
       // copy to grid and apply kernel correction
       q.submit([&](sycl::handler &cgh)
         {
-        auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
-        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-        auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+        sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
+        sycl::accessor acccfu{bufcfu, cgh, sycl::read_only};
+        sycl::accessor acccfv{bufcfv, cgh, sycl::read_only};
+        sycl::accessor accgrid{bufgrid, cgh, sycl::write_only};
         cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=par.nxdirty,nydirty=par.nydirty,nu=par.nu,nv=par.nv](sycl::item<2> item)
           {
           auto i = item.get_id(0);
@@ -224,10 +224,10 @@ class GlobalCorrector
       // copy to dirty image and apply kernel correction
       q.submit([&](sycl::handler &cgh)
         {
-        auto accdirty{bufdirty.template get_access<sycl::access::mode::discard_write>(cgh)};
-        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
-        auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+        sycl::accessor accdirty{bufdirty, cgh, sycl::write_only, sycl::no_init};
+        sycl::accessor acccfu{bufcfu, cgh, sycl::read_only};
+        sycl::accessor acccfv{bufcfv, cgh, sycl::read_only};
+        sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
         cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [accdirty,acccfu,acccfv,accgrid,nxdirty=par.nxdirty,nydirty=par.nydirty,nu=par.nu,nv=par.nv](sycl::item<2> item)
           {
           auto i = item.get_id(0);
@@ -252,9 +252,9 @@ class GlobalCorrector
       q.submit([&](sycl::handler &cgh)
         {
         Wcorrector<30> wcorr(par.krn->Corr());
-        auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
-        auto acccfu{bufcfu.template get_access<sycl::access::mode::read>(cgh)};
-        auto acccfv{bufcfv.template get_access<sycl::access::mode::read>(cgh)};
+        sycl::accessor accdirty{bufdirty, cgh, sycl::read_write};
+        sycl::accessor acccfu{bufcfu, cgh, sycl::read_only};
+        sycl::accessor acccfv{bufcfv, cgh, sycl::read_only};
         double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
                y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
         cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty,nydirty=par.nydirty,accdirty,acccfu,acccfv,pixsize_x=par.pixsize_x,pixsize_y=par.pixsize_y,x0,y0,divide_by_n=par.divide_by_n,wcorr,nshift=par.nshift,dw=par.dw](sycl::item<2> item)
@@ -287,8 +287,8 @@ class GlobalCorrector
       // copy to grid and apply wscreen
       q.submit([&](sycl::handler &cgh)
         {
-        auto accdirty{bufdirty.template get_access<sycl::access::mode::read>(cgh)};
-        auto accgrid{bufgrid.template get_access<sycl::access::mode::write>(cgh)};
+        sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
+        sycl::accessor accgrid{bufgrid, cgh, sycl::write_only};
         double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
                y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
         cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty, nydirty=par.nydirty, nu=par.nu, nv=par.nv, pixsize_x=par.pixsize_x, pixsize_y=par.pixsize_y,nshift=par.nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
@@ -311,8 +311,8 @@ class GlobalCorrector
       {
       q.submit([&](sycl::handler &cgh)
         {
-        auto accdirty{bufdirty.template get_access<sycl::access::mode::read_write>(cgh)};
-        auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
+        sycl::accessor accdirty{bufdirty, cgh, sycl::read_write};
+        sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
         double x0 = par.lshift-0.5*par.nxdirty*par.pixsize_x,
                y0 = par.mshift-0.5*par.nydirty*par.pixsize_y;
         cgh.parallel_for(sycl::range<2>(par.nxdirty, par.nydirty), [nxdirty=par.nxdirty, nydirty=par.nydirty, nu=par.nu, nv=par.nv, pixsize_x=par.pixsize_x, pixsize_y=par.pixsize_y,nshift=par.nshift,accgrid,accdirty,x0,y0,w](sycl::item<2> item)
@@ -342,10 +342,10 @@ class RowchanComputer
 
   public:
     RowchanComputer(IndexComputer &idxcomp, sycl::handler &cgh)
-      : acc_blockinfo(idxcomp.buf_blockinfo.template get_access<sycl::access::mode::read>(cgh)),
-        acc_vissum(idxcomp.buf_vissum.template get_access<sycl::access::mode::read>(cgh)),
-        acc_row(idxcomp.buf_row.template get_access<sycl::access::mode::read>(cgh)),
-        acc_chbegin(idxcomp.buf_chbegin.template get_access<sycl::access::mode::read>(cgh))
+      : acc_blockinfo(idxcomp.buf_blockinfo, cgh, sycl::read_only),
+        acc_vissum(idxcomp.buf_vissum, cgh, sycl::read_only),
+        acc_row(idxcomp.buf_row, cgh, sycl::read_only),
+        acc_chbegin(idxcomp.buf_chbegin, cgh, sycl::read_only)
       {}
 
     void getRowChan(size_t iblock, size_t iwork, size_t &irow, size_t &ichan) const
@@ -375,7 +375,7 @@ template<typename T> class KernelComputer
 
   public:
     KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
-      : acc_coeff(buf_coeff.template get_access<sycl::access::mode::read>(cgh)),
+      : acc_coeff(buf_coeff, cgh, sycl::read_only),
         supp(supp_), D(supp_+3) {}
     template<size_t Supp> inline void compute_uv(T ufrac, T vfrac, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
@@ -509,10 +509,10 @@ q.wait(); timers.poppush("degridding proper");
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
 
-              auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
-              auto accblidx{bufblidx.template get_access<sycl::access::mode::read>(cgh)};
-              auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
-              auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
+              sycl::accessor acc_minplane{idxcomp.buf_minplane, cgh, sycl::read_only};
+              sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
+              sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
+              sycl::accessor accvis{bufvis, cgh, sycl::write_only};
 
               constexpr size_t n_workitems = 32;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
@@ -634,8 +634,8 @@ q.wait(); timers.poppush("degridding proper");
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             RowchanComputer rccomp(idxcomp, cgh);
   
-            auto accgrid{bufgrid.template get_access<sycl::access::mode::read>(cgh)};
-            auto accvis{bufvis.template get_access<sycl::access::mode::write>(cgh)};
+            sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
+            sycl::accessor accvis{bufvis, cgh, sycl::write_only};
   
             constexpr size_t n_workitems = 512;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
@@ -762,8 +762,8 @@ q.wait(); timers.poppush("zeroing grid");
 q.wait(); timers.poppush("copy HtoD");
   q.submit([&](sycl::handler &cgh)
     {
-    auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-    auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+    sycl::accessor accvis{bufvis, cgh, sycl::read_only};
+    sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
     cgh.single_task([accvis,accwgt](){});
     });
 q.wait(); timers.poppush("gridding proper");
@@ -775,12 +775,12 @@ q.wait(); timers.poppush("gridding proper");
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
   
-              auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
-              auto acc_minplane{idxcomp.buf_minplane.template get_access<sycl::access::mode::read>(cgh)};
-              auto accblidx{bufblidx.template get_access<sycl::access::mode::read>(cgh)};
-              auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
-              auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-              auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+              sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
+              sycl::accessor acc_minplane{idxcomp.buf_minplane, cgh, sycl::read_only};
+              sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
+              sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
+              sycl::accessor accvis{bufvis, cgh, sycl::read_only};
+              sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
   
               constexpr size_t n_workitems = 32;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
@@ -789,7 +789,7 @@ q.wait(); timers.poppush("gridding proper");
               size_t sidelen = 2*nsafe+(1<<logsquare);
               my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 
-              cgh.parallel_for<class grid_w>(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = acc_minplane[iblock];
@@ -930,9 +930,14 @@ q.wait(); timers.poppush("indexcomp");
 q.wait(); timers.poppush("copy HtoD");
   q.submit([&](sycl::handler &cgh)
     {
-    auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-    auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
-    cgh.single_task([accvis,accwgt](){});
+    Baselines_GPU blloc(bl_prep, cgh);
+    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+    RowchanComputer rccomp(idxcomp, cgh);
+    sycl::accessor accvis{bufvis, cgh, sycl::read_only};
+    sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
+    sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
+    sycl::accessor accgridr{bufgridr, cgh, sycl::read_only};
+    cgh.single_task([accvis,accwgt,acc_tileinfo,accgridr,blloc,kcomp,rccomp](){});
     });
 q.wait(); timers.poppush("gridding proper");
         constexpr size_t blksz = 32768;
@@ -945,11 +950,10 @@ q.wait(); timers.poppush("gridding proper");
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             RowchanComputer rccomp(idxcomp, cgh);
   
-            auto acc_tileinfo{idxcomp.buf_tileinfo.template get_access<sycl::access::mode::read>(cgh)};
-  
-            auto accgridr{bufgridr.template get_access<sycl::access::mode::read_write>(cgh)};
-            auto accvis{bufvis.template get_access<sycl::access::mode::read>(cgh)};
-            auto accwgt{bufwgt.template get_access<sycl::access::mode::read>(cgh)};
+            sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
+            sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
+            sycl::accessor accvis{bufvis, cgh, sycl::read_only};
+            sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
   
             constexpr size_t n_workitems = 512;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
@@ -976,7 +980,6 @@ q.wait(); timers.poppush("gridding proper");
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
                 if (irow==~size_t(0)) break;  // work done
-  
                 auto coord = blloc.effectiveCoord(irow, ichan);
                 auto imflip = coord.FixW();
   
@@ -1027,7 +1030,6 @@ q.wait(); timers.poppush("gridding proper");
               auto u_tile = acc_tileinfo[iblock].tile_u;
               auto v_tile = acc_tileinfo[iblock].tile_v;
               item.barrier();
-              //size_t ofs = (supp-1)/2;
               for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;

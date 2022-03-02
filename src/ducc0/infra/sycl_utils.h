@@ -159,7 +159,7 @@ template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<comple
   q.wait();
   q.submit([&](sycl::handler &cgh)
     {
-    auto acc{buf.template get_access<sycl::access::mode::read_write>(cgh)};
+    sycl::accessor acc{buf, cgh, sycl::read_write};
     cgh.hipSYCL_enqueue_custom_operation([acc, forward](sycl::interop_handle &h) {
       void *native_mem = h.get_native_mem<sycl::backend::cuda>(acc);
       cufftHandle plan;
@@ -221,7 +221,7 @@ template<typename T, int ndim> void sycl_zero_buffer(sycl::queue &q, sycl::buffe
   {
   q.submit([&](sycl::handler &cgh)
     {
-    auto acc{buf.template get_access<sycl::access::mode::discard_write>(cgh)};
+    sycl::accessor acc{buf, cgh, sycl::write_only, sycl::no_init};
     if constexpr(ndim==1)
       cgh.parallel_for(sycl::range<1>(acc.get_range().get(0)), [acc](sycl::item<1> item)
         { acc[item.get_id(0)] = T(0); });
