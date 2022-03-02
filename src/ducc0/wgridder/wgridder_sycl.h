@@ -450,6 +450,7 @@ class CoordCalculator
         { // Device buffer scope
 timers.push("prep");
         sycl::queue q{sycl::default_selector()};
+print_device_info(q.get_device());
 
         auto bufdirty(make_sycl_buffer(dirty_in));
         // grid (only on GPU)
@@ -637,7 +638,7 @@ q.wait(); timers.poppush("degridding proper");
             sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
             sycl::accessor accvis{bufvis, cgh, sycl::write_only};
   
-            constexpr size_t n_workitems = 512;
+            constexpr size_t n_workitems = 64;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
             cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs](sycl::nd_item<2> item)
@@ -782,7 +783,7 @@ q.wait(); timers.poppush("gridding proper");
               sycl::accessor accvis{bufvis, cgh, sycl::read_only};
               sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
   
-              constexpr size_t n_workitems = 32;
+              constexpr size_t n_workitems = 96;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
@@ -955,7 +956,7 @@ q.wait(); timers.poppush("gridding proper");
             sycl::accessor accvis{bufvis, cgh, sycl::read_only};
             sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
   
-            constexpr size_t n_workitems = 512;
+            constexpr size_t n_workitems = 96;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
             int nsafe = (supp+1)/2;

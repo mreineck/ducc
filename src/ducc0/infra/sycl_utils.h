@@ -241,11 +241,20 @@ void print_device_info(const sycl::device &device)
   cout << "max_work_item_dimensions: " << device.template get_info<sycl::info::device::max_work_item_dimensions>() << endl;
 //using blah = sycl::info::device::max_work_item_sizes<1>;
 //cout << "max_work_item_sizes<1>: " << device.template get_info<blah>() << endl;
+  auto has_local_mem = device.is_host()
+    || (device.get_info<sycl::info::device::local_mem_type>()
+    != sycl::info::local_mem_type::none);
+  auto local_mem_size = device.get_info<sycl::info::device::local_mem_size>();
+  cout << "local memory size: " << local_mem_size << endl;
+  auto subgroupsizes = device.get_info<sycl::info::device::sub_group_sizes>();
+  cout << "sub group sizes: ";
+  for (auto i:subgroupsizes) cout << i << " ";
+  cout << endl;
   }
 
 #ifndef __INTEL_LLVM_COMPILER
 template<typename T> using my_atomic_ref = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
-template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
+template<typename T> using my_atomic_ref_l = sycl::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::work_group,sycl::access::address_space::local_space>;
 #else
 template<typename T> using my_atomic_ref = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::global_space>;
 template<typename T> using my_atomic_ref_l = sycl::ext::oneapi::atomic_ref<T, sycl::memory_order::relaxed, sycl::memory_scope::device,sycl::access::address_space::local_space>;
