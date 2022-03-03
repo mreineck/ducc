@@ -23,6 +23,7 @@
 #include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/wgridder/wgridder.h"
+#include "ducc0/wgridder/wgridder_sycl.h"
 
 namespace ducc0 {
 
@@ -56,13 +57,22 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
   auto dirty2 = to_vmav<T,2>(dirty);
   {
   py::gil_scoped_release release;
-  double_precision_accumulation ?
-    ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
-      sigma_max, center_x, center_y, allow_nshift, gpu) :
-    ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
-      sigma_max, center_x, center_y, allow_nshift, gpu);
+  if (gpu)
+    double_precision_accumulation ?
+      ms2dirty_sycl<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift) :
+      ms2dirty_sycl<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift);
+  else
+    double_precision_accumulation ?
+      ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift) :
+      ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift);
   }
   return move(dirty);
   }
@@ -168,9 +178,14 @@ template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
   auto vis2 = to_vmav<complex<T>,2>(vis);
   {
   py::gil_scoped_release release;
-  dirty2ms<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-    do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
-    sigma_max, center_x, center_y, allow_nshift, gpu);
+  if (gpu)
+    dirty2ms_sycl<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift);
+  else
+    dirty2ms<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift);
   }
   return move(vis);
   }

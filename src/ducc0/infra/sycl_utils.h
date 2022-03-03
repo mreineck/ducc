@@ -24,7 +24,6 @@
 #if (__has_include("CL/sycl.hpp"))
 #include "CL/sycl.hpp"
 #define DUCC0_HAVE_SYCL
-using namespace cl;
 #endif
 //#endif
 
@@ -47,6 +46,7 @@ namespace ducc0 {
 namespace detail_sycl_utils {
 
 using namespace std;
+using namespace cl;
 
 template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
   (const cmav<T,ndim> &arr)

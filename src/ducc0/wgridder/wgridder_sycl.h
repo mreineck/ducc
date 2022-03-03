@@ -1,5 +1,488 @@
+/*
+ *  This code is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This code is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this code; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
 /* Copyright (C) 2022 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
+
+#ifndef DUCC0_WGRIDDER_SYCL_H
+#define DUCC0_WGRIDDER_SYCL_H
+
+#include <cstring>
+#include <complex>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <type_traits>
+#include <utility>
+#include <iostream>
+#include <algorithm>
+#include <cstdlib>
+#include <cmath>
+#include <vector>
+#include <array>
+
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/math/constants.h"
+#include "ducc0/infra/threading.h"
+#include "ducc0/infra/misc_utils.h"
+#include "ducc0/infra/useful_macros.h"
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/timers.h"
+#include "ducc0/math/gridding_kernel.h"
+#include "ducc0/infra/sycl_utils.h"
+
+namespace ducc0 {
+
+namespace detail_wgridder_sycl {
+
+using namespace std;
+using namespace cl;
+
+template<typename T> T sqr(T val) { return val*val; }
+
+template<size_t ndim> void checkShape
+  (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
+  { MR_assert(shp1==shp2, "shape mismatch"); }
+
+class Uvwidx
+  {
+  public:
+    uint16_t tile_u, tile_v, minplane;
+
+    Uvwidx() {}
+    Uvwidx(uint16_t tile_u_, uint16_t tile_v_, uint16_t minplane_)
+      : tile_u(tile_u_), tile_v(tile_v_), minplane(minplane_) {}
+
+    uint64_t idx() const
+      { return (uint64_t(tile_u)<<32) + (uint64_t(tile_v)<<16) + minplane; }
+    bool operator!=(const Uvwidx &other) const
+      { return idx()!=other.idx(); }
+    bool operator<(const Uvwidx &other) const
+      { return idx()<other.idx(); }
+  };
+
+class RowchanRange
+  {
+  public:
+    uint32_t row;
+    uint16_t ch_begin, ch_end;
+
+    RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
+      : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
+  };
+
+using VVR = vector<pair<Uvwidx, vector<RowchanRange>>>;
+
+struct UVW
+  {
+  double u, v, w;
+  UVW() {}
+  UVW(double u_, double v_, double w_) : u(u_), v(v_), w(w_) {}
+  UVW operator* (double fct) const
+    { return UVW(u*fct, v*fct, w*fct); }
+  void Flip() { u=-u; v=-v; w=-w; }
+  double FixW()
+    {
+    double res=1.-2.*(w<0);
+    u*=res; v*=res; w*=res;
+    return res;
+    }
+  };
+
+class Baselines
+  {
+  protected:
+    vector<UVW> coord;
+    vector<double> f_over_c;
+    size_t nrows, nchan;
+    double umax, vmax;
+
+  public:
+    Baselines() = default;
+    template<typename T> Baselines(const cmav<T,2> &coord_,
+      const cmav<T,1> &freq, bool negate_v=false)
+      {
+      constexpr double speedOfLight = 299792458.;
+      MR_assert(coord_.shape(1)==3, "dimension mismatch");
+      nrows = coord_.shape(0);
+      nchan = freq.shape(0);
+      f_over_c.resize(nchan);
+      double fcmax = 0;
+      for (size_t i=0; i<nchan; ++i)
+        {
+        MR_assert(freq(i)>0, "negative channel frequency encountered");
+        f_over_c[i] = freq(i)/speedOfLight;
+        fcmax = max(fcmax, abs(f_over_c[i]));
+        }
+      coord.resize(nrows);
+      double vfac = negate_v ? -1 : 1;
+      umax=vmax=0;
+      for (size_t i=0; i<coord.size(); ++i)
+        {
+        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        umax = max(umax, abs(coord_(i,0)));
+        vmax = max(vmax, abs(coord_(i,1)));
+        }
+      umax *= fcmax;
+      vmax *= fcmax;
+      }
+
+    UVW effectiveCoord(size_t row, size_t chan) const
+      { return coord[row]*f_over_c[chan]; }
+    double absEffectiveW(size_t row, size_t chan) const
+      { return abs(coord[row].w*f_over_c[chan]); }
+    UVW baseCoord(size_t row) const
+      { return coord[row]; }
+    void prefetchRow(size_t row) const
+      { DUCC0_PREFETCH_R(&coord[row]); }
+    double ffact(size_t chan) const
+      { return f_over_c[chan];}
+    size_t Nrows() const { return nrows; }
+    size_t Nchannels() const { return nchan; }
+    double Umax() const { return umax; }
+    double Vmax() const { return vmax; }
+
+    const vector<UVW> &getUVW_raw() const { return coord; }
+    const vector<double> &get_f_over_c() const { return f_over_c; }
+  };
+
+constexpr int logsquare=4;
+
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
+  {
+  private:
+    bool gridding;
+    TimerHierarchy timers;
+    const cmav<complex<Tms>,2> &ms_in;
+    vmav<complex<Tms>,2> &ms_out;
+    const cmav<Timg,2> &dirty_in;
+    vmav<Timg,2> &dirty_out;
+    const cmav<Tms,2> &wgt;
+    const cmav<uint8_t,2> &mask;
+    double pixsize_x, pixsize_y;
+    size_t nxdirty, nydirty;
+    double epsilon;
+    bool do_wgridding;
+    size_t nthreads;
+    size_t verbosity;
+    bool negate_v, divide_by_n;
+    double sigma_min, sigma_max;
+
+    Baselines bl;
+    VVR ranges;
+    double wmin_d, wmax_d;
+    size_t nvis;
+    double wmin, dw;
+    size_t nplanes;
+    double nm1min, nm1max;
+
+    double lshift, mshift, nshift;
+    bool shifting, lmshift, no_nshift;
+
+    size_t nu, nv;
+    double ofactor;
+
+    shared_ptr<HornerKernel> krn;
+
+    size_t supp, nsafe;
+    double ushift, vshift;
+    int maxiu0, maxiv0;
+
+    static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
+    static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
+    static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
+
+    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+      {
+      u = u_in*pixsize_x;
+      u = (u-floor(u))*nu;
+      iu0 = min(int(u+ushift)-int(nu), maxiu0);
+      u -= iu0;
+      v = v_in*pixsize_y;
+      v = (v-floor(v))*nv;
+      iv0 = min(int(v+vshift)-int(nv), maxiv0);
+      v -= iv0;
+      }
+
+    void countRanges()
+      {
+      timers.push("building index");
+      size_t nrow=bl.Nrows(),
+             nchan=bl.Nchannels();
+
+      if (do_wgridding)
+        {
+        dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
+        nplanes = size_t((wmax_d-wmin_d)/dw+supp);
+        MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
+        wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
+        }
+      else
+        dw = wmin = nplanes = 0;
+      size_t nbunch = do_wgridding ? supp : 1;
+      // we want a maximum deviation of 1% in gridding time between threads
+      constexpr double max_asymm = 0.01;
+      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
+
+      struct tmp2
+        {
+        size_t sz=0;
+        vector<vector<RowchanRange>> v;
+        void add(const RowchanRange &rng, size_t max_allowed)
+          {
+          if (v.empty() || (sz>=max_allowed))
+            { v.emplace_back(); sz=0; }
+          v.back().push_back(rng);
+          sz += rng.ch_end-rng.ch_begin;
+          }
+        };
+      using Vmap = map<Uvwidx, tmp2>;
+      struct bufmap
+        {
+        Vmap m;
+        mutex mut;
+        uint64_t dummy[8]; // separator to keep every entry on a different cache line
+        };
+      checkShape(wgt.shape(),{nrow,nchan});
+      checkShape(ms_in.shape(), {nrow,nchan});
+      checkShape(mask.shape(), {nrow,nchan});
+
+      size_t ntiles_u = (nu>>logsquare) + 20,
+             ntiles_v = (nv>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u*ntiles_v);
+      auto chunk = max<size_t>(1, nrow/(20*nthreads));
+      auto xdw = 1./dw;
+      auto shift = dw-(0.5*supp*dw)-wmin;
+      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+        {
+        vector<pair<uint16_t, uint16_t>> interbuf;
+        while (auto rng=sched.getNext())
+        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+          {
+          bool on=false;
+          Uvwidx uvwlast(0,0,0);
+          size_t chan0=0;
+
+          auto flush=[&]()
+            {
+            if (interbuf.empty()) return;
+            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            lock_guard<mutex> lock(buf[tileidx].mut);
+            auto &loc(buf[tileidx].m[uvwlast]);
+            for (auto &x: interbuf)
+              loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
+            interbuf.clear();
+            };
+          auto add=[&](uint16_t cb, uint16_t ce)
+            { interbuf.emplace_back(cb, ce); };
+
+          for (size_t ichan=0; ichan<nchan; ++ichan)
+            {
+            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
+              {
+              auto uvw = bl.effectiveCoord(irow, ichan);
+              uvw.FixW();
+              double udum, vdum;
+              int iu0, iv0, iw;
+              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+              iu0 = (iu0+nsafe)>>logsquare;
+              iv0 = (iv0+nsafe)>>logsquare;
+              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
+              Uvwidx uvwcur(iu0, iv0, iw);
+              if (!on) // new active region
+                {
+                on=true;
+                if (uvwlast!=uvwcur) flush();
+                uvwlast=uvwcur; chan0=ichan;
+                }
+              else if (uvwlast!=uvwcur) // change of active region
+                {
+                add(chan0, ichan);
+                flush();
+                uvwlast=uvwcur; chan0=ichan;
+                }
+              }
+            else if (on) // end of active region
+              {
+              add(chan0, ichan);
+              on=false;
+              }
+            }
+          if (on) // end of active region at last channel
+            add(chan0, nchan);
+          flush();
+          }
+        });
+
+      size_t total=0;
+      for (const auto &x: buf)
+        for (const auto &y: x.m)
+          total += y.second.v.size();
+      ranges.reserve(total);
+      for (auto &x: buf)
+        for (auto &y: x.m)
+          for (auto &z: y.second.v)
+            ranges.emplace_back(y.first, move(z));
+
+      timers.pop();
+      }
+
+    void report()
+      {
+      if (verbosity==0) return;
+      cout << (gridding ? "Gridding:" : "Degridding:") << endl
+           << "  nthreads=" << nthreads << ", "
+           << "dirty=(" << nxdirty << "x" << nydirty << "), "
+           << "grid=(" << nu << "x" << nv;
+      if (do_wgridding) cout << "x" << nplanes;
+      cout << "), supp=" << supp
+           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
+           << endl;
+      cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
+           << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      if (do_wgridding)
+        cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
+             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+      size_t ovh0 = 0;
+      for (const auto &v : ranges)
+        ovh0 += v.second.size()*sizeof(RowchanRange);
+      ovh0 += ranges.size()*sizeof(VVR);
+      size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
+      if (!do_wgridding)
+        ovh1 += nu*nv*sizeof(Tcalc);                          // rgrid
+      if (!gridding)
+        ovh1 += nxdirty*nydirty*sizeof(Timg);                 // tdirty
+      cout << "  memory overhead: "
+           << ovh0/double(1<<30) << "GB (index) + "
+           << ovh1/double(1<<30) << "GB (2D arrays)" << endl;
+      }
+
+    auto getNuNv()
+      {
+      timers.push("parameter calculation");
+
+      double xmin = lshift - 0.5*nxdirty*pixsize_x,
+             xmax = xmin + (nxdirty-1)*pixsize_x,
+             ymin = mshift - 0.5*nydirty*pixsize_y,
+             ymax = ymin + (nydirty-1)*pixsize_y;
+      vector<double> xext{xmin, xmax},
+                     yext{ymin, ymax};
+      if (xmin*xmax<0) xext.push_back(0);
+      if (ymin*ymax<0) yext.push_back(0);
+      nm1min = 1e300, nm1max = -1e300;
+      for (auto xc: xext)
+        for (auto yc: yext)
+          {
+          double tmp = xc*xc+yc*yc;
+          double nval;
+          if (tmp <= 1.) // northern hemisphere
+            nval = sqrt(1.-tmp) - 1.;
+          else
+            nval = -sqrt(tmp-1.) -1.;
+          nm1min = min(nm1min, nval);
+          nm1max = max(nm1max, nval);
+          }
+      nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
+      shifting = lmshift || (nshift!=0);
+
+      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      double mincost = 1e300;
+      constexpr double nref_fft=2048;
+      constexpr double costref_fft=0.0693;
+      size_t minnu=0, minnv=0, minidx=KernelDB.size();
+      for (size_t i=0; i<idx.size(); ++i)
+        {
+        const auto &krn(KernelDB[idx[i]]);
+        auto supp = krn.W;
+        auto ofactor = krn.ofactor;
+        size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
+        size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
+        double logterm = log(nu*nv)/log(nref_fft*nref_fft);
+        double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
+        double gridcost = 2.2e-10*nvis*(supp*supp + ((2*supp+1)*(supp+3)));
+        if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
+        if (do_wgridding)
+          {
+          double dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
+          size_t nplanes = size_t((wmax_d-wmin_d)/dw+supp);
+          fftcost *= nplanes;
+          gridcost *= supp;
+          }
+        // FIXME: heuristics could be improved
+        gridcost /= nthreads;  // assume perfect scaling for now
+        constexpr double max_fft_scaling = 6;
+        constexpr double scaling_power=2;
+        auto sigmoid = [](double x, double m, double s)
+          {
+          auto x2 = x-1;
+          auto m2 = m-1;
+          return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
+          };
+        fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
+        double cost = fftcost+gridcost;
+        if (cost<mincost)
+          {
+          mincost=cost;
+          minnu=nu;
+          minnv=nv;
+          minidx = idx[i];
+          }
+        }
+      timers.pop();
+      nu = minnu;
+      nv = minnv;
+      return minidx;
+      }
+
+    void scanData()
+      {
+      timers.push("Initial scan");
+      size_t nrow=bl.Nrows(),
+             nchan=bl.Nchannels();
+      checkShape(wgt.shape(),{nrow,nchan});
+      checkShape(ms_in.shape(), {nrow,nchan});
+      checkShape(mask.shape(), {nrow,nchan});
+
+      nvis=0;
+      wmin_d=1e300;
+      wmax_d=-1e300;
+      mutex mut;
+      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+        {
+        double lwmin_d=1e300, lwmax_d=-1e300;
+        size_t lnvis=0;
+        for(auto irow=lo; irow<hi; ++irow)
+          for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+//            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
+            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
+              {
+              ++lnvis;
+              double w = bl.absEffectiveW(irow, ichan);
+              lwmin_d = min(lwmin_d, w);
+              lwmax_d = max(lwmax_d, w);
+              }
+        {
+        lock_guard<mutex> lock(mut);
+        wmin_d = min(wmin_d, lwmin_d);
+        wmax_d = max(wmax_d, lwmax_d);
+        nvis += lnvis;
+        }
+        });
+      timers.pop();
+      }
 
 class Baselines_GPU_prep
   {
@@ -169,7 +652,7 @@ class GlobalCorrector
           }
       };
    
-    static double syclphase(double x, double y, double w, bool adjoint, double nshift)
+    static double phase(double x, double y, double w, bool adjoint, double nshift)
       {
       double tmp = 1.-x-y;
       if (tmp<=0) return 0; // no phase factor beyond the horizon
@@ -301,7 +784,7 @@ class GlobalCorrector
           if (j2>=nv) j2-=nv;
           double fx = sqr(x0+i*pixsize_x);
           double fy = sqr(y0+j*pixsize_y);
-          double myphase = syclphase(fx, fy, w, false, nshift);
+          double myphase = phase(fx, fy, w, false, nshift);
           accgrid[i2][j2] = complex<Tcalc>(sycl::cos(myphase),sycl::sin(myphase))*accdirty[i][j];
           });
         });
@@ -325,7 +808,7 @@ class GlobalCorrector
           if (j2>=nv) j2-=nv;
           double fx = sqr(x0+i*pixsize_x);
           double fy = sqr(y0+j*pixsize_y);
-          double myphase = syclphase(fx, fy, w, true, nshift);
+          double myphase = phase(fx, fy, w, true, nshift);
           accdirty[i][j] += sycl::cos(myphase)*accgrid[i2][j2].real()
                            -sycl::sin(myphase)*accgrid[i2][j2].imag();
           });
@@ -455,7 +938,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
   val *= phase;
   }
 
-    void dirty2x_gpu()
+    void dirty2x()
       {
       timers.push("GPU degridding");
       if (do_wgridding)
@@ -701,7 +1184,7 @@ timers.pop();
       timers.pop();
       }
 
-    void x2dirty_gpu()
+    void x2dirty()
       {
       timers.push("GPU gridding");
       if (do_wgridding)
@@ -1033,3 +1516,113 @@ timers.pop();
         }
       timers.pop();
       }
+
+  public:
+    Params(const cmav<double,2> &uvw, const cmav<double,1> &freq,
+           const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
+           const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
+           const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
+           double pixsize_x_, double pixsize_y_, double epsilon_,
+           bool do_wgridding_, size_t nthreads_, size_t verbosity_,
+           bool negate_v_, bool divide_by_n_, double sigma_min_,
+           double sigma_max_, double center_x, double center_y, bool allow_nshift)
+      : gridding(ms_out_.size()==0),
+        timers(gridding ? "gridding" : "degridding"),
+        ms_in(ms_in_), ms_out(ms_out_),
+        dirty_in(dirty_in_), dirty_out(dirty_out_),
+        wgt(wgt_), mask(mask_),
+        pixsize_x(pixsize_x_), pixsize_y(pixsize_y_),
+        nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
+        nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
+        epsilon(epsilon_),
+        do_wgridding(do_wgridding_),
+        nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
+        verbosity(verbosity_),
+        negate_v(negate_v_), divide_by_n(divide_by_n_),
+        sigma_min(sigma_min_), sigma_max(sigma_max_),
+        lshift(center_x), mshift(negate_v ? -center_y : center_y),
+        lmshift((lshift!=0) || (mshift!=0)),
+        no_nshift(!allow_nshift)
+      {
+      timers.push("Baseline construction");
+      bl = Baselines(uvw, freq, negate_v);
+      MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
+      timers.pop();
+      // adjust for increased error when gridding in 2 or 3 dimensions
+      epsilon /= do_wgridding ? 3 : 2;
+      scanData();
+      if (nvis==0)
+        {
+        if (gridding) mav_apply([](Timg &v){v=Timg(0);}, nthreads, dirty_out);
+        return;
+        }
+      auto kidx = getNuNv();
+      MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
+      MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
+      ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
+      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      supp = krn->support();
+      nsafe = (supp+1)/2;
+      ushift = supp*(-0.5)+1+nu;
+      vshift = supp*(-0.5)+1+nv;
+      maxiu0 = (nu+nsafe)-supp;
+      maxiv0 = (nv+nsafe)-supp;
+      MR_assert(nu>=2*nsafe, "nu too small");
+      MR_assert(nv>=2*nsafe, "nv too small");
+      MR_assert((nxdirty&1)==0, "nx_dirty must be even");
+      MR_assert((nydirty&1)==0, "ny_dirty must be even");
+      MR_assert((nu&1)==0, "nu must be even");
+      MR_assert((nv&1)==0, "nv must be even");
+      MR_assert(epsilon>0, "epsilon must be positive");
+      MR_assert(pixsize_x>0, "pixsize_x must be positive");
+      MR_assert(pixsize_y>0, "pixsize_y must be positive");
+      countRanges();
+      report();
+      gridding ? x2dirty() : dirty2x();
+
+      if (verbosity>0)
+        timers.report(cout);
+      }
+  };
+
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
+  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
+  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  {
+  auto ms_out(vmav<complex<Tms>,2>::build_empty());
+  auto dirty_in(vmav<Timg,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+  }
+
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
+  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
+  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  {
+  if (ms.size()==0) return;  // nothing to do
+  auto ms_in(ms.build_uniform(ms.shape(),1.));
+  auto dirty_out(vmav<Timg,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+  }
+}
+
+using detail_wgridder_sycl::dirty2ms_sycl;
+using detail_wgridder_sycl::ms2dirty_sycl;
+
+}
+
+#endif

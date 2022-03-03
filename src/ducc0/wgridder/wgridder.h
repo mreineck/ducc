@@ -16,7 +16,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2022 Max-Planck-Society
+/* Copyright (C) 2019-2021 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_H
@@ -50,7 +50,6 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
-#include "ducc0/infra/sycl_utils.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/rangeset.h"
 
@@ -61,14 +60,6 @@ namespace detail_gridder {
 using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
-
-// part of C++20
-template<typename T> constexpr T bit_width(T x) noexcept
-  {
-  T res=0;
-  while((x>>res)!=0) ++res;
-  return res;
-  }
 
 template<typename T> constexpr inline int mysimdlen
   = min<int>(8, native_simd<T>::size());
@@ -341,9 +332,6 @@ class Baselines
     size_t Nchannels() const { return nchan; }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
-
-    const vector<UVW> &getUVW_raw() const { return coord; }
-    const vector<double> &get_f_over_c() const { return f_over_c; }
   };
 
 
@@ -391,8 +379,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t vlim;
     bool uv_side_fast;
     vector<rangeset<int>> uranges, vranges;
-
-    bool gpu;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
@@ -1412,8 +1398,6 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         }
       }
 
-#include "ducc0/wgridder/wgridder_sycl.h"
-
     auto getNuNv()
       {
       timers.push("parameter calculation");
@@ -1538,8 +1522,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool negate_v_, bool divide_by_n_, double sigma_min_,
-           double sigma_max_, double center_x, double center_y, bool allow_nshift,
-           bool gpu_)
+           double sigma_max_, double center_x, double center_y, bool allow_nshift)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
@@ -1556,8 +1539,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         sigma_min(sigma_min_), sigma_max(sigma_max_),
         lshift(center_x), mshift(negate_v ? -center_y : center_y),
         lmshift((lshift!=0) || (mshift!=0)),
-        no_nshift(!allow_nshift),
-        gpu(gpu_)
+        no_nshift(!allow_nshift)
       {
       timers.push("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
@@ -1608,10 +1590,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
       countRanges();
       report();
-      if (gpu)
-        gridding ? x2dirty_gpu() : dirty2x_gpu();
-      else
-        gridding ? x2dirty() : dirty2x();
+      gridding ? x2dirty() : dirty2x();
 
       if (verbosity>0)
         timers.report(cout);
@@ -1623,7 +1602,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true, bool gpu=false)
+  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
@@ -1631,7 +1610,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift, gpu);
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
@@ -1639,8 +1618,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true,
-  bool gpu=false)
+  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
@@ -1649,7 +1627,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift, gpu);
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
 } // namespace detail_gridder
