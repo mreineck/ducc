@@ -49,6 +49,9 @@ namespace ducc0 {
 namespace detail_wgridder_sycl {
 
 using namespace std;
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::min, std::max;
+
 using namespace cl;
 
 template<typename T> T sqr(T val) { return val*val; }
@@ -411,7 +414,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
-        double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
+// FIXME: 0.3 is an estimated fudge factor
+        double fftcost = 0.3*nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*supp + ((2*supp+1)*(supp+3)));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         if (do_wgridding)
@@ -967,6 +971,17 @@ q.wait(); timers.poppush("zeroing ms");
 q.wait(); timers.poppush("indexcomp");
         // build index structure
         IndexComputer idxcomp(ranges, do_wgridding, false);
+
+q.wait(); timers.poppush("copy HtoD");
+  q.submit([&](sycl::handler &cgh)
+    {
+    Baselines_GPU blloc(bl_prep, cgh);
+    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+    RowchanComputer rccomp(idxcomp, cgh);
+    sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
+    cgh.single_task([blloc,kcomp,rccomp,accdirty](){});
+    });
+
         // apply global corrections to dirty image on GPU
 q.wait(); timers.poppush("globcorr");
         GlobalCorrector globcorr(*this);
@@ -987,6 +1002,12 @@ q.wait(); timers.push("plane data structures");
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
+q.wait(); timers.poppush("copy HtoD idx");
+  q.submit([&](sycl::handler &cgh)
+    {
+    sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
+    cgh.single_task([accblidx](){});
+    });
 q.wait(); timers.poppush("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
 
@@ -1097,6 +1118,21 @@ q.wait(); timers.poppush("zeroing ms and grid");
         sycl_zero_buffer(q, bufvis);
         sycl_zero_buffer(q, bufgrid);
 
+q.wait(); timers.poppush("indexcomp");
+        // build index structure
+        IndexComputer idxcomp(ranges, do_wgridding, false);
+        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+
+q.wait(); timers.poppush("copy HtoD");
+  q.submit([&](sycl::handler &cgh)
+    {
+    Baselines_GPU blloc(bl_prep, cgh);
+    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+    RowchanComputer rccomp(idxcomp, cgh);
+    sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
+    cgh.single_task([blloc,kcomp,rccomp,accdirty](){});
+    });
+
 q.wait(); timers.poppush("globcorr");
         {
         GlobalCorrector globcorr(*this);
@@ -1105,11 +1141,7 @@ q.wait(); timers.poppush("globcorr");
         // FFT
 q.wait(); timers.poppush("FFT");
         sycl_c2c(q, bufgrid, true);
-q.wait(); timers.poppush("indexcomp");
 
-        // build index structure
-        IndexComputer idxcomp(ranges, do_wgridding, false);
-        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 q.wait(); timers.poppush("degridding proper");
         constexpr size_t blksz = 32768;
         size_t nblock = idxcomp.blockinfo.size()-1;
@@ -1231,6 +1263,12 @@ q.wait(); timers.push("plane data structures");
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
+q.wait(); timers.poppush("copy HtoD idx");
+  q.submit([&](sycl::handler &cgh)
+    {
+    sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
+    cgh.single_task([accblidx](){});
+    });
 
 q.wait(); timers.poppush("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
