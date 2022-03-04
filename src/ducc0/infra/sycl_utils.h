@@ -20,19 +20,18 @@
 #ifndef DUCC0_SYCL_UTILS_H
 #define DUCC0_SYCL_UTILS_H
 
+#if defined(DUCC0_USE_SYCL)
 //#if (defined(SYCL_LANGUAGE_VERSION) && (SYCL_LANGUAGE_VERSION>=202001))
-#if (__has_include("CL/sycl.hpp"))
+//#if (__has_include("CL/sycl.hpp"))
 #include "CL/sycl.hpp"
-#define DUCC0_HAVE_SYCL
-#endif
+//#define DUCC0_USE_SYCL
+//#endif
 //#endif
 
-#if (defined(DUCC0_HAVE_SYCL))
 #if (defined(__HIPSYCL_ENABLE_CUDA_TARGET__))
 #if (__has_include(<cufft.h>))
 #include <cufft.h>
 #define DUCC0_HAVE_CUFFT
-#endif
 #endif
 #endif
 
@@ -41,9 +40,11 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/fft/fft.h"
 
+#endif
+
 namespace ducc0 {
 
-#if defined(DUCC0_HAVE_SYCL)
+#if defined(DUCC0_USE_SYCL)
 
 namespace detail_sycl_utils {
 

@@ -48,7 +48,7 @@ namespace ducc0 {
 
 namespace detail_wgridder_sycl {
 
-#if defined(DUCC0_HAVE_SYCL)
+#if defined(DUCC0_USE_SYCL)
 
 using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
@@ -949,7 +949,6 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
       timers.push("GPU degridding");
       if (do_wgridding)
         {
-#if (defined(DUCC0_HAVE_SYCL))
         { // Device buffer scope
 timers.push("prep");
         sycl::queue q{sycl::default_selector()};
@@ -1094,13 +1093,9 @@ timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
           mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
 timers.pop();
-#else
-        MR_fail("CUDA not found");
-#endif
         }
       else
         {
-#if (defined(DUCC0_HAVE_SYCL))
         { // Device buffer scope
         sycl::queue q{sycl::default_selector()};
 q.wait(); timers.push("prep");
@@ -1211,9 +1206,6 @@ timers.poppush("weight application");
         if (wgt.stride(0)!=0)  // we need to apply weights!
           mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
 timers.pop();
-#else
-        MR_fail("CUDA not found");
-#endif
         }
       timers.pop();
       }
@@ -1222,7 +1214,6 @@ timers.pop();
       {
       timers.push("GPU gridding");
       if (do_wgridding)
-#if (defined(DUCC0_HAVE_SYCL))
         {
 timers.push("prep");
         bool do_weights = (wgt.stride(0)!=0);
@@ -1397,12 +1388,8 @@ q.wait(); timers.poppush("copy DtoH");
         }  // end of device buffer scope, buffers are written back
 timers.pop();
         }
-#else
-        MR_fail("CUDA not found");
-#endif
       else
         {
-#if (defined(DUCC0_HAVE_SYCL))
 timers.push("prep");
         bool do_weights = (wgt.stride(0)!=0);
 
@@ -1550,9 +1537,6 @@ q.wait(); timers.poppush("globcorr");
 q.wait(); timers.poppush("copy DtoH");
         }  // end of device buffer scope, buffers are written back
 timers.pop();
-#else
-        MR_fail("CUDA not found");
-#endif
         }
       timers.pop();
       }
