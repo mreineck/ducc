@@ -43,6 +43,8 @@
 
 namespace ducc0 {
 
+#if defined(DUCC0_HAVE_SYCL)
+
 namespace detail_sycl_utils {
 
 using namespace std;
@@ -274,6 +276,17 @@ using detail_sycl_utils::print_device_info;
 using detail_sycl_utils::my_atomic_ref;
 using detail_sycl_utils::my_atomic_ref_l;
 using detail_sycl_utils::my_local_accessor;
+
+#endif
+
+bool sycl_active()
+  {
+#if defined(DUCC0_USE_SYCL)
+  return true;
+#else
+  return false;
+#endif
+  }
 
 }
 

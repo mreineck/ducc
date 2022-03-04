@@ -27,9 +27,6 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-has_gpu = False  # FIXME Determine this automatically
-has_gpu = True
-
 pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
@@ -134,8 +131,8 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
-@pmp("gpu", (False, True))
-def xtest_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
+@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
+def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask, gpu):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
@@ -197,7 +194,7 @@ def xtest_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2, 7))
 @pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
-@pmp("gpu", (False, True)[1:])
+@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
                                 nthreads, gpu):

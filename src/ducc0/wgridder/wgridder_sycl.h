@@ -48,6 +48,8 @@ namespace ducc0 {
 
 namespace detail_wgridder_sycl {
 
+#if defined(DUCC0_HAVE_SYCL)
+
 using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
@@ -1656,6 +1658,27 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
+
+#else  // no SYCL support
+
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
+  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
+  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  { throw runtime_error("no SYCL support available"); }
+
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
+  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
+  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
+  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  { throw runtime_error("no SYCL support available"); }
+
+#endif
+
 }
 
 using detail_wgridder_sycl::dirty2ms_sycl;
