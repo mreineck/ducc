@@ -162,7 +162,7 @@ class Baselines
     const vector<double> &get_f_over_c() const { return f_over_c; }
   };
 
-constexpr int logsquare=4;
+constexpr int logsquare=5;
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
   {
@@ -239,7 +239,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       else
         dw = wmin = nplanes = 0;
       size_t nbunch = do_wgridding ? supp : 1;
-      size_t max_allowed = 16384;
+      size_t max_allowed = 1024;
 
       struct tmp2
         {
@@ -264,9 +264,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 20,
-             ntiles_v = (nv>>logsquare) + 20;
-      vector<bufmap> buf(ntiles_u*ntiles_v);
+      size_t ntiles_u = (nu>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
       auto shift = dw-(0.5*supp*dw)-wmin;
@@ -283,7 +282,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto tileidx = ntiles_v*uvwlast.tile_u + uvwlast.tile_v;
+            auto tileidx = uvwlast.tile_u;
             lock_guard<mutex> lock(buf[tileidx].mut);
             auto &loc(buf[tileidx].m[uvwlast]);
             for (auto &x: interbuf)
@@ -343,6 +342,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       ranges.reserve(nranges);
       size_t visacc=0;
       vissum.reserve(nranges+1);
+
+// FIXME parallelize!
       for (auto &x: buf)
         for (auto &y: x.m)
           for (auto &z: y.second.v)
