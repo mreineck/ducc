@@ -1578,20 +1578,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 
 #else  // no SYCL support
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &,
+  const cmav<double,1> &, const cmav<complex<Tms>,2> &,
+  const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
+  bool, size_t, vmav<Timg,2> &, size_t,
+  bool=false, bool=true, double=1.1,
+  double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &,
+  const cmav<double,1> &, const cmav<Timg,2> &,
+  const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
+  double, bool, size_t, vmav<complex<Tms>,2> &,
+  size_t, bool=false, bool=true,
+  double=1.1, double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
 #endif
