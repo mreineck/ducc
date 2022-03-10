@@ -695,9 +695,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 20,
-             ntiles_v = (nv>>logsquare) + 20;
-      vector<bufmap> buf(ntiles_u*ntiles_v);
+      size_t ntiles_u = (nu>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
       auto shift = dw-(0.5*supp*dw)-wmin;
@@ -714,7 +713,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            auto tileidx = uvwlast.tile_u;
             lock_guard<mutex> lock(buf[tileidx].mut);
             auto &loc(buf[tileidx].m[uvwlast]);
             for (auto &x: interbuf)
