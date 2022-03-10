@@ -89,8 +89,6 @@ class RowchanRange
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
   };
 
-using VVR = vector<pair<Uvwidx, vector<RowchanRange>>>;
-
 struct UVW
   {
   double u, v, w;
@@ -164,7 +162,7 @@ class Baselines
     const vector<double> &get_f_over_c() const { return f_over_c; }
   };
 
-constexpr int logsquare=4;
+constexpr int logsquare=5;
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
   {
@@ -187,7 +185,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     double sigma_min, sigma_max;
 
     Baselines bl;
-    VVR ranges;
+    vector<RowchanRange> ranges;
+    vector<uint32_t> vissum;
+    vector<pair<Uvwidx, uint32_t>> blockstart;
+ 
     double wmin_d, wmax_d;
     size_t nvis;
     double wmin, dw;
@@ -238,9 +239,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       else
         dw = wmin = nplanes = 0;
       size_t nbunch = do_wgridding ? supp : 1;
-      // we want a maximum deviation of 1% in gridding time between threads
-      constexpr double max_asymm = 0.01;
-      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
+      size_t max_allowed = 1024;
 
       struct tmp2
         {
@@ -265,9 +264,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 20,
-             ntiles_v = (nv>>logsquare) + 20;
-      vector<bufmap> buf(ntiles_u*ntiles_v);
+      size_t ntiles_u = (nu>>logsquare) + 20;
+      vector<bufmap> buf(ntiles_u);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
       auto shift = dw-(0.5*supp*dw)-wmin;
@@ -284,7 +282,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto tileidx = uvwlast.tile_u + ntiles_u*uvwlast.tile_v;
+            auto tileidx = uvwlast.tile_u;
             lock_guard<mutex> lock(buf[tileidx].mut);
             auto &loc(buf[tileidx].m[uvwlast]);
             for (auto &x: interbuf)
@@ -332,15 +330,34 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           }
         });
 
-      size_t total=0;
+      size_t nranges=0, nblocks=0;
       for (const auto &x: buf)
         for (const auto &y: x.m)
-          total += y.second.v.size();
-      ranges.reserve(total);
+          {
+          nblocks += y.second.v.size();
+          for (const auto &z: y.second.v)
+            nranges += z.size();
+          }
+      blockstart.reserve(nblocks);
+      ranges.reserve(nranges);
+      size_t visacc=0;
+      vissum.reserve(nranges+1);
+
+// FIXME parallelize!
       for (auto &x: buf)
         for (auto &y: x.m)
           for (auto &z: y.second.v)
-            ranges.emplace_back(y.first, move(z));
+            {
+            blockstart.push_back({y.first, uint32_t(ranges.size())});
+            for (const auto &zz: z)
+              {
+              ranges.push_back(zz);
+              vissum.push_back(visacc);
+              visacc += zz.ch_end-zz.ch_begin; 
+              }
+            // z.resize(0); ??
+            }
+      vissum.push_back(visacc);
 
       timers.pop();
       }
@@ -361,10 +378,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
              << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
-      size_t ovh0 = 0;
-      for (const auto &v : ranges)
-        ovh0 += v.second.size()*sizeof(RowchanRange);
-      ovh0 += ranges.size()*sizeof(VVR);
+      size_t ovh0 = ranges.size()*sizeof(ranges[0]);
+      ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
       if (!do_wgridding)
         ovh1 += nu*nv*sizeof(Tcalc);                          // rgrid
@@ -528,97 +543,20 @@ class Baselines_GPU
     size_t Nchannels() const { return acc_f_over_c.get_range().get(0); }
   };
 
-class IndexComputer0
+class IndexComputer
   {
   public:
-    struct Tileinfo { uint16_t tile_u, tile_v; };
-    struct Blockinfo { uint32_t limits, startidx; };
-    static constexpr size_t chunksize=1024;
-    bool store_tiles;
-    vector<uint32_t> row_gpu;
-    vector<uint16_t> chbegin_gpu;
-    vector<Tileinfo> tileinfo;
-    vector<uint16_t> minplane_gpu;
-    vector<uint32_t> vissum_gpu;
-    vector<Blockinfo> blockinfo;
-
-    IndexComputer0(const VVR &ranges, bool do_wgridding, bool store_tiles_)
-      : store_tiles(store_tiles_)
-      {
-      size_t nranges=0;
-      for (const auto &rng: ranges)
-        nranges+=rng.second.size();
-      row_gpu.reserve(nranges);
-      chbegin_gpu.reserve(nranges);
-      vissum_gpu.reserve(nranges+1);
-      size_t isamp=0, curtile_u=~uint16_t(0), curtile_v=~uint16_t(0), curminplane=~uint16_t(0);
-      size_t accum=0;
-
-      // if necessary, resize some vectors to size 1, because SYCL is unhappy otherwise
-      if (!do_wgridding)
-        minplane_gpu.resize(1);
-      if (!store_tiles)
-        tileinfo.resize(1);
-      for (const auto &rng: ranges)
-        {
-        if ((curtile_u!=rng.first.tile_u)||(curtile_v!=rng.first.tile_v)
-          ||(curminplane!=rng.first.minplane))
-          {
-          blockinfo.push_back({uint32_t(row_gpu.size()), uint32_t(accum)});
-          isamp=0;
-          curtile_u = rng.first.tile_u;
-          curtile_v = rng.first.tile_v;
-          curminplane = rng.first.minplane;
-          if (store_tiles)
-            tileinfo.push_back({rng.first.tile_u, rng.first.tile_v});
-          if (do_wgridding)
-            minplane_gpu.push_back(rng.first.minplane);
-          }
-        for (const auto &rcr: rng.second)
-          {
-          auto nchan = size_t(rcr.ch_end-rcr.ch_begin);
-          size_t curpos=0;
-          while (curpos+chunksize-isamp<=nchan)
-            {
-            blockinfo.push_back({uint32_t(row_gpu.size()),
-                                 uint32_t(blockinfo.back().startidx+chunksize)});
-            if (store_tiles)
-              tileinfo.push_back({rng.first.tile_u, rng.first.tile_v});
-            if (do_wgridding)
-              minplane_gpu.push_back(rng.first.minplane);
-            curpos += chunksize-isamp;
-            isamp = 0;
-            }
-          isamp += nchan-curpos;
-          row_gpu.push_back(rcr.row);
-          chbegin_gpu.push_back(rcr.ch_begin);
-          vissum_gpu.push_back(accum);
-          accum += nchan;
-          }
-        }
-      blockinfo.push_back({uint32_t(row_gpu.size()), uint32_t(accum)});
-      vissum_gpu.push_back(accum);
-      }
-  };
-class IndexComputer: public IndexComputer0
-  {
-  public:
-    sycl::buffer<uint32_t, 1> buf_row;
-    sycl::buffer<uint16_t, 1> buf_chbegin;
+    sycl::buffer<RowchanRange, 1> buf_ranges;
     sycl::buffer<uint32_t, 1> buf_vissum;
-    sycl::buffer<typename IndexComputer0::Blockinfo, 1> buf_blockinfo;
-    sycl::buffer<typename IndexComputer0::Tileinfo, 1> buf_tileinfo;
-    sycl::buffer<uint16_t, 1> buf_minplane;
+    sycl::buffer<pair<Uvwidx, uint32_t>> buf_blockstart;
 
-    IndexComputer(const VVR &ranges, bool do_wgridding, bool store_tiles_)
-      : IndexComputer0(ranges, do_wgridding, store_tiles_),
-        buf_row(make_sycl_buffer(this->row_gpu)),
-        buf_chbegin(make_sycl_buffer(this->chbegin_gpu)),
-        buf_vissum(make_sycl_buffer(this->vissum_gpu)),
-        buf_blockinfo(make_sycl_buffer(this->blockinfo)),
-        buf_tileinfo(make_sycl_buffer(this->tileinfo)),
-        buf_minplane(make_sycl_buffer(this->minplane_gpu))
-        {}
+    IndexComputer(const vector<RowchanRange> &ranges,
+      const vector<uint32_t> &vissum,
+      const vector<pair<Uvwidx, uint32_t>> &blockstart)
+      : buf_ranges(make_sycl_buffer(ranges)),
+        buf_vissum(make_sycl_buffer(vissum)),
+        buf_blockstart(make_sycl_buffer(blockstart))
+      {}
   };
 
 class GlobalCorrector
@@ -823,26 +761,25 @@ class GlobalCorrector
   };
 class RowchanComputer
   {
-  protected:
-    sycl::accessor<typename IndexComputer0::Blockinfo,1,sycl::access::mode::read> acc_blockinfo;
+  public:
+    sycl::accessor<RowchanRange,1,sycl::access::mode::read> acc_ranges;
     sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_vissum;
-    sycl::accessor<uint32_t,1,sycl::access::mode::read> acc_row;
-    sycl::accessor<uint16_t,1,sycl::access::mode::read> acc_chbegin;
+    sycl::accessor<pair<Uvwidx,uint32_t>,1,sycl::access::mode::read> acc_blockstart;
 
   public:
     RowchanComputer(IndexComputer &idxcomp, sycl::handler &cgh)
-      : acc_blockinfo(idxcomp.buf_blockinfo, cgh, sycl::read_only),
+      : acc_ranges(idxcomp.buf_ranges, cgh, sycl::read_only),
         acc_vissum(idxcomp.buf_vissum, cgh, sycl::read_only),
-        acc_row(idxcomp.buf_row, cgh, sycl::read_only),
-        acc_chbegin(idxcomp.buf_chbegin, cgh, sycl::read_only)
+        acc_blockstart(idxcomp.buf_blockstart, cgh, sycl::read_only)
       {}
 
     void getRowChan(size_t iblock, size_t iwork, size_t &irow, size_t &ichan) const
       {
-      auto xlo = acc_blockinfo[iblock].limits;
-      auto xhi = acc_blockinfo[iblock+1].limits;
-      auto wanted = acc_blockinfo[iblock].startidx+iwork;
-      if (wanted>=acc_blockinfo[iblock+1].startidx)
+      auto xlo = acc_blockstart[iblock].second;
+      auto xhi = (iblock+1==acc_blockstart.size()) ?
+        acc_ranges.size() : acc_blockstart[iblock+1].second;
+      auto wanted = acc_vissum[xlo]+iwork;
+      if (wanted>=acc_vissum[xhi])
         { irow = ~size_t(0); return; }  // nothing to do for this item
       while (xlo+1<xhi)  // bisection search
         {
@@ -851,8 +788,8 @@ class RowchanComputer
         }
       if (acc_vissum[xhi]<=wanted)
         xlo = xhi;
-      irow = acc_row[xlo];
-      ichan = acc_chbegin[xlo] + (wanted-acc_vissum[xlo]);
+      irow = acc_ranges[xlo].row;
+      ichan = acc_ranges[xlo].ch_begin + (wanted-acc_vissum[xlo]);
       }
   };
 
@@ -971,7 +908,7 @@ q.wait(); timers.poppush("zeroing ms");
 
 q.wait(); timers.poppush("indexcomp");
         // build index structure
-        IndexComputer idxcomp(ranges, do_wgridding, false);
+        IndexComputer idxcomp(ranges, vissum, blockstart);
 
 q.wait(); timers.poppush("copy HtoD");
   q.submit([&](sycl::handler &cgh)
@@ -996,9 +933,9 @@ q.wait(); timers.pop();
 q.wait(); timers.push("plane data structures");
           double w = wmin+pl*dw;
           vector<size_t> blidx;
-          for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
+          for (size_t i=0; i<blockstart.size(); ++i)
             {
-            auto minpl = idxcomp.minplane_gpu[i];
+            auto minpl = blockstart[i].first.minplane;
             if ((pl>=minpl) && (pl<minpl+supp))
               blidx.push_back(i);
             }
@@ -1029,7 +966,6 @@ q.wait(); timers.poppush("degridding proper");
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
 
-              sycl::accessor acc_minplane{idxcomp.buf_minplane, cgh, sycl::read_only};
               sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
               sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
               sycl::accessor accvis{bufvis, cgh, sycl::write_only};
@@ -1037,10 +973,10 @@ q.wait(); timers.poppush("degridding proper");
               constexpr size_t n_workitems = 32;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
-              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
-                auto minplane = acc_minplane[iblock];
+                auto minplane = rccomp.acc_blockstart[iblock].first.minplane;
 
                 for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                   {
@@ -1117,7 +1053,7 @@ q.wait(); timers.poppush("zeroing ms and grid");
 
 q.wait(); timers.poppush("indexcomp");
         // build index structure
-        IndexComputer idxcomp(ranges, do_wgridding, false);
+        IndexComputer idxcomp(ranges, vissum, blockstart);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
 q.wait(); timers.poppush("copy HtoD");
@@ -1141,7 +1077,7 @@ q.wait(); timers.poppush("FFT");
 
 q.wait(); timers.poppush("degridding proper");
         constexpr size_t blksz = 32768;
-        size_t nblock = idxcomp.blockinfo.size()-1;
+        size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+= blksz)
           {
           q.submit([&](sycl::handler &cgh)
@@ -1239,7 +1175,7 @@ timers.push("prep");
 
 q.wait(); timers.poppush("indexcomp");
         // build index structure
-        IndexComputer idxcomp(ranges, do_wgridding, true);
+        IndexComputer idxcomp(ranges, vissum, blockstart);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
         GlobalCorrector globcorr(*this);
 
@@ -1249,9 +1185,9 @@ q.wait(); timers.pop();
 q.wait(); timers.push("plane data structures");
           double w = wmin+pl*dw;
           vector<size_t> blidx;
-          for (size_t i=0; i<idxcomp.minplane_gpu.size(); ++i)
+          for (size_t i=0; i<blockstart.size(); ++i)
             {
-            auto minpl = idxcomp.minplane_gpu[i];
+            auto minpl = blockstart[i].first.minplane;
             if ((pl>=minpl) && (pl<minpl+supp))
               blidx.push_back(i);
             }
@@ -1282,8 +1218,6 @@ q.wait(); timers.poppush("gridding proper");
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
   
-              sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
-              sycl::accessor acc_minplane{idxcomp.buf_minplane, cgh, sycl::read_only};
               sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
               sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
               sycl::accessor accvis{bufvis, cgh, sycl::read_only};
@@ -1296,10 +1230,10 @@ q.wait(); timers.poppush("gridding proper");
               size_t sidelen = 2*nsafe+(1<<logsquare);
               my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 
-              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,acc_minplane,sidelen,nsafe,acc_tileinfo,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,sidelen,nsafe,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
-                auto minplane = acc_minplane[iblock];
+                auto minplane = rccomp.acc_blockstart[iblock].first.minplane;
   
                 // preparation
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_local_range(1))
@@ -1354,8 +1288,8 @@ q.wait(); timers.poppush("gridding proper");
                   }
   
                 // add local buffer back to global buffer
-                auto u_tile = acc_tileinfo[iblock].tile_u;
-                auto v_tile = acc_tileinfo[iblock].tile_v;
+                auto u_tile = rccomp.acc_blockstart[iblock].first.tile_u;
+                auto v_tile = rccomp.acc_blockstart[iblock].first.tile_v;
                 item.barrier(sycl::access::fence_space::local_space);
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                   {
@@ -1416,7 +1350,7 @@ q.wait(); timers.poppush("zeroing grid");
 
         // build index structure
 q.wait(); timers.poppush("indexcomp");
-        IndexComputer idxcomp(ranges, do_wgridding, true);
+        IndexComputer idxcomp(ranges, vissum, blockstart);
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
 
 q.wait(); timers.poppush("copy HtoD");
@@ -1427,14 +1361,14 @@ q.wait(); timers.poppush("copy HtoD");
     RowchanComputer rccomp(idxcomp, cgh);
     sycl::accessor accvis{bufvis, cgh, sycl::read_only};
     sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-    sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
     sycl::accessor accgridr{bufgridr, cgh, sycl::read_only};
-    cgh.single_task([accvis,accwgt,acc_tileinfo,accgridr,blloc,kcomp,rccomp](){});
+    cgh.single_task([accvis,accwgt,accgridr,blloc,kcomp,rccomp](){});
     });
 q.wait(); timers.poppush("gridding proper");
+cout <<"beep" << endl;
         constexpr size_t blksz = 32768;
-        size_t nblock = idxcomp.blockinfo.size()-1;
-        for (size_t ofs=0; ofs<nblock; ofs+= blksz)
+        size_t nblock = blockstart.size();
+        for (size_t ofs=0; ofs<nblock; ofs+=blksz)
           {
           q.submit([&](sycl::handler &cgh)
             {
@@ -1442,7 +1376,6 @@ q.wait(); timers.poppush("gridding proper");
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             RowchanComputer rccomp(idxcomp, cgh);
   
-            sycl::accessor acc_tileinfo{idxcomp.buf_tileinfo, cgh, sycl::read_only};
             sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
             sycl::accessor accvis{bufvis, cgh, sycl::read_only};
             sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
@@ -1454,7 +1387,7 @@ q.wait(); timers.poppush("gridding proper");
             size_t sidelen = 2*nsafe+(1<<logsquare);
             my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
 
-            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,acc_tileinfo,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;
   
@@ -1466,11 +1399,12 @@ q.wait(); timers.poppush("gridding proper");
                 tile[iu][iv][1] = Tcalc(0);
                 }
               item.barrier();
-  
+#if 1
               for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                 {
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
+//irow=ichan=0;
                 if (irow==~size_t(0)) break;  // work done
                 auto coord = blloc.effectiveCoord(irow, ichan);
                 auto imflip = coord.FixW();
@@ -1506,10 +1440,10 @@ q.wait(); timers.poppush("gridding proper");
                     }
                   }
                 }
-  
+#endif
               // add local buffer back to global buffer
-              auto u_tile = acc_tileinfo[iblock].tile_u;
-              auto v_tile = acc_tileinfo[iblock].tile_v;
+              auto u_tile = rccomp.acc_blockstart[iblock].first.tile_u;
+              auto v_tile = rccomp.acc_blockstart[iblock].first.tile_v;
               item.barrier();
               for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                 {
@@ -1645,20 +1579,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 
 #else  // no SYCL support
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &,
+  const cmav<double,1> &, const cmav<complex<Tms>,2> &,
+  const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
+  bool, size_t, vmav<Timg,2> &, size_t,
+  bool=false, bool=true, double=1.1,
+  double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &,
+  const cmav<double,1> &, const cmav<Timg,2> &,
+  const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
+  double, bool, size_t, vmav<complex<Tms>,2> &,
+  size_t, bool=false, bool=true,
+  double=1.1, double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
 #endif
