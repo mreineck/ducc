@@ -331,10 +331,9 @@ class oof2filter
 
     double operator()(double x2)
       {
-      double y2 = c0*x2 + c1*x1 + d0*y1;
+      y1 = c0*x2 + c1*x1 + d0*y1;
       x1 = x2;
-      y1 = y2;
-      return y2;
+      return y1;
       }
   };
 
