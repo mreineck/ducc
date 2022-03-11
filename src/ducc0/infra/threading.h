@@ -55,6 +55,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstddef>
 #include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <optional>
 
 namespace ducc0 {
 
@@ -141,6 +144,60 @@ inline void execParallel(size_t nwork, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   { execParallel(0, nwork, nthreads, func); }
 
+// FIXME: experimental
+template<typename T> class Worklist
+  {
+  private:
+    std::mutex mtx;
+    std::condition_variable cv;
+    size_t nworking {0};
+    std::vector<T> items;
+
+  public:
+    Worklist() {}
+    Worklist(const std::vector<T> &items_): items(items_) {}
+
+    std::optional<T> get_item()
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      cv.wait(lck,[&](){return (!items.empty()) || (nworking==0);});
+      if (!items.empty())
+        {
+        auto res = items.back();
+        items.pop_back();
+        ++nworking;
+        return res;
+        }
+      else
+        return {};      
+      }
+    void put_item(const T &item)
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      items.push_back(item);
+      cv.notify_one();
+      }
+    void work_done()
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      if ((--nworking==0) && items.empty())
+        cv.notify_all();
+      }
+  };
+
+// FIXME: experimental
+template<typename T, typename Func> auto execRecursive
+  (size_t nthreads, Worklist<T> &wl, Func &&func)
+  {
+  execParallel(nthreads, [&wl, &func](auto &) {
+    while(auto wrk=wl.get_item())
+      {
+      func(wrk.value());
+      wl.work_done();
+      }
+    });
+  }
+
 } // end of namespace detail_threading
 
 using detail_threading::max_threads;
@@ -152,6 +209,9 @@ using detail_threading::execStatic;
 using detail_threading::execDynamic;
 using detail_threading::execGuided;
 using detail_threading::execParallel;
+
+using detail_threading::Worklist;
+using detail_threading::execRecursive;
 
 } // end of namespace ducc0
 
