@@ -185,14 +185,14 @@ template<typename T> class Worklist
       }
   };
 
-// FIXME: experimental
 template<typename T, typename Func> auto execRecursive
-  (size_t nthreads, Worklist<T> &wl, Func &&func)
+  (size_t nthreads, const std::vector<T> &items, Func &&func)
   {
+  Worklist<T> wl(items);
   execParallel(nthreads, [&wl, &func](auto &) {
     while(auto wrk=wl.get_item())
       {
-      func(wrk.value());
+      func(wrk.value(), [&wl](const T &item){wl.put_item(item);});
       wl.work_done();
       }
     });
