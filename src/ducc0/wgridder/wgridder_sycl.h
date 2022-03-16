@@ -87,6 +87,7 @@ class RowchanRange
 
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
+    uint16_t size() const { return ch_end-ch_begin; }
   };
 
 struct UVW
@@ -926,6 +927,8 @@ q.wait(); timers.poppush("globcorr");
         globcorr.apply_global_corrections(q, bufdirty);
 
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+q.wait(); timers.poppush("FFT plan generation");
+        sycl_fft_plan plan(bufgrid);
 q.wait(); timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
@@ -954,7 +957,7 @@ q.wait(); timers.poppush("wscreen");
 
 q.wait(); timers.poppush("FFT");
           // FFT
-          sycl_c2c(q, bufgrid, true);
+          plan.exec(q, bufgrid, true);
 
 q.wait(); timers.poppush("degridding proper");
           constexpr size_t blksz = 32768;
@@ -1072,8 +1075,10 @@ q.wait(); timers.poppush("globcorr");
         globcorr.corr_degrid_narrow_field(q, bufdirty, bufgrid);
         }
         // FFT
+q.wait(); timers.poppush("FFT plan generation");
+        sycl_fft_plan plan(bufgrid);
 q.wait(); timers.poppush("FFT");
-        sycl_c2c(q, bufgrid, true);
+        plan.exec(q, bufgrid, true);
 
 q.wait(); timers.poppush("degridding proper");
         constexpr size_t blksz = 32768;
@@ -1179,6 +1184,8 @@ q.wait(); timers.poppush("indexcomp");
         CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
         GlobalCorrector globcorr(*this);
 
+q.wait(); timers.poppush("FFT plan generation");
+        sycl_fft_plan plan(bufgrid);
 q.wait(); timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
@@ -1307,7 +1314,7 @@ q.wait(); timers.poppush("gridding proper");
             }
 q.wait(); timers.poppush("FFT");
           // FFT
-          sycl_c2c(q, bufgrid, false);
+          plan.exec(q, bufgrid, false);
 
 q.wait(); timers.poppush("wscreen");
           globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
@@ -1398,7 +1405,7 @@ q.wait(); timers.poppush("gridding proper");
                 tile[iu][iv][1] = Tcalc(0);
                 }
               item.barrier();
-#if 1
+
               for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                 {
                 size_t irow, ichan;
@@ -1439,7 +1446,7 @@ q.wait(); timers.poppush("gridding proper");
                     }
                   }
                 }
-#endif
+
               // add local buffer back to global buffer
               auto u_tile = rccomp.acc_blockstart[iblock].first.tile_u;
               auto v_tile = rccomp.acc_blockstart[iblock].first.tile_v;
@@ -1458,9 +1465,11 @@ q.wait(); timers.poppush("gridding proper");
             });
           }
 
+q.wait(); timers.poppush("FFT plan generation");
+        sycl_fft_plan plan(bufgrid);
 q.wait(); timers.poppush("FFT");
         // FFT
-        sycl_c2c(q, bufgrid, false);
+        plan.exec(q, bufgrid, false);
 
 q.wait(); timers.poppush("globcorr");
         {
