@@ -268,11 +268,11 @@ py::array Py_ms2dirty(const py::array &uvw,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t /*nu*/,
   size_t /*nv*/, double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask,
-  bool double_precision_accumulation=false)
+  bool double_precision_accumulation=false, bool gpu=false)
   {
   return Py_vis2dirty(uvw, freq, ms, wgt, npix_x, npix_y, pixsize_x, pixsize_y,
     epsilon, do_wgridding, nthreads, verbosity, mask, false, true, None, 1.1,
-    2.6, 0., 0., true, double_precision_accumulation);
+    2.6, 0., 0., true, gpu, double_precision_accumulation);
   }
 
 constexpr auto ms2dirty_DS = R"""(
@@ -327,9 +327,9 @@ Other strides will work, but can degrade performance significantly.
 py::array Py_dirty2ms(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/, double epsilon,
-  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask)
+  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask, bool gpu=false)
   {
-  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, true);
+  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, true, None, 1.1, 2.6, 0, 0, true, gpu);
   }
 
 constexpr auto dirty2ms_DS = R"""(
@@ -411,10 +411,10 @@ void add_wgridder(py::module_ &msup)
   m.def("ms2dirty", &Py_ms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,
     "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "double_precision_accumulation"_a=false);
+    "double_precision_accumulation"_a=false, "gpu"_a=false);
   m.def("dirty2ms", &Py_dirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0, "epsilon"_a,
-    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
+    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None, "gpu"_a=false);
   }
 
 }

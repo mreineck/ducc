@@ -1365,7 +1365,6 @@ q.wait(); timers.poppush("copy HtoD");
     cgh.single_task([accvis,accwgt,accgridr,blloc,kcomp,rccomp](){});
     });
 q.wait(); timers.poppush("gridding proper");
-cout <<"beep" << endl;
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+=blksz)
