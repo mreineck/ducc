@@ -190,7 +190,7 @@ template<typename T> class Worklist
  *  (the work item to be processed) as well as a function which also takes
  *  a const T & (the insert function). Work items will be assigned whenever a
  *  thread becomes available. */
-template<typename T, typename Func> auto execRecursive
+template<typename T, typename Func> auto execWorklist
   (size_t nthreads, const std::vector<T> &items, Func &&func)
   {
   Worklist<T> wl(items);
@@ -212,7 +212,7 @@ using detail_threading::execStatic;
 using detail_threading::execDynamic;
 using detail_threading::execGuided;
 using detail_threading::execParallel;
-using detail_threading::execRecursive;
+using detail_threading::execWorklist;
 
 } // end of namespace ducc0
 
