@@ -1,7 +1,7 @@
 /** \file ducc0/infra/threading.h
  *  Mulithreading support, similar to functionality provided by OpenMP
  *
- * \copyright Copyright (C) 2019-2021 Peter Bell, Max-Planck-Society
+ * \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
  * \authors Peter Bell, Martin Reinecke
  */
 
@@ -55,6 +55,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstddef>
 #include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <optional>
 
 namespace ducc0 {
 
@@ -141,6 +144,63 @@ inline void execParallel(size_t nwork, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   { execParallel(0, nwork, nthreads, func); }
 
+template<typename T> class Worklist
+  {
+  private:
+    std::mutex mtx;
+    std::condition_variable cv;
+    size_t nworking{0};
+    std::vector<T> items;
+
+  public:
+    Worklist(const std::vector<T> &items_)
+      : items(items_) {}
+
+    std::optional<T> get_item()
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      if ((--nworking==0) && items.empty()) cv.notify_all();
+      cv.wait(lck,[&](){return (!items.empty()) || (nworking==0);});
+      if (!items.empty())
+        {
+        auto res = items.back();
+        items.pop_back();
+        ++nworking;
+        return res;
+        }
+      else
+        return {};      
+      }
+    void startup()
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      ++nworking;
+      }
+    void put_item(const T &item)
+      {
+      std::unique_lock<std::mutex> lck(mtx);
+      items.push_back(item);
+      cv.notify_one();
+      }
+  };
+
+/// Execute \a func on work items in \a items over \a nthreads threads.
+/** While processing a work item, \a func may submit further items to the list
+ *  of work items. For this purpose, \a func must take a const T &
+ *  (the work item to be processed) as well as a function which also takes
+ *  a const T & (the insert function). Work items will be assigned whenever a
+ *  thread becomes available. */
+template<typename T, typename Func> auto execWorklist
+  (size_t nthreads, const std::vector<T> &items, Func &&func)
+  {
+  Worklist<T> wl(items);
+  execParallel(nthreads, [&wl, &func](auto &) {
+    wl.startup();
+    while(auto wrk=wl.get_item())
+      func(wrk.value(), [&wl](const T &item){wl.put_item(item);});
+    });
+  }
+
 } // end of namespace detail_threading
 
 using detail_threading::max_threads;
@@ -152,6 +212,7 @@ using detail_threading::execStatic;
 using detail_threading::execDynamic;
 using detail_threading::execGuided;
 using detail_threading::execParallel;
+using detail_threading::execWorklist;
 
 } // end of namespace ducc0
 
