@@ -87,7 +87,7 @@ class RowchanRange
 
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
-    uint16_t size() const { return ch_end-ch_begin; }
+    uint16_t nchan() const { return ch_end-ch_begin; }
   };
 
 struct UVW
@@ -266,7 +266,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(mask.shape(), {nrow,nchan});
 
       size_t ntiles_u = (nu>>logsquare) + 20;
-      vector<bufmap> buf(ntiles_u);
+      size_t ntiles_v = (nv>>logsquare) + 20;
+      constexpr size_t nbuf = 4096;
+      vector<bufmap> buf(nbuf);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
       auto shift = dw-(0.5*supp*dw)-wmin;
@@ -283,7 +285,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto tileidx = uvwlast.tile_u;
+            auto tileidx = (uvwlast.tile_u*ntiles_v + uvwlast.tile_v)%nbuf;
             lock_guard<mutex> lock(buf[tileidx].mut);
             auto &loc(buf[tileidx].m[uvwlast]);
             for (auto &x: interbuf)
@@ -432,8 +434,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
-// FIXME: 0.3 is an estimated fudge factor
-        double fftcost = 0.3*nu/nref_fft*nv/nref_fft*logterm*costref_fft;
+        double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*supp + ((2*supp+1)*(supp+3)));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         if (do_wgridding)
