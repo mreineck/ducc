@@ -415,6 +415,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
   protected:
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
+    using fmav_info::idx;
 
   public:
     using typename tinfo::shape_t;
@@ -477,6 +478,7 @@ template<typename T> class vfmav: public cfmav<T>
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
     using tinfo::shp, tinfo::str;
+    using fmav_info::idx;
 
   public:
     using typename tinfo::shape_t;
