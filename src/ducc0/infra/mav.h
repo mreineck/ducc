@@ -974,14 +974,20 @@ template<typename Ttuple, typename Func>
   {
   auto len = shp[idim];
   if (idim+1<shp.size())
+    {
+    auto idxbak = index[idim];
     for (size_t i=0; i<len; ++i, ++index[idim])
       applyHelper_with_index(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
         func, index);
+    index[idim] = idxbak;
+    }
   else
     {
     auto locptrs(ptrs);
+    auto idxbak = index[idim];
     for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, str, idim))
       call_with_tuple_arg(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
+    index[idim] = idxbak;
     }
   }
 template<typename Func, typename Ttuple>
