@@ -525,7 +525,7 @@ template<typename T> class vfmav: public cfmav<T>
       }
 
     using cfmav<T>::operator();
-    template<typename... Ns> const T &operator()(Ns... ns) const
+    template<typename... Ns> T &operator()(Ns... ns)
       { return raw(idx(ns...)); }
 
     vfmav subarray(const vector<slice> &slices)
