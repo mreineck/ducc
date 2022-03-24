@@ -940,6 +940,83 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
   }
 
+DUCC0_NOINLINE auto multiprep_noopt(const vector<fmav_info> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    {
+    shp.push_back(info[0].shape(i));
+    for (size_t j=0; j<narr; ++j)
+      str[j].push_back(info[j].stride(i));
+    }
+  return make_tuple(shp, str);
+  }
+
+template <typename Func, typename Arg, typename Ttuple, size_t... I>
+inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
+  index_sequence<I...>)
+  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
+template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
+  (Func &&func, Arg &&arg, Ttuple &&tuple)
+  {
+  call_with_tuple_arg_impl(forward<Func>(func), arg, tuple,
+                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  }
+template<typename Ttuple, typename Func>
+  DUCC0_NOINLINE void applyHelper_with_index(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    vector<size_t> &index)
+  {
+  auto len = shp[idim];
+  if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i, ++index[idim])
+      applyHelper_with_index(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
+        func, index);
+  else
+    {
+    auto locptrs(ptrs);
+    for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, str, idim))
+      call_with_tuple_arg(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
+    }
+  }
+template<typename Func, typename Ttuple>
+  inline void applyHelper_with_index(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    size_t nthreads, vector<size_t> &index)
+  {
+  if (shp.size()==0)
+    call_with_tuple_arg(forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
+  else if (nthreads==1)
+    applyHelper_with_index(0, shp, str, ptrs, forward<Func>(func), index);
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      auto locshp(shp);
+      locshp[0] = hi-lo;
+      auto locidx(index);
+      locidx[0]=lo;
+      applyHelper_with_index(0, locshp, str, locptrs, func, locidx);
+      });
+  }
+template<typename Func, typename... Targs>
+  void mav_apply_with_index(Func &&func, int nthreads, Targs... args)
+  {
+  vector<fmav_info> infos;
+  (infos.push_back(args), ...);
+  auto [shp, str] = multiprep_noopt(infos);
+  vector<size_t> index(shp.size(), 0);
+
+  auto ptrs = tuple_transform(forward_as_tuple(args...),
+    [](auto &&arg){return arg.data();});
+  applyHelper_with_index(shp, str, ptrs, forward<Func>(func), nthreads, index);
+  }
+
 
 template<typename T, size_t ndim> class mavref
   {
@@ -1107,6 +1184,7 @@ using detail_mav::cmav;
 using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
+using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
 }
 
