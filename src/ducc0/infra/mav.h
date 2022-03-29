@@ -1218,16 +1218,16 @@ template<typename Ti, typename To, typename I> void special_add_at
 
   if (nthreads==1)
     for (size_t iin=0; iin<idx.size(); ++iin)
-      applyHelper(shp, str, make_tuple(in.data()+iin*dpin, out.data()+idx[iin]*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+      applyHelper(shp, str, make_tuple(in.data()+iin*dpin, out.data()+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
   else
-    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+    execParallel(shp[0], nthreads, [&,shp=shp,str=str](size_t lo, size_t hi)
       {
       auto shp2 = shp;
       shp2[0] = hi-lo;
       auto pin = fin.data()+lo*str[0][0];
       auto pout = fout.data()+lo*str[1][0];
       for (size_t iin=0; iin<idx.size(); ++iin)
-        applyHelper(shp2, str, make_tuple(pin+iin*dpin, pout+idx[iin]*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+        applyHelper(shp2, str, make_tuple(pin+iin*dpin, pout+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
       });
   }
 
