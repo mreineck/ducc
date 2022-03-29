@@ -451,6 +451,9 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
 
+    // no-op. Needed for template tricks.
+    cfmav to_fmav() const { return *this; }
+
     void assign(const cfmav &other)
       {
       tinfo::assign(other);
@@ -519,6 +522,10 @@ template<typename T> class vfmav: public cfmav<T>
     using cfmav<T>::raw;
     template<typename I> T &raw(I i)
       { return data()[i]; }
+
+    // no-op. Needed for template tricks.
+    using cfmav<T>::to_fmav;
+    vfmav to_fmav() { return *this; }
 
     void assign(const vfmav &other)
       {
@@ -611,6 +618,9 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       {
       return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    // Needed for template tricks.
+    cfmav<T> to_fmav() const { return operator cfmav<T>(); }
+
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
@@ -672,6 +682,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       {
       return vfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    // Needed for template tricks.
+    using cmav<T, ndim>::to_fmav;
+    vfmav<T> to_fmav() { return operator vfmav<T>(); }
+
     using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns)
       { return const_cast<T &>(parent::operator()(ns...)); }
@@ -1179,6 +1193,30 @@ template<size_t nd0, size_t nd1, size_t nd2,
                       forward<Func>(func), nthreads); 
   }
 
+template<typename Ti, typename To, typename I> void special_add_at
+  (const Ti &in, size_t axis, const I &idx, To &out)
+  {
+  auto fin = in.to_fmav();
+  auto fout = out.to_fmav();
+  MR_assert(fin.ndim()==fout.ndim(), "dimension mismatch");
+  MR_assert(fin.ndim()>axis, "input array has too few dimensions");
+  MR_assert(idx.size()==fin.shape(axis), "idx size mismatch");
+
+  vector<slice> slices(fin.ndim());
+  slices[axis] = slice(0);
+  auto sub_in = subarray(fin, slices);
+  auto sub_out = subarray(fout, slices);
+
+  auto [shp, str] = multiprep({sub_in, sub_out});
+  bool last_contiguous = true;
+  if (shp.size()>0)
+    for (const auto &s:str)
+      last_contiguous &= (s.back()==1);
+
+  for (size_t iin=0; iin<idx.size(); ++iin)
+    applyHelper(shp, str, make_tuple(in.data()+iin*in.stride(axis), out.data()+idx[iin]*out.stride(axis)), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+  }
+
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1194,6 +1232,7 @@ using detail_mav::subarray;
 using detail_mav::mav_apply;
 using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
+using detail_mav::special_add_at;
 }
 
 #endif
