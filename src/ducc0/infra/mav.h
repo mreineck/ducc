@@ -1194,7 +1194,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   }
 
 template<typename Ti, typename To, typename I> void special_add_at
-  (const Ti &in, size_t axis, const I &idx, To &out)
+  (const Ti &in, size_t axis, const I &idx, To &out, size_t nthreads)
   {
   auto fin = in.to_fmav();
   auto fout = out.to_fmav();
@@ -1213,8 +1213,22 @@ template<typename Ti, typename To, typename I> void special_add_at
     for (const auto &s:str)
       last_contiguous &= (s.back()==1);
 
-  for (size_t iin=0; iin<idx.size(); ++iin)
-    applyHelper(shp, str, make_tuple(in.data()+iin*in.stride(axis), out.data()+idx[iin]*out.stride(axis)), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+  auto dpin = fin.stride(axis);
+  auto dpout = fout.stride(axis);
+
+  if (nthreads==1)
+    for (size_t iin=0; iin<idx.size(); ++iin)
+      applyHelper(shp, str, make_tuple(in.data()+iin*dpin, out.data()+idx[iin]*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto shp2 = shp;
+      shp2[0] = hi-lo;
+      auto pin = fin.data()+lo*str[0][0];
+      auto pout = fout.data()+lo*str[1][0];
+      for (size_t iin=0; iin<idx.size(); ++iin)
+        applyHelper(shp2, str, make_tuple(pin+iin*dpin, pout+idx[iin]*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+      });
   }
 
 }
