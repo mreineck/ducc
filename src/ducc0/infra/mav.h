@@ -1193,6 +1193,12 @@ template<size_t nd0, size_t nd1, size_t nd2,
                       forward<Func>(func), nthreads); 
   }
 
+// in : mav-like
+// out: mav-like, same element type as "in", same shape as "in" except for "axis"
+// idx: 1D mav-like, integer element type, axis length==in.shape(axis), values
+//      in [0; out.shape(axis)[
+//
+// NOTE: "out" is NOT zeroed at the beginning!
 template<typename Ti, typename To, typename I> void special_add_at
   (const Ti &in, size_t axis, const I &idx, To &out, size_t nthreads)
   {

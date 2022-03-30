@@ -441,6 +441,7 @@ template<typename T> py::array Py2_special_add_at(py::array &a_, size_t axis, py
   auto a = to_vfmav<T>(a_);
   auto b = to_cfmav<T>(b_);
   auto index = to_cfmav<int64_t>(index_);
+  mav_apply([](T &v){v=0;}, 1, a);
   special_add_at(b, axis, index, a, 1);
   return a_;
   }
@@ -514,7 +515,7 @@ Notes
 
 The functionality in this module is not considered to have a stable interface
 and also may be moved to other modules in the future. If you use it, be prepared
-to adjust your code at some point ion the future!
+to adjust your code at some point in the future!
 )""";
 
 void add_misc(py::module_ &msup)
@@ -523,15 +524,15 @@ void add_misc(py::module_ &msup)
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 
-  m.def("vdot", &Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
-  m.def("l2error", &Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
+  m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
+  m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
 
-  m.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
-  m.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
+  m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
+  m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
 
-  m.def("transpose",&Py_transpose, "in"_a, "out"_a);
+  m.def("transpose", Py_transpose, "in"_a, "out"_a);
 
-  m.def("make_noncritical",&Py_make_noncritical,Py_make_noncritical_DS,"in"_a);
+  m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS, py::module_local())
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
@@ -539,7 +540,7 @@ void add_misc(py::module_ &msup)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
 
-  m.def("special_add_at",&Py_special_add_at,"a"_a, "axis"_a, "index"_a, "b"_a);
+  m.def("special_add_at", Py_special_add_at, "a"_a, "axis"_a, "index"_a, "b"_a);
   }
 
 }
