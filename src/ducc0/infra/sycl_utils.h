@@ -196,6 +196,7 @@ template<typename T> class sycl_fft_plan
             }
           });
         });
+      q.wait();
       }
     ~sycl_fft_plan()
       {
