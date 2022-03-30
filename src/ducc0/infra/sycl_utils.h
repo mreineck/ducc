@@ -156,68 +156,55 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
   }
 
 #if (defined (DUCC0_HAVE_CUFFT))
-template<typename T, int ndim> void sycl_c2c(sycl::queue &q, sycl::buffer<complex<T>,ndim> &buf, bool forward)
-  {
-  // This should not be needed, but without it tests fail when optimization is off
-  q.wait();
-  q.submit([&](sycl::handler &cgh)
-    {
-    sycl::accessor acc{buf, cgh, sycl::read_write};
-    cgh.hipSYCL_enqueue_custom_operation([acc, forward](sycl::interop_handle &h) {
-      void *native_mem = h.get_native_mem<sycl::backend::cuda>(acc);
-      cufftHandle plan;
 #define DUCC0_CUDACHECK(cmd, err) { auto res=cmd; MR_assert(res==CUFFT_SUCCESS, err, "\nError code: ", res); }
-// cufftCreate() is only needed for "extensible" plans ...
-//      DUCC0_CUDACHECK(cufftCreate(&plan), "plan creation failed")
-//      DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream");
-      auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
-      if constexpr (is_same<T,double>::value)
-        {
-        if constexpr(ndim==2)
-          {
-          DUCC0_CUDACHECK(cufftPlan2d(&plan, acc.get_range().get(0), acc.get_range().get(1), CUFFT_Z2Z),
-            "double precision planning failed")
-          }
-        else
-          MR_fail("unsupported dimensionality");
-        auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
-        DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, direction),
-          "double precision FFT failed")
-        }
-      else if constexpr (is_same<T,float>::value)
-        {
-        if constexpr(ndim==2)
-          {
-          DUCC0_CUDACHECK(cufftPlan2d(&plan, acc.get_range().get(0), acc.get_range().get(1), CUFFT_C2C),
-            "single precision planning failed")
-          }
-        else
-          MR_fail("unsupported dimensionality");
-        auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
-        DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, direction),
-          "single precision FFT failed")
-        }
-      else
-        MR_fail("unsupported data type");
-      DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
-#undef DUCC0_CUDACHECK
-      });
-    });
-//q.wait();
-  }
-#else
-template<typename T, int ndim> void sycl_c2c(sycl::queue &/*q*/, sycl::buffer<complex<T>,ndim> &buf, bool forward)
+
+template<typename T> class sycl_fft_plan
   {
-  sycl::host_accessor<complex<T>,ndim,sycl::access::mode::read_write> acc{buf};
-  complex<T> *ptr = acc.get_pointer();
-  if constexpr(ndim==2)
-    {
-    vfmav<complex<T>> arr(ptr, {buf.get_range().get(0), buf.get_range().get(1)});
-    c2c (arr, arr, {0,1}, forward, T(1));
-    }
-  else
-    MR_fail("unsupported dimensionality");
-  }
+  private:
+    static_assert(is_same<T,double>::value || is_same<T,float>::value, "unsupported data type");
+    cufftHandle plan;
+
+  public:
+    sycl_fft_plan(sycl::buffer<complex<T>,2> &buf)
+      {
+      auto transtype = is_same<T,double>::value ? CUFFT_Z2Z : CUFFT_C2C;
+      DUCC0_CUDACHECK(cufftPlan2d(&plan, buf.get_range().get(0), buf.get_range().get(1), transtype),
+            "planning failed")
+      DUCC0_CUDACHECK(cudaDeviceSynchronize(), "synchronization problem")
+      }
+    void exec(sycl::queue &q, sycl::buffer<complex<T>,2> &buf, bool forward)
+      {
+      q.wait();
+      q.submit([&](sycl::handler &cgh)
+        {
+        sycl::accessor acc{buf, cgh, sycl::read_write};
+        auto direction = forward ? CUFFT_FORWARD : CUFFT_INVERSE;
+        cgh.hipSYCL_enqueue_custom_operation([acc,direction,plan=plan](sycl::interop_handle &h) {
+          DUCC0_CUDACHECK(cufftSetStream(plan, h.get_native_queue<sycl::backend::cuda>()), "could not set stream")
+          void *native_mem = h.get_native_mem<sycl::backend::cuda>(acc);
+          if constexpr(is_same<T,double>::value)
+            {
+            auto* cu_d = reinterpret_cast<cufftDoubleComplex *>(native_mem);
+            DUCC0_CUDACHECK(cufftExecZ2Z(plan, cu_d, cu_d, direction),
+              "double precision FFT failed")
+            }
+          else
+            {
+            auto* cu_d = reinterpret_cast<cufftComplex *>(native_mem);
+            DUCC0_CUDACHECK(cufftExecC2C(plan, cu_d, cu_d, direction),
+              "single precision FFT failed")
+            }
+          });
+        });
+      }
+    ~sycl_fft_plan()
+      {
+      DUCC0_CUDACHECK(cufftDestroy(plan), "plan destruction failed")
+      DUCC0_CUDACHECK(cudaDeviceSynchronize(), "synchronization problem")
+      }
+  };
+
+#undef DUCC0_CUDACHECK
 #endif
 
 template<typename T, int ndim> void sycl_zero_buffer(sycl::queue &q, sycl::buffer<T,ndim> &buf)
@@ -272,7 +259,7 @@ template<typename T, size_t ndim> using my_local_accessor = sycl::accessor<T,ndi
 
 using detail_sycl_utils::make_sycl_buffer;
 using detail_sycl_utils::sycl_zero_buffer;
-using detail_sycl_utils::sycl_c2c;
+using detail_sycl_utils::sycl_fft_plan;
 using detail_sycl_utils::print_device_info;
 using detail_sycl_utils::my_atomic_ref;
 using detail_sycl_utils::my_atomic_ref_l;
