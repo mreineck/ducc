@@ -221,6 +221,13 @@ class fmav_info
       for (size_t i=0; i<ndim(); ++i) res += str[i]*ns[i];
       return res;
       }
+    template<typename RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
+      {
+      MR_assert(ndim()==end-beg, "incorrect number of indices");
+      size_t res = 0;
+      for (size_t i=0; i<ndim(); ++i, ++beg) res += str[i]* (*beg);
+      return res;
+      }
     /// Returns the common broadcast shape of *this and \a shp2
     shape_t bcast_shape(const shape_t &shp2) const
       {
@@ -472,6 +479,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       { return raw(idx(ns...)); }
     const T &operator()(const shape_t &ns) const
       { return raw(idx(ns)); }
+    template<typename RAiter> const T& val(RAiter beg, RAiter end) const
+      { return raw(idxval(beg, end)); }
 
     cfmav subarray(const vector<slice> &slices) const
       {
@@ -547,6 +556,9 @@ template<typename T> class vfmav: public cfmav<T>
       { return raw(idx(ns...)); }
     T &operator()(const shape_t &ns)
       { return raw(idx(ns)); }
+    using cfmav<T>::val;
+    template<typename RAiter> T& val(RAiter beg, RAiter end)
+      { return raw(idxval(beg, end)); }
 
     vfmav subarray(const vector<slice> &slices)
       {
