@@ -214,6 +214,13 @@ class fmav_info
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    ptrdiff_t idx(const shape_t &ns) const
+      {
+      MR_assert(ndim()==ns.size(), "incorrect number of indices");
+      size_t res = 0;
+      for (size_t i=0; i<ndim(); ++i) res += str[i]*ns[i];
+      return res;
+      }
     /// Returns the common broadcast shape of *this and \a shp2
     shape_t bcast_shape(const shape_t &shp2) const
       {
@@ -463,6 +470,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     /// Returns the data entry at the given set of indices.
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
+    const T &operator()(const shape_t &ns) const
+      { return raw(idx(ns)); }
 
     cfmav subarray(const vector<slice> &slices) const
       {
@@ -536,6 +545,8 @@ template<typename T> class vfmav: public cfmav<T>
     using cfmav<T>::operator();
     template<typename... Ns> T &operator()(Ns... ns)
       { return raw(idx(ns...)); }
+    T &operator()(const shape_t &ns)
+      { return raw(idx(ns)); }
 
     vfmav subarray(const vector<slice> &slices)
       {
