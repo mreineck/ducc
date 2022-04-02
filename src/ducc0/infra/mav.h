@@ -764,17 +764,16 @@ DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::strid
   if (shp.size()>1)
     {
     // sort dimensions in order of descending stride, as far as possible
-    vector<size_t> strcrit(shp.size(),0);
+    vector<size_t> strcrit(shp.size(),~size_t(0));
     for (const auto &curstr: str)
       for (size_t i=0; i<curstr.size(); ++i)
-        strcrit[i] = (strcrit[i]==0) ?
-          size_t(abs(curstr[i])) : min(strcrit[i],size_t(abs(curstr[i])));
-  
+        strcrit[i] = min(strcrit[i],size_t(abs(curstr[i])));
+
     for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
       {
       auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)
                         -strcrit.begin());
-      if (dim+1!=lastdim)
+      if ((dim+1!=lastdim) && (strcrit[dim]<strcrit[lastdim-1]))
         {
         swap(strcrit[dim], strcrit[lastdim-1]);
         swap(shp[dim], shp[lastdim-1]);
