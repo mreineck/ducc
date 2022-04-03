@@ -223,7 +223,7 @@ class fmav_info
       }
     template<typename RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
       {
-      MR_assert(ndim()==end-beg, "incorrect number of indices");
+      MR_assert(ndim()==size_t(end-beg), "incorrect number of indices");
       size_t res = 0;
       for (size_t i=0; i<ndim(); ++i, ++beg) res += str[i]* (*beg);
       return res;
@@ -486,6 +486,29 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       {
       auto [ninfo, nofs] = subdata(slices);
       return cfmav(ninfo, tbuf::d+nofs, *this);
+      }
+    cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
+      {
+      MR_assert(new_shape.size()>=ndim(),
+        "new shape smaller than original one");
+      MR_assert(axpos.size()==ndim(), "bad axpos size");
+      stride_t new_stride(new_shape.size(), 0);
+      vector<uint8_t> used(new_shape.size(),0);
+      for (size_t i=0; i<ndim(); ++i)
+        {
+        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(used[axpos[i]]==0, "repeated axis position");
+        used[axpos[i]]=1;
+        new_stride[axpos[i]] = str[i];
+        }
+      return cfmav(*this, new_shape, new_stride);
+      }
+    cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
+      {
+      shape_t axpos(ndim());
+      std::iota(axpos.begin(), axpos.end(), firstaxis);
+      return extend_and_broadcast(new_shape, axpos);
       }
   };
 
