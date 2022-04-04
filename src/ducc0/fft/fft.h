@@ -1858,12 +1858,14 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);
+#if 0
   if (axes.size()==2)
     {
     r2r_separable_hartley(in, out, axes, fct, nthreads);
     oscarize(out, axes[0], axes[1], nthreads);
     return;
     }
+#endif
 // disabled until we have a more efficient 3D oscarization
 #if 0
   if (axes.size()==3)
