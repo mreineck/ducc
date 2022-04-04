@@ -117,10 +117,25 @@ constexpr size_t MAXIDX=~(size_t(0));
 
 struct slice
   {
-  size_t lo, hi;
-  slice() : lo(0), hi(MAXIDX) {}
-  slice(size_t idx) : lo(idx), hi(idx) {}
-  slice(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
+  size_t beg, end;
+  ptrdiff_t step;
+  slice() : beg(0), end(MAXIDX), step(1) {}
+  slice(size_t idx) : beg(idx), end(idx), step(1) {}
+  slice(size_t beg_, size_t end_, ptrdiff_t step_=1)
+    : beg(beg_), end(end_), step(step_)
+    {
+// FIXME: add sanity checks here
+    }
+
+  size_t size(size_t shp) const
+    {
+    if (beg==end) return 0;
+    if (step>0) return (min(shp,end)-beg+step-1)/step;
+    // negative step
+    if (end==MAXIDX)
+      return (beg-step)/(-step);
+    return (beg-end-step-1)/(-step);
+    }
   };
 
 /// Helper class containing shape and stride information of an `fmav` object
@@ -278,21 +293,19 @@ class fmav_info
       stride_t nstr(ndim);
       MR_assert(slices.size()==ndim, "incorrect number of slices");
       size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      for (auto x:slices) if (x.beg==x.end) ++n0;
       ptrdiff_t nofs=0;
       nshp.resize(ndim-n0);
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
+        MR_assert(slices[i].beg<shp[i], "bad subset");
+        nofs+=slices[i].beg*str[i];
+        if (slices[i].beg!=slices[i].end)
           {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
+          auto ext = slices[i].size(shp[i]);
+          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
           ++i2;
           }
         }
@@ -399,24 +412,22 @@ template<size_t ndim> class mav_info
       array<size_t, nd2> nshp;
       array<ptrdiff_t, nd2> nstr;
 
-      // unnecessary, but gcc arns otherwise
+      // unnecessary, but gcc warns otherwise
       for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
 
       size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      for (auto x:slices) if (x.beg==x.end) ++n0;
       MR_assert(n0+nd2==ndim, "bad extent");
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
+        MR_assert(slices[i].beg<shp[i], "bad subset");
+        nofs+=slices[i].beg*str[i];
+        if (slices[i].beg!=slices[i].end)
           {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
+          auto ext = slices[i].size(shp[i]);
+          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
           ++i2;
           }
         }
