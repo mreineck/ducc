@@ -1748,14 +1748,12 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     else if (find(axes.begin(), axes.end(), idim) != axes.end())
       {
       if (nthreads==1)
-        {
         for (size_t i=0; i<len; ++i)
           {
           size_t j = (i==0) ? 0 : len-i;
           size_t io0=iout0+i*str, io1=iout1+j*str;
           hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
           }
-        }
       else
         execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
           {
