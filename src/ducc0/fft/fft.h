@@ -1751,14 +1751,12 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     else if (find(axes.begin(), axes.end(), idim) != axes.end())
       {
       if (nthreads==1)
-        {
         for (size_t i=0; i<len; ++i)
           {
           size_t j = (i==0) ? 0 : len-i;
           size_t io0=iout0+i*str, io1=iout1+j*str;
           hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
           }
-        }
       else
         execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
           {
@@ -1778,7 +1776,7 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
         for (size_t i=0; i<len; ++i)
           hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
       else
-         execParallel(0, len, nthreads, [&](size_t lo, size_t hi)
+        execParallel(0, len, nthreads, [&](size_t lo, size_t hi)
           {
           for (size_t i=lo; i<hi; ++i)
             hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
@@ -1790,73 +1788,27 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
 template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
   size_t nthreads)
   {
-  vfmav<T> d(data);
-  // sort axes to have decreasing strides from ax0 to ax1
-  if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
-  d.swap_axes(ax0, d.ndim()-2);
-  d.swap_axes(ax1, d.ndim()-1);
-  flexible_mav_apply<2>([nthreads](const auto &plane)
+  auto nu=data.shape(ax0), nv=data.shape(ax1);
+  if ((nu<3)||(nv<3)) return;
+  vector<slice> slc(data.ndim());
+  slc[ax0] = slice(1,(nu+1)/2);
+  slc[ax1] = slice(1,(nv+1)/2);
+  auto all = subarray(data, slc);
+  slc[ax0] = slice(nu-1,nu/2,-1);
+  auto ahl = subarray(data, slc);
+  slc[ax1] = slice(nv-1,nv/2,-1);
+  auto ahh = subarray(data, slc);
+  slc[ax0] = slice(1,(nu+1)/2);
+  auto alh = subarray(data, slc);
+  mav_apply([](T &ll, T &hl, T &hh, T &lh)
     {
-    auto nu=plane.shape(0), nv=plane.shape(1);
-    execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for(auto i=lo+1; i<hi+1; ++i)
-        for(size_t j=1; j<(nv+1)/2; ++j)
-          {
-          T ll = plane(i   ,j   );
-          T hl = plane(nu-i,j   );
-          T lh = plane(i   ,nv-j);
-          T hh = plane(nu-i,nv-j);
-          T v = T(0.5)*(ll+lh+hl+hh);
-          plane(i   ,j   ) = v-hh;
-          plane(nu-i,j   ) = v-lh;
-          plane(i   ,nv-j) = v-hl;
-          plane(nu-i,nv-j) = v-ll;
-          }
-      });
-    }, 1, d);
-  }
-
-// Bortfeld & Dinter, IEEE Transactions on Signal Processing 43, 1995, 1306 
-template<typename T> void oscarize3(vfmav<T> &data, size_t ax0, size_t ax1, size_t ax2,
-  size_t nthreads)
-  {
-  vfmav<T> d(data);
-  // sort axes to have decreasing strides from ax0 to ax2
-  if (d.stride(ax0)<d.stride(ax1)) swap(ax0, ax1);
-  if (d.stride(ax0)<d.stride(ax2)) swap(ax0, ax2);
-  if (d.stride(ax1)<d.stride(ax2)) swap(ax1, ax2);
-  d.swap_axes(ax0, d.ndim()-3);
-  d.swap_axes(ax1, d.ndim()-2);
-  d.swap_axes(ax2, d.ndim()-1);
-  flexible_mav_apply<3>([nthreads](const auto &plane)
-    {
-    auto nu=plane.shape(0), nv=plane.shape(1), nw=plane.shape(2);
-    execParallel(nu/2+1, nthreads, [&](size_t lo, size_t hi)
-      {
-      for(auto i=lo, xi=(i==0)?0:nu-i; i<hi; ++i, xi=nu-i)
-        for(size_t j=0, xj=0; j<=xj; ++j, xj=nv-j)
-          for(size_t k=0, xk=0; k<=xk; ++k, xk=nw-k)
-            {
-            T lll = plane(i ,j ,k );
-            T hll = plane(xi,j ,k );
-            T lhl = plane(i ,xj,k );
-            T hhl = plane(xi,xj,k );
-            T llh = plane(i ,j ,xk);
-            T hlh = plane(xi,j ,xk);
-            T lhh = plane(i ,xj,xk);
-            T hhh = plane(xi,xj,xk);
-            plane(i ,j ,k ) = T(0.5)*(llh+lhl+hll-hhh);
-            plane(xi,j ,k ) = T(0.5)*(hlh+hhl+lll-lhh);
-            plane(i ,xj,k ) = T(0.5)*(lhh+lll+hhl-hlh);
-            plane(xi,xj,k ) = T(0.5)*(hhh+hll+lhl-llh);
-            plane(i ,j ,xk) = T(0.5)*(lll+lhh+hlh-hhl);
-            plane(xi,j ,xk) = T(0.5)*(hll+hhh+llh-lhl);
-            plane(i ,xj,xk) = T(0.5)*(lhl+llh+hhh-hll);
-            plane(xi,xj,xk) = T(0.5)*(hhl+hlh+lhh-lll);
-            }
-      });
-    }, 1, d);
+    T tll=ll, thl=hl, tlh=lh, thh=hh;
+    T v = T(0.5)*(tll+tlh+thl+thh);
+    ll = v-thh;
+    hl = v-tlh;
+    lh = v-thl;
+    hh = v-tll;
+    }, nthreads, all, ahl, ahh, alh);
   }
 
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
@@ -1868,12 +1820,6 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
     {
     r2r_separable_hartley(in, out, axes, fct, nthreads);
     oscarize(out, axes[0], axes[1], nthreads);
-    return;
-    }
-  if (axes.size()==3)
-    {
-    r2r_separable_hartley(in, out, axes, fct, nthreads);
-    oscarize3(out, axes[0], axes[1], axes[2], nthreads);
     return;
     }
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);

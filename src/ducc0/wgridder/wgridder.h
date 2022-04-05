@@ -335,11 +335,10 @@ class Baselines
   };
 
 
-constexpr int logsquare=4;
-
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
   {
   private:
+    constexpr static int logsquare=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     TimerHierarchy timers;
     const cmav<complex<Tms>,2> &ms_in;
@@ -1549,7 +1548,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       epsilon /= do_wgridding ? 3 : 2;
       if (!gridding)
         {
-        timers.push("MS zeroing");
+        timers.push("zeroing MS");
         quickzero(ms_out, nthreads);
         timers.pop();
         }

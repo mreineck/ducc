@@ -3,6 +3,9 @@
   - improved template code for multi-array operations (internal detail)
 
 - fft:
+  - fix a bug in multi-D Hartley transform which was introduced in ducc0 0.21.
+    This bug was triggered in cases with two or three transformed axes and at
+    least one untransformed axis.
   - use clear dual-license headers in all files required for the FFT component
 
 - healpix:
