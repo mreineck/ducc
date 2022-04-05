@@ -441,7 +441,6 @@ template<typename T> py::array Py2_special_add_at(py::array &a_, size_t axis, py
   auto a = to_vfmav<T>(a_);
   auto b = to_cfmav<T>(b_);
   auto index = to_cfmav<int64_t>(index_);
-  mav_apply([](T &v){v=0;}, 1, a);
   special_add_at(b, axis, index, a, 1);
   return a_;
   }
