@@ -30,7 +30,7 @@ shapes1D = ((10,), (127,))
 shapes2D = ((128, 128), (128, 129),
             (1, 129), (2, 127), (3, 127), (6, 127),
             (129, 1), (127, 2), (127, 3), (127, 6))
-shapes3D = ((32, 17, 39),(32, 1, 39),(2, 3, 17),)
+shapes3D = ((32, 17, 39),(32, 1, 39),(2, 3, 17),(2,8,17),(5,7,5))
 shapes = shapes1D+shapes2D+shapes3D
 len1D = list(range(1, 2048)) + [137*137]
 
@@ -280,6 +280,24 @@ def test_genuine_hartley_2D(shp, axes):
     a = rng.random(shp)-0.5
     assert_(l2error(fft.genuine_hartley(fft.genuine_hartley(
         a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
+
+
+def test_hartley_multiD():
+    rng = np.random.default_rng(42)
+    for i in range(1000):
+        ndim = rng.integers(1, 6)
+        axlen = int(10)
+        shape = rng.integers(1, axlen+1, ndim)
+        axes = np.arange(ndim)
+        rng.shuffle(axes)
+        nax = rng.integers(1, ndim+1)
+        axes = axes[:nax]
+        a = rng.random(shape)-0.5
+        nthreads=rng.integers(1, 8)
+        b = fft.genuine_hartley(a,axes=axes, nthreads=nthreads)
+        c = fft.c2c(a.astype(np.complex128),axes=axes, nthreads=nthreads)
+        d = c.real - c.imag if proper_hartley_convention else c.real + c.imag
+        assert_(l2error(b,d)<1e-10)
 
 
 @pmp("len", len1D)
