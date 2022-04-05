@@ -117,10 +117,25 @@ constexpr size_t MAXIDX=~(size_t(0));
 
 struct slice
   {
-  size_t lo, hi;
-  slice() : lo(0), hi(MAXIDX) {}
-  slice(size_t idx) : lo(idx), hi(idx) {}
-  slice(size_t lo_, size_t hi_) : lo(lo_), hi(hi_) {}
+  size_t beg, end;
+  ptrdiff_t step;
+  slice() : beg(0), end(MAXIDX), step(1) {}
+  slice(size_t idx) : beg(idx), end(idx), step(1) {}
+  slice(size_t beg_, size_t end_, ptrdiff_t step_=1)
+    : beg(beg_), end(end_), step(step_)
+    {
+// FIXME: add sanity checks here
+    }
+
+  size_t size(size_t shp) const
+    {
+    if (beg==end) return 0;
+    if (step>0) return (min(shp,end)-beg+step-1)/step;
+    // negative step
+    if (end==MAXIDX)
+      return (beg-step)/(-step);
+    return (beg-end-step-1)/(-step);
+    }
   };
 
 /// Helper class containing shape and stride information of an `fmav` object
@@ -214,6 +229,20 @@ class fmav_info
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    ptrdiff_t idx(const shape_t &ns) const
+      {
+      MR_assert(ndim()==ns.size(), "incorrect number of indices");
+      size_t res = 0;
+      for (size_t i=0; i<ndim(); ++i) res += str[i]*ns[i];
+      return res;
+      }
+    template<typename RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
+      {
+      MR_assert(ndim()==size_t(end-beg), "incorrect number of indices");
+      size_t res = 0;
+      for (size_t i=0; i<ndim(); ++i, ++beg) res += str[i]* (*beg);
+      return res;
+      }
     /// Returns the common broadcast shape of *this and \a shp2
     shape_t bcast_shape(const shape_t &shp2) const
       {
@@ -264,21 +293,19 @@ class fmav_info
       stride_t nstr(ndim);
       MR_assert(slices.size()==ndim, "incorrect number of slices");
       size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      for (auto x:slices) if (x.beg==x.end) ++n0;
       ptrdiff_t nofs=0;
       nshp.resize(ndim-n0);
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
+        MR_assert(slices[i].beg<shp[i], "bad subset");
+        nofs+=slices[i].beg*str[i];
+        if (slices[i].beg!=slices[i].end)
           {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
+          auto ext = slices[i].size(shp[i]);
+          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
           ++i2;
           }
         }
@@ -385,24 +412,22 @@ template<size_t ndim> class mav_info
       array<size_t, nd2> nshp;
       array<ptrdiff_t, nd2> nstr;
 
-      // unnecessary, but gcc arns otherwise
+      // unnecessary, but gcc warns otherwise
       for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
 
       size_t n0=0;
-      for (auto x:slices) if (x.lo==x.hi) ++n0;
+      for (auto x:slices) if (x.beg==x.end) ++n0;
       MR_assert(n0+nd2==ndim, "bad extent");
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-        MR_assert(slices[i].lo<shp[i], "bad subset");
-        nofs+=slices[i].lo*str[i];
-        if (slices[i].lo!=slices[i].hi)
+        MR_assert(slices[i].beg<shp[i], "bad subset");
+        nofs+=slices[i].beg*str[i];
+        if (slices[i].beg!=slices[i].end)
           {
-          auto ext = slices[i].hi-slices[i].lo;
-          if (slices[i].hi==MAXIDX)
-            ext = shp[i]-slices[i].lo;
-          MR_assert(slices[i].lo+ext<=shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=str[i];
+          auto ext = slices[i].size(shp[i]);
+          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
           ++i2;
           }
         }
@@ -415,6 +440,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
   protected:
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
+    using fmav_info::idx;
 
   public:
     using typename tinfo::shape_t;
@@ -450,6 +476,9 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
 
+    // no-op. Needed for template tricks.
+    cfmav to_fmav() const { return *this; }
+
     void assign(const cfmav &other)
       {
       tinfo::assign(other);
@@ -459,11 +488,38 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     /// Returns the data entry at the given set of indices.
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
+    const T &operator()(const shape_t &ns) const
+      { return raw(idx(ns)); }
+    template<typename RAiter> const T& val(RAiter beg, RAiter end) const
+      { return raw(idxval(beg, end)); }
 
     cfmav subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = subdata(slices);
       return cfmav(ninfo, tbuf::d+nofs, *this);
+      }
+    cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
+      {
+      MR_assert(new_shape.size()>=ndim(),
+        "new shape smaller than original one");
+      MR_assert(axpos.size()==ndim(), "bad axpos size");
+      stride_t new_stride(new_shape.size(), 0);
+      vector<uint8_t> used(new_shape.size(),0);
+      for (size_t i=0; i<ndim(); ++i)
+        {
+        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(used[axpos[i]]==0, "repeated axis position");
+        used[axpos[i]]=1;
+        new_stride[axpos[i]] = str[i];
+        }
+      return cfmav(*this, new_shape, new_stride);
+      }
+    cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
+      {
+      shape_t axpos(ndim());
+      std::iota(axpos.begin(), axpos.end(), firstaxis);
+      return extend_and_broadcast(new_shape, axpos);
       }
   };
 
@@ -477,6 +533,7 @@ template<typename T> class vfmav: public cfmav<T>
     using tbuf = cmembuf<T>;
     using tinfo = fmav_info;
     using tinfo::shp, tinfo::str;
+    using fmav_info::idx;
 
   public:
     using typename tinfo::shape_t;
@@ -518,6 +575,10 @@ template<typename T> class vfmav: public cfmav<T>
     template<typename I> T &raw(I i)
       { return data()[i]; }
 
+    // no-op. Needed for template tricks.
+    using cfmav<T>::to_fmav;
+    vfmav to_fmav() { return *this; }
+
     void assign(const vfmav &other)
       {
       fmav_info::assign(other);
@@ -525,8 +586,13 @@ template<typename T> class vfmav: public cfmav<T>
       }
 
     using cfmav<T>::operator();
-    template<typename... Ns> const T &operator()(Ns... ns) const
+    template<typename... Ns> T &operator()(Ns... ns)
       { return raw(idx(ns...)); }
+    T &operator()(const shape_t &ns)
+      { return raw(idx(ns)); }
+    using cfmav<T>::val;
+    template<typename RAiter> T& val(RAiter beg, RAiter end)
+      { return raw(idxval(beg, end)); }
 
     vfmav subarray(const vector<slice> &slices)
       {
@@ -609,6 +675,9 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       {
       return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    // Needed for template tricks.
+    cfmav<T> to_fmav() const { return operator cfmav<T>(); }
+
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
@@ -670,6 +739,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       {
       return vfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
+    // Needed for template tricks.
+    using cmav<T, ndim>::to_fmav;
+    vfmav<T> to_fmav() { return operator vfmav<T>(); }
+
     using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns)
       { return const_cast<T &>(parent::operator()(ns...)); }
@@ -725,17 +798,16 @@ DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::strid
   if (shp.size()>1)
     {
     // sort dimensions in order of descending stride, as far as possible
-    vector<size_t> strcrit(shp.size(),0);
+    vector<size_t> strcrit(shp.size(),~size_t(0));
     for (const auto &curstr: str)
       for (size_t i=0; i<curstr.size(); ++i)
-        strcrit[i] = (strcrit[i]==0) ?
-          size_t(abs(curstr[i])) : min(strcrit[i],size_t(abs(curstr[i])));
-  
+        strcrit[i] = min(strcrit[i],size_t(abs(curstr[i])));
+
     for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
       {
       auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)
                         -strcrit.begin());
-      if (dim+1!=lastdim)
+      if ((dim+1!=lastdim) && (strcrit[dim]<strcrit[lastdim-1]))
         {
         swap(strcrit[dim], strcrit[lastdim-1]);
         swap(shp[dim], shp[lastdim-1]);
@@ -940,6 +1012,89 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
   }
 
+DUCC0_NOINLINE auto multiprep_noopt(const vector<fmav_info> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    {
+    shp.push_back(info[0].shape(i));
+    for (size_t j=0; j<narr; ++j)
+      str[j].push_back(info[j].stride(i));
+    }
+  return make_tuple(shp, str);
+  }
+
+template <typename Func, typename Arg, typename Ttuple, size_t... I>
+inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
+  index_sequence<I...>)
+  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
+template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
+  (Func &&func, Arg &&arg, Ttuple &&tuple)
+  {
+  call_with_tuple_arg_impl(forward<Func>(func), arg, tuple,
+                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  }
+template<typename Ttuple, typename Func>
+  DUCC0_NOINLINE void applyHelper_with_index(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    vector<size_t> &index)
+  {
+  auto len = shp[idim];
+  if (idim+1<shp.size())
+    {
+    auto idxbak = index[idim];
+    for (size_t i=0; i<len; ++i, ++index[idim])
+      applyHelper_with_index(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
+        func, index);
+    index[idim] = idxbak;
+    }
+  else
+    {
+    auto locptrs(ptrs);
+    auto idxbak = index[idim];
+    for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, str, idim))
+      call_with_tuple_arg(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
+    index[idim] = idxbak;
+    }
+  }
+template<typename Func, typename Ttuple>
+  inline void applyHelper_with_index(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    size_t nthreads, vector<size_t> &index)
+  {
+  if (shp.size()==0)
+    call_with_tuple_arg(forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
+  else if (nthreads==1)
+    applyHelper_with_index(0, shp, str, ptrs, forward<Func>(func), index);
+  else
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      auto locshp(shp);
+      locshp[0] = hi-lo;
+      auto locidx(index);
+      locidx[0]=lo;
+      applyHelper_with_index(0, locshp, str, locptrs, func, locidx);
+      });
+  }
+template<typename Func, typename... Targs>
+  void mav_apply_with_index(Func &&func, int nthreads, Targs... args)
+  {
+  vector<fmav_info> infos;
+  (infos.push_back(args), ...);
+  auto [shp, str] = multiprep_noopt(infos);
+  vector<size_t> index(shp.size(), 0);
+
+  auto ptrs = tuple_transform(forward_as_tuple(args...),
+    [](auto &&arg){return arg.data();});
+  applyHelper_with_index(shp, str, ptrs, forward<Func>(func), nthreads, index);
+  }
+
 
 template<typename T, size_t ndim> class mavref
   {
@@ -1094,6 +1249,50 @@ template<size_t nd0, size_t nd1, size_t nd2,
                       forward<Func>(func), nthreads); 
   }
 
+// in : mav-like
+// out: mav-like, same element type as "in", same shape as "in" except for "axis"
+// idx: 1D mav-like, integer element type, axis length==in.shape(axis), values
+//      in [0; out.shape(axis)[
+//
+// NOTE: "out" is NOT zeroed at the beginning!
+template<typename Ti, typename To, typename I> void special_add_at
+  (const Ti &in, size_t axis, const I &idx, To &out, size_t nthreads)
+  {
+  auto fin = in.to_fmav();
+  auto fout = out.to_fmav();
+  MR_assert(fin.ndim()==fout.ndim(), "dimension mismatch");
+  MR_assert(fin.ndim()>axis, "input array has too few dimensions");
+  MR_assert(idx.size()==fin.shape(axis), "idx size mismatch");
+
+  vector<slice> slices(fin.ndim());
+  slices[axis] = slice(0);
+  auto sub_in = subarray(fin, slices);
+  auto sub_out = subarray(fout, slices);
+
+  auto [shp, str] = multiprep({sub_in, sub_out});
+  bool last_contiguous = true;
+  if (shp.size()>0)
+    for (const auto &s:str)
+      last_contiguous &= (s.back()==1);
+
+  auto dpin = fin.stride(axis);
+  auto dpout = fout.stride(axis);
+
+  if (nthreads==1)
+    for (size_t iin=0; iin<idx.size(); ++iin)
+      applyHelper(shp, str, make_tuple(in.data()+iin*dpin, out.data()+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+  else
+    execParallel(shp[0], nthreads, [&,shp=shp,str=str](size_t lo, size_t hi)
+      {
+      auto shp2 = shp;
+      shp2[0] = hi-lo;
+      auto pin = fin.data()+lo*str[0][0];
+      auto pout = fout.data()+lo*str[1][0];
+      for (size_t iin=0; iin<idx.size(); ++iin)
+        applyHelper(shp2, str, make_tuple(pin+iin*dpin, pout+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
+      });
+  }
+
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1107,7 +1306,9 @@ using detail_mav::cmav;
 using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
+using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
+using detail_mav::special_add_at;
 }
 
 #endif

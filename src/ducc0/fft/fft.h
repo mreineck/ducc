@@ -1782,11 +1782,43 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     }
   }
 
+template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
+  size_t nthreads)
+  {
+  auto nu=data.shape(ax0), nv=data.shape(ax1);
+  if ((nu<3)||(nv<3)) return;
+  vector<slice> slc(data.ndim());
+  slc[ax0] = slice(1,(nu+1)/2);
+  slc[ax1] = slice(1,(nv+1)/2);
+  auto all = subarray(data, slc);
+  slc[ax0] = slice(nu-1,nu/2,-1);
+  auto ahl = subarray(data, slc);
+  slc[ax1] = slice(nv-1,nv/2,-1);
+  auto ahh = subarray(data, slc);
+  slc[ax0] = slice(1,(nu+1)/2);
+  auto alh = subarray(data, slc);
+  mav_apply([](T &ll, T &hl, T &hh, T &lh)
+    {
+    T tll=ll, thl=hl, tlh=lh, thh=hh;
+    T v = T(0.5)*(tll+tlh+thl+thh);
+    ll = v-thh;
+    hl = v-tlh;
+    lh = v-thl;
+    hh = v-tll;
+    }, nthreads, all, ahl, ahh, alh);
+  }
+
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);
+  if (axes.size()==2)
+    {
+    r2r_separable_hartley(in, out, axes, fct, nthreads);
+    oscarize(out, axes[0], axes[1], nthreads);
+    return;
+    }
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   shape_t tshp(in.shape());
