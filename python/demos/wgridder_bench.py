@@ -20,23 +20,38 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def get_npixdirty(uvw, freq, fov_deg, mask):
+    speedOfLight = 299792458.
+    bl = np.sqrt(uvw[:,0]**2+uvw[:,1]**2+uvw[:,2]**2)
+    bluvw = bl.reshape((-1,1))*freq.reshape((1,-1))/speedOfLight
+    maxbluvw = np.max(bluvw*mask)
+    minsize = int((2*fov_deg*np.pi/180*maxbluvw)) + 1
+    return minsize+(minsize%2)  # make even
+
+
 def main():
-#    ms, fov_deg, npixdirty = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2., 1200
-#    ms, fov_deg, npixdirty = '/home/martin/ms/1052736496-averaged.npz', 25., 2048
-    ms, fov_deg, npixdirty = '/home/martin/ms/1052735056.npz', 45., 1200
-#    ms, fov_deg, npixdirty = '/home/martin/ms/G330.89-0.36.npz', 2., 1200
-#    ms, fov_deg, npixdirty = '/home/martin/ms/bigms.npz', 0.0005556*1800, 1800
+#    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2.
+#    ms, fov_deg = '/home/martin/ms/1052736496-averaged.npz', 25.
+    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
+#    ms, fov_deg = '/home/martin/ms/G330.89-0.36.npz', 2.
+#    ms, fov_deg = '/home/martin/ms/bigms.npz', 0.0005556*1800
+#    ms, fov_deg = '/home/martin/ms/L_UV_DATA-IF1.npz', 1.
 
     data = np.load(ms)
     uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
     mask = data["mask"] if "mask" in data else None
 
     wgt[vis == 0] = 0
+    if mask is None:
+        mask = np.ones(wgt.shape, dtype=np.uint8)
+    mask[wgt == 0] = False
     DEG2RAD = np.pi/180
-    pixsize = fov_deg/npixdirty*DEG2RAD
     nthreads = 2
     epsilon = 1e-4
     do_wgridding = True
+
+    npixdirty = get_npixdirty(uvw, freq, fov_deg, mask)
+    pixsize = fov_deg/npixdirty*DEG2RAD
 
     print('Start gridding...')
     t0 = time()
