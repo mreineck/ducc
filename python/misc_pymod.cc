@@ -490,7 +490,7 @@ template<typename T> py::array Py2_special_add_at(py::array &a_, size_t axis, py
   auto a = to_vfmav<T>(a_);
   auto b = to_cfmav<T>(b_);
   auto index = to_cfmav<int64_t>(index_);
-  special_add_at(b, axis, index, a, 1);
+  special_add_at(b, axis, index, a);
   return a_;
   }
 py::array Py_special_add_at(py::array &a, size_t axis, py::array_t<int64_t> &index, const py::array &b)
