@@ -1252,50 +1252,6 @@ template<size_t nd0, size_t nd1, size_t nd2,
                       forward<Func>(func), nthreads); 
   }
 
-// in : mav-like
-// out: mav-like, same element type as "in", same shape as "in" except for "axis"
-// idx: 1D mav-like, integer element type, axis length==in.shape(axis), values
-//      in [0; out.shape(axis)[
-//
-// NOTE: "out" is NOT zeroed at the beginning!
-template<typename Ti, typename To, typename I> void special_add_at
-  (const Ti &in, size_t axis, const I &idx, To &out, size_t nthreads)
-  {
-  auto fin = in.to_fmav();
-  auto fout = out.to_fmav();
-  MR_assert(fin.ndim()==fout.ndim(), "dimension mismatch");
-  MR_assert(fin.ndim()>axis, "input array has too few dimensions");
-  MR_assert(idx.size()==fin.shape(axis), "idx size mismatch");
-
-  vector<slice> slices(fin.ndim());
-  slices[axis] = slice(0);
-  auto sub_in = subarray(fin, slices);
-  auto sub_out = subarray(fout, slices);
-
-  auto [shp, str] = multiprep({sub_in, sub_out});
-  bool last_contiguous = true;
-  if (shp.size()>0)
-    for (const auto &s:str)
-      last_contiguous &= (s.back()==1);
-
-  auto dpin = fin.stride(axis);
-  auto dpout = fout.stride(axis);
-
-  if (nthreads==1)
-    for (size_t iin=0; iin<idx.size(); ++iin)
-      applyHelper(shp, str, make_tuple(in.data()+iin*dpin, out.data()+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
-  else
-    execParallel(shp[0], nthreads, [&,shp=shp,str=str](size_t lo, size_t hi)
-      {
-      auto shp2 = shp;
-      shp2[0] = hi-lo;
-      auto pin = fin.data()+lo*str[0][0];
-      auto pout = fout.data()+lo*str[1][0];
-      for (size_t iin=0; iin<idx.size(); ++iin)
-        applyHelper(shp2, str, make_tuple(pin+iin*dpin, pout+idx(iin)*dpout), [](const auto &vin, auto &vout) {vout += vin;}, 1, last_contiguous);
-      });
-  }
-
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1311,7 +1267,6 @@ using detail_mav::subarray;
 using detail_mav::mav_apply;
 using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
-using detail_mav::special_add_at;
 }
 
 #endif
