@@ -1249,27 +1249,6 @@ template<size_t nd0, size_t nd1, size_t nd2,
                       forward<Func>(func), nthreads); 
   }
 
-// idx: 1D mav-like, integer element type, axis length==in.shape(axis), values
-//      in [0; out.shape(axis)[
-//
-// NOTE: "out" is NOT zeroed at the beginning!
-template<typename T, typename I> void special_add_at
-  (const cfmav<T> &in, size_t axis, const cfmav<I> &idx, vfmav<T> &out)
-  {
-  MR_assert(in.ndim()==out.ndim(), "dimension mismatch");
-  MR_assert(in.ndim()>axis, "input array has too few dimensions");
-  MR_assert(idx.size()==in.shape(axis), "idx size mismatch");
-  auto idx1 = idx.extend_and_broadcast(in.shape(),axis);
-  auto outstr1 = out.stride();
-  outstr1[axis] = 0;
-  auto axstr = out.stride(axis);
-  auto out1 = vfmav<T>(out, in.shape(), outstr1);
-  mav_apply([&](T vin, I idx, T &vout)
-    {
-    *(&vout+idx*axstr) += vin;
-    }, 1, in, idx1, out1);
-  }
-
 }
 
 using detail_mav::UNINITIALIZED;
@@ -1285,7 +1264,6 @@ using detail_mav::subarray;
 using detail_mav::mav_apply;
 using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
-using detail_mav::special_add_at;
 }
 
 #endif
