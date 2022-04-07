@@ -743,6 +743,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   protected:
     vmav(const tinfo &info, T *d_, tbuf &buf)
       : parent(info, d_, buf) {}
+    vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : parent(buf, shp_, str_){}
 
   public:
     vmav() {}
@@ -806,6 +808,18 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
+      }
+    static vmav from_vfmav(vfmav<T> &inp)
+      {
+      MR_assert(inp.ndim()==ndim, "dimensionality mismatch");
+      shape_t tshp;
+      stride_t tstr;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        tshp[i] = inp.shape(i);
+        tstr[i] = inp.stride(i);
+        }
+      return vmav(inp, tshp, tstr);
       }
   };
 
