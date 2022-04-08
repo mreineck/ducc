@@ -383,6 +383,17 @@ template<size_t ndim> class mav_info
     /// automatically, assuming a C-contiguous memory layout.
     mav_info(const shape_t &shape_)
       : mav_info(shape_, shape2stride(shape_)) {}
+    mav_info(const fmav_info &inp)
+      {
+      MR_assert(inp.ndim()==ndim, "dimensionality mismatch");
+      sz=1;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp[i] = inp.shape(i);
+        sz *= shp[i];
+        str[i] = inp.stride(i);
+        }
+      }
     void assign(const mav_info &other)
       {
       shp = other.shp;
@@ -688,6 +699,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(d_) {}
     cmav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
+    cmav(const cfmav<T> &inp)
+      : tinfo(inp), tbuf(inp) {}
     void assign(const cmav &other)
       {
       mav_info<ndim>::assign(other);
@@ -756,7 +769,9 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
-
+    vmav(vfmav<T> &inp)
+      : parent(inp) {}
+      
     void assign(vmav &other)
       { parent::assign(other); }
     operator vfmav<T>()
@@ -808,18 +823,6 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
-      }
-    static vmav from_vfmav(vfmav<T> &inp)
-      {
-      MR_assert(inp.ndim()==ndim, "dimensionality mismatch");
-      shape_t tshp;
-      stride_t tstr;
-      for (size_t i=0; i<ndim; ++i)
-        {
-        tshp[i] = inp.shape(i);
-        tstr[i] = inp.stride(i);
-        }
-      return vmav(inp, tshp, tstr);
       }
   };
 
