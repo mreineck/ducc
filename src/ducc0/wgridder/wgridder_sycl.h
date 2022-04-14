@@ -50,14 +50,6 @@ namespace detail_wgridder_sycl {
 
 #if defined(DUCC0_USE_SYCL)
 
-// do we want timing information (adds some synchronization overhead)?
-#undef DUCC0_DO_SYCL_TIMING
-#ifdef DUCC0_DO_SYCL_TIMING
-#define DUCC0_SYCL_TIMER(cmd) cmd
-#else
-#define DUCC0_SYCL_TIMER(cmd)
-#endif
-
 using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
@@ -893,58 +885,49 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
 
     void dirty2x()
       {
+      { // Device buffer scope
+      bool do_weights = (wgt.stride(0)!=0);
+      sycl::queue q{sycl::default_selector()};
+//print_device_info(q.get_device());
+      auto bufdirty(make_sycl_buffer(dirty_in));
+      // grid (only on GPU)
+      sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+      vmav<Tms,2> wgtx({1,1});
+      auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
+
+      Baselines_GPU_prep bl_prep(bl);
+      auto bufvis(make_sycl_buffer(ms_out));
+      const auto &dcoef(krn->Coeff());
+      vector<Tcalc> coef(dcoef.size());
+      for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+      auto bufcoef(make_sycl_buffer(coef));
+
+      sycl_zero_buffer(q, bufvis);
+
+      // initiate data transfer to GPU
+      q.submit([&](sycl::handler &cgh)
+        {
+        KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
+        sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
+        sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
+        cgh.single_task([kcomp,accdirty,accwgt](){});
+        });
+
+      countRanges();
+      report();
+
       timers.push("GPU degridding");
+      IndexComputer idxcomp(ranges, vissum, blockstart);
+      CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+      GlobalCorrector globcorr(*this);
+      sycl_fft_plan plan(bufgrid);
+
       if (do_wgridding)
         {
-        { // Device buffer scope
-DUCC0_SYCL_TIMER(timers.push("prep");)
-        sycl::queue q{sycl::default_selector()};
-//print_device_info(q.get_device());
-
-        auto bufdirty(make_sycl_buffer(dirty_in));
-        // grid (only on GPU)
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-
-        Baselines_GPU_prep bl_prep(bl);
-
-        auto bufvis(make_sycl_buffer(ms_out));
-        const auto &dcoef(krn->Coeff());
-        vector<Tcalc> coef(dcoef.size());
-        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        auto bufcoef(make_sycl_buffer(coef));
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("zeroing ms");)
-        sycl_zero_buffer(q, bufvis);
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("indexcomp");)
-        // build index structure
-        IndexComputer idxcomp(ranges, vissum, blockstart);
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    Baselines_GPU blloc(bl_prep, cgh);
-    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-    RowchanComputer rccomp(idxcomp, cgh);
-    sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
-    cgh.single_task([blloc,kcomp,rccomp,accdirty](){});
-    });
-#endif
-
-        // apply global corrections to dirty image on GPU
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("globcorr");)
-        GlobalCorrector globcorr(*this);
         globcorr.apply_global_corrections(q, bufdirty);
-
-        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT plan generation");)
-        sycl_fft_plan plan(bufgrid);
-DUCC0_SYCL_TIMER(q.wait(); timers.pop();)
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
-DUCC0_SYCL_TIMER(q.wait(); timers.push("plane data structures");)
           double w = wmin+pl*dw;
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
@@ -954,25 +937,13 @@ DUCC0_SYCL_TIMER(q.wait(); timers.push("plane data structures");)
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD idx");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
-    cgh.single_task([accblidx](){});
-    });
-#endif
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("zeroing grid");)
           sycl_zero_buffer(q, bufgrid);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("wscreen");)
           globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT");)
           // FFT
           plan.exec(q, bufgrid, true);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
@@ -985,11 +956,12 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
               sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
               sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
               sycl::accessor accvis{bufvis, cgh, sycl::write_only};
+              sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
 
               constexpr size_t n_workitems = 32;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
-              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,w,dw=dw,ofs,accblidx](sycl::nd_item<2> item)
+              cgh.parallel_for(sycl::nd_range(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = rccomp.acc_blockstart[iblock].first.minplane;
@@ -1031,71 +1003,25 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
       
                   if (shifting)
                     do_shift(res, coord, lshift, mshift, nshift, -imflip);
+                  if (do_weights)
+                    res *= accwgt[irow][ichan];
                   accvis[irow][ichan] += res;
                   }
                 });
               });
             }
           q.wait();
-DUCC0_SYCL_TIMER(timers.pop();)
           } // end of loop over planes
-DUCC0_SYCL_TIMER(q.wait(); timers.push("copying DtoH");)
-        }  // end of device buffer scope, buffers are written back
-DUCC0_SYCL_TIMER(timers.poppush("weight application");)
-        if (wgt.stride(0)!=0)  // we need to apply weights!
-          mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
-DUCC0_SYCL_TIMER(timers.pop();)
         }
       else
         {
-        { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
-DUCC0_SYCL_TIMER(q.wait(); timers.push("prep");)
-
-        auto bufdirty(make_sycl_buffer(dirty_in));
-        // grid (only on GPU)
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-
-        Baselines_GPU_prep bl_prep(bl);
-        auto bufvis(make_sycl_buffer(ms_out));
-        const auto &dcoef(krn->Coeff());
-        vector<Tcalc> coef(dcoef.size());
-        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        auto bufcoef(make_sycl_buffer(coef));
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("zeroing ms and grid");)
-        sycl_zero_buffer(q, bufvis);
         sycl_zero_buffer(q, bufgrid);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("indexcomp");)
-        // build index structure
-        IndexComputer idxcomp(ranges, vissum, blockstart);
-        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    Baselines_GPU blloc(bl_prep, cgh);
-    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-    RowchanComputer rccomp(idxcomp, cgh);
-    sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
-    cgh.single_task([blloc,kcomp,rccomp,accdirty](){});
-    });
-#endif
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("globcorr");)
-        {
-        GlobalCorrector globcorr(*this);
         globcorr.corr_degrid_narrow_field(q, bufdirty, bufgrid);
-        }
+
         // FFT
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT plan generation");)
-        sycl_fft_plan plan(bufgrid);
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT");)
         plan.exec(q, bufgrid, true);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+= blksz)
@@ -1108,11 +1034,12 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
   
             sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
             sycl::accessor accvis{bufvis, cgh, sycl::write_only};
-  
+            sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
+
             constexpr size_t n_workitems = 64;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
-            cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs](sycl::nd_item<2> item)
+            cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;
   
@@ -1151,60 +1078,65 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("degridding proper");)
     
                 if (shifting)
                   do_shift(res, coord, lshift, mshift, 0., -imflip);
+                if (do_weights)
+                  res *= accwgt[irow][ichan];
                 accvis[irow][ichan] = res;
                 }
               });
             });
           }
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copying DtoH");)
-        }  // end of device buffer scope, buffers are written back
-DUCC0_SYCL_TIMER(timers.poppush("weight application");)
-        if (wgt.stride(0)!=0)  // we need to apply weights!
-          mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, ms_out, wgt);
-DUCC0_SYCL_TIMER(timers.pop();)
         }
+      }  // end of device buffer scope, buffers are written back
       timers.pop();
       }
 
     void x2dirty()
       {
+      timers.push("GPU gridding prep");
+      bool do_weights = (wgt.stride(0)!=0);
+      { // Device buffer scope
+      sycl::queue q{sycl::default_selector()};
+
+      auto bufdirty(make_sycl_buffer(dirty_out));
+      auto bufvis(make_sycl_buffer(ms_in));
+      vmav<Tms,2> wgtx({1,1});
+      auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
+
+      // initiate data transfer to GPU
+      q.submit([&](sycl::handler &cgh)
+        {
+        sycl::accessor accvis{bufvis, cgh, sycl::read_only};
+        sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
+        cgh.single_task([accvis,accwgt](){});
+        });
+      timers.pop();
+      countRanges();
+      report();
       timers.push("GPU gridding");
+
+      // grid (only on GPU)
+      sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
+      sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
+
+      Baselines_GPU_prep bl_prep(bl);
+
+      const auto &dcoef(krn->Coeff());
+      vector<Tcalc> coef(dcoef.size());
+      for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+      auto bufcoef(make_sycl_buffer(coef));
+
+      IndexComputer idxcomp(ranges, vissum, blockstart);
+      CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
+      GlobalCorrector globcorr(*this);
+
+      sycl_fft_plan plan(bufgrid);
+
       if (do_wgridding)
         {
-DUCC0_SYCL_TIMER(timers.push("prep");)
-        bool do_weights = (wgt.stride(0)!=0);
-        { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
-
-        auto bufdirty(make_sycl_buffer(dirty_out));
         sycl_zero_buffer(q, bufdirty);
 
-        // grid (only on GPU)
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-        sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
-
-        Baselines_GPU_prep bl_prep(bl);
-        auto bufvis(make_sycl_buffer(ms_in));
-        vmav<Tms,2> wgtx({1,1});
-        auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
-
-        const auto &dcoef(krn->Coeff());
-        vector<Tcalc> coef(dcoef.size());
-        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        auto bufcoef(make_sycl_buffer(coef));
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("indexcomp");)
-        // build index structure
-        IndexComputer idxcomp(ranges, vissum, blockstart);
-        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-        GlobalCorrector globcorr(*this);
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT plan generation");)
-        sycl_fft_plan plan(bufgrid);
-DUCC0_SYCL_TIMER(q.wait(); timers.pop();)
         for (size_t pl=0; pl<nplanes; ++pl)
           {
-DUCC0_SYCL_TIMER(q.wait(); timers.push("plane data structures");)
           double w = wmin+pl*dw;
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
@@ -1214,28 +1146,9 @@ DUCC0_SYCL_TIMER(q.wait(); timers.push("plane data structures");)
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD idx");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
-    cgh.single_task([accblidx](){});
-    });
-#endif
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("zeroing grid");)
           sycl_zero_buffer(q, bufgrid);
           constexpr size_t blksz = 32768;
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    sycl::accessor accvis{bufvis, cgh, sycl::read_only};
-    sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-    cgh.single_task([accvis,accwgt](){});
-    });
-#endif
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("gridding proper");)
           for (size_t ofs=0; ofs<blidx.size(); ofs+= blksz)
             {
             q.submit([&](sycl::handler &cgh)
@@ -1331,68 +1244,21 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("gridding proper");)
                 });
               });
             }
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT");)
+
           // FFT
           plan.exec(q, bufgrid, false);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("wscreen");)
           globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
           q.wait();
-DUCC0_SYCL_TIMER(timers.pop();)
           } // end of loop over planes
 
-DUCC0_SYCL_TIMER(q.wait(); timers.push("globcorr");)
         // apply global corrections to dirty image on GPU
         globcorr.apply_global_corrections(q, bufdirty);
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy DtoH");)
-        }  // end of device buffer scope, buffers are written back
-DUCC0_SYCL_TIMER(timers.pop();)
         }
       else
         {
-DUCC0_SYCL_TIMER(timers.push("prep");)
-        bool do_weights = (wgt.stride(0)!=0);
-
-        { // Device buffer scope
-        sycl::queue q{sycl::default_selector()};
-        // dirty image
-        auto bufdirty(make_sycl_buffer(dirty_out));
-        // grid (only on GPU)
-        sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
-        sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
-
-        Baselines_GPU_prep bl_prep(bl);
-        auto bufvis(make_sycl_buffer(ms_in));
-        vmav<Tms,2> wgtx({1,1});
-        auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
-
-        const auto &dcoef(krn->Coeff());
-        vector<Tcalc> coef(dcoef.size());
-        for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
-        auto bufcoef(make_sycl_buffer(coef));
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("zeroing grid");)
         sycl_zero_buffer(q, bufgrid);
 
-        // build index structure
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("indexcomp");)
-        IndexComputer idxcomp(ranges, vissum, blockstart);
-        CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
-
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy HtoD");)
-#ifdef DUCC0_DO_SYCL_TIMING
-  q.submit([&](sycl::handler &cgh)
-    {
-    Baselines_GPU blloc(bl_prep, cgh);
-    KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-    RowchanComputer rccomp(idxcomp, cgh);
-    sycl::accessor accvis{bufvis, cgh, sycl::read_only};
-    sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-    sycl::accessor accgridr{bufgridr, cgh, sycl::read_only};
-    cgh.single_task([accvis,accwgt,accgridr,blloc,kcomp,rccomp](){});
-    });
-#endif
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("gridding proper");)
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+=blksz)
@@ -1486,21 +1352,12 @@ DUCC0_SYCL_TIMER(q.wait(); timers.poppush("gridding proper");)
             });
           }
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT plan generation");)
-        sycl_fft_plan plan(bufgrid);
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("FFT");)
         // FFT
         plan.exec(q, bufgrid, false);
 
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("globcorr");)
-        {
-        GlobalCorrector globcorr(*this);
         globcorr.corr_grid_narrow_field(q, bufgrid, bufdirty);
         }
-DUCC0_SYCL_TIMER(q.wait(); timers.poppush("copy DtoH");)
         }  // end of device buffer scope, buffers are written back
-DUCC0_SYCL_TIMER(timers.pop();)
-        }
       timers.pop();
       }
 
@@ -1564,8 +1421,6 @@ DUCC0_SYCL_TIMER(timers.pop();)
       MR_assert(epsilon>0, "epsilon must be positive");
       MR_assert(pixsize_x>0, "pixsize_x must be positive");
       MR_assert(pixsize_y>0, "pixsize_y must be positive");
-      countRanges();
-      report();
       gridding ? x2dirty() : dirty2x();
 
       if (verbosity>0)
@@ -1605,9 +1460,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
-
-#undef DUCC0_DO_SYCL_TIMING
-#undef DUCC0_SYCL_TIMER
 
 #else  // no SYCL support
 
