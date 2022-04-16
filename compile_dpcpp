@@ -1,2 +1,0 @@
-#!/bin/bash
-CC=dpcpp CXX=dpcpp DUCC0_FLAGS="-DDUCC0_USE_SYCL" DUCC0_OPTIMIZATION=native python3 setup.py install --user -f
