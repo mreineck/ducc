@@ -242,7 +242,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       else
         dw = wmin = nplanes = 0;
       size_t nbunch = do_wgridding ? supp : 1;
-      size_t max_allowed = 1024;
+      size_t max_allowed = 4096;
 
       checkShape(wgt.shape(),{nrow,nchan});
       checkShape(ms_in.shape(), {nrow,nchan});
@@ -251,7 +251,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
       size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
-timers.push("phase1");
+timers.push("counting");
       vector<atomic<uint32_t>> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
@@ -312,7 +312,7 @@ timers.push("phase1");
           flush();
           }
         });
-timers.poppush("phase2");
+timers.poppush("allocation");
 // accumulate
       {
       blockstart.clear(); // for now
@@ -329,7 +329,7 @@ timers.poppush("phase2");
             }
       buf.back()=acc;
       }
-timers.poppush("phase3");
+timers.poppush("filling");
       ranges.resize(buf.back());
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
@@ -390,7 +390,7 @@ timers.poppush("phase3");
           flush();
           }
         });
-timers.poppush("phase4");
+timers.poppush("building blockstart");
       vissum.clear(); // for now
       vissum.reserve(ranges.size()+1);
       uint32_t visacc=0;
@@ -502,17 +502,6 @@ timers.pop();
           fftcost *= nplanes;
           gridcost *= supp;
           }
-        // FIXME: heuristics could be improved
-        gridcost /= nthreads;  // assume perfect scaling for now
-        constexpr double max_fft_scaling = 6;
-        constexpr double scaling_power=2;
-        auto sigmoid = [](double x, double m, double s)
-          {
-          auto x2 = x-1;
-          auto m2 = m-1;
-          return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-          };
-        fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
         double cost = fftcost+gridcost;
         if (cost<mincost)
           {
@@ -1083,7 +1072,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
 
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
-        for (size_t ofs=0; ofs<nblock; ofs+= blksz)
+        for (size_t ofs=0; ofs<nblock; ofs+=blksz)
           {
           q.submit([&](sycl::handler &cgh)
             {
@@ -1095,7 +1084,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
             sycl::accessor accvis{bufvis, cgh, sycl::write_only};
             sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
 
-            constexpr size_t n_workitems = 64;
+            constexpr size_t n_workitems = 32;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
             cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs,accwgt,do_weights](sycl::nd_item<2> item)
@@ -1208,7 +1197,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
 
           sycl_zero_buffer(q, bufgrid);
           constexpr size_t blksz = 32768;
-          for (size_t ofs=0; ofs<blidx.size(); ofs+= blksz)
+          for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
             q.submit([&](sycl::handler &cgh)
               {
@@ -1226,7 +1215,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
               size_t sidelen = 2*nsafe+(1<<logsquare);
-              my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+              my_local_accessor<Tacc,3> tile({sidelen,sidelen,2}, cgh);
 
               cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,sidelen,nsafe,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
@@ -1237,8 +1226,8 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
                   size_t iu = i/sidelen, iv = i%sidelen;
-                  tile[iu][iv][0]=Tcalc(0);
-                  tile[iu][iv][1]=Tcalc(0);
+                  tile[iu][iv][0]=Tacc(0);
+                  tile[iu][iv][1]=Tacc(0);
                   }
                 item.barrier(sycl::access::fence_space::local_space);
   
@@ -1276,10 +1265,10 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
                     auto tmp = ukrn[i]*val;
                     for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                       {
-                      auto tmp2 = vkrn[j]*tmp;
-                      my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
+                      auto tmp2 = complex<Tacc>(vkrn[j]*tmp);
+                      my_atomic_ref_l<Tacc> rr(tile[ipos][jpos][0]);
                       rr.fetch_add(tmp2.real());
-                      my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
+                      my_atomic_ref_l<Tacc> ri(tile[ipos][jpos][1]);
                       ri.fetch_add(tmp2.imag());
                       }
                     }
@@ -1296,9 +1285,9 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
                   size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
   
                   my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                  rr.fetch_add(tile[iu][iv][0]);
+                  rr.fetch_add(Tcalc(tile[iu][iv][0]));
                   my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                  ri.fetch_add(tile[iu][iv][1]);
+                  ri.fetch_add(Tcalc(tile[iu][iv][1]));
                   }
                 });
               });
@@ -1337,7 +1326,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
             sycl::range<2> local(1, n_workitems);
             int nsafe = (supp+1)/2;
             size_t sidelen = 2*nsafe+(1<<logsquare);
-            my_local_accessor<Tcalc,3> tile({sidelen,sidelen,2}, cgh);
+            my_local_accessor<Tacc,3> tile({sidelen,sidelen,2}, cgh);
 
             cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
@@ -1347,8 +1336,8 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;
-                tile[iu][iv][0] = Tcalc(0);
-                tile[iu][iv][1] = Tcalc(0);
+                tile[iu][iv][0] = Tacc(0);
+                tile[iu][iv][1] = Tacc(0);
                 }
               item.barrier();
 
@@ -1384,10 +1373,10 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
                   auto tmp = ukrn[i]*val;
                   for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                     {
-                    auto tmp2 = vkrn[j]*tmp;
-                    my_atomic_ref_l<Tcalc> rr(tile[ipos][jpos][0]);
+                    auto tmp2 = complex<Tacc>(vkrn[j]*tmp);
+                    my_atomic_ref_l<Tacc> rr(tile[ipos][jpos][0]);
                     rr.fetch_add(tmp2.real());
-                    my_atomic_ref_l<Tcalc> ri(tile[ipos][jpos][1]);
+                    my_atomic_ref_l<Tacc> ri(tile[ipos][jpos][1]);
                     ri.fetch_add(tmp2.imag());
                     }
                   }
@@ -1403,9 +1392,9 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
                 size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
                 size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
                 my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
-                rr.fetch_add(tile[iu][iv][0]);
+                rr.fetch_add(Tcalc(tile[iu][iv][0]));
                 my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
-                ri.fetch_add(tile[iu][iv][1]);
+                ri.fetch_add(Tcalc(tile[iu][iv][1]));
                 }
               });
             });
