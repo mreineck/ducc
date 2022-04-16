@@ -288,6 +288,31 @@ class fmav_info
       swap(str[ax0], str[ax1]);
       }
 
+    fmav_info extend_and_broadcast(const shape_t &new_shape,
+      const shape_t &axpos) const
+      {
+      MR_assert(new_shape.size()>=ndim(),
+        "new shape smaller than original one");
+      MR_assert(axpos.size()==ndim(), "bad axpos size");
+      stride_t new_stride(new_shape.size(), 0);
+      vector<uint8_t> used(new_shape.size(),0);
+      for (size_t i=0; i<ndim(); ++i)
+        {
+        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(used[axpos[i]]==0, "repeated axis position");
+        used[axpos[i]]=1;
+        new_stride[axpos[i]] = str[i];
+        }
+      return fmav_info(new_shape, new_stride);
+      }
+    fmav_info extend_and_broadcast(const shape_t &new_shape,
+      size_t firstaxis) const
+      {
+      shape_t axpos(ndim());
+      std::iota(axpos.begin(), axpos.end(), firstaxis);
+      return extend_and_broadcast(new_shape, axpos);
+      }
   protected:
     auto subdata(const vector<slice> &slices) const
       {
@@ -361,6 +386,17 @@ template<size_t ndim> class mav_info
     /// automatically, assuming a C-contiguous memory layout.
     mav_info(const shape_t &shape_)
       : mav_info(shape_, shape2stride(shape_)) {}
+    mav_info(const fmav_info &inp)
+      {
+      MR_assert(inp.ndim()==ndim, "dimensionality mismatch");
+      sz=1;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp[i] = inp.shape(i);
+        sz *= shp[i];
+        str[i] = inp.stride(i);
+        }
+      }
     void assign(const mav_info &other)
       {
       shp = other.shp;
@@ -464,6 +500,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
         ofs += (ptrdiff_t(shp[i])-1)*str[i];
       MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
       }
+    cfmav(const fmav_info &info, const tbuf &buf)
+      : tinfo(info), tbuf(buf) {}
     cfmav(const fmav_info &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
 
@@ -503,26 +541,11 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       }
     cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
       {
-      MR_assert(new_shape.size()>=ndim(),
-        "new shape smaller than original one");
-      MR_assert(axpos.size()==ndim(), "bad axpos size");
-      stride_t new_stride(new_shape.size(), 0);
-      vector<uint8_t> used(new_shape.size(),0);
-      for (size_t i=0; i<ndim(); ++i)
-        {
-        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
-        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
-        MR_assert(used[axpos[i]]==0, "repeated axis position");
-        used[axpos[i]]=1;
-        new_stride[axpos[i]] = str[i];
-        }
-      return cfmav(*this, new_shape, new_stride);
+      return cfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
       }
     cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
       {
-      shape_t axpos(ndim());
-      std::iota(axpos.begin(), axpos.end(), firstaxis);
-      return extend_and_broadcast(new_shape, axpos);
+      return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
   };
 
@@ -544,6 +567,8 @@ template<typename T> class vfmav: public cfmav<T>
     using tinfo::size, tinfo::shape, tinfo::stride;
 
   protected:
+    vfmav(const fmav_info &info, tbuf &buf)
+      : cfmav<T>(info, buf) {}
     vfmav(const fmav_info &info, T *d_, tbuf &buf)
       : cfmav<T>(info, d_, buf) {}
 
@@ -631,6 +656,14 @@ template<typename T> class vfmav: public cfmav<T>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
+    vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos)
+      {
+      return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
+      }
+    vfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis)
+      {
+      return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
+      }
   };
 
 template<typename T> vfmav<T> subarray
@@ -669,6 +702,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(d_) {}
     cmav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
+    cmav(const cfmav<T> &inp)
+      : tinfo(inp), tbuf(inp) {}
     void assign(const cmav &other)
       {
       mav_info<ndim>::assign(other);
@@ -724,6 +759,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   protected:
     vmav(const tinfo &info, T *d_, tbuf &buf)
       : parent(info, d_, buf) {}
+    vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
+      : parent(buf, shp_, str_){}
 
   public:
     vmav() {}
@@ -735,7 +772,9 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
-
+    vmav(vfmav<T> &inp)
+      : parent(inp) {}
+      
     void assign(vmav &other)
       { parent::assign(other); }
     operator vfmav<T>()
