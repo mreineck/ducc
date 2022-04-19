@@ -258,11 +258,12 @@ class RowchanRange
     uint32_t row;
     uint16_t ch_begin, ch_end;
 
+    RowchanRange() = default;
+    RowchanRange(const RowchanRange &) = default;
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
+    uint16_t nchan() const { return ch_end-ch_begin; }
   };
-
-using VVR = vector<pair<Uvwidx, vector<RowchanRange>>>;
 
 struct UVW
   {
@@ -347,6 +348,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     vmav<Timg,2> &dirty_out;
     const cmav<Tms,2> &wgt;
     const cmav<uint8_t,2> &mask;
+    vmav<uint8_t,2> lmask;
     double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
     double epsilon;
@@ -357,7 +359,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     double sigma_min, sigma_max;
 
     Baselines bl;
-    VVR ranges;
+    vector<RowchanRange> ranges;
+    vector<pair<Uvwidx, size_t>> blockstart;
+
     double wmin_d, wmax_d;
     size_t nvis;
     double wmin, dw;
@@ -671,34 +675,91 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
-      struct tmp2
-        {
-        size_t sz=0;
-        vector<vector<RowchanRange>> v;
-        void add(const RowchanRange &rng, size_t max_allowed)
-          {
-          if (v.empty() || (sz>=max_allowed))
-            { v.emplace_back(); sz=0; }
-          v.back().push_back(rng);
-          sz += rng.ch_end-rng.ch_begin;
-          }
-        };
-      using Vmap = map<Uvwidx, tmp2>;
-      struct bufmap
-        {
-        Vmap m;
-        mutex mut;
-        uint64_t dummy[8]; // separator to keep every entry on a different cache line
-        };
       checkShape(wgt.shape(),{nrow,nchan});
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 20;
-      vector<bufmap> buf(ntiles_u);
+      size_t ntiles_u = (nu>>logsquare) + 3;
+      size_t ntiles_v = (nv>>logsquare) + 3;
+      size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
+timers.push("counting");
+      vector<atomic<size_t>> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       auto xdw = 1./dw;
       auto shift = dw-(0.5*supp*dw)-wmin;
+      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+        {
+        uint32_t intercnt=0;
+        while (auto rng=sched.getNext())
+        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+          {
+          bool on=false;
+          Uvwidx uvwlast(0,0,0);
+
+          auto flush=[&]()
+            {
+            if (intercnt==0) return;
+            buf[uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane] += intercnt;
+            intercnt=0;
+            };
+          auto uvwbase = bl.baseCoord(irow);
+          uvwbase.FixW();
+          for (uint32_t ichan=0; ichan<nchan; ++ichan)
+            {
+            if (lmask(irow,ichan))
+              {
+              auto uvw = uvwbase*bl.ffact(ichan);
+              double udum, vdum;
+              int iu0, iv0, iw;
+              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+              iu0 = (iu0+nsafe)>>logsquare;
+              iv0 = (iv0+nsafe)>>logsquare;
+              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
+              Uvwidx uvwcur(iu0, iv0, iw);
+              if (!on) // new active region
+                {
+                on=true;
+                if (uvwlast!=uvwcur) flush();
+                uvwlast=uvwcur;
+                }
+              else if (uvwlast!=uvwcur) // change of active region
+                {
+                lmask(irow,ichan)=2;
+                ++intercnt;
+                flush();
+                uvwlast=uvwcur;
+                }
+              }
+            else if (on) // end of active region
+              {
+              ++intercnt;
+              on=false;
+              }
+            }
+          if (on) // end of active region at last channel
+            ++intercnt;
+          flush();
+          }
+        });
+timers.poppush("allocation");
+// accumulate
+      {
+      blockstart.clear(); // for now
+      size_t acc=0;
+      for (size_t tu=0; tu<ntiles_u; ++tu)
+        for (size_t tv=0; tv<ntiles_v; ++tv)
+          for (size_t mp=0; mp<nwmin; ++mp)
+            {
+            size_t i = tu*ntiles_v*nwmin + tv*nwmin + mp;
+            size_t tmp = buf[i];
+            if (tmp>0) blockstart.push_back({Uvwidx(tu,tv,mp),acc});
+            buf[i] = acc;
+            acc += tmp;
+            }
+      buf.back()=acc;
+      }
+timers.poppush("filling");
+      ranges.resize(buf.back());
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
         vector<pair<uint16_t, uint16_t>> interbuf;
@@ -712,40 +773,44 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto tileidx = uvwlast.tile_u;
-            lock_guard<mutex> lock(buf[tileidx].mut);
-            auto &loc(buf[tileidx].m[uvwlast]);
-            for (auto &x: interbuf)
-              loc.add(RowchanRange(irow, x.first, x.second), max_allowed);
+            auto bufidx = uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane;
+            auto bufpos = (buf[bufidx]+=interbuf.size()) - interbuf.size();
+            for (size_t i=0; i<interbuf.size(); ++i)
+              ranges[bufpos+i] = RowchanRange(irow,interbuf[i].first,interbuf[i].second);
             interbuf.clear();
             };
           auto add=[&](uint16_t cb, uint16_t ce)
             { interbuf.emplace_back(cb, ce); };
 
+          auto uvwbase = bl.baseCoord(irow);
+          uvwbase.FixW();
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
-            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan)!=0)
+            auto xmask = lmask(irow,ichan);
+            if (xmask)
               {
-              auto uvw = bl.effectiveCoord(irow, ichan);
-              uvw.FixW();
-              double udum, vdum;
-              int iu0, iv0, iw;
-              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-              iu0 = (iu0+nsafe)>>logsquare;
-              iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
-              Uvwidx uvwcur(iu0, iv0, iw);
-              if (!on) // new active region
+              if ((!on)||(xmask==2))
                 {
-                on=true;
-                if (uvwlast!=uvwcur) flush();
-                uvwlast=uvwcur; chan0=ichan;
-                }
-              else if (uvwlast!=uvwcur) // change of active region
-                {
-                add(chan0, ichan);
-                flush();
-                uvwlast=uvwcur; chan0=ichan;
+                auto uvw = uvwbase*bl.ffact(ichan);
+                double udum, vdum;
+                int iu0, iv0, iw;
+                getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+                iu0 = (iu0+nsafe)>>logsquare;
+                iv0 = (iv0+nsafe)>>logsquare;
+                iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
+                Uvwidx uvwcur(iu0, iv0, iw);
+                if (!on) // new active region
+                  {
+                  on=true;
+                  if (uvwlast!=uvwcur) flush();
+                  uvwlast=uvwcur; chan0=ichan;
+                  }
+                else if (uvwlast!=uvwcur) // change of active region
+                  {
+                  add(chan0, ichan);
+                  flush();
+                  uvwlast=uvwcur; chan0=ichan;
+                  }
                 }
               }
             else if (on) // end of active region
@@ -759,16 +824,37 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           flush();
           }
         });
-
-      size_t total=0;
-      for (const auto &x: buf)
-        for (const auto &y: x.m)
-          total += y.second.v.size();
-      ranges.reserve(total);
-      for (auto &x: buf)
-        for (auto &y: x.m)
-          for (auto &z: y.second.v)
-            ranges.emplace_back(y.first, move(z));
+timers.poppush("building blockstart");
+      vector<size_t> vissum;
+      vissum.reserve(ranges.size()+1);
+      size_t visacc=0;
+      for (size_t i=0; i<ranges.size(); ++i)
+        {
+        vissum.push_back(visacc);
+        visacc += ranges[i].nchan();
+        }
+      vissum.push_back(visacc);
+      vector<pair<Uvwidx, size_t>> bs2;
+      swap(blockstart, bs2);
+      for (size_t i=0; i<bs2.size(); ++i)
+        {
+        blockstart.push_back(bs2[i]);
+        size_t i1 = bs2[i].second;
+        size_t i2 = vissum.size();
+        if (i+1<bs2.size()) i2 = bs2[i+1].second;
+        size_t acc=0;
+        for (size_t j=i1+1; j<i2; ++j)
+          {
+          acc += vissum[j]-vissum[j-1];
+          if (acc>max_allowed)
+            {
+            blockstart.push_back({bs2[i].first, j});
+            acc=0;
+            }
+          }
+        }
+      lmask.dealloc();
+timers.pop();
 
       // compute which grid regions are required
       if (do_wgridding)
@@ -776,7 +862,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         timers.poppush("grid regions");
         vmav<unsigned char, 2> tmpu({nplanes,(nu>>logsquare)+1}),
                                tmpv({nplanes,(nv>>logsquare)+1});
-        for (const auto &rng: ranges)
+        for (const auto &rng: blockstart)
           for (size_t i=0; i<supp; ++i)
             {
             tmpu(rng.first.minplane+i, rng.first.tile_u) = 1;
@@ -1045,7 +1131,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
       vector<mutex> locks(nu);
 
-      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
+      execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr auto vlen=mysimd<Tacc>::size();
         constexpr auto NVEC((SUPP+vlen-1)/vlen);
@@ -1056,20 +1142,21 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         vector<complex<Tcalc>> phases;
         vector<Tcalc> buf;
 
-        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
-          const auto &uvwidx(ranges[ix].first);
+//auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
+          const auto &uvwidx(blockstart[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
 //bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (size_t cnt=0; cnt<ranges[ix].second.size(); ++cnt)
+            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
+            for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
               {
-              const auto &rcr(ranges[ix].second[cnt]);
-              if (cnt+1<ranges[ix].second.size())
+              const auto &rcr(ranges[cnt]);
+              if (cnt+1<iend)
                 {
-                const auto &nextrcr(ranges[ix].second[cnt+1]);
+                const auto &nextrcr(ranges[cnt+1]);
                 DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
                 bl.prefetchRow(nextrcr.row);
@@ -1147,7 +1234,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       MR_assert(supp==SUPP, "requested support ou of range");
 
       // Loop over sampling points
-      execDynamic(ranges.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
+      execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=mysimd<Tcalc>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -1158,20 +1245,20 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         vector<complex<Tcalc>> phases;
         vector<Tcalc> buf;
 
-        while (auto rng=sched.getNext()) for(auto ix_=rng.lo; ix_<rng.hi; ++ix_)
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
-          const auto &uvwidx(ranges[ix].first);
+          const auto &uvwidx(blockstart[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
             bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
-            for (size_t cnt=0; cnt<ranges[ix].second.size(); ++cnt)
+            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
+            for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
               {
-              const auto &rcr(ranges[ix].second[cnt]);
-              if (cnt+1<ranges[ix].second.size())
+              const auto &rcr(ranges[cnt]);
+              if (cnt+1<iend)
                 {
-                const auto &nextrcr(ranges[ix].second[cnt+1]);
+                const auto &nextrcr(ranges[cnt+1]);
                 DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
@@ -1307,10 +1394,8 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
              << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
-      size_t ovh0 = 0;
-      for (const auto &v : ranges)
-        ovh0 += v.second.size()*sizeof(RowchanRange);
-      ovh0 += ranges.size()*sizeof(VVR);
+      size_t ovh0 = ranges.size()*sizeof(ranges[0]);
+      ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
       if (!do_wgridding)
         ovh1 += nu*nv*sizeof(Tcalc);                          // rgrid
@@ -1497,6 +1582,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
 //            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
               {
+              lmask(irow, ichan)=1;
               ++lnvis;
               double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
@@ -1526,6 +1612,7 @@ auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
         wgt(wgt_), mask(mask_),
+        lmask(gridding ? ms_in.shape() : ms_out.shape()),
         pixsize_x(pixsize_x_), pixsize_y(pixsize_y_),
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
