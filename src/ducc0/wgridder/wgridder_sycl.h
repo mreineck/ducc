@@ -540,7 +540,7 @@ timers.pop();
         double lwmin_d=1e300, lwmax_d=-1e300;
         size_t lnvis=0;
         for(auto irow=lo; irow<hi; ++irow)
-          for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+          for (size_t ichan=0; ichan<nchan; ++ichan)
 //            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
               {

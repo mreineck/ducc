@@ -1250,6 +1250,7 @@ timers.pop();
           const auto &uvwidx(blockstart[ix].first);
           if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
+            bool firstplane = (!wgrid) || (uvwidx.minplane==p0);
             bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
             size_t nth = p0-uvwidx.minplane;
             size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
@@ -1304,11 +1305,12 @@ timers.pop();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx<Tcalc>(rr,ri);
-                ms_out(row, ch) += r;
+                if (!firstplane) r += ms_out(row, ch);
                 if (lastplane)
-                  ms_out(row, ch) *= shifting ?
+                  r *= shifting ?
                     complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(wgt(row, ch))) :
                     wgt(row, ch);
+                ms_out(row, ch) = r;
                 }
               }
             }
@@ -1578,7 +1580,7 @@ timers.pop();
         double lwmin_d=1e300, lwmax_d=-1e300;
         size_t lnvis=0;
         for(auto irow=lo; irow<hi; ++irow)
-          for (size_t ichan=0, idx=irow*nchan; ichan<nchan; ++ichan, ++idx)
+          for (size_t ichan=0; ichan<nchan; ++ichan)
 //            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
             if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
               {
@@ -1587,6 +1589,10 @@ timers.pop();
               double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
               lwmax_d = max(lwmax_d, w);
+              }
+            else
+              {
+              if (!gridding) ms_out(irow, ichan)=0;
               }
         {
         lock_guard<mutex> lock(mut);
@@ -1633,12 +1639,6 @@ timers.pop();
       timers.pop();
       // adjust for increased error when gridding in 2 or 3 dimensions
       epsilon /= do_wgridding ? 3 : 2;
-      if (!gridding)
-        {
-        timers.push("zeroing MS");
-        quickzero(ms_out, nthreads);
-        timers.pop();
-        }
       scanData();
       if (nvis==0)
         {
