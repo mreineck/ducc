@@ -264,7 +264,6 @@ timers.push("counting");
           {
           bool on=false;
           Uvwidx uvwlast(0,0,0);
-          size_t chan0=0;
 
           auto flush=[&]()
             {
@@ -272,15 +271,13 @@ timers.push("counting");
             buf[uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane] += intercnt;
             intercnt=0;
             };
-          auto add=[&](uint16_t cb, uint16_t ce)
-            { ++intercnt; };
-
+          auto uvwbase = bl.baseCoord(irow);
+          uvwbase.FixW();
           for (uint32_t ichan=0; ichan<nchan; ++ichan)
             {
             if (lmask(irow,ichan))
               {
-              auto uvw = bl.effectiveCoord(irow, ichan);
-              uvw.FixW();
+              auto uvw = uvwbase*bl.ffact(ichan);
               double udum, vdum;
               int iu0, iv0, iw;
               getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
@@ -292,23 +289,24 @@ timers.push("counting");
                 {
                 on=true;
                 if (uvwlast!=uvwcur) flush();
-                uvwlast=uvwcur; chan0=ichan;
+                uvwlast=uvwcur;
                 }
               else if (uvwlast!=uvwcur) // change of active region
                 {
-                add(chan0, ichan);
+                lmask(irow,ichan)=2;
+                ++intercnt;
                 flush();
-                uvwlast=uvwcur; chan0=ichan;
+                uvwlast=uvwcur;
                 }
               }
             else if (on) // end of active region
               {
-              add(chan0, ichan);
+              ++intercnt;
               on=false;
               }
             }
           if (on) // end of active region at last channel
-            add(chan0, nchan);
+            ++intercnt;
           flush();
           }
         });
@@ -353,30 +351,35 @@ timers.poppush("filling");
           auto add=[&](uint16_t cb, uint16_t ce)
             { interbuf.emplace_back(cb, ce); };
 
+          auto uvwbase = bl.baseCoord(irow);
+          uvwbase.FixW();
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
-            if (lmask(irow,ichan))
+            auto xmask = lmask(irow,ichan);
+            if (xmask)
               {
-              auto uvw = bl.effectiveCoord(irow, ichan);
-              uvw.FixW();
-              double udum, vdum;
-              int iu0, iv0, iw;
-              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-              iu0 = (iu0+nsafe)>>logsquare;
-              iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
-              Uvwidx uvwcur(iu0, iv0, iw);
-              if (!on) // new active region
+              if ((!on)||(xmask==2))
                 {
-                on=true;
-                if (uvwlast!=uvwcur) flush();
-                uvwlast=uvwcur; chan0=ichan;
-                }
-              else if (uvwlast!=uvwcur) // change of active region
-                {
-                add(chan0, ichan);
-                flush();
-                uvwlast=uvwcur; chan0=ichan;
+                auto uvw = uvwbase*bl.ffact(ichan);
+                double udum, vdum;
+                int iu0, iv0, iw;
+                getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+                iu0 = (iu0+nsafe)>>logsquare;
+                iv0 = (iv0+nsafe)>>logsquare;
+                iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
+                Uvwidx uvwcur(iu0, iv0, iw);
+                if (!on) // new active region
+                  {
+                  on=true;
+                  if (uvwlast!=uvwcur) flush();
+                  uvwlast=uvwcur; chan0=ichan;
+                  }
+                else if (uvwlast!=uvwcur) // change of active region
+                  {
+                  add(chan0, ichan);
+                  flush();
+                  uvwlast=uvwcur; chan0=ichan;
+                  }
                 }
               }
             else if (on) // end of active region
@@ -419,6 +422,7 @@ timers.poppush("building blockstart");
             }
           }
         }
+      lmask.dealloc();
 timers.pop();
       timers.pop();
       }
@@ -440,6 +444,7 @@ timers.pop();
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
              << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
+      ovh0 += vissum.size()*sizeof(vissum[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
       if (!do_wgridding)
@@ -645,7 +650,7 @@ class GlobalCorrector
           return 1./tmp;
           }
       };
-   
+
     static double phase(double x, double y, double w, bool adjoint, double nshift)
       {
       double tmp = 1.-x-y;
@@ -658,7 +663,7 @@ class GlobalCorrector
       // we are reducing accuracy, so let's better do range reduction first
       return twopi*(phs-sycl::floor(phs));
       }
-   
+
   public:
     GlobalCorrector(const Params &par_)
       : par(par_),
