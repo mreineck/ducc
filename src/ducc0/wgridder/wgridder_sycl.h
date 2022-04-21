@@ -194,7 +194,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
  
     double wmin_d, wmax_d;
     size_t nvis;
-    double wmin, dw;
+    double wmin, dw, xdw, wshift;
     size_t nplanes;
     double nm1min, nm1max;
 
@@ -226,6 +226,18 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       v -= iv0;
       }
 
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t ch)
+      {
+      auto uvw = uvwbase*bl.ffact(ch);
+      double udum, vdum;
+      int iu0, iv0, iw;
+      getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+      iu0 = (iu0+nsafe)>>logsquare;
+      iv0 = (iv0+nsafe)>>logsquare;
+      iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
+      return Uvwidx(iu0, iv0, iw);
+      }
+
     void countRanges()
       {
       timers.push("building index");
@@ -235,12 +247,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       if (do_wgridding)
         {
         dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
+        xdw = 1./dw;
         nplanes = size_t((wmax_d-wmin_d)/dw+supp);
         MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
         wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
+        wshift = dw-(0.5*supp*dw)-wmin;
         }
       else
-        dw = wmin = nplanes = 0;
+        dw = wmin  = xdw = wshift = nplanes = 0;
       size_t nbunch = do_wgridding ? supp : 1;
       size_t max_allowed = 4096;
 
@@ -254,8 +268,61 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 timers.push("counting");
       vector<atomic<uint32_t>> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
-      auto xdw = 1./dw;
-      auto shift = dw-(0.5*supp*dw)-wmin;
+#if 1
+      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+        {
+        while (auto rng=sched.getNext())
+        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+          {
+          auto uvwbase = bl.baseCoord(irow);
+          uvwbase.FixW();
+
+          uint32_t ch0=0;
+          while(ch0<nchan)
+            {
+            while((ch0<nchan) && (!lmask(irow,ch0))) ++ch0;
+            uint32_t ch1=min<uint32_t>(nchan,ch0+1);
+            while( (ch1<nchan) && (lmask(irow,ch1))) ++ch1;
+            // now [ch0;ch1[ contains an active range or we are at end
+            auto inc0 = [&](Uvwidx idx)
+              {
+              ++buf[idx.tile_u*ntiles_v*nwmin + idx.tile_v*nwmin + idx.minplane];
+              };
+            auto inc = [&](Uvwidx idx, uint32_t ch)
+              {
+              inc0(idx);
+              lmask(irow,ch)=2;
+              };
+            auto recurse=[&](uint32_t ch_lo, uint32_t ch_hi, Uvwidx uvw_lo, Uvwidx uvw_hi, auto &&recurse) -> void
+              {
+              if (ch_lo+1==ch_hi)
+                {
+                if (uvw_lo!=uvw_hi)
+                  inc(uvw_hi,ch_hi);
+                }
+              else
+                {
+                auto ch_mid = ch_lo+(ch_hi-ch_lo)/2;
+                auto uvw_mid = get_uvwidx(uvwbase, ch_mid);
+                if (uvw_lo!=uvw_mid)
+                  recurse(ch_lo, ch_mid, uvw_lo, uvw_mid, recurse);
+                if (uvw_mid!=uvw_hi)
+                  recurse(ch_mid, ch_hi, uvw_mid, uvw_hi, recurse);
+                }
+              };
+
+            if (ch0!=ch1)
+              {
+              auto uvw0 = get_uvwidx(uvwbase,ch0);
+              inc0(uvw0);
+              if (ch0+1<ch1)
+                recurse(ch0,ch1-1,uvw0,get_uvwidx(uvwbase,ch1-1),recurse);
+              }
+            ch0 = ch1;
+            }
+          }
+        });
+#else
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
         uint32_t intercnt=0;
@@ -283,7 +350,7 @@ timers.push("counting");
               getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
               iu0 = (iu0+nsafe)>>logsquare;
               iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
+              iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
               Uvwidx uvwcur(iu0, iv0, iw);
               if (!on) // new active region
                 {
@@ -310,6 +377,7 @@ timers.push("counting");
           flush();
           }
         });
+#endif
 timers.poppush("allocation");
 // accumulate
       {
@@ -360,14 +428,15 @@ timers.poppush("filling");
               {
               if ((!on)||(xmask==2))
                 {
-                auto uvw = uvwbase*bl.ffact(ichan);
-                double udum, vdum;
-                int iu0, iv0, iw;
-                getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-                iu0 = (iu0+nsafe)>>logsquare;
-                iv0 = (iv0+nsafe)>>logsquare;
-                iw = do_wgridding ? max(0,int((uvw.w+shift)*xdw)) : 0;
-                Uvwidx uvwcur(iu0, iv0, iw);
+                auto uvwcur = get_uvwidx(uvwbase, ichan);
+                //auto uvw = uvwbase*bl.ffact(ichan);
+                //double udum, vdum;
+                //int iu0, iv0, iw;
+                //getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+                //iu0 = (iu0+nsafe)>>logsquare;
+                //iv0 = (iv0+nsafe)>>logsquare;
+                //iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
+                //Uvwidx uvwcur(iu0, iv0, iw);
                 if (!on) // new active region
                   {
                   on=true;
