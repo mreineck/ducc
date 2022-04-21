@@ -130,6 +130,9 @@ class Baselines
       for (size_t i=0; i<nchan; ++i)
         {
         MR_assert(freq(i)>0, "negative channel frequency encountered");
+        if (i>0)
+          MR_assert(freq(i)>=freq(i-1),
+            "channel frequencies must e sorted in ascending order");
         f_over_c[i] = freq(i)/speedOfLight;
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
@@ -1026,15 +1029,6 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
 
       sycl_zero_buffer(q, bufvis);
 
-      // initiate data transfer to GPU
-      q.submit([&](sycl::handler &cgh)
-        {
-        KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
-        sycl::accessor accdirty{bufdirty, cgh, sycl::read_only};
-        sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-        cgh.single_task([kcomp,accdirty,accwgt](){});
-        });
-
       countRanges();
       report();
 
@@ -1051,6 +1045,13 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
+
+          sycl_zero_buffer(q, bufgrid);
+          globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
+
+          // FFT
+          plan.exec(q, bufgrid, true);
+
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
             {
@@ -1059,12 +1060,6 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
-          sycl_zero_buffer(q, bufgrid);
-
-          globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
-
-          // FFT
-          plan.exec(q, bufgrid, true);
 
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
@@ -1224,13 +1219,6 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
       vmav<Tms,2> wgtx({1,1});
       auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
 
-      // initiate data transfer to GPU
-      q.submit([&](sycl::handler &cgh)
-        {
-        sycl::accessor accvis{bufvis, cgh, sycl::read_only};
-        sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-        cgh.single_task([accvis,accwgt](){});
-        });
       timers.pop();
       countRanges();
       report();
@@ -1260,6 +1248,9 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
+
+          sycl_zero_buffer(q, bufgrid);
+
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
             {
@@ -1269,7 +1260,6 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
             }
           auto bufblidx(make_sycl_buffer(blidx));
 
-          sycl_zero_buffer(q, bufgrid);
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {

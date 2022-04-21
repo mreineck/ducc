@@ -303,6 +303,9 @@ class Baselines
       for (size_t i=0; i<nchan; ++i)
         {
         MR_assert(freq(i)>0, "negative channel frequency encountered");
+        if (i>0)
+          MR_assert(freq(i)>=freq(i-1),
+            "channel frequencies must e sorted in ascending order");
         f_over_c[i] = freq(i)/speedOfLight;
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
