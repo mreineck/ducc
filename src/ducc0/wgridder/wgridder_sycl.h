@@ -33,6 +33,7 @@
 #include <cmath>
 #include <vector>
 #include <array>
+#include <atomic>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
