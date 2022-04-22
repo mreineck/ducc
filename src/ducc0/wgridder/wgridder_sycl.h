@@ -920,6 +920,18 @@ class RowchanComputer
       }
   };
 
+vector<Tcalc> prepCoeff()
+  {
+  auto D = supp+3;
+  const auto &dcoef(krn->Coeff());
+  auto lim = (supp+1)/2;
+  vector<Tcalc> res(lim*(D+1));
+  for (size_t i=0; i<lim; ++i)
+    for (size_t j=0; j<=D; ++j)
+      res[i*(D+1) + j] = Tcalc(dcoef[j*supp + i]);
+  return res;
+  }
+
 template<typename T> class KernelComputer
   {
   protected:
@@ -935,16 +947,22 @@ template<typename T> class KernelComputer
 //      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
-      for (size_t i=0; i<supp; ++i)
+      auto lim = (supp+1)/2;
+      for (size_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i], resv=acc_coeff[i];
+        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
+        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
         for (size_t j=1; j<=D; ++j)
           {
-          resu = resu*x0 + acc_coeff[j*supp+i];
-          resv = resv*y0 + acc_coeff[j*supp+i];
+          resu = acc_coeff[j+i*(D+1)] + resu*x0;
+          resv = acc_coeff[j+i*(D+1)] + resv*y0;
+          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
+          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
           }
         ku[i] = resu;
         kv[i] = resv;
+        ku[supp-1-i] = resmu;
+        kv[supp-1-i] = resmv;
         }
       }
     template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, size_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
@@ -953,19 +971,27 @@ template<typename T> class KernelComputer
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       auto z0 = T(wval-nth)*T(2)+T(supp-1);
-      Tcalc resw=acc_coeff[nth];
+      auto lim = (supp+1)/2;
+      if (nth>=lim)
+        { nth = supp-1-nth; z0=-z0; }
+      Tcalc resw=acc_coeff[nth*(D+1)];
       for (size_t j=1; j<=D; ++j)
-        resw = resw*z0 + acc_coeff[j*supp+nth];
-      for (size_t i=0; i<supp; ++i)
+        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
+      for (size_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i], resv=acc_coeff[i];
+        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
+        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
         for (size_t j=1; j<=D; ++j)
           {
-          resu = resu*x0 + acc_coeff[j*supp+i];
-          resv = resv*y0 + acc_coeff[j*supp+i];
+          resu = acc_coeff[j+i*(D+1)] + resu*x0;
+          resv = acc_coeff[j+i*(D+1)] + resv*y0;
+          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
+          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
           }
         ku[i] = resu*resw;
         kv[i] = resv;
+        ku[supp-1-i] = resmu*resw;
+        kv[supp-1-i] = resmv;
         }
       }
   };
@@ -1022,36 +1048,47 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
 
       Baselines_GPU_prep bl_prep(bl);
       auto bufvis(make_sycl_buffer(ms_out));
-      const auto &dcoef(krn->Coeff());
-      vector<Tcalc> coef(dcoef.size());
-      for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+      auto coef(prepCoeff());
       auto bufcoef(make_sycl_buffer(coef));
 
+q.wait();timers.push("zeroing MS");
       sycl_zero_buffer(q, bufvis);
+q.wait();timers.pop();
 
       countRanges();
       report();
 
-      timers.push("GPU degridding");
+q.wait();timers.push("prep");
       IndexComputer idxcomp(ranges, vissum, blockstart);
       CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
       GlobalCorrector globcorr(*this);
+q.wait();timers.poppush("FFT planning");
       sycl_fft_plan plan(bufgrid);
+q.wait();timers.poppush("copy HtoD");
+ensure_device_copy(q, bufdirty);
+ensure_device_copy(q, bufwgt);
 
+q.wait();timers.pop();
       if (do_wgridding)
         {
+q.wait();timers.push("applying global correction");
         globcorr.apply_global_corrections(q, bufdirty);
+q.wait();timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
 
+q.wait();timers.push("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
+q.wait();timers.poppush("applying wscreen");
           globcorr.degridding_wscreen(q, w, bufdirty, bufgrid);
 
+q.wait();timers.poppush("FFT");
           // FFT
           plan.exec(q, bufgrid, true);
 
+q.wait();timers.poppush("index computation");
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
             {
@@ -1061,6 +1098,7 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
             }
           auto bufblidx(make_sycl_buffer(blidx));
 
+q.wait();timers.poppush("degridding proper");
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
@@ -1128,17 +1166,22 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               });
             }
           q.wait();
+timers.pop();
           } // end of loop over planes
         }
       else
         {
+q.wait();timers.push("zeroing grid");
         sycl_zero_buffer(q, bufgrid);
 
+q.wait();timers.poppush("applying global corrections");
         globcorr.corr_degrid_narrow_field(q, bufdirty, bufgrid);
 
         // FFT
+q.wait();timers.poppush("FFT");
         plan.exec(q, bufgrid, true);
 
+q.wait();timers.poppush("degridding proper");
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+=blksz)
@@ -1202,9 +1245,11 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               });
             });
           }
+q.wait(); timers.pop();
         }
+q.wait(); timers.push("DtoH");
       }  // end of device buffer scope, buffers are written back
-      timers.pop();
+timers.pop();
       }
 
     void x2dirty()
@@ -1219,38 +1264,45 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
       vmav<Tms,2> wgtx({1,1});
       auto bufwgt(make_sycl_buffer(do_weights ? wgt : wgtx));
 
-      timers.pop();
+      q.wait();timers.pop();
       countRanges();
       report();
-      timers.push("GPU gridding");
 
+q.wait();timers.push("prep");
       // grid (only on GPU)
       sycl::buffer<complex<Tcalc>, 2> bufgrid{sycl::range<2>(nu,nv)};
       sycl::buffer<Tcalc, 3> bufgridr{bufgrid.template reinterpret<Tcalc,3>(sycl::range<3>(nu,nv,2))};
 
       Baselines_GPU_prep bl_prep(bl);
 
-      const auto &dcoef(krn->Coeff());
-      vector<Tcalc> coef(dcoef.size());
-      for (size_t i=0;i<coef.size(); ++i) coef[i] = Tcalc(dcoef[i]);
+      auto coef(prepCoeff());
       auto bufcoef(make_sycl_buffer(coef));
 
       IndexComputer idxcomp(ranges, vissum, blockstart);
       CoordCalculator ccalc(nu, nv, maxiu0, maxiv0, pixsize_x, pixsize_y, ushift,vshift);
       GlobalCorrector globcorr(*this);
 
+q.wait();timers.poppush("FFT planning");
       sycl_fft_plan plan(bufgrid);
+q.wait();timers.poppush("copy HtoD");
+ensure_device_copy(q, bufvis);
+ensure_device_copy(q, bufwgt);
+q.wait();timers.pop();
 
       if (do_wgridding)
         {
+q.wait();timers.push("zeroing dirty image");
         sycl_zero_buffer(q, bufdirty);
+q.wait();timers.pop();
 
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
 
+q.wait();timers.push("zeroing grid");
           sycl_zero_buffer(q, bufgrid);
 
+q.wait();timers.poppush("index computation");
           vector<size_t> blidx;
           for (size_t i=0; i<blockstart.size(); ++i)
             {
@@ -1259,7 +1311,9 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               blidx.push_back(i);
             }
           auto bufblidx(make_sycl_buffer(blidx));
+ensure_device_copy(q, bufblidx);
 
+q.wait();timers.poppush("gridding proper");
           constexpr size_t blksz = 32768;
           for (size_t ofs=0; ofs<blidx.size(); ofs+=blksz)
             {
@@ -1357,20 +1411,26 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
               });
             }
 
+q.wait();timers.poppush("FFT");
           // FFT
           plan.exec(q, bufgrid, false);
 
+q.wait();timers.poppush("applying wscreen");
           globcorr.gridding_wscreen(q, w, bufgrid, bufdirty);
           q.wait();
+q.wait();timers.pop();
           } // end of loop over planes
-
         // apply global corrections to dirty image on GPU
+q.wait();timers.push("applying global corrections");
         globcorr.apply_global_corrections(q, bufdirty);
+q.wait();timers.pop();
         }
       else
         {
+q.wait();timers.push("zeroing grid");
         sycl_zero_buffer(q, bufgrid);
 
+q.wait();timers.poppush("gridding proper");
         constexpr size_t blksz = 32768;
         size_t nblock = blockstart.size();
         for (size_t ofs=0; ofs<nblock; ofs+=blksz)
@@ -1465,12 +1525,16 @@ template<typename T> static inline void do_shift(complex<T> &val, const UVW &coo
           }
 
         // FFT
+q.wait();timers.poppush("FFT");
         plan.exec(q, bufgrid, false);
 
+q.wait();timers.poppush("applying global corrections");
         globcorr.corr_grid_narrow_field(q, bufgrid, bufdirty);
+q.wait();timers.pop();
         }
+q.wait();timers.push("DtoH");
         }  // end of device buffer scope, buffers are written back
-      timers.pop();
+timers.pop();
       }
 
   public:

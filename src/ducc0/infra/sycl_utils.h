@@ -256,6 +256,15 @@ template<typename T, size_t ndim> using my_local_accessor = sycl::local_accessor
 #else
 template<typename T, size_t ndim> using my_local_accessor = sycl::accessor<T,ndim,sycl::access::mode::read_write, sycl::access::target::local>;
 #endif
+
+template<typename T, int ndim> void ensure_device_copy(sycl::queue &q, sycl::buffer<T,ndim> &buf)
+  {
+  q.submit([&](sycl::handler &cgh)
+    {
+    sycl::accessor acc{buf, cgh, sycl::read_only};
+    cgh.single_task([acc](){});
+    });
+  }
 }
 
 using detail_sycl_utils::make_sycl_buffer;
@@ -265,6 +274,7 @@ using detail_sycl_utils::print_device_info;
 using detail_sycl_utils::my_atomic_ref;
 using detail_sycl_utils::my_atomic_ref_l;
 using detail_sycl_utils::my_local_accessor;
+using detail_sycl_utils::ensure_device_copy;
 
 #endif
 
