@@ -1248,7 +1248,7 @@ q.wait();timers.poppush("degridding proper");
           }
 q.wait(); timers.pop();
         }
-q.wait(); timers.push("DtoH");
+q.wait(); timers.push("copy DtoH");
       }  // end of device buffer scope, buffers are written back
 timers.pop();
       }
@@ -1533,7 +1533,7 @@ q.wait();timers.poppush("applying global corrections");
         globcorr.corr_grid_narrow_field(q, bufgrid, bufdirty);
 q.wait();timers.pop();
         }
-q.wait();timers.push("DtoH");
+q.wait();timers.push("copy DtoH");
         }  // end of device buffer scope, buffers are written back
 timers.pop();
       }
