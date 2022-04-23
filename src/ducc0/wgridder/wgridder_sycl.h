@@ -195,7 +195,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     vector<RowchanRange> ranges;
     vector<uint32_t> vissum;
     vector<pair<Uvwidx, uint32_t>> blockstart;
- 
+
     double wmin_d, wmax_d;
     size_t nvis;
     double wmin, dw, xdw, wshift;
@@ -272,7 +272,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 timers.push("counting");
       vector<atomic<uint32_t>> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
-#if 1
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
         while (auto rng=sched.getNext())
@@ -326,62 +325,6 @@ timers.push("counting");
             }
           }
         });
-#else
-      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
-        {
-        uint32_t intercnt=0;
-        while (auto rng=sched.getNext())
-        for(auto irow=rng.lo; irow<rng.hi; ++irow)
-          {
-          bool on=false;
-          Uvwidx uvwlast(0,0,0);
-
-          auto flush=[&]()
-            {
-            if (intercnt==0) return;
-            buf[uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane] += intercnt;
-            intercnt=0;
-            };
-          auto uvwbase = bl.baseCoord(irow);
-          uvwbase.FixW();
-          for (uint32_t ichan=0; ichan<nchan; ++ichan)
-            {
-            if (lmask(irow,ichan))
-              {
-              auto uvw = uvwbase*bl.ffact(ichan);
-              double udum, vdum;
-              int iu0, iv0, iw;
-              getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-              iu0 = (iu0+nsafe)>>logsquare;
-              iv0 = (iv0+nsafe)>>logsquare;
-              iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
-              Uvwidx uvwcur(iu0, iv0, iw);
-              if (!on) // new active region
-                {
-                on=true;
-                if (uvwlast!=uvwcur) flush();
-                uvwlast=uvwcur;
-                }
-              else if (uvwlast!=uvwcur) // change of active region
-                {
-                lmask(irow,ichan)=2;
-                ++intercnt;
-                flush();
-                uvwlast=uvwcur;
-                }
-              }
-            else if (on) // end of active region
-              {
-              ++intercnt;
-              on=false;
-              }
-            }
-          if (on) // end of active region at last channel
-            ++intercnt;
-          flush();
-          }
-        });
-#endif
 timers.poppush("allocation");
 // accumulate
       {
@@ -692,14 +635,14 @@ class GlobalCorrector
   private:
     const Params &par;
     vector<double> cfu, cfv;
-    sycl::buffer<double,1> bufcfu, bufcfv; 
+    sycl::buffer<double,1> bufcfu, bufcfv;
 
     template<size_t maxsz> class Wcorrector
       {
       private:
         array<double, maxsz> x, wgtpsi;
         size_t n, supp;
-    
+
       public:
         Wcorrector(const detail_gridding_kernel::KernelCorrection &corr)
           {
@@ -714,7 +657,7 @@ class GlobalCorrector
             wgtpsi[i] = wgtpsi_[i];
             }
           }
-    
+
         double corfunc(double v) const
           {
           double tmp=0;
@@ -937,23 +880,23 @@ template<typename T> class KernelComputer
   {
   protected:
     sycl::accessor<T,1,sycl::access::mode::read> acc_coeff;
-    size_t supp, D;
+    uint32_t supp, D;
 
   public:
     KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
       : acc_coeff(buf_coeff, cgh, sycl::read_only),
-        supp(supp_), D(supp_+3) {}
+        supp(uint32_t(supp_)), D(uint32_t(supp_+3)) {}
     template<size_t Supp> inline void compute_uv(T ufrac, T vfrac, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
 //      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       auto lim = (supp+1)/2;
-      for (size_t i=0; i<lim; ++i)
+      for (uint32_t i=0; i<lim; ++i)
         {
         Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
         Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (size_t j=1; j<=D; ++j)
+        for (uint32_t j=1; j<=D; ++j)
           {
           resu = acc_coeff[j+i*(D+1)] + resu*x0;
           resv = acc_coeff[j+i*(D+1)] + resv*y0;
@@ -966,7 +909,7 @@ template<typename T> class KernelComputer
         kv[supp-1-i] = resmv;
         }
       }
-    template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, size_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
+    template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, uint32_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
 //      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
@@ -976,13 +919,13 @@ template<typename T> class KernelComputer
       if (nth>=lim)
         { nth = supp-1-nth; z0=-z0; }
       Tcalc resw=acc_coeff[nth*(D+1)];
-      for (size_t j=1; j<=D; ++j)
+      for (uint32_t j=1; j<=D; ++j)
         resw = resw*z0 + acc_coeff[j+nth*(D+1)];
-      for (size_t i=0; i<lim; ++i)
+      for (uint32_t i=0; i<lim; ++i)
         {
         Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
         Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (size_t j=1; j<=D; ++j)
+        for (uint32_t j=1; j<=D; ++j)
           {
           resu = acc_coeff[j+i*(D+1)] + resu*x0;
           resv = acc_coeff[j+i*(D+1)] + resv*y0;
@@ -1127,21 +1070,21 @@ q.wait();timers.poppush("degridding proper");
                   size_t irow, ichan;
                   rccomp.getRowChan(iblock, iwork, irow, ichan);
                   if (irow==~size_t(0)) return;
-      
+
                   auto coord = blloc.effectiveCoord(irow, ichan);
                   auto imflip = coord.FixW();
-      
+
                   // compute fractional and integer indices in "grid"
                   double ufrac,vfrac;
                   int iu0, iv0;
                   ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-      
+
                   // compute kernel values
-                  array<Tcalc, 16> ukrn, vkrn;
+                  array<Tcalc, is_same<Tcalc,float>::value ? 8 : 16> ukrn, vkrn;
                   size_t nth=pl-minplane;
                   auto wval=Tcalc((w-coord.w)/dw);
                   kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
-      
+
                   // loop over supp*supp pixels from "grid"
                   complex<Tcalc> res=0;
                   auto iustart=size_t((iu0+nu)%nu);
@@ -1156,7 +1099,7 @@ q.wait();timers.poppush("degridding proper");
                     res += ukrn[i]*tmp;
                     }
                   res.imag(res.imag()*imflip);
-      
+
                   if (shifting)
                     do_shift(res, coord, lshift, mshift, nshift, -imflip);
                   if (do_weights)
@@ -1192,7 +1135,7 @@ q.wait();timers.poppush("degridding proper");
             Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             RowchanComputer rccomp(idxcomp, cgh);
-  
+
             sycl::accessor accgrid{bufgrid, cgh, sycl::read_only};
             sycl::accessor accvis{bufvis, cgh, sycl::write_only};
             sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
@@ -1203,25 +1146,25 @@ q.wait();timers.poppush("degridding proper");
             cgh.parallel_for(sycl::nd_range<2>(global, local), [accgrid,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;
-  
+
               for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                 {
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
                 if (irow==~size_t(0)) return;
-    
+
                 auto coord = blloc.effectiveCoord(irow, ichan);
                 auto imflip = coord.FixW();
-    
+
                 // compute fractional and integer indices in "grid"
                 double ufrac,vfrac;
                 int iu0, iv0;
                 ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-    
+
                 // compute kernel values
-                array<Tcalc, 16> ukrn, vkrn;
+                array<Tcalc, is_same<Tcalc,float>::value ? 8 : 16> ukrn, vkrn;
                 kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
-    
+
                 // loop over supp*supp pixels from "grid"
                 complex<Tcalc> res=0;
                 auto iustart=size_t((iu0+nu)%nu);
@@ -1236,7 +1179,7 @@ q.wait();timers.poppush("degridding proper");
                   res += ukrn[i]*tmp;
                   }
                 res.imag(res.imag()*imflip);
-    
+
                 if (shifting)
                   do_shift(res, coord, lshift, mshift, 0., -imflip);
                 if (do_weights)
@@ -1323,24 +1266,24 @@ q.wait();timers.poppush("gridding proper");
               Baselines_GPU blloc(bl_prep, cgh);
               KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
               RowchanComputer rccomp(idxcomp,cgh);
-  
+
               sycl::accessor accblidx{bufblidx, cgh, sycl::read_only};
               sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
               sycl::accessor accvis{bufvis, cgh, sycl::read_only};
               sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-  
-              constexpr size_t n_workitems = 96;
+
+              constexpr uint32_t n_workitems = 96;
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
-              size_t sidelen = 2*nsafe+(1<<logsquare);
+              uint32_t sidelen = 2*nsafe+(1<<logsquare);
               my_local_accessor<Tacc,3> tile({sidelen,sidelen,2}, cgh);
 
               cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,sidelen,nsafe,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
                 {
                 auto iblock = accblidx[item.get_global_id(0)+ofs];
                 auto minplane = rccomp.acc_blockstart[iblock].first.minplane;
-  
+                auto myid = item.get_global_id(1)%supp;
                 // preparation
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_local_range(1))
                   {
@@ -1349,40 +1292,44 @@ q.wait();timers.poppush("gridding proper");
                   tile[iu][iv][1]=Tacc(0);
                   }
                 item.barrier(sycl::access::fence_space::local_space);
-  
+
                 for (auto iwork=item.get_global_id(1); ; iwork+=item.get_global_range(1))
                   {
                   size_t irow, ichan;
                   rccomp.getRowChan(iblock, iwork, irow, ichan);
-                  if (irow==~size_t(0)) break;  // work done 
-  
+                  if (irow==~size_t(0)) break;  // work done
+
                   auto coord = blloc.effectiveCoord(irow, ichan);
                   auto imflip = coord.FixW();
-    
+
                   // compute fractional and integer indices in "grid"
                   double ufrac,vfrac;
                   int iu0, iv0;
                   ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-    
+
                   // compute kernel values
-                  array<Tcalc, 16> ukrn, vkrn;
-                  size_t nth=pl-minplane;
+                  array<Tcalc, is_same<Tcalc,float>::value ? 8 : 16> ukrn, vkrn;
+                  uint32_t nth=pl-minplane;
                   auto wval=Tcalc((w-coord.w)/dw);
                   kcomp.compute_uvw(ufrac, vfrac, wval, nth, ukrn, vkrn);
-    
+
                   // loop over supp*supp pixels from "grid"
                   complex<Tcalc> val=accvis[irow][ichan];
                   if (do_weights) val *= accwgt[irow][ichan];
                   if (shifting)
                     do_shift(val, coord, lshift, mshift, nshift, imflip);
                   val.imag(val.imag()*imflip);
-  
+
                   int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
                   int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                  for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
+
+                  for (uint32_t ix=0, iposx=iu0-bu0; ix<supp; ++ix, ++iposx)
                     {
+                    auto i = ix+myid;
+                    auto ipos = iposx+myid;
+                    if (i>=supp) { i-=supp; ipos-=supp; }
                     auto tmp = ukrn[i]*val;
-                    for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
+                    for (uint32_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                       {
                       auto tmp2 = complex<Tacc>(vkrn[j]*tmp);
                       my_atomic_ref_l<Tacc> rr(tile[ipos][jpos][0]);
@@ -1392,7 +1339,7 @@ q.wait();timers.poppush("gridding proper");
                       }
                     }
                   }
-  
+
                 // add local buffer back to global buffer
                 auto u_tile = rccomp.acc_blockstart[iblock].first.tile_u;
                 auto v_tile = rccomp.acc_blockstart[iblock].first.tile_v;
@@ -1402,7 +1349,7 @@ q.wait();timers.poppush("gridding proper");
                   size_t iu = i/sidelen, iv = i%sidelen;
                   size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
                   size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
-  
+
                   my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
                   rr.fetch_add(Tcalc(tile[iu][iv][0]));
                   my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
@@ -1441,11 +1388,11 @@ q.wait();timers.poppush("gridding proper");
             Baselines_GPU blloc(bl_prep, cgh);
             KernelComputer<Tcalc> kcomp(bufcoef, supp, cgh);
             RowchanComputer rccomp(idxcomp, cgh);
-  
+
             sycl::accessor accgridr{bufgridr, cgh, sycl::read_write};
             sycl::accessor accvis{bufvis, cgh, sycl::read_only};
             sycl::accessor accwgt{bufwgt, cgh, sycl::read_only};
-  
+
             constexpr size_t n_workitems = 96;
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
@@ -1456,7 +1403,8 @@ q.wait();timers.poppush("gridding proper");
             cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
               {
               auto iblock = item.get_global_id(0)+ofs;
-  
+              auto myid = item.get_global_id(1)%supp;
+
               // preparation: zero local buffer
               for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                 {
@@ -1470,31 +1418,34 @@ q.wait();timers.poppush("gridding proper");
                 {
                 size_t irow, ichan;
                 rccomp.getRowChan(iblock, iwork, irow, ichan);
-//irow=ichan=0;
+
                 if (irow==~size_t(0)) break;  // work done
                 auto coord = blloc.effectiveCoord(irow, ichan);
                 auto imflip = coord.FixW();
-  
+
                 // compute fractional and integer indices in "grid"
                 double ufrac,vfrac;
                 int iu0, iv0;
                 ccalc.getpix(coord.u, coord.v, ufrac, vfrac, iu0, iv0);
-  
+
                 // compute kernel values
-                array<Tcalc, 16> ukrn, vkrn;
+                array<Tcalc, is_same<Tcalc,float>::value ? 8 : 16> ukrn, vkrn;
                 kcomp.compute_uv(ufrac, vfrac, ukrn, vkrn);
-  
+
                 // loop over supp*supp pixels from "grid"
                 complex<Tcalc> val=accvis[irow][ichan];
                 if(do_weights) val *= accwgt[irow][ichan];
                 if (shifting)
                   do_shift(val, coord, lshift, mshift, 0., imflip);
                 val.imag(val.imag()*imflip);
-  
+
                 int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
                 int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                for (size_t i=0, ipos=iu0-bu0; i<supp; ++i, ++ipos)
+                for (uint32_t ix=0, iposx=iu0-bu0; ix<supp; ++ix, ++iposx)
                   {
+                  auto i = ix+myid;
+                  auto ipos = iposx+myid;
+                  if (i>=supp) { i-=supp; ipos-=supp; }
                   auto tmp = ukrn[i]*val;
                   for (size_t j=0, jpos=iv0-bv0; j<supp; ++j, ++jpos)
                     {
@@ -1617,7 +1568,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x, 
+  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
