@@ -1,6 +1,4 @@
 /*
- *  This file is part of the MR utility library.
- *
  *  This code is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
@@ -203,7 +201,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
     std::array<Tsimd,(D+1)*nvec> coeff;
     const T *scoeff;
     static constexpr auto sstride = nvec*vlen;
- 
+
     void transferCoeffs(const vector<double> &input, size_t d_input)
       {
       auto ofs = D-d_input;
@@ -233,6 +231,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
     [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {
       z = (z-nth)*2+(W-1);
+//cout << x << " " << y << " " << z << endl;
       T x2=x*x, y2=y*y, z2=z*z;
       if constexpr (nvec==1)
         {

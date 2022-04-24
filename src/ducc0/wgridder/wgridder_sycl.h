@@ -376,14 +376,6 @@ timers.poppush("filling");
               if ((!on)||(xmask==2))
                 {
                 auto uvwcur = get_uvwidx(uvwbase, ichan);
-                //auto uvw = uvwbase*bl.ffact(ichan);
-                //double udum, vdum;
-                //int iu0, iv0, iw;
-                //getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-                //iu0 = (iu0+nsafe)>>logsquare;
-                //iv0 = (iv0+nsafe)>>logsquare;
-                //iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
-                //Uvwidx uvwcur(iu0, iv0, iw);
                 if (!on) // new active region
                   {
                   on=true;
