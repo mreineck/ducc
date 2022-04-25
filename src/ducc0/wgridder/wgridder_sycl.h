@@ -930,6 +930,30 @@ template<typename T> class KernelComputer
         kv[supp-1-i] = resmv;
         }
       }
+    inline T compute_uvw_single(T ufrac, uint32_t unth, T vfrac, uint32_t vnth, T wval, uint32_t nth) const
+      {
+//      if (Supp<supp) throw runtime_error("bad array size");
+      auto x0 = T(ufrac)*T(-2)+T(supp-1);
+      auto y0 = T(vfrac)*T(-2)+T(supp-1);
+      auto z0 = T(wval-nth)*T(2)+T(supp-1);
+      auto lim = (supp+1)/2;
+      if (unth>=lim)
+        { unth = supp-1-unth; x0=-x0; }
+      if (vnth>=lim)
+        { vnth = supp-1-vnth; y0=-y0; }
+      if (nth>=lim)
+        { nth = supp-1-nth; z0=-z0; }
+      Tcalc resu=acc_coeff[unth*(D+1)];
+      Tcalc resv=acc_coeff[vnth*(D+1)];
+      Tcalc resw=acc_coeff[nth*(D+1)];
+      for (uint32_t j=1; j<=D; ++j)
+        {
+        resu = resu*x0 + acc_coeff[j+unth*(D+1)];
+        resv = resv*y0 + acc_coeff[j+vnth*(D+1)];
+        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
+        }
+      return resu*resv*resw;
+      }
   };
 
 class CoordCalculator
@@ -1491,7 +1515,7 @@ timers.pop();
            bool negate_v_, bool divide_by_n_, double sigma_min_,
            double sigma_max_, double center_x, double center_y, bool allow_nshift)
       : gridding(ms_out_.size()==0),
-        timers(gridding ? "gridding" : "degridding"),
+        timers(gridding ? "gridding" : "degridding", "lmask allocation"),
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
         wgt(wgt_), mask(mask_),
@@ -1509,7 +1533,7 @@ timers.pop();
         lmshift((lshift!=0) || (mshift!=0)),
         no_nshift(!allow_nshift)
       {
-      timers.push("Baseline construction");
+      timers.poppush("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");

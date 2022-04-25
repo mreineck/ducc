@@ -18,8 +18,8 @@
 
 /** \file ducc0/infra/timers.h
  *  High precision wallclock timers.
- * 
- *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *
+ *  \copyright Copyright (C) 2019-2022 Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -200,6 +200,9 @@ class TimerHierarchy
   public:
     TimerHierarchy(const string &name="<root>")
       : last_time(clock::now()), root(name, nullptr), curnode(&root) {}
+    TimerHierarchy(const string &name, const string &firsttimer)
+      : TimerHierarchy(name)
+      { push(firsttimer); }
     /// Push a new category \a name to the stack.
     /** While this is on the stack, all elapsed time will be added to this
      *  category. */
