@@ -13,6 +13,7 @@
 #
 # Copyright(C) 2019-2020 Max-Planck-Society
 
+import os
 from time import time
 
 import ducc0.wgridder.experimental as wgridder
@@ -30,6 +31,13 @@ def get_npixdirty(uvw, freq, fov_deg, mask):
     return minsize+(minsize%2)  # make even
 
 
+def load_ms(ms):
+    import resolve as rve
+    ms = next(rve.ms2observations_all("/data/CYG-ALL-13360-8MHZ.ms", "DATA"))
+    return dict(uvw=ms.uvw, freqs=ms.freq, vis=ms.vis.val[0], wgt=ms.weight.val_rw()[0],
+                mask=ms.mask.val_rw()[0].astype(np.uint8))
+
+
 def main():
 #    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2.
 #    ms, fov_deg = '/home/martin/ms/1052736496-averaged.npz', 25.
@@ -39,8 +47,12 @@ def main():
 #    ms, fov_deg = '/home/martin/ms/L_UV_DATA-IF1.npz', 1.
 #    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.npz', 0.08
     ms, fov_deg = '/data/L_UV_DATA-IF1.npz', 1.
+#    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.ms', 0.05
 
-    data = np.load(ms)
+    if os.path.splitext(ms)[1] == ".ms":
+        data = load_ms(ms)
+    else:
+        data = np.load(ms)
     uvw, freq, vis, wgt = data["uvw"], data["freqs"], data["vis"], data["wgt"]
     mask = data["mask"] if "mask" in data else None
     wgt[vis == 0] = 0
