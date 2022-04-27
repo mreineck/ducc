@@ -40,7 +40,7 @@ namespace detail_sht {
 
 using namespace std;
 
-// the nextline is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
@@ -2046,7 +2046,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
                   tmp(i) *= conj(shift[i]);
                 tmp(im) *= shift[i];
                 }
-  
+
             // zero padding to full-resolution CC grid
             if (nfull>nfull_in) // pad
               {
@@ -2479,7 +2479,7 @@ template<typename T> void analysis_2d(
         for (size_t k=0; k<legi.shape(2); ++k)
           legi(i,j,k) *= wgt1;
         }
-         
+
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
     vmav<double,1> newtheta({ntheta_leg});
     for (size_t i=0; i<ntheta_leg; ++i)

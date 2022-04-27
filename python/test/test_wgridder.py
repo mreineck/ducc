@@ -123,7 +123,7 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 
 @pmp('nx', [(30, 3), (128, 2)])
 @pmp('ny', [(128, 2), (250, 5)])
-@pmp("nrow", (1, 2, 2048))
+@pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
@@ -211,10 +211,6 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
         if use_mask else None
- #   wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
- #   if wgt is not None:
- #       wgt = np.ascontiguousarray(wgt)
- #       print(wgt.strides)
     nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")

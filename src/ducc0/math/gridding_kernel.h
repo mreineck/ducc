@@ -231,7 +231,6 @@ template<size_t W, typename Tsimd> class TemplateKernel
     [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {
       z = (z-nth)*2+(W-1);
-//cout << x << " " << y << " " << z << endl;
       T x2=x*x, y2=y*y, z2=z*z;
       if constexpr (nvec==1)
         {

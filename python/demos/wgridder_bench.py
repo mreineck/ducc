@@ -41,13 +41,12 @@ def load_ms(ms):
 def main():
 #    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2.
 #    ms, fov_deg = '/home/martin/ms/1052736496-averaged.npz', 25.
-#    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
+    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
 #    ms, fov_deg = '/home/martin/ms/G330.89-0.36.npz', 2.
 #    ms, fov_deg = '/home/martin/ms/bigms.npz', 0.0005556*1800
 #    ms, fov_deg = '/home/martin/ms/L_UV_DATA-IF1.npz', 1.
 #    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.npz', 0.08
-    ms, fov_deg = '/data/L_UV_DATA-IF1.npz', 1.
-#    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.ms', 0.05
+#    ms, fov_deg = '/data/L_UV_DATA-IF1.npz', 1.
 
     if os.path.splitext(ms)[1] == ".ms":
         data = load_ms(ms)
@@ -60,15 +59,15 @@ def main():
         mask = np.ones(wgt.shape, dtype=np.uint8)
     mask[wgt == 0] = False
     DEG2RAD = np.pi/180
-    nthreads = 16
+    nthreads = 8
     epsilon = 1e-4
-    do_wgridding = False
+    do_wgridding = True
     verbosity = 1
 
-    do_sycl = True
-    do_cng = True
+    do_sycl = False #True
+    do_cng = False #True
 
-    ntries = 2
+    ntries = 1
 
     npixdirty = get_npixdirty(uvw, freq, fov_deg, mask)
     pixsize = fov_deg/npixdirty*DEG2RAD
@@ -92,6 +91,11 @@ def main():
     print("Best time: {:.4f} s".format(mintime))
     print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
     print()
+
+#    import matplotlib.pyplot as plt
+#    plt.imshow(dirty)
+#    plt.show()
+
     if do_sycl:
         print('SYCL gridding...')
         mintime=1e300
