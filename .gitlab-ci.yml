@@ -51,11 +51,11 @@ test_alpine_version:
   image: alpine:edge
   stage: testing
   script:
-    - apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0
-    - apk add git
+    - apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0 git py3-pip
+    - pip download ducc0
     - python3 -c 'import ducc0; print(ducc0.__version__)'
-    - git describe --abbrev=0 --tags | cut -c7- | sed -e 's/_/./g'
-    - if [ "`python3 -c 'import ducc0; print(ducc0.__version__)'`" != "`git describe --abbrev=0 --tags | cut -c7- | sed -e 's/_/./g'`" ]; then echo "Ducc version in repository and on alpine linux package manager are not in sync!" && exit 1; fi
+    - ls ducc0* | cut -d "-" -f 2
+    - if [ "`python3 -c 'import ducc0; print(ducc0.__version__)'`" != "`ls ducc0* | cut -d '-' -f 2`" ]; then echo "Ducc version on PyPI and on alpine linux package manager are not in sync!" && exit 1; fi
   allow_failure: true
 
 #wgridding_demo:
