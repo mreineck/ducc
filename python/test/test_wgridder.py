@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2021 Max-Planck-Society
+# Copyright(C) 2020-2022 Max-Planck-Society
 
 from itertools import product
 
@@ -111,6 +111,7 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
         cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
         cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
         facet = dirty[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)]
+        facet = np.ascontiguousarray(facet)
         foo = ng.experimental.dirty2vis(**kwargs, dirty=facet,
                                         center_x=cx, center_y=cy)
         if vis is None:
@@ -130,9 +131,10 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2, 7))
+@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask):
+                              use_mask, gpu):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -167,18 +169,17 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
 
-
     dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask).astype("f8")
+                                     mask=mask, gpu=gpu).astype("f8")
     ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
-                                  mask=mask).astype("c16")
+                                  mask=mask, gpu=gpu).astype("c16")
     check(dirty2, ms2)
 
 
@@ -193,9 +194,10 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2, 7))
 @pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
+@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
-                                nthreads):
+                                nthreads, gpu):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -206,10 +208,9 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
     freq = f0 + np.arange(nchan)*(f0/nchan)
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/SPEEDOFLIGHT)
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
-    wgt = rng.uniform(0.9, 1.1, (nrow, 1)) if use_wgt else None
+    wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
         if use_mask else None
-    wgt = np.broadcast_to(wgt, (nrow, nchan)) if use_wgt else None
     nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
@@ -227,7 +228,7 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask).astype("f8")
+                                     mask=mask,gpu=gpu).astype("f8")
     assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
 
     if wstacking or (not have_finufft):

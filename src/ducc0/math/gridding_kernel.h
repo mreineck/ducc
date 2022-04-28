@@ -1,6 +1,4 @@
 /*
- *  This file is part of the MR utility library.
- *
  *  This code is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
@@ -140,6 +138,10 @@ class KernelCorrection
         });
       return res;
       }
+
+    const vector<double> &X() const { return x; }
+    const vector<double> &Wgtpsi() const { return wgtpsi; }
+    size_t Supp() const { return supp; }
   };
 
 class GLFullCorrection: public KernelCorrection
@@ -183,6 +185,8 @@ class HornerKernel: public GriddingKernel
 
     const vector<double> &Coeff() const { return coeff; }
     size_t degree() const { return D; }
+
+    const KernelCorrection &Corr() const { return corr; }
   };
 
 template<size_t W, typename Tsimd> class TemplateKernel
@@ -197,7 +201,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
     std::array<Tsimd,(D+1)*nvec> coeff;
     const T *scoeff;
     static constexpr auto sstride = nvec*vlen;
- 
+
     void transferCoeffs(const vector<double> &input, size_t d_input)
       {
       auto ofs = D-d_input;

@@ -80,6 +80,9 @@ namespace detail_fft {
 
 using namespace std;
 
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::min, std::max;
+
 template<typename T> constexpr inline size_t fft1d_simdlen
   = min<size_t>(8, native_simd<T>::size());
 template<> constexpr inline size_t fft1d_simdlen<double>

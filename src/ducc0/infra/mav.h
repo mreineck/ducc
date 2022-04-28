@@ -71,6 +71,9 @@ namespace detail_mav {
 
 using namespace std;
 
+// the next line is necessary to address some sloppy name choices in hipSYCL
+using std::min, std::max;
+
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 
@@ -774,6 +777,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       
     void assign(vmav &other)
       { parent::assign(other); }
+    void dealloc()
+      {
+      vmav empty;
+      assign(empty);
+      }
     operator vfmav<T>()
       {
       return vfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});

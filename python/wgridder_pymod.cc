@@ -16,13 +16,14 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2022 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/wgridder/wgridder.h"
+#include "ducc0/wgridder/wgridder_sycl.h"
 
 namespace ducc0 {
 
@@ -40,7 +41,7 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
   bool flip_v, bool divide_by_n, py::object &dirty_, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift,
-  bool double_precision_accumulation)
+  bool gpu, bool double_precision_accumulation)
   {
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
@@ -56,13 +57,22 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
   auto dirty2 = to_vmav<T,2>(dirty);
   {
   py::gil_scoped_release release;
-  double_precision_accumulation ?
-    ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
-      sigma_max, center_x, center_y, allow_nshift) :
-    ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-      do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
-      sigma_max, center_x, center_y, allow_nshift);
+  if (gpu)
+    double_precision_accumulation ?
+      ms2dirty_sycl<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift) :
+      ms2dirty_sycl<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift);
+  else
+    double_precision_accumulation ?
+      ms2dirty<T,double>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift) :
+      ms2dirty<T,T>(uvw,freq,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+        do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
+        sigma_max, center_x, center_y, allow_nshift);
   }
   return move(dirty);
   }
@@ -73,18 +83,18 @@ py::array Py_vis2dirty(const py::array &uvw,
   size_t verbosity, const py::object &mask, bool flip_v, bool divide_by_n,
   py::object &dirty=None, double sigma_min=1.1, double sigma_max=2.6,
   double center_x=0., double center_y=0., bool allow_nshift=true,
-  bool double_precision_accumulation=false)
+  bool gpu=false, bool double_precision_accumulation=false)
   {
   if (isPyarr<complex<float>>(vis))
     return Py2_vis2dirty<float>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
       flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y,
-      allow_nshift, double_precision_accumulation);
+      allow_nshift, gpu, double_precision_accumulation);
   if (isPyarr<complex<double>>(vis))
     return Py2_vis2dirty<double>(uvw, freq, vis, wgt, mask, npix_x, npix_y,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
       flip_v, divide_by_n, dirty, sigma_min, sigma_max, center_x, center_y,
-      allow_nshift, double_precision_accumulation);
+      allow_nshift, gpu, double_precision_accumulation);
   MR_fail("type matching failed: 'vis' has neither type 'c8' nor 'c16'");
   }
 constexpr auto vis2dirty_DS = R"""(
@@ -154,7 +164,8 @@ template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
   const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_v, bool divide_by_n,
-  py::object &vis_, double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
+  py::object &vis_, double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift,
+  bool gpu)
   {
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
@@ -167,9 +178,14 @@ template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
   auto vis2 = to_vmav<complex<T>,2>(vis);
   {
   py::gil_scoped_release release;
-  dirty2ms<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
-    do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
-    sigma_max, center_x, center_y, allow_nshift);
+  if (gpu)
+    dirty2ms_sycl<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift);
+  else
+    dirty2ms<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+      do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
+      sigma_max, center_x, center_y, allow_nshift);
   }
   return move(vis);
   }
@@ -178,16 +194,17 @@ py::array Py_dirty2vis(const py::array &uvw,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, const py::object &mask,
   bool flip_v, bool divide_by_n, py::object &vis=None, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0., double center_y=0., bool allow_nshift=true)
+  double sigma_max=2.6, double center_x=0., double center_y=0., bool allow_nshift=true,
+  bool gpu=false)
   {
   if (isPyarr<float>(dirty))
     return Py2_dirty2vis<float>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, vis, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+      flip_v, divide_by_n, vis, sigma_min, sigma_max, center_x, center_y, allow_nshift, gpu);
   if (isPyarr<double>(dirty))
     return Py2_dirty2vis<double>(uvw, freq, dirty, wgt, mask,
       pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity,
-      flip_v, divide_by_n, vis, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+      flip_v, divide_by_n, vis, sigma_min, sigma_max, center_x, center_y, allow_nshift, gpu);
   MR_fail("type matching failed: 'dirty' has neither type 'f4' nor 'f8'");
   }
 constexpr auto dirty2vis_DS = R"""(
@@ -251,11 +268,11 @@ py::array Py_ms2dirty(const py::array &uvw,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t /*nu*/,
   size_t /*nv*/, double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const py::object &mask,
-  bool double_precision_accumulation=false)
+  bool double_precision_accumulation=false, bool gpu=false)
   {
   return Py_vis2dirty(uvw, freq, ms, wgt, npix_x, npix_y, pixsize_x, pixsize_y,
     epsilon, do_wgridding, nthreads, verbosity, mask, false, true, None, 1.1,
-    2.6, 0., 0., true, double_precision_accumulation);
+    2.6, 0., 0., true, gpu, double_precision_accumulation);
   }
 
 constexpr auto ms2dirty_DS = R"""(
@@ -310,9 +327,9 @@ Other strides will work, but can degrade performance significantly.
 py::array Py_dirty2ms(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
   double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/, double epsilon,
-  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask)
+  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask, bool gpu=false)
   {
-  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, true);
+  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, true, None, 1.1, 2.6, 0, 0, true, gpu);
   }
 
 constexpr auto dirty2ms_DS = R"""(
@@ -377,25 +394,27 @@ void add_wgridder(py::module_ &msup)
   auto m = msup.def_submodule("wgridder");
   auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 
+  m2.def("sycl_active", &ducc0::sycl_active);
+
   m2.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
     "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
     "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0.,
-    "allow_nshift"_a=true, "double_precision_accumulation"_a=false);
+    "allow_nshift"_a=true, "gpu"_a=false, "double_precision_accumulation"_a=false);
   m2.def("dirty2vis", &Py_dirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
     "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None,"sigma_min"_a=1.1,
-    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true);
+    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None, "sigma_min"_a=1.1,
+    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true, "gpu"_a=false);
 
   m.def("ms2dirty", &Py_ms2dirty, ms2dirty_DS, "uvw"_a, "freq"_a, "ms"_a,
     "wgt"_a=None, "npix_x"_a, "npix_y"_a, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0,
     "epsilon"_a, "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "double_precision_accumulation"_a=false);
+    "double_precision_accumulation"_a=false, "gpu"_a=false);
   m.def("dirty2ms", &Py_dirty2ms, dirty2ms_DS, "uvw"_a, "freq"_a, "dirty"_a,
     "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "nu"_a=0, "nv"_a=0, "epsilon"_a,
-    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None);
+    "do_wstacking"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None, "gpu"_a=false);
   }
 
 }

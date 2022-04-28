@@ -11,6 +11,7 @@ include src/ducc0/infra/misc_utils.h
 include src/ducc0/infra/simd.h
 include src/ducc0/infra/string_utils.cc
 include src/ducc0/infra/string_utils.h
+include src/ducc0/infra/sycl_utils.h
 include src/ducc0/infra/threading.cc
 include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
@@ -49,6 +50,7 @@ include src/ducc0/healpix/healpix_tables.cc
 include src/ducc0/healpix/healpix_tables.h
 
 include src/ducc0/wgridder/wgridder.h
+include src/ducc0/wgridder/wgridder_sycl.h
 
 include python/fft_pymod.cc
 include python/sht_pymod.cc

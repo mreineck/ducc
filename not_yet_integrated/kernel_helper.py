@@ -109,14 +109,21 @@ def kernel2error(krn, nu, x, W):
     corr = gridder_to_grid_correction(krn, nu, x, W)
     return calc_map_error(krn, corr, nu, x, W)
 
+def kernel2acceptability(krn, nu, x, W, ofactor):
+    M = len(nu) // W
+    corr = gridder_to_grid_correction(krn, nu, x, W)
+    return np.max(corr[:int(len(corr)/ofactor)+1]/corr[0])
+
 M=128
 N=512
 x=np.arange(N+1)/(2*N)
 
 # for quick experiments, just enter the desired oversampling factor and support
 # as single elements in the tuples below
-ofactors = np.linspace(1.15,2.00,18)
+ofactors = np.linspace(1.15,2.50,28)
 Ws = np.arange(4,17)
+#ofactors = [1.5]#np.linspace(1.15,2.00,18)
+#Ws = [8] #np.arange(4,17)
 results = []
 for W in Ws:
     for ofactor in ofactors:
@@ -125,6 +132,7 @@ for W in Ws:
         ulim = int(2*x0*N+0.9999)+1
         rbeta=[1., 2.5]
         re0=[0.48, 0.65]
+        re0=[0.5,0.5]
         dbeta = rbeta[1]-rbeta[0]
         de0 = re0[1]-re0[0]
         for i in range(30):
@@ -136,4 +144,5 @@ for W in Ws:
         krn1 = eskapprox(res1, nu, x, W) 
         err1 = kernel2error(krn1, nu, x, W)
         maxerr1 = np.sqrt(np.max(err1[0:ulim]))
-        print("{{{0:2d}, {1:4.2f}, {2:13.8g}, {3:12.10f}, {4:12.10f}}},".format(W, ofactor, maxerr1, res1[0], res1[1]))
+        acceptability = kernel2acceptability(krn1, nu, x, W, ofactor)
+        print("{{{0:2d}, {1:4.2f}, {2:13.8g}, {3:12.10f}, {4:12.10f}, {5:12.10f}}},".format(W, ofactor, maxerr1, res1[0], res1[1], acceptability))
