@@ -18,6 +18,7 @@ def random_alm(lmax, mmax, ncomp):
     res[:, 0:lmax+1].imag = 0.
     return res
 
+
 # Very simple class to store a_lm that allow negative m values
 class AlmPM:
     def __init__(self, lmax, mmax):
@@ -46,17 +47,17 @@ class AlmPM:
 
 
 # Adri 2020 A25/A35
-def m_hwp_to_C(m_hwp):
+def mueller_to_C(mueller):
     T = np.zeros((4,4),dtype=np.complex128)
     T[0,0] = T[3,3] = 1.
     T[1,1] = T[2,1] = 1./np.sqrt(2.)
     T[1,2] = 1j/np.sqrt(2.)
     T[2,2] = -1j/np.sqrt(2.)
-    C = T.dot(m_hwp.dot(np.conj(T.T)))
+    C = T.dot(mueller.dot(np.conj(T.T)))
     return C
 
 
-def hwp_tc_prep (blm, m_hwp, lmax, mmax):
+def mueller_tc_prep (blm, mueller, lmax, mmax):
     ncomp = blm.shape[0]
 
     # convert input blm to T/P/P*/V blm
@@ -83,9 +84,10 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
                 blm2[2][l,-m] = np.conj(blm2[1][l,m]) * (-1)**m
             idx += 1
 
-    C = m_hwp_to_C(m_hwp)
+    C = mueller_to_C(mueller)
 
-    # compute the blm for the full beam+HWP system at HWP angles 0, 2pi/10, ...
+    # compute the blm for the full beam+Mueller matrix system at angles
+    # n*pi/5 for n in [0; 5[
     sqrt2 = np.sqrt(2.)
     nbeam = 5
     blm_eff = [[AlmPM(lmax, mmax+4) for _ in range(4)] for _ in range(nbeam)]
@@ -113,7 +115,7 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
                 blm_eff[ibeam][2][l, m] += C[1,2]*e4ia*blm2[1][l,m-4]
                 blm_eff[ibeam][2][l, m] += C[2,2]*blm2[2][l,m]
 
-    # back to original format
+    # back to original TEBV b_lm format
     inc = 4
     res = np.zeros((nbeam, ncomp, nalm(lmax, mmax+inc)), dtype=np.complex128)
 
@@ -135,6 +137,9 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
     return res
 
 
+# "Fourier transform" the blm at different alpha to obtain
+# blm(alpha) = out[0] + cos(2*alpha)*out[1] + sin(2*alpha)*out[2]
+#                     + cos(4*alpha)*out[3] + sin(4*alpha)*out[4]
 def pseudo_fft(inp):
     out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=np.complex128)
     out[0] = 0.2*(inp[0]+inp[1]+inp[2]+inp[3]+inp[4])
@@ -147,18 +152,46 @@ def pseudo_fft(inp):
     return out
 
 
+class MuellerConvolver:
+    def __init__ (self, lmax, kmax, slm, blm, mueller):
+        self._slm = slm
+        self._lmax = lmax
+        self._kmax = kmax
+        tmp = mueller_tc_prep (blm, mueller, lmax, kmax)
+        self._blm = pseudo_fft(tmp)
+
+    def signal(self, ptg, alpha):
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            self._blm[0], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        res = inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            self._blm[1], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        res += np.cos(2*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            self._blm[2], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        res += np.sin(2*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            self._blm[3], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        res += np.cos(4*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            self._blm[4], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        res += np.sin(4*alpha)*inter.interpol(ptg)[0]
+        return res
+
+
 class Convolver:
-    def __init__ (self, lmax, kmax, slm, blm, hwp):
+    def __init__ (self, lmax, kmax, slm, blm):
         self._slm = slm
         self._orig_blm = blm
         self._lmax = lmax
         self._kmax = kmax
-        tmp = hwp_tc_prep (blm, hwp, lmax, kmax)
-        self._blm = pseudo_fft(tmp)
-        for i in range(5):
-            print(i, np.sum(np.abs(self._blm[i])))
 
-    def signal_without_HWP(self, ptg):
+    def signal_without_mueller(self, ptg):
         inter = ducc0.totalconvolve.Interpolator(self._slm, self._orig_blm,
             separate=False, lmax=self._lmax, kmax=self._kmax, epsilon=1e-4,
             nthreads=1)
@@ -197,30 +230,6 @@ class Convolver:
         signal = bar_TT[0, :] + cos_alpha*bar_EE_BB[0, :] + sin_alpha*bar_EB_BE[0, :]
         return signal
 
-    def signal(self, ptg, alpha):
-        inter = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[0], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res = inter.interpol(ptg)[0]
-        inter = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[1], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res += np.cos(2*alpha)*inter.interpol(ptg)[0]
-        inter = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[2], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res += np.sin(2*alpha)*inter.interpol(ptg)[0]
-        inter = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[3], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res += np.cos(4*alpha)*inter.interpol(ptg)[0]
-        inter = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[4], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res += np.sin(4*alpha)*inter.interpol(ptg)[0]
-
-        return res
-
 
 lmax = 256  # band limit
 kmax = 13  # maximum beam azimuthal moment
@@ -241,26 +250,24 @@ blm = random_alm(lmax, kmax, 3)
 
 ptg = np.empty((nptg,3))
 
-ptg[:, 0] = 0.2#rng.uniform(0., 1., nptg)*np.pi
-ptg[:, 1] = 0.3#rng.uniform(0., 1., nptg)*2*np.pi
-ptg[:, 2] = 0.5#rng.uniform(0., 1., nptg)*2*np.pi
+# for this test, we keep (theta, phi, psi) fixed and rotate alpha through 2pi
+ptg[:, 0] = 0.2
+ptg[:, 1] = 0.3
+ptg[:, 2] = 0.5
+alpha = np.arange(nptg)/nptg*2*np.pi
 
-# Mueller matrix
-hwp = rng.random((4,4))-0.5
-hwp = np.identity(4)
-hwp[2,2] = hwp[3,3] = -1
-phi0 = 0
-omega = 88*2*pi/60
-f_samp = 19.1
-alpha = phi0+omega*np.arange(nptg)/f_samp
-alpha = np.arange(nptg)/nptg*2*np.pi+0.4
-conv = Convolver(lmax, kmax, slm, blm, hwp)
-sig = conv.signal(ptg, alpha)
-sig_nohwp = conv.signal_without_HWP(ptg)
+# We use an idealized HWP Mueller matrix
+mueller = np.identity(4)
+mueller[2,2] = mueller[3,3] = -1
+
+fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller)
+conv = Convolver(lmax, kmax, slm, blm)
+sig = fullconv.signal(ptg, alpha)
+sig_nomueller = conv.signal_without_mueller(ptg)
 sig_idealhwp = conv.signal_with_ideal_HWP(ptg, alpha)
 
 import matplotlib.pyplot as plt
 plt.plot(sig)
-plt.plot(sig_nohwp)
+plt.plot(sig_nomueller)
 plt.plot(sig_idealhwp)
 plt.show()
