@@ -4,7 +4,7 @@ import time
 from math import pi
 from astropy.io import fits
 
-rng = np.random.default_rng(48)
+rng = np.random.default_rng(41)
 
 
 def nalm(lmax, mmax):
@@ -18,7 +18,7 @@ def random_alm(lmax, mmax, ncomp):
     res[:, 0:lmax+1].imag = 0.
     return res
 
-
+# Very simple class to store a_lm that allow negative m values
 class AlmPM:
     def __init__(self, lmax, mmax):
         if lmax < 0 or mmax < 0 or lmax < mmax:
@@ -28,18 +28,24 @@ class AlmPM:
 
     def __getitem__(self, lm):
         l, m = lm
-        if l < 0 or l > self._lmax or m < -self._mmax or m > self._mmax:
-            return 0
+
+        if l < 0 or l > self._lmax: # or abs(m) > l:
+            print(l,m)
+            raise ValueError("out of bounds read access")
+        # if we are asked for elements outside our m range, return 0
+        if m < -self._mmax or m > self._mmax:
+            return 0.+0j
         return self._data[m+self._mmax, l]
 
     def __setitem__(self, lm, val):
         l, m = lm
-        if l < 0 or l > self._lmax or m < -self._mmax or m > self._mmax:
-            raise ValueError("argh")
-            return
+        if l < 0 or l > self._lmax or abs(m) > l or  m < -self._mmax or m > self._mmax:
+            print(l,m)
+            raise ValueError("out of bounds write access")
         self._data[m+self._mmax, l] = val
 
 
+# Adri 2020 A25/A35
 def m_hwp_to_C(m_hwp):
     T = np.zeros((4,4),dtype=np.complex128)
     T[0,0] = T[3,3] = 1.
@@ -130,24 +136,14 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
 
 
 def pseudo_fft(inp):
-    for i in range(5):
-        print(i,i,i,np.max(np.abs(inp[i]-inp[i+4])))
-    tmp = ducc0.fft.c2c(inp,axes=(0,))
-    for i in range(tmp.shape[0]):
-        print(i,i,np.max(np.abs(tmp[i])))
     out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=np.complex128)
-    # out[0] = 0.2*(inp[0]+inp[2]+inp[4]+inp[-4]+inp[-2])
-    # c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
-    # c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
-    # out[1] = 0.4*(inp[0] + c1*(inp[2]+inp[-2]) + c2*(inp[4]+inp[-4]))
-    # out[2] = 0.4*(s1*(inp[2]-inp[-2]) + s2*(inp[4]-inp[-4]))
-    # out[3] = 0.4*(inp[0] + c2*(inp[2]+inp[-2]) + c1*(inp[4]+inp[-4]))
-    # out[4] = 0.4*(s2*(inp[2]-inp[-2]) - s1*(inp[4]-inp[-4]))
-    out[0] = inp[0]
-    out[1] = inp[1]
-    out[2] = inp[2]
-    out[3] = inp[3]
-    out[4] = inp[4]
+    out[0] = 0.2*(inp[0]+inp[1]+inp[2]+inp[3]+inp[4])
+    c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
+    c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
+    out[1] = 0.4*(inp[0] + c1*(inp[1]+inp[4]) + c2*(inp[2]+inp[3]))
+    out[2] = 0.4*(s1*(inp[1]-inp[4]) + s2*(inp[2]-inp[3]))
+    out[3] = 0.4*(inp[0] + c2*(inp[1]+inp[4]) + c1*(inp[2]+inp[3]))
+    out[4] = 0.4*(s2*(inp[1]-inp[4]) - s1*(inp[2]-inp[3]))
     return out
 
 
@@ -158,7 +154,7 @@ class Convolver:
         self._lmax = lmax
         self._kmax = kmax
         tmp = hwp_tc_prep (blm, hwp, lmax, kmax)
-        self._blm = pseudo_fft(tmp)
+        self._blm = tmp
         for i in range(5):
             print(i, np.sum(np.abs(self._blm[i])))
 
@@ -202,40 +198,61 @@ class Convolver:
         return signal
 
     def signal(self, ptg, alpha):
-        inter0 = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[0], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res0 = inter0.interpol(ptg)
-        inter1 = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[1], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res1 = inter1.interpol(ptg)
-        inter2 = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[2], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res2 = inter2.interpol(ptg)
-        inter3 = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[3], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res3 = inter3.interpol(ptg)
-        inter4 = ducc0.totalconvolve.Interpolator(self._slm,
-            self._blm[4], False, self._lmax, self._kmax+4,
-            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        res4 = inter4.interpol(ptg)
+        res = np.empty((10,alpha.shape[0]))
+        for i in range(10):
+            inter = ducc0.totalconvolve.Interpolator(self._slm,
+                self._blm[i], False, self._lmax, self._kmax+4,
+                epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+            res[i] = inter.interpol(ptg)[0]
+            print(np.sum(res[i]))
 
-        c1, s1 = np.cos(2*np.pi/5), -np.sin(2*np.pi/5)
-        c2, s2 = np.cos(4*np.pi/5), -np.sin(4*np.pi/5)
-        print(np.sum(res0))
-        print(np.sum(res1))
-        print(np.sum(res2))
-        print(np.sum(res3))
-        print(np.sum(res4))
-        res = 0.2*(res0+res1+res2+res3+res4)
-        res += 0.4*(res0 + c1*(res1+res4) + c2*(res2+res3))*np.cos(2*alpha)
-        res += 0.4*(s1*(res1-res4) + s2*(res2-res3))*np.sin(2*alpha)
-        res += 0.4*(res0 + c2*(res1+res4) + c1*(res2+res3))*np.cos(4*alpha)
-        res += 0.4*(s2*(res1-res4) - s1*(res2-res3))*np.sin(4*alpha)
-        return res[0]
+        resx =np.zeros(alpha.shape[0], dtype=np.complex128)
+        for i in range(alpha.shape[0]):
+            tmp = res[:,i].copy().astype(np.complex128)
+            print(tmp)
+            tmp = ducc0.fft.c2c(tmp, out=tmp)
+            print(tmp)
+            resx[i] = tmp[0]
+            for j in range(1,5):
+                resx[i] += tmp[j]*np.exp(1j*j*alpha[i])
+                resx[i] += tmp[10-j]*np.exp(-1j*j*alpha[i])
+            print (resx[i])
+        resx2 =resx.real/10
+
+        c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
+        c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
+        resx = 0.2*(res[0]+res[1]+res[2]+res[3]+res[4])
+        resx += 0.4*(res[0] + c1*(res[1]+res[4]) + c2*(res[2]+res[3]))*np.cos(2*alpha)
+        resx += 0.4*(s1*(res[1]-res[4]) + s2*(res[2]-res[3]))*np.sin(2*alpha)
+        resx += 0.4*(res[0] + c2*(res[1]+res[4]) + c1*(res[2]+res[3]))*np.cos(4*alpha)
+        resx += 0.4*(s2*(res[1]-res[4]) - s1*(res[2]-res[3]))*np.sin(4*alpha)
+        print("a1",np.max(np.abs(resx-resx2)))
+    #    print(resx-resx2)
+
+        gnampf = pseudo_fft(self._blm)
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            gnampf[0], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        resx3 = inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            gnampf[1], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        resx3 += np.cos(2*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            gnampf[2], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        resx3 += np.sin(2*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            gnampf[3], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        resx3 += np.cos(4*alpha)*inter.interpol(ptg)[0]
+        inter = ducc0.totalconvolve.Interpolator(self._slm,
+            gnampf[4], False, self._lmax, self._kmax+4,
+            epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+        resx3 += np.sin(4*alpha)*inter.interpol(ptg)[0]
+        print("a2",np.max(np.abs(resx-resx3)))
+
+        return resx3
 
 #    def signal_with_nonideal_HWP(self, ptg, alpha):
 
@@ -258,14 +275,14 @@ blm = random_alm(lmax, kmax, 3)
 
 ptg = np.empty((nptg,3))
 
-ptg[:, 0] = 0.5 #rng.uniform(0., 1., nptg)*np.pi
-ptg[:, 1] = 0.2 #rng.uniform(0., 1., nptg)*2*np.pi
-ptg[:, 2] = 0.4 #rng.uniform(0., 1., nptg)*2*np.pi
+ptg[:, 0] = rng.uniform(0., 1., nptg)*np.pi
+ptg[:, 1] = rng.uniform(0., 1., nptg)*2*np.pi
+ptg[:, 2] = rng.uniform(0., 1., nptg)*2*np.pi
 
 # Mueller matrix
-#hwp = rng.random((4,4))-0.5
-hwp = np.identity(4)
-hwp[2,2] = hwp[3,3] = -1
+hwp = rng.random((4,4))-0.5
+#hwp = -np.identity(4)
+#hwp[2,2] = hwp[3,3] = -1
 phi0 = 0
 omega = 88*2*pi/60
 f_samp = 19.1
@@ -275,8 +292,8 @@ conv = Convolver(lmax, kmax, slm, blm, hwp)
 sig0 = conv.signal_without_HWP(ptg)
 sig1 = conv.signal_with_ideal_HWP(ptg, alpha)
 sig2 = conv.signal(ptg, alpha)
-print("beep", np.max(np.abs(sig0-sig1)))
-print("beep", np.max(np.abs(sig0-sig2)))
+print("beep", np.max(np.abs(sig0+sig2)))
+print("beep", np.max(np.abs(sig1-sig2)))
 
 import matplotlib.pyplot as plt
 plt.plot(sig0)
