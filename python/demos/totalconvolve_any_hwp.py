@@ -87,10 +87,10 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
 
     # compute the blm for the full beam+HWP system at HWP angles 0, 2pi/10, ...
     sqrt2 = np.sqrt(2.)
-    nbeam = 10
+    nbeam = 5
     blm_eff = [[AlmPM(lmax, mmax+4) for _ in range(4)] for _ in range(nbeam)]
     for ibeam in range(nbeam):
-        alpha = ibeam*2*np.pi/nbeam
+        alpha = ibeam*np.pi/nbeam
         e2ia = np.exp(2*1j*alpha)
         e2iac = np.exp(-2*1j*alpha)
         e4ia = np.exp(4*1j*alpha)
@@ -138,8 +138,8 @@ def hwp_tc_prep (blm, m_hwp, lmax, mmax):
 def pseudo_fft(inp):
     out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=np.complex128)
     out[0] = 0.2*(inp[0]+inp[1]+inp[2]+inp[3]+inp[4])
-    c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
-    c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
+    c1, s1 = np.cos(2*np.pi/5), np.sin(-2*np.pi/5)
+    c2, s2 = np.cos(4*np.pi/5), np.sin(-4*np.pi/5)
     out[1] = 0.4*(inp[0] + c1*(inp[1]+inp[4]) + c2*(inp[2]+inp[3]))
     out[2] = 0.4*(s1*(inp[1]-inp[4]) + s2*(inp[2]-inp[3]))
     out[3] = 0.4*(inp[0] + c2*(inp[1]+inp[4]) + c1*(inp[2]+inp[3]))
@@ -154,7 +154,7 @@ class Convolver:
         self._lmax = lmax
         self._kmax = kmax
         tmp = hwp_tc_prep (blm, hwp, lmax, kmax)
-        self._blm = tmp
+        self._blm = pseudo_fft(tmp)
         for i in range(5):
             print(i, np.sum(np.abs(self._blm[i])))
 
@@ -198,63 +198,29 @@ class Convolver:
         return signal
 
     def signal(self, ptg, alpha):
-        res = np.empty((10,alpha.shape[0]))
-        for i in range(10):
-            inter = ducc0.totalconvolve.Interpolator(self._slm,
-                self._blm[i], False, self._lmax, self._kmax+4,
-                epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-            res[i] = inter.interpol(ptg)[0]
-            print(np.sum(res[i]))
-
-        resx =np.zeros(alpha.shape[0], dtype=np.complex128)
-        for i in range(alpha.shape[0]):
-            tmp = res[:,i].copy().astype(np.complex128)
-            print(tmp)
-            tmp = ducc0.fft.c2c(tmp, out=tmp)
-            print(tmp)
-            resx[i] = tmp[0]
-            for j in range(1,5):
-                resx[i] += tmp[j]*np.exp(1j*j*alpha[i])
-                resx[i] += tmp[10-j]*np.exp(-1j*j*alpha[i])
-            print (resx[i])
-        resx2 =resx.real/10
-
-        c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
-        c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
-        resx = 0.2*(res[0]+res[1]+res[2]+res[3]+res[4])
-        resx += 0.4*(res[0] + c1*(res[1]+res[4]) + c2*(res[2]+res[3]))*np.cos(2*alpha)
-        resx += 0.4*(s1*(res[1]-res[4]) + s2*(res[2]-res[3]))*np.sin(2*alpha)
-        resx += 0.4*(res[0] + c2*(res[1]+res[4]) + c1*(res[2]+res[3]))*np.cos(4*alpha)
-        resx += 0.4*(s2*(res[1]-res[4]) - s1*(res[2]-res[3]))*np.sin(4*alpha)
-        print("a1",np.max(np.abs(resx-resx2)))
-    #    print(resx-resx2)
-
-        gnampf = pseudo_fft(self._blm)
         inter = ducc0.totalconvolve.Interpolator(self._slm,
-            gnampf[0], False, self._lmax, self._kmax+4,
+            self._blm[0], False, self._lmax, self._kmax+4,
             epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        resx3 = inter.interpol(ptg)[0]
+        res = inter.interpol(ptg)[0]
         inter = ducc0.totalconvolve.Interpolator(self._slm,
-            gnampf[1], False, self._lmax, self._kmax+4,
+            self._blm[1], False, self._lmax, self._kmax+4,
             epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        resx3 += np.cos(2*alpha)*inter.interpol(ptg)[0]
+        res += np.cos(2*alpha)*inter.interpol(ptg)[0]
         inter = ducc0.totalconvolve.Interpolator(self._slm,
-            gnampf[2], False, self._lmax, self._kmax+4,
+            self._blm[2], False, self._lmax, self._kmax+4,
             epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        resx3 += np.sin(2*alpha)*inter.interpol(ptg)[0]
+        res += np.sin(2*alpha)*inter.interpol(ptg)[0]
         inter = ducc0.totalconvolve.Interpolator(self._slm,
-            gnampf[3], False, self._lmax, self._kmax+4,
+            self._blm[3], False, self._lmax, self._kmax+4,
             epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        resx3 += np.cos(4*alpha)*inter.interpol(ptg)[0]
+        res += np.cos(4*alpha)*inter.interpol(ptg)[0]
         inter = ducc0.totalconvolve.Interpolator(self._slm,
-            gnampf[4], False, self._lmax, self._kmax+4,
+            self._blm[4], False, self._lmax, self._kmax+4,
             epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
-        resx3 += np.sin(4*alpha)*inter.interpol(ptg)[0]
-        print("a2",np.max(np.abs(resx-resx3)))
+        res += np.sin(4*alpha)*inter.interpol(ptg)[0]
 
-        return resx3
+        return res
 
-#    def signal_with_nonideal_HWP(self, ptg, alpha):
 
 lmax = 256  # band limit
 kmax = 13  # maximum beam azimuthal moment
@@ -275,28 +241,26 @@ blm = random_alm(lmax, kmax, 3)
 
 ptg = np.empty((nptg,3))
 
-ptg[:, 0] = rng.uniform(0., 1., nptg)*np.pi
-ptg[:, 1] = rng.uniform(0., 1., nptg)*2*np.pi
-ptg[:, 2] = rng.uniform(0., 1., nptg)*2*np.pi
+ptg[:, 0] = 0.2#rng.uniform(0., 1., nptg)*np.pi
+ptg[:, 1] = 0.3#rng.uniform(0., 1., nptg)*2*np.pi
+ptg[:, 2] = 0.5#rng.uniform(0., 1., nptg)*2*np.pi
 
 # Mueller matrix
 hwp = rng.random((4,4))-0.5
-#hwp = -np.identity(4)
-#hwp[2,2] = hwp[3,3] = -1
+hwp = np.identity(4)
+hwp[2,2] = hwp[3,3] = -1
 phi0 = 0
 omega = 88*2*pi/60
 f_samp = 19.1
 alpha = phi0+omega*np.arange(nptg)/f_samp
-alpha = np.arange(nptg)/nptg*2*np.pi
+alpha = np.arange(nptg)/nptg*2*np.pi+0.4
 conv = Convolver(lmax, kmax, slm, blm, hwp)
-sig0 = conv.signal_without_HWP(ptg)
-sig1 = conv.signal_with_ideal_HWP(ptg, alpha)
-sig2 = conv.signal(ptg, alpha)
-print("beep", np.max(np.abs(sig0+sig2)))
-print("beep", np.max(np.abs(sig1-sig2)))
+sig = conv.signal(ptg, alpha)
+sig_nohwp = conv.signal_without_HWP(ptg)
+sig_idealhwp = conv.signal_with_ideal_HWP(ptg, alpha)
 
 import matplotlib.pyplot as plt
-plt.plot(sig0)
-plt.plot(sig1)
-plt.plot(sig2)
+plt.plot(sig)
+plt.plot(sig_nohwp)
+plt.plot(sig_idealhwp)
 plt.show()
