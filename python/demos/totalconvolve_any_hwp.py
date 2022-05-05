@@ -33,9 +33,14 @@ class MuellerConvolver:
         def __getitem__(self, lm):
             l, m = lm
 
-            if l < 0 or l > self._lmax: # or abs(m) > l:
-                print(l,m)
-                raise ValueError("out of bounds read access")
+            if isinstance(l, slice):
+                if l.step is not None or l.start < 0 or l.stop-1 > self._lmax:
+                    print(l,m)
+                    raise ValueError("out of bounds read access")
+            else:
+                if l < 0 or l > self._lmax: # or abs(m) > l:
+                    print(l,m)
+                    raise ValueError("out of bounds read access")
             # if we are asked for elements outside our m range, return 0
             if m < -self._mmax or m > self._mmax:
                 return 0.+0j
@@ -43,9 +48,14 @@ class MuellerConvolver:
 
         def __setitem__(self, lm, val):
             l, m = lm
-            if l < 0 or l > self._lmax or abs(m) > l or  m < -self._mmax or m > self._mmax:
-                print(l,m)
-                raise ValueError("out of bounds write access")
+            if isinstance(l, slice):
+                if l.step is not None or l.start < 0 or l.stop-1 > self._lmax:
+                    print(l,m)
+                    raise ValueError("out of bounds write access")
+            else:
+                if l < 0 or l > self._lmax or abs(m) > l or  m < -self._mmax or m > self._mmax:
+                    print(l,m)
+                    raise ValueError("out of bounds write access")
             self._data[m+self._mmax, l] = val
 
 
@@ -56,25 +66,27 @@ class MuellerConvolver:
         blm2 = [self.AlmPM(lmax, mmax+4) for _ in range(4)]
         idx = 0
         for m in range(mmax+1):
-            for l in range(m, lmax+1):
-                # T component
-                blm2[0][l, m] = blm[0, idx]
-                blm2[0][l,-m] = np.conj(blm[0, idx]) * (-1)**m
-                # V component
-                if ncomp > 3:
-                    blm2[3][l, m] = blm[3, idx]
-                    blm2[3][l,-m] = np.conj(blm[3, idx]) * (-1)**m
-                # E/B components
-                if ncomp > 2:
-                    # Adri's notes [10]
-                    blm2[1][l,m] = -(blm[1,idx] + 1j*blm[2,idx]) # spin +2
-                    # Adri's notes [9]
-                    blm2[2][l,m] = -(blm[1,idx] - 1j*blm[2,idx]) # spin -2
-                    # negative m
-                    # Adri's notes [2]
-                    blm2[1][l,-m] = np.conj(blm2[2][l,m]) * (-1)**m
-                    blm2[2][l,-m] = np.conj(blm2[1][l,m]) * (-1)**m
-                idx += 1
+            sign = (-1)**m
+            lrange = slice(m, lmax+1)
+            idxrange = slice(idx, idx+lmax+1-m)
+            # T component
+            blm2[0][lrange, m] = blm[0, idxrange]
+            blm2[0][lrange,-m] = np.conj(blm[0, idxrange]) * sign
+            # V component
+            if ncomp > 3:
+                blm2[3][lrange, m] = blm[3, idxrange]
+                blm2[3][lrange,-m] = np.conj(blm[3, idxrange]) * sign
+            # E/B components
+            if ncomp > 2:
+                # Adri's notes [10]
+                blm2[1][lrange,m] = -(blm[1,idxrange] + 1j*blm[2,idxrange]) # spin +2
+                # Adri's notes [9]
+                blm2[2][lrange,m] = -(blm[1,idxrange] - 1j*blm[2,idxrange]) # spin -2
+                # negative m
+                # Adri's notes [2]
+                blm2[1][lrange,-m] = np.conj(blm2[2][lrange,m]) * sign
+                blm2[2][lrange,-m] = np.conj(blm2[1][lrange,m]) * sign
+            idx += lmax+1-m
 
         C = mueller_to_C(mueller)
 
@@ -85,6 +97,7 @@ class MuellerConvolver:
         inc = 4
         res = np.zeros((nbeam, ncomp, nalm(lmax, mmax+inc)), dtype=np.complex128)
         blm_eff = [self.AlmPM(lmax, mmax+4) for _ in range(4)]
+
         for ibeam in range(nbeam):
             alpha = ibeam*np.pi/nbeam
             e2ia = np.exp(2*1j*alpha)
@@ -92,48 +105,50 @@ class MuellerConvolver:
             e4ia = np.exp(4*1j*alpha)
             e4iac = np.exp(-4*1j*alpha)
             for m in range(-mmax-4, mmax+4+1):
-                for l in range(abs(m), lmax+1):
-                    # T component, Marta notes [4a]
-                    blm_eff[0][l, m] = \
-                          C[0,0]*blm2[0][l,m] \
-                        + C[3,0]*blm2[3][l,m] \
-                        + 1./sqrt2*(C[1,0]*blm2[2][l,m+2]*e2ia \
-                                  + C[2,0]*blm2[1][l,m-2]*e2iac)
-                    # V component, Marta notes [4d]
-                    blm_eff[3][l, m] = \
-                          C[0,3]*blm2[0][l,m] \
-                        + C[3,3]*blm2[3][l,m] \
-                        + 1./sqrt2*(C[1,3]*blm2[2][l,m+2]*e2ia \
-                                  + C[2,3]*blm2[1][l,m-2]*e2iac)
-                    # E/B components, Marta notes [4b,c]
-                    blm_eff[1][l, m] = \
-                          sqrt2*e2iac*(C[0,1]*blm2[0][l,m+2] \
-                                   + C[3,1]*blm2[3][l,m+2]) \
-                        + C[2,1]*e4iac*blm2[2][l,m+4] \
-                        + C[1,1]*blm2[1][l,m]
-                    blm_eff[2][l, m] = \
-                          sqrt2*e2ia*(C[0,2]*blm2[0][l,m-2] \
-                                    + C[3,2]*blm2[3][l,m-2]) \
-                        + C[1,2]*e4ia*blm2[1][l,m-4] \
-                        + C[2,2]*blm2[2][l,m]
+                lrange = slice(abs(m), lmax+1)
+                # T component, Marta notes [4a]
+                blm_eff[0][lrange, m] = \
+                      C[0,0]*blm2[0][lrange,m] \
+                    + C[3,0]*blm2[3][lrange,m] \
+                    + 1./sqrt2*(C[1,0]*blm2[2][lrange,m+2]*e2ia \
+                              + C[2,0]*blm2[1][lrange,m-2]*e2iac)
+                # V component, Marta notes [4d]
+                blm_eff[3][lrange, m] = \
+                      C[0,3]*blm2[0][lrange,m] \
+                    + C[3,3]*blm2[3][lrange,m] \
+                    + 1./sqrt2*(C[1,3]*blm2[2][lrange,m+2]*e2ia \
+                              + C[2,3]*blm2[1][lrange,m-2]*e2iac)
+                # E/B components, Marta notes [4b,c]
+                blm_eff[1][lrange, m] = \
+                      sqrt2*e2iac*(C[0,1]*blm2[0][lrange,m+2] \
+                               + C[3,1]*blm2[3][lrange,m+2]) \
+                    + C[2,1]*e4iac*blm2[2][lrange,m+4] \
+                    + C[1,1]*blm2[1][lrange,m]
+                blm_eff[2][lrange, m] = \
+                      sqrt2*e2ia*(C[0,2]*blm2[0][lrange,m-2] \
+                                + C[3,2]*blm2[3][lrange,m-2]) \
+                    + C[1,2]*e4ia*blm2[1][lrange,m-4] \
+                    + C[2,2]*blm2[2][lrange,m]
 
             # back to original TEBV b_lm format
             idx = 0
             for m in range(mmax+inc+1):
-                for l in range(m, lmax+1):
-                    # T component
-                    res[ibeam, 0, idx] = blm_eff[0][l, m]
-                    # V component
-                    if ncomp > 3:
-                        res[ibeam, 3, idx] = blm_eff[3][l, m]
-                    # E/B components
-                    if ncomp > 2:
-                        # Adri's notes [10]
-                        res[ibeam, 1, idx] = -0.5*(blm_eff[1][l, m] \
-                                                  +blm_eff[2][l, m])
-                        res[ibeam, 2, idx] = 0.5j*(blm_eff[1][l, m] \
-                                                  -blm_eff[2][l, m])
-                    idx += 1
+                lrange = slice(m, lmax+1)
+                idxrange = slice(idx, idx+lmax+1-m)
+                # T component
+                res[ibeam, 0, idxrange] = blm_eff[0][lrange, m]
+                # V component
+                if ncomp > 3:
+                    res[ibeam, 3, idxrange] = blm_eff[3][lrange, m]
+                # E/B components
+                if ncomp > 2:
+                    # Adri's notes [10]
+                    res[ibeam, 1, idxrange] = -0.5*(blm_eff[1][lrange, m] \
+                                                   +blm_eff[2][lrange, m])
+                    res[ibeam, 2, idxrange] = 0.5j*(blm_eff[1][lrange, m] \
+                                                   -blm_eff[2][lrange, m])
+                idx += lmax+1-m
+
         return res
 
     # "Fourier transform" the blm at different alpha to obtain
@@ -227,7 +242,7 @@ def main():
     # We use an idealized HWP Mueller matrix
     mueller = np.identity(4)
     mueller[2,2] = mueller[3,3] = -1
-#   mueller = rng.random((4,4))-0.5
+    mueller = rng.random((4,4))-0.5
 
     fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller, epsilon,
                                 ofactor, nthreads)
