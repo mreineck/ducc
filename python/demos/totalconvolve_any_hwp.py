@@ -18,7 +18,7 @@ def mueller_to_C(mueller):
 
 
 # Class for computing convolutions between arbitrary beams and skies in the
-# presence of an optical element with arbitrary Mueller matrix in from of the
+# presence of an optical element with arbitrary Mueller matrix in front of the
 # detector.
 class MuellerConvolver:
 
@@ -121,7 +121,7 @@ class MuellerConvolver:
                 # E/B components, Marta notes [4b,c]
                 blm_eff[1][lrange, m] = \
                       sqrt2*e2iac*(C[0,1]*blm2[0][lrange,m+2] \
-                               + C[3,1]*blm2[3][lrange,m+2]) \
+                                 + C[3,1]*blm2[3][lrange,m+2]) \
                     + C[2,1]*e4iac*blm2[2][lrange,m+4] \
                     + C[1,1]*blm2[1][lrange,m]
                 blm_eff[2][lrange, m] = \
