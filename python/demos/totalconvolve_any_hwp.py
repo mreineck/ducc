@@ -21,6 +21,35 @@ def mueller_to_C(mueller):
 # presence of an optical element with arbitrary Mueller matrix in front of the
 # detector.
 class MuellerConvolver:
+    """Class for computing convolutions between arbitrary beams and skies in the
+    presence of an optical element with arbitrary Mueller matrix in front of the
+    detector.
+
+    Parameters
+    ----------
+    lmax : int
+        maximum l moment of the provided sky and beam a_lm
+    kmax : int
+        maximum m moment of the provided beam a_lm
+    slm : numpy.ndarray((n_comp, n_slm), stype=np.complex128)
+        input sky a_lm
+        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively
+        the components have the a_lm format used by healpy
+    blm : numpy.ndarray((n_comp, n_blm), stype=np.complex128)
+        input beam a_lm
+        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively
+        the components have the a_lm format used by healpy
+    mueller : np.ndarray((4,4), dtype=np.float64)
+        Mueller matrix of the optical elemen in front of the detector
+    epsilon : float
+        desired accuracy for the interpolation; a typical value is 1e-4
+    ofactor : float
+        oversampling factor to be used for the interpolation grids.
+        Should be in the range [1.2; 2], a typical value is 1.5
+        Increasing this factor makes (adjoint) convolution slower and
+        increases memory consumption, but speeds up interpolation/deinterpolation.
+    nthreads : the number of threads to use for computation
+    """
 
     # Very simple class to store a_lm that allow negative m values
     class AlmPM:
@@ -193,6 +222,20 @@ class MuellerConvolver:
                 self._inter.append(None)
 
     def signal(self, ptg, alpha):
+        """Computes the convolved signal for a set of pointings and HWP angles.
+
+        Parameters
+        ----------
+        ptg : numpy.ndarray((nptg, 3), dtype=np.float64)
+            the input pointings, in (theta, phi, psi) order
+        alpha : numpy.ndarray((nptg,), dtype=np.float64)
+            the HWP angles
+
+        Returns
+        -------
+        signal : numpy.ndarray((nptg,), dtype=np.float64)
+            the signal measured by the detector
+        """
         res = self._inter[0].interpol(ptg)[0]
         if self._inter[1] is not None:
             res += np.cos(2*alpha)*self._inter[1].interpol(ptg)[0]
