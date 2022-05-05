@@ -143,8 +143,9 @@ def mueller_tc_prep (blm, mueller, lmax, mmax):
 def pseudo_fft(inp):
     out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=np.complex128)
     out[0] = 0.2*(inp[0]+inp[1]+inp[2]+inp[3]+inp[4])
-    c1, s1 = np.cos(2*np.pi/5), np.sin(-2*np.pi/5)
-    c2, s2 = np.cos(4*np.pi/5), np.sin(-4*np.pi/5)
+    # FIXME: I'm not absolutely sure about the sign of the angles yet
+    c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
+    c2, s2 = np.cos(4*np.pi/5), np.sin(4*np.pi/5)
     out[1] = 0.4*(inp[0] + c1*(inp[1]+inp[4]) + c2*(inp[2]+inp[3]))
     out[2] = 0.4*(s1*(inp[1]-inp[4]) + s2*(inp[2]-inp[3]))
     out[3] = 0.4*(inp[0] + c2*(inp[1]+inp[4]) + c1*(inp[2]+inp[3]))
@@ -259,6 +260,7 @@ alpha = np.arange(nptg)/nptg*2*np.pi
 # We use an idealized HWP Mueller matrix
 mueller = np.identity(4)
 mueller[2,2] = mueller[3,3] = -1
+#mueller = rng.random((4,4))-0.5
 
 fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller)
 conv = Convolver(lmax, kmax, slm, blm)
