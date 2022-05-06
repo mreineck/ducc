@@ -17,6 +17,25 @@ def mueller_to_C(mueller):
     return C
 
 
+def truncate_blm(inp, lmax, kmax, epsilon=1e-10):
+    limit = epsilon * np.max(np.abs(inp))
+    ncomp = inp.shape[1]
+    out = []
+    for i in range(len(inp)):
+        maxk = -1
+        idx = 0
+        for k in range(kmax+1):
+            if np.max(np.abs(inp[i,:,idx:idx+lmax+1-k])) > limit:
+                maxk = k
+            idx += lmax+1-k
+#        print("component",i,"maxk=",maxk)
+        if maxk == -1:
+            out.append(None)
+        else:
+            out.append((inp[i,:,:nalm(lmax, maxk)].copy(), maxk))
+    return out
+
+
 # Class for computing convolutions between arbitrary beams and skies in the
 # presence of an optical element with arbitrary Mueller matrix in front of the
 # detector.
@@ -198,6 +217,14 @@ class MuellerConvolver:
         out[2] = 0.4*(s1*(inp[1]-inp[4]) + s2*(inp[2]-inp[3]))
         out[3] = 0.4*(inp[0] + c2*(inp[1]+inp[4]) + c1*(inp[2]+inp[3]))
         out[4] = 0.4*(s2*(inp[1]-inp[4]) - s1*(inp[2]-inp[3]))
+        # Alternative way via real FFT
+        # out2 = inp.copy()
+        # out2 = out2.view(np.float64)
+        # out2 = ducc0.fft.r2r_fftpack(out2,real2hermitian=True,forward=False,axes=(0,),out=out2)
+        # out2[0] *=0.2
+        # out2[1:] *=0.4
+        # out2 = out2.view(np.complex128)
+        # print(np.max(np.abs(out-out2)))
         return out
 
     def __init__ (self, lmax, kmax, slm, blm, mueller, epsilon=1e-4,
@@ -209,21 +236,17 @@ class MuellerConvolver:
         tmp = self.pseudo_fft(tmp)
 
         # construct the five interpolators for the individual components
-        # With some enhancements in the C++ code I could put this into a single
-        # interpolator for better performance, but for now this should do.
-        # If the blm for any interpolator are very small in comparison to the
-        # others, the interpolator is replaced by a `None` object.
-        maxval = [np.max(np.abs(x)) for x in tmp]
-        maxmax = max(maxval)
+        # All sets of blm are checked up to which kmax they contain significant
+        # coefficients, and the interpolator is chosen accordingly
+        tmp = truncate_blm(tmp, self._lmax, self._kmax+4)
         self._inter = []
         for i in range(5):
-            if maxval[i] > 1e-10*maxmax:  # component is not zero
+            if tmp[i] is not None:  # component is not zero
                 self._inter.append(ducc0.totalconvolve.Interpolator(slm,
-                                   tmp[i], False, self._lmax, self._kmax+4,
+                                   tmp[i][0], False, self._lmax, tmp[i][1],
                                    epsilon=epsilon, ofactor=ofactor,
                                    nthreads=nthreads))
-            else:  # we can ignore this component
-#                print ("component",i,"vanishes")
+            else:  # we can ignore this component entirely
                 self._inter.append(None)
 
     def signal(self, ptg, alpha):
@@ -241,7 +264,10 @@ class MuellerConvolver:
         signal : numpy.ndarray((nptg,), dtype=np.float64)
             the signal measured by the detector
         """
-        res = self._inter[0].interpol(ptg)[0]
+        if self._inter[0] is not None:
+            res = self._inter[0].interpol(ptg)[0]
+        else:
+            res = np.zeros(ptg.shape[0])
         if self._inter[1] is not None:
             res += np.cos(2*alpha)*self._inter[1].interpol(ptg)[0]
         if self._inter[2] is not None:
