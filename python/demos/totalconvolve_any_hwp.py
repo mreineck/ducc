@@ -36,9 +36,6 @@ def truncate_blm(inp, lmax, kmax, epsilon=1e-10):
     return out
 
 
-# Class for computing convolutions between arbitrary beams and skies in the
-# presence of an optical element with arbitrary Mueller matrix in front of the
-# detector.
 class MuellerConvolver:
     """Class for computing convolutions between arbitrary beams and skies in the
     presence of an optical element with arbitrary Mueller matrix in front of the
@@ -54,16 +51,18 @@ class MuellerConvolver:
         maximum l moment of the provided sky and beam a_lm
     kmax : int
         maximum m moment of the provided beam a_lm
-    slm : numpy.ndarray((n_comp, n_slm), stype=np.complex128)
+    slm : numpy.ndarray((n_comp, n_slm), dtype=complex)
         input sky a_lm
         ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively.
         The components have the a_lm format used by healpy
-    blm : numpy.ndarray((n_comp, n_blm), stype=np.complex128)
+    blm : numpy.ndarray((n_comp, n_blm), dtype=complex)
         input beam a_lm
         ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively.
         The components have the a_lm format used by healpy
     mueller : np.ndarray((4,4), dtype=np.float64)
         Mueller matrix of the optical elemen in front of the detector
+    single_precision : bool
+        if True, store internal data in single precision, else double precision
     epsilon : float
         desired accuracy for the interpolation; a typical value is 1e-4
     ofactor : float
@@ -148,7 +147,7 @@ class MuellerConvolver:
         sqrt2 = np.sqrt(2.)
         nbeam = 5
         inc = 4
-        res = np.zeros((nbeam, ncomp, nalm(lmax, mmax+inc)), dtype=np.complex128)
+        res = np.zeros((nbeam, ncomp, nalm(lmax, mmax+inc)), dtype=self._ctype)
         blm_eff = [self.AlmPM(lmax, mmax+4) for _ in range(4)]
 
         for ibeam in range(nbeam):
@@ -208,7 +207,7 @@ class MuellerConvolver:
     # blm(alpha) = out[0] + cos(2*alpha)*out[1] + sin(2*alpha)*out[2]
     #                     + cos(4*alpha)*out[3] + sin(4*alpha)*out[4]
     def pseudo_fft(self, inp):
-        out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=np.complex128)
+        out = np.zeros((5, inp.shape[1], inp.shape[2]), dtype=self._ctype)
         out[0] = 0.2*(inp[0]+inp[1]+inp[2]+inp[3]+inp[4])
         # FIXME: I'm not absolutely sure about the sign of the angles yet
         c1, s1 = np.cos(2*np.pi/5), np.sin(2*np.pi/5)
@@ -227,9 +226,11 @@ class MuellerConvolver:
         # print(np.max(np.abs(out-out2)))
         return out
 
-    def __init__ (self, lmax, kmax, slm, blm, mueller, epsilon=1e-4,
-                  ofactor=1.5, nthreads=1):
-        self._slm = slm
+    def __init__ (self, lmax, kmax, slm, blm, mueller, single_precision=True,
+                  epsilon=1e-4, ofactor=1.5, nthreads=1):
+        self._ftype = np.float32 if single_precision else np.float64
+        self._ctype = np.complex64 if single_precision else np.complex128
+        self._slm = slm.astype(self._ctype)
         self._lmax = lmax
         self._kmax = kmax
         tmp = self.mueller_tc_prep (blm, mueller, lmax, kmax)
@@ -240,9 +241,11 @@ class MuellerConvolver:
         # coefficients, and the interpolator is chosen accordingly
         tmp = truncate_blm(tmp, self._lmax, self._kmax+4)
         self._inter = []
+        intertype = ducc0.totalconvolve.Interpolator_f \
+            if self._ctype == np.complex64 else ducc0.totalconvolve.Interpolator
         for i in range(5):
             if tmp[i] is not None:  # component is not zero
-                self._inter.append(ducc0.totalconvolve.Interpolator(slm,
+                self._inter.append(intertype(self._slm,
                                    tmp[i][0], False, self._lmax, tmp[i][1],
                                    epsilon=epsilon, ofactor=ofactor,
                                    nthreads=nthreads))
@@ -254,20 +257,22 @@ class MuellerConvolver:
 
         Parameters
         ----------
-        ptg : numpy.ndarray((nptg, 3), dtype=np.float64)
+        ptg : numpy.ndarray((nptg, 3), dtype=float)
             the input pointings in radians, in (theta, phi, psi) order
-        alpha : numpy.ndarray((nptg,), dtype=np.float64)
+        alpha : numpy.ndarray((nptg,), dtype=np.float)
             the HWP angles in radians
 
         Returns
         -------
-        signal : numpy.ndarray((nptg,), dtype=np.float64)
+        signal : numpy.ndarray((nptg,), dtype=np.float)
             the signal measured by the detector
         """
+        ptg = ptg.astype(self._ftype)
+        alpha = alpha.astype(self._ftype)
         if self._inter[0] is not None:
             res = self._inter[0].interpol(ptg)[0]
         else:
-            res = np.zeros(ptg.shape[0])
+            res = np.zeros(ptg.shape[0], dtype=self._ftype)
         if self._inter[1] is not None:
             res += np.cos(2*alpha)*self._inter[1].interpol(ptg)[0]
         if self._inter[2] is not None:
@@ -318,8 +323,9 @@ def main():
     mueller[2,2] = mueller[3,3] = -1
     mueller = rng.random((4,4))-0.5
 
-    fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller, epsilon,
-                                ofactor, nthreads)
+    fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller,
+                                single_precision=True, epsilon=epsilon,
+                                ofactor=ofactor, nthreads=nthreads)
     sig = fullconv.signal(ptg, alpha)
 
     import matplotlib.pyplot as plt
