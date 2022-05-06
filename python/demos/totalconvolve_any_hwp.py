@@ -25,6 +25,10 @@ class MuellerConvolver:
     presence of an optical element with arbitrary Mueller matrix in front of the
     detector.
 
+    Most of the expressions in this code are derived from
+    Duivenvoorden et al. 2021, MNRAS 502, 4526
+    (https://arxiv.org/abs/2012.10437)
+
     Parameters
     ----------
     lmax : int
@@ -33,12 +37,12 @@ class MuellerConvolver:
         maximum m moment of the provided beam a_lm
     slm : numpy.ndarray((n_comp, n_slm), stype=np.complex128)
         input sky a_lm
-        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively
-        the components have the a_lm format used by healpy
+        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively.
+        The components have the a_lm format used by healpy
     blm : numpy.ndarray((n_comp, n_blm), stype=np.complex128)
         input beam a_lm
-        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively
-        the components have the a_lm format used by healpy
+        ncomp can be 1, 3, or 4, for T, TEB, TEBV components, respectively.
+        The components have the a_lm format used by healpy
     mueller : np.ndarray((4,4), dtype=np.float64)
         Mueller matrix of the optical elemen in front of the detector
     epsilon : float
@@ -48,7 +52,8 @@ class MuellerConvolver:
         Should be in the range [1.2; 2], a typical value is 1.5
         Increasing this factor makes (adjoint) convolution slower and
         increases memory consumption, but speeds up interpolation/deinterpolation.
-    nthreads : the number of threads to use for computation
+    nthreads : int
+        the number of threads to use for computation
     """
 
     # Very simple class to store a_lm that allow negative m values
@@ -227,9 +232,9 @@ class MuellerConvolver:
         Parameters
         ----------
         ptg : numpy.ndarray((nptg, 3), dtype=np.float64)
-            the input pointings, in (theta, phi, psi) order
+            the input pointings in radians, in (theta, phi, psi) order
         alpha : numpy.ndarray((nptg,), dtype=np.float64)
-            the HWP angles
+            the HWP angles in radians
 
         Returns
         -------
