@@ -2,6 +2,9 @@ import ducc0
 import numpy as np
 
 
+__all__ = ["MuellerConvolver"]
+
+
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
@@ -156,6 +159,7 @@ class MuellerConvolver:
             e2iac = np.exp(-2*1j*alpha)
             e4ia = np.exp(4*1j*alpha)
             e4iac = np.exp(-4*1j*alpha)
+# FIXME: do I need to calculate anything for negative m?
             for m in range(-mmax-4, mmax+4+1):
                 lrange = slice(abs(m), lmax+1)
                 # T component, Marta notes [4a]
@@ -182,6 +186,20 @@ class MuellerConvolver:
                     + C[1,2]*e4ia*blm2[1][lrange,m-4] \
                     + C[2,2]*blm2[2][lrange,m]
 
+# TEMPORARY sanity check ...
+            for m in range(0, mmax+4+1):
+                sign = (-1)**m
+                lrange = slice(abs(m), lmax+1)
+                if np.max(np.abs(blm_eff[0][lrange,m]-sign*np.conj(blm_eff[0][lrange,-m]))) > 1e-4:
+                    raise RuntimeError("error T")
+                if np.max(np.abs(blm_eff[1][lrange,m]-sign*np.conj(blm_eff[2][lrange,-m]))) > 1e-4:
+                    raise RuntimeError("error 12")
+                if np.max(np.abs(blm_eff[2][lrange,m]-sign*np.conj(blm_eff[1][lrange,-m]))) > 1e-4:
+                    raise RuntimeError("error 21")
+                if np.max(np.abs(blm_eff[3][lrange,m]-sign*np.conj(blm_eff[3][lrange,-m]))) > 1e-4:
+                    raise RuntimeError("error V")
+# ... up to here
+
             # back to original TEBV b_lm format
             idx = 0
             for m in range(mmax+inc+1):
@@ -195,10 +213,10 @@ class MuellerConvolver:
                 # E/B components
                 if ncomp > 2:
                     # Adri's notes [10]
-                    res[ibeam, 1, idxrange] = -0.5*(blm_eff[1][lrange, m] \
-                                                   +blm_eff[2][lrange, m])
-                    res[ibeam, 2, idxrange] = 0.5j*(blm_eff[1][lrange, m] \
-                                                   -blm_eff[2][lrange, m])
+                    res[ibeam, 1, idxrange] = -0.5 *(blm_eff[1][lrange, m] \
+                                                    +blm_eff[2][lrange, m])
+                    res[ibeam, 2, idxrange] =  0.5j*(blm_eff[1][lrange, m] \
+                                                    -blm_eff[2][lrange, m])
                 idx += lmax+1-m
 
         return res
@@ -240,6 +258,7 @@ class MuellerConvolver:
         # All sets of blm are checked up to which kmax they contain significant
         # coefficients, and the interpolator is chosen accordingly
         tmp = truncate_blm(tmp, self._lmax, self._kmax+4)
+
         self._inter = []
         intertype = ducc0.totalconvolve.Interpolator_f \
             if self._ctype == np.complex64 else ducc0.totalconvolve.Interpolator
@@ -282,56 +301,3 @@ class MuellerConvolver:
         if self._inter[4] is not None:
             res += np.sin(4*alpha)*self._inter[4].interpol(ptg)[0]
         return res
-
-
-# demo application
-
-def main():
-    rng = np.random.default_rng(41)
-
-    def random_alm(lmax, mmax, ncomp):
-        res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
-         + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
-        # make a_lm with m==0 real-valued
-        res[:, 0:lmax+1].imag = 0.
-        return res
-
-    lmax = 256  # band limit
-    kmax = 13  # maximum beam azimuthal moment
-    nptg = 100
-    epsilon = 1e-4  # desired accuracy
-    ofactor = 1.5  # oversampling factor: for tuning tradeoff between CPU and memory usage
-    nthreads = 0  # use as many threads as available
-
-    # get random sky a_lm
-    # the a_lm arrays follow the same conventions as those in healpy
-
-    slm = random_alm(lmax, lmax, 3)
-    blm = random_alm(lmax, kmax, 3)
-
-    # produce pointings (i.e. theta, phi, psi triples)
-    ptg = np.empty((nptg,3))
-
-    # for this test, we keep (theta, phi, psi) fixed and rotate alpha through 2pi
-    ptg[:, 0] = 0.2
-    ptg[:, 1] = 0.3
-    ptg[:, 2] = 0.5
-    alpha = np.arange(nptg)/nptg*2*np.pi
-
-    # We use an idealized HWP Mueller matrix
-    mueller = np.identity(4)
-    mueller[2,2] = mueller[3,3] = -1
-    mueller = rng.random((4,4))-0.5
-
-    fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller,
-                                single_precision=True, epsilon=epsilon,
-                                ofactor=ofactor, nthreads=nthreads)
-    sig = fullconv.signal(ptg, alpha)
-
-    import matplotlib.pyplot as plt
-    plt.plot(sig)
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()
