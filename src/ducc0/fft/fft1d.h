@@ -488,7 +488,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
     size_t l1, ido;
     static constexpr size_t ip=4;
     quick_array<Tcs> wa;
- 
+
     auto WA(size_t x, size_t i) const
       { return wa[x+(i-1)*(ip-1)]; }
 
@@ -1182,7 +1182,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     size_t rfct;
     Troots<Tfs> myroots;
 
-// FIXME split into sub-functions. This is too long! 
+// FIXME split into sub-functions. This is too long!
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf, size_t nthreads) const
       {
@@ -1207,7 +1207,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
-          static const auto ticv = tidx<Tcv *>();
+          static const type_index ticv = tidx<Tcv *>();
 
           if (ido==1)
             {
@@ -1654,7 +1654,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const
       {
-      static const auto tics = tidx<Tcs *>(); 
+      static const auto tics = tidx<Tcs *>();
       MR_assert(ti==tics, "bad input type");
       auto in1 = static_cast<Tcs *>(in);
       auto copy1 = static_cast<Tcs *>(copy);
@@ -2714,7 +2714,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           auto res = static_cast<Tcd *>(cplan->exec(ticd, cc2, ch2,
             subbuf, fwd, nthreads));
           // copy out
-          CH(0,0,k) = res[0].r; 
+          CH(0,0,k) = res[0].r;
           for (size_t m=1; m<=ip/2; ++m)
             {
             CH(ido-1,2*m-1,k)=res[m].r;
@@ -2735,8 +2735,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               }
             auto res = static_cast<Tcd *>(cplan->exec(ticd, cc2, ch2,
               subbuf, fwd, nthreads));
-            CH(i-1,0,k) = res[0].r; 
-            CH(i,0,k) = res[0].i; 
+            CH(i-1,0,k) = res[0].r;
+            CH(i,0,k) = res[0].i;
             for (size_t m=1; m<ipph; ++m)
               {
               CH(i-1,2*m,k) = res[m].r;
@@ -2771,7 +2771,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           for (size_t i=2, ic=ido-2; i<ido; i+=2, ic-=2)
             {
             // copy in
-            cc2[0] = {CC(i-1,0,k),CC(i,0,k)}; 
+            cc2[0] = {CC(i-1,0,k),CC(i,0,k)};
             for (size_t m=1; m<=ip/2; ++m)
               {
               cc2[m] = {CC(i-1,2*m,k),CC(i,2*m,k)};
