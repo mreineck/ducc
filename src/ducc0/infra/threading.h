@@ -103,14 +103,14 @@ void execSingle(size_t nwork,
 /// Execute \a func over \a nwork work items, on \a nthreads threads.
 /** Chunks will have the size \a chunksize, except for the last one which
  *  may be smaller.
- * 
+ *
  *  Chunks are statically assigned to threads at startup. */
 void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func);
 /// Execute \a func over \a nwork work items, on \a nthreads threads.
 /** Chunks will have the size \a chunksize, except for the last one which
  *  may be smaller.
- * 
+ *
  *  Chunks are assigned dynamically to threads;whenever a thread is finished
  *  with its current chunk, it will obtain the next one from the list of
  *  remaining chunks. */
@@ -169,7 +169,7 @@ template<typename T> class Worklist
         return res;
         }
       else
-        return {};      
+        return {};
       }
     void startup()
       {

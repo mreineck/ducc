@@ -187,7 +187,7 @@ template<typename T> class ConvolverPlan
           }
         });
       quick_array<uint32_t> res(key.size());
-      bucket_sort(&key[0], &res[0], key.size(), ncp*nct*ncpsi, nthreads);
+      bucket_sort2(key, res, ncp*nct*ncpsi, nthreads);
       return res;
       }
 

@@ -121,7 +121,7 @@ template<typename T, size_t alignment=alignof(T)> class array_base
       { other.p=nullptr; other.sz=0; }
     ~array_base() { dealloc(p); }
 
-    /// If \a n is different from the currnt size, resizes the array to hold
+    /// If \a n is different from the current size, resizes the array to hold
     /// \a n elements.
     /** \note No data content is copied, the new array is uninitialized! */
     void resize(size_t n)

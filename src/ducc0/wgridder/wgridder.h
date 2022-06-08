@@ -259,6 +259,7 @@ class RowchanRange
 
     RowchanRange() = default;
     RowchanRange(const RowchanRange &) = default;
+    RowchanRange &operator=(const RowchanRange &) = default;
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
     uint16_t nchan() const { return ch_end-ch_begin; }
