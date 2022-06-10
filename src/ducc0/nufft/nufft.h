@@ -292,7 +292,7 @@ class Baselines
   public:
     Baselines() = default;
     template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool negate_v=false)
+      const cmav<T,1> &freq)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -310,11 +310,10 @@ class Baselines
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
-      double vfac = negate_v ? -1 : 1;
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        coord[i] = UVW(coord_(i,0), coord_(i,1), coord_(i,2));
         umax = max(umax, abs(coord_(i,0)));
         vmax = max(vmax, abs(coord_(i,1)));
         }
@@ -357,7 +356,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     double epsilon;
     size_t nthreads;
     size_t verbosity;
-    bool negate_v, divide_by_n;
     double sigma_min, sigma_max;
 
     Baselines bl;
@@ -737,7 +735,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -827,7 +825,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -874,7 +872,6 @@ timers.pop();
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
 //auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
-          const auto &uvwidx(blockstart[ix].first);
             {
            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
             for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
@@ -893,7 +890,7 @@ timers.pop();
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
-                hlp.prep(coord, 0);
+                hlp.prep(coord);
                 auto v(ms_in(row, ch));
                 v*=wgt(row, ch);
 
@@ -968,7 +965,6 @@ timers.pop();
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          const auto &uvwidx(blockstart[ix].first);
             {
             bool firstplane = true;
             bool lastplane = true;
@@ -990,7 +986,7 @@ timers.pop();
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
-                hlp.prep(coord, 0);
+                hlp.prep(coord);
                 mysimd<Tcalc> rr=0, ri=0;
                 if constexpr (NVEC==1)
                   {
@@ -1096,11 +1092,6 @@ timers.pop();
       {
       timers.push("parameter calculation");
 
-      double xmin = -0.5*nxdirty*pixsize_x,
-             xmax = xmin + (nxdirty-1)*pixsize_x,
-             ymin = -0.5*nydirty*pixsize_y,
-             ymax = ymin + (nydirty-1)*pixsize_y;
-
       auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
@@ -1194,8 +1185,8 @@ timers.pop();
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            size_t nthreads_, size_t verbosity_,
-           bool negate_v_, bool divide_by_n_, double sigma_min_,
-           double sigma_max_, double center_x, double center_y)
+           double sigma_min_,
+           double sigma_max_)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
@@ -1208,11 +1199,10 @@ timers.pop();
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
-        negate_v(negate_v_), divide_by_n(divide_by_n_),
         sigma_min(sigma_min_), sigma_max(sigma_max_)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uvw, freq, negate_v);
+      bl = Baselines(uvw, freq);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
@@ -1265,24 +1255,23 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0)
+  double sigma_min=1.1,
+  double sigma_max=2.6)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y);
+    pixsize_y, epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, size_t nthreads, vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0)
+  size_t verbosity,
+  double sigma_min=1.1, double sigma_max=2.6)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
@@ -1290,8 +1279,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y);
+    pixsize_y, epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
 } // namespace detail_nufft

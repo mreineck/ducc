@@ -63,7 +63,7 @@ auto pixsize_y = 2*pi/grid.shape(1);
       }
     auto freq = cmav<double, 1>::build_uniform({1}, 1.);
     dirty2ms_nufft<Tgrid,Tgrid>(cmav<double,2>(uvw),freq,grid,wgt,mask,pixsize_x,pixsize_y,epsilon,
-      nthreads,out2,1,false,false,1.2,2.0,0.,0.);
+      nthreads,out2,1,1.2,2.0);
     }
     return move(out_);
     }
