@@ -355,7 +355,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
     double epsilon;
-    bool do_wgridding;
     size_t nthreads;
     size_t verbosity;
     bool negate_v, divide_by_n;
@@ -367,12 +366,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
     double wmin_d, wmax_d;
     size_t nvis;
-    double wmin, dw, xdw, wshift;
-    size_t nplanes;
-    double nm1min, nm1max;
-
-    double lshift, mshift, nshift;
-    bool shifting, lmshift, no_nshift;
 
     size_t nu, nv;
     double ofactor;
@@ -389,19 +382,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
-
-    static double phase(double x, double y, double w, bool adjoint, double nshift)
-      {
-      double tmp = 1.-x-y;
-      if (tmp<=0) return 0; // no phase factor beyond the horizon
-      double nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
-      double phs = w*(nm1+nshift);
-      if (adjoint) phs *= -1;
-      if constexpr (is_same<Tcalc, double>::value)
-        return twopi*phs;
-      // we are reducing accuracy, so let's better do range reduction first
-      return twopi*(phs-floor(phs));
-      }
 
     void grid2dirty_post(vmav<Tcalc,2> &tmav, vmav<Timg,2> &dirty) const
       {
@@ -425,51 +405,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           }
         });
       }
-    void grid2dirty_post2(vmav<complex<Tcalc>,2> &tmav, vmav<Timg,2> &dirty, double w) const
-      {
-      checkShape(dirty.shape(), {nxdirty,nydirty});
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
-      size_t nxd = lmshift ? nxdirty : (nxdirty/2+1);
-      execParallel(nxd, nthreads, [&](size_t lo, size_t hi)
-        {
-        vector<complex<Tcalc>> phases(lmshift ? nydirty : (nydirty/2+1));
-        vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
-        for (auto i=lo; i<hi; ++i)
-          {
-          double fx = sqr(x0+i*pixsize_x);
-          size_t ix = nu-nxdirty/2+i;
-          if (ix>=nu) ix-=nu;
-          expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
-          if (lmshift)
-            for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-              dirty(i,j) += Timg(tmav(ix,jx).real()*phases[j].real()
-                               - tmav(ix,jx).imag()*phases[j].imag());
-          else
-            {
-            size_t i2 = nxdirty-i;
-            size_t ix2 = nu-nxdirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            if ((i>0)&&(i<i2))
-              for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-                {
-                size_t j2 = min(j, nydirty-j);
-                Tcalc re = phases[j2].real(), im = phases[j2].imag();
-                dirty(i ,j) += Timg(tmav(ix ,jx).real()*re - tmav(ix ,jx).imag()*im);
-                dirty(i2,j) += Timg(tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im);
-                }
-            else
-              for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-                {
-                size_t j2 = min(j, nydirty-j);
-                Tcalc re = phases[j2].real(), im = phases[j2].imag();
-                dirty(i,j) += Timg(tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im); // lower left
-                }
-            }
-          }
-        });
-      }
 
     void grid2dirty_overwrite(vmav<Tcalc,2> &grid, vmav<Timg,2> &dirty)
       {
@@ -478,47 +413,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       hartley2_2D(grid, vlim, uv_side_fast, nthreads);
       timers.poppush("grid correction");
       grid2dirty_post(grid, dirty);
-      timers.pop();
-      }
-
-    void grid2dirty_c_overwrite_wscreen_add
-      (vmav<complex<Tcalc>,2> &grid, vmav<Timg,2> &dirty, double w, size_t iplane)
-      {
-      timers.push("FFT");
-      checkShape(grid.shape(), {nu,nv});
-      vfmav<complex<Tcalc>> inout(grid);
-
-      const auto &rsu(uranges[iplane]);
-      const auto &rsv(vranges[iplane]);
-      auto cost_ufirst = nxdirty*log(nv)*nv + rsv.nval()*log(nu)*nu;
-      auto cost_vfirst = nydirty*log(nu)*nu + rsu.nval()*log(nv)*nv;
-      if (cost_ufirst<cost_vfirst)
-        {
-        for (size_t i=0; i<rsv.nranges(); ++i)
-          {
-          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
-          c2c(inout_tmp, inout_tmp, {0}, BACKWARD, Tcalc(1), nthreads);
-          }
-        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
-        c2c(inout_lo, inout_lo, {1}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
-        c2c(inout_hi, inout_hi, {1}, BACKWARD, Tcalc(1), nthreads);
-        }
-      else
-        {
-        for (size_t i=0; i<rsu.nranges(); ++i)
-          {
-          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
-          c2c(inout_tmp, inout_tmp, {1}, BACKWARD, Tcalc(1), nthreads);
-          }
-        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
-        c2c(inout_lo, inout_lo, {0}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
-        c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
-        }
-
-      timers.poppush("wscreen+grid correction");
-      grid2dirty_post2(grid, dirty, w);
       timers.pop();
       }
 
@@ -552,97 +446,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         });
       timers.pop();
       }
-    void dirty2grid_pre2(const cmav<Timg,2> &dirty, vmav<complex<Tcalc>,2> &grid, double w)
-      {
-      timers.push("zeroing grid");
-      checkShape(dirty.shape(), {nxdirty, nydirty});
-      checkShape(grid.shape(), {nu, nv});
-      // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxdirty/2,nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
-      timers.poppush("wscreen+grid correction");
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
-      size_t nxd = lmshift ? nxdirty : (nxdirty/2+1);
-      execParallel(nxd, nthreads, [&](size_t lo, size_t hi)
-        {
-        vector<complex<Tcalc>> phases(lmshift ? nydirty : (nydirty/2+1));
-        vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
-        for(auto i=lo; i<hi; ++i)
-          {
-          double fx = sqr(x0+i*pixsize_x);
-          size_t ix = nu-nxdirty/2+i;
-          if (ix>=nu) ix-=nu;
-          expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
-          if (lmshift)
-            for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-              grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
-          else
-            {
-            size_t i2 = nxdirty-i;
-            size_t ix2 = nu-nxdirty/2+i2;
-            if (ix2>=nu) ix2-=nu;
-            if ((i>0)&&(i<i2))
-              for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-                {
-                size_t j2 = min(j, nydirty-j);
-                grid(ix ,jx) = Tcalc(dirty(i ,j))*phases[j2]; // lower left
-                grid(ix2,jx) = Tcalc(dirty(i2,j))*phases[j2]; // lower right
-                }
-            else
-              for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
-                grid(ix,jx) = Tcalc(dirty(i,j))*phases[min(j, nydirty-j)]; // lower left
-            }
-          }
-        });
-      timers.pop();
-      }
 
     void dirty2grid(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
       {
       dirty2grid_pre(dirty, grid);
       timers.push("FFT");
       hartley2_2D(grid, vlim, !uv_side_fast, nthreads);
-      timers.pop();
-      }
-
-    void dirty2grid_c_wscreen(const cmav<Timg,2> &dirty,
-      vmav<complex<Tcalc>,2> &grid, double w, size_t iplane)
-      {
-      dirty2grid_pre2(dirty, grid, w);
-      timers.push("FFT");
-      vfmav<complex<Tcalc>> inout(grid);
-
-      const auto &rsu(uranges[iplane]);
-      const auto &rsv(vranges[iplane]);
-      auto cost_ufirst = nydirty*log(nu)*nu + rsu.nval()*log(nv)*nv;
-      auto cost_vfirst = nxdirty*log(nv)*nv + rsv.nval()*log(nu)*nu;
-      if (cost_ufirst<cost_vfirst)
-        {
-        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
-        c2c(inout_lo, inout_lo, {0}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
-        c2c(inout_hi, inout_hi, {0}, FORWARD, Tcalc(1), nthreads);
-        for (size_t i=0; i<rsu.nranges(); ++i)
-          {
-          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
-          c2c(inout_tmp, inout_tmp, {1}, FORWARD, Tcalc(1), nthreads);
-          }
-        }
-      else
-        {
-        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
-        c2c(inout_lo, inout_lo, {1}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
-        c2c(inout_hi, inout_hi, {1}, FORWARD, Tcalc(1), nthreads);
-        for (size_t i=0; i<rsv.nranges(); ++i)
-          {
-          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
-          c2c(inout_tmp, inout_tmp, {0}, FORWARD, Tcalc(1), nthreads);
-          }
-        }
       timers.pop();
       }
 
@@ -662,12 +471,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       auto uvw = uvwbase*bl.ffact(ch);
       double udum, vdum;
-      int iu0, iv0, iw;
+      int iu0, iv0;
       getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>logsquare;
       iv0 = (iv0+nsafe)>>logsquare;
-      iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
-      return Uvwidx(iu0, iv0, iw);
+      return Uvwidx(iu0, iv0, 0);
       }
 
     void countRanges()
@@ -676,18 +484,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       size_t nrow=bl.Nrows(),
              nchan=bl.Nchannels();
 
-      if (do_wgridding)
-        {
-        dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
-        xdw = 1./dw;
-        nplanes = size_t((wmax_d-wmin_d)/dw+supp);
-        MR_assert(nplanes<(size_t(1)<<16), "too many w planes");
-        wmin = (wmin_d+wmax_d)*0.5 - 0.5*(nplanes-1)*dw;
-        wshift = dw-(0.5*supp*dw)-wmin;
-        }
-      else
-        dw = wmin  = xdw = wshift = nplanes = 0;
-      size_t nbunch = do_wgridding ? supp : 1;
+      size_t nbunch = 1;
       // we want a maximum deviation of 1% in gridding time between threads
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
@@ -698,9 +495,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
-      size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
 timers.push("counting");
-      vector<atomic<size_t>> buf(ntiles_u*ntiles_v*nwmin+1);
+      vector<atomic<size_t>> buf(ntiles_u*ntiles_v+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
@@ -719,7 +515,7 @@ timers.push("counting");
             // now [ch0;ch1[ contains an active range or we are at end
             auto inc0 = [&](Uvwidx idx)
               {
-              ++buf[idx.tile_u*ntiles_v*nwmin + idx.tile_v*nwmin + idx.minplane];
+              ++buf[idx.tile_u*ntiles_v + idx.tile_v];
               };
             auto inc = [&](Uvwidx idx, uint32_t ch)
               {
@@ -763,14 +559,13 @@ timers.poppush("allocation");
       size_t acc=0;
       for (size_t tu=0; tu<ntiles_u; ++tu)
         for (size_t tv=0; tv<ntiles_v; ++tv)
-          for (size_t mp=0; mp<nwmin; ++mp)
-            {
-            size_t i = tu*ntiles_v*nwmin + tv*nwmin + mp;
-            size_t tmp = buf[i];
-            if (tmp>0) blockstart.push_back({Uvwidx(tu,tv,mp),acc});
-            buf[i] = acc;
-            acc += tmp;
-            }
+          {
+          size_t i = tu*ntiles_v + tv;
+          size_t tmp = buf[i];
+          if (tmp>0) blockstart.push_back({Uvwidx(tu,tv,0),acc});
+          buf[i] = acc;
+          acc += tmp;
+          }
       buf.back()=acc;
       }
 timers.poppush("filling");
@@ -788,7 +583,7 @@ timers.poppush("filling");
           auto flush=[&]()
             {
             if (interbuf.empty()) return;
-            auto bufidx = uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane;
+            auto bufidx = uvwlast.tile_u*ntiles_v + uvwlast.tile_v;
             auto bufpos = (buf[bufidx]+=interbuf.size()) - interbuf.size();
             for (size_t i=0; i<interbuf.size(); ++i)
               ranges[bufpos+i] = RowchanRange(irow,interbuf[i].first,interbuf[i].second);
@@ -865,62 +660,10 @@ timers.poppush("building blockstart");
 timers.pop();
 
       // compute which grid regions are required
-      if (do_wgridding)
-        {
-        timers.poppush("grid regions");
-        vmav<unsigned char, 2> tmpu({nplanes,(nu>>logsquare)+1}),
-                               tmpv({nplanes,(nv>>logsquare)+1});
-        for (const auto &rng: blockstart)
-          for (size_t i=0; i<supp; ++i)
-            {
-            tmpu(rng.first.minplane+i, rng.first.tile_u) = 1;
-            tmpv(rng.first.minplane+i, rng.first.tile_v) = 1;
-            }
-        uranges.resize(nplanes);
-        vranges.resize(nplanes);
-        constexpr int tilesize = 1<<logsquare;
-        for (size_t i=0; i<nplanes; ++i)
-          {
-          auto &rsu(uranges[i]);
-          auto &rsv(vranges[i]);
-          for (size_t j=0; j<tmpu.shape(1); ++j)
-            if (tmpu(i,j))
-              rsu.add(j*tilesize-int(supp/2)-1, (j+1)*tilesize+int(supp/2)+1);
-          // handle wraparound
-          if (!rsu.empty() && rsu.ivbegin(0)<0)
-            {
-            int tmp = rsu.ivbegin(0);
-            rsu.remove(tmp,0);
-            rsu.add(nu+tmp, nu);
-            }
-          if (!rsu.empty() && rsu.ivend(rsu.size()-1)>int(nu))
-            {
-            int tmp = rsu.ivend(rsu.size()-1);
-            rsu.remove(nu,tmp);
-            rsu.add(0, tmp-nu);
-            }
-          for (size_t j=0; j<tmpv.shape(1); ++j)
-            if (tmpv(i,j))
-              rsv.add(j*tilesize-int(supp/2)-1, (j+1)*tilesize+int(supp/2)+1);
-          // handle wraparound
-          if (!rsv.empty() && rsv.ivbegin(0)<0)
-            {
-            int tmp = rsv.ivbegin(0);
-            rsv.remove(tmp,0);
-            rsv.add(nv+tmp, nv);
-            }
-          if (!rsv.empty() && rsv.ivend(rsv.size()-1)>int(nv))
-            {
-            int tmp = rsv.ivend(rsv.size()-1);
-            rsv.remove(nv,tmp);
-            rsv.add(0, tmp-nv);
-            }
-          }
-        }
       timers.pop();
       }
 
-    template<size_t supp, bool wgrid> class HelperX2g2
+    template<size_t supp> class HelperX2g2
       {
       public:
         static constexpr size_t vlen = mysimd<Tacc>::size();
@@ -1002,10 +745,7 @@ timers.pop();
           parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
-          if constexpr(wgrid)
-            tkrn.eval2s(Tacc(x0), Tacc(y0), Tacc(xdw*(w0-in.w)), nth, &buf.simd[0]);
-          else
-            tkrn.eval2(Tacc(x0), Tacc(y0), &buf.simd[0]);
+          tkrn.eval2(Tacc(x0), Tacc(y0), &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
@@ -1020,7 +760,7 @@ timers.pop();
       };
 
 
-    template<size_t supp, bool wgrid> class HelperG2x2
+    template<size_t supp> class HelperG2x2
       {
       public:
         static constexpr size_t vlen = mysimd<Tcalc>::size();
@@ -1095,9 +835,6 @@ timers.pop();
           parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
-          if constexpr(wgrid)
-            tkrn.eval2s(Tcalc(x0), Tcalc(y0), Tcalc(xdw*(w0-in.w)), nth, &buf.simd[0]);
-          else
             tkrn.eval2(Tcalc(x0), Tcalc(y0), &buf.simd[0]);
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
@@ -1112,38 +849,22 @@ timers.pop();
           }
       };
 
-    void compute_phases(vector<complex<Tcalc>> &phases, vector<Tcalc> &buf,
-      Tcalc imflip, const UVW &bcoord, const RowchanRange &rcr)
-      {
-      phases.resize(rcr.ch_end-rcr.ch_begin);
-      buf.resize(rcr.ch_end-rcr.ch_begin);
-      double fct = imflip*(bcoord.u*lshift + bcoord.v*mshift + bcoord.w*nshift);
-      expi(phases, buf, [&](size_t i) {
-                      auto tmp = fct*bl.ffact(rcr.ch_begin+i);
-                      if constexpr (is_same<double, Tcalc>::value)
-                        return Tcalc(twopi*tmp);
-                      // we are reducing accuracy,
-                      // so let's better do range reduction first
-                      return Tcalc(twopi*(tmp-floor(tmp)));
-                      });
-      }
-
-    template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
-      (size_t supp, vmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+    template<size_t SUPP> [[gnu::hot]] void x2grid_c_helper
+      (size_t supp, vmav<complex<Tcalc>,2> &grid)
       {
       if constexpr (SUPP>=8)
-        if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
+        if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
-        if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+        if (supp<SUPP) return x2grid_c_helper<SUPP-1>(supp, grid);
       MR_assert(supp==SUPP, "requested support ou of range");
 
       vector<mutex> locks(nu);
 
-      execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
+      execDynamic(blockstart.size(), nthreads, 1, [&](Scheduler &sched)
         {
         constexpr auto vlen=mysimd<Tacc>::size();
         constexpr auto NVEC((SUPP+vlen-1)/vlen);
-        HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
+        HelperX2g2<SUPP> hlp(this, grid, locks);
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -1154,11 +875,8 @@ timers.pop();
           {
 //auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
           const auto &uvwidx(blockstart[ix].first);
-          if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
-//bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
-            size_t nth = p0-uvwidx.minplane;
-            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
+           size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
             for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
               {
               const auto &rcr(ranges[cnt]);
@@ -1172,15 +890,11 @@ timers.pop();
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               auto imflip = Tcalc(bcoord.FixW());
-              if (shifting)
-                compute_phases(phases, buf, imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
-                hlp.prep(coord, nth);
+                hlp.prep(coord, 0);
                 auto v(ms_in(row, ch));
-                if (shifting)
-                  v*=phases[ch-rcr.ch_begin];
                 v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
@@ -1224,29 +938,28 @@ timers.pop();
         });
       }
 
-    template<bool wgrid> void x2grid_c(vmav<complex<Tcalc>,2> &grid,
-      size_t p0, double w0=-1)
+    void x2grid_c(vmav<complex<Tcalc>,2> &grid)
       {
       checkShape(grid.shape(), {nu, nv});
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
-      x2grid_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
+      x2grid_c_helper<maxsupp>(supp, grid);
       }
 
-    template<size_t SUPP, bool wgrid> [[gnu::hot]] void grid2x_c_helper
-      (size_t supp, const cmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+    template<size_t SUPP> [[gnu::hot]] void grid2x_c_helper
+      (size_t supp, const cmav<complex<Tcalc>,2> &grid)
       {
       if constexpr (SUPP>=8)
-        if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
+        if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
-        if (supp<SUPP) return grid2x_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+        if (supp<SUPP) return grid2x_c_helper<SUPP-1>(supp, grid);
       MR_assert(supp==SUPP, "requested support ou of range");
 
       // Loop over sampling points
-      execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
+      execDynamic(blockstart.size(), nthreads, 1, [&](Scheduler &sched)
         {
         constexpr size_t vlen=mysimd<Tcalc>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
-        HelperG2x2<SUPP,wgrid> hlp(this, grid, w0, dw);
+        HelperG2x2<SUPP> hlp(this, grid);
         constexpr int jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
@@ -1256,11 +969,9 @@ timers.pop();
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           const auto &uvwidx(blockstart[ix].first);
-          if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
             {
-            bool firstplane = (!wgrid) || (uvwidx.minplane==p0);
-            bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
-            size_t nth = p0-uvwidx.minplane;
+            bool firstplane = true;
+            bool lastplane = true;
             size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
             for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
               {
@@ -1276,12 +987,10 @@ timers.pop();
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
               auto imflip = Tcalc(bcoord.FixW());
-              if (shifting&&lastplane)
-                compute_phases(phases, buf, -imflip, bcoord, rcr);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
                 auto coord = bcoord*bl.ffact(ch);
-                hlp.prep(coord, nth);
+                hlp.prep(coord, 0);
                 mysimd<Tcalc> rr=0, ri=0;
                 if constexpr (NVEC==1)
                   {
@@ -1315,9 +1024,7 @@ timers.pop();
                 auto r = hsum_cmplx<Tcalc>(rr,ri);
                 if (!firstplane) r += ms_out(row, ch);
                 if (lastplane)
-                  r *= shifting ?
-                    complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(wgt(row, ch))) :
-                    wgt(row, ch);
+                  r *= wgt(row, ch);
                 ms_out(row, ch) = r;
                 }
               }
@@ -1326,66 +1033,11 @@ timers.pop();
         });
       }
 
-    template<bool wgrid> void grid2x_c(const cmav<complex<Tcalc>,2> &grid,
-      size_t p0, double w0=-1)
+    void grid2x_c(const cmav<complex<Tcalc>,2> &grid)
       {
       checkShape(grid.shape(), {nu, nv});
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
-      grid2x_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
-      }
-
-    void apply_global_corrections(vmav<Timg,2> &dirty)
-      {
-      timers.push("global corrections");
-      double x0 = lshift-0.5*nxdirty*pixsize_x,
-             y0 = mshift-0.5*nydirty*pixsize_y;
-      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
-      size_t nxd = lmshift ? nxdirty : (nxdirty/2+1);
-      size_t nyd = lmshift ? nydirty : (nydirty/2+1);
-      execParallel(nxd, nthreads, [&](size_t lo, size_t hi)
-        {
-        for(auto i=lo; i<hi; ++i)
-          {
-          double fx = sqr(x0+i*pixsize_x);
-          for (size_t j=0; j<nyd; ++j)
-            {
-            double fy = sqr(y0+j*pixsize_y);
-            double fct = 0;
-            auto tmp = 1-fx-fy;
-            if (tmp>=0)
-              {
-              auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
-              fct = krn->corfunc((nm1+nshift)*dw);
-              if (divide_by_n)
-                fct /= nm1+1;
-              }
-            else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
-            if (lmshift)
-              {
-              auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
-              fct *= cfu[nxdirty/2-i2]*cfv[nydirty/2-j2];
-              dirty(i,j)*=Timg(fct);
-              }
-            else
-              {
-              fct *= cfu[nxdirty/2-i]*cfv[nydirty/2-j];
-              size_t i2 = nxdirty-i, j2 = nydirty-j;
-              dirty(i,j)*=Timg(fct);
-              if ((i>0)&&(i<i2))
-                {
-                dirty(i2,j)*=Timg(fct);
-                if ((j>0)&&(j<j2))
-                  dirty(i2,j2)*=Timg(fct);
-                }
-              if ((j>0)&&(j<j2))
-                dirty(i,j2)*=Timg(fct);
-              }
-            }
-          }
-        });
-      timers.pop();
+      grid2x_c_helper<maxsupp>(supp, grid);
       }
 
     void report()
@@ -1395,20 +1047,15 @@ timers.pop();
            << "  nthreads=" << nthreads << ", "
            << "dirty=(" << nxdirty << "x" << nydirty << "), "
            << "grid=(" << nu << "x" << nv;
-      if (do_wgridding) cout << "x" << nplanes;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
+           << ", eps=" << (epsilon * 2)
            << endl;
       cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
-      if (do_wgridding)
-        cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
-      if (!do_wgridding)
-        ovh1 += nu*nv*sizeof(Tcalc);                          // rgrid
+      ovh1 += nu*nv*sizeof(Tcalc);                            // rgrid
       if (!gridding)
         ovh1 += nxdirty*nydirty*sizeof(Timg);                 // tdirty
       cout << "  memory overhead: "
@@ -1418,106 +1065,41 @@ timers.pop();
 
     void x2dirty()
       {
-      if (do_wgridding)
-        {
-        timers.push("zeroing dirty image");
-        mav_apply([](Timg &v){v=Timg(0);}, nthreads, dirty_out);
-        timers.poppush("allocating grid");
-        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
-        timers.pop();
-        for (size_t pl=0; pl<nplanes; ++pl)
-          {
-          double w = wmin+pl*dw;
-          timers.push("zeroing grid");
-          quickzero(grid, nthreads);
-          timers.poppush("gridding proper");
-          x2grid_c<true>(grid, pl, w);
-          timers.pop();
-          grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, w, pl);
-          }
-        // correct for w gridding etc.
-        apply_global_corrections(dirty_out);
-        }
-      else
-        {
-        timers.push("allocating grid");
-        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
-        timers.poppush("gridding proper");
-        x2grid_c<false>(grid, 0);
-        timers.poppush("allocating rgrid");
-        auto rgrid = vmav<Tcalc,2>::build_noncritical(grid.shape(), UNINITIALIZED);
-        timers.poppush("complex2hartley");
-        complex2hartley(grid, rgrid, nthreads);
-        timers.pop();
-        grid2dirty_overwrite(rgrid, dirty_out);
-        }
+      timers.push("allocating grid");
+      auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
+      timers.poppush("gridding proper");
+      x2grid_c(grid);
+      timers.poppush("allocating rgrid");
+      auto rgrid = vmav<Tcalc,2>::build_noncritical(grid.shape(), UNINITIALIZED);
+      timers.poppush("complex2hartley");
+      complex2hartley(grid, rgrid, nthreads);
+      timers.pop();
+      grid2dirty_overwrite(rgrid, dirty_out);
       }
 
     void dirty2x()
       {
-      if (do_wgridding)
-        {
-        timers.push("copying dirty image");
-        vmav<Timg,2> tdirty({nxdirty,nydirty}, UNINITIALIZED);
-        mav_apply([](Timg &a, const Timg &b) {a=b;}, nthreads, tdirty, dirty_in);
-        timers.pop();
-        // correct for w gridding etc.
-        apply_global_corrections(tdirty);
-        timers.push("allocating grid");
-        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
-        timers.pop();
-        for (size_t pl=0; pl<nplanes; ++pl)
-          {
-          double w = wmin+pl*dw;
-          dirty2grid_c_wscreen(tdirty, grid, w, pl);
-          timers.push("degridding proper");
-          grid2x_c<true>(grid, pl, w);
-          timers.pop();
-          }
-        }
-      else
-        {
-        timers.push("allocating grid");
-        auto rgrid = vmav<Tcalc,2>::build_noncritical({nu,nv}, UNINITIALIZED);
-        timers.pop();
-        dirty2grid(dirty_in, rgrid);
-        timers.push("allocating grid");
-        auto grid = vmav<complex<Tcalc>,2>::build_noncritical(rgrid.shape());
-        timers.poppush("hartley2complex");
-        hartley2complex(rgrid, grid, nthreads);
-        timers.poppush("degridding proper");
-        grid2x_c<false>(grid, 0);
-        timers.pop();
-        }
+      timers.push("allocating grid");
+      auto rgrid = vmav<Tcalc,2>::build_noncritical({nu,nv}, UNINITIALIZED);
+      timers.pop();
+      dirty2grid(dirty_in, rgrid);
+      timers.push("allocating grid");
+      auto grid = vmav<complex<Tcalc>,2>::build_noncritical(rgrid.shape());
+      timers.poppush("hartley2complex");
+      hartley2complex(rgrid, grid, nthreads);
+      timers.poppush("degridding proper");
+      grid2x_c(grid);
+      timers.pop();
       }
 
     auto getNuNv()
       {
       timers.push("parameter calculation");
 
-      double xmin = lshift - 0.5*nxdirty*pixsize_x,
+      double xmin = -0.5*nxdirty*pixsize_x,
              xmax = xmin + (nxdirty-1)*pixsize_x,
-             ymin = mshift - 0.5*nydirty*pixsize_y,
+             ymin = -0.5*nydirty*pixsize_y,
              ymax = ymin + (nydirty-1)*pixsize_y;
-      vector<double> xext{xmin, xmax},
-                     yext{ymin, ymax};
-      if (xmin*xmax<0) xext.push_back(0);
-      if (ymin*ymax<0) yext.push_back(0);
-      nm1min = 1e300, nm1max = -1e300;
-      for (auto xc: xext)
-        for (auto yc: yext)
-          {
-          double tmp = xc*xc+yc*yc;
-          double nval;
-          if (tmp <= 1.) // northern hemisphere
-            nval = sqrt(1.-tmp) - 1.;
-          else
-            nval = -sqrt(tmp-1.) -1.;
-          nm1min = min(nm1min, nval);
-          nm1max = max(nm1max, nval);
-          }
-      nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
-      shifting = lmshift || (nshift!=0);
 
       auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
       double mincost = 1e300;
@@ -1537,13 +1119,6 @@ timers.pop();
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
-        if (do_wgridding)
-          {
-          double dw = 0.5/ofactor/max(abs(nm1max+nshift), abs(nm1min+nshift));
-          size_t nplanes = size_t((wmax_d-wmin_d)/dw+supp);
-          fftcost *= nplanes;
-          gridcost *= supp;
-          }
         // FIXME: heuristics could be improved
         gridcost /= nthreads;  // assume perfect scaling for now
         constexpr double max_fft_scaling = 6;
@@ -1618,9 +1193,9 @@ timers.pop();
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
-           bool do_wgridding_, size_t nthreads_, size_t verbosity_,
+           size_t nthreads_, size_t verbosity_,
            bool negate_v_, bool divide_by_n_, double sigma_min_,
-           double sigma_max_, double center_x, double center_y, bool allow_nshift)
+           double sigma_max_, double center_x, double center_y)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
@@ -1631,14 +1206,10 @@ timers.pop();
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
         epsilon(epsilon_),
-        do_wgridding(do_wgridding_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         negate_v(negate_v_), divide_by_n(divide_by_n_),
-        sigma_min(sigma_min_), sigma_max(sigma_max_),
-        lshift(center_x), mshift(negate_v ? -center_y : center_y),
-        lmshift((lshift!=0) || (mshift!=0)),
-        no_nshift(!allow_nshift)
+        sigma_min(sigma_min_), sigma_max(sigma_max_)
       {
       timers.push("Baseline construction");
       bl = Baselines(uvw, freq, negate_v);
@@ -1646,7 +1217,7 @@ timers.pop();
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
       // adjust for increased error when gridding in 2 or 3 dimensions
-      epsilon /= do_wgridding ? 3 : 2;
+      epsilon /= 2;
       scanData();
       if (nvis==0)
         {
@@ -1693,25 +1264,25 @@ timers.pop();
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_nufft(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  double sigma_max=2.6, double center_x=0, double center_y=0)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+    pixsize_y, epsilon, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y);
   }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, size_t nthreads, vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
@@ -1719,8 +1290,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
-    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+    pixsize_y, epsilon, nthreads, verbosity, negate_v,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y);
   }
 
 } // namespace detail_nufft
