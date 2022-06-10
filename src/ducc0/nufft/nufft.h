@@ -51,7 +51,6 @@
 #include "ducc0/infra/timers.h"
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/math/gridding_kernel.h"
-#include "ducc0/math/rangeset.h"
 
 namespace ducc0 {
 
@@ -178,59 +177,13 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t nthreads)
-  {
-  size_t nu=arr.shape(0), nv=arr.shape(1);
-  vfmav<T> farr(arr);
-  r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
-
-  execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
-    {
-    for(auto i=lo+1; i<hi+1; ++i)
-      for(size_t j=1; j<(nv+1)/2; ++j)
-        {
-        T ll = arr(i   ,j   );
-        T hl = arr(nu-i,j   );
-        T lh = arr(i   ,nv-j);
-        T hh = arr(nu-i,nv-j);
-        T v = T(0.5)*(ll+lh+hl+hh);
-        arr(i   ,j   ) = v-hh;
-        arr(nu-i,j   ) = v-lh;
-        arr(i   ,nv-j) = v-hl;
-        arr(nu-i,nv-j) = v-ll;
-        }
-     });
-  }
-
 class Uvwidx
   {
   public:
-    uint16_t tile_u, tile_v, minplane;
+    uint16_t tile_u, tile_v;
 
-    Uvwidx() {}
-    Uvwidx(uint16_t tile_u_, uint16_t tile_v_, uint16_t minplane_)
-      : tile_u(tile_u_), tile_v(tile_v_), minplane(minplane_) {}
-
-    uint64_t idx() const
-      { return (uint64_t(tile_u)<<32) + (uint64_t(tile_v)<<16) + minplane; }
-    bool operator!=(const Uvwidx &other) const
-      { return idx()!=other.idx(); }
-    bool operator<(const Uvwidx &other) const
-      { return idx()<other.idx(); }
-  };
-
-class RowchanRange
-  {
-  public:
-    uint32_t row;
-    uint16_t ch_begin, ch_end;
-
-    RowchanRange() = default;
-    RowchanRange(const RowchanRange &) = default;
-    RowchanRange &operator=(const RowchanRange &) = default;
-    RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
-      : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
-    uint16_t nchan() const { return ch_end-ch_begin; }
+    Uvwidx(uint16_t tile_u_, uint16_t tile_v_)
+      : tile_u(tile_u_), tile_v(tile_v_) {}
   };
 
 struct UV
@@ -242,34 +195,28 @@ struct UV
     { return UV(u*fct, v*fct); }
   };
 
-class Baselines
+template<typename Tcoord> class Baselines
   {
   protected:
-    vector<UV> coord;
-    size_t nrows;
+    const cmav<Tcoord,2> &coord;
+    double fctx, fcty;
 
   public:
-    Baselines() = default;
-    template<typename T> Baselines(const cmav<T,2> &coord_, size_t nxdirty, size_t nydirty)
+    Baselines(const cmav<Tcoord,2> &coord_, size_t nxdirty, size_t nydirty)
+      : coord(coord_), fctx(nxdirty/(4*pi*pi)), fcty(nydirty/(4*pi*pi))
       {
       MR_assert(coord_.shape(1)==2, "dimension mismatch");
-      nrows = coord_.shape(0);
-      coord.resize(nrows);
-      for (size_t i=0; i<coord.size(); ++i)
-        coord[i] = UV(coord_(i,0)*nxdirty/(4*pi*pi), coord_(i,1)*nydirty/(4*pi*pi));
       }
 
-    UV effectiveCoord(size_t row, size_t /*chan*/) const
-      { return coord[row]; }
     UV baseCoord(size_t row) const
-      { return coord[row]; }
+      { return UV(coord(row,0)*fctx, coord(row,1)*fcty); }
     void prefetchRow(size_t row) const
-      { DUCC0_PREFETCH_R(&coord[row]); }
-    size_t Nrows() const { return nrows; }
+      { DUCC0_PREFETCH_R(&coord(row,0)); }
+    size_t Nrows() const { return coord.shape(0); }
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> class Params
   {
   private:
     constexpr static int logsquare=is_same<Tacc,float>::value ? 5 : 4;
@@ -286,7 +233,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t verbosity;
     double sigma_min, sigma_max;
 
-    Baselines bl;
+    Baselines<Tcoord> bl;
 
     quick_array<uint32_t> coord_idx;
 
@@ -300,7 +247,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t supp, nsafe;
     double ushift, vshift;
     int maxiu0, maxiv0;
-    vector<rangeset<int>> uranges, vranges;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
@@ -333,7 +279,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
-      hartley2_2D(grid, nthreads);
+      vfmav<Tcalc> fgrid(grid);
+      r2r_genuine_hartley(fgrid, fgrid, {0,1}, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       grid2dirty_post(grid, dirty);
       timers.pop();
@@ -374,7 +321,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       dirty2grid_pre(dirty, grid);
       timers.push("FFT");
-      hartley2_2D(grid, nthreads);
+      vfmav<Tcalc> fgrid(grid);
+      r2r_genuine_hartley(fgrid, fgrid, {0,1}, Tcalc(1), nthreads);
       timers.pop();
       }
 
@@ -390,14 +338,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UV &uv, uint32_t /*ch*/)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const UV &uv)
       {
       double udum, vdum;
       int iu0, iv0;
       getpix(uv.u, uv.v, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>logsquare;
       iv0 = (iv0+nsafe)>>logsquare;
-      return Uvwidx(iu0, iv0, 0);
+      return Uvwidx(iu0, iv0);
       }
 
     void countRanges()
@@ -412,7 +360,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(bl.baseCoord(i), 0);
+          auto tmp = get_uvwidx(bl.baseCoord(i));
           key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
           }
         });
@@ -440,7 +388,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
         vmav<Tacc,2> bufr, bufi;
         Tacc *px0r, *px0i;
-        double w0, xdw;
         vector<mutex> &locks;
 
         DUCC0_NOINLINE void dump()
@@ -479,15 +426,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         kbuf buf;
 
         HelperX2g2(const Params *parent_, vmav<complex<Tcalc>,2> &grid_,
-          vector<mutex> &locks_, double w0_=-1, double dw_=-1)
+          vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
             px0r(bufr.data()), px0i(bufi.data()),
-            w0(w0_),
-            xdw(1./dw_),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
         ~HelperX2g2() { dump(); }
@@ -538,7 +483,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
         vmav<Tcalc,2> bufr, bufi;
         const Tcalc *px0r, *px0i;
-        double w0, xdw;
 
         DUCC0_NOINLINE void load()
           {
@@ -570,16 +514,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           };
         kbuf buf;
 
-        HelperG2x2(const Params *parent_, const cmav<complex<Tcalc>,2> &grid_,
-          double w0_=-1, double dw_=-1)
+        HelperG2x2(const Params *parent_, const cmav<complex<Tcalc>,2> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
             bufr({size_t(su),size_t(svvec)}),
             bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
-            w0(w0_),
-            xdw(1./dw_)
+            px0r(bufr.data()), px0i(bufi.data())
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
 
         constexpr int lineJump() const { return svvec; }
@@ -872,7 +813,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
 
   public:
-    Params(const cmav<double,2> &uv,
+    Params(const cmav<Tcoord,2> &uv,
            const cmav<complex<Tms>,1> &ms_in_, vmav<complex<Tms>,1> &ms_out_,
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
            double epsilon_,
@@ -889,10 +830,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
-        sigma_min(sigma_min_), sigma_max(sigma_max_)
+        sigma_min(sigma_min_), sigma_max(sigma_max_),
+        bl(uv, nxdirty, nydirty)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uv, nxdirty, nydirty);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       timers.pop();
       // adjust for increased error when gridding in 2 dimensions
@@ -932,7 +873,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_nufft(const cmav<double,2> &uv,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void ms2dirty_nufft(const cmav<Tcoord,2> &uv,
   const cmav<complex<Tms>,1> &ms,
   double epsilon,
   size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
@@ -941,11 +882,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   {
   auto ms_out(vmav<complex<Tms>,1>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
-  Params<Tcalc, Tacc, Tms, Timg> par(uv, ms, ms_out, dirty_in, dirty,
+  Params<Tcalc, Tacc, Tms, Timg, Tcoord> par(uv, ms, ms_out, dirty_in, dirty,
     epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uv,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void dirty2ms_nufft(const cmav<Tcoord,2> &uv,
   const cmav<Timg,2> &dirty,
   double epsilon, size_t nthreads, vmav<complex<Tms>,1> &ms,
   size_t verbosity,
@@ -954,7 +895,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
   auto dirty_out(vmav<Timg,2>::build_empty());
-  Params<Tcalc, Tacc, Tms, Timg> par(uv, ms_in, ms, dirty, dirty_out,
+  Params<Tcalc, Tacc, Tms, Timg, Tcoord> par(uv, ms_in, ms, dirty, dirty_out,
     epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
