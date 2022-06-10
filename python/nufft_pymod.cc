@@ -49,20 +49,13 @@ MR_assert(!forward, "only backward transforms supported at the moment");
     vmav<Tpoints,2> out2(out.data(), mav_info<2>::shape_t{out.shape(0), 1}, mav_info<2>::stride_t{out.stride(0), 0});
     {
     py::gil_scoped_release release;
-    auto wgt = cmav<Tgrid, 2>::build_uniform({out.shape(0),1}, Tgrid(1));
-    auto mask = cmav<uint8_t, 2>::build_uniform({out.shape(0),1}, uint8_t(1));
-    vmav<double,2> uvw({coord.shape(0),3});
-Tgrid SPEEDOFLIGHT = Tgrid(299792458.);
-auto pixsize_x = 2*pi/grid.shape(0);
-auto pixsize_y = 2*pi/grid.shape(1);
+    vmav<double,2> uvw({coord.shape(0),2});
     for (size_t i=0; i<coord.shape(0); ++i)
       {
-      uvw(i,0) = coord(i,0)/(2*pi)*SPEEDOFLIGHT/pixsize_x;
-      uvw(i,1) = coord(i,1)/(2*pi)*SPEEDOFLIGHT/pixsize_y;
-      uvw(i,2) = 0;
+      uvw(i,0) = coord(i,0)*grid.shape(0)/(4*pi*pi);
+      uvw(i,1) = coord(i,1)*grid.shape(1)/(4*pi*pi);
       }
-    auto freq = cmav<double, 1>::build_uniform({1}, 1.);
-    dirty2ms_nufft<Tgrid,Tgrid>(cmav<double,2>(uvw),freq,grid,wgt,mask,pixsize_x,pixsize_y,epsilon,
+    dirty2ms_nufft<Tgrid,Tgrid>(cmav<double,2>(uvw),grid,epsilon,
       nthreads,out2,1,1.2,2.0);
     }
     return move(out_);

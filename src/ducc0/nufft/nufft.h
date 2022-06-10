@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2022 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_H
@@ -91,26 +91,6 @@ template<typename T> void quickzero(vmav<T,2> &arr, size_t nthreads)
           arr(i,j) = T(0);
     });
 #endif
-  }
-
-template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res, vector<T> &buf, F getang)
-  {
-  using Tsimd = native_simd<T>;
-  static constexpr auto vlen = Tsimd::size();
-  auto n=res.size();
-  for (size_t j=0; j<n; ++j)
-    buf[j] = getang(j);
-  size_t i=0;
-  for (; i+vlen-1<n; i+=vlen)
-    {
-    auto vang = Tsimd(&buf[i],element_aligned_tag());
-    auto vcos = cos(vang);
-    auto vsin = sin(vang);
-    for (size_t ii=0; ii<vlen; ++ii)
-      res[i+ii] = complex<T>(vcos[ii], vsin[ii]);
-    }
-  for (; i<n; ++i)
-    res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
 
 template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
@@ -197,24 +177,11 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
-  bool first_fast, size_t nthreads)
+template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t nthreads)
   {
   size_t nu=arr.shape(0), nv=arr.shape(1);
   vfmav<T> farr(arr);
-  if (2*vlim<nv)
-    {
-    if (!first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
-    auto flo = subarray(farr, {{}, {0,vlim}});
-    r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
-    auto fhi = subarray(farr, {{}, {farr.shape(1)-vlim, MAXIDX}});
-    r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
-    if (first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
-    }
-  else
-    r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
+  r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
 
   execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
     {
@@ -265,76 +232,39 @@ class RowchanRange
     uint16_t nchan() const { return ch_end-ch_begin; }
   };
 
-struct UVW
+struct UV
   {
-  double u, v, w;
-  UVW() {}
-  UVW(double u_, double v_, double w_) : u(u_), v(v_), w(w_) {}
-  UVW operator* (double fct) const
-    { return UVW(u*fct, v*fct, w*fct); }
-  void Flip() { u=-u; v=-v; w=-w; }
-  double FixW()
-    {
-    double res=1.-2.*(w<0);
-    u*=res; v*=res; w*=res;
-    return res;
-    }
+  double u, v;
+  UV() {}
+  UV(double u_, double v_) : u(u_), v(v_) {}
+  UV operator* (double fct) const
+    { return UV(u*fct, v*fct); }
   };
 
 class Baselines
   {
   protected:
-    vector<UVW> coord;
-    vector<double> f_over_c;
-    size_t nrows, nchan;
-    double umax, vmax;
+    vector<UV> coord;
+    size_t nrows;
 
   public:
     Baselines() = default;
-    template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq)
+    template<typename T> Baselines(const cmav<T,2> &coord_)
       {
-      constexpr double speedOfLight = 299792458.;
-      MR_assert(coord_.shape(1)==3, "dimension mismatch");
+      MR_assert(coord_.shape(1)==2, "dimension mismatch");
       nrows = coord_.shape(0);
-      nchan = freq.shape(0);
-      f_over_c.resize(nchan);
-      double fcmax = 0;
-      for (size_t i=0; i<nchan; ++i)
-        {
-        MR_assert(freq(i)>0, "negative channel frequency encountered");
-        if (i>0)
-          MR_assert(freq(i)>=freq(i-1),
-            "channel frequencies must e sorted in ascending order");
-        f_over_c[i] = freq(i)/speedOfLight;
-        fcmax = max(fcmax, abs(f_over_c[i]));
-        }
       coord.resize(nrows);
-      umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
-        {
-        coord[i] = UVW(coord_(i,0), coord_(i,1), coord_(i,2));
-        umax = max(umax, abs(coord_(i,0)));
-        vmax = max(vmax, abs(coord_(i,1)));
-        }
-      umax *= fcmax;
-      vmax *= fcmax;
+        coord[i] = UV(coord_(i,0), coord_(i,1));
       }
 
-    UVW effectiveCoord(size_t row, size_t chan) const
-      { return coord[row]*f_over_c[chan]; }
-    double absEffectiveW(size_t row, size_t chan) const
-      { return abs(coord[row].w*f_over_c[chan]); }
-    UVW baseCoord(size_t row) const
+    UV effectiveCoord(size_t row, size_t /*chan*/) const
+      { return coord[row]; }
+    UV baseCoord(size_t row) const
       { return coord[row]; }
     void prefetchRow(size_t row) const
       { DUCC0_PREFETCH_R(&coord[row]); }
-    double ffact(size_t chan) const
-      { return f_over_c[chan];}
     size_t Nrows() const { return nrows; }
-    size_t Nchannels() const { return nchan; }
-    double Umax() const { return umax; }
-    double Vmax() const { return vmax; }
   };
 
 
@@ -348,11 +278,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     vmav<complex<Tms>,2> &ms_out;
     const cmav<Timg,2> &dirty_in;
     vmav<Timg,2> &dirty_out;
-    const cmav<Tms,2> &wgt;
-    const cmav<uint8_t,2> &mask;
     vmav<uint8_t,2> lmask;
-    double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
+    double pixsize_x, pixsize_y;
     double epsilon;
     size_t nthreads;
     size_t verbosity;
@@ -362,7 +290,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     vector<RowchanRange> ranges;
     vector<pair<Uvwidx, size_t>> blockstart;
 
-    double wmin_d, wmax_d;
     size_t nvis;
 
     size_t nu, nv;
@@ -373,8 +300,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t supp, nsafe;
     double ushift, vshift;
     int maxiu0, maxiv0;
-    size_t vlim;
-    bool uv_side_fast;
     vector<rangeset<int>> uranges, vranges;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
@@ -408,7 +333,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
-      hartley2_2D(grid, vlim, uv_side_fast, nthreads);
+      hartley2_2D(grid, nthreads);
       timers.poppush("grid correction");
       grid2dirty_post(grid, dirty);
       timers.pop();
@@ -449,7 +374,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       dirty2grid_pre(dirty, grid);
       timers.push("FFT");
-      hartley2_2D(grid, vlim, !uv_side_fast, nthreads);
+      hartley2_2D(grid, nthreads);
       timers.pop();
       }
 
@@ -465,12 +390,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t ch)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const UV &uv, uint32_t /*ch*/)
       {
-      auto uvw = uvwbase*bl.ffact(ch);
       double udum, vdum;
       int iu0, iv0;
-      getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
+      getpix(uv.u, uv.v, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>logsquare;
       iv0 = (iv0+nsafe)>>logsquare;
       return Uvwidx(iu0, iv0, 0);
@@ -480,16 +404,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       {
       timers.push("building index");
       size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
+             nchan=1;
 
       size_t nbunch = 1;
       // we want a maximum deviation of 1% in gridding time between threads
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
-      checkShape(wgt.shape(),{nrow,nchan});
       checkShape(ms_in.shape(), {nrow,nchan});
-      checkShape(mask.shape(), {nrow,nchan});
 
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
@@ -501,8 +423,7 @@ timers.push("counting");
         while (auto rng=sched.getNext())
         for(auto irow=rng.lo; irow<rng.hi; ++irow)
           {
-          auto uvwbase = bl.baseCoord(irow);
-          uvwbase.FixW();
+          auto uvbase = bl.baseCoord(irow);
 
           uint32_t ch0=0;
           while(ch0<nchan)
@@ -530,7 +451,7 @@ timers.push("counting");
               else
                 {
                 auto ch_mid = ch_lo+(ch_hi-ch_lo)/2;
-                auto uvw_mid = get_uvwidx(uvwbase, ch_mid);
+                auto uvw_mid = get_uvwidx(uvbase, ch_mid);
                 if (uvw_lo!=uvw_mid)
                   recurse(ch_lo, ch_mid, uvw_lo, uvw_mid, recurse);
                 if (uvw_mid!=uvw_hi)
@@ -540,10 +461,10 @@ timers.push("counting");
 
             if (ch0!=ch1)
               {
-              auto uvw0 = get_uvwidx(uvwbase,ch0);
-              inc0(uvw0);
+              auto uv0 = get_uvwidx(uvbase,ch0);
+              inc0(uv0);
               if (ch0+1<ch1)
-                recurse(ch0,ch1-1,uvw0,get_uvwidx(uvwbase,ch1-1),recurse);
+                recurse(ch0,ch1-1,uv0,get_uvwidx(uvbase,ch1-1),recurse);
               }
             ch0 = ch1;
             }
@@ -590,8 +511,7 @@ timers.poppush("filling");
           auto add=[&](uint16_t cb, uint16_t ce)
             { interbuf.emplace_back(cb, ce); };
 
-          auto uvwbase = bl.baseCoord(irow);
-          uvwbase.FixW();
+          auto uvbase = bl.baseCoord(irow);
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
             auto xmask = lmask(irow,ichan);
@@ -599,7 +519,7 @@ timers.poppush("filling");
               {
               if ((!on)||(xmask==2))
                 {
-                auto uvwcur = get_uvwidx(uvwbase, ichan);
+                auto uvwcur = get_uvwidx(uvbase, ichan);
                 if (!on) // new active region
                   {
                   on=true;
@@ -735,7 +655,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UV &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -825,7 +745,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UV &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -880,19 +800,17 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
-              auto imflip = Tcalc(bcoord.FixW());
+              auto imflip = Tcalc(1);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                auto coord = bcoord*bl.ffact(ch);
+                auto coord = bcoord;
                 hlp.prep(coord);
                 auto v(ms_in(row, ch));
-                v*=wgt(row, ch);
 
                 if constexpr (NVEC==1)
                   {
@@ -966,8 +884,6 @@ timers.pop();
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
             {
-            bool firstplane = true;
-            bool lastplane = true;
             size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
             for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
               {
@@ -975,17 +891,16 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
                 DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
               auto bcoord = bl.baseCoord(row);
-              auto imflip = Tcalc(bcoord.FixW());
+              auto imflip = Tcalc(1);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                auto coord = bcoord*bl.ffact(ch);
+                auto coord = bcoord;
                 hlp.prep(coord);
                 mysimd<Tcalc> rr=0, ri=0;
                 if constexpr (NVEC==1)
@@ -1017,11 +932,7 @@ timers.pop();
                     }
                   }
                 ri *= imflip;
-                auto r = hsum_cmplx<Tcalc>(rr,ri);
-                if (!firstplane) r += ms_out(row, ch);
-                if (lastplane)
-                  r *= wgt(row, ch);
-                ms_out(row, ch) = r;
+                ms_out(row, ch) = hsum_cmplx<Tcalc>(rr,ri);
                 }
               }
             }
@@ -1046,8 +957,8 @@ timers.pop();
       cout << "), supp=" << supp
            << ", eps=" << (epsilon * 2)
            << endl;
-      cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
-           << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      cout << "  nrow=" << bl.Nrows()
+           << ", nvis=" << nvis << "/" << bl.Nrows() << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
@@ -1140,29 +1051,20 @@ timers.pop();
       {
       timers.push("Initial scan");
       size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
-      checkShape(wgt.shape(),{nrow,nchan});
+             nchan=1;
       checkShape(ms_in.shape(), {nrow,nchan});
-      checkShape(mask.shape(), {nrow,nchan});
 
       nvis=0;
-      wmin_d=1e300;
-      wmax_d=-1e300;
       mutex mut;
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
-        double lwmin_d=1e300, lwmax_d=-1e300;
         size_t lnvis=0;
         for(auto irow=lo; irow<hi; ++irow)
           for (size_t ichan=0; ichan<nchan; ++ichan)
-//            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
-            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
+            if (norm(ms_in(irow,ichan)) != 0)
               {
               lmask(irow, ichan)=1;
               ++lnvis;
-              double w = bl.absEffectiveW(irow, ichan);
-              lwmin_d = min(lwmin_d, w);
-              lwmax_d = max(lwmax_d, w);
               }
             else
               {
@@ -1170,8 +1072,6 @@ timers.pop();
               }
         {
         lock_guard<mutex> lock(mut);
-        wmin_d = min(wmin_d, lwmin_d);
-        wmax_d = max(wmax_d, lwmax_d);
         nvis += lnvis;
         }
         });
@@ -1179,11 +1079,10 @@ timers.pop();
       }
 
   public:
-    Params(const cmav<double,2> &uvw, const cmav<double,1> &freq,
+    Params(const cmav<double,2> &uv,
            const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
-           const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
-           double pixsize_x_, double pixsize_y_, double epsilon_,
+           double epsilon_,
            size_t nthreads_, size_t verbosity_,
            double sigma_min_,
            double sigma_max_)
@@ -1191,20 +1090,18 @@ timers.pop();
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
-        wgt(wgt_), mask(mask_),
         lmask(gridding ? ms_in.shape() : ms_out.shape()),
-        pixsize_x(pixsize_x_), pixsize_y(pixsize_y_),
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
+        pixsize_x(2*pi/nxdirty), pixsize_y(2*pi/nydirty),
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         sigma_min(sigma_min_), sigma_max(sigma_max_)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uvw, freq);
+      bl = Baselines(uv);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
-      MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
       // adjust for increased error when gridding in 2 or 3 dimensions
       epsilon /= 2;
@@ -1225,14 +1122,6 @@ timers.pop();
       vshift = supp*(-0.5)+1+nv;
       maxiu0 = (nu+nsafe)-supp;
       maxiv0 = (nv+nsafe)-supp;
-      vlim = min(nv/2, size_t(nv*bl.Vmax()*pixsize_y+0.5*supp+1));
-      uv_side_fast = true;
-      size_t vlim2 = (nydirty+1)/2+(supp+1)/2;
-      if (vlim2<vlim)
-        {
-        vlim = vlim2;
-        uv_side_fast = false;
-        }
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
       MR_assert((nxdirty&1)==0, "nx_dirty must be even");
@@ -1251,24 +1140,21 @@ timers.pop();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_nufft(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_nufft(const cmav<double,2> &uv,
+  const cmav<complex<Tms>,2> &ms,
+  double epsilon,
   size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
   double sigma_min=1.1,
   double sigma_max=2.6)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
-  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
-  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, nthreads, verbosity, sigma_min, sigma_max);
+  Params<Tcalc, Tacc, Tms, Timg> par(uv, ms, ms_out, dirty_in, dirty,
+    epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uv,
+  const cmav<Timg,2> &dirty,
   double epsilon, size_t nthreads, vmav<complex<Tms>,2> &ms,
   size_t verbosity,
   double sigma_min=1.1, double sigma_max=2.6)
@@ -1276,10 +1162,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
   auto dirty_out(vmav<Timg,2>::build_empty());
-  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
-  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, nthreads, verbosity, sigma_min, sigma_max);
+  Params<Tcalc, Tacc, Tms, Timg> par(uv, ms_in, ms, dirty, dirty_out,
+    epsilon, nthreads, verbosity, sigma_min, sigma_max);
   }
 
 } // namespace detail_nufft
