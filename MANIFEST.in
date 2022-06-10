@@ -39,6 +39,8 @@ include src/ducc0/math/vec3.h
 include src/ducc0/fft/fft1d.h
 include src/ducc0/fft/fft.h
 
+include src/ducc0/nufft/nufft.h
+
 include src/ducc0/sht/alm.h
 include src/ducc0/sht/sht.h
 include src/ducc0/sht/sht.cc
@@ -53,6 +55,7 @@ include src/ducc0/wgridder/wgridder.h
 include src/ducc0/wgridder/wgridder_sycl.h
 
 include python/fft_pymod.cc
+include python/nufft_pymod.cc
 include python/sht_pymod.cc
 include python/healpix_pymod.cc
 include python/wgridder_pymod.cc
