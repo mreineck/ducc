@@ -46,17 +46,9 @@ MR_assert(!forward, "only backward transforms supported at the moment");
     auto grid = to_cmav<Tgrid,2>(grid_);
     auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
     auto out = to_vmav<Tpoints,1>(out_);
-    vmav<Tpoints,2> out2(out.data(), mav_info<2>::shape_t{out.shape(0), 1}, mav_info<2>::stride_t{out.stride(0), 0});
     {
     py::gil_scoped_release release;
-    vmav<double,2> uvw({coord.shape(0),2});
-    for (size_t i=0; i<coord.shape(0); ++i)
-      {
-      uvw(i,0) = coord(i,0)*grid.shape(0)/(4*pi*pi);
-      uvw(i,1) = coord(i,1)*grid.shape(1)/(4*pi*pi);
-      }
-    dirty2ms_nufft<Tgrid,Tgrid>(cmav<double,2>(uvw),grid,epsilon,
-      nthreads,out2,1,1.2,2.0);
+    dirty2ms_nufft<Tgrid,Tgrid>(coord,grid,epsilon,nthreads,out,1,1.2,2.0);
     }
     return move(out_);
     }

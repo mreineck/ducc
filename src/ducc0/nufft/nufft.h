@@ -49,6 +49,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
+#include "ducc0/infra/bucket_sort.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/rangeset.h"
 
@@ -249,13 +250,13 @@ class Baselines
 
   public:
     Baselines() = default;
-    template<typename T> Baselines(const cmav<T,2> &coord_)
+    template<typename T> Baselines(const cmav<T,2> &coord_, size_t nxdirty, size_t nydirty)
       {
       MR_assert(coord_.shape(1)==2, "dimension mismatch");
       nrows = coord_.shape(0);
       coord.resize(nrows);
       for (size_t i=0; i<coord.size(); ++i)
-        coord[i] = UV(coord_(i,0), coord_(i,1));
+        coord[i] = UV(coord_(i,0)*nxdirty/(4*pi*pi), coord_(i,1)*nydirty/(4*pi*pi));
       }
 
     UV effectiveCoord(size_t row, size_t /*chan*/) const
@@ -274,11 +275,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     constexpr static int logsquare=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     TimerHierarchy timers;
-    const cmav<complex<Tms>,2> &ms_in;
-    vmav<complex<Tms>,2> &ms_out;
+    const cmav<complex<Tms>,1> &ms_in;
+    vmav<complex<Tms>,1> &ms_out;
     const cmav<Timg,2> &dirty_in;
     vmav<Timg,2> &dirty_out;
-    vmav<uint8_t,2> lmask;
     size_t nxdirty, nydirty;
     double pixsize_x, pixsize_y;
     double epsilon;
@@ -287,8 +287,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     double sigma_min, sigma_max;
 
     Baselines bl;
-    vector<RowchanRange> ranges;
-    vector<pair<Uvwidx, size_t>> blockstart;
+
+    quick_array<uint32_t> coord_idx;
 
     size_t nvis;
 
@@ -402,182 +402,21 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
 
     void countRanges()
       {
-      timers.push("building index");
-      size_t nrow=bl.Nrows(),
-             nchan=1;
-
-      size_t nbunch = 1;
-      // we want a maximum deviation of 1% in gridding time between threads
-      constexpr double max_asymm = 0.01;
-      size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
-
-      checkShape(ms_in.shape(), {nrow,nchan});
-
+      timers.push("building index new");
+      size_t nrow=bl.Nrows();
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
-timers.push("counting");
-      vector<atomic<size_t>> buf(ntiles_u*ntiles_v+1);
-      auto chunk = max<size_t>(1, nrow/(20*nthreads));
-      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
+      coord_idx.resize(nrow);
+      quick_array<uint32_t> key(nrow);
+      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
-        while (auto rng=sched.getNext())
-        for(auto irow=rng.lo; irow<rng.hi; ++irow)
+        for (size_t i=lo; i<hi; ++i)
           {
-          auto uvbase = bl.baseCoord(irow);
-
-          uint32_t ch0=0;
-          while(ch0<nchan)
-            {
-            while((ch0<nchan) && (!lmask(irow,ch0))) ++ch0;
-            uint32_t ch1=min<uint32_t>(nchan,ch0+1);
-            while( (ch1<nchan) && (lmask(irow,ch1))) ++ch1;
-            // now [ch0;ch1[ contains an active range or we are at end
-            auto inc0 = [&](Uvwidx idx)
-              {
-              ++buf[idx.tile_u*ntiles_v + idx.tile_v];
-              };
-            auto inc = [&](Uvwidx idx, uint32_t ch)
-              {
-              inc0(idx);
-              lmask(irow,ch)=2;
-              };
-            auto recurse=[&](uint32_t ch_lo, uint32_t ch_hi, Uvwidx uvw_lo, Uvwidx uvw_hi, auto &&recurse) -> void
-              {
-              if (ch_lo+1==ch_hi)
-                {
-                if (uvw_lo!=uvw_hi)
-                  inc(uvw_hi,ch_hi);
-                }
-              else
-                {
-                auto ch_mid = ch_lo+(ch_hi-ch_lo)/2;
-                auto uvw_mid = get_uvwidx(uvbase, ch_mid);
-                if (uvw_lo!=uvw_mid)
-                  recurse(ch_lo, ch_mid, uvw_lo, uvw_mid, recurse);
-                if (uvw_mid!=uvw_hi)
-                  recurse(ch_mid, ch_hi, uvw_mid, uvw_hi, recurse);
-                }
-              };
-
-            if (ch0!=ch1)
-              {
-              auto uv0 = get_uvwidx(uvbase,ch0);
-              inc0(uv0);
-              if (ch0+1<ch1)
-                recurse(ch0,ch1-1,uv0,get_uvwidx(uvbase,ch1-1),recurse);
-              }
-            ch0 = ch1;
-            }
+          auto tmp = get_uvwidx(bl.baseCoord(i), 0);
+          key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
           }
         });
-
-timers.poppush("allocation");
-// accumulate
-      {
-      blockstart.clear(); // for now
-      size_t acc=0;
-      for (size_t tu=0; tu<ntiles_u; ++tu)
-        for (size_t tv=0; tv<ntiles_v; ++tv)
-          {
-          size_t i = tu*ntiles_v + tv;
-          size_t tmp = buf[i];
-          if (tmp>0) blockstart.push_back({Uvwidx(tu,tv,0),acc});
-          buf[i] = acc;
-          acc += tmp;
-          }
-      buf.back()=acc;
-      }
-timers.poppush("filling");
-      ranges.resize(buf.back());
-      execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
-        {
-        vector<pair<uint16_t, uint16_t>> interbuf;
-        while (auto rng=sched.getNext())
-        for(auto irow=rng.lo; irow<rng.hi; ++irow)
-          {
-          bool on=false;
-          Uvwidx uvwlast(0,0,0);
-          size_t chan0=0;
-
-          auto flush=[&]()
-            {
-            if (interbuf.empty()) return;
-            auto bufidx = uvwlast.tile_u*ntiles_v + uvwlast.tile_v;
-            auto bufpos = (buf[bufidx]+=interbuf.size()) - interbuf.size();
-            for (size_t i=0; i<interbuf.size(); ++i)
-              ranges[bufpos+i] = RowchanRange(irow,interbuf[i].first,interbuf[i].second);
-            interbuf.clear();
-            };
-          auto add=[&](uint16_t cb, uint16_t ce)
-            { interbuf.emplace_back(cb, ce); };
-
-          auto uvbase = bl.baseCoord(irow);
-          for (size_t ichan=0; ichan<nchan; ++ichan)
-            {
-            auto xmask = lmask(irow,ichan);
-            if (xmask)
-              {
-              if ((!on)||(xmask==2))
-                {
-                auto uvwcur = get_uvwidx(uvbase, ichan);
-                if (!on) // new active region
-                  {
-                  on=true;
-                  if (uvwlast!=uvwcur) flush();
-                  uvwlast=uvwcur; chan0=ichan;
-                  }
-                else if (uvwlast!=uvwcur) // change of active region
-                  {
-                  add(chan0, ichan);
-                  flush();
-                  uvwlast=uvwcur; chan0=ichan;
-                  }
-                }
-              }
-            else if (on) // end of active region
-              {
-              add(chan0, ichan);
-              on=false;
-              }
-            }
-          if (on) // end of active region at last channel
-            add(chan0, nchan);
-          flush();
-          }
-        });
-timers.poppush("building blockstart");
-      vector<size_t> vissum;
-      vissum.reserve(ranges.size()+1);
-      size_t visacc=0;
-      for (size_t i=0; i<ranges.size(); ++i)
-        {
-        vissum.push_back(visacc);
-        visacc += ranges[i].nchan();
-        }
-      vissum.push_back(visacc);
-      vector<pair<Uvwidx, size_t>> bs2;
-      swap(blockstart, bs2);
-      for (size_t i=0; i<bs2.size(); ++i)
-        {
-        blockstart.push_back(bs2[i]);
-        size_t i1 = bs2[i].second;
-        size_t i2 = vissum.size();
-        if (i+1<bs2.size()) i2 = bs2[i+1].second;
-        size_t acc=0;
-        for (size_t j=i1+1; j<i2; ++j)
-          {
-          acc += vissum[j]-vissum[j-1];
-          if (acc>max_allowed)
-            {
-            blockstart.push_back({bs2[i].first, j});
-            acc=0;
-            }
-          }
-        }
-      lmask.dealloc();
-timers.pop();
-
-      // compute which grid regions are required
+      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
       timers.pop();
       }
 
@@ -778,77 +617,66 @@ timers.pop();
 
       vector<mutex> locks(nu);
 
-      execDynamic(blockstart.size(), nthreads, 1, [&](Scheduler &sched)
+      execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
         {
-        constexpr auto vlen=mysimd<Tacc>::size();
-        constexpr auto NVEC((SUPP+vlen-1)/vlen);
+        constexpr size_t vlen=mysimd<Tcalc>::size();
+        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperX2g2<SUPP> hlp(this, grid, locks);
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
-        vector<complex<Tcalc>> phases;
-        vector<Tcalc> buf;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-//auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
+          if (ix+1<coord_idx.size())
             {
-           size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
-            for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
-              {
-              const auto &rcr(ranges[cnt]);
-              if (cnt+1<iend)
-                {
-                const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
-                bl.prefetchRow(nextrcr.row);
-                }
-              size_t row = rcr.row;
-              auto bcoord = bl.baseCoord(row);
-              auto imflip = Tcalc(1);
-              for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
-                {
-                auto coord = bcoord;
-                hlp.prep(coord);
-                auto v(ms_in(row, ch));
+            auto nextidx = coord_idx[ix+1];
+            DUCC0_PREFETCH_R(&ms_in(nextidx));
+            bl.prefetchRow(nextidx);
+            }
+          size_t row = coord_idx[ix];
+          auto bcoord = bl.baseCoord(row);
+          auto imflip = Tcalc(1);
+          {
+          auto coord = bcoord;
+          hlp.prep(coord);
+          auto v(ms_in(row));
 
-                if constexpr (NVEC==1)
-                  {
-                  mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
-                  for (size_t cu=0; cu<SUPP; ++cu)
-                    {
-                    auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
-                    auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                    auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
-                    tr += vr*ku[cu];
-                    ti += vi*ku[cu];
-                    tr.copy_to(pxr,element_aligned_tag());
-                    ti.copy_to(pxi,element_aligned_tag());
-                    }
-                  }
-                else
-                  {
-                  mysimd<Tacc> vr(v.real()), vi(v.imag()*imflip);
-                  for (size_t cu=0; cu<SUPP; ++cu)
-                    {
-                    mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
-                    for (size_t cv=0; cv<NVEC; ++cv)
-                      {
-                      auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
-                      auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                      tr += tmpr*kv[cv];
-                      tr.copy_to(pxr,element_aligned_tag());
-                      auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                      ti += tmpi*kv[cv];
-                      ti.copy_to(pxi,element_aligned_tag());
-                      }
-                    }
-                  }
+          if constexpr (NVEC==1)
+            {
+            mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+            for (size_t cu=0; cu<SUPP; ++cu)
+              {
+              auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
+              auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
+              auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+              auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
+              tr += vr*ku[cu];
+              ti += vi*ku[cu];
+              tr.copy_to(pxr,element_aligned_tag());
+              ti.copy_to(pxi,element_aligned_tag());
+              }
+            }
+          else
+            {
+            mysimd<Tacc> vr(v.real()), vi(v.imag()*imflip);
+            for (size_t cu=0; cu<SUPP; ++cu)
+              {
+              mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+              for (size_t cv=0; cv<NVEC; ++cv)
+                {
+                auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
+                auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
+                auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+                tr += tmpr*kv[cv];
+                tr.copy_to(pxr,element_aligned_tag());
+                auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
+                ti += tmpi*kv[cv];
+                ti.copy_to(pxi,element_aligned_tag());
                 }
               }
             }
+          }
           }
         });
       }
@@ -869,8 +697,7 @@ timers.pop();
         if (supp<SUPP) return grid2x_c_helper<SUPP-1>(supp, grid);
       MR_assert(supp==SUPP, "requested support ou of range");
 
-      // Loop over sampling points
-      execDynamic(blockstart.size(), nthreads, 1, [&](Scheduler &sched)
+      execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
         {
         constexpr size_t vlen=mysimd<Tcalc>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -878,64 +705,54 @@ timers.pop();
         constexpr int jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
-        vector<complex<Tcalc>> phases;
-        vector<Tcalc> buf;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
+          if (ix+1<coord_idx.size())
             {
-            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
-            for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
+            auto nextidx = coord_idx[ix+1];
+            DUCC0_PREFETCH_R(&ms_out(nextidx));
+            DUCC0_PREFETCH_W(&ms_out(nextidx));
+            bl.prefetchRow(nextidx);
+            }
+          size_t row = coord_idx[ix];
+          auto bcoord = bl.baseCoord(row);
+          auto imflip = Tcalc(1);
+          {
+          auto coord = bcoord;
+          hlp.prep(coord);
+          mysimd<Tcalc> rr=0, ri=0;
+          if constexpr (NVEC==1)
+            {
+            for (size_t cu=0; cu<SUPP; ++cu)
               {
-              const auto &rcr(ranges[cnt]);
-              if (cnt+1<iend)
+              const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
+              const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
+              rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
+              ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
+              }
+            rr *= kv[0];
+            ri *= kv[0];
+            }
+          else
+            {
+            for (size_t cu=0; cu<SUPP; ++cu)
+              {
+              mysimd<Tcalc> tmpr(0), tmpi(0);
+              for (size_t cv=0; cv<NVEC; ++cv)
                 {
-                const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
-                bl.prefetchRow(nextrcr.row);
+                const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
+                const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
+                tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
+                tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
                 }
-              size_t row = rcr.row;
-              auto bcoord = bl.baseCoord(row);
-              auto imflip = Tcalc(1);
-              for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
-                {
-                auto coord = bcoord;
-                hlp.prep(coord);
-                mysimd<Tcalc> rr=0, ri=0;
-                if constexpr (NVEC==1)
-                  {
-                  for (size_t cu=0; cu<SUPP; ++cu)
-                    {
-                    const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
-                    const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
-                    ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
-                    }
-                  rr *= kv[0];
-                  ri *= kv[0];
-                  }
-                else
-                  {
-                  for (size_t cu=0; cu<SUPP; ++cu)
-                    {
-                    mysimd<Tcalc> tmpr(0), tmpi(0);
-                    for (size_t cv=0; cv<NVEC; ++cv)
-                      {
-                      const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
-                      const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                      tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                      tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
-                      }
-                    rr += ku[cu]*tmpr;
-                    ri += ku[cu]*tmpi;
-                    }
-                  }
-                ri *= imflip;
-                ms_out(row, ch) = hsum_cmplx<Tcalc>(rr,ri);
-                }
+              rr += ku[cu]*tmpr;
+              ri += ku[cu]*tmpi;
               }
             }
+          ri *= imflip;
+          ms_out(row) = hsum_cmplx<Tcalc>(rr,ri);
+          }
           }
         });
       }
@@ -959,8 +776,7 @@ timers.pop();
            << endl;
       cout << "  nrow=" << bl.Nrows()
            << ", nvis=" << nvis << "/" << bl.Nrows() << endl;
-      size_t ovh0 = ranges.size()*sizeof(ranges[0]);
-      ovh0 += blockstart.size()*sizeof(blockstart[0]);
+      size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
       ovh1 += nu*nv*sizeof(Tcalc);                            // rgrid
       if (!gridding)
@@ -1050,37 +866,14 @@ timers.pop();
     void scanData()
       {
       timers.push("Initial scan");
-      size_t nrow=bl.Nrows(),
-             nchan=1;
-      checkShape(ms_in.shape(), {nrow,nchan});
-
-      nvis=0;
-      mutex mut;
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
-        {
-        size_t lnvis=0;
-        for(auto irow=lo; irow<hi; ++irow)
-          for (size_t ichan=0; ichan<nchan; ++ichan)
-            if (norm(ms_in(irow,ichan)) != 0)
-              {
-              lmask(irow, ichan)=1;
-              ++lnvis;
-              }
-            else
-              {
-              if (!gridding) ms_out(irow, ichan)=0;
-              }
-        {
-        lock_guard<mutex> lock(mut);
-        nvis += lnvis;
-        }
-        });
+      checkShape(ms_in.shape(), {bl.Nrows()});
+      nvis=bl.Nrows();
       timers.pop();
       }
 
   public:
     Params(const cmav<double,2> &uv,
-           const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
+           const cmav<complex<Tms>,1> &ms_in_, vmav<complex<Tms>,1> &ms_out_,
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
            double epsilon_,
            size_t nthreads_, size_t verbosity_,
@@ -1090,7 +883,6 @@ timers.pop();
         timers(gridding ? "gridding" : "degridding"),
         ms_in(ms_in_), ms_out(ms_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
-        lmask(gridding ? ms_in.shape() : ms_out.shape()),
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
         pixsize_x(2*pi/nxdirty), pixsize_y(2*pi/nydirty),
@@ -1100,10 +892,10 @@ timers.pop();
         sigma_min(sigma_min_), sigma_max(sigma_max_)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uv);
+      bl = Baselines(uv, nxdirty, nydirty);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       timers.pop();
-      // adjust for increased error when gridding in 2 or 3 dimensions
+      // adjust for increased error when gridding in 2 dimensions
       epsilon /= 2;
       scanData();
       if (nvis==0)
@@ -1141,13 +933,13 @@ timers.pop();
   };
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_nufft(const cmav<double,2> &uv,
-  const cmav<complex<Tms>,2> &ms,
+  const cmav<complex<Tms>,1> &ms,
   double epsilon,
   size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
   double sigma_min=1.1,
   double sigma_max=2.6)
   {
-  auto ms_out(vmav<complex<Tms>,2>::build_empty());
+  auto ms_out(vmav<complex<Tms>,1>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   Params<Tcalc, Tacc, Tms, Timg> par(uv, ms, ms_out, dirty_in, dirty,
     epsilon, nthreads, verbosity, sigma_min, sigma_max);
@@ -1155,7 +947,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_nufft(const cmav<double,2> &uv,
   const cmav<Timg,2> &dirty,
-  double epsilon, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, size_t nthreads, vmav<complex<Tms>,1> &ms,
   size_t verbosity,
   double sigma_min=1.1, double sigma_max=2.6)
   {
