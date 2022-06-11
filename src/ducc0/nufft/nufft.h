@@ -151,8 +151,6 @@ struct UV
   double u, v;
   UV() {}
   UV(double u_, double v_) : u(u_), v(v_) {}
-  UV operator* (double fct) const
-    { return UV(u*fct, v*fct); }
   };
 
 template<typename Tcoord> class Baselines
@@ -419,7 +417,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           }
       };
 
-
     template<size_t supp> class HelperG2x2
       {
       public:
@@ -534,16 +531,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             bl.prefetchRow(nextidx);
             }
           size_t row = coord_idx[ix];
-          auto bcoord = bl.baseCoord(row);
-          auto imflip = Tcalc(1);
-          {
-          auto coord = bcoord;
+          auto coord = bl.baseCoord(row);
           hlp.prep(coord);
           auto v(ms_in(row));
 
           if constexpr (NVEC==1)
             {
-            mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+            mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*kv[0];
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
@@ -558,7 +552,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             }
           else
             {
-            mysimd<Tacc> vr(v.real()), vi(v.imag()*imflip);
+            mysimd<Tacc> vr(v.real()), vi(v.imag());
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
@@ -575,7 +569,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
                 }
               }
             }
-          }
           }
         });
       }
@@ -615,10 +608,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             bl.prefetchRow(nextidx);
             }
           size_t row = coord_idx[ix];
-          auto bcoord = bl.baseCoord(row);
-          auto imflip = Tcalc(1);
-          {
-          auto coord = bcoord;
+          auto coord = bl.baseCoord(row);
           hlp.prep(coord);
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
@@ -649,9 +639,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
               ri += ku[cu]*tmpi;
               }
             }
-          ri *= imflip;
           ms_out(row) = hsum_cmplx<Tcalc>(rr,ri);
-          }
           }
         });
       }
