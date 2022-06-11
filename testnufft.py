@@ -6,14 +6,14 @@ from time import time
 # number of nonuniform points
 M = 10000000
 
-nthreads=8
+nthreads=1
 epsilon=1e-5
 forward=False
 
 # the nonuniform points
 coord = 2 * np.pi * np.random.uniform(size=2*M).reshape((-1,2))
 
-N1, N2 = 4096,4096
+N1, N2 = 255,480
 
 f = (np.random.standard_normal(size=(N1, N2))
      + 1J * np.random.standard_normal(size=(N1, N2)))

@@ -137,21 +137,11 @@ template<size_t ndim> void checkShape
 // Start of real gridder functionality
 //
 
-class Uvwidx
-  {
-  public:
-    uint16_t tile_u, tile_v;
-
-    Uvwidx(uint16_t tile_u_, uint16_t tile_v_)
-      : tile_u(tile_u_), tile_v(tile_v_) {}
-  };
+struct Uvwidx
+  { uint16_t tile_u, tile_v; };
 
 struct UV
-  {
-  double u, v;
-  UV() {}
-  UV(double u_, double v_) : u(u_), v(v_) {}
-  };
+  { double u, v; };
 
 template<typename Tcoord> class Baselines
   {
@@ -167,7 +157,7 @@ template<typename Tcoord> class Baselines
       }
 
     UV baseCoord(size_t row) const
-      { return UV(coord(row,0)*fct, coord(row,1)*fct); }
+      { return UV{coord(row,0)*fct, coord(row,1)*fct}; }
     void prefetchRow(size_t row) const
       { DUCC0_PREFETCH_R(&coord(row,0)); }
     size_t Nrows() const { return coord.shape(0); }
@@ -301,12 +291,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       getpix(uv.u, uv.v, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>logsquare;
       iv0 = (iv0+nsafe)>>logsquare;
-      return Uvwidx(iu0, iv0);
+      return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
       }
 
     void countRanges()
       {
-      timers.push("building index new");
+      timers.push("building index");
       size_t nrow=bl.Nrows();
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
@@ -603,7 +593,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           if (ix+1<coord_idx.size())
             {
             auto nextidx = coord_idx[ix+1];
-            DUCC0_PREFETCH_R(&ms_out(nextidx));
             DUCC0_PREFETCH_W(&ms_out(nextidx));
             bl.prefetchRow(nextidx);
             }
@@ -661,8 +650,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       cout << "), supp=" << supp
            << ", eps=" << (epsilon * 2)
            << endl;
-      cout << "  nrow=" << bl.Nrows()
-           << ", nvis=" << nvis << "/" << bl.Nrows() << endl;
+      cout << "  npoints=" << bl.Nrows() << endl;
       size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
       if (!gridding)
@@ -740,14 +728,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       return minidx;
       }
 
-    void scanData()
-      {
-      timers.push("Initial scan");
-      checkShape(ms_in.shape(), {bl.Nrows()});
-      nvis=bl.Nrows();
-      timers.pop();
-      }
-
   public:
     Params(const cmav<Tcoord,2> &uv,
            const cmav<complex<Tms>,1> &ms_in_, vmav<complex<Tms>,1> &ms_out_,
@@ -772,7 +752,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       // adjust for increased error when gridding in 2 dimensions
       epsilon /= 2;
-      scanData();
+      checkShape(ms_in.shape(), {bl.Nrows()});
+      nvis=bl.Nrows();
       if (nvis==0)
         {
         if (gridding) mav_apply([](complex<Timg> &v){v=complex<Timg>(0);}, nthreads, dirty_out);
@@ -791,8 +772,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       maxiv0 = (nv+nsafe)-supp;
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
-      MR_assert((nxdirty&1)==0, "nx_dirty must be even");
-      MR_assert((nydirty&1)==0, "ny_dirty must be even");
+  //    MR_assert((nxdirty&1)==0, "nx_dirty must be even");
+  //    MR_assert((nydirty&1)==0, "ny_dirty must be even");
       MR_assert((nu&1)==0, "nu must be even");
       MR_assert((nv&1)==0, "nv must be even");
       MR_assert(epsilon>0, "epsilon must be positive");
