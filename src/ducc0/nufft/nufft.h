@@ -162,7 +162,7 @@ template<typename Tcoord> class Baselines
     static constexpr double fct=0.5/pi;
 
   public:
-    Baselines(const cmav<Tcoord,2> &coord_, size_t nxdirty, size_t nydirty)
+    Baselines(const cmav<Tcoord,2> &coord_)
       : coord(coord_)
       {
       MR_assert(coord_.shape(1)==2, "dimension mismatch");
@@ -779,7 +779,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        bl(uv, nxdirty, nydirty)
+        bl(uv)
       {
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       // adjust for increased error when gridding in 2 dimensions

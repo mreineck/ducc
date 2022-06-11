@@ -74,12 +74,55 @@ py::array Py_u2nu(const py::array &grid,
   MR_fail("not yet supported");
   }
 
+template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
+  const py::array &coord_, bool forward, double epsilon, size_t nthreads,
+  py::object &out__)
+  {
+  using Tgrid = Tpoints;
+  auto coord = to_cmav<Tcoord,2>(coord_);
+  auto ndim = coord.shape(1);
+  if (ndim==2)
+    {
+    auto points = to_cmav<complex<Tpoints>,1>(points_);
+  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
+    auto out = to_vmav<complex<Tgrid>,2>(out__);
+    {
+    py::gil_scoped_release release;
+    ms2dirty_nufft<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,1,1.2,2.0);
+    }
+    return move(out__);
+    }
+  MR_fail("unsupported");
+  }
+py::array Py_nu2u(const py::array &points,
+  const py::array &coord, bool forward, double epsilon, size_t nthreads,
+  py::object &out)
+  {
+  if (isPyarr<double>(coord))  // double precision coordinates
+    {
+    if (isPyarr<complex<double>>(points))
+      return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads, out);
+    else if (isPyarr<complex<float>>(points))  // double precision R2C
+      return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads, out);
+    }
+  else if (isPyarr<double>(coord))  // single precision coordinates
+    {
+    if (isPyarr<complex<double>>(points))
+      return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads, out);
+    else if (isPyarr<complex<float>>(points))
+      return Py2_nu2u<float, float>(points, coord, forward, epsilon, nthreads, out);
+    }
+  MR_fail("not yet supported");
+  }
+
 void add_nufft(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("nufft");
 
   m.def("u2nu", &Py_u2nu, py::kw_only(), "grid"_a, "coord"_a, "forward"_a,
+        "epsilon"_a, "nthreads"_a=1, "out"_a=None);
+  m.def("nu2u", &Py_nu2u, py::kw_only(), "points"_a, "coord"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=1, "out"_a=None);
   }
 
