@@ -34,7 +34,7 @@ auto None = py::none();
 
 template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &grid_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__)
+  py::object &out__, size_t verbosity)
   {
   using Tpoints = decltype(conj(Tgrid(0)));
 
@@ -47,7 +47,18 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
     auto out = to_vmav<Tpoints,1>(out_);
     {
     py::gil_scoped_release release;
-    dirty2ms_nufft<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,1,1.2,2.0);
+    u2nu_2d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
+    }
+    return move(out_);
+    }
+  else if (ndim==3)
+    {
+    auto grid = to_cmav<complex<Tgrid>,3>(grid_);
+    auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
+    auto out = to_vmav<Tpoints,1>(out_);
+    {
+    py::gil_scoped_release release;
+    u2nu_3d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
     }
     return move(out_);
     }
@@ -55,28 +66,28 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   }
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out)
+  py::object &out, size_t verbosity)
   {
   if (isPyarr<double>(coord))  // double precision coordinates
     {
     if (isPyarr<complex<double>>(grid))
-      return Py2_u2nu<double, double>(grid, coord, forward, epsilon, nthreads, out);
+      return Py2_u2nu<double, double>(grid, coord, forward, epsilon, nthreads, out, verbosity);
     else if (isPyarr<complex<float>>(grid))  // double precision R2C
-      return Py2_u2nu<float, double>(grid, coord, forward, epsilon, nthreads, out);
+      return Py2_u2nu<float, double>(grid, coord, forward, epsilon, nthreads, out, verbosity);
     }
   else if (isPyarr<double>(coord))  // single precision coordinates
     {
     if (isPyarr<complex<double>>(grid))
-      return Py2_u2nu<double, float>(grid, coord, forward, epsilon, nthreads, out);
+      return Py2_u2nu<double, float>(grid, coord, forward, epsilon, nthreads, out, verbosity);
     else if (isPyarr<complex<float>>(grid))
-      return Py2_u2nu<float, float>(grid, coord, forward, epsilon, nthreads, out);
+      return Py2_u2nu<float, float>(grid, coord, forward, epsilon, nthreads, out, verbosity);
     }
   MR_fail("not yet supported");
   }
 
 template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__)
+  py::object &out__, size_t verbosity)
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
@@ -88,7 +99,18 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
     auto out = to_vmav<complex<Tgrid>,2>(out__);
     {
     py::gil_scoped_release release;
-    ms2dirty_nufft<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,1,1.2,2.0);
+    nu2u_2d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
+    }
+    return move(out__);
+    }
+  else if (ndim==3)
+    {
+    auto points = to_cmav<complex<Tpoints>,1>(points_);
+  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
+    auto out = to_vmav<complex<Tgrid>,3>(out__);
+    {
+    py::gil_scoped_release release;
+    nu2u_3d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
     }
     return move(out__);
     }
@@ -96,21 +118,21 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   }
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out)
+  py::object &out, size_t verbosity)
   {
   if (isPyarr<double>(coord))  // double precision coordinates
     {
     if (isPyarr<complex<double>>(points))
-      return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads, out);
+      return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads, out, verbosity);
     else if (isPyarr<complex<float>>(points))  // double precision R2C
-      return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads, out);
+      return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads, out, verbosity);
     }
   else if (isPyarr<double>(coord))  // single precision coordinates
     {
     if (isPyarr<complex<double>>(points))
-      return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads, out);
+      return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads, out, verbosity);
     else if (isPyarr<complex<float>>(points))
-      return Py2_nu2u<float, float>(points, coord, forward, epsilon, nthreads, out);
+      return Py2_nu2u<float, float>(points, coord, forward, epsilon, nthreads, out, verbosity);
     }
   MR_fail("not yet supported");
   }
@@ -121,9 +143,9 @@ void add_nufft(py::module_ &msup)
   auto m = msup.def_submodule("nufft");
 
   m.def("u2nu", &Py_u2nu, py::kw_only(), "grid"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None);
+        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0);
   m.def("nu2u", &Py_nu2u, py::kw_only(), "points"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None);
+        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0);
   }
 
 }

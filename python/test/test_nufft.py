@@ -84,7 +84,7 @@ pmp = pytest.mark.parametrize
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
 @pmp("nthreads", (1, 2, 7))
-def test_adjointness_ms2dirty(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
+def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -108,9 +108,46 @@ def test_adjointness_ms2dirty(nx, ny, npoints, epsilon, forward, singleprec, nth
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward, epsilon=epsilon, nthreads=nthreads).astype("c16")
     check(dirty2, ms2)
 
-    if have_finufft:
-        comp = finufft.nufft2d2(uvw[:,0], uvw[:,1], dirty.astype("c16"), nthreads=nthreads,eps=epsilon,isign=1 if forward else -1)
+    if have_finufft and not singleprec:
+        comp = finufft.nufft2d2(uvw[:,0], uvw[:,1], dirty, nthreads=nthreads,eps=epsilon,isign=1 if forward else -1)
         if comp.ndim==0:
             comp=np.array([comp[()]])
-        print(ms2.shape,comp.shape)
+        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
+
+@pmp('nx', [20, 21, 64])
+@pmp('ny', [21, 32, 64])
+@pmp('nz', [22, 35, 64])
+@pmp("npoints", (1, 37, 1000))
+@pmp("epsilon", (1e-5, 1e-3, 3e-5, 2e-13))
+@pmp("forward", (True, False))
+@pmp("singleprec", (True, False))
+@pmp("nthreads", (1, 2, 7))
+def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec, nthreads):
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(42)
+    uvw = (rng.random((npoints, 3))-0.5)*2*np.pi
+    ms = rng.random(npoints)-0.5 + 1j*(rng.random(npoints)-0.5)
+    dirty = rng.random((nx, ny, nz))-0.5
+    dirty = dirty +  1j*(rng.random((nx, ny, nz))-0.5)
+    nu = nv = nw = 0
+    if singleprec:
+        ms = ms.astype("c8")
+        dirty = dirty.astype("c8")
+
+    def check(d2, m2):
+        ref = max(ducc0.misc.vdot(ms, ms).real, ducc0.misc.vdot(m2, m2).real,
+                  ducc0.misc.vdot(dirty, dirty).real, ducc0.misc.vdot(d2, d2).real)
+        tol = 3e-5*ref if singleprec else 2e-13*ref
+        assert_allclose(ducc0.misc.vdot(ms, m2), ducc0.misc.vdot(d2, dirty), rtol=tol)
+
+    dirty2 = np.empty((nx,ny,nz), dtype=dirty.dtype)
+    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward, epsilon=epsilon, nthreads=nthreads, out=dirty2, verbosity=0).astype("c16")
+    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward, epsilon=epsilon, nthreads=nthreads, verbosity=0).astype("c16")
+    check(dirty2, ms2)
+
+    if have_finufft and not singleprec:
+        comp = finufft.nufft3d2(uvw[:,0], uvw[:,1], uvw[:,2], dirty, nthreads=nthreads,eps=epsilon,isign=1 if forward else -1)
+        if comp.ndim==0:
+            comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
