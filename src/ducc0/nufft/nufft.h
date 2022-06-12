@@ -149,18 +149,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
     class Baselines
       {
       protected:
-        const cmav<Tcoord,1> &coord;
+        const cmav<Tcoord,2> &coord;
         static constexpr double fct=0.5/pi;
 
       public:
-        Baselines(const cmav<Tcoord,1> &coord_)
+        Baselines(const cmav<Tcoord,2> &coord_)
           : coord(coord_)
-          {}
+          {
+          MR_assert(coord_.shape(1)==1, "dimension mismatch");
+          }
 
         U baseCoord(size_t row) const
-          { return U{coord(row)*fct}; }
+          { return U{coord(row,0)*fct}; }
         void prefetchRow(size_t row) const
-          { DUCC0_PREFETCH_R(&coord(row)); }
+          { DUCC0_PREFETCH_R(&coord(row,0)); }
         size_t Nrows() const { return coord.shape(0); }
       };
 
@@ -619,7 +621,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       }
 
   public:
-    Params1d(const cmav<Tcoord,1> &u,
+    Params1d(const cmav<Tcoord,2> &u,
            const cmav<complex<Tms>,1> &ms_in_, vmav<complex<Tms>,1> &ms_out_,
            const cmav<complex<Timg>,1> &dirty_in_, vmav<complex<Timg>,1> &dirty_out_,
            double epsilon_, bool forward_,
@@ -2021,7 +2023,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void nu2u_1d(const cmav<Tcoord,1> &u,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void nu2u_1d(const cmav<Tcoord,2> &u,
   const cmav<complex<Tms>,1> &ms, bool forward,
   double epsilon,
   size_t nthreads, vmav<complex<Timg>,1> &dirty, size_t verbosity,
@@ -2034,7 +2036,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
     epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void u2nu_1d(const cmav<Tcoord,1> &u,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> void u2nu_1d(const cmav<Tcoord,2> &u,
   const cmav<complex<Timg>,1> &dirty, bool forward,
   double epsilon, size_t nthreads, vmav<complex<Tms>,1> &ms,
   size_t verbosity,
