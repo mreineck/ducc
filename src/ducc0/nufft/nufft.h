@@ -166,7 +166,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         size_t Nrows() const { return coord.shape(0); }
       };
 
-    constexpr static int logsquare=6;
+    constexpr static int logsquare=9;
     bool gridding;
     bool forward;
     TimerHierarchy timers;
