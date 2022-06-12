@@ -38,10 +38,22 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   {
   using Tpoints = decltype(conj(Tgrid(0)));
 
-  auto coord = to_cmav<Tcoord,2>(coord_);
-  auto ndim = coord.shape(1);
-  if (ndim==2)
+  auto ndim = (coord_.ndim()==1) ? 1 : coord_.shape(1);
+  if (ndim==1)
     {
+    auto coord = to_cmav<Tcoord,1>(coord_);
+    auto grid = to_cmav<complex<Tgrid>,1>(grid_);
+    auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
+    auto out = to_vmav<Tpoints,1>(out_);
+    {
+    py::gil_scoped_release release;
+    u2nu_1d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
+    }
+    return move(out_);
+    }
+  else if (ndim==2)
+    {
+    auto coord = to_cmav<Tcoord,2>(coord_);
     auto grid = to_cmav<complex<Tgrid>,2>(grid_);
     auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
     auto out = to_vmav<Tpoints,1>(out_);
@@ -53,6 +65,7 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
     }
   else if (ndim==3)
     {
+    auto coord = to_cmav<Tcoord,2>(coord_);
     auto grid = to_cmav<complex<Tgrid>,3>(grid_);
     auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
     auto out = to_vmav<Tpoints,1>(out_);
@@ -90,10 +103,22 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   py::object &out__, size_t verbosity)
   {
   using Tgrid = Tpoints;
-  auto coord = to_cmav<Tcoord,2>(coord_);
-  auto ndim = coord.shape(1);
-  if (ndim==2)
+  auto ndim = (coord_.ndim()==1) ? 1 : coord_.shape(1);
+  if (ndim==1)
     {
+    auto coord = to_cmav<Tcoord,1>(coord_);
+    auto points = to_cmav<complex<Tpoints>,1>(points_);
+  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
+    auto out = to_vmav<complex<Tgrid>,1>(out__);
+    {
+    py::gil_scoped_release release;
+    nu2u_1d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,1.2,2.0);
+    }
+    return move(out__);
+    }
+  else if (ndim==2)
+    {
+    auto coord = to_cmav<Tcoord,2>(coord_);
     auto points = to_cmav<complex<Tpoints>,1>(points_);
   //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
     auto out = to_vmav<complex<Tgrid>,2>(out__);
@@ -105,6 +130,7 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
     }
   else if (ndim==3)
     {
+    auto coord = to_cmav<Tcoord,2>(coord_);
     auto points = to_cmav<complex<Tpoints>,1>(points_);
   //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
     auto out = to_vmav<complex<Tgrid>,3>(out__);

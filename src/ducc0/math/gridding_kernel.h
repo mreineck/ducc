@@ -318,6 +318,33 @@ template<size_t W, typename Tsimd> class TemplateKernel
           res[nvec+i] = tvaly*y+tvaly2;
           }
       }
+    [[gnu::always_inline]] void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
+      {
+      T x2=x*x;
+      if constexpr (nvec==1)
+        {
+        Tvl tvalx = coeff[0];
+        Tvl tvalx2 = coeff[1];
+        for (size_t j=2; j<D; j+=2)
+          {
+          tvalx = tvalx*x2 + Tvl(coeff[j]);
+          tvalx2 = tvalx2*x2 + Tvl(coeff[j+1]);
+          }
+        res[0] = x*tvalx+tvalx2;
+        }
+      else
+        for (size_t i=0; i<nvec; ++i)
+          {
+          Tvl tvalx = coeff[i];
+          Tvl tvalx2 = coeff[i+nvec];
+          for (size_t j=2; j<D; j+=2)
+            {
+            tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec]);
+            tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
+            }
+          res[i] = tvalx*x+tvalx2;
+          }
+      }
     [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x, y2=y*y, z2=z*z;
