@@ -195,7 +195,7 @@ numpy.ndarray((npoints,), same data type as grid)
 )""";
 
 constexpr const char *nu2u_DS = R"""(
-Type 2 non-uniform FFT (uniform to non-uniform)
+Type 1 non-uniform FFT (non-uniform to uniform)
 
 Parameters
 ----------
