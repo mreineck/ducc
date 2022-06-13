@@ -38,41 +38,14 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   {
   using Tpoints = decltype(conj(Tgrid(0)));
   auto coord = to_cmav<Tcoord,2>(coord_);
-  auto ndim = coord.shape(1);
-  if (ndim==1)
-    {
-    auto grid = to_cmav<complex<Tgrid>,1>(grid_);
-    auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
-    auto out = to_vmav<Tpoints,1>(out_);
-    {
-    py::gil_scoped_release release;
-    u2nu_1d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out_);
-    }
-  else if (ndim==2)
-    {
-    auto grid = to_cmav<complex<Tgrid>,2>(grid_);
-    auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
-    auto out = to_vmav<Tpoints,1>(out_);
-    {
-    py::gil_scoped_release release;
-    u2nu_2d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out_);
-    }
-  else if (ndim==3)
-    {
-    auto grid = to_cmav<complex<Tgrid>,3>(grid_);
-    auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
-    auto out = to_vmav<Tpoints,1>(out_);
-    {
-    py::gil_scoped_release release;
-    u2nu_3d<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out_);
-    }
-  MR_fail("unsupported");
+  auto grid = to_cfmav<complex<Tgrid>>(grid_);
+  auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
+  auto out = to_vmav<Tpoints,1>(out_);
+  {
+  py::gil_scoped_release release;
+  u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
+  }
+  return move(out_);
   }
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
@@ -101,41 +74,13 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
-  auto ndim = coord.shape(1);
-  if (ndim==1)
-    {
-    auto points = to_cmav<complex<Tpoints>,1>(points_);
-  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
-    auto out = to_vmav<complex<Tgrid>,1>(out__);
-    {
-    py::gil_scoped_release release;
-    nu2u_1d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out__);
-    }
-  else if (ndim==2)
-    {
-    auto points = to_cmav<complex<Tpoints>,1>(points_);
-  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
-    auto out = to_vmav<complex<Tgrid>,2>(out__);
-    {
-    py::gil_scoped_release release;
-    nu2u_2d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out__);
-    }
-  else if (ndim==3)
-    {
-    auto points = to_cmav<complex<Tpoints>,1>(points_);
-  //  auto out_ = make_Pyarr<Tgrid>(out__, {coord.shape(0)});
-    auto out = to_vmav<complex<Tgrid>,3>(out__);
-    {
-    py::gil_scoped_release release;
-    nu2u_3d<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
-    }
-    return move(out__);
-    }
-  MR_fail("unsupported");
+  auto points = to_cmav<complex<Tpoints>,1>(points_);
+  auto out = to_vfmav<complex<Tgrid>>(out__);
+  {
+  py::gil_scoped_release release;
+  nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
+  }
+  return move(out__);
   }
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
@@ -223,6 +168,7 @@ verbosity: int
     1: some diagnostic console output
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
 
 Returns
 -------
