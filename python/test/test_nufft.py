@@ -31,7 +31,7 @@ pmp = pytest.mark.parametrize
 
 
 def explicit_nufft(uvw, ms, shape, forward):
-    xyz = np.meshgrid(*[(-(ss-1)//2 + np.arange(ss)) for ss in shape],
+    xyz = np.meshgrid(*[(-(ss//2) + np.arange(ss)) for ss in shape],
                        indexing='ij')
     isign = -1 if forward else 1
     res = np.zeros(shape, dtype=ms.dtype)

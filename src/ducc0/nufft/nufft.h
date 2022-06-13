@@ -438,8 +438,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       if (verbosity==0) return;
       cout << (gridding ? "Nonuniform to uniform:" : "Uniform to nonuniform:") << endl
            << "  nthreads=" << nthreads << ", "
-           << "dirty=(" << nxdirty << "), "
-           << "grid=(" << nu;
+           << "grid=(" << nxdirty << "), "
+           << "oversampled grid=(" << nu;
       cout << "), supp=" << supp
            << ", eps=" << (epsilon * 2)
            << endl;
@@ -760,26 +760,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
       }
 
-    void countRanges()
-      {
-      timers.push("building index");
-      size_t nrow=bl.Nrows();
-      size_t ntiles_u = (nu>>logsquare) + 3;
-      size_t ntiles_v = (nv>>logsquare) + 3;
-      coord_idx.resize(nrow);
-      quick_array<uint32_t> key(nrow);
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          {
-          auto tmp = get_uvwidx(bl.baseCoord(i));
-          key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
-          }
-        });
-      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
-      timers.pop();
-      }
-
     template<size_t supp> class HelperX2g2
       {
       public:
@@ -1029,13 +1009,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         });
       }
 
-    void x2grid_c(vmav<complex<Tcalc>,2> &grid)
-      {
-      checkShape(grid.shape(), {nu, nv});
-      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
-      x2grid_c_helper<maxsupp>(supp, grid);
-      }
-
     template<size_t SUPP> [[gnu::hot]] void grid2x_c_helper
       (size_t supp, const cmav<complex<Tcalc>,2> &grid)
       {
@@ -1099,13 +1072,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         });
       }
 
-    void grid2x_c(const cmav<complex<Tcalc>,2> &grid)
-      {
-      checkShape(grid.shape(), {nu, nv});
-      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
-      grid2x_c_helper<maxsupp>(supp, grid);
-      }
-
     void report()
       {
       if (verbosity==0) return;
@@ -1131,7 +1097,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
       timers.poppush("gridding proper");
-      x2grid_c(grid);
+      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      x2grid_c_helper<maxsupp>(supp, grid);
       timers.pop();
       grid2dirty(grid, dirty_out);
       }
@@ -1143,7 +1110,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.pop();
       dirty2grid(dirty_in, grid);
       timers.push("degridding proper");
-      grid2x_c(grid);
+      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      grid2x_c_helper<maxsupp>(supp, grid);
       timers.pop();
       }
 
@@ -1239,12 +1207,27 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       maxiv0 = (nv+nsafe)-supp;
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
-  //    MR_assert((nxdirty&1)==0, "nx_dirty must be even");
-  //    MR_assert((nydirty&1)==0, "ny_dirty must be even");
       MR_assert((nu&1)==0, "nu must be even");
       MR_assert((nv&1)==0, "nv must be even");
       MR_assert(epsilon>0, "epsilon must be positive");
-      countRanges();
+
+      timers.push("building index");
+      size_t nrow=bl.Nrows();
+      size_t ntiles_u = (nu>>logsquare) + 3;
+      size_t ntiles_v = (nv>>logsquare) + 3;
+      coord_idx.resize(nrow);
+      quick_array<uint32_t> key(nrow);
+      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (size_t i=lo; i<hi; ++i)
+          {
+          auto tmp = get_uvwidx(bl.baseCoord(i));
+          key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
+          }
+        });
+      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
+      timers.pop();
+
       report();
       gridding ? x2dirty() : dirty2x();
 
@@ -1411,27 +1394,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       iv0 = (iv0+nsafe)>>logsquare;
       iw0 = (iw0+nsafe)>>logsquare;
       return Uvwidx{uint16_t(iu0), uint16_t(iv0), uint16_t(iw0)};
-      }
-
-    void countRanges()
-      {
-      timers.push("building index");
-      size_t nrow=bl.Nrows();
-      size_t ntiles_u = (nu>>logsquare) + 3;
-      size_t ntiles_v = (nv>>logsquare) + 3;
-      size_t ntiles_w = (nw>>logsquare) + 3;
-      coord_idx.resize(nrow);
-      quick_array<uint32_t> key(nrow);
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          {
-          auto tmp = get_uvwidx(bl.baseCoord(i));
-          key[i] = tmp.tile_u*ntiles_v*ntiles_w + tmp.tile_v*ntiles_w + tmp.tile_w;
-          }
-        });
-      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v*ntiles_w, nthreads);
-      timers.pop();
       }
 
     template<size_t supp> class HelperX2g2
@@ -1719,13 +1681,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         });
       }
 
-    void x2grid_c(vmav<complex<Tcalc>,3> &grid)
-      {
-      checkShape(grid.shape(), {nu, nv, nw});
-      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
-      x2grid_c_helper<maxsupp>(supp, grid);
-      }
-
     template<size_t SUPP> [[gnu::hot]] void grid2x_c_helper
       (size_t supp, const cmav<complex<Tcalc>,3> &grid)
       {
@@ -1803,13 +1758,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         });
       }
 
-    void grid2x_c(const cmav<complex<Tcalc>,3> &grid)
-      {
-      checkShape(grid.shape(), {nu, nv, nw});
-      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
-      grid2x_c_helper<maxsupp>(supp, grid);
-      }
-
     void report()
       {
       if (verbosity==0) return;
@@ -1835,7 +1783,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nu,nv,nw});
       timers.poppush("gridding proper");
-      x2grid_c(grid);
+      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      x2grid_c_helper<maxsupp>(supp, grid);
       timers.pop();
       grid2dirty(grid, dirty_out);
       }
@@ -1847,7 +1796,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.pop();
       dirty2grid(dirty_in, grid);
       timers.push("degridding proper");
-      grid2x_c(grid);
+      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      grid2x_c_helper<maxsupp>(supp, grid);
       timers.pop();
       }
 
@@ -1952,13 +1902,29 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       MR_assert(nu>=2*nsafe, "nu too small");
       MR_assert(nv>=2*nsafe, "nv too small");
       MR_assert(nw>=2*nsafe, "nw too small");
-  //    MR_assert((nxdirty&1)==0, "nx_dirty must be even");
-  //    MR_assert((nydirty&1)==0, "ny_dirty must be even");
       MR_assert((nu&1)==0, "nu must be even");
       MR_assert((nv&1)==0, "nv must be even");
       MR_assert((nw&1)==0, "nw must be even");
       MR_assert(epsilon>0, "epsilon must be positive");
-      countRanges();
+
+      timers.push("building index");
+      size_t nrow=bl.Nrows();
+      size_t ntiles_u = (nu>>logsquare) + 3;
+      size_t ntiles_v = (nv>>logsquare) + 3;
+      size_t ntiles_w = (nw>>logsquare) + 3;
+      coord_idx.resize(nrow);
+      quick_array<uint32_t> key(nrow);
+      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (size_t i=lo; i<hi; ++i)
+          {
+          auto tmp = get_uvwidx(bl.baseCoord(i));
+          key[i] = tmp.tile_u*ntiles_v*ntiles_w + tmp.tile_v*ntiles_w + tmp.tile_w;
+          }
+        });
+      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v*ntiles_w, nthreads);
+      timers.pop();
+
       report();
       gridding ? x2dirty() : dirty2x();
 
