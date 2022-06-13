@@ -140,33 +140,12 @@ template<size_t ndim> void checkShape
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tcoord> class Params1d
   {
   private:
-    struct Uvwidx
-      { uint16_t tile_u; };
-
     struct U
       { double u; };
 
-    class Baselines
-      {
-      protected:
-        const cmav<Tcoord,2> &coord;
-        static constexpr double fct=0.5/pi;
-
-      public:
-        Baselines(const cmav<Tcoord,2> &coord_)
-          : coord(coord_)
-          {
-          MR_assert(coord_.shape(1)==1, "dimension mismatch");
-          }
-
-        U baseCoord(size_t row) const
-          { return U{coord(row,0)*fct}; }
-        void prefetchRow(size_t row) const
-          { DUCC0_PREFETCH_R(&coord(row,0)); }
-        size_t Nrows() const { return coord.shape(0); }
-      };
-
     constexpr static int logsquare=9;
+    static constexpr double coordfct=0.5/pi;
+
     bool gridding;
     bool forward;
     TimerHierarchy timers;
@@ -180,7 +159,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
     size_t verbosity;
     double sigma_min, sigma_max;
 
-    Baselines bl;
+    const cmav<Tcoord,2> &coord;
 
     quick_array<uint32_t> coord_idx;
 
@@ -206,13 +185,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       u -= iu0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const U &u)
+    [[gnu::always_inline]] uint32_t get_uvwidx(const U &u)
       {
       double udum;
       int iu0;
       getpix(u.u, udum, iu0);
       iu0 = (iu0+nsafe)>>logsquare;
-      return Uvwidx{uint16_t(iu0)};
+      return uint32_t(iu0);
       }
 
     template<size_t supp> class HelperX2g2
@@ -391,11 +370,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             {
             auto nextidx = coord_idx[ix+1];
             DUCC0_PREFETCH_R(&ms_in(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coord(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
-          hlp.prep(coord);
+          auto lcoord = U{coord(row,0)*coordfct};
+          hlp.prep(lcoord);
           auto v(ms_in(row));
 
           mysimd<Tacc> vr(v.real()), vi(v.imag());
@@ -436,11 +415,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             {
             auto nextidx = coord_idx[ix+1];
             DUCC0_PREFETCH_W(&ms_out(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coord(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
-          hlp.prep(coord);
+          auto lcoord = U{coord(row,0)*coordfct};
+          hlp.prep(lcoord);
           mysimd<Tcalc> rr=0, ri=0;
           for (size_t cu=0; cu<NVEC; ++cu)
             {
@@ -464,8 +443,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       cout << "), supp=" << supp
            << ", eps=" << (epsilon * 2)
            << endl;
-      cout << "  npoints=" << bl.Nrows() << endl;
-      size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
+      cout << "  npoints=" << coord.shape(0) << endl;
+      size_t ovh0 = coord.shape(0)*sizeof(uint32_t);
       size_t ovh1 = nu*sizeof(complex<Tcalc>);             // grid
       if (!gridding)
         ovh1 += nxdirty*sizeof(Timg);                 // tdirty
@@ -574,7 +553,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       }
 
   public:
-    Params1d(const cmav<Tcoord,2> &u,
+    Params1d(const cmav<Tcoord,2> &coord_,
            const cmav<complex<Tms>,1> &ms_in_, vmav<complex<Tms>,1> &ms_out_,
            const cmav<complex<Timg>,1> &dirty_in_, vmav<complex<Timg>,1> &dirty_out_,
            double epsilon_, bool forward_,
@@ -591,20 +570,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        bl(u)
+        coord(coord_)
       {
-      MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(coord.shape(0)<(uint64_t(1)<<32), "too many rows in the MS");
       // adjust for increased error when gridding in 2 dimensions
       epsilon /= 2;
-      checkShape(ms_in.shape(), {bl.Nrows()});
-      nvis=bl.Nrows();
+      checkShape(ms_in.shape(), {coord.shape(0)});
+      nvis=coord.shape(0);
       if (nvis==0)
         {
         if (gridding) mav_apply([](complex<Timg> &v){v=complex<Timg>(0);}, nthreads, dirty_out);
         return;
         }
       auto kidx = getNu();
-      MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
+      MR_assert((nu>>logsquare)<(size_t(1)<<32), "nu too large");
       ofactor = double(nu)/nxdirty;
       krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
       supp = krn->support();
@@ -612,22 +591,18 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       ushift = supp*(-0.5)+1+nu;
       maxiu0 = (nu+nsafe)-supp;
       MR_assert(nu>=2*nsafe, "nu too small");
-  //    MR_assert((nxdirty&1)==0, "nx_dirty must be even");
       MR_assert((nu&1)==0, "nu must be even");
       MR_assert(epsilon>0, "epsilon must be positive");
 
       timers.push("building index");
-      size_t nrow=bl.Nrows();
+      size_t nrow=coord.shape(0);
       size_t ntiles_u = (nu>>logsquare) + 3;
       coord_idx.resize(nrow);
       quick_array<uint32_t> key(nrow);
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
-          {
-          auto tmp = get_uvwidx(bl.baseCoord(i));
-          key[i] = tmp.tile_u;
-          }
+          key[i] = get_uvwidx(U{coord(i,0)*coordfct});
         });
       bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       timers.pop();
