@@ -1,3 +1,16 @@
+0.24.0:
+- general:
+  - work around a compilation problem with gcc 7
+
+- nufft:
+  - beginnings of a non-uniform FFT module
+    Conventions are closely following the FINUFFT library.
+    The interface is not finalized yet.
+
+- wgridder:
+  - improved pre-sorting of visibilities
+
+
 0.23.0:
 - general:
   - improved template code for multi-array operations (internal detail)
@@ -162,7 +175,7 @@
 - sht:
   - bug fixes
   - tweaks to the experimental interface for extracting moments up to lmax
-    from maps with only lmax+1 or lmax+2 equidistant rings. 
+    from maps with only lmax+1 or lmax+2 equidistant rings.
 
 
 0.12.0:
