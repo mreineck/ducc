@@ -224,12 +224,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
     void dirty2grid(const cmav<complex<Timg>,1> &dirty, vmav<complex<Tcalc>,1> &grid)
       {
       timers.push("zeroing grid");
-      checkShape(dirty.shape(), {nxdirty});
       checkShape(grid.shape(), {nu});
-      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-      // only zero the parts of the grid that are not filled afterwards anyway
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid); // quickzero(grid, nthreads);
       timers.poppush("grid correction");
+      checkShape(dirty.shape(), {nxdirty});
+      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -767,13 +766,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
       { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
+      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1412,11 +1411,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty, nzdirty});
       checkShape(grid.shape(), {nu, nv, nw});
+      mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid); // quickzero(grid, nthreads);
+      timers.poppush("grid correction");
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
       auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       auto cfw = krn->corfunc(nzdirty/2+1, 1./nw, nthreads);
-      mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid); // quickzero(grid, nthreads);
-      timers.poppush("grid correction");
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)

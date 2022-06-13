@@ -525,15 +525,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     void dirty2grid_pre(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
       {
       timers.push("zeroing grid");
-      checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
       { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
+      checkShape(dirty.shape(), {nxdirty, nydirty});
+      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)

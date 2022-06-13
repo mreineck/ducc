@@ -119,22 +119,36 @@ class KernelCorrection
   public:
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    double corfunc(double v) const
+    template<typename T> [[gnu::always_inline]] T corfunc(T v) const
       {
-      double tmp=0;
+      T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
-        tmp += wgtpsi[i]*cos(pi*supp*v*x[i]);
-      return 1./tmp;
+        tmp += wgtpsi[i]*cos((pi*supp*x[i])*v);
+      return T(1)/tmp;
       }
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
     vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       {
       vector<double> res(n);
+// The commented lines would add vectorization support,
+// but this doesn't appear beneficial.
+//      constexpr size_t vlen = native_simd<double>::size();
+//      native_simd<double> itimesdx;
+//      for (size_t i=0; i<vlen; ++i) itimesdx[i]=i*dx;
       execStatic(n, nthreads, 0, [&](auto &sched)
         {
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
-          res[i] = corfunc(i*dx);
+        while (auto rng=sched.getNext())
+          {
+          auto i = rng.lo;
+          //for (; i+vlen<=rng.hi; i+=vlen)
+            //{
+            //auto v = corfunc(itimesdx+i*dx);
+            //v.copy_to(&res[i],element_aligned_tag());
+            //}
+          for(; i<rng.hi; ++i)
+            res[i] = corfunc(i*dx);
+          }
         });
       return res;
       }
