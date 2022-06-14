@@ -524,8 +524,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         auto nvec = (supp+vlen-1)/vlen;
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
-        double logterm = log(nu)/log(nref_fft);
-        double fftcost = nu/nref_fft*logterm*costref_fft;
+        double logterm = log(nu)/log(nref_fft*nref_fft);
+        double fftcost = nu/(nref_fft*nref_fft)*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(nvec*vlen + (nvec*(supp+3)*vlen));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         // FIXME: heuristics could be improved
@@ -1820,8 +1820,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
         size_t nw=2*good_size_complex(size_t(nzdirty*ofactor*0.5)+1);
-        double logterm = log(nu*nv*nw)/log(nref_fft*nref_fft*nref_fft);
-        double fftcost = nu/nref_fft*nv/nref_fft*nw/nref_fft*logterm*costref_fft;
+        double logterm = log(nu*nv*nw)/log(nref_fft*nref_fft);
+        double fftcost = nu*nv*nw/(nref_fft*nref_fft)*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*supp*nvec*vlen + ((3*nvec+1)*(supp+3)*vlen));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         // FIXME: heuristics could be improved
