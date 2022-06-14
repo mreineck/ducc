@@ -162,7 +162,7 @@ nthreads : int >= 0
     if 0, use as many threads as there are hardware threads available on the system
 out : numpy.ndarray(1D/2D/3D, same dtype as points)
     the grid of output data
-    Note: this is a mandatory parameter,since its shape defines the grid dimensions!
+    Note: this is a mandatory parameter, since its shape defines the grid dimensions!
 verbosity: int
     0: no console output
     1: some diagnostic console output
