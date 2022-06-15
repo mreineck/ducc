@@ -299,8 +299,8 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
 // - accept scalar nphi, phi0?
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
-  const py::object &mstart_, ptrdiff_t lstride, 
-  const py::array &theta_, 
+  const py::object &mstart_, ptrdiff_t lstride,
+  const py::array &theta_,
   const py::array &nphi_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
@@ -321,23 +321,23 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   return map_;
   }
 py::array Py_synthesis(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart, 
+  size_t lmax, const py::object &mstart,
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads, py::object &map)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta, 
+    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta, 
+    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   py::object &map__, size_t lmax,
-  const py::object &mstart_, ptrdiff_t lstride, 
-  const py::array &theta_, 
+  const py::object &mstart_, ptrdiff_t lstride,
+  const py::array &theta_,
   const py::array &nphi_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
@@ -348,9 +348,9 @@ template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
+  MR_assert(alm.shape(0)==1, "bad number of components in alm array");
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, {2, min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_vmav<T,2>(map_);
-  MR_assert(map.shape(0)==2, "bad number of components in map array");
   {
   py::gil_scoped_release release;
   synthesis(alm, map, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
@@ -358,16 +358,16 @@ template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   return map_;
   }
 py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart, 
+  size_t lmax, const py::object &mstart,
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads, py::object &map)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_deriv1<float>(alm, map, lmax, mstart, lstride, theta, 
+    return Py2_synthesis_deriv1<float>(alm, map, lmax, mstart, lstride, theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_deriv1<double>(alm, map, lmax, mstart, lstride, theta, 
+    return Py2_synthesis_deriv1<double>(alm, map, lmax, mstart, lstride, theta,
       nphi, phi0, ringstart, pixstride, nthreads);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
@@ -480,7 +480,7 @@ py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string
   }
 
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
-  size_t lmax, const py::object &mstart_, ptrdiff_t lstride, 
+  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
   const py::array &nphi_, const py::array &ringstart_, size_t spin, ptrdiff_t pixstride,
   size_t nthreads)
@@ -1001,7 +1001,7 @@ numpy.ndarray((ncomp, ntheta, nm), dtype=numpy.complex of same accuracy as `map`
 Notes
 -----
 In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
-range from 0 to mmax, inclusively. 
+range from 0 to mmax, inclusively.
 )""";
 
 constexpr const char *leg2map_DS = R"""(
@@ -1040,7 +1040,7 @@ numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`)
 Notes
 -----
 In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
-range from 0 to mmax, inclusively. 
+range from 0 to mmax, inclusively.
 )""";
 
 constexpr const char *synthesis_2d_DS = R"""(
