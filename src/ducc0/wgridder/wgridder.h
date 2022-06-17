@@ -1397,7 +1397,7 @@ timers.pop();
            << "grid=(" << nu << "x" << nv;
       if (do_wgridding) cout << "x" << nplanes;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
+           << ", eps=" << epsilon
            << endl;
       cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
@@ -1519,7 +1519,7 @@ timers.pop();
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1645,8 +1645,6 @@ timers.pop();
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
-      // adjust for increased error when gridding in 2 or 3 dimensions
-      epsilon /= do_wgridding ? 3 : 2;
       scanData();
       if (nvis==0)
         {
@@ -1657,7 +1655,7 @@ timers.pop();
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

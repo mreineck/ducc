@@ -122,7 +122,7 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
 @pmp('ny', [21, 32, 64])
 @pmp('nz', [22, 35, 64])
 @pmp("npoints", (1, 37, 10))
-@pmp("epsilon", (1e-5, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-5, 1e-3, 3e-5, 1e-12))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
 @pmp("nthreads", (1, 2, 7))

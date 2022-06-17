@@ -441,7 +441,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
            << "grid=(" << nxdirty << "), "
            << "oversampled grid=(" << nu;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * 2)
+           << ", eps=" << epsilon
            << endl;
       cout << "  npoints=" << coord.shape(0) << endl;
       size_t ovh0 = coord.shape(0)*sizeof(uint32_t);
@@ -511,7 +511,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       {
       timers.push("parameter calculation");
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, 1, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -573,8 +573,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         coord(coord_)
       {
       MR_assert(coord.shape(0)<(uint64_t(1)<<32), "too many rows in the MS");
-      // adjust for increased error when gridding in 2 dimensions
-      epsilon /= 2;
       checkShape(ms_in.shape(), {coord.shape(0)});
       nvis=coord.shape(0);
       if (nvis==0)
@@ -585,7 +583,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       auto kidx = getNu();
       MR_assert((nu>>logsquare)<(size_t(1)<<32), "nu too large");
       ofactor = double(nu)/nxdirty;
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
@@ -1080,7 +1078,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
            << "dirty=(" << nxdirty << "x" << nydirty << "), "
            << "grid=(" << nu << "x" << nv;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * 2)
+           << ", eps=" << epsilon
            << endl;
       cout << "  npoints=" << bl.Nrows() << endl;
       size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
@@ -1119,7 +1117,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       {
       timers.push("parameter calculation");
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1135,7 +1133,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
-        double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));
+        double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + (2*nvec*(supp+3)*vlen));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         // FIXME: heuristics could be improved
         gridcost /= nthreads;  // assume perfect scaling for now
@@ -1185,8 +1183,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         bl(uv)
       {
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
-      // adjust for increased error when gridding in 2 dimensions
-      epsilon /= 2;
       checkShape(ms_in.shape(), {bl.Nrows()});
       nvis=bl.Nrows();
       if (nvis==0)
@@ -1198,7 +1194,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
@@ -1622,7 +1618,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
         const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*NVEC;
 
-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext())
+{
+//cout << rng.lo << " " << rng.hi << endl;
+ for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           if (ix+1<coord_idx.size())
             {
@@ -1657,6 +1656,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           else
             {
             mysimd<Tacc> vr(v.real()), vi(v.imag());
+            auto * DUCC0_RESTRICT pxr = hlp.p0r;
+            auto * DUCC0_RESTRICT pxi = hlp.p0i;
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
@@ -1665,19 +1666,24 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
                 mysimd<Tacc> tmp2r=tmpr*kv[cv], tmp2i=tmpi*kv[cv];
                 for (size_t cw=0; cw<NVEC; ++cw)
                   {
-                  auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*pjump+cv*ljump+cw*hlp.vlen;
-                  auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*pjump+cv*ljump+cw*hlp.vlen;
                   auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
                   tr += tmp2r*kw[cw];
                   tr.copy_to(pxr,element_aligned_tag());
                   auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
                   ti += tmp2i*kw[cw];
                   ti.copy_to(pxi,element_aligned_tag());
+                  pxr += hlp.vlen;
+                  pxi += hlp.vlen;
                   }
+                pxr += ljump-NVEC*hlp.vlen;
+                pxi += ljump-NVEC*hlp.vlen;
                 }
+              pxr += pjump-SUPP*ljump;
+              pxi += pjump-SUPP*ljump;
               }
             }
           }
+}
         });
       }
 
@@ -1766,7 +1772,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
            << "dirty=(" << nxdirty << "x" << nydirty << "x" << nzdirty << "), "
            << "grid=(" << nu << "x" << nv << "x" << nw;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * 3)
+           << ", eps=" << epsilon
            << endl;
       cout << "  npoints=" << bl.Nrows() << endl;
       size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
@@ -1805,7 +1811,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       {
       timers.push("parameter calculation");
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, 3, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1822,7 +1828,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         size_t nw=2*good_size_complex(size_t(nzdirty*ofactor*0.5)+1);
         double logterm = log(nu*nv*nw)/log(nref_fft*nref_fft);
         double fftcost = nu*nv*nw/(nref_fft*nref_fft)*logterm*costref_fft;
-        double gridcost = 2.2e-10*nvis*(supp*supp*nvec*vlen + ((3*nvec+1)*(supp+3)*vlen));
+        double gridcost = 2.2e-10*nvis*(supp*supp*nvec*vlen + (3*nvec*(supp+3)*vlen));
         if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
         // FIXME: heuristics could be improved
         gridcost /= nthreads;  // assume perfect scaling for now
@@ -1875,8 +1881,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         bl(uvw)
       {
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
-      // adjust for increased error when gridding in 3 dimensions
-      epsilon /= 3;
       checkShape(ms_in.shape(), {bl.Nrows()});
       nvis=bl.Nrows();
       if (nvis==0)
@@ -1890,7 +1894,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       MR_assert((nw>>logsquare)<(size_t(1)<<10), "nw too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
       ofactor = min(ofactor, double(nw)/nzdirty);
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

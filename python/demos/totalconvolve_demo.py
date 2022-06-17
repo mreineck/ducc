@@ -50,7 +50,7 @@ ncomp = 1
 separate = True
 nptg = 50000000
 epsilon = 1e-4
-ofactor = 1.5
+ofactor = 1.6
 nthreads = 0  # use as many threads as available
 
 ncomp2 = ncomp if separate else 1

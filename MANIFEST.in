@@ -69,6 +69,7 @@ include python/test/test_pointing.py
 include python/test/test_sht.py
 include python/test/test_totalconvolve.py
 include python/test/test_wgridder.py
+include python/test/test_nufft.py
 
 include python/demos/fft_bench.py
 include python/demos/fft_stress.py

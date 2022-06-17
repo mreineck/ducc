@@ -122,7 +122,8 @@ x=np.arange(N+1)/(2*N)
 # as single elements in the tuples below
 ofactors = np.linspace(2.00,2.50,11)
 Ws = np.arange(9,17)
-#ofactors = [1.5]#np.linspace(1.15,2.00,18)
+Ws=[12]
+ofactors = [1.15, 1.2, 1.25, 1.3, 1.35]
 #Ws = [8] #np.arange(4,17)
 results = []
 for W in Ws:

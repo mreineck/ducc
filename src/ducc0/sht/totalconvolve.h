@@ -455,7 +455,7 @@ template<typename T> class ConvolverPlan
         xdphi(1./dphi),
         xdtheta(1./dtheta),
         xdpsi(1./dpsi),
-        kernel(selectKernel<T>(realsigma(), epsilon/3.)),
+        kernel(selectKernel<T>(realsigma(), 3, epsilon)),
         nbphi((kernel->support()+1)/2),
         nbtheta((kernel->support()+1)/2),
         nphi(nphi_b+2*nbphi+vlen),
