@@ -77,7 +77,7 @@ def test_against_convolution(lkmax):
     blm = random_alm(rng, lmax, kmax, 1)[0, :]
 
     conv = ducc0.totalconvolve.ConvolverPlan(lmax, kmax, sigma=2.,
-                                             epsilon=1e-12, nthreads=2)
+                                             epsilon=1.5e-13, nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -98,7 +98,7 @@ def test_against_convolution(lkmax):
     for i in range(nptg):
         rbeam = ducc0.sht.rotate_alm(blm2, lmax, ptg[i, 2], ptg[i, 0], ptg[i, 1])
         res2[i] = convolve(slm, rbeam, lmax).real
-    _assert_close(res1, res2, 1e-12)
+    _assert_close(res1, res2, 1.5e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -111,7 +111,7 @@ def test_against_convolution_2(lkmax, ncomp, separate):
     blm = random_alm(rng, lmax, kmax, ncomp)
 
     inter = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                             epsilon=1e-12, ofactor=2., nthreads=2)
+                                             epsilon=1.5e-13, ofactor=2., nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -129,9 +129,9 @@ def test_against_convolution_2(lkmax, ncomp, separate):
                                          ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
-        _assert_close(res1, res2, 1e-12)
+        _assert_close(res1, res2, 1.5e-13)
     else:
-        _assert_close(res1[0, :], np.sum(res2, axis=0), 1e-12)
+        _assert_close(res1[0, :], np.sum(res2, axis=0), 1.5e-13)
 
 
 @pmp("lkmax", [(13, 13), (2, 1), (30, 15), (35, 2)])
@@ -144,7 +144,7 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
     blm = random_alm(rng, lmax, kmax, ncomp).astype("c8")
 
     inter = ducc0.totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
-                                               epsilon=1e-5, ofactor=2., nthreads=2)
+                                               epsilon=4e-6, ofactor=2., nthreads=2)
     nptg = 50
     ptg = np.zeros((nptg, 3))
     ptg[:, 0] = rng.uniform(0, np.pi, nptg)
@@ -163,9 +163,9 @@ def test_against_convolution_2f(lkmax, ncomp, separate):
                                          ptg[i, 2], ptg[i, 0], ptg[i, 1])
             res2[c, i] = convolve(slm[c, :], rbeam, lmax).real
     if separate:
-        _assert_close(res1, res2, 1e-5)
+        _assert_close(res1, res2, 4e-6)
     else:
-        _assert_close(res1[0, :], np.sum(res2, axis=0), 1e-5)
+        _assert_close(res1[0, :], np.sum(res2, axis=0), 4e-6)
 
 
 @pmp("lkmax", [(13, 13), (20, 0), (2, 1), (30, 15), (35, 2)])
@@ -180,7 +180,7 @@ def test_adjointness(lkmax):
     ptg[:, 1] *= 2*np.pi
     ptg[:, 2] *= 2*np.pi
     conv = ducc0.totalconvolve.ConvolverPlan(lmax, kmax, sigma=2,
-                                             epsilon=1e-5, nthreads=2)
+                                             epsilon=4e-6, nthreads=2)
 
     cube = np.empty((conv.Npsi(), conv.Ntheta(), conv.Nphi()))
     conv.getPlane(slm, blm, 0, cube[0:1])
