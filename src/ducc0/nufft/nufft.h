@@ -353,7 +353,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return x2grid_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       mutex mylock;
 
@@ -364,11 +364,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         HelperX2g2<SUPP> hlp(this, grid, mylock);
         const auto * DUCC0_RESTRICT ku = hlp.buf.simd;
 
+        constexpr size_t lookahead=10;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&ms_in(nextidx));
             DUCC0_PREFETCH_R(&coord(nextidx,0));
             }
@@ -400,7 +401,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return grid2x_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
         {
@@ -409,11 +410,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         HelperG2x2<SUPP> hlp(this, grid);
         const auto * DUCC0_RESTRICT ku = hlp.buf.simd;
 
+        constexpr size_t lookahead=10;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&ms_out(nextidx));
             DUCC0_PREFETCH_R(&coord(nextidx,0));
             }
@@ -638,7 +640,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         UV baseCoord(size_t row) const
           { return UV{coord(row,0)*fct, coord(row,1)*fct}; }
         void prefetchRow(size_t row) const
-          { DUCC0_PREFETCH_R(&coord(row,0)); }
+          {
+          DUCC0_PREFETCH_R(&coord(row,0));
+          DUCC0_PREFETCH_R(&coord(row,1));
+          }
         size_t Nrows() const { return coord.shape(0); }
       };
 
@@ -943,7 +948,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return x2grid_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       vector<mutex> locks(nu);
 
@@ -956,11 +961,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
+        constexpr size_t lookahead=3;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&ms_in(nextidx));
             bl.prefetchRow(nextidx);
             }
@@ -1014,7 +1020,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return grid2x_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
         {
@@ -1025,11 +1031,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
 
+        constexpr size_t lookahead=3;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&ms_out(nextidx));
             bl.prefetchRow(nextidx);
             }
@@ -1257,7 +1264,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         UVW baseCoord(size_t row) const
           { return UVW{coord(row,0)*fct, coord(row,1)*fct, coord(row,2)*fct}; }
         void prefetchRow(size_t row) const
-          { DUCC0_PREFETCH_R(&coord(row,0)); }
+          {
+          DUCC0_PREFETCH_R(&coord(row,0));
+          DUCC0_PREFETCH_R(&coord(row,1));
+          DUCC0_PREFETCH_R(&coord(row,2));
+          }
         size_t Nrows() const { return coord.shape(0); }
       };
 
@@ -1400,10 +1411,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<logsquare);
-        static constexpr int sv = 2*nsafe+(1<<logsquare);
-        static constexpr int sw = 2*nsafe+(1<<logsquare);
-        static constexpr int swvec = sw+vlen-1;
+        static constexpr int su = supp+(1<<logsquare);
+        static constexpr int sv = supp+(1<<logsquare);
+        static constexpr int sw = supp+(1<<logsquare);
         static constexpr double xsupp=2./supp;
         const Params3d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -1411,7 +1421,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         int iu0, iv0, iw0; // start index of the current visibility
         int bu0, bv0, bw0; // start index of the current buffer
 
-        vmav<Tacc,3> bufr, bufi;
+        vmav<Tacc,3> bufri;
         Tacc *px0r, *px0i;
         vector<mutex> &locks;
 
@@ -1435,8 +1445,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
               int idxw = idxw0;
               for (int iw=0; iw<sw; ++iw)
                 {
-                grid(idxu,idxv,idxw) += complex<Tcalc>(Tcalc(bufr(iu,iv,iw)), Tcalc(bufi(iu,iv,iw)));
-                bufr(iu,iv,iw) = bufi(iu,iv,iw) = 0;
+                grid(idxu,idxv,idxw) += complex<Tcalc>(Tcalc(bufri(iu,2*iv,iw)), Tcalc(bufri(iu,2*iv+1,iw)));
+                bufri(iu,2*iv,iw) = bufri(iu,2*iv+1,iw) = 0;
                 if (++idxw>=inw) idxw=0;
                 }
               if (++idxv>=inv) idxv=0;
@@ -1462,15 +1472,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
             bu0(-1000000), bv0(-1000000), bw0(-1000000),
-            bufr({size_t(su),size_t(sv),size_t(swvec)}),
-            bufi({size_t(su),size_t(sv),size_t(swvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
+            bufri({size_t(su+1),size_t(2*sv),size_t(sw)}),
+            px0r(bufri.data()), px0i(bufri.data()+sw),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv,parent->nw}); }
         ~HelperX2g2() { dump(); }
 
-        constexpr int lineJump() const { return swvec; }
-        constexpr int planeJump() const { return sv*swvec; }
+        constexpr int lineJump() const { return 2*sw; }
+        constexpr int planeJump() const { return 2*sv*sw; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
           {
@@ -1492,7 +1501,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
             bw0=((((iw0+nsafe)>>logsquare)<<logsquare))-nsafe;
             }
-          auto ofs = (iu0-bu0)*sv*swvec + (iv0-bv0)*swvec + (iw0-bw0);
+          auto ofs = (iu0-bu0)*2*sv*sw + (iv0-bv0)*2*sw + (iw0-bw0);
           p0r = px0r+ofs;
           p0i = px0i+ofs;
           }
@@ -1603,7 +1612,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return x2grid_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       vector<mutex> locks(nu);
 
@@ -1623,9 +1632,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
 //cout << rng.lo << " " << rng.hi << endl;
  for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          constexpr size_t lookahead=3;
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&ms_in(nextidx));
             bl.prefetchRow(nextidx);
             }
@@ -1655,15 +1665,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
             }
           else
             {
-            mysimd<Tacc> vr(v.real()), vi(v.imag());
+            Tacc vr(v.real()), vi(v.imag());
             auto * DUCC0_RESTRICT pxr = hlp.p0r;
             auto * DUCC0_RESTRICT pxi = hlp.p0i;
             for (size_t cu=0; cu<SUPP; ++cu)
               {
-              mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+              Tacc tmpr=vr*ku[cu], tmpi=vi*ku[cu];
               for (size_t cv=0; cv<SUPP; ++cv)
                 {
-                mysimd<Tacc> tmp2r=tmpr*kv[cv], tmp2i=tmpi*kv[cv];
+                Tacc tmp2r=tmpr*kv[cv], tmp2i=tmpi*kv[cv];
                 for (size_t cw=0; cw<NVEC; ++cw)
                   {
                   auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
@@ -1694,7 +1704,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return grid2x_c_helper<SUPP-1>(supp, grid);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
         {
@@ -1709,9 +1719,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          if (ix+1<coord_idx.size())
+          constexpr size_t lookahead=3;
+          if (ix+lookahead<coord_idx.size())
             {
-            auto nextidx = coord_idx[ix+1];
+            auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&ms_out(nextidx));
             bl.prefetchRow(nextidx);
             }

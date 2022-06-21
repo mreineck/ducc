@@ -1135,7 +1135,7 @@ timers.pop();
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
       if constexpr (SUPP>4)
         if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       vector<mutex> locks(nu);
 
@@ -1239,7 +1239,7 @@ timers.pop();
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
       if constexpr (SUPP>4)
         if (supp<SUPP) return grid2x_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       // Loop over sampling points
       execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
