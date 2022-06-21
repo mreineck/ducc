@@ -51,14 +51,14 @@ py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
   py::object &out, size_t verbosity, double sigma_min, double sigma_max)
   {
-  if (isPyarr<double>(coord))  // double precision coordinates
+  if (isPyarr<double>(coord))
     {
     if (isPyarr<complex<double>>(grid))
       return Py2_u2nu<double, double>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
-    else if (isPyarr<complex<float>>(grid))  // double precision R2C
+    else if (isPyarr<complex<float>>(grid))
       return Py2_u2nu<float, double>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
     }
-  else if (isPyarr<float>(coord))  // single precision coordinates
+  else if (isPyarr<float>(coord))
     {
     if (isPyarr<complex<double>>(grid))
       return Py2_u2nu<double, float>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
@@ -86,14 +86,14 @@ py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
   py::object &out, size_t verbosity, double sigma_min, double sigma_max)
   {
-  if (isPyarr<double>(coord))  // double precision coordinates
+  if (isPyarr<double>(coord))
     {
     if (isPyarr<complex<double>>(points))
       return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
-    else if (isPyarr<complex<float>>(points))  // double precision R2C
+    else if (isPyarr<complex<float>>(points))
       return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
     }
-  else if (isPyarr<float>(coord))  // single precision coordinates
+  else if (isPyarr<float>(coord))
     {
     if (isPyarr<complex<double>>(points))
       return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
