@@ -1381,14 +1381,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       w -= iw0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvw)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvw, size_t lsq2)
       {
       double udum, vdum, wdum;
       int iu0, iv0, iw0;
       getpix(uvw.u, uvw.v, uvw.w, udum, vdum, wdum, iu0, iv0, iw0);
-      iu0 = (iu0+nsafe)>>logsquare;
-      iv0 = (iv0+nsafe)>>logsquare;
-      iw0 = (iw0+nsafe)>>logsquare;
+      iu0 = (iu0+nsafe)>>lsq2;
+      iv0 = (iv0+nsafe)>>lsq2;
+      iw0 = (iw0+nsafe)>>lsq2;
       return Uvwidx{uint16_t(iu0), uint16_t(iv0), uint16_t(iw0)};
       }
 
@@ -1916,17 +1916,29 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
       size_t ntiles_u = (nu>>logsquare) + 3;
       size_t ntiles_v = (nv>>logsquare) + 3;
       size_t ntiles_w = (nw>>logsquare) + 3;
+      size_t lsq2 = logsquare;
+      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<3*(logsquare-lsq2))<(size_t(1)<<28)))
+        --lsq2;
+      auto ssmall = logsquare-lsq2;
+      auto msmall = (size_t(1)<<ssmall) - 1;
+
       coord_idx.resize(nrow);
       quick_array<uint32_t> key(nrow);
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(bl.baseCoord(i));
-          key[i] = tmp.tile_u*ntiles_v*ntiles_w + tmp.tile_v*ntiles_w + tmp.tile_w;
+          auto tmp = get_uvwidx(bl.baseCoord(i),lsq2);
+          auto lowkey = ((tmp.tile_u&msmall)<<(2*ssmall))
+                      | ((tmp.tile_v&msmall)<<   ssmall)
+                      |  (tmp.tile_w&msmall);
+          auto hikey = ((tmp.tile_u>>ssmall)*ntiles_v*ntiles_w)
+                     + ((tmp.tile_v>>ssmall)*ntiles_w)
+                     +  (tmp.tile_w>>ssmall);
+          key[i] = (hikey<<(3*ssmall)) | lowkey;
           }
         });
-      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v*ntiles_w, nthreads);
+      bucket_sort2(key, coord_idx, (ntiles_u*ntiles_v*ntiles_w)<<(3*ssmall), nthreads);
       timers.pop();
 
       report();
