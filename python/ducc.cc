@@ -15,6 +15,7 @@
 #include "python/healpix_pymod.cc"
 #include "python/misc_pymod.cc"
 #include "python/pointingprovider_pymod.cc"
+#include "python/nufft_pymod.cc"
 
 using namespace ducc0;
 
@@ -33,4 +34,5 @@ PYBIND11_MODULE(PKGNAME, m)
   add_healpix(m);
   add_misc(m);
   add_pointingprovider(m);
+  add_nufft(m);
   }

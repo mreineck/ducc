@@ -120,9 +120,10 @@ x=np.arange(N+1)/(2*N)
 
 # for quick experiments, just enter the desired oversampling factor and support
 # as single elements in the tuples below
-ofactors = np.linspace(1.15,2.50,28)
-Ws = np.arange(4,17)
-#ofactors = [1.5]#np.linspace(1.15,2.00,18)
+ofactors = np.linspace(2.00,2.50,11)
+Ws = np.arange(9,17)
+Ws=[12]
+ofactors = [1.15, 1.2, 1.25, 1.3, 1.35]
 #Ws = [8] #np.arange(4,17)
 results = []
 for W in Ws:
@@ -132,7 +133,7 @@ for W in Ws:
         ulim = int(2*x0*N+0.9999)+1
         rbeta=[1., 2.5]
         re0=[0.48, 0.65]
-        re0=[0.5,0.5]
+        #re0=[0.5,0.5]
         dbeta = rbeta[1]-rbeta[0]
         de0 = re0[1]-re0[0]
         for i in range(30):
@@ -141,7 +142,7 @@ for W in Ws:
             de0*=0.5
             rbeta = [res1[0]-0.5*dbeta, res1[0]+0.5*dbeta]
             re0 = [res1[1]-0.5*de0, res1[1]+0.5*de0]
-        krn1 = eskapprox(res1, nu, x, W) 
+        krn1 = eskapprox(res1, nu, x, W)
         err1 = kernel2error(krn1, nu, x, W)
         maxerr1 = np.sqrt(np.max(err1[0:ulim]))
         acceptability = kernel2acceptability(krn1, nu, x, W, ofactor)

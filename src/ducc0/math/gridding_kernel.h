@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020-2021 Max-Planck-Society
+/* Copyright (C) 2020-2022 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_GRIDDING_KERNEL_H
@@ -28,6 +28,7 @@
 #include <memory>
 #include <cmath>
 #include <type_traits>
+#include <limits>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
@@ -119,22 +120,36 @@ class KernelCorrection
   public:
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    double corfunc(double v) const
+    template<typename T> [[gnu::always_inline]] T corfunc(T v) const
       {
-      double tmp=0;
+      T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
-        tmp += wgtpsi[i]*cos(pi*supp*v*x[i]);
-      return 1./tmp;
+        tmp += wgtpsi[i]*cos((pi*supp*x[i])*v);
+      return T(1)/tmp;
       }
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
     vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       {
       vector<double> res(n);
+// The commented lines would add vectorization support,
+// but this doesn't appear beneficial.
+//      constexpr size_t vlen = native_simd<double>::size();
+//      native_simd<double> itimesdx;
+//      for (size_t i=0; i<vlen; ++i) itimesdx[i]=i*dx;
       execStatic(n, nthreads, 0, [&](auto &sched)
         {
-        while (auto rng=sched.getNext()) for(auto i=rng.lo; i<rng.hi; ++i)
-          res[i] = corfunc(i*dx);
+        while (auto rng=sched.getNext())
+          {
+          auto i = rng.lo;
+          //for (; i+vlen<=rng.hi; i+=vlen)
+            //{
+            //auto v = corfunc(itimesdx+i*dx);
+            //v.copy_to(&res[i],element_aligned_tag());
+            //}
+          for(; i<rng.hi; ++i)
+            res[i] = corfunc(i*dx);
+          }
         });
       return res;
       }
@@ -316,6 +331,33 @@ template<size_t W, typename Tsimd> class TemplateKernel
             }
           res[i] = tvalx*x+tvalx2;
           res[nvec+i] = tvaly*y+tvaly2;
+          }
+      }
+    [[gnu::always_inline]] void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
+      {
+      T x2=x*x;
+      if constexpr (nvec==1)
+        {
+        Tvl tvalx = coeff[0];
+        Tvl tvalx2 = coeff[1];
+        for (size_t j=2; j<D; j+=2)
+          {
+          tvalx = tvalx*x2 + Tvl(coeff[j]);
+          tvalx2 = tvalx2*x2 + Tvl(coeff[j+1]);
+          }
+        res[0] = x*tvalx+tvalx2;
+        }
+      else
+        for (size_t i=0; i<nvec; ++i)
+          {
+          Tvl tvalx = coeff[i];
+          Tvl tvalx2 = coeff[i+nvec];
+          for (size_t j=2; j<D; j+=2)
+            {
+            tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec]);
+            tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec]);
+            }
+          res[i] = tvalx*x+tvalx2;
           }
       }
     [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
@@ -631,35 +673,37 @@ auto selectKernel(size_t idx)
   return make_shared<HornerKernel>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
-bool acceptable(size_t i)
-  { return KernelDB[i].corr_range < 10.; }
-
 template<typename T> constexpr inline size_t Wmax()
   { return is_same<T,float>::value ? 8 : 16; }
 
-/*! Returns the 2-parameter ES kernel for the given oversampling factor and
- *  error that has the smallest support. */
-template<typename T> auto selectKernel(double ofactor, double epsilon)
+
+template<typename T>double kernelEps(size_t idx, size_t ndim)
+  {
+  return ndim*KernelDB[idx].epsilon
+       + numeric_limits<T>::epsilon()*pow(KernelDB[idx].corr_range, ndim);
+  }
+
+/*! Returns the 2-parameter ES kernel for the given oversampling factor,
+ *  dimensionality, and error that has the smallest support. */
+template<typename T> auto selectKernel(double ofactor, size_t ndim, double epsilon)
   {
   size_t Wmin = Wmax<T>();
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
-    if ((KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon)
-      && (KernelDB[i].W<=Wmin) && acceptable(i))
+    {
+    double eps = kernelEps<T>(i, ndim);
+    if ((KernelDB[i].ofactor<=ofactor) && (eps<=epsilon)
+      && (KernelDB[i].W<=Wmin))
       {
       idx = i;
       Wmin = KernelDB[i].W;
       }
+    }
   return selectKernel(idx);
-  }
-template<typename T> auto selectKernel(double ofactor, double epsilon, size_t idx)
-  {
-  return (idx<KernelDB.size()) ?
-    selectKernel(idx) : selectKernel<T>(ofactor, epsilon);
   }
 
 template<typename T> auto getAvailableKernels(double epsilon,
-  double ofactor_min=1.1, double ofactor_max=2.6)
+  size_t ndim, double ofactor_min=1.1, double ofactor_max=2.6)
   {
   vector<double> ofc(20, ofactor_max);
   vector<size_t> idx(20, KernelDB.size());
@@ -668,8 +712,9 @@ template<typename T> auto getAvailableKernels(double epsilon,
     {
     auto ofactor = KernelDB[i].ofactor;
     size_t W = KernelDB[i].W;
-    if ((W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
-      && (ofactor<ofc[W]) && (ofactor>=ofactor_min) && acceptable(i))
+    double eps = kernelEps<T>(i, ndim);
+    if ((W<=Wlim) && (eps<=epsilon)
+      && (ofactor<ofc[W]) && (ofactor>=ofactor_min))
       {
       ofc[W] = ofactor;
       idx[W] = i;

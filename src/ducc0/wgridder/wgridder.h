@@ -525,15 +525,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     void dirty2grid_pre(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
       {
       timers.push("zeroing grid");
-      checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
-      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       // only zero the parts of the grid that are not filled afterwards anyway
       { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
+      checkShape(dirty.shape(), {nxdirty, nydirty});
+      auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nydirty/2+1, 1./nv, nthreads);
       execParallel(nxdirty, nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1135,7 +1135,7 @@ timers.pop();
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
       if constexpr (SUPP>4)
         if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       vector<mutex> locks(nu);
 
@@ -1239,7 +1239,7 @@ timers.pop();
         if (supp<=SUPP/2) return grid2x_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
       if constexpr (SUPP>4)
         if (supp<SUPP) return grid2x_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
-      MR_assert(supp==SUPP, "requested support ou of range");
+      MR_assert(supp==SUPP, "requested support out of range");
 
       // Loop over sampling points
       execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
@@ -1397,7 +1397,7 @@ timers.pop();
            << "grid=(" << nu << "x" << nv;
       if (do_wgridding) cout << "x" << nplanes;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
+           << ", eps=" << epsilon
            << endl;
       cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
@@ -1519,7 +1519,7 @@ timers.pop();
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -1645,8 +1645,6 @@ timers.pop();
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
-      // adjust for increased error when gridding in 2 or 3 dimensions
-      epsilon /= do_wgridding ? 3 : 2;
       scanData();
       if (nvis==0)
         {
@@ -1657,7 +1655,7 @@ timers.pop();
       MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

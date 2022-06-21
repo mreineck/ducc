@@ -207,6 +207,16 @@ as the `wgridder` component.
   reasonable resource consumption
 
 
+ducc.nufft
+----------
+
+Library for non-uniform FFTs in 1D/2D/3D
+(currently only supports transform types 1 and 2).
+The goal is to provide similar or better performance and accuracy than
+[FINUFFT](https://github.com/flatironinstitute/finufft), making use of lessons
+learned during the implementation of the `wgridder` module.
+
+
 ducc.misc
 ---------
 
