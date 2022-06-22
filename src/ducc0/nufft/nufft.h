@@ -583,7 +583,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         return;
         }
       auto kidx = getNu();
-      MR_assert((nu>>logsquare)<(size_t(1)<<32), "nu too large");
+      MR_assert((nu>>logsquare)<(uint64_t(1)<<32), "nu too large");
       ofactor = double(nu)/nxdirty;
       krn = selectKernel(kidx);
       supp = krn->support();
