@@ -1627,10 +1627,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
         const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*NVEC;
 
+        constexpr size_t du=16384/(SUPP*ljump*sizeof(Tacc));
         while (auto rng=sched.getNext())
 {
-//cout << rng.lo << " " << rng.hi << endl;
- for(auto ix=rng.lo; ix<rng.hi; ++ix)
+for (size_t ustart=0; ustart<SUPP; ustart+=du)
+{
+size_t ustop = min(SUPP, ustart+du);
+
+        for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           constexpr size_t lookahead=3;
           if (ix+lookahead<coord_idx.size())
@@ -1647,7 +1651,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           if constexpr (NVEC==1)
             {
             mysimd<Tacc> vr=v.real()*kw[0], vi=v.imag()*kw[0];
-            for (size_t cu=0; cu<SUPP; ++cu)
+            for (size_t cu=ustart; cu<ustop; ++cu)
               {
               mysimd<Tacc> v2r=vr*ku[cu], v2i=vi*ku[cu];
               for (size_t cv=0; cv<SUPP; ++cv)
@@ -1666,9 +1670,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
           else
             {
             Tacc vr(v.real()), vi(v.imag());
-            auto * DUCC0_RESTRICT pxr = hlp.p0r;
-            auto * DUCC0_RESTRICT pxi = hlp.p0i;
-            for (size_t cu=0; cu<SUPP; ++cu)
+            auto * DUCC0_RESTRICT pxr = hlp.p0r+ustart*pjump;
+            auto * DUCC0_RESTRICT pxi = hlp.p0i+ustart*pjump;
+            for (size_t cu=ustart; cu<ustop; ++cu)
               {
               Tacc tmpr=vr*ku[cu], tmpi=vi*ku[cu];
               for (size_t cv=0; cv<SUPP; ++cv)
@@ -1693,6 +1697,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
               }
             }
           }
+}
 }
         });
       }
