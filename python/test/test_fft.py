@@ -32,7 +32,7 @@ shapes2D = ((128, 128), (128, 129),
             (129, 1), (127, 2), (127, 3), (127, 6))
 shapes3D = ((32, 17, 39),(32, 1, 39),(2, 3, 17),(2,8,17),(5,7,5))
 shapes = shapes1D+shapes2D+shapes3D
-len1D = list(range(1, 2048)) + [137*137]
+len1D = list(range(1, 256)) + list(range(1700, 2048)) + [137*137]
 
 
 def _assert_close(a, b, epsilon):

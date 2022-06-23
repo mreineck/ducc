@@ -43,10 +43,10 @@ def explicit_nufft(uvw, ms, shape, forward):
 
 @pmp('nx', [20, 21, 250, 257])
 @pmp("npoints", (1, 37, 10))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -80,12 +80,12 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, nthreads):
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
 
 @pmp('nx', [20, 21, 250, 257])
-@pmp('ny', [21, 32, 250, 257])
+@pmp('ny', [21, 32, 257])
 @pmp("npoints", (1, 37, 10))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -118,14 +118,14 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
 
-@pmp('nx', [20, 21, 64])
-@pmp('ny', [21, 32, 64])
-@pmp('nz', [22, 35, 64])
+@pmp('nx', [20, 21])
+@pmp('ny', [21, 32])
+@pmp('nz', [22, 35])
 @pmp("npoints", (1, 37, 10))
-@pmp("epsilon", (1e-5, 1e-3, 3e-5, 5e-13))
+@pmp("epsilon", (1e-5, 3e-5, 5e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()

@@ -574,7 +574,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         sigma_min(sigma_min_), sigma_max(sigma_max_),
         coord(coord_)
       {
-      MR_assert(coord.shape(0)<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(coord.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
       checkShape(ms_in.shape(), {coord.shape(0)});
       nvis=coord.shape(0);
       if (nvis==0)
@@ -583,7 +583,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         return;
         }
       auto kidx = getNu();
-      MR_assert((nu>>logsquare)<(uint64_t(1)<<32), "nu too large");
+      MR_assert((nu>>logsquare)<=(~uint32_t(0)), "nu too large");
       ofactor = double(nu)/nxdirty;
       krn = selectKernel(kidx);
       supp = krn->support();
@@ -1189,7 +1189,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tc
         sigma_min(sigma_min_), sigma_max(sigma_max_),
         bl(uv)
       {
-      MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(bl.Nrows()<=(~uint32_t(0)), "too many rows in the MS");
       checkShape(ms_in.shape(), {bl.Nrows()});
       nvis=bl.Nrows();
       if (nvis==0)
@@ -1896,7 +1896,7 @@ size_t ustop = min(SUPP, ustart+du);
         sigma_min(sigma_min_), sigma_max(sigma_max_),
         bl(uvw)
       {
-      MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
+      MR_assert(bl.Nrows()<=(~uint32_t(0)), "too many rows in the MS");
       checkShape(ms_in.shape(), {bl.Nrows()});
       nvis=bl.Nrows();
       if (nvis==0)
@@ -1905,9 +1905,9 @@ size_t ustop = min(SUPP, ustart+du);
         return;
         }
       auto kidx = getNuNvNw();
-      MR_assert((nu>>logsquare)<(size_t(1)<<10), "nu too large");
-      MR_assert((nv>>logsquare)<(size_t(1)<<10), "nv too large");
-      MR_assert((nw>>logsquare)<(size_t(1)<<10), "nw too large");
+      MR_assert((nu>>logsquare)<(uint32_t(1)<<10), "nu too large");
+      MR_assert((nv>>logsquare)<(uint32_t(1)<<10), "nv too large");
+      MR_assert((nw>>logsquare)<(uint32_t(1)<<10), "nw too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
       ofactor = min(ofactor, double(nw)/nzdirty);
       krn = selectKernel(kidx);

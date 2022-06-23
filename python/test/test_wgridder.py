@@ -125,12 +125,12 @@ def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
 @pmp('ny', [(128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 @pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
@@ -187,13 +187,13 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
 @pmp('ny', [(64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
+@pmp("epsilon", (1e-2, 1e-4, 1e-7))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (False, True))
 @pmp("use_wgt", (True,))
 @pmp("use_mask", (True,))
-@pmp("nthreads", (1, 2, 7))
-@pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
+@pmp("nthreads", (1, 2))
+@pmp("fov", (0.001, 0.1, 20.))
 @pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
@@ -242,7 +242,7 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
 @pmp('nydirty', [64])
 @pmp("nrow", (1, 100))
 @pmp("nchan", (1, 7))
-@pmp("epsilon", list(10.**np.linspace(-2., -12., 100)))
+@pmp("epsilon", list(10.**np.linspace(-2., -12., 20)))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
 @pmp("use_wgt", (True,))
@@ -281,12 +281,12 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp('ny', [(128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask):

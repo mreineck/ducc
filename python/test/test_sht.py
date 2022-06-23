@@ -53,7 +53,7 @@ def myalmdot(a1, a2, lmax):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmmax', ((2, 0), (2, 2), (5, 5), (11, 10), (11, 11), (32, 32), (600, 600)))
+@pmp('lmmax', ((2, 0), (2, 2), (5, 5), (11, 10), (11, 11), (32, 32), (200, 200)))
 def test_2d_roundtrip(lmmax, geometry, spin, nthreads):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     ncomp = 1 if spin == 0 else 2
@@ -104,7 +104,7 @@ def test_2d_roundtrip(lmmax, geometry, spin, nthreads):
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmmax', ((2, 0), (2, 2), (5, 5), (11, 10), (11, 11), (32, 32), (600, 600)))
+@pmp('lmmax', ((2, 0), (2, 2), (5, 5), (11, 10), (11, 11), (32, 32), (200, 200)))
 def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     rng = np.random.default_rng(48)
 
@@ -166,8 +166,8 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
 
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
-@pmp('lmax', (2, 5, 11, 32, 600))
-@pmp('nside', (2, 5, 27, 128))
+@pmp('lmax', (2, 5, 32, 256))
+@pmp('nside', (2, 5, 128))
 def test_healpix_adjoint(lmax, nside, spin, nthreads):
     rng = np.random.default_rng(48)
 
@@ -189,7 +189,7 @@ def test_healpix_adjoint(lmax, nside, spin, nthreads):
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
 
-@pmp("lmax", tuple(range(70)))
+@pmp("lmax", tuple(range(0,70,3)))
 @pmp("nthreads", (0,1,2))
 def test_rotation(lmax, nthreads):
     rng = np.random.default_rng(42)
