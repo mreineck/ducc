@@ -36,11 +36,11 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
   py::object &out__, size_t verbosity, double sigma_min, double sigma_max)
   {
-  using Tpoints = decltype(conj(Tgrid(0)));
+  using Tpoints = Tgrid;
   auto coord = to_cmav<Tcoord,2>(coord_);
   auto grid = to_cfmav<complex<Tgrid>>(grid_);
-  auto out_ = get_optional_Pyarr<Tpoints>(out__, {coord.shape(0)});
-  auto out = to_vmav<Tpoints,1>(out_);
+  auto out_ = get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)});
+  auto out = to_vmav<complex<Tpoints>,1>(out_);
   {
   py::gil_scoped_release release;
   u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
