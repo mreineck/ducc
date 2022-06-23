@@ -22,14 +22,14 @@ test_gcc:
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && python3 -m pip install --user . && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && python3 setup.py install --user && python3 -m pytest -q python/test'
 
 test_clang:
   stage: testing
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang CXX=clang++ python3 -m pip install --user . && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && CC=clang CXX=clang++ python3 setup.py install --user && python3 -m pytest -q python/test'
 
 test_alpine:
   image: alpine:latest
