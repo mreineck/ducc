@@ -174,7 +174,9 @@ class GLFullCorrection: public KernelCorrection
       }
   };
 
-class HornerKernel: public GriddingKernel
+/*! This class implements the \a GriddingKernel interface by approximating the
+    provided function with \a W polynomials of degree \a D. */
+class PolynomialKernel: public GriddingKernel
   {
   private:
     size_t W, D;
@@ -182,7 +184,7 @@ class HornerKernel: public GriddingKernel
     KernelCorrection corr;
 
   public:
-    HornerKernel(size_t W_, size_t D_, const function<double(double)> &func,
+    PolynomialKernel(size_t W_, size_t D_, const function<double(double)> &func,
       const KernelCorrection &corr_)
       : W(W_), D(D_),
         coeff(getCoeffs(W_, D_, func)),
@@ -204,6 +206,8 @@ class HornerKernel: public GriddingKernel
     const KernelCorrection &Corr() const { return corr; }
   };
 
+/*! This class is initialized with a \a PolynomialKernel object and provides
+    low level methods for extremely fast kernel evaluations. */
 template<size_t W, typename Tsimd> class TemplateKernel
   {
   private:
@@ -233,7 +237,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
       }
 
   public:
-    TemplateKernel(const HornerKernel &krn)
+    TemplateKernel(const PolynomialKernel &krn)
       : scoeff(reinterpret_cast<T *>(&coeff[0]))
       {
       MR_assert(W==krn.support(), "support mismatch");
@@ -670,7 +674,7 @@ auto selectKernel(size_t idx)
   auto beta = KernelDB[idx].beta*supp;
   auto e0 = KernelDB[idx].e0;
   auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  return make_shared<HornerKernel>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  return make_shared<PolynomialKernel>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
 template<typename T> constexpr inline size_t Wmax()
@@ -732,7 +736,7 @@ template<typename T> auto getAvailableKernels(double epsilon,
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::selectKernel;
 using detail_gridding_kernel::getAvailableKernels;
-using detail_gridding_kernel::HornerKernel;
+using detail_gridding_kernel::PolynomialKernel;
 using detail_gridding_kernel::TemplateKernel;
 using detail_gridding_kernel::KernelParams;
 using detail_gridding_kernel::KernelDB;

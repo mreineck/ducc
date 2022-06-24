@@ -206,7 +206,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     // selected oversampling factor
     double ofactor;
 
-    shared_ptr<HornerKernel> krn;
+    shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     double ushift;
@@ -708,7 +708,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t nu, nv;
     double ofactor;
 
-    shared_ptr<HornerKernel> krn;
+    shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     double ushift, vshift;
@@ -1319,7 +1319,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t nu, nv, nw;
     double ofactor;
 
-    shared_ptr<HornerKernel> krn;
+    shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     double ushift, vshift, wshift;

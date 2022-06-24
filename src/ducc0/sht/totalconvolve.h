@@ -67,7 +67,7 @@ template<typename T> class ConvolverPlan
     size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
     double dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
 
-    shared_ptr<HornerKernel> kernel;
+    shared_ptr<PolynomialKernel> kernel;
     size_t nbphi, nbtheta;
     size_t nphi, ntheta;
     double phi0, theta0;
