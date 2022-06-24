@@ -487,12 +487,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            << endl;
       cout << "  npoints=" << coords.shape(0) << endl;
       size_t ovh0 = coords.shape(0)*sizeof(uint32_t);
-      size_t ovh1 = nu*sizeof(complex<Tcalc>);             // oversampled grid
-      if (!gridding)
-        ovh1 += nxuni*sizeof(Tgrid);                 // temporary grid copy
+      size_t ovh1 = nu*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
            << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (1D arrays)" << endl;
+           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
@@ -1066,12 +1064,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            << endl;
       cout << "  npoints=" << bl.Nrows() << endl;
       size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
-      size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // oversampled grid
-      if (!gridding)
-        ovh1 += nxuni*nyuni*sizeof(Tgrid);                 // uniform grid copy
+      size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
            << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (2D arrays)" << endl;
+           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
@@ -1740,18 +1736,16 @@ size_t ustop = min(SUPP, ustart+du);
       cout << (gridding ? "Gridding:" : "Degridding:") << endl
            << "  nthreads=" << nthreads << ", "
            << "grid=(" << nxuni << "x" << nyuni << "x" << nzuni << "), "
-           << "momuniform grid=(" << nu << "x" << nv << "x" << nw;
+           << "oversampled grid=(" << nu << "x" << nv << "x" << nw;
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
       cout << "  npoints=" << bl.Nrows() << endl;
       size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
-      size_t ovh1 = nu*nv*nw*sizeof(complex<Tcalc>);             // oversampled uniform grid
-      if (!gridding)
-        ovh1 += nxuni*nyuni*nzuni*sizeof(Tgrid);                 // uniform grid
+      size_t ovh1 = nu*nv*nw*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
            << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (3D arrays)" << endl;
+           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
