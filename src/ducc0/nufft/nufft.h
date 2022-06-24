@@ -139,6 +139,9 @@ template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
   { MR_assert(shp1==shp2, "shape mismatch"); }
 
+// constant factor needed when converting between non-uniform coordinates and grid positions.
+constexpr double coordfct=0.5/pi;
+
 //
 // Start of real NUFFT functionality
 //
@@ -164,8 +167,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile=9;
-    // constant factor needed when converting between non-uniform coordinates and grid positions.
-    static constexpr double coordfct=0.5/pi;
 
     // if true, perform nonuniform-to-uniform transform, else uniform-to-nonuniform
     bool gridding;
@@ -417,8 +418,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto lcoord = Coord{coords(row,0)*coordfct};
-          hlp.prep(lcoord);
+          auto coord = Coord{coords(row,0)*coordfct};
+          hlp.prep(coord);
           auto v(points_in(row));
 
           mysimd<Tacc> vr(v.real()), vi(v.imag());
@@ -463,8 +464,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto lcoord = Coord{coords(row,0)*coordfct};
-          hlp.prep(lcoord);
+          auto coord = Coord{coords(row,0)*coordfct};
+          hlp.prep(coord);
           mysimd<Tcalc> rr=0, ri=0;
           for (size_t cu=0; cu<NVEC; ++cu)
             {
@@ -662,31 +663,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     struct Uvwidx
       { uint16_t tile_u, tile_v; };
 
-    struct UV
+    struct Coord
       { double u, v; };
-
-    class Baselines
-      {
-      protected:
-        const cmav<Tcoord,2> &coord;
-        static constexpr double fct=0.5/pi;
-
-      public:
-        Baselines(const cmav<Tcoord,2> &coord_)
-          : coord(coord_)
-          {
-          MR_assert(coord_.shape(1)==2, "dimension mismatch");
-          }
-
-        UV baseCoord(size_t row) const
-          { return UV{coord(row,0)*fct, coord(row,1)*fct}; }
-        void prefetchRow(size_t row) const
-          {
-          DUCC0_PREFETCH_R(&coord(row,0));
-          DUCC0_PREFETCH_R(&coord(row,1));
-          }
-        size_t Nrows() const { return coord.shape(0); }
-      };
 
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
@@ -702,7 +680,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t verbosity;
     double sigma_min, sigma_max;
 
-    Baselines bl;
+    const cmav<Tcoord,2> &coords;
 
     quick_array<uint32_t> coord_idx;
 
@@ -731,11 +709,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UV &uv)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const Coord &coord)
       {
       double udum, vdum;
       int iu0, iv0;
-      getpix(uv.u, uv.v, udum, vdum, iu0, iv0);
+      getpix(coord.u, coord.v, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>log2tile;
       iv0 = (iv0+nsafe)>>log2tile;
       return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
@@ -812,7 +790,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UV &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -897,7 +875,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UV &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -946,10 +924,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points_in(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            DUCC0_PREFETCH_R(&coords(nextidx,1));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
+          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct};
           hlp.prep(coord);
           auto v(points_in(row));
 
@@ -1016,10 +995,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points_out(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            DUCC0_PREFETCH_R(&coords(nextidx,1));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
+          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct};
           hlp.prep(coord);
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
@@ -1065,8 +1045,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  npoints=" << bl.Nrows() << endl;
-      size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
+      cout << "  npoints=" << npoints << endl;
+      size_t ovh0 = npoints*sizeof(uint32_t);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
            << ovh0/double(1<<30) << "GB (index) + "
@@ -1198,7 +1178,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    Nufft2d(const cmav<Tcoord,2> &uv,
+    Nufft2d(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
            const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
            double epsilon_, bool forward_,
@@ -1216,11 +1196,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        bl(uv)
+        coords(coords_)
       {
-      MR_assert(bl.Nrows()<=(~uint32_t(0)), "too many rows in the MS");
-      checkShape(points_in.shape(), {bl.Nrows()});
-      npoints=bl.Nrows();
+      npoints=coords.shape(0);
+      MR_assert(npoints<=(~uint32_t(0)), "too many rows in the MS");
+      checkShape(points_in.shape(), {npoints});
       if (npoints==0)
         {
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
@@ -1244,16 +1224,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(epsilon>0, "epsilon must be positive");
 
       timers.push("building index");
-      size_t nrow=bl.Nrows();
       size_t ntiles_u = (nu>>log2tile) + 3;
       size_t ntiles_v = (nv>>log2tile) + 3;
-      coord_idx.resize(nrow);
-      quick_array<uint32_t> key(nrow);
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(npoints);
+      quick_array<uint32_t> key(npoints);
+      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(bl.baseCoord(i));
+          auto tmp = get_uvwidx(Coord{coords(i,0)*coordfct, coords(i,1)*coordfct});
           key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
           }
         });
@@ -1274,32 +1253,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     struct Uvwidx
       { uint16_t tile_u, tile_v, tile_w; };
 
-    struct UVW
+    struct Coord
       { double u, v, w; };
-
-    class Baselines
-      {
-      protected:
-        const cmav<Tcoord,2> &coord;
-        static constexpr double fct=0.5/pi;
-
-      public:
-        Baselines(const cmav<Tcoord,2> &coord_)
-          : coord(coord_)
-          {
-          MR_assert(coord_.shape(1)==3, "dimension mismatch");
-          }
-
-        UVW baseCoord(size_t row) const
-          { return UVW{coord(row,0)*fct, coord(row,1)*fct, coord(row,2)*fct}; }
-        void prefetchRow(size_t row) const
-          {
-          DUCC0_PREFETCH_R(&coord(row,0));
-          DUCC0_PREFETCH_R(&coord(row,1));
-          DUCC0_PREFETCH_R(&coord(row,2));
-          }
-        size_t Nrows() const { return coord.shape(0); }
-      };
 
     constexpr static int log2tile=3;
     bool gridding;
@@ -1315,7 +1270,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t verbosity;
     double sigma_min, sigma_max;
 
-    Baselines bl;
+    const cmav<Tcoord,2> &coords;
 
     quick_array<uint32_t> coord_idx;
 
@@ -1347,11 +1302,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       w -= iw0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvw, size_t lsq2)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const Coord &coord, size_t lsq2)
       {
       double udum, vdum, wdum;
       int iu0, iv0, iw0;
-      getpix(uvw.u, uvw.v, uvw.w, udum, vdum, wdum, iu0, iv0, iw0);
+      getpix(coord.u, coord.v, coord.w, udum, vdum, wdum, iu0, iv0, iw0);
       iu0 = (iu0+nsafe)>>lsq2;
       iv0 = (iv0+nsafe)>>lsq2;
       iw0 = (iw0+nsafe)>>lsq2;
@@ -1436,7 +1391,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         constexpr int lineJump() const { return 2*sw; }
         constexpr int planeJump() const { return 2*sv*sw; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
           double ufrac, vfrac, wfrac;
           auto iu0old = iu0;
@@ -1534,7 +1489,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         constexpr int lineJump() const { return swvec; }
         constexpr int planeJump() const { return sv*swvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
           double ufrac, vfrac, wfrac;
           auto iu0old = iu0;
@@ -1596,10 +1551,12 @@ size_t ustop = min(SUPP, ustart+du);
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points_in(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            DUCC0_PREFETCH_R(&coords(nextidx,1));
+            DUCC0_PREFETCH_R(&coords(nextidx,2));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
+          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct, coords(row,2)*coordfct};
           hlp.prep(coord);
           auto v(points_in(row));
 
@@ -1684,10 +1641,12 @@ size_t ustop = min(SUPP, ustart+du);
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points_out(nextidx));
-            bl.prefetchRow(nextidx);
+            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            DUCC0_PREFETCH_R(&coords(nextidx,1));
+            DUCC0_PREFETCH_R(&coords(nextidx,2));
             }
           size_t row = coord_idx[ix];
-          auto coord = bl.baseCoord(row);
+          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct, coords(row,2)*coordfct};
           hlp.prep(coord);
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
@@ -1745,8 +1704,8 @@ size_t ustop = min(SUPP, ustart+du);
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  npoints=" << bl.Nrows() << endl;
-      size_t ovh0 = bl.Nrows()*sizeof(uint32_t);
+      cout << "  npoints=" << npoints << endl;
+      size_t ovh0 = npoints*sizeof(uint32_t);
       size_t ovh1 = nu*nv*nw*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
            << ovh0/double(1<<30) << "GB (index) + "
@@ -1890,7 +1849,7 @@ size_t ustop = min(SUPP, ustart+du);
       }
 
   public:
-    Nufft3d(const cmav<Tcoord,2> &uvw,
+    Nufft3d(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
            const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
            double epsilon_, bool forward_,
@@ -1909,11 +1868,11 @@ size_t ustop = min(SUPP, ustart+du);
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        bl(uvw)
+        coords(coords_)
       {
-      MR_assert(bl.Nrows()<=(~uint32_t(0)), "too many rows in the MS");
-      checkShape(points_in.shape(), {bl.Nrows()});
-      npoints=bl.Nrows();
+      npoints=coords.shape(0);
+      MR_assert(npoints<=(~uint32_t(0)), "too many rows in the MS");
+      checkShape(points_in.shape(), {npoints});
       if (npoints==0)
         {
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
@@ -1943,7 +1902,6 @@ size_t ustop = min(SUPP, ustart+du);
       MR_assert(epsilon>0, "epsilon must be positive");
 
       timers.push("building index");
-      size_t nrow=bl.Nrows();
       size_t ntiles_u = (nu>>log2tile) + 3;
       size_t ntiles_v = (nv>>log2tile) + 3;
       size_t ntiles_w = (nw>>log2tile) + 3;
@@ -1953,13 +1911,14 @@ size_t ustop = min(SUPP, ustart+du);
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
-      coord_idx.resize(nrow);
-      quick_array<uint32_t> key(nrow);
-      execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(npoints);
+      quick_array<uint32_t> key(npoints);
+      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(bl.baseCoord(i),lsq2);
+          Coord coord{coords(i,0)*coordfct, coords(i,1)*coordfct, coords(i,2)*coordfct};
+          auto tmp = get_uvwidx(coord,lsq2);
           auto lowkey = ((tmp.tile_u&msmall)<<(2*ssmall))
                       | ((tmp.tile_v&msmall)<<   ssmall)
                       |  (tmp.tile_w&msmall);
