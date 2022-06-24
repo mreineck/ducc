@@ -142,6 +142,61 @@ template<size_t ndim> void checkShape
 // constant factor needed when converting between non-uniform coordinates and grid positions.
 constexpr double coordfct=0.5/pi;
 
+/*! Selects the most efficient combination of gridding kernel and oversampled
+    grid size for the provided problem parameters. */
+template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
+  double sigma_min, double sigma_max, const vector<size_t> &dims,
+  size_t npoints, bool gridding, size_t vlen, size_t nthreads)
+  {
+  auto ndim = dims.size();
+  auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
+  double mincost = 1e300;
+  constexpr double nref_fft=2048;
+  constexpr double costref_fft=0.0693;
+  vector<size_t> bigdims(ndim, 0);
+  size_t minidx=KernelDB.size();
+  for (size_t i=0; i<idx.size(); ++i)
+    {
+    const auto &krn(KernelDB[idx[i]]);
+    auto supp = krn.W;
+    auto nvec = (supp+vlen-1)/vlen;
+    auto ofactor = krn.ofactor;
+    vector<size_t> lbigdims(ndim,0);
+    double gridsize=1;
+    for (size_t idim=0; idim<ndim; ++idim)
+      {
+      lbigdims[idim] = 2*good_size_complex(size_t(dims[idim]*ofactor*0.5)+1);
+      gridsize *= lbigdims[idim];
+      }
+    double logterm = log(gridsize)/log(nref_fft*nref_fft);
+    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
+    size_t kernelpoints = nvec*vlen;
+    for (size_t idim=0; idim+1<ndim; ++idim)
+      kernelpoints*=supp;
+    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
+    if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
+    // FIXME: heuristics could be improved
+    gridcost /= nthreads;  // assume perfect scaling for now
+    constexpr double max_fft_scaling = 6;
+    constexpr double scaling_power=2;
+    auto sigmoid = [](double x, double m, double s)
+      {
+      auto x2 = x-1;
+      auto m2 = m-1;
+      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
+      };
+    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
+    double cost = fftcost+gridcost;
+    if (cost<mincost)
+      {
+      mincost=cost;
+      bigdims=lbigdims;
+      minidx = idx[i];
+      }
+    }
+  return make_tuple(minidx, bigdims);
+  }
+
 //
 // Start of real NUFFT functionality
 //
@@ -204,8 +259,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     // oversampled grid dimensions
     size_t nu;
-    // selected oversampling factor
-    double ofactor;
 
     shared_ptr<PolynomialKernel> krn;
 
@@ -551,51 +604,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
       }
 
-    auto chooseKernel()
-      {
-      timers.push("parameter calculation");
-
-      auto idx = getAvailableKernels<Tcalc>(epsilon, 1, sigma_min, sigma_max);
-      double mincost = 1e300;
-      constexpr double nref_fft=2048;
-      constexpr double costref_fft=0.0693;
-      size_t minnu=0, minidx=KernelDB.size();
-      size_t vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
-      for (size_t i=0; i<idx.size(); ++i)
-        {
-        const auto &krn(KernelDB[idx[i]]);
-        auto supp = krn.W;
-        auto nvec = (supp+vlen-1)/vlen;
-        auto ofactor = krn.ofactor;
-        size_t nu=2*good_size_complex(size_t(nxuni*ofactor*0.5)+1);
-        double logterm = log(nu)/log(nref_fft*nref_fft);
-        double fftcost = nu/(nref_fft*nref_fft)*logterm*costref_fft;
-        double gridcost = 2.2e-10*npoints*(nvec*vlen + (nvec*(supp+3)*vlen));
-        if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
-        // FIXME: heuristics could be improved
-        gridcost /= nthreads;  // assume perfect scaling for now
-        constexpr double max_fft_scaling = 6;
-        constexpr double scaling_power=2;
-        auto sigmoid = [](double x, double m, double s)
-          {
-          auto x2 = x-1;
-          auto m2 = m-1;
-          return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-          };
-        fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
-        double cost = fftcost+gridcost;
-        if (cost<mincost)
-          {
-          mincost=cost;
-          minnu=nu;
-          minidx = idx[i];
-          }
-        }
-      timers.pop();
-      nu = minnu;
-      return minidx;
-      }
-
   public:
     Nufft1d(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
@@ -624,9 +632,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = chooseKernel();
+
+      timers.push("parameter calculation");
+      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
+        {nxuni}, npoints, gridding,
+        gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
+      nu = dims[0];
+      timers.pop();
+
       MR_assert((nu>>log2tile)<=(~uint32_t(0)), "nu too large");
-      ofactor = double(nu)/nxuni;
       krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
@@ -687,7 +701,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t npoints;
 
     size_t nu, nv;
-    double ofactor;
 
     shared_ptr<PolynomialKernel> krn;
 
@@ -1129,54 +1142,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
       }
 
-    auto chooseKernel()
-      {
-      timers.push("parameter calculation");
-
-      auto idx = getAvailableKernels<Tcalc>(epsilon, 2, sigma_min, sigma_max);
-      double mincost = 1e300;
-      constexpr double nref_fft=2048;
-      constexpr double costref_fft=0.0693;
-      size_t minnu=0, minnv=0, minidx=KernelDB.size();
-      size_t vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
-      for (size_t i=0; i<idx.size(); ++i)
-        {
-        const auto &krn(KernelDB[idx[i]]);
-        auto supp = krn.W;
-        auto nvec = (supp+vlen-1)/vlen;
-        auto ofactor = krn.ofactor;
-        size_t nu=2*good_size_complex(size_t(nxuni*ofactor*0.5)+1);
-        size_t nv=2*good_size_complex(size_t(nyuni*ofactor*0.5)+1);
-        double logterm = log(nu*nv)/log(nref_fft*nref_fft);
-        double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
-        double gridcost = 2.2e-10*npoints*(supp*nvec*vlen + (2*nvec*(supp+3)*vlen));
-        if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
-        // FIXME: heuristics could be improved
-        gridcost /= nthreads;  // assume perfect scaling for now
-        constexpr double max_fft_scaling = 6;
-        constexpr double scaling_power=2;
-        auto sigmoid = [](double x, double m, double s)
-          {
-          auto x2 = x-1;
-          auto m2 = m-1;
-          return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-          };
-        fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
-        double cost = fftcost+gridcost;
-        if (cost<mincost)
-          {
-          mincost=cost;
-          minnu=nu;
-          minnv=nv;
-          minidx = idx[i];
-          }
-        }
-      timers.pop();
-      nu = minnu;
-      nv = minnv;
-      return minidx;
-      }
-
   public:
     Nufft2d(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
@@ -1206,10 +1171,17 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = chooseKernel();
+
+      timers.push("parameter calculation");
+      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
+        {nxuni, nyuni}, npoints, gridding,
+        gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
+      nu = dims[0];
+      nv = dims[1];
+      timers.pop();
+
       MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
-      ofactor = min(double(nu)/nxuni, double(nv)/nyuni);
       krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
@@ -1277,7 +1249,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t npoints;
 
     size_t nu, nv, nw;
-    double ofactor;
 
     shared_ptr<PolynomialKernel> krn;
 
@@ -1797,57 +1768,6 @@ size_t ustop = min(SUPP, ustart+du);
       timers.pop();
       }
 
-    auto chooseKernel()
-      {
-      timers.push("parameter calculation");
-
-      auto idx = getAvailableKernels<Tcalc>(epsilon, 3, sigma_min, sigma_max);
-      double mincost = 1e300;
-      constexpr double nref_fft=2048;
-      constexpr double costref_fft=0.0693;
-      size_t minnu=0, minnv=0, minnw=0, minidx=KernelDB.size();
-      size_t vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
-      for (size_t i=0; i<idx.size(); ++i)
-        {
-        const auto &krn(KernelDB[idx[i]]);
-        auto supp = krn.W;
-        auto nvec = (supp+vlen-1)/vlen;
-        auto ofactor = krn.ofactor;
-        size_t nu=2*good_size_complex(size_t(nxuni*ofactor*0.5)+1);
-        size_t nv=2*good_size_complex(size_t(nyuni*ofactor*0.5)+1);
-        size_t nw=2*good_size_complex(size_t(nzuni*ofactor*0.5)+1);
-        double logterm = log(nu*nv*nw)/log(nref_fft*nref_fft);
-        double fftcost = nu*nv*nw/(nref_fft*nref_fft)*logterm*costref_fft;
-        double gridcost = 2.2e-10*npoints*(supp*supp*nvec*vlen + (3*nvec*(supp+3)*vlen));
-        if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
-        // FIXME: heuristics could be improved
-        gridcost /= nthreads;  // assume perfect scaling for now
-        constexpr double max_fft_scaling = 6;
-        constexpr double scaling_power=2;
-        auto sigmoid = [](double x, double m, double s)
-          {
-          auto x2 = x-1;
-          auto m2 = m-1;
-          return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-          };
-        fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
-        double cost = fftcost+gridcost;
-        if (cost<mincost)
-          {
-          mincost=cost;
-          minnu=nu;
-          minnv=nv;
-          minnw=nw;
-          minidx = idx[i];
-          }
-        }
-      timers.pop();
-      nu = minnu;
-      nv = minnv;
-      nw = minnw;
-      return minidx;
-      }
-
   public:
     Nufft3d(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
@@ -1878,12 +1798,19 @@ size_t ustop = min(SUPP, ustart+du);
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = chooseKernel();
+
+      timers.push("parameter calculation");
+      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
+        {nxuni, nyuni, nzuni}, npoints, gridding,
+        gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
+      nu = dims[0];
+      nv = dims[1];
+      nw = dims[2];
+      timers.pop();
+
       MR_assert((nu>>log2tile)<(uint32_t(1)<<10), "nu too large");
       MR_assert((nv>>log2tile)<(uint32_t(1)<<10), "nv too large");
       MR_assert((nw>>log2tile)<(uint32_t(1)<<10), "nw too large");
-      ofactor = min(double(nu)/nxuni, double(nv)/nyuni);
-      ofactor = min(ofactor, double(nw)/nzuni);
       krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
