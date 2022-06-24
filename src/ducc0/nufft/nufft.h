@@ -63,7 +63,7 @@ using std::min, std::max;
 // Generally we want to use SIMD types with the largest possible size, but not
 // larger than 8; length-16 SIMD types (like full AVX512 float32 vectors) would
 // be overkill for typical kernel supports (we don't let float32 kernels have
-// a support larger than 8).
+// a support larger than 8 anyway).
 template<typename T> constexpr inline int good_simdlen
   = min<int>(8, native_simd<T>::size());
 
@@ -143,7 +143,7 @@ template<size_t ndim> void checkShape
 // Start of real NUFFT functionality
 //
 
-/** Helper class for carrying out 1D nonuniform FFTs of types 1 and 2.
+/*! Helper class for carrying out 1D nonuniform FFTs of types 1 and 2.
     Tcalc: the floating-point type in which all kernel-related calculations
            are performed
     Tacc:  the floating-point type used for the grid on which data is
@@ -162,8 +162,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     struct Coord
       { double u; };
 
-    // the base-2 logarithm of the linear dimension of a computational patch.
-    constexpr static int log2patch=9;
+    // the base-2 logarithm of the linear dimension of a computational tile.
+    constexpr static int log2tile=9;
     // constant factor needed when converting between non-uniform coordinates and grid positions.
     static constexpr double coordfct=0.5/pi;
 
@@ -216,6 +216,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     static_assert(sizeof(Tpoints)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Tgrid)<=sizeof(Tcalc), "bad type combination");
 
+    /*! Compute minimum index in the oversampled grid touched by the kernel
+        around coordinate \a u. */
     [[gnu::always_inline]] void getpix(double u_in, double &u, int &iu0) const
       {
       u = (u_in-floor(u_in))*nu;
@@ -223,12 +225,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       u -= iu0;
       }
 
+    /*! Compute index of the tile into which \a coord falls. */
     [[gnu::always_inline]] uint32_t get_uvwidx(const Coord &coord)
       {
       double udum;
       int iu0;
       getpix(coord.u, udum, iu0);
-      iu0 = (iu0+nsafe)>>log2patch;
+      iu0 = (iu0+nsafe)>>log2tile;
       return uint32_t(iu0);
       }
 
@@ -240,20 +243,20 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2patch);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
         static constexpr int suvec = su+vlen-1;
         static constexpr double xsupp=2./supp;
         const Nufft1d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,1> &grid;
-        int iu0; // start index of the current visibility
+        int iu0; // start index of the current nonuniform point
         int bu0; // start index of the current buffer
 
         vmav<Tacc,1> bufr, bufi;
         Tacc *px0r, *px0i;
         mutex &mylock;
 
-        // add the acumulated local patch to the global oversampled grid
+        // add the acumulated local tile to the global oversampled grid
         DUCC0_NOINLINE void dump()
           {
           int inu = int(parent->nu);
@@ -305,7 +308,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           if ((iu0<bu0) || (iu0+int(supp)>bu0+su))
             {
             dump();
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
           auto ofs = iu0-bu0;
           p0r = px0r+ofs;
@@ -321,20 +324,20 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2patch);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
         static constexpr int suvec = su+vlen-1;
         static constexpr double xsupp=2./supp;
         const Nufft1d *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,1> &grid;
-        int iu0; // start index of the current visibility
+        int iu0; // start index of the current nonuniform point
         int bu0; // start index of the current buffer
 
         vmav<Tcalc,1> bufr, bufi;
         const Tcalc *px0r, *px0i;
 
-        // load a patch from the global oversampled grid into local buffer
+        // load a tile from the global oversampled grid into local buffer
         DUCC0_NOINLINE void load()
           {
           int inu = int(parent->nu);
@@ -377,7 +380,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           if (iu0==iu0old) return;
           if ((iu0<bu0) || (iu0+int(supp)>bu0+su))
             {
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
           auto ofs = iu0-bu0;
@@ -386,13 +389,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           }
       };
 
-    template<size_t SUPP> [[gnu::hot]] void x2grid_helper
+    template<size_t SUPP> [[gnu::hot]] void spreading_helper
       (size_t supp, vmav<complex<Tcalc>,1> &grid)
       {
       if constexpr (SUPP>=8)
-        if (supp<=SUPP/2) return x2grid_helper<SUPP/2>(supp, grid);
+        if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
-        if (supp<SUPP) return x2grid_helper<SUPP-1>(supp, grid);
+        if (supp<SUPP) return spreading_helper<SUPP-1>(supp, grid);
       MR_assert(supp==SUPP, "requested support out of range");
 
       mutex mylock;
@@ -434,13 +437,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    template<size_t SUPP> [[gnu::hot]] void grid2x_helper
+    template<size_t SUPP> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,1> &grid)
       {
       if constexpr (SUPP>=8)
-        if (supp<=SUPP/2) return grid2x_helper<SUPP/2>(supp, grid);
+        if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid);
       if constexpr (SUPP>4)
-        if (supp<SUPP) return grid2x_helper<SUPP-1>(supp, grid);
+        if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid);
       MR_assert(supp==SUPP, "requested support out of range");
 
       execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
@@ -497,9 +500,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,1>::build_noncritical({nu});
-      timers.poppush("gridding proper");
+      timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
-      x2grid_helper<maxsupp>(supp, grid);
+      spreading_helper<maxsupp>(supp, grid);
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
       c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
@@ -541,13 +544,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
       c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
-      timers.poppush("degridding proper");
+      timers.poppush("interpolation");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
-      grid2x_helper<maxsupp>(supp, grid);
+      interpolation_helper<maxsupp>(supp, grid);
       timers.pop();
       }
 
-    auto getNu()
+    auto chooseKernel()
       {
       timers.push("parameter calculation");
 
@@ -620,8 +623,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = getNu();
-      MR_assert((nu>>log2patch)<=(~uint32_t(0)), "nu too large");
+      auto kidx = chooseKernel();
+      MR_assert((nu>>log2tile)<=(~uint32_t(0)), "nu too large");
       ofactor = double(nu)/nxuni;
       krn = selectKernel(kidx);
       supp = krn->support();
@@ -634,7 +637,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("building index");
       size_t nrow=coords.shape(0);
-      size_t ntiles_u = (nu>>log2patch) + 3;
+      size_t ntiles_u = (nu>>log2tile) + 3;
       coord_idx.resize(nrow);
       quick_array<uint32_t> key(nrow);
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
@@ -685,7 +688,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         size_t Nrows() const { return coord.shape(0); }
       };
 
-    constexpr static int log2patch=is_same<Tacc,float>::value ? 5 : 4;
+    constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     bool forward;
     TimerHierarchy timers;
@@ -733,8 +736,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       double udum, vdum;
       int iu0, iv0;
       getpix(uv.u, uv.v, udum, vdum, iu0, iv0);
-      iu0 = (iu0+nsafe)>>log2patch;
-      iv0 = (iv0+nsafe)>>log2patch;
+      iu0 = (iu0+nsafe)>>log2tile;
+      iv0 = (iv0+nsafe)>>log2tile;
       return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
       }
 
@@ -746,14 +749,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2patch);
-        static constexpr int sv = 2*nsafe+(1<<log2patch);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
+        static constexpr int sv = 2*nsafe+(1<<log2tile);
         static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
         const Nufft2d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,2> &grid;
-        int iu0, iv0; // start index of the current visibility
+        int iu0, iv0; // start index of the current nonuniform point
         int bu0, bv0; // start index of the current buffer
 
         vmav<Tacc,2> bufr, bufi;
@@ -822,8 +825,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
             dump();
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bv0=((((iv0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
           auto ofs = (iu0-bu0)*svvec + iv0-bv0;
           p0r = px0r+ofs;
@@ -839,15 +842,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2patch);
-        static constexpr int sv = 2*nsafe+(1<<log2patch);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
+        static constexpr int sv = 2*nsafe+(1<<log2tile);
         static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
         const Nufft2d *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,2> &grid;
-        int iu0, iv0; // start index of the current visibility
+        int iu0, iv0; // start index of the current nonuniform point
         int bu0, bv0; // start index of the current buffer
 
         vmav<Tcalc,2> bufr, bufi;
@@ -906,8 +909,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bv0=((((iv0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
           auto ofs = (iu0-bu0)*svvec + iv0-bv0;
@@ -1074,13 +1077,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
-      timers.poppush("gridding proper");
+      timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, grid);
 
       timers.poppush("FFT");
       checkShape(grid.shape(), {nu,nv});
       vfmav<complex<Tcalc>> fgrid(grid);
+      // TODO: not all elements of the output aray are needed, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni});
@@ -1137,14 +1141,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
+      // TODO: the array is partially zero, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1}, forward, Tcalc(1), nthreads);
-      timers.poppush("interpolation proper");
+      timers.poppush("interpolation");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid);
       timers.pop();
       }
 
-    auto getNuNv()
+    auto chooseKernel()
       {
       timers.push("parameter calculation");
 
@@ -1221,9 +1226,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = getNuNv();
-      MR_assert((nu>>log2patch)<(size_t(1)<<16), "nu too large");
-      MR_assert((nv>>log2patch)<(size_t(1)<<16), "nv too large");
+      auto kidx = chooseKernel();
+      MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
+      MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxuni, double(nv)/nyuni);
       krn = selectKernel(kidx);
       supp = krn->support();
@@ -1240,8 +1245,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("building index");
       size_t nrow=bl.Nrows();
-      size_t ntiles_u = (nu>>log2patch) + 3;
-      size_t ntiles_v = (nv>>log2patch) + 3;
+      size_t ntiles_u = (nu>>log2tile) + 3;
+      size_t ntiles_v = (nv>>log2tile) + 3;
       coord_idx.resize(nrow);
       quick_array<uint32_t> key(nrow);
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
@@ -1296,7 +1301,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         size_t Nrows() const { return coord.shape(0); }
       };
 
-    constexpr static int log2patch=3;
+    constexpr static int log2tile=3;
     bool gridding;
     bool forward;
     TimerHierarchy timers;
@@ -1361,14 +1366,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = supp+(1<<log2patch);
-        static constexpr int sv = supp+(1<<log2patch);
-        static constexpr int sw = supp+(1<<log2patch);
+        static constexpr int su = supp+(1<<log2tile);
+        static constexpr int sv = supp+(1<<log2tile);
+        static constexpr int sw = supp+(1<<log2tile);
         static constexpr double xsupp=2./supp;
         const Nufft3d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,3> &grid;
-        int iu0, iv0, iw0; // start index of the current visibility
+        int iu0, iv0, iw0; // start index of the current nonuniform point
         int bu0, bv0, bw0; // start index of the current buffer
 
         vmav<Tacc,3> bufri;
@@ -1447,9 +1452,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv) || (iw0+int(supp)>bw0+sw))
             {
             dump();
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bv0=((((iv0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bw0=((((iw0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
           auto ofs = (iu0-bu0)*2*sv*sw + (iv0-bv0)*2*sw + (iw0-bw0);
           p0r = px0r+ofs;
@@ -1465,16 +1470,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2patch);
-        static constexpr int sv = 2*nsafe+(1<<log2patch);
-        static constexpr int sw = 2*nsafe+(1<<log2patch);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
+        static constexpr int sv = 2*nsafe+(1<<log2tile);
+        static constexpr int sw = 2*nsafe+(1<<log2tile);
         static constexpr int swvec = sw+vlen-1;
         static constexpr double xsupp=2./supp;
         const Nufft3d *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,3> &grid;
-        int iu0, iv0, iw0; // start index of the current visibility
+        int iu0, iv0, iw0; // start index of the nonuniform point
         int bu0, bv0, bw0; // start index of the current buffer
 
         vmav<Tcalc,3> bufr, bufi;
@@ -1544,9 +1549,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           if ((iu0<bu0) || (iv0<bv0) || (iw0<bw0)
            || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv) || (iw0+int(supp)>bw0+sw))
             {
-            bu0=((((iu0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bv0=((((iv0+nsafe)>>log2patch)<<log2patch))-nsafe;
-            bw0=((((iw0+nsafe)>>log2patch)<<log2patch))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
           auto ofs = (iu0-bu0)*sv*swvec + (iv0-bv0)*swvec + (iw0-bw0);
@@ -1752,11 +1757,12 @@ size_t ustop = min(SUPP, ustart+du);
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nu,nv,nw});
-      timers.poppush("gridding proper");
+      timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, grid);
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
+      // TODO: not all elements of the output aray are needed, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1,2}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni, nzuni});
@@ -1794,6 +1800,7 @@ size_t ustop = min(SUPP, ustart+du);
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nu,nv,nw});
       timers.poppush("zeroing grid");
       checkShape(uniform_in.shape(), {nxuni, nyuni, nzuni});
+      // TODO: not all entries need to be zeroed, perhaps some time can be saved here
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
       auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
@@ -1823,14 +1830,15 @@ size_t ustop = min(SUPP, ustart+du);
         });
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
+      // TODO: the array is partially zero, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1,2}, forward, Tcalc(1), nthreads);
-      timers.poppush("degridding proper");
+      timers.poppush("interpolation");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid);
       timers.pop();
       }
 
-    auto getNuNvNw()
+    auto chooseKernel()
       {
       timers.push("parameter calculation");
 
@@ -1911,10 +1919,10 @@ size_t ustop = min(SUPP, ustart+du);
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
         }
-      auto kidx = getNuNvNw();
-      MR_assert((nu>>log2patch)<(uint32_t(1)<<10), "nu too large");
-      MR_assert((nv>>log2patch)<(uint32_t(1)<<10), "nv too large");
-      MR_assert((nw>>log2patch)<(uint32_t(1)<<10), "nw too large");
+      auto kidx = chooseKernel();
+      MR_assert((nu>>log2tile)<(uint32_t(1)<<10), "nu too large");
+      MR_assert((nv>>log2tile)<(uint32_t(1)<<10), "nv too large");
+      MR_assert((nw>>log2tile)<(uint32_t(1)<<10), "nw too large");
       ofactor = min(double(nu)/nxuni, double(nv)/nyuni);
       ofactor = min(ofactor, double(nw)/nzuni);
       krn = selectKernel(kidx);
@@ -1936,13 +1944,13 @@ size_t ustop = min(SUPP, ustart+du);
 
       timers.push("building index");
       size_t nrow=bl.Nrows();
-      size_t ntiles_u = (nu>>log2patch) + 3;
-      size_t ntiles_v = (nv>>log2patch) + 3;
-      size_t ntiles_w = (nw>>log2patch) + 3;
-      size_t lsq2 = log2patch;
-      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<3*(log2patch-lsq2))<(size_t(1)<<28)))
+      size_t ntiles_u = (nu>>log2tile) + 3;
+      size_t ntiles_v = (nv>>log2tile) + 3;
+      size_t ntiles_w = (nw>>log2tile) + 3;
+      size_t lsq2 = log2tile;
+      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<3*(log2tile-lsq2))<(size_t(1)<<28)))
         --lsq2;
-      auto ssmall = log2patch-lsq2;
+      auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
       coord_idx.resize(nrow);
