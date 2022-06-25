@@ -244,8 +244,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t nthreads;
     // 0: no output, 1: some diagnostic console output
     size_t verbosity;
-    // minimum and maximum allowed oversampling factors
-    double sigma_min, sigma_max;
 
     // reference to coordinates of the non-uniform points. Shape is (npoints, ndim).
     const cmav<Tcoord,2> &coords;
@@ -253,9 +251,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     // holds the indices of the nonuniform points in the order in which they
     // should be processed
     quick_array<uint32_t> coord_idx;
-
-    // number of nonuniform points
-    size_t npoints;
 
     // oversampled grid dimensions
     size_t nu;
@@ -475,7 +470,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           hlp.prep(coord);
           auto v(points_in(row));
 
-          mysimd<Tacc> vr(v.real()), vi(v.imag());
+          Tacc vr(v.real()), vi(v.imag());
           for (size_t cu=0; cu<NVEC; ++cu)
             {
             auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*hlp.vlen;
@@ -543,11 +538,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            << ", eps=" << epsilon
            << endl;
       cout << "  npoints=" << coords.shape(0) << endl;
-      size_t ovh0 = coords.shape(0)*sizeof(uint32_t);
-      size_t ovh1 = nu*sizeof(complex<Tcalc>);
       cout << "  memory overhead: "
-           << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
+           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
+           << nu*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
@@ -610,8 +603,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            const cmav<complex<Tgrid>,1> &uniform_in_, vmav<complex<Tgrid>,1> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min_,
-           double sigma_max_)
+           double sigma_min,
+           double sigma_max)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -621,13 +614,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
-        sigma_min(sigma_min_), sigma_max(sigma_max_),
         coords(coords_)
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
       checkShape(points_in.shape(), {coords.shape(0)});
-      npoints=coords.shape(0);
-      if (npoints==0)
+      if (coords.shape(0)==0)
         {
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
@@ -635,7 +626,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni}, npoints, gridding,
+        {nxuni}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       timers.pop();
@@ -692,13 +683,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     double epsilon;
     size_t nthreads;
     size_t verbosity;
-    double sigma_min, sigma_max;
 
     const cmav<Tcoord,2> &coords;
 
     quick_array<uint32_t> coord_idx;
-
-    size_t npoints;
 
     size_t nu, nv;
 
@@ -1058,12 +1046,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  npoints=" << npoints << endl;
-      size_t ovh0 = npoints*sizeof(uint32_t);
-      size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);
+      cout << "  npoints=" << coords.shape(0) << endl;
       cout << "  memory overhead: "
-           << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
+           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
+           << nu*nv*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
@@ -1148,8 +1134,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min_,
-           double sigma_max_)
+           double sigma_min,
+           double sigma_max)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -1160,13 +1146,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
-        sigma_min(sigma_min_), sigma_max(sigma_max_),
         coords(coords_)
       {
-      npoints=coords.shape(0);
-      MR_assert(npoints<=(~uint32_t(0)), "too many rows in the MS");
-      checkShape(points_in.shape(), {npoints});
-      if (npoints==0)
+      MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
+      checkShape(points_in.shape(), {coords.shape(0)});
+      if (coords.shape(0)==0)
         {
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
@@ -1174,7 +1158,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni, nyuni}, npoints, gridding,
+        {nxuni, nyuni}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       nv = dims[1];
@@ -1198,9 +1182,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.push("building index");
       size_t ntiles_u = (nu>>log2tile) + 3;
       size_t ntiles_v = (nv>>log2tile) + 3;
-      coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(coords.shape(0));
+      quick_array<uint32_t> key(coords.shape(0));
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
@@ -1240,13 +1224,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     double epsilon;
     size_t nthreads;
     size_t verbosity;
-    double sigma_min, sigma_max;
 
     const cmav<Tcoord,2> &coords;
 
     quick_array<uint32_t> coord_idx;
-
-    size_t npoints;
 
     size_t nu, nv, nw;
 
@@ -1675,12 +1656,10 @@ size_t ustop = min(SUPP, ustart+du);
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  npoints=" << npoints << endl;
-      size_t ovh0 = npoints*sizeof(uint32_t);
-      size_t ovh1 = nu*nv*nw*sizeof(complex<Tcalc>);
+      cout << "  npoints=" << coords.shape(0) << endl;
       cout << "  memory overhead: "
-           << ovh0/double(1<<30) << "GB (index) + "
-           << ovh1/double(1<<30) << "GB (oversampled grid)" << endl;
+           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
+           << nu*nv*nw*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
     void nonuni2uni()
@@ -1774,8 +1753,8 @@ size_t ustop = min(SUPP, ustart+du);
            const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min_,
-           double sigma_max_)
+           double sigma_min,
+           double sigma_max)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -1787,13 +1766,11 @@ size_t ustop = min(SUPP, ustart+du);
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
-        sigma_min(sigma_min_), sigma_max(sigma_max_),
         coords(coords_)
       {
-      npoints=coords.shape(0);
-      MR_assert(npoints<=(~uint32_t(0)), "too many rows in the MS");
-      checkShape(points_in.shape(), {npoints});
-      if (npoints==0)
+      MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
+      checkShape(points_in.shape(), {coords.shape(0)});
+      if (coords.shape(0)==0)
         {
         if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
         return;
@@ -1801,7 +1778,7 @@ size_t ustop = min(SUPP, ustart+du);
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni, nyuni, nzuni}, npoints, gridding,
+        {nxuni, nyuni, nzuni}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       nv = dims[1];
@@ -1838,9 +1815,9 @@ size_t ustop = min(SUPP, ustart+du);
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
-      coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(coords.shape(0));
+      quick_array<uint32_t> key(coords.shape(0));
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
