@@ -728,9 +728,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2tile);
-        static constexpr int sv = 2*nsafe+(1<<log2tile);
-        static constexpr int svvec = sv+vlen-1;
+        static constexpr int su = supp+(1<<log2tile);
+        static constexpr int sv = supp+(1<<log2tile);
+        static constexpr int svvec = max<size_t>(sv, ((supp+2*vlen-2)/vlen)*vlen);
         static constexpr double xsupp=2./supp;
         const Nufft2d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -738,7 +738,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         int iu0, iv0; // start index of the current nonuniform point
         int bu0, bv0; // start index of the current buffer
 
-        vmav<Tacc,2> bufr, bufi;
+        vmav<Tacc,2> bufri;
         Tacc *px0r, *px0i;
         vector<mutex> &locks;
 
@@ -757,8 +757,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
-              grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
-              bufr(iu,iv) = bufi(iu,iv) = 0;
+              grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufri(2*iu,iv)), Tcalc(bufri(2*iu+1,iv)));
+              bufri(2*iu,iv) = bufri(2*iu+1,iv) = 0;
               if (++idxv>=inv) idxv=0;
               }
             }
@@ -782,14 +782,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
-            bufr({size_t(su),size_t(svvec)}),
-            bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
+            bufri({size_t(2*su+1),size_t(svvec)}),
+            px0r(bufri.data()), px0i(bufri.data()+svvec),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
         ~HelperNu2u() { dump(); }
 
-        constexpr int lineJump() const { return svvec; }
+        constexpr int lineJump() const { return 2*svvec; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
@@ -807,7 +806,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*svvec + iv0-bv0;
+          auto ofs = (iu0-bu0)*2*svvec + iv0-bv0;
           p0r = px0r+ofs;
           p0i = px0i+ofs;
           }
@@ -821,9 +820,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<log2tile);
-        static constexpr int sv = 2*nsafe+(1<<log2tile);
-        static constexpr int svvec = sv+vlen-1;
+        static constexpr int su = supp+(1<<log2tile);
+        static constexpr int sv = supp+(1<<log2tile);
+        static constexpr int svvec = max<size_t>(sv, ((supp+2*vlen-2)/vlen)*vlen);
         static constexpr double xsupp=2./supp;
         const Nufft2d *parent;
 
@@ -832,7 +831,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         int iu0, iv0; // start index of the current nonuniform point
         int bu0, bv0; // start index of the current buffer
 
-        vmav<Tcalc,2> bufr, bufi;
+        vmav<Tcalc,2> bufri;
         const Tcalc *px0r, *px0i;
 
         DUCC0_NOINLINE void load()
@@ -846,8 +845,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             int idxv = idxv0;
             for (int iv=0; iv<sv; ++iv)
               {
-              bufr(iu,iv) = grid(idxu, idxv).real();
-              bufi(iu,iv) = grid(idxu, idxv).imag();
+              bufri(2*iu,iv) = grid(idxu, idxv).real();
+              bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
               if (++idxv>=inv) idxv=0;
               }
             if (++idxu>=inu) idxu=0;
@@ -869,12 +868,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
-            bufr({size_t(su),size_t(svvec)}),
-            bufi({size_t(su),size_t(svvec)}),
-            px0r(bufr.data()), px0i(bufi.data())
+            bufri({size_t(2*su+1),size_t(svvec)}),
+            px0r(bufri.data()), px0i(bufri.data()+svvec)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
 
-        constexpr int lineJump() const { return svvec; }
+        constexpr int lineJump() const { return 2*svvec; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
@@ -892,7 +890,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
-          auto ofs = (iu0-bu0)*svvec + iv0-bv0;
+          auto ofs = (iu0-bu0)*2*svvec + iv0-bv0;
           p0r = px0r+ofs;
           p0i = px0i+ofs;
           }
@@ -1063,7 +1061,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("FFT");
       checkShape(grid.shape(), {nu,nv});
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: not all elements of the output aray are needed, some FFTs can be skipped
+      // TODO: not all elements of the output array are needed, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni});
@@ -1276,6 +1274,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = supp+(1<<log2tile);
         static constexpr int sv = supp+(1<<log2tile);
         static constexpr int sw = supp+(1<<log2tile);
+        static constexpr int swvec = max<size_t>(sw, ((supp+2*nvec-2)/nvec)*nvec);
         static constexpr double xsupp=2./supp;
         const Nufft3d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -1334,14 +1333,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
             bu0(-1000000), bv0(-1000000), bw0(-1000000),
-            bufri({size_t(su+1),size_t(2*sv),size_t(sw)}),
-            px0r(bufri.data()), px0i(bufri.data()+sw),
+            bufri({size_t(su+1),size_t(2*sv),size_t(swvec)}),
+            px0r(bufri.data()), px0i(bufri.data()+swvec),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv,parent->nw}); }
         ~HelperNu2u() { dump(); }
 
-        constexpr int lineJump() const { return 2*sw; }
-        constexpr int planeJump() const { return 2*sv*sw; }
+        constexpr int lineJump() const { return 2*swvec; }
+        constexpr int planeJump() const { return 2*sv*swvec; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
@@ -1363,7 +1362,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*2*sv*sw + (iv0-bv0)*2*sw + (iw0-bw0);
+          auto ofs = (iu0-bu0)*2*sv*swvec + (iv0-bv0)*2*swvec + (iw0-bw0);
           p0r = px0r+ofs;
           p0i = px0i+ofs;
           }
@@ -1380,7 +1379,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = 2*nsafe+(1<<log2tile);
         static constexpr int sv = 2*nsafe+(1<<log2tile);
         static constexpr int sw = 2*nsafe+(1<<log2tile);
-        static constexpr int swvec = sw+vlen-1;
+        static constexpr int swvec = max<size_t>(sw, ((supp+2*nvec-2)/nvec)*nvec);
         static constexpr double xsupp=2./supp;
         const Nufft3d *parent;
 
@@ -1389,7 +1388,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         int iu0, iv0, iw0; // start index of the nonuniform point
         int bu0, bv0, bw0; // start index of the current buffer
 
-        vmav<Tcalc,3> bufr, bufi;
+        vmav<Tcalc,3> bufri;
         const Tcalc *px0r, *px0i;
 
         DUCC0_NOINLINE void load()
@@ -1408,8 +1407,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
               int idxw = idxw0;
               for (int iw=0; iw<sw; ++iw)
                 {
-                bufr(iu,iv,iw) = grid(idxu, idxv, idxw).real();
-                bufi(iu,iv,iw) = grid(idxu, idxv, idxw).imag();
+                bufri(iu,2*iv,iw) = grid(idxu, idxv, idxw).real();
+                bufri(iu,2*iv+1,iw) = grid(idxu, idxv, idxw).imag();
                 if (++idxw>=inw) idxw=0;
                 }
               if (++idxv>=inv) idxv=0;
@@ -1433,13 +1432,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
             bu0(-1000000), bv0(-1000000), bw0(-1000000),
-            bufr({size_t(su),size_t(sv),size_t(swvec)}),
-            bufi({size_t(su),size_t(sv),size_t(swvec)}),
-            px0r(bufr.data()), px0i(bufi.data())
+            bufri({size_t(su+1),size_t(2*sv),size_t(swvec)}),
+            px0r(bufri.data()), px0i(bufri.data()+swvec)
           { checkShape(grid.shape(), {parent->nu,parent->nv,parent->nw}); }
 
-        constexpr int lineJump() const { return swvec; }
-        constexpr int planeJump() const { return sv*swvec; }
+        constexpr int lineJump() const { return 2*swvec; }
+        constexpr int planeJump() const { return 2*sv*swvec; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
           {
@@ -1461,7 +1459,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
-          auto ofs = (iu0-bu0)*sv*swvec + (iv0-bv0)*swvec + (iw0-bw0);
+          auto ofs = (iu0-bu0)*2*sv*swvec + (iv0-bv0)*2*swvec + (iw0-bw0);
           p0r = px0r+ofs;
           p0i = px0i+ofs;
           }
@@ -1671,7 +1669,7 @@ size_t ustop = min(SUPP, ustart+du);
       spreading_helper<maxsupp>(supp, grid);
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: not all elements of the output aray are needed, some FFTs can be skipped
+      // TODO: not all elements of the output array are needed, some FFTs can be skipped
       c2c(fgrid, fgrid, {0,1,2}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni, nzuni});
