@@ -217,9 +217,6 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft1d
   {
   private:
-    struct Coord
-      { double u; };
-
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile=9;
 
@@ -269,17 +266,29 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         around coordinate \a u. */
     [[gnu::always_inline]] void getpix(double u_in, double &u, int &iu0) const
       {
-      u = (u_in-floor(u_in))*nu;
-      iu0 = min(int(u+ushift)-int(nu), maxiu0);
-      u -= iu0;
+      if constexpr (is_same<Tcoord,double>::value)
+        {
+        constexpr long double coordfctx=0.5L/3.141592653589793238462643383279502884197L;
+        long double u2 = u_in*coordfctx;
+        long double tmpu = (u2-floor(u2))*nu;
+        iu0 = min(int(tmpu+ushift)-int(nu), maxiu0);
+        u = double(tmpu-iu0);
+        }
+      else
+        {
+        u_in *= coordfct;
+        u = (u_in-floor(u_in))*nu;
+        iu0 = min(int(u+ushift)-int(nu), maxiu0);
+        u -= iu0;
+        }
       }
 
     /*! Compute index of the tile into which \a coord falls. */
-    [[gnu::always_inline]] uint32_t get_uvwidx(const Coord &coord)
+    [[gnu::always_inline]] uint32_t get_uvwidx(double u_in)
       {
       double udum;
       int iu0;
-      getpix(coord.u, udum, iu0);
+      getpix(u_in, udum, iu0);
       iu0 = (iu0+nsafe)>>log2tile;
       return uint32_t(iu0);
       }
@@ -346,11 +355,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           { checkShape(grid.shape(), {parent->nu}); }
         ~HelperNu2u() { dump(); }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &coord)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in)
           {
           double ufrac;
           auto iu0old = iu0;
-          parent->getpix(coord.u, ufrac, iu0);
+          parent->getpix(u_in, ufrac, iu0);
           auto x0 = -ufrac*2+(supp-1);
           tkrn.eval1(Tacc(x0), &buf.simd[0]);
           if (iu0==iu0old) return;
@@ -419,11 +428,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             px0r(bufr.data()), px0i(bufi.data())
           { checkShape(grid.shape(), {parent->nu}); }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &coord)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in)
           {
           double ufrac;
           auto iu0old = iu0;
-          parent->getpix(coord.u, ufrac, iu0);
+          parent->getpix(u_in, ufrac, iu0);
           auto x0 = -ufrac*2+(supp-1);
           tkrn.eval1(Tcalc(x0), &buf.simd[0]);
           if (iu0==iu0old) return;
@@ -466,8 +475,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto coord = Coord{coords(row,0)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0));
           auto v(points_in(row));
 
           Tacc vr(v.real()), vi(v.imag());
@@ -512,8 +520,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-          auto coord = Coord{coords(row,0)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0));
           mysimd<Tcalc> rr=0, ri=0;
           for (size_t cu=0; cu<NVEC; ++cu)
             {
@@ -649,7 +656,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
-          key[i] = get_uvwidx(Coord{coords(i,0)*coordfct});
+          key[i] = get_uvwidx(coords(i,0));
         });
       bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       timers.pop();
@@ -667,9 +674,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   private:
     struct Uvwidx
       { uint16_t tile_u, tile_v; };
-
-    struct Coord
-      { double u, v; };
 
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
@@ -702,19 +706,21 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
+      u_in *= coordfct;
       u = (u_in-floor(u_in))*nu;
       iu0 = min(int(u+ushift)-int(nu), maxiu0);
       u -= iu0;
+      v_in *= coordfct;
       v = (v_in-floor(v_in))*nv;
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const Coord &coord)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in)
       {
       double udum, vdum;
       int iu0, iv0;
-      getpix(coord.u, coord.v, udum, vdum, iu0, iv0);
+      getpix(u_in, v_in, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>log2tile;
       iv0 = (iv0+nsafe)>>log2tile;
       return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
@@ -790,12 +796,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         constexpr int lineJump() const { return 2*svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
-          parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
+          parent->getpix(u_in, v_in, ufrac, vfrac, iu0, iv0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
           tkrn.eval2(Tacc(x0), Tacc(y0), &buf.simd[0]);
@@ -874,12 +880,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         constexpr int lineJump() const { return 2*svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
-          parent->getpix(in.u, in.v, ufrac, vfrac, iu0, iv0);
+          parent->getpix(u_in, v_in, ufrac, vfrac, iu0, iv0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
             tkrn.eval2(Tcalc(x0), Tcalc(y0), &buf.simd[0]);
@@ -927,8 +933,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,1));
             }
           size_t row = coord_idx[ix];
-          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0), coords(row,1));
           auto v(points_in(row));
 
           if constexpr (NVEC==1)
@@ -998,8 +1003,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             DUCC0_PREFETCH_R(&coords(nextidx,1));
             }
           size_t row = coord_idx[ix];
-          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0), coords(row,1));
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
             {
@@ -1186,7 +1190,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(Coord{coords(i,0)*coordfct, coords(i,1)*coordfct});
+          auto tmp = get_uvwidx(coords(i,0), coords(i,1));
           key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
           }
         });
@@ -1206,9 +1210,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   private:
     struct Uvwidx
       { uint16_t tile_u, tile_v, tile_w; };
-
-    struct Coord
-      { double u, v, w; };
 
     constexpr static int log2tile=3;
     bool gridding;
@@ -1241,22 +1242,25 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double w_in, double &u, double &v, double &w, int &iu0, int &iv0, int &iw0) const
       {
+      u_in *= coordfct;
       u = (u_in-floor(u_in))*nu;
       iu0 = min(int(u+ushift)-int(nu), maxiu0);
       u -= iu0;
+      v_in *= coordfct;
       v = (v_in-floor(v_in))*nv;
       iv0 = min(int(v+vshift)-int(nv), maxiv0);
       v -= iv0;
+      w_in *= coordfct;
       w = (w_in-floor(w_in))*nw;
       iw0 = min(int(w+wshift)-int(nw), maxiw0);
       w -= iw0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const Coord &coord, size_t lsq2)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in, double w_in, size_t lsq2)
       {
       double udum, vdum, wdum;
       int iu0, iv0, iw0;
-      getpix(coord.u, coord.v, coord.w, udum, vdum, wdum, iu0, iv0, iw0);
+      getpix(u_in, v_in, w_in, udum, vdum, wdum, iu0, iv0, iw0);
       iu0 = (iu0+nsafe)>>lsq2;
       iv0 = (iv0+nsafe)>>lsq2;
       iw0 = (iw0+nsafe)>>lsq2;
@@ -1342,13 +1346,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         constexpr int lineJump() const { return 2*swvec; }
         constexpr int planeJump() const { return 2*sv*swvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in, double w_in)
           {
           double ufrac, vfrac, wfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
           auto iw0old = iw0;
-          parent->getpix(in.u, in.v, in.w, ufrac, vfrac, wfrac, iu0, iv0, iw0);
+          parent->getpix(u_in, v_in, w_in, ufrac, vfrac, wfrac, iu0, iv0, iw0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
           auto z0 = -wfrac*2+(supp-1);
@@ -1439,13 +1443,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         constexpr int lineJump() const { return 2*swvec; }
         constexpr int planeJump() const { return 2*sv*swvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const Coord &in)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in, double w_in)
           {
           double ufrac, vfrac, wfrac;
           auto iu0old = iu0;
           auto iv0old = iv0;
           auto iw0old = iw0;
-          parent->getpix(in.u, in.v, in.w, ufrac, vfrac, wfrac, iu0, iv0, iw0);
+          parent->getpix(u_in, v_in, w_in, ufrac, vfrac, wfrac, iu0, iv0, iw0);
           auto x0 = -ufrac*2+(supp-1);
           auto y0 = -vfrac*2+(supp-1);
           auto z0 = -wfrac*2+(supp-1);
@@ -1506,8 +1510,7 @@ size_t ustop = min(SUPP, ustart+du);
             DUCC0_PREFETCH_R(&coords(nextidx,2));
             }
           size_t row = coord_idx[ix];
-          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct, coords(row,2)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0), coords(row,1), coords(row,2));
           auto v(points_in(row));
 
           if constexpr (NVEC==1)
@@ -1596,8 +1599,7 @@ size_t ustop = min(SUPP, ustart+du);
             DUCC0_PREFETCH_R(&coords(nextidx,2));
             }
           size_t row = coord_idx[ix];
-          Coord coord{coords(row,0)*coordfct, coords(row,1)*coordfct, coords(row,2)*coordfct};
-          hlp.prep(coord);
+          hlp.prep(coords(row,0), coords(row,1), coords(row,2));
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
             {
@@ -1819,8 +1821,7 @@ size_t ustop = min(SUPP, ustart+du);
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          Coord coord{coords(i,0)*coordfct, coords(i,1)*coordfct, coords(i,2)*coordfct};
-          auto tmp = get_uvwidx(coord,lsq2);
+          auto tmp = get_uvwidx(coords(i,0),coords(i,1),coords(i,2),lsq2);
           auto lowkey = ((tmp.tile_u&msmall)<<(2*ssmall))
                       | ((tmp.tile_v&msmall)<<   ssmall)
                       |  (tmp.tile_w&msmall);

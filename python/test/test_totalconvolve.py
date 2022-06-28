@@ -223,7 +223,7 @@ def test_adjointness2(lkmax, ncomp, separate, single):
         blm = blm.astype("c8")
         ptg = ptg.astype("f4")
         foo = ducc0.totalconvolve.Interpolator_f(slm, blm, separate, lmax, kmax,
-                                                 epsilon=1e-5, ofactor=1.8, nthreads=2)
+                                                 epsilon=1e-5, ofactor=1.9, nthreads=2)
     else:
         foo = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
                                                epsilon=1e-6, ofactor=1.8, nthreads=2)
@@ -233,7 +233,7 @@ def test_adjointness2(lkmax, ncomp, separate, single):
     if single:
         fake = fake.astype("f4")
         foo2 = ducc0.totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=1e-5,
-                                                  ofactor=1.8, nthreads=2)
+                                                  ofactor=1.9, nthreads=2)
     else:
         foo2 = ducc0.totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=1e-6,
                                                 ofactor=1.8, nthreads=2)
