@@ -266,21 +266,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         around coordinate \a u. */
     [[gnu::always_inline]] void getpix(double u_in, double &u, int &iu0) const
       {
-      if constexpr (is_same<Tcoord,double>::value)
-        {
-        constexpr long double coordfctx=0.5L/3.141592653589793238462643383279502884197L;
-        long double u2 = u_in*coordfctx;
-        long double tmpu = (u2-floor(u2))*nu;
-        iu0 = min(int(tmpu+ushift)-int(nu), maxiu0);
-        u = double(tmpu-iu0);
-        }
-      else
-        {
-        u_in *= coordfct;
-        u = (u_in-floor(u_in))*nu;
-        iu0 = min(int(u+ushift)-int(nu), maxiu0);
-        u -= iu0;
-        }
+      // do range reduction in long double when Tcoord is double,
+      // to avoid inaccuracies with very large grids
+      using Tbig = typename conditional<is_same<Tcoord,double>::value, long double, double>::type;
+      u_in *= coordfct;
+      auto tmpu = Tbig(u_in-floor(u_in))*nu;
+      iu0 = min(int(tmpu+ushift)-int(nu), maxiu0);
+      u = double(tmpu-iu0);
       }
 
     /*! Compute index of the tile into which \a coord falls. */
@@ -706,14 +698,17 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
+      // probably no need for long double here, since grid dimensions will never be that large
+      using Tbig = double;
+        //typename conditional<is_same<Tcoord,double>::value, long double, double>::type;
       u_in *= coordfct;
-      u = (u_in-floor(u_in))*nu;
-      iu0 = min(int(u+ushift)-int(nu), maxiu0);
-      u -= iu0;
+      auto tmpu = Tbig(u_in-floor(u_in))*nu;
+      iu0 = min(int(tmpu+ushift)-int(nu), maxiu0);
+      u = double(tmpu-iu0);
       v_in *= coordfct;
-      v = (v_in-floor(v_in))*nv;
-      iv0 = min(int(v+vshift)-int(nv), maxiv0);
-      v -= iv0;
+      auto tmpv = Tbig(v_in-floor(v_in))*nv;
+      iv0 = min(int(tmpv+vshift)-int(nv), maxiv0);
+      v = double(tmpv-iv0);
       }
 
     [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in)
@@ -1242,18 +1237,21 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     [[gnu::always_inline]] void getpix(double u_in, double v_in, double w_in, double &u, double &v, double &w, int &iu0, int &iv0, int &iw0) const
       {
+      // probably no need for long double here, since grid dimensions will never be that large
+      using Tbig = double;
+        //typename conditional<is_same<Tcoord,double>::value, long double, double>::type;
       u_in *= coordfct;
-      u = (u_in-floor(u_in))*nu;
-      iu0 = min(int(u+ushift)-int(nu), maxiu0);
-      u -= iu0;
+      auto tmpu = Tbig(u_in-floor(u_in))*nu;
+      iu0 = min(int(tmpu+ushift)-int(nu), maxiu0);
+      u = double(tmpu-iu0);
       v_in *= coordfct;
-      v = (v_in-floor(v_in))*nv;
-      iv0 = min(int(v+vshift)-int(nv), maxiv0);
-      v -= iv0;
+      auto tmpv = Tbig(v_in-floor(v_in))*nv;
+      iv0 = min(int(tmpv+vshift)-int(nv), maxiv0);
+      v = double(tmpv-iv0);
       w_in *= coordfct;
-      w = (w_in-floor(w_in))*nw;
-      iw0 = min(int(w+wshift)-int(nw), maxiw0);
-      w -= iw0;
+      auto tmpw = Tbig(w_in-floor(w_in))*nw;
+      iw0 = min(int(tmpw+wshift)-int(nw), maxiw0);
+      w = double(tmpw-iw0);
       }
 
     [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in, double w_in, size_t lsq2)
