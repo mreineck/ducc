@@ -184,9 +184,9 @@ void add_nufft(py::module_ &msup)
   auto m = msup.def_submodule("nufft");
 
   m.def("u2nu", &Py_u2nu, u2nu_DS,  py::kw_only(), "grid"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.0);
+        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
   m.def("nu2u", &Py_nu2u, nu2u_DS, py::kw_only(), "points"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.0);
+        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
   }
 
 }

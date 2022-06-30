@@ -1039,7 +1039,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       cout << (gridding ? "Gridding:" : "Degridding:") << endl
            << "  nthreads=" << nthreads << ", "
            << "grid=(" << nxuni << "x" << nyuni << "), "
-           << "ovdersampled grid=(" << nu << "x" << nv;
+           << "oversampled grid=(" << nu << "x" << nv;
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
@@ -1308,8 +1308,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
               int idxw = idxw0;
               for (int iw=0; iw<sw; ++iw)
                 {
-                grid(idxu,idxv,idxw) += complex<Tcalc>(Tcalc(bufri(iu,2*iv,iw)), Tcalc(bufri(iu,2*iv+1,iw)));
-                bufri(iu,2*iv,iw) = bufri(iu,2*iv+1,iw) = 0;
+                Tacc tr=bufri(iu,2*iv,iw), ti=bufri(iu,2*iv+1,iw);
+                if (tr*tr+ti*ti!=0)
+                  {
+                  grid(idxu,idxv,idxw) += complex<Tcalc>(Tcalc(tr), Tcalc(ti));
+                  bufri(iu,2*iv,iw) = bufri(iu,2*iv+1,iw) = 0;
+                  }
                 if (++idxw>=inw) idxw=0;
                 }
               if (++idxv>=inv) idxv=0;
@@ -1478,7 +1482,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       vector<mutex> locks(nu);
 
-      execDynamic(coord_idx.size(), nthreads, 1000, [&](Scheduler &sched)
+      execDynamic(coord_idx.size(), nthreads, 10000, [&](Scheduler &sched)
         {
         constexpr size_t vlen=mysimd<Tcalc>::size();
         constexpr size_t NVEC((SUPP+vlen-1)/vlen);
@@ -1489,14 +1493,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
         const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*NVEC;
 
-        constexpr size_t du=16384/(SUPP*ljump*sizeof(Tacc));
-        while (auto rng=sched.getNext())
-{
-for (size_t ustart=0; ustart<SUPP; ustart+=du)
-{
-size_t ustop = min(SUPP, ustart+du);
-
-        for(auto ix=rng.lo; ix<rng.hi; ++ix)
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           constexpr size_t lookahead=3;
           if (ix+lookahead<coord_idx.size())
@@ -1514,7 +1511,7 @@ size_t ustop = min(SUPP, ustart+du);
           if constexpr (NVEC==1)
             {
             mysimd<Tacc> vr=v.real()*kw[0], vi=v.imag()*kw[0];
-            for (size_t cu=ustart; cu<ustop; ++cu)
+            for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tacc> v2r=vr*ku[cu], v2i=vi*ku[cu];
               for (size_t cv=0; cv<SUPP; ++cv)
@@ -1533,9 +1530,9 @@ size_t ustop = min(SUPP, ustart+du);
           else
             {
             Tacc vr(v.real()), vi(v.imag());
-            auto * DUCC0_RESTRICT pxr = hlp.p0r+ustart*pjump;
-            auto * DUCC0_RESTRICT pxi = hlp.p0i+ustart*pjump;
-            for (size_t cu=ustart; cu<ustop; ++cu)
+            auto * DUCC0_RESTRICT pxr = hlp.p0r;
+            auto * DUCC0_RESTRICT pxi = hlp.p0i;
+            for (size_t cu=0; cu<SUPP; ++cu)
               {
               Tacc tmpr=vr*ku[cu], tmpi=vi*ku[cu];
               for (size_t cv=0; cv<SUPP; ++cv)
@@ -1560,8 +1557,6 @@ size_t ustop = min(SUPP, ustart+du);
               }
             }
           }
-}
-}
         });
       }
 
@@ -1808,7 +1803,7 @@ size_t ustop = min(SUPP, ustart+du);
       size_t ntiles_v = (nv>>log2tile) + 3;
       size_t ntiles_w = (nw>>log2tile) + 3;
       size_t lsq2 = log2tile;
-      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<3*(log2tile-lsq2))<(size_t(1)<<28)))
+      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<(3*(log2tile-lsq2)))<(size_t(1)<<28)))
         --lsq2;
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
