@@ -276,7 +276,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
     /*! Compute index of the tile into which \a coord falls. */
-    [[gnu::always_inline]] uint32_t get_uvwidx(double u_in)
+    [[gnu::always_inline]] uint32_t get_utile(double u_in)
       {
       double udum;
       int iu0;
@@ -648,7 +648,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
-          key[i] = get_uvwidx(coords(i,0));
+          key[i] = get_utile(coords(i,0));
         });
       bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       timers.pop();
@@ -664,9 +664,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft2d
   {
   private:
-    struct Uvwidx
-      { uint16_t tile_u, tile_v; };
-
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     bool forward;
@@ -711,14 +708,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       v = double(tmpv-iv0);
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in)
+    [[gnu::always_inline]] auto get_uvtile(double u_in, double v_in)
       {
       double udum, vdum;
       int iu0, iv0;
       getpix(u_in, v_in, udum, vdum, iu0, iv0);
       iu0 = (iu0+nsafe)>>log2tile;
       iv0 = (iv0+nsafe)>>log2tile;
-      return Uvwidx{uint16_t(iu0), uint16_t(iv0)};
+      return make_tuple(uint32_t(iu0), uint32_t(iv0));
       }
 
     template<size_t supp> class HelperNu2u
@@ -1185,8 +1182,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(coords(i,0), coords(i,1));
-          key[i] = tmp.tile_u*ntiles_v + tmp.tile_v;
+          auto [tile_u, tile_v] = get_uvtile(coords(i,0), coords(i,1));
+          key[i] = tile_u*ntiles_v + tile_v;
           }
         });
       bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
@@ -1203,9 +1200,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft3d
   {
   private:
-    struct Uvwidx
-      { uint16_t tile_u, tile_v, tile_w; };
-
     constexpr static int log2tile=3;
     bool gridding;
     bool forward;
@@ -1254,7 +1248,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       w = double(tmpw-iw0);
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(double u_in, double v_in, double w_in, size_t lsq2)
+    [[gnu::always_inline]] auto get_uvwtile(double u_in, double v_in, double w_in, size_t lsq2)
       {
       double udum, vdum, wdum;
       int iu0, iv0, iw0;
@@ -1262,7 +1256,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       iu0 = (iu0+nsafe)>>lsq2;
       iv0 = (iv0+nsafe)>>lsq2;
       iw0 = (iw0+nsafe)>>lsq2;
-      return Uvwidx{uint16_t(iu0), uint16_t(iv0), uint16_t(iw0)};
+      return make_tuple(uint32_t(iu0), uint32_t(iv0), uint32_t(iw0));
       }
 
     template<size_t supp> class HelperNu2u
@@ -1814,13 +1808,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         {
         for (size_t i=lo; i<hi; ++i)
           {
-          auto tmp = get_uvwidx(coords(i,0),coords(i,1),coords(i,2),lsq2);
-          auto lowkey = ((tmp.tile_u&msmall)<<(2*ssmall))
-                      | ((tmp.tile_v&msmall)<<   ssmall)
-                      |  (tmp.tile_w&msmall);
-          auto hikey = ((tmp.tile_u>>ssmall)*ntiles_v*ntiles_w)
-                     + ((tmp.tile_v>>ssmall)*ntiles_w)
-                     +  (tmp.tile_w>>ssmall);
+          auto [tile_u, tile_v, tile_w] = get_uvwtile(coords(i,0),coords(i,1),coords(i,2),lsq2);
+          auto lowkey = ((tile_u&msmall)<<(2*ssmall))
+                      | ((tile_v&msmall)<<   ssmall)
+                      |  (tile_w&msmall);
+          auto hikey = ((tile_u>>ssmall)*ntiles_v*ntiles_w)
+                     + ((tile_v>>ssmall)*ntiles_w)
+                     +  (tile_w>>ssmall);
           key[i] = (hikey<<(3*ssmall)) | lowkey;
           }
         });
