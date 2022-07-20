@@ -112,7 +112,7 @@ def kernel2error(krn, nu, x, W):
 def kernel2acceptability(krn, nu, x, W, ofactor):
     M = len(nu) // W
     corr = gridder_to_grid_correction(krn, nu, x, W)
-    return np.max(corr[:int(len(corr)/ofactor)+1]/corr[0])
+    return np.max(corr[:int(len(corr)/ofactor)+1])/np.min(corr[:int(len(corr)/ofactor)+1])
 
 M=128
 N=512
@@ -120,11 +120,9 @@ x=np.arange(N+1)/(2*N)
 
 # for quick experiments, just enter the desired oversampling factor and support
 # as single elements in the tuples below
-ofactors = np.linspace(2.00,2.50,11)
-Ws = np.arange(9,17)
-Ws=[12]
-ofactors = [1.15, 1.2, 1.25, 1.3, 1.35]
-#Ws = [8] #np.arange(4,17)
+ofactors = np.linspace(1.50,2.50,21)
+Ws = np.arange(4,17)
+Ws=[16]
 results = []
 for W in Ws:
     for ofactor in ofactors:
@@ -136,14 +134,17 @@ for W in Ws:
         #re0=[0.5,0.5]
         dbeta = rbeta[1]-rbeta[0]
         de0 = re0[1]-re0[0]
-        for i in range(30):
+        res1 = [(re0[0]+re0[1])*0.5, (rbeta[0]+rbeta[1])*0.5]
+        while dbeta>1e-16*res1[0] or de0>1e-16*res1[1]:
             res1 = scan_esk(rbeta, re0, nu, x, W, M, N, x0, 10)
-            dbeta*=0.5
-            de0*=0.5
+            if dbeta>1e-16*res1[0]:
+                dbeta*=0.5
+            if de0>1e-16*res1[1]:
+                de0*=0.5
             rbeta = [res1[0]-0.5*dbeta, res1[0]+0.5*dbeta]
             re0 = [res1[1]-0.5*de0, res1[1]+0.5*de0]
         krn1 = eskapprox(res1, nu, x, W)
         err1 = kernel2error(krn1, nu, x, W)
         maxerr1 = np.sqrt(np.max(err1[0:ulim]))
         acceptability = kernel2acceptability(krn1, nu, x, W, ofactor)
-        print("{{{0:2d}, {1:4.2f}, {2:13.8g}, {3:12.10f}, {4:12.10f}, {5:12.10f}}},".format(W, ofactor, maxerr1, res1[0], res1[1], acceptability))
+        print("{{{0:2d}, {1:4.2f}, {2:13.8g}, {3:19.17f}, {4:20.18f}, {5:14.10f}}},".format(W, ofactor, maxerr1, res1[0], res1[1], acceptability))

@@ -208,7 +208,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t nu, nv;
     double ofactor;
 
-    shared_ptr<HornerKernel> krn;
+    shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     double ushift, vshift;
