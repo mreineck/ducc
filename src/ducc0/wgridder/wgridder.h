@@ -425,8 +425,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
           }
         });
       }
-    void grid2dirty_post2(vmav<complex<Tcalc>,2> &tmav, vmav<Timg,2> &dirty, double w) const
+    void grid2dirty_post2(vmav<complex<Tcalc>,2> &tmav, vmav<Timg,2> &dirty, double w)
       {
+      timers.push("wscreen+grid correction");
       checkShape(dirty.shape(), {nxdirty,nydirty});
       double x0 = lshift-0.5*nxdirty*pixsize_x,
              y0 = mshift-0.5*nydirty*pixsize_y;
@@ -444,8 +445,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
             { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
+              {
               dirty(i,j) += Timg(tmav(ix,jx).real()*phases[j].real()
                                - tmav(ix,jx).imag()*phases[j].imag());
+              tmav(ix,jx) = complex<Tcalc>(0);
+              }
           else
             {
             size_t i2 = nxdirty-i;
@@ -458,6 +462,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
                 Tcalc re = phases[j2].real(), im = phases[j2].imag();
                 dirty(i ,j) += Timg(tmav(ix ,jx).real()*re - tmav(ix ,jx).imag()*im);
                 dirty(i2,j) += Timg(tmav(ix2,jx).real()*re - tmav(ix2,jx).imag()*im);
+                tmav(ix,jx) = tmav(ix2,jx) = complex<Tcalc>(0);
                 }
             else
               for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
@@ -465,10 +470,17 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
                 size_t j2 = min(j, nydirty-j);
                 Tcalc re = phases[j2].real(), im = phases[j2].imag();
                 dirty(i,j) += Timg(tmav(ix,jx).real()*re - tmav(ix,jx).imag()*im); // lower left
+                tmav(ix,jx) = complex<Tcalc>(0);
                 }
             }
           }
         });
+      timers.poppush("zeroing grid");
+      // only zero the parts of the grid that have not been zeroed before
+      { auto a0 = subarray<2>(tmav, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(tmav, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(tmav, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      timers.pop();
       }
 
     void grid2dirty_overwrite(vmav<Tcalc,2> &grid, vmav<Timg,2> &dirty)
@@ -517,9 +529,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
         }
 
-      timers.poppush("wscreen+grid correction");
-      grid2dirty_post2(grid, dirty, w);
       timers.pop();
+      grid2dirty_post2(grid, dirty, w);
       }
 
     void dirty2grid_pre(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
@@ -1423,14 +1434,12 @@ timers.pop();
         timers.push("zeroing dirty image");
         mav_apply([](Timg &v){v=Timg(0);}, nthreads, dirty_out);
         timers.poppush("allocating grid");
-        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, UNINITIALIZED);
+        auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
         timers.pop();
         for (size_t pl=0; pl<nplanes; ++pl)
           {
           double w = wmin+pl*dw;
-          timers.push("zeroing grid");
-          quickzero(grid, nthreads);
-          timers.poppush("gridding proper");
+          timers.push("gridding proper");
           x2grid_c<true>(grid, pl, w);
           timers.pop();
           grid2dirty_c_overwrite_wscreen_add(grid, dirty_out, w, pl);
