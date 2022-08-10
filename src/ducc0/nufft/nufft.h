@@ -1200,7 +1200,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft3d
   {
   private:
-    constexpr static int log2tile=3;
+    constexpr static int log2tile=4;
     bool gridding;
     bool forward;
     TimerHierarchy timers;
@@ -1270,7 +1270,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = supp+(1<<log2tile);
         static constexpr int sv = supp+(1<<log2tile);
         static constexpr int sw = supp+(1<<log2tile);
-        static constexpr int swvec = max<size_t>(sw, ((supp+2*nvec-2)/nvec)*nvec);
         static constexpr double xsupp=2./supp;
         const Nufft3d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -1278,8 +1277,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         int iu0, iv0, iw0; // start index of the current nonuniform point
         int bu0, bv0, bw0; // start index of the current buffer
 
-        vmav<Tacc,3> bufri;
-        Tacc *px0r, *px0i;
+        vmav<complex<Tacc>,3> gbuf;
+        complex<Tacc> *px0;
         vector<mutex> &locks;
 
         DUCC0_NOINLINE void dump()
@@ -1302,12 +1301,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
               int idxw = idxw0;
               for (int iw=0; iw<sw; ++iw)
                 {
-                Tacc tr=bufri(iu,2*iv,iw), ti=bufri(iu,2*iv+1,iw);
-                if (tr*tr+ti*ti!=0)
-                  {
-                  grid(idxu,idxv,idxw) += complex<Tcalc>(Tcalc(tr), Tcalc(ti));
-                  bufri(iu,2*iv,iw) = bufri(iu,2*iv+1,iw) = 0;
-                  }
+                auto t=gbuf(iu,iv,iw);
+ //               if (norm(t)!=0)
+ //                 {
+                  grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                  gbuf(iu,iv,iw) = 0;
+ //                 }
                 if (++idxw>=inw) idxw=0;
                 }
               if (++idxv>=inv) idxv=0;
@@ -1318,7 +1317,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           }
 
       public:
-        Tacc * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
+        complex<Tacc> * DUCC0_RESTRICT p0;
         union kbuf {
           Tacc scalar[3*nvec*vlen];
           mysimd<Tacc> simd[3*nvec];
@@ -1333,14 +1332,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
             bu0(-1000000), bv0(-1000000), bw0(-1000000),
-            bufri({size_t(su+1),size_t(2*sv),size_t(swvec)}),
-            px0r(bufri.data()), px0i(bufri.data()+swvec),
+            gbuf({size_t(su),size_t(sv),size_t(sw)}),
+            px0(gbuf.data()),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv,parent->nw}); }
         ~HelperNu2u() { dump(); }
 
-        constexpr int lineJump() const { return 2*swvec; }
-        constexpr int planeJump() const { return 2*sv*swvec; }
+        constexpr int lineJump() const { return sw; }
+        constexpr int planeJump() const { return sv*sw; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in, double w_in)
           {
@@ -1362,9 +1361,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*2*sv*swvec + (iv0-bv0)*2*swvec + (iw0-bw0);
-          p0r = px0r+ofs;
-          p0i = px0i+ofs;
+          auto ofs = (iu0-bu0)*sv*sw + (iv0-bv0)*sw + (iw0-bw0);
+          p0 = px0+ofs;
           }
       };
 
@@ -1464,6 +1462,20 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           p0i = px0i+ofs;
           }
       };
+template<typename T> static void addbla(T * DUCC0_RESTRICT bla2, const T * DUCC0_RESTRICT bla1, const T * DUCC0_RESTRICT ku, const T * DUCC0_RESTRICT kv, size_t supp, size_t j1, size_t j2) DUCC0_NOINLINE
+{
+            for (size_t cu=0; cu<supp; ++cu)
+              {
+              for (size_t cv=0; cv<supp; ++cv)
+                {
+                Tacc tmp2x=ku[cu]*kv[cv];
+                for (size_t cw=0; cw<2*supp; ++cw)
+		          bla2[cw] += tmp2x*bla1[cw];
+                bla2 += j1;
+                }
+              bla2 += j2;
+              }
+            }
 
     template<size_t SUPP> [[gnu::hot]] void spreading_helper
       (size_t supp, vmav<complex<Tcalc>,3> &grid)
@@ -1485,7 +1497,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         constexpr auto pjump = hlp.planeJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
-        const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*NVEC;
+        const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*vlen*NVEC;
+array<complex<Tacc>,SUPP> xdata;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
@@ -1502,53 +1515,48 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           hlp.prep(coords(row,0), coords(row,1), coords(row,2));
           auto v(points_in(row));
 
-          if constexpr (NVEC==1)
+          //if constexpr (NVEC==1)
+            //{
+            //mysimd<Tacc> vr=v.real()*kw[0], vi=v.imag()*kw[0];
+            //for (size_t cu=0; cu<SUPP; ++cu)
+              //{
+              //mysimd<Tacc> v2r=vr*ku[cu], v2i=vi*ku[cu];
+              //for (size_t cv=0; cv<SUPP; ++cv)
+                //{
+                //auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*pjump+cv*ljump;
+                //auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*pjump+cv*ljump;
+                //auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+                //auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
+                //tr += v2r*kv[cv];
+                //ti += v2i*kv[cv];
+                //tr.copy_to(pxr,element_aligned_tag());
+                //ti.copy_to(pxi,element_aligned_tag());
+                //}
+              //}
+            //}
+          //else
             {
-            mysimd<Tacc> vr=v.real()*kw[0], vi=v.imag()*kw[0];
-            for (size_t cu=0; cu<SUPP; ++cu)
-              {
-              mysimd<Tacc> v2r=vr*ku[cu], v2i=vi*ku[cu];
-              for (size_t cv=0; cv<SUPP; ++cv)
-                {
-                auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*pjump+cv*ljump;
-                auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*pjump+cv*ljump;
-                auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
-                tr += v2r*kv[cv];
-                ti += v2i*kv[cv];
-                tr.copy_to(pxr,element_aligned_tag());
-                ti.copy_to(pxi,element_aligned_tag());
-                }
-              }
-            }
-          else
-            {
-            Tacc vr(v.real()), vi(v.imag());
-            auto * DUCC0_RESTRICT pxr = hlp.p0r;
-            auto * DUCC0_RESTRICT pxi = hlp.p0i;
-            for (size_t cu=0; cu<SUPP; ++cu)
-              {
-              Tacc tmpr=vr*ku[cu], tmpi=vi*ku[cu];
-              for (size_t cv=0; cv<SUPP; ++cv)
-                {
-                Tacc tmp2r=tmpr*kv[cv], tmp2i=tmpi*kv[cv];
-                for (size_t cw=0; cw<NVEC; ++cw)
-                  {
-                  auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                  tr += tmp2r*kw[cw];
-                  tr.copy_to(pxr,element_aligned_tag());
-                  auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                  ti += tmp2i*kw[cw];
-                  ti.copy_to(pxi,element_aligned_tag());
-                  pxr += hlp.vlen;
-                  pxi += hlp.vlen;
-                  }
-                pxr += ljump-NVEC*hlp.vlen;
-                pxi += ljump-NVEC*hlp.vlen;
-                }
-              pxr += pjump-SUPP*ljump;
-              pxi += pjump-SUPP*ljump;
-              }
+            complex<Tacc> vr(v);
+            auto * DUCC0_RESTRICT px = hlp.p0;
+for (size_t cw=0; cw<SUPP; ++cw)
+  xdata[cw]=kw[cw]*v;
+const Tacc * DUCC0_RESTRICT bla1=(const Tacc *)(xdata.data());
+Tacc * DUCC0_RESTRICT bla2=(Tacc *)(px);
+auto j1 = 2*ljump;
+auto j2 = 2*(pjump-SUPP*ljump);
+addbla(bla2, bla1, ku, kv, SUPP, j1, j2);
+            //for (size_t cu=0; cu<SUPP; ++cu)
+              //{
+////              Tacc tmpx=ku[cu];
+              //for (size_t cv=0; cv<SUPP; ++cv)
+                //{
+                //Tacc tmp2x=ku[cu]*kv[cv];
+                //for (size_t cw=0; cw<2*SUPP; ++cw)
+		          //bla2[cw] += tmp2x*bla1[cw];
+                //bla2 += j1;
+               //}
+              //bla2 += j2;
+              //}
             }
           }
         });
