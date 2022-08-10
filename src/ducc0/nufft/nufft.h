@@ -1302,11 +1302,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
               for (int iw=0; iw<sw; ++iw)
                 {
                 auto t=gbuf(iu,iv,iw);
- //               if (norm(t)!=0)
- //                 {
-                  grid(idxu,idxv,idxw) += complex<Tcalc>(t);
-                  gbuf(iu,iv,iw) = 0;
- //                 }
+                grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                gbuf(iu,iv,iw) = 0;
                 if (++idxw>=inw) idxw=0;
                 }
               if (++idxv>=inv) idxv=0;
@@ -1484,7 +1481,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
         const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*vlen*NVEC;
-array<complex<Tacc>,SUPP> xdata;
+        array<complex<Tacc>,SUPP> xdata;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
@@ -1504,21 +1501,17 @@ array<complex<Tacc>,SUPP> xdata;
           auto * DUCC0_RESTRICT px = hlp.p0;
           for (size_t cw=0; cw<SUPP; ++cw)
             xdata[cw]=kw[cw]*v;
-          const Tacc * DUCC0_RESTRICT bla1=(const Tacc *)(xdata.data());
-          Tacc * DUCC0_RESTRICT bla2=(Tacc *)(px);
-          auto j1 = 2*ljump;
-          auto j2 = 2*(pjump-SUPP*ljump);
-          for (size_t cu=0; cu<SUPP; ++cu)
-            {
-            for (size_t cv=0; cv<SUPP; ++cv)
+          const Tacc * DUCC0_RESTRICT fptr1=(const Tacc *)(xdata.data());
+          Tacc * DUCC0_RESTRICT fptr2=(Tacc *)(px);
+          const auto j1 = 2*ljump;
+          const auto j2 = 2*(pjump-SUPP*ljump);
+          for (size_t cu=0; cu<SUPP; ++cu, fptr2+=j2)
+            for (size_t cv=0; cv<SUPP; ++cv, fptr2+=j1)
               {
               Tacc tmp2x=ku[cu]*kv[cv];
               for (size_t cw=0; cw<2*SUPP; ++cw)
-                bla2[cw] += tmp2x*bla1[cw];
-              bla2 += j1;
+                fptr2[cw] += tmp2x*fptr1[cw];
               }
-            bla2 += j2;
-            }
           }
         });
       }
