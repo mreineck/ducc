@@ -803,8 +803,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*sv + iv0-bv0;
-          p0 = px0+ofs;
+          p0 = px0 + (iu0-bu0)*sv + iv0-bv0;
           }
       };
 
@@ -1354,8 +1353,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bw0=((((iw0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*sv*sw + (iv0-bv0)*sw + (iw0-bw0);
-          p0 = px0+ofs;
+          p0 = px0 + (iu0-bu0)*sv*sw + (iv0-bv0)*sw + (iw0-bw0);
           }
       };
 
