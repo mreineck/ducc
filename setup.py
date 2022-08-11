@@ -8,7 +8,7 @@ from setuptools import setup, Extension
 import pybind11
 
 pkgname = 'ducc0'
-version = '0.24.0'
+version = '0.25.0'
 
 tmp = os.getenv("DUCC0_CFLAGS", "").split(" ")
 user_cflags = [x for x in tmp if x != ""]

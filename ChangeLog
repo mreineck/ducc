@@ -1,3 +1,14 @@
+0.25.0:
+- general:
+  - try to fix the package on 32bit platforms
+
+- nufft:
+  - significant performance and accuracy improvements
+
+- wgridder:
+  - recalculated kernels, improved error model
+
+
 0.24.0:
 - general:
   - work around a compilation problem with gcc 7
