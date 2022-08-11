@@ -86,7 +86,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Implementation of multi-dimensional Fast Fourier and related transforms
  *  \copyright Copyright (C) 2010-2021 Max-Planck-Society
  *  \copyright Copyright (C) 2019 Peter Bell
- *  \copyright  
+ *  \copyright
  *  \copyright For the odd-sized DCT-IV transforms:
  *  \copyright   Copyright (C) 2003, 2007-14 Matteo Frigo
  *  \copyright   Copyright (C) 2003, 2007-14 Massachusetts Institute of Technology
@@ -652,10 +652,10 @@ template<size_t N> class multi_iter
     ptrdiff_t oofs(size_t i) const { return p_o[0] + ptrdiff_t(i)*cstr_o; }
     ptrdiff_t oofs(size_t j, size_t i) const { return p_o[j] + ptrdiff_t(i)*cstr_o; }
     ptrdiff_t oofs_uni(size_t j, size_t i) const { return p_o[0] + ptrdiff_t(j)*sstr_o + ptrdiff_t(i)*cstr_o; }
-    bool uniform_i() const { return uni_i; } 
-    ptrdiff_t unistride_i() const { return sstr_i; } 
-    bool uniform_o() const { return uni_o; } 
-    ptrdiff_t unistride_o() const { return sstr_o; } 
+    bool uniform_i() const { return uni_i; }
+    ptrdiff_t unistride_i() const { return sstr_i; }
+    bool uniform_o() const { return uni_o; }
+    ptrdiff_t unistride_o() const { return sstr_o; }
     size_t length_in() const { return cshp_i; }
     size_t length_out() const { return cshp_o; }
     ptrdiff_t stride_in() const { return cstr_i; }
@@ -1058,7 +1058,7 @@ struct ExecHartley
         plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, nthreads);
     copy_output(it, res, out);
@@ -1103,7 +1103,7 @@ struct ExecFFTW
         plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
@@ -1150,7 +1150,7 @@ struct ExecDcst
         plan.exec_copyback(out.data(), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine, nthreads);
     copy_output(it, res, out);
@@ -1523,12 +1523,12 @@ struct ExecR2R
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a minus sign will be used in the exponent.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1559,17 +1559,17 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a DCT is computed, otherwise an inverse DCT.
  *
  *  \a type specifies the desired type (1-4) of the transform.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If \a ortho is true, the first and last array entries are corrected (if
  *  necessary) to allow an orthonormalized transform.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1595,17 +1595,17 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a DST is computed, otherwise an inverse DST.
  *
  *  \a type specifies the desired type (1-4) of the transform.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If \a ortho is true, the first and last array entries are corrected (if
  *  necessary) to allow an orthonormalized transform.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1997,7 +1997,7 @@ struct ExecConv1C
  *  The main purpose of this routine is efficiency: the combination of the above
  *  operations can be carried out more quickly than running the individual
  *  operations in succession.
- * 
+ *
  *  \a in and \a out must have identical shapes, with the possible exception
  *  of the axis \a axis; they may point to the same memory; in this case all
  *  of their strides must be identical.
@@ -2006,7 +2006,7 @@ struct ExecConv1C
  *
  *  \a kernel must have the same length as \a in.shape(axis); it must be
  *  provided in the same domain as \a in (i.e. not pre-transformed).
- * 
+ *
  *  If \a in has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */

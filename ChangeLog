@@ -7,6 +7,7 @@
 
 - wgridder:
   - recalculated kernels, improved error model
+  - small performance tweaks
 
 
 0.24.0:
