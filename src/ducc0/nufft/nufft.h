@@ -1056,9 +1056,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.poppush("FFT");
       checkShape(grid.shape(), {nu,nv});
+      {
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: not all elements of the output array are needed, some FFTs can be skipped
-      c2c(fgrid, fgrid, {0,1}, forward, Tcalc(1), nthreads);
+      c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
+      auto fgridl=fgrid.subarray({{},{0,(nyuni+1)/2}});
+      c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
+      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nyuni/2,MAXIDX}});
+      c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+      }
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni});
       auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
@@ -1113,9 +1118,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           }
         });
       timers.poppush("FFT");
+      {
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: the array is partially zero, some FFTs can be skipped
-      c2c(fgrid, fgrid, {0,1}, forward, Tcalc(1), nthreads);
+      auto fgridl=fgrid.subarray({{},{0,(nyuni+1)/2}});
+      c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
+      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nyuni/2,MAXIDX}});
+      c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+      c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
+      }
       timers.poppush("interpolation");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid);
@@ -1619,9 +1629,24 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, grid);
       timers.poppush("FFT");
+      {
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: not all elements of the output array are needed, some FFTs can be skipped
-      c2c(fgrid, fgrid, {0,1,2}, forward, Tcalc(1), nthreads);
+      slice slz{0,(nzuni+1)/2}, shz{fgrid.shape(2)-nzuni/2,MAXIDX};
+      slice sly{0,(nyuni+1)/2}, shy{fgrid.shape(1)-nyuni/2,MAXIDX};
+      c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
+      auto fgridl=fgrid.subarray({{},{},slz});
+      c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
+      auto fgridh=fgrid.subarray({{},{},shz});
+      c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+      auto fgridll=fgrid.subarray({{},sly,slz});
+      c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
+      auto fgridlh=fgrid.subarray({{},sly,shz});
+      c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
+      auto fgridhl=fgrid.subarray({{},shy,slz});
+      c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
+      auto fgridhh=fgrid.subarray({{},shy,shz});
+      c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+      }
       timers.poppush("grid correction");
       checkShape(uniform_out.shape(), {nxuni, nyuni, nzuni});
       auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
@@ -1687,9 +1712,24 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           }
         });
       timers.poppush("FFT");
+      {
       vfmav<complex<Tcalc>> fgrid(grid);
-      // TODO: the array is partially zero, some FFTs can be skipped
-      c2c(fgrid, fgrid, {0,1,2}, forward, Tcalc(1), nthreads);
+      slice slz{0,(nzuni+1)/2}, shz{fgrid.shape(2)-nzuni/2,MAXIDX};
+      slice sly{0,(nyuni+1)/2}, shy{fgrid.shape(1)-nyuni/2,MAXIDX};
+      auto fgridll=fgrid.subarray({{},sly,slz});
+      c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
+      auto fgridlh=fgrid.subarray({{},sly,shz});
+      c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
+      auto fgridhl=fgrid.subarray({{},shy,slz});
+      c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
+      auto fgridhh=fgrid.subarray({{},shy,shz});
+      c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+      auto fgridl=fgrid.subarray({{},{},slz});
+      c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
+      auto fgridh=fgrid.subarray({{},{},shz});
+      c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+      c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
+      }
       timers.poppush("interpolation");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid);
