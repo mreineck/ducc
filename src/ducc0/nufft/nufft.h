@@ -728,7 +728,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int nsafe = (supp+1)/2;
         static constexpr int su = supp+(1<<log2tile);
         static constexpr int sv = supp+(1<<log2tile);
-        static constexpr int svvec = max<size_t>(sv, ((supp+2*vlen-2)/vlen)*vlen);
         static constexpr double xsupp=2./supp;
         const Nufft2d *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
@@ -736,8 +735,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         int iu0, iv0; // start index of the current nonuniform point
         int bu0, bv0; // start index of the current buffer
 
-        vmav<Tacc,2> bufri;
-        Tacc *px0r, *px0i;
+        vmav<complex<Tacc>,2> gbuf;
+        complex<Tacc> *px0;
         vector<mutex> &locks;
 
         DUCC0_NOINLINE void dump()
@@ -755,8 +754,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             lock_guard<mutex> lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
-              grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufri(2*iu,iv)), Tcalc(bufri(2*iu+1,iv)));
-              bufri(2*iu,iv) = bufri(2*iu+1,iv) = 0;
+              grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
+              gbuf(iu,iv) = 0;
               if (++idxv>=inv) idxv=0;
               }
             }
@@ -765,7 +764,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           }
 
       public:
-        Tacc * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
+        complex<Tacc> * DUCC0_RESTRICT p0;
         union kbuf {
           Tacc scalar[2*nvec*vlen];
           mysimd<Tacc> simd[2*nvec];
@@ -780,13 +779,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
-            bufri({size_t(2*su+1),size_t(svvec)}),
-            px0r(bufri.data()), px0i(bufri.data()+svvec),
+            gbuf({size_t(su+1),size_t(sv)}),
+            px0(gbuf.data()),
             locks(locks_)
           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
         ~HelperNu2u() { dump(); }
 
-        constexpr int lineJump() const { return 2*svvec; }
+        constexpr int lineJump() const { return sv; }
 
         [[gnu::always_inline]] [[gnu::hot]] void prep(double u_in, double v_in)
           {
@@ -804,9 +803,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
-          auto ofs = (iu0-bu0)*2*svvec + iv0-bv0;
-          p0r = px0r+ofs;
-          p0i = px0i+ofs;
+          auto ofs = (iu0-bu0)*sv + iv0-bv0;
+          p0 = px0+ofs;
           }
       };
 
@@ -912,7 +910,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         HelperNu2u<SUPP> hlp(this, grid, locks);
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
-        const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+NVEC*vlen;
+        constexpr size_t NVEC2 = (2*SUPP+vlen-1)/vlen;
+        union Txdata{
+          array<complex<Tacc>,SUPP> c;
+          array<mysimd<Tacc>,NVEC2> v;
+          Txdata(){for (size_t i=0; i<v.size(); ++i) v[i]=0;}
+          };
+        Txdata xdata;
 
         constexpr size_t lookahead=3;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
@@ -928,38 +933,19 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           hlp.prep(coords(row,0), coords(row,1));
           auto v(points_in(row));
 
-          if constexpr (NVEC==1)
+          for (size_t cv=0; cv<SUPP; ++cv)
+            xdata.c[cv] = kv[cv]*v;
+
+          Tacc * DUCC0_RESTRICT xpx = reinterpret_cast<Tacc *>(hlp.p0);
+          for (size_t cu=0; cu<SUPP; ++cu)
             {
-            mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*kv[0];
-            for (size_t cu=0; cu<SUPP; ++cu)
+            Tacc tmpx=ku[cu];
+            for (size_t cv=0; cv<NVEC2; ++cv)
               {
-              auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
-              auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-              auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-              auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
-              tr += vr*ku[cu];
-              ti += vi*ku[cu];
-              tr.copy_to(pxr,element_aligned_tag());
-              ti.copy_to(pxi,element_aligned_tag());
-              }
-            }
-          else
-            {
-            mysimd<Tacc> vr(v.real()), vi(v.imag());
-            for (size_t cu=0; cu<SUPP; ++cu)
-              {
-              mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
-              for (size_t cv=0; cv<NVEC; ++cv)
-                {
-                auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
-                auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                tr += tmpr*kv[cv];
-                tr.copy_to(pxr,element_aligned_tag());
-                auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                ti += tmpi*kv[cv];
-                ti.copy_to(pxi,element_aligned_tag());
-                }
+              auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
+              auto tval = mysimd<Tacc>(px,element_aligned_tag());
+              tval += tmpx*xdata.v[cv];
+              tval.copy_to(px,element_aligned_tag());
               }
             }
           }
@@ -1491,7 +1477,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
         const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*vlen*NVEC;
-        array<complex<Tacc>,SUPP> xdata;
+        union Txdata{
+          array<complex<Tacc>,SUPP> c;
+          array<Tacc,2*SUPP> f;
+          Txdata(){for (size_t i=0; i<f.size(); ++i) f[i]=0;}
+          };
+        Txdata xdata;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
@@ -1508,11 +1499,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           hlp.prep(coords(row,0), coords(row,1), coords(row,2));
           auto v(points_in(row));
 
-          auto * DUCC0_RESTRICT px = hlp.p0;
           for (size_t cw=0; cw<SUPP; ++cw)
-            xdata[cw]=kw[cw]*v;
-          const Tacc * DUCC0_RESTRICT fptr1=(const Tacc *)(xdata.data());
-          Tacc * DUCC0_RESTRICT fptr2=(Tacc *)(px);
+            xdata.c[cw]=kw[cw]*v;
+          const Tacc * DUCC0_RESTRICT fptr1=xdata.f.data();
+          Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const auto j1 = 2*ljump;
           const auto j2 = 2*(pjump-SUPP*ljump);
           for (size_t cu=0; cu<SUPP; ++cu, fptr2+=j2)
