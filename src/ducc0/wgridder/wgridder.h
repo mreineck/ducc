@@ -1890,7 +1890,7 @@ auto get_tuning_parameters(const cmav<double,2> &uvw,
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, double center_x, double center_y)
   {
-  if (!do_wgridding)
+  if ((!do_wgridding) || (npix_x<500) || (npix_y<500))
     return make_tuple(vmav<uint8_t,2>::build_empty(), size_t(0), size_t(0), size_t(0));
 
   auto W = size_t(max(3, min(16, int(2-log10(epsilon)))));
