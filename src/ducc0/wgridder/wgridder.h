@@ -1788,6 +1788,26 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
+auto get_facet_data(size_t npix_x, size_t npix_y, size_t nfx, size_t nfy, size_t ifx, size_t ify,
+  double pixsize_x, double pixsize_y, double center_x, double center_y)
+  {
+  size_t istep = (npix_x+nfx-1) / nfx;
+  istep += istep%2;  // make even
+  size_t jstep = (npix_y+nfy-1) / nfy;
+  jstep += jstep%2;  // make even
+
+  MR_assert((istep<=npix_x) && (jstep<=npix_y), "bad istep, jstep");
+
+  size_t startx=ifx*istep, stopx=min((ifx+1)*istep, npix_x);
+  if ((stopx-startx)&1) --startx;
+  size_t starty=ify*jstep, stopy=min((ify+1)*jstep, npix_y);
+  if ((stopy-starty)&1) --starty;
+
+  double cx = center_x + pixsize_x*0.5*(startx+stopx-double(npix_x));
+  double cy = center_y + pixsize_y*0.5*(starty+stopy-double(npix_y));
+  return make_tuple(startx, starty, stopx, stopy, cx, cy);
+  }
+
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
@@ -1796,34 +1816,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   double sigma_max=2.6, double center_x=0, double center_y=0)
   {
   size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
-  size_t istep = (npix_x+nfx-1) / nfx;
-  istep += istep%2;  // make even
-  size_t jstep = (npix_y+nfy-1) / nfy;
-  jstep += jstep%2;  // make even
-// FIXME: optimize use of temporary arrays!
   for (size_t i=0; i<nfx; ++i)
-    {
-    double cx = center_x + pixsize_x*0.5*((2*i+1)*istep-double(npix_x));
-    size_t imax = min((i+1)*istep, npix_x);
     for (size_t j=0; j<nfy; ++j)
       {
-      double cy = center_y + pixsize_y*0.5*((2*j+1)*jstep-double(npix_y));
-      size_t jmax = min((j+1)*jstep, npix_y);
-      if ((imax==(i+1)*istep) && (jmax==(j+1)*jstep))
-        {
-        auto subdirty=subarray<2>(dirty, {{i*istep, imax}, {j*jstep, jmax}});
-        ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, subdirty, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-        }
-      else
-        {
-        vmav<Timg,2> subdirty({istep,jstep});
-        ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, subdirty, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-        for (size_t ii=0; ii<imax-i*istep; ++ii)
-          for (size_t jj=0; jj<jmax-j*jstep; ++jj)
-            dirty(ii+i*istep, jj+j*jstep) = subdirty(ii,jj);
-        }
+      auto [startx, starty, stopx, stopy, cx, cy] = get_facet_data(npix_x, npix_y, nfx, nfy, i, j, pixsize_x, pixsize_y, center_x, center_y);
+      auto subdirty=subarray<2>(dirty, {{startx, stopx}, {starty, stopy}});
+      ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, subdirty, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
       }
-    }
   }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_faceted(size_t nfx,size_t nfy, const cmav<double,2> &uvw,
@@ -1839,34 +1838,16 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   size_t jstep = (npix_y+nfy-1) / nfy;
   jstep += jstep%2;  // make even
 
-// FIXME: optimize use of temporary arrays!
   vmav<complex<Tms>,2> ms2(ms.shape());
   mav_apply([](complex<Tms> &v){v=complex<Tms>(0);},nthreads,ms);
   for (size_t i=0; i<nfx; ++i)
-    {
-    double cx = center_x + pixsize_x*0.5*((2*i+1)*istep-double(npix_x));
-    size_t imax = min((i+1)*istep, npix_x);
     for (size_t j=0; j<nfy; ++j)
       {
-      double cy = center_y + pixsize_y*0.5*((2*j+1)*jstep-double(npix_y));
-      size_t jmax = min((j+1)*jstep, npix_y);
-      if ((imax==(i+1)*istep) && (jmax==(j+1)*jstep))
-        {
-        auto subdirty=subarray<2>(dirty, {{i*istep, imax}, {j*jstep, jmax}});
-        dirty2ms<Tcalc,Tacc>(uvw, freq, subdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms2, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-        }
-      else
-        {
-        vmav<Timg,2> subdirty({istep,jstep});
-        mav_apply([](Timg &v){v=Timg(0);},nthreads,subdirty);
-        for (size_t ii=0; ii<imax-i*istep; ++ii)
-          for (size_t jj=0; jj<jmax-j*jstep; ++jj)
-            subdirty(ii,jj) = dirty(ii+i*istep, jj+j*jstep);
-        dirty2ms<Tcalc,Tacc>(uvw, freq, subdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms2, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-        }
+      auto [startx, starty, stopx, stopy, cx, cy] = get_facet_data(npix_x, npix_y, nfx, nfy, i, j, pixsize_x, pixsize_y, center_x, center_y);
+      auto subdirty=subarray<2>(dirty, {{startx, stopx}, {starty, stopy}});
+      dirty2ms<Tcalc,Tacc>(uvw, freq, subdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms2, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, cx, cy, true);
       mav_apply([](complex<Tms> &v1, const complex<Tms> &v2){v1+=v2;},nthreads,ms,ms2);
       }
-    }
   }
 
 auto get_nminmax_rectangle(double xmin, double xmax, double ymin, double ymax)
@@ -1931,7 +1912,6 @@ auto get_tuning_parameters(const cmav<double,2> &uvw,
          ymax = ymin + (npix_y-1)*pixsize_y;
 
   auto [nm1min, nm1max] = get_nminmax_rectangle(xmin, xmax, ymin, ymax);
-  cout << "n range: " << nm1min << " " << nm1max << endl;
   double dw = 1./sigma/abs(nm1min-nm1max);
 
   constexpr size_t vlen=4;
@@ -2030,6 +2010,21 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0)
   {
+  {
+  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
+  bool xodd=npix_x&1, yodd=npix_y&1;
+  if (xodd || yodd)  // odd image size
+    {
+    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd});
+    ms2dirty_tuning<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon,
+               do_wgridding, nthreads, tdirty, verbosity, negate_v, divide_by_n,
+               sigma_min, sigma_max, center_x+0.5*pixsize_x*xodd, center_y+0.5*pixsize_y*yodd);
+    for (size_t i=0; i<npix_x; ++i)
+      for (size_t j=0; j<npix_y; ++j)
+        dirty(i,j) = tdirty(i,j);
+    return;
+    }
+  }
   auto [bin, icut, nfx, nfy] = get_tuning_parameters(uvw, freq, mask_,
     dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, epsilon,
     do_wgridding, nthreads, verbosity, center_x, center_y);
@@ -2049,15 +2044,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
     auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
     vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
     auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
+    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
+    ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
+             do_wgridding, nthreads, dirty, verbosity, negate_v, divide_by_n,
+             sigma_min, sigma_max, center_x, center_y);
+    vmav<Timg,2> dirty2(dirty.shape());
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
     ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
-               do_wgridding, nthreads, dirty, verbosity, negate_v, divide_by_n,
+               do_wgridding, nthreads, dirty2, verbosity, negate_v, divide_by_n,
                sigma_min, sigma_max, center_x, center_y, true);
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
-    vmav<Timg,2> dirty2(dirty.shape());
-    ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
-             do_wgridding, nthreads, dirty2, verbosity, negate_v, divide_by_n,
-             sigma_min, sigma_max, center_x, center_y);
     mav_apply([&](Timg &v1, Timg v2) {v1+=v2;}, nthreads, dirty, dirty2);
     }
   }
@@ -2069,6 +2064,19 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0)
   {
+  {
+  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
+  bool xodd=npix_x&1, yodd=npix_y&1;
+  if (xodd || yodd)  // odd image size
+    {
+    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd});
+    for (size_t i=0; i<npix_x+xodd; ++i)
+      for (size_t j=0; j<npix_y+yodd; ++j)
+        tdirty(i,j) = ((i<npix_x)&&(j<npix_y)) ? dirty(i,j) : Timg(0);
+    dirty2ms_tuning<Tcalc,Tacc>(uvw, freq, tdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y);
+    return;
+    }
+  }
   auto [bin, icut, nfx, nfy] = get_tuning_parameters(uvw, freq, mask_,
     dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, epsilon,
     do_wgridding, nthreads, verbosity, center_x, center_y);
