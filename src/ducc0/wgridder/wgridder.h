@@ -2048,11 +2048,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
     {
     auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
     vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut); }, nthreads, mask, bin, mask2);
+    auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
+    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
     ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
                do_wgridding, nthreads, dirty, verbosity, negate_v, divide_by_n,
                sigma_min, sigma_max, center_x, center_y, true);
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut); }, nthreads, mask, bin, mask2);
+    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
     vmav<Timg,2> dirty2(dirty.shape());
     ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
              do_wgridding, nthreads, dirty2, verbosity, negate_v, divide_by_n,
@@ -2082,9 +2083,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     {
     auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
     vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut); }, nthreads, mask, bin, mask2);
+    auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
+    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
     dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y);
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut); }, nthreads, mask, bin, mask2);
+    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
     vmav<complex<Tms>,2> tms(ms.shape());
     dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, tms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
     mav_apply([&](complex<Tms> &v1, complex<Tms> v2) {v1+=v2;}, nthreads, ms, tms);
