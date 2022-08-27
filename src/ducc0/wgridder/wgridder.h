@@ -1414,7 +1414,7 @@ timers.pop();
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+             << ", dw=" << dw << ", (wmax-wmin)/dw=" << (wmax_d-wmin_d)/dw << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
       size_t ovh1 = nu*nv*sizeof(complex<Tcalc>);             // grid
@@ -1799,9 +1799,9 @@ auto get_facet_data(size_t npix_x, size_t npix_y, size_t nfx, size_t nfy, size_t
   MR_assert((istep<=npix_x) && (jstep<=npix_y), "bad istep, jstep");
 
   size_t startx=ifx*istep, stopx=min((ifx+1)*istep, npix_x);
-  if ((stopx-startx)&1) --startx;
+  MR_assert((startx+32<=stopx) && ((stopx&1)==0), "bad facet x length");
   size_t starty=ify*jstep, stopy=min((ify+1)*jstep, npix_y);
-  if ((stopy-starty)&1) --starty;
+  MR_assert((starty+32<=stopy) && ((stopy&1)==0), "bad facet y length");
 
   double cx = center_x + pixsize_x*0.5*(startx+stopx-double(npix_x));
   double cy = center_y + pixsize_y*0.5*(starty+stopy-double(npix_y));
@@ -1891,14 +1891,17 @@ auto get_tuning_parameters(const cmav<double,2> &uvw,
   size_t verbosity, double center_x, double center_y)
   {
   if ((!do_wgridding) || (npix_x<500) || (npix_y<500))
+    {
+    if (verbosity>0)
+      cout << "Tuning decision:\n  no subdivision" << endl;
     return make_tuple(vmav<uint8_t,2>::build_empty(), size_t(0), size_t(0), size_t(0));
-
+    }
   auto W = size_t(max(3, min(16, int(2-log10(epsilon)))));
 
   constexpr double sigma = 1.5;
 
   constexpr size_t nbin=50;
-  auto [wmin, wmax, whist,wbin] = get_winfo(uvw, freq, mask_, nbin, nthreads);
+  auto [wmin, wmax, whist, wbin] = get_winfo(uvw, freq, mask_, nbin, nthreads);
   vmav<size_t,1> whist_acc({nbin});
   for (size_t i=0; i<whist.shape(0); ++i)
     whist_acc(i) = whist(i) + ((i==0) ? 0 : whist_acc(i-1));
@@ -1923,6 +1926,19 @@ auto get_tuning_parameters(const cmav<double,2> &uvw,
   double logterm = log(nu*nv)/log(nref_fft*nref_fft);
   double fftcost0 = npix_x/nref_fft*nv/nref_fft*logterm*costref_fft * 1.3;
   double overhead = 4e-9*uvw.shape(0)*freq.shape(0);
+
+  {
+  // check for early exit
+  auto nplanes_naive = (wmax-wmin)/dw+W;
+  auto gridcost_naive = gridcost0*whist_acc(nbin-1);
+  auto fftcost_naive = fftcost0*nplanes_naive;
+  if ((nplanes_naive<=2*W) || (gridcost_naive>2*fftcost_naive))
+    {
+    if (verbosity>0)
+      cout << "Tuning decision:\n  no subdivision" << endl;
+    return make_tuple(vmav<uint8_t,2>::build_empty(), size_t(0), size_t(0), size_t(0));
+    }
+  }
 
   double minmincost=1e300;
   size_t minminnfx=0, minminnfy=0, miniwcut=0;
@@ -2093,10 +2109,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
     auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
-    dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y);
+    dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y);
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
     vmav<complex<Tms>,2> tms(ms.shape());
-    dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, tms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
+    dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, tms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
     mav_apply([&](complex<Tms> &v1, complex<Tms> v2) {v1+=v2;}, nthreads, ms, tms);
     }
   }
