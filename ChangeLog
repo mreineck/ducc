@@ -1,3 +1,8 @@
+0.26.0:
+- general:
+  - clarify that the preferred installation method is compilation from source
+
+
 0.25.0:
 - general:
   - try to fix the package on 32bit platforms
