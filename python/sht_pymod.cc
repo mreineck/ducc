@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2021 Max-Planck-Society
+ *  Copyright (C) 2017-2022 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -305,18 +305,34 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
   auto mstart = get_mstart(lmax, mstart_);
   auto theta = to_cmav<double,1>(theta_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
-  auto map = to_vmav<T,2>(map_);
+  auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  vector<size_t> mapshp(alm_.ndim());
+  for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
+  mapshp[mapshp.size()-1] = min_mapdim(nphi, ringstart, pixstride);
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp);
+  auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  MR_assert(map.shape(1)==alm.shape(1), "bad number of components in map array");
+  size_t nthreads_outer=1;
+  if (alm.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
   {
   py::gil_scoped_release release;
-  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP);
+  execDynamic(alm.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        synthesis(subalm, submap, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP);
+        }
+    });
   }
   return map_;
   }
@@ -342,18 +358,35 @@ template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   const py::array &phi0_, const py::array &ringstart_,
   ptrdiff_t pixstride, size_t nthreads)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
   auto mstart = get_mstart(lmax, mstart_);
   auto theta = to_cmav<double,1>(theta_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  vector<size_t> mapshp(alm_.ndim());
+  for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
   MR_assert(alm.shape(0)==1, "bad number of components in alm array");
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {2, min_mapdim(nphi, ringstart, pixstride)});
-  auto map = to_vmav<T,2>(map_);
+  mapshp[mapshp.size()-1] = min_mapdim(nphi, ringstart, pixstride);
+  mapshp[mapshp.size()-2] = 2;
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp);
+  auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  size_t nthreads_outer=1;
+  if (alm.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
   {
   py::gil_scoped_release release;
-  synthesis(alm, map, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
+  execDynamic(alm.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        synthesis(subalm, submap, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
+        }
+    });
   }
   return map_;
   }
@@ -486,7 +519,6 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   size_t nthreads)
   {
   auto mstart = get_mstart(lmax, mstart_);
-  auto map = to_cmav<T,2>(map_);
   auto theta = to_cmav<double,1>(theta_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
@@ -494,12 +526,29 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   vmav<size_t,1> mval(mstart.shape());
   for (size_t i=0; i<mval.shape(0); ++i)
     mval(i) = i;
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {map.shape(0),min_almdim(lmax, mval, mstart, lstride)});
-  auto alm = to_vmav<complex<T>,2>(alm_);
-  MR_assert(alm.shape(0)==map.shape(0), "bad number of components in a_lm array");
+  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
+  vector<size_t> almshp(map_.ndim());
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  almshp[almshp.size()-1] = min_almdim(lmax, mval, mstart, lstride);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
+  MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
+  size_t nthreads_outer=1;
+  if (map.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
   {
   py::gil_scoped_release release;
-  adjoint_synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  execDynamic(map.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        adjoint_synthesis(subalm, submap, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+        }
+    });
   }
   return alm_;
   }
@@ -517,6 +566,84 @@ py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
   else if (isPyarr<double>(map))
     return Py2_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
+  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
+  const py::array &map_, const py::array &theta_, const py::array &phi0_,
+  const py::array &nphi_, const py::array &ringstart_, size_t spin, ptrdiff_t pixstride,
+  size_t nthreads, size_t maxiter, double epsilon)
+  {
+  auto mstart = get_mstart(lmax, mstart_);
+  auto theta = to_cmav<double,1>(theta_);
+  auto phi0 = to_cmav<double,1>(phi0_);
+  auto nphi = to_cmav<size_t,1>(nphi_);
+  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  vmav<size_t,1> mval(mstart.shape());
+  for (size_t i=0; i<mval.shape(0); ++i)
+    mval(i) = i;
+  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
+  vector<size_t> almshp(map_.ndim());
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  almshp[almshp.size()-1] = min_almdim(lmax, mval, mstart, lstride);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
+  MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
+  size_t nthreads_outer=1;
+  if (map.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
+  vector<size_t> itn(map.shape(0)), istop(map.shape(0));
+  vector<double> rnorm(map.shape(0)), sqnorm(map.shape(0));
+  {
+  py::gil_scoped_release release;
+  execDynamic(map.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(subalm, submap, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, maxiter, epsilon);
+        itn[itrans] = xitn;
+        istop[itrans] = xistop;
+        rnorm[itrans] = xrnorm;
+        sqnorm[itrans] = xsqnorm;
+        }
+    });
+  }
+  py::list res;
+  res.append(alm_);
+  if (map_.ndim()<=2) // just a single transform
+    {
+    res.append(py::cast(istop[0]));
+    res.append(py::cast(itn[0]));
+    res.append(py::cast(rnorm[0]));
+    res.append(py::cast(sqnorm[0]));
+    }
+  else
+    {
+    res.append(py::cast(istop));
+    res.append(py::cast(itn));
+    res.append(py::cast(rnorm));
+    res.append(py::cast(sqnorm));
+    }
+  return res;
+  }
+py::object Py_pseudo_analysis(const py::array &map, const py::array &theta,
+ size_t lmax,
+  const py::object &mstart,
+  const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
+  size_t nthreads,
+  py::object &alm, size_t maxiter, double epsilon)
+  {
+  if (isPyarr<float>(map))
+    return Py2_pseudo_analysis<float>(alm, lmax, mstart, lstride, map, theta,
+      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon);
+  else if (isPyarr<double>(map))
+    return Py2_pseudo_analysis<double>(alm, lmax, mstart, lstride, map, theta,
+      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -1474,6 +1601,9 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS, py::kw_only(), "map"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("pseudo_analysis", &Py_pseudo_analysis, /* docstring, */ py::kw_only(), "map"_a, "theta"_a,
+    "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a);
   m2.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS, py::kw_only(), "alm"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);

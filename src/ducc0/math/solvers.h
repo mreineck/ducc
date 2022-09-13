@@ -42,58 +42,75 @@ template<typename T> auto sym_ortho(T a, T b, T &c, T &s, T &r)
   s = b/r;
   }
 
-template <typename Tx, typename Tb, typename Top, typename Top_adj,
-  typename Tnormx, typename Tnormb>
-  auto lsmr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb, const Tb &b,
-            const Tx &x0, double damp, double atol, double btol, double conlim,
+/* Code based on scipy's LSMR implementation
+   Original copyright:
+   Copyright (C) 2010 David Fong and Michael Saunders
+
+   David Chin-lung Fong            clfong@stanford.edu
+   Institute for Computational and Mathematical Engineering
+   Stanford University
+
+   Michael Saunders                saunders@stanford.edu
+   Systems Optimization Laboratory
+   Dept of MS&E, Stanford University. */
+template <typename Tx, typename Tb, size_t xdim, size_t bdim,
+  typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
+  auto lsmr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
+            const cmav<Tb,bdim> &b, vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
+            double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
-  Tb u(b.shape());
+  static_assert(is_same<Tx,float >::value || is_same<Tx,complex<float >>::value
+              ||is_same<Tx,double>::value || is_same<Tx,complex<double>>::value,
+                "bad type for x");
+  static_assert(is_same<Tb,float >::value || is_same<Tb,complex<float >>::value
+              ||is_same<Tb,double>::value || is_same<Tb,complex<double>>::value,
+                "bad type for b");
+  using Tfx = typename conditional<is_same<Tx,float>::value
+                                 ||is_same<Tx,complex<float>>::value, float, double>::type;
+  using Tfb = typename conditional<is_same<Tb,float>::value
+                                 ||is_same<Tb,complex<float>>::value, float, double>::type;
+  static_assert(is_same<Tfx,Tfb>::value, "mixed single/double precision detected");
+  vmav<Tb, bdim> u(b.shape());
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
-  double normb = fnormb(b);
-  Tx x(x0.shape());
+  auto normb = fnormb(b);
+  MR_assert(x.shape()==x0.shape(), "shape mismatch");
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
-  Tx xtmp(x0.shape());
-  Tb btmp(b.shape());
+  vmav<Tx, xdim> xtmp(x0.shape());
+  vmav<Tb, bdim> btmp(b.shape());
   {
   op(x,btmp);
   mav_apply([](auto &v1, const auto &v2) { v1-=v2; }, nthreads, u, btmp);
   }
-  double beta = fnormb(u);
+  auto beta = fnormb(u);
 
-  Tx v(x0.shape());
+  vmav<Tx, xdim> v(x0.shape());
   double alpha = 0;
   if (beta>0)
     {
-    double xbeta = 1./beta;
-    mav_apply([xbeta](auto &v1) { v1*=xbeta; }, nthreads, u);
+    mav_apply([xbeta=Tfb(1./beta)](auto &v1) { v1*=xbeta; }, nthreads, u);
     op_adj(u,v);
     alpha = fnormx(v);
     }
   else
-    {
     mav_apply([](auto &v1) { v1=0; }, nthreads, v);
-    alpha = 0;
-    }
+
   if (alpha>0)
-    {
-    double xalpha = 1./alpha;
-    mav_apply([xalpha](auto &v1) { v1*=xalpha; }, nthreads, v);
-    }
+    mav_apply([xalpha=Tfx(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
 
   // Initialize variables for 1st iteration.
   size_t itn = 0;
-  double zetabar = alpha * beta,
+  double zetabar = alpha*beta,
          alphabar = alpha,
          rho = 1,
          rhobar = 1,
          cbar = 1,
          sbar = 0;
 
-  Tx h(v.shape());
+  vmav<Tx, xdim> h(v.shape());
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, h, v);
-  Tx hbar(h.shape());
+  vmav<Tx, xdim> hbar(h.shape());
   mav_apply([](auto &v1) { v1=0; }, nthreads, hbar);
 
   // Initialize variables for estimation of ||r||.
@@ -119,16 +136,20 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
   auto normr = beta;
 
   auto normar = alpha*beta;
-  if (normar==0)
-    return make_tuple(x, istop, itn, normr, normar, normA, condA, normx);
 
-  if (normb==0)
+  if (verbose)
+    cout << "0" << " " << normr << " " << normar << " " << normA << " " << condA << endl;
+
+  if (normar==0)  // x0 is a solution
+    return make_tuple(x, istop, itn, normr, normar, normA, condA, normx, normb);
+
+  if (normb==0)  // zero vector is a solution
     {
     mav_apply([](auto &v1) { v1=0; }, nthreads, x);
-    return make_tuple(x, istop, itn, normr, normar, normA, condA, normx);
+    return make_tuple(x, istop, itn, normr, normar, normA, condA, normx, normb);
     }
 
-  for (size_t itn=0; itn<maxiter; ++itn)
+  for (itn=1; itn<=maxiter; ++itn)
     {
     // Perform the next step of the bidiagonalization to obtain the
     // next  beta, u, alpha, v.  These satisfy the relations
@@ -136,23 +157,17 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
     //     alpha*v  =  A'@u  -  beta*v.
 
     op(v, btmp);
-    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-alpha*v1;}, nthreads, u, btmp);
+    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-Tfb(alpha)*v1;}, nthreads, u, btmp);
     beta = fnormb(u);
 
     if (beta>0)
       {
-      {
-      double xbeta = 1./beta;
-      mav_apply([xbeta](auto &v1) {v1 *= xbeta;}, nthreads, u);
-      }
+      mav_apply([xbeta=Tb(1./beta)](auto &v1) {v1 *= xbeta;}, nthreads, u);
       op_adj(u, xtmp);
-      mav_apply([beta](auto &v1, const auto &v2) {v1 = -beta*v1 + v2;}, nthreads, v, xtmp);
+      mav_apply([beta](auto &v1, const auto &v2) {v1 = v2-Tfx(beta)*v1;}, nthreads, v, xtmp);
       alpha = fnormx(v);
       if (alpha>0)
-        {
-        double xalpha = 1./alpha;
-        mav_apply([xalpha](auto &v1) {v1 *= xalpha;}, nthreads, v);
-        }
+        mav_apply([xalpha=Tfx(1./alpha)](auto &v1) {v1 *= xalpha;}, nthreads, v);
       }
 
     // At this point, beta = beta_{k+1}, alpha = alpha_{k+1}.
@@ -179,14 +194,14 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
 
     // Update h, h_hat, x.
     {
-    double fct = - thetabar * rho / (rhoold * rhobarold);
-    double fct2 = zeta / (rho * rhobar);
-    double fct3 = -thetanew/rho;
+    auto fct = Tfx(- thetabar * rho / (rhoold * rhobarold));
+    auto fct2 = Tfx(zeta / (rho * rhobar));
+    auto fct3 = Tfx(-thetanew/rho);
     mav_apply([fct, fct2, fct3](auto &vhbar, auto &vx, auto &vh, const auto &vv)
       {
       vhbar = vhbar*fct + vh;
-      vx += fct2*vhbar;
-      vh = fct3*vh + vv;
+      vx += vhbar*fct2;
+      vh = vh*fct3 + vv;
       }, nthreads, hbar, x, h, v);
     }
 
@@ -237,7 +252,6 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
 
     // Now use these norms to estimate certain other quantities,
     // some of which will be small near a solution.
-
     auto test1 = normr / normb;
     auto test2 = (normA*normr==0) ? 1./0. : normar / (normA*normr);
     auto test3 = 1 / condA;
@@ -246,26 +260,19 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
 
     // The following tests guard against extremely small values of
     // atol, btol or ctol.  (The user may have set any or all of
-    // the parameters atol, btol, conlim  to 0.)
+    // the parameters atol, btol, conlim to 0.)
     // The effect is equivalent to the normAl tests using
     // atol = eps,  btol = eps,  conlim = 1/eps.
 
-    if (itn >= maxiter)
-      istop = 7;
-    if (1 + test3 <= 1)
-      istop = 6;
-    if (1 + test2 <= 1)
-      istop = 5;
-    if (1 + t1 <= 1)
-      istop = 4;
+    if (itn >= maxiter) istop=7;  // did not find a solution in time
+    if (1+test3 <= 1) istop=6;
+    if (1+test2 <= 1) istop=5;
+    if (1+t1 <= 1) istop=4;
 
     // Allow for tolerances set by the user.
-    if (test3 <= ctol)
-      istop = 3;
-    if (test2 <= atol)
-      istop = 2;
-    if (test1 <= rtol)
-      istop = 1;
+    if (test3 <= ctol) istop=3;  // cond(A) > conlim
+    if (test2 <= atol) istop=2;  // x solves least-squares problem
+    if (test1 <= rtol) istop=1;  // x is an approximate solution
 
     if (verbose)
       cout << itn << " " << normr << " " << normar << " " << normA << " " << condA << endl;
@@ -273,7 +280,7 @@ template <typename Tx, typename Tb, typename Top, typename Top_adj,
     if (istop>0)
       break;
     }
-  return make_tuple(x, istop, itn, normr, normar, normA, condA, normx);
+  return make_tuple(x, istop, itn, normr, normar, normA, condA, normx, normb);
   }
 
 }

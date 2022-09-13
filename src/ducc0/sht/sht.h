@@ -113,6 +113,22 @@ template<typename T> void adjoint_synthesis(
   ptrdiff_t pixstride,
   size_t nthreads);
 
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilom);
+
 template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads, SHT_mode mode=ALM2MAP);
 
@@ -141,6 +157,7 @@ using detail_sht::map2leg;
 using detail_sht::leg2map;
 using detail_sht::synthesis;
 using detail_sht::adjoint_synthesis;
+using detail_sht::pseudo_analysis;
 using detail_sht::synthesis_2d;
 using detail_sht::adjoint_synthesis_2d;
 using detail_sht::analysis_2d;
