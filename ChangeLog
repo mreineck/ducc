@@ -1,3 +1,14 @@
+0.26.0:
+- wgridder:
+  - add "self-tuning" versions of `vis2dirty` and `dirty2vis` which attempt to
+    save time by
+     - splitting visibilities into a small-w and large-w part and processing
+       them separately, and/or
+     - subdividing the field of view into facets.
+    This can be advantageous when FFT cost would dominate using the naive
+    approach and the number of w-planes is large (roughly 50 and higher).
+
+
 0.25.0:
 - general:
   - try to fix the package on 32bit platforms
