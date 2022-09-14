@@ -1,4 +1,7 @@
 0.26.0:
+- general:
+  - clarify that the preferred installation method is compilation from source
+
 - wgridder:
   - add "self-tuning" versions of `vis2dirty` and `dirty2vis` which attempt to
     save time by

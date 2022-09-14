@@ -45,21 +45,22 @@ and that it should not be considered stable.
 
 ### Installation
 
-DUCC can be installed using a simple `pip` invocation:
-
-    pip3 install --user ducc0
-
-In most cases this will download and install a binary wheel.
-However, the performance of the installed package may not be optimal, since
-the wheel has to work on all CPUs of a given architecture (e.g. x86_64) and
-will therefore probably not use all features present in your local CPU.
-
-It is therefore recommended to install from source if possible, using the
-command
+For best performance, it is recommended to compile DUCC from source, optimizing
+for the specific CPU on the system. This can be done using the command
 
     pip3 install --no-binary ducc0 --user ducc0
 
-NOTE: compilation can take a significant amount of time (several minutes).
+NOTE: compilation requires the appropriate compilers to be installed (see above)
+and can take a significant amount of time (several minutes).
+
+Alternatively, a simple
+
+    pip3 install --user ducc0
+
+will install a pre-compiled binary package, which makes the installation process
+much quicker and does not require any compilers to be installed on the system.
+However, the code will most likely perform significantly worse (by a factor of
+two to three for some functions) than a custom built version.
 
 DUCC0 has been packaged for Alpine linux and can be installed with
 

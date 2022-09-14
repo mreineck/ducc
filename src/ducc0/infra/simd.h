@@ -2,7 +2,7 @@
  *  Functionality which approximates future standard C++ SIMD classes.
  *
  *  For details see section 9 of https://wg21.link/N4808
- * 
+ *
  *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
  *  \author Martin Reinecke
  */
@@ -141,7 +141,6 @@ using detail_simd::vectorizable;
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_SVE_BITS)
 #if __ARM_FEATURE_SVE_BITS>0
 // OK, we can use SVE
-#warning Using SVE
 #define DUCC0_USE_SVE
 #include <arm_sve.h>
 #endif
@@ -149,7 +148,6 @@ using detail_simd::vectorizable;
 #ifndef DUCC0_USE_SVE
 // see if we can use Neon
 #if defined(__ARM_NEON)
-#warning Using NEON
 #define DUCC0_USE_NEON
 #include <arm_neon.h>
 #endif
