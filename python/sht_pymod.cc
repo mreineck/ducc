@@ -310,6 +310,7 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
+  MR_assert((alm_.ndim()>=2)&&(alm_.ndim()<=3), "alm must be a 2D or 3D array");
   auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
   vector<size_t> mapshp(alm_.ndim());
   for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
@@ -363,6 +364,7 @@ template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
+  MR_assert((alm_.ndim()>=2)&&(alm_.ndim()<=3), "alm must be a 2D or 3D array");
   auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
   vector<size_t> mapshp(alm_.ndim());
   for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
@@ -526,6 +528,7 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   vmav<size_t,1> mval(mstart.shape());
   for (size_t i=0; i<mval.shape(0); ++i)
     mval(i) = i;
+  MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
   auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
   vector<size_t> almshp(map_.ndim());
   for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
@@ -582,6 +585,7 @@ template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
   vmav<size_t,1> mval(mstart.shape());
   for (size_t i=0; i<mval.shape(0); ++i)
     mval(i) = i;
+  MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
   auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
   vector<size_t> almshp(map_.ndim());
   for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
@@ -1431,17 +1435,17 @@ For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
 )""";
 
 constexpr const char *synthesis_DS = R"""(
-Transforms one or two sets of spherical harmonic coefficients to maps on the sphere.
+Transforms (sets of) one or two sets of spherical harmonic coefficients to maps on the sphere.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
+alm: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
-map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`
+map: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
-    The second dimension must be large enough to accommodate all pixels, which
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1451,17 +1455,17 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
@@ -1474,25 +1478,25 @@ lmax: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`)
+numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float of same accuracy as `alm`)
     the map pixel data.
     If `map` was supplied, this will be the same object
-    If newly allocated, the smallest possible second dimensions will be chosen.
+    If newly allocated, the smallest possible last dimension will be chosen.
 )""";
 
 constexpr const char *adjoint_synthesis_DS = R"""(
-Transforms one or two maps to spherical harmonic coefficients.
+Transforms (sets of) one or two maps to spherical harmonic coefficients.
 This is the adjoint operation of `synthesis`.
 
 Parameters
 ----------
-alm: None or numpy.ndarray((ncomp, x), dtype=numpy.complex of same precision as `map`)
+alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
+    The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
     if `None`, a new suitable array is allocated
-map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64
-    The second dimension must be large enough to accommodate all pixels, which
+map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
@@ -1501,17 +1505,17 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
@@ -1524,26 +1528,95 @@ lmax: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.complex of same accuracy as `map`)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-    If newly allocated, the smallest possible second dimensions will be chosen.
+numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    If `alm` was supplied, this will be the same object
+    If newly allocated, the smallest possible last dimension will be chosen.
 )""";
 
-constexpr const char *synthesis_deriv1_DS = R"""(
-Transforms a set of spherical harmonic coefficients to two maps containing
-the derivatives with respect to theta and phi.
+constexpr const char *pseudo_analysis_DS = R"""(
+Tries to extract spherical harmonic coefficients from (sets of) one or two maps
+by using the iterative LSMR algorithm.
 
 Parameters
 ----------
-alm: numpy.ndarray((1, x), dtype=numpy.complex64 or numpy.complex128)
+alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
+    The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
-map: None or numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`
+    if `None`, a new suitable array is allocated
+map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
+    The last dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    azimuth (in radians) of the first pixel in every ring
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    the index in the last dimension of `map` at which the first pixel of every
+    ring is stored
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+pixstride: int
+    the index stride in the last dimension of `map` between two subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+maxiter: int >= 0
+    the maximum number of iterations before stopping the algorithm
+epsilon: float >= 0
+    the relative tolerance used as a stopping criterion
+
+Returns
+-------
+numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    If `alm` was supplied, this will be the same object
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+int or list(int)
+    the reason for stopping the iteration
+    1: approximate solution to the equation system found
+    2: approximate least-squares solution found
+    3: condition number of the equation system too large
+    7: maximum number of iterations reached
+
+int or list(int):
+    the iteration count(s)
+
+float or list(float):
+    the residual norm, divided by the norm of `map`
+
+float or list(float):
+    the quality of the least-squares solution
+)""";
+
+constexpr const char *synthesis_deriv1_DS = R"""(
+Transforms a set (or sets) of spherical harmonic coefficients to two maps
+containing the derivatives with respect to theta and phi.
+
+Parameters
+----------
+alm: numpy.ndarray(([ntrans,] 1, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+map: None or numpy.ndarray(([ntrans,] 2, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
-    The second dimension must be large enough to accommodate all pixels, which
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1553,17 +1626,17 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
@@ -1576,7 +1649,7 @@ Returns
 numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`)
     the map pixel data.
     If `map` was supplied, this will be the same object
-    If newly allocated, the smallest possible second dimensions will be chosen.
+    If newly allocated, the smallest possible last dimension will be chosen.
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
@@ -1601,7 +1674,7 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS, py::kw_only(), "map"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
-  m2.def("pseudo_analysis", &Py_pseudo_analysis, /* docstring, */ py::kw_only(), "map"_a, "theta"_a,
+  m2.def("pseudo_analysis", &Py_pseudo_analysis, pseudo_analysis_DS, py::kw_only(), "map"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a);
   m2.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS, py::kw_only(), "alm"_a, "theta"_a,

@@ -17,7 +17,7 @@
 /*! \file sht.cc
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2022 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -2449,7 +2449,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
     = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
            alm0, 0., epsilon, epsilon, 1e8,
-           maxiter, true, nthreads);
+           maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 
