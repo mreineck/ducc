@@ -203,3 +203,26 @@ def test_rotation(lmax, nthreads):
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     assert_(ducc0.misc.l2error(alm,alm2)<=1e-6)
+
+
+@pmp('spin', (0, 2))
+@pmp('nthreads', (1, 4))
+@pmp('nside', (32, 64))
+@pmp('ntrans', (1, 8))
+def test_healpix_inverse(nside, spin, ntrans, nthreads):
+    rng = np.random.default_rng(48)
+
+    lmax = int(2.5*nside)
+    mmax = lmax
+    ncomp = 1 if spin == 0 else 2
+
+    alm0 = random_alm(lmax, mmax, spin, ntrans*ncomp, rng)
+    alm0 = alm0.reshape((ntrans, ncomp, -1))
+
+    base = ducc0.healpix.Healpix_Base(nside, "RING")
+    geom = base.sht_info()
+
+    map = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, **geom)
+    alm1 = ducc0.sht.experimental.pseudo_analysis(map=map, lmax=lmax, spin=spin, nthreads=nthreads, epsilon=1e-8, maxiter=20, **geom)[0]
+
+    assert_(ducc0.misc.l2error(alm0,alm1)<1e-6)
