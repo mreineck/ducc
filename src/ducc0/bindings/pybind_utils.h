@@ -119,11 +119,37 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj)
   return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
     copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
   }
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const py::array &obj)
+  {
+  auto tmp = to_cfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename cmav<T,ndim>::shape_t newshape;
+  typename cmav<T,ndim>::stride_t newstride;
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return cmav<T,ndim>(tmp.data(), newshape, newstride);
+  }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
   {
   auto arr = toPyarr<T>(obj);
   return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
     copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true));
+  }
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::array &obj)
+  {
+  auto tmp = to_vfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename vmav<T,ndim>::shape_t newshape;
+  typename vmav<T,ndim>::stride_t newstride;
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return vmav<T,ndim>(tmp.data(), newshape, newstride);
   }
 
 template<typename T> void zero_Pyarr(py::array_t<T> &arr, size_t nthreads=1)
@@ -215,7 +241,9 @@ using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
 using detail_pybind::to_cmav;
+using detail_pybind::to_cmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
+using detail_pybind::to_vmav_with_optional_leading_dimensions;
 
 }
 

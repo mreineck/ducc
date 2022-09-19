@@ -217,7 +217,8 @@ class fmav_info
       ptrdiff_t stride=1;
       for (size_t i=0; i<ndim; ++i)
         {
-        if (str[ndim-1-i]!=stride) return false;
+        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
+          return false;
         stride *= ptrdiff_t(shp[ndim-1-i]);
         }
       return true;
@@ -425,7 +426,8 @@ template<size_t ndim> class mav_info
       ptrdiff_t stride=1;
       for (size_t i=0; i<ndim; ++i)
         {
-        if (str[ndim-1-i]!=stride) return false;
+        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
+          return false;
         stride *= ptrdiff_t(shp[ndim-1-i]);
         }
       return true;

@@ -17,7 +17,7 @@
 /*! \file sht.cc
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2022 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -33,6 +33,7 @@
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
+#include "ducc0/math/solvers.h"
 
 namespace ducc0 {
 
@@ -2393,6 +2394,63 @@ template<typename T> void adjoint_synthesis(
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
     }
+  }
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon)
+  {
+  auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
+    {
+    synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi, phi0,
+              ringstart, pixstride, nthreads, ALM2MAP);
+    };
+  auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
+    {
+    adjoint_synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi,
+                      phi0, ringstart, pixstride, nthreads);
+    };
+  auto mapnorm = [&](const cmav<T,2> &xmap)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xmap.shape(0); ++icomp)
+      for (size_t iring=0; iring<ringstart.shape(0); ++iring)
+         for (size_t ipix=0; ipix<nphi(iring); ++ipix)
+           {
+           auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride);
+           res += tmp*tmp;
+           }
+    return sqrt(res);
+    };
+  auto almnorm = [&](const cmav<complex<T>,2> &xalm)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xalm.shape(0); ++icomp)
+      for (size_t m=0; m<mstart.shape(0); ++m)
+         for (size_t l=m; l<=lmax; ++l)
+           {
+           auto tmp = xalm(icomp,mstart(m)+l*lstride);
+           res += norm(tmp) * ((m==0) ? 1 : 2);
+           }
+    return sqrt(res);
+    };
+  auto alm0 = alm.build_uniform(alm.shape(), 0.);
+  auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
+    = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
+           alm0, 0., epsilon, epsilon, 1e8,
+           maxiter, false, nthreads);
+  return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 
 template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,

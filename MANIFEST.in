@@ -31,6 +31,7 @@ include src/ducc0/math/pointing.cc
 include src/ducc0/math/pointing.h
 include src/ducc0/math/quaternion.h
 include src/ducc0/math/rangeset.h
+include src/ducc0/math/solvers.h
 include src/ducc0/math/space_filling.cc
 include src/ducc0/math/space_filling.h
 include src/ducc0/math/unity_roots.h
