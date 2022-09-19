@@ -235,7 +235,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     tautildeold = (zetaold - thetatildeold * tautildeold) / rhotildeold;
     auto taud = (zeta - thetatilde * tautildeold) / rhodold;
     d += betacheck * betacheck;
-    normr = sqrt(d + (betad - taud)*(betad-taud) + betadd * betadd);
+    normr = sqrt(d + (betad-taud)*(betad-taud) + betadd * betadd);
 
     // Estimate ||A||.
     normA2 += beta * beta;
