@@ -11,6 +11,15 @@
     This can be advantageous when FFT cost would dominate using the naive
     approach and the number of w-planes is large (roughly 50 and higher).
 
+- sht:
+  - the methods synthesis, adjoint_synthesis, and synthesis_deriv1 now accept
+    an optional leading dimension in the alm/map arrays, to allow "batched"
+    transforms. If the batch size is large enough, parallelization will not
+    be done within a single transforms, but rather over different transforms,
+    which can be beneficial, especially if the transforms are small.
+  - a new method "pseudo_analysis" was added, which performs iterative,
+    approximate map analysis using the LSMR algorithm.
+
 
 0.25.0:
 - general:
