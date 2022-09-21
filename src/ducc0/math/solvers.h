@@ -31,6 +31,7 @@
 #define DUCC0_SOLVERS_H
 
 #include <cmath>
+#include <limits>
 #include "ducc0/infra/mav.h"
 
 namespace ducc0 {
@@ -257,7 +258,8 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     // Now use these norms to estimate certain other quantities,
     // some of which will be small near a solution.
     auto test1 = normr / normb;
-    auto test2 = (normA*normr==0) ? 1./0. : normar / (normA*normr);
+    auto test2 = (normA*normr==0) ?
+      numeric_limits<double>::infinity() : normar / (normA*normr);
     auto test3 = 1 / condA;
     auto t1 = test1 / (1 + normA * normx / normb);
     auto rtol = btol + atol * normA * normx / normb;
