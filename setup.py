@@ -112,47 +112,9 @@ extensions = [Extension(pkgname,
                         extra_compile_args=extra_compile_args,
                         extra_link_args=python_module_link_args)]
 
-
-this_directory = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
-description = ("Distinctly useful code collection: contains efficient " +
-               "algorithms for Fast Fourier (and related) transforms, " +
-               "spherical harmonic transforms involving very general " +
-               "spherical grids, gridding/degridding tools for radio " +
-               "interferometry, 4pi spherical convolution operators " +
-               "and much more.")
-
 _print_env()
 
 setup(name=pkgname,
       version=version,
-      description=description,
-      long_description=long_description,
-      long_description_content_type='text/markdown',
-      url='https://gitlab.mpcdf.mpg.de/mtr/ducc',
-      include_package_data=True,
-      author='Martin Reinecke',
-      author_email='martin@mpa-garching.mpg.de',
-      packages=[],
-      python_requires=">=3.7",
-      ext_modules=extensions,
-      install_requires=['numpy>=1.17.0'],
-      license="GPLv2+",
-      classifiers=[
-          "Development Status :: 5 - Production/Stable",
-          "Topic :: Scientific/Engineering :: Mathematics",
-          "Topic :: Scientific/Engineering :: Physics",
-          "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
-          "Operating System :: OS Independent",
-          "Programming Language :: C++",
-          "Intended Audience :: Science/Research"],
-      project_urls={
-          "Bug Tracker": "https://gitlab.mpcdf.mpg.de/mtr/ducc/issues",
-          "Bug Tracker (Github)": "https://github.com/mreineck/ducc/issues",
-          "Documentation": "https://mtr.pages.mpcdf.de/ducc",
-          "Source Code": "https://gitlab.mpcdf.mpg.de/mtr/ducc",
-          "Source Code (Github)": "https://github.com/mreineck/ducc",
-          "README": "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/README.md",
-          "Changelog": "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/ChangeLog"},
+      ext_modules = extensions
       )
