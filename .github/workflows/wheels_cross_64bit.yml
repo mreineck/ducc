@@ -5,7 +5,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macOS-10.15]
+        os: [macOS-11.0]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
