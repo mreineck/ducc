@@ -27,8 +27,7 @@ jobs:
       - run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
       - run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
       - run: sudo apt update
-      # fix this version for now, because the current one has trouble installing
-      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp-2021.2.0
+      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp
       - run: |
           source /opt/intel/oneapi/setvars.sh intel64
           CC=icx CXX=icpx python3 -m pip install --user .
