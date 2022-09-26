@@ -69,7 +69,6 @@ define_macros = [("PKGNAME", pkgname),
                  ("PKGVERSION", version)]
 
 if sys.platform == 'darwin':
-    import distutils.sysconfig
     extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
     python_module_link_args += ['-mmacosx-version-min=10.14', '-pthread']
 elif sys.platform == 'win32':
