@@ -2446,10 +2446,15 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
     return sqrt(res);
     };
   auto alm0 = alm.build_uniform(alm.shape(), 0.);
+  // try to estimate ATOL according to Paige & Saunders
+  // assuming an absolute error of machine epsilon in every matrix element
+  // and a sum of squares of 1 along every row/column
+  size_t npix=0;
+  mav_apply([&npix](size_t v){npix+=v;}, 1, nphi);
+  double atol = 1e-14*sqrt(npix);
   auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
     = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
-           alm0, 0., epsilon, epsilon, 1e8,
-           maxiter, false, nthreads);
+           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 
