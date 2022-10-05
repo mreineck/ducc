@@ -62,11 +62,11 @@ much quicker and does not require any compilers to be installed on the system.
 However, the code will most likely perform significantly worse (by a factor of
 two to three for some functions) than a custom built version.
 
-DUCC0 has been packaged for Alpine linux and can be installed with
+Additionally, pre-compiled binaries are distributed for the following systems.
 
-    apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0
-
-on the Alpine edge distribution.
+<a href="https://repology.org/project/python:ducc0/versions">
+<img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
+</a>
 
 
 Installing multiple major versions simultaneously
