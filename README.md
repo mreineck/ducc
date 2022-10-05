@@ -69,16 +69,16 @@ DUCC0 has been packaged for Alpine linux and can be installed with
 on the Alpine edge distribution.
 
 
-Installing multiple versions simultaneously
--------------------------------------------
+Installing multiple major versions simultaneously
+-------------------------------------------------
 
 The interfaces of the DUCC components are expected to evolve over time; whenever
 an interface changes in a manner that is not backwards compatible, the DUCC
-version number will increase. As a consequence it might happen that one part of
-a Python code may use an older version of DUCC while at the same time another
-part requires a newer version. Since DUCC's version number is included in the
-module name itself (the module is not called `ducc`, but rather `ducc<X>`),
-this is not a problem, as multiple DUCC versions can be installed
+major version number will increase. As a consequence it might happen that one
+part of a Python code may use an older version of DUCC while at the same time
+another part requires a newer version. Since DUCC's major version number is
+included in the module name itself (the module is not called `ducc`, but rather
+`ducc<X>`), this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need
