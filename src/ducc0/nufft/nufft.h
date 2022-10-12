@@ -1867,9 +1867,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   const cmav<complex<Tpoints>,1> &ms, bool forward,
   double epsilon,
   size_t nthreads, vfmav<complex<Tgrid>> &uniform, size_t verbosity,
-  double sigma_min=1.1,
-  double sigma_max=2.6,
-  double periodicity=2*pi, bool fft_order=false)
+  double sigma_min,
+  double sigma_max,
+  double periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -1901,8 +1901,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   const cfmav<complex<Tgrid>> &uniform, bool forward,
   double epsilon, size_t nthreads, vmav<complex<Tpoints>,1> &ms,
   size_t verbosity,
-  double sigma_min=1.1, double sigma_max=2.6,
-  double periodicity=2*pi, bool fft_order=false)
+  double sigma_min, double sigma_max,
+  double periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
