@@ -30,14 +30,14 @@ from numpy.testing import assert_allclose
 pmp = pytest.mark.parametrize
 
 
-def explicit_nufft(uvw, ms, shape, forward):
+def explicit_nufft(uvw, ms, shape, forward, periodicity):
     xyz = np.meshgrid(*[(-(ss//2) + np.arange(ss)) for ss in shape],
                        indexing='ij')
     isign = -1 if forward else 1
     res = np.zeros(shape, dtype=ms.dtype)
     for row in range(ms.shape[0]):
        phase = sum([a*b for a,b in zip(xyz, uvw[row,:])])
-       res += (ms[row]*np.exp((isign*1j)*phase))
+       res += (ms[row]*np.exp((2*np.pi/periodicity*isign*1j)*phase))
     return res
 
 
@@ -46,12 +46,14 @@ def explicit_nufft(uvw, ms, shape, forward):
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
+@pmp("periodicity", (1., 2*np.pi))
 @pmp("nthreads", (1, 2))
-def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, nthreads):
+def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
+                  nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
-    uvw = (rng.random((npoints,1))-0.5)*2*np.pi
+    uvw = (rng.random((npoints,1))-0.5)*periodicity
     ms = rng.random(npoints)-0.5 + 1j*(rng.random(npoints)-0.5)
     dirty = rng.random((nx))-0.5
     dirty = dirty +  1j*(rng.random((nx))-0.5)
@@ -67,14 +69,20 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, nthreads):
         assert_allclose(ducc0.misc.vdot(ms, m2), ducc0.misc.vdot(d2, dirty), rtol=tol)
 
     dirty2 = np.empty((nx,), dtype=dirty.dtype)
-    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward, epsilon=epsilon, nthreads=nthreads, out=dirty2).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,), forward)
+    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
+                              epsilon=epsilon, nthreads=nthreads, out=dirty2,
+                              periodicity=periodicity).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,), forward, periodicity)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
-    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward, epsilon=epsilon, nthreads=nthreads).astype("c16")
+    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
+                           epsilon=epsilon, nthreads=nthreads,
+                           periodicity=periodicity).astype("c16")
     check(dirty2, ms2)
 
     if have_finufft and not singleprec:
-        comp = finufft.nufft1d2(uvw[:,0], dirty, nthreads=nthreads,eps=epsilon,isign=1 if forward else -1)
+        comp = finufft.nufft1d2(uvw[:,0]*2*np.pi/periodicity, dirty,
+                                nthreads=nthreads,eps=epsilon,
+                                isign=1 if forward else -1)
         if comp.ndim==0:
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
@@ -85,12 +93,14 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, nthreads):
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
+@pmp("periodicity", (1., 2*np.pi))
 @pmp("nthreads", (1, 2))
-def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
+def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
+                  nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
-    uvw = (rng.random((npoints, 2))-0.5)*2*np.pi
+    uvw = (rng.random((npoints, 2))-0.5)*periodicity
     ms = rng.random(npoints)-0.5 + 1j*(rng.random(npoints)-0.5)
     dirty = rng.random((nx, ny))-0.5
     dirty = dirty +  1j*(rng.random((nx, ny))-0.5)
@@ -106,14 +116,21 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
         assert_allclose(ducc0.misc.vdot(ms, m2), ducc0.misc.vdot(d2, dirty), rtol=tol)
 
     dirty2 = np.empty((nx,ny), dtype=dirty.dtype)
-    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward, epsilon=epsilon, nthreads=nthreads, out=dirty2).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,ny), forward)
+    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
+                              epsilon=epsilon, nthreads=nthreads, out=dirty2,
+                              periodicity=periodicity).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,ny), forward, periodicity)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
-    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward, epsilon=epsilon, nthreads=nthreads).astype("c16")
+    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
+                           epsilon=epsilon, nthreads=nthreads,
+                           periodicity=periodicity).astype("c16")
     check(dirty2, ms2)
 
     if have_finufft and not singleprec:
-        comp = finufft.nufft2d2(uvw[:,0], uvw[:,1], dirty, nthreads=nthreads,eps=epsilon,isign=1 if forward else -1)
+        comp = finufft.nufft2d2(uvw[:,0]*2*np.pi/periodicity,
+                                uvw[:,1]*2*np.pi/periodicity,
+                                dirty, nthreads=nthreads,eps=epsilon,
+                                isign=1 if forward else -1)
         if comp.ndim==0:
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
@@ -125,12 +142,14 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, nthreads):
 @pmp("epsilon", (1e-5, 3e-5, 5e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
+@pmp("periodicity", (1., 2*np.pi))
 @pmp("nthreads", (1, 2))
-def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec, nthreads):
+def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
+                  periodicity, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
-    uvw = (rng.random((npoints, 3))-0.5)*2*np.pi
+    uvw = (rng.random((npoints, 3))-0.5)*periodicity
     ms = rng.random(npoints)-0.5 + 1j*(rng.random(npoints)-0.5)
     dirty = rng.random((nx, ny, nz))-0.5
     dirty = dirty +  1j*(rng.random((nx, ny, nz))-0.5)
@@ -146,14 +165,22 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec, nthreads):
         assert_allclose(ducc0.misc.vdot(ms, m2), ducc0.misc.vdot(d2, dirty), rtol=tol)
 
     dirty2 = np.empty((nx,ny,nz), dtype=dirty.dtype)
-    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward, epsilon=epsilon, nthreads=nthreads, out=dirty2, verbosity=0).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,ny,nz), forward)
+    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
+                              epsilon=epsilon, nthreads=nthreads, out=dirty2,
+                              verbosity=0, periodicity=periodicity).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,ny,nz), forward, periodicity)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
-    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward, epsilon=epsilon, nthreads=nthreads, verbosity=0).astype("c16")
+    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
+                           epsilon=epsilon, nthreads=nthreads, verbosity=0,
+                           periodicity=periodicity).astype("c16")
     check(dirty2, ms2)
 
-    # if have_finufft and not singleprec:
-        # comp = finufft.nufft3d2(uvw[:,0], uvw[:,1], uvw[:,2], dirty, nthreads=nthreads,eps=epsilon,isign=1 if forward else -1, debug=1)
-        # if comp.ndim==0:
-            # comp=np.array([comp[()]])
-        # assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=30*epsilon)
+    if have_finufft and not singleprec:
+        comp = finufft.nufft3d2(uvw[:,0]*2*np.pi/periodicity,
+                                uvw[:,1]*2*np.pi/periodicity,
+                                uvw[:,2]*2*np.pi/periodicity,
+                                dirty, nthreads=nthreads,eps=epsilon,
+                                isign=1 if forward else -1)
+        if comp.ndim==0:
+            comp=np.array([comp[()]])
+        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=30*epsilon)

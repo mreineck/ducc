@@ -139,9 +139,6 @@ template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
   { MR_assert(shp1==shp2, "shape mismatch"); }
 
-// constant factor needed when converting between non-uniform coordinates and grid positions.
-constexpr double coordfct=0.5/pi;
-
 /*! Selects the most efficient combination of gridding kernel and oversampled
     grid size for the provided problem parameters. */
 template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
@@ -241,6 +238,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     size_t nthreads;
     // 0: no output, 1: some diagnostic console output
     size_t verbosity;
+
+    // 1./<periodicity of coordinates>
+    double coordfct;
+
+    // if true, start with zero mode
+    // if false, start with most negative mode
+    bool fft_order;
 
     // reference to coordinates of the non-uniform points. Shape is (npoints, ndim).
     const cmav<Tcoord,2> &coords;
@@ -603,7 +607,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
            double sigma_min,
-           double sigma_max)
+           double sigma_max,
+           double periodicity,
+           bool fft_order_)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -613,6 +619,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
+        coordfct(1./periodicity),
+        fft_order(fft_order_),
         coords(coords_)
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
@@ -676,6 +684,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     double epsilon;
     size_t nthreads;
     size_t verbosity;
+    double coordfct;
+    bool fft_order;
 
     const cmav<Tcoord,2> &coords;
 
@@ -1124,7 +1134,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
            double sigma_min,
-           double sigma_max)
+           double sigma_max,
+           double periodicity,
+           bool fft_order_)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -1135,6 +1147,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
+        coordfct(1./periodicity),
+        fft_order(fft_order_),
         coords(coords_)
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
@@ -1207,6 +1221,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     double epsilon;
     size_t nthreads;
     size_t verbosity;
+    double coordfct;
+    bool fft_order;
 
     const cmav<Tcoord,2> &coords;
 
@@ -1731,7 +1747,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
            double sigma_min,
-           double sigma_max)
+           double sigma_max,
+           double periodicity,
+           bool fft_order_)
       : gridding(points_out_.size()==0),
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
@@ -1743,6 +1761,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
+        coordfct(1./periodicity),
+        fft_order(fft_order_),
         coords(coords_)
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many rows in the MS");
@@ -1824,7 +1844,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   double epsilon,
   size_t nthreads, vfmav<complex<Tgrid>> &uniform, size_t verbosity,
   double sigma_min=1.1,
-  double sigma_max=2.6)
+  double sigma_max=2.6,
+  double periodicity=2*pi, bool fft_order=false)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -1835,28 +1856,29 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     auto uniform_in(vmav<complex<Tgrid>,1>::build_empty());
     vmav<complex<Tpoints>,1> uniform2(uniform);
     Nufft1d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==2)
     {
     auto uniform_in(vmav<complex<Tgrid>,2>::build_empty());
     vmav<complex<Tpoints>,2> uniform2(uniform);
     Nufft2d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==3)
     {
     auto uniform_in(vmav<complex<Tgrid>,3>::build_empty());
     vmav<complex<Tpoints>,3> uniform2(uniform);
     Nufft3d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   }
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> void u2nu(const cmav<Tcoord,2> &coord,
   const cfmav<complex<Tgrid>> &uniform, bool forward,
   double epsilon, size_t nthreads, vmav<complex<Tpoints>,1> &ms,
   size_t verbosity,
-  double sigma_min=1.1, double sigma_max=2.6)
+  double sigma_min=1.1, double sigma_max=2.6,
+  double periodicity=2*pi, bool fft_order=false)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -1866,19 +1888,19 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     {
     auto uniform_out(vmav<complex<Tgrid>,1>::build_empty());
     Nufft1d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==2)
     {
     auto uniform_out(vmav<complex<Tgrid>,2>::build_empty());
     Nufft2d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==3)
     {
     auto uniform_out(vmav<complex<Tgrid>,3>::build_empty());
     Nufft3d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
-      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max);
+      epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   }
 } // namespace detail_nufft
