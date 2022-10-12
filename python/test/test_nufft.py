@@ -16,7 +16,6 @@
 from itertools import product
 
 import ducc0
-import ducc0
 
 try:
     import finufft
@@ -30,14 +29,16 @@ from numpy.testing import assert_allclose
 pmp = pytest.mark.parametrize
 
 
-def explicit_nufft(uvw, ms, shape, forward, periodicity):
+def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
     xyz = np.meshgrid(*[(-(ss//2) + np.arange(ss)) for ss in shape],
                        indexing='ij')
     isign = -1 if forward else 1
     res = np.zeros(shape, dtype=ms.dtype)
     for row in range(ms.shape[0]):
-       phase = sum([a*b for a,b in zip(xyz, uvw[row,:])])
-       res += (ms[row]*np.exp((2*np.pi/periodicity*isign*1j)*phase))
+        phase = sum([a*b for a,b in zip(xyz, uvw[row,:])])
+        res += (ms[row]*np.exp((2*np.pi/periodicity*isign*1j)*phase))
+    if fft_order:
+        res = np.fft.ifftshift(res)
     return res
 
 
@@ -47,9 +48,10 @@ def explicit_nufft(uvw, ms, shape, forward, periodicity):
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
 @pmp("periodicity", (1., 2*np.pi))
+@pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
-                  nthreads):
+                  fft_order, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -71,18 +73,19 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
     dirty2 = np.empty((nx,), dtype=dirty.dtype)
     dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
                               epsilon=epsilon, nthreads=nthreads, out=dirty2,
-                              periodicity=periodicity).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,), forward, periodicity)
+                              periodicity=periodicity, fft_order=fft_order).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,), forward, periodicity, fft_order)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
                            epsilon=epsilon, nthreads=nthreads,
-                           periodicity=periodicity).astype("c16")
+                           periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
 
     if have_finufft and not singleprec:
         comp = finufft.nufft1d2(uvw[:,0]*2*np.pi/periodicity, dirty,
                                 nthreads=nthreads,eps=epsilon,
-                                isign=1 if forward else -1)
+                                isign=1 if forward else -1,
+                                modeord=1 if fft_order else 0)
         if comp.ndim==0:
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
@@ -94,9 +97,10 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
 @pmp("periodicity", (1., 2*np.pi))
+@pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
-                  nthreads):
+                  fft_order, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -118,19 +122,20 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
     dirty2 = np.empty((nx,ny), dtype=dirty.dtype)
     dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
                               epsilon=epsilon, nthreads=nthreads, out=dirty2,
-                              periodicity=periodicity).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,ny), forward, periodicity)
+                              periodicity=periodicity, fft_order=fft_order).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,ny), forward, periodicity, fft_order)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
                            epsilon=epsilon, nthreads=nthreads,
-                           periodicity=periodicity).astype("c16")
+                           periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
 
     if have_finufft and not singleprec:
         comp = finufft.nufft2d2(uvw[:,0]*2*np.pi/periodicity,
                                 uvw[:,1]*2*np.pi/periodicity,
                                 dirty, nthreads=nthreads,eps=epsilon,
-                                isign=1 if forward else -1)
+                                isign=1 if forward else -1,
+                                modeord=1 if fft_order else 0)
         if comp.ndim==0:
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
@@ -143,9 +148,10 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
 @pmp("periodicity", (1., 2*np.pi))
+@pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
-                  periodicity, nthreads):
+                  periodicity, fft_order, nthreads):
     if singleprec and epsilon < 1e-6:
         pytest.skip()
     rng = np.random.default_rng(42)
@@ -167,12 +173,12 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
     dirty2 = np.empty((nx,ny,nz), dtype=dirty.dtype)
     dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
                               epsilon=epsilon, nthreads=nthreads, out=dirty2,
-                              verbosity=0, periodicity=periodicity).astype("c16")
-    dirty_ref = explicit_nufft(uvw, ms, (nx,ny,nz), forward, periodicity)
+                              verbosity=0, periodicity=periodicity, fft_order=fft_order).astype("c16")
+    dirty_ref = explicit_nufft(uvw, ms, (nx,ny,nz), forward, periodicity, fft_order)
     assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
                            epsilon=epsilon, nthreads=nthreads, verbosity=0,
-                           periodicity=periodicity).astype("c16")
+                           periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
 
     if have_finufft and not singleprec:
@@ -180,7 +186,8 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
                                 uvw[:,1]*2*np.pi/periodicity,
                                 uvw[:,2]*2*np.pi/periodicity,
                                 dirty, nthreads=nthreads,eps=epsilon,
-                                isign=1 if forward else -1)
+                                isign=1 if forward else -1,
+                                modeord=1 if fft_order else 0)
         if comp.ndim==0:
             comp=np.array([comp[()]])
-        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=30*epsilon)
+        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=50*epsilon)

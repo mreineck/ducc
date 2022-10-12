@@ -564,9 +564,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
-          size_t i2 = nu-nxuni/2+i;
-          if (i2>=nu) i2-=nu;
-          uniform_out(i) = complex<Tgrid>(grid(i2)*Tgrid(cfu[icfu]));
+          size_t iin = nu-nxuni/2+i;
+          if (iin>=nu) iin-=nu;
+          size_t iout = fft_order ? nxuni-nxuni/2+i : i;
+          if (iout>=nxuni) iout-=nxuni;
+          uniform_out(iout) = complex<Tgrid>(grid(iin)*Tgrid(cfu[icfu]));
           }
         });
       timers.pop();
@@ -586,9 +588,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
-          size_t i2 = nu-nxuni/2+i;
-          if (i2>=nu) i2-=nu;
-          grid(i2) = uniform_in(i)*Tcalc(cfu[icfu]);
+          size_t iin = fft_order ? nxuni-nxuni/2+i : i;
+          if (iin>=nxuni) iin-=nxuni;
+          size_t iout = nu-nxuni/2+i;
+          if (iout>=nu) iout-=nu;
+          grid(iout) = uniform_in(iin)*Tcalc(cfu[icfu]);
           }
         });
       timers.poppush("FFT");
@@ -1068,14 +1072,18 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
+          size_t iin = nu-nxuni/2+i;
+          if (iin>=nu) iin-=nu;
+          size_t iout = fft_order ? nxuni-nxuni/2+i : i;
+          if (iout>=nxuni) iout-=nxuni;
           for (size_t j=0; j<nyuni; ++j)
             {
             int icfv = abs(int(nyuni/2)-int(j));
-            size_t i2 = nu-nxuni/2+i;
-            if (i2>=nu) i2-=nu;
-            size_t j2 = nv-nyuni/2+j;
-            if (j2>=nv) j2-=nv;
-            uniform_out(i,j) = complex<Tgrid>(grid(i2,j2)*Tgrid(cfu[icfu]*cfv[icfv]));
+            size_t jin = nv-nyuni/2+j;
+            if (jin>=nv) jin-=nv;
+            size_t jout = fft_order ? nyuni-nyuni/2+j : j;
+            if (jout>=nyuni) jout-=nyuni;
+            uniform_out(iout,jout) = complex<Tgrid>(grid(iin,jin)*Tgrid(cfu[icfu]*cfv[icfv]));
             }
           }
         });
@@ -1101,14 +1109,18 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
+          size_t iin = fft_order ? nxuni-nxuni/2+i : i;
+          if (iin>=nxuni) iin-=nxuni;
+          size_t iout = nu-nxuni/2+i;
+          if (iout>=nu) iout-=nu;
           for (size_t j=0; j<nyuni; ++j)
             {
             int icfv = abs(int(nyuni/2)-int(j));
-            size_t i2 = nu-nxuni/2+i;
-            if (i2>=nu) i2-=nu;
-            size_t j2 = nv-nyuni/2+j;
-            if (j2>=nv) j2-=nv;
-            grid(i2,j2) = uniform_in(i,j)*Tcalc(cfu[icfu]*cfv[icfv]);
+            size_t jin = fft_order ? nyuni-nyuni/2+j : j;
+            if (jin>=nyuni) jin-=nyuni;
+            size_t jout = nv-nyuni/2+j;
+            if (jout>=nv) jout-=nv;
+            grid(iout,jout) = uniform_in(iin,jin)*Tcalc(cfu[icfu]*cfv[icfv]);
             }
           }
         });
@@ -1661,19 +1673,25 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
-          size_t i2 = nu-nxuni/2+i;
-          if (i2>=nu) i2-=nu;
+          size_t iin = nu-nxuni/2+i;
+          if (iin>=nu) iin-=nu;
+          size_t iout = fft_order ? nxuni-nxuni/2+i : i;
+          if (iout>=nxuni) iout-=nxuni;
           for (size_t j=0; j<nyuni; ++j)
             {
             int icfv = abs(int(nyuni/2)-int(j));
-            size_t j2 = nv-nyuni/2+j;
-            if (j2>=nv) j2-=nv;
+            size_t jin = nv-nyuni/2+j;
+            if (jin>=nv) jin-=nv;
+            size_t jout = fft_order ? nyuni-nyuni/2+j : j;
+            if (jout>=nyuni) jout-=nyuni;
             for (size_t k=0; k<nzuni; ++k)
               {
               int icfw = abs(int(nzuni/2)-int(k));
-              size_t k2 = nw-nzuni/2+k;
-              if (k2>=nw) k2-=nw;
-              uniform_out(i,j,k) = complex<Tgrid>(grid(i2,j2,k2)*Tgrid(cfu[icfu]*cfv[icfv]*cfw[icfw]));
+              size_t kin = nw-nzuni/2+k;
+              if (kin>=nw) kin-=nw;
+              size_t kout = fft_order ? nzuni-nzuni/2+k : k;
+              if (kout>=nzuni) kout-=nzuni;
+              uniform_out(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)*Tgrid(cfu[icfu]*cfv[icfv]*cfw[icfw]));
               }
             }
           }
@@ -1698,19 +1716,25 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         for (auto i=lo; i<hi; ++i)
           {
           int icfu = abs(int(nxuni/2)-int(i));
-          size_t i2 = nu-nxuni/2+i;
-          if (i2>=nu) i2-=nu;
+          size_t iin = fft_order ? nxuni-nxuni/2+i : i;
+          if (iin>=nxuni) iin-=nxuni;
+          size_t iout = nu-nxuni/2+i;
+          if (iout>=nu) iout-=nu;
           for (size_t j=0; j<nyuni; ++j)
             {
             int icfv = abs(int(nyuni/2)-int(j));
-            size_t j2 = nv-nyuni/2+j;
-            if (j2>=nv) j2-=nv;
+            size_t jin = fft_order ? nyuni-nyuni/2+j : j;
+            if (jin>=nyuni) jin-=nyuni;
+            size_t jout = nv-nyuni/2+j;
+            if (jout>=nv) jout-=nv;
             for (size_t k=0; k<nzuni; ++k)
               {
               int icfw = abs(int(nzuni/2)-int(k));
-              size_t k2 = nw-nzuni/2+k;
-              if (k2>=nw) k2-=nw;
-              grid(i2,j2,k2) = uniform_in(i,j,k)*Tcalc(cfu[icfu]*cfv[icfv]*cfw[icfw]);
+              size_t kin = fft_order ? nzuni-nzuni/2+k : k;
+              if (kin>=nzuni) kin-=nzuni;
+              size_t kout = nw-nzuni/2+k;
+              if (kout>=nw) kout-=nw;
+              grid(iout,jout,kout) = uniform_in(iin,jin,kin)*Tcalc(cfu[icfu]*cfv[icfv]*cfw[icfw]);
               }
             }
           }
