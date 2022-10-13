@@ -416,14 +416,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           int inu = int(parent->nover[0]);
           if (bu0<-nsafe) return; // nothing written into buffer yet
 
-          int idxu = (bu0+inu)%inu;
           {
           lock_guard<mutex> lock(mylock);
-          for (int iu=0; iu<su; ++iu)
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
             bufr(iu) = bufi(iu) = 0;
-            if (++idxu>=inu) idxu=0;
             }
           }
           }
@@ -495,12 +493,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         DUCC0_NOINLINE void load()
           {
           int inu = int(parent->nover[0]);
-          int idxu = (bu0+inu)%inu;
-          for (int iu=0; iu<su; ++iu)
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             bufr(iu) = grid(idxu).real();
             bufi(iu) = grid(idxu).imag();
-            if (++idxu>=inu) idxu=0;
             }
           }
 
@@ -782,21 +778,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           int inv = int(parent->nover[1]);
           if (bu0<-nsafe) return; // nothing written into buffer yet
 
-          int idxu = (bu0+inu)%inu;
           int idxv0 = (bv0+inv)%inv;
-          for (int iu=0; iu<su; ++iu)
-            {
-            int idxv = idxv0;
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             lock_guard<mutex> lock(locks[idxu]);
-            for (int iv=0; iv<sv; ++iv)
+            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
               gbuf(iu,iv) = 0;
-              if (++idxv>=inv) idxv=0;
               }
-            }
-            if (++idxu>=inu) idxu=0;
             }
           }
 
@@ -870,19 +860,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           {
           int inu = int(parent->nover[0]);
           int inv = int(parent->nover[1]);
-          int idxu = (bu0+inu)%inu;
           int idxv0 = (bv0+inv)%inv;
-          for (int iu=0; iu<su; ++iu)
-            {
-            int idxv = idxv0;
-            for (int iv=0; iv<sv; ++iv)
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               bufri(2*iu,iv) = grid(idxu, idxv).real();
               bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
-              if (++idxv>=inv) idxv=0;
               }
-            if (++idxu>=inu) idxu=0;
-            }
           }
 
       public:
@@ -1243,28 +1227,18 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           int inw = int(parent->nover[2]);
           if (bu0<-nsafe) return; // nothing written into buffer yet
 
-          int idxu = (bu0+inu)%inu;
           int idxv0 = (bv0+inv)%inv;
           int idxw0 = (bw0+inw)%inw;
-          for (int iu=0; iu<su; ++iu)
-            {
-            int idxv = idxv0;
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             lock_guard<mutex> lock(locks[idxu]);
-            for (int iv=0; iv<sv; ++iv)
-              {
-              int idxw = idxw0;
-              for (int iw=0; iw<sw; ++iw)
+            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 auto t=gbuf(iu,iv,iw);
                 grid(idxu,idxv,idxw) += complex<Tcalc>(t);
                 gbuf(iu,iv,iw) = 0;
-                if (++idxw>=inw) idxw=0;
                 }
-              if (++idxv>=inv) idxv=0;
-              }
-            }
-            if (++idxu>=inu) idxu=0;
             }
           }
 
@@ -1345,25 +1319,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           int inu = int(parent->nover[0]);
           int inv = int(parent->nover[1]);
           int inw = int(parent->nover[2]);
-          int idxu = (bu0+inu)%inu;
           int idxv0 = (bv0+inv)%inv;
           int idxw0 = (bw0+inw)%inw;
-          for (int iu=0; iu<su; ++iu)
-            {
-            int idxv = idxv0;
-            for (int iv=0; iv<sv; ++iv)
-              {
-              int idxw = idxw0;
-              for (int iw=0; iw<sw; ++iw)
+          for (int iu=0, idxu=(bu0+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 bufri(iu,2*iv,iw) = grid(idxu, idxv, idxw).real();
                 bufri(iu,2*iv+1,iw) = grid(idxu, idxv, idxw).imag();
-                if (++idxw>=inw) idxw=0;
                 }
-              if (++idxv>=inv) idxv=0;
-              }
-            if (++idxu>=inu) idxu=0;
-            }
           }
 
       public:
