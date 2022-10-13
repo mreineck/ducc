@@ -209,7 +209,7 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
 // Start of real NUFFT functionality
 //
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft_ancestor
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord, size_t ndim> class Nufft_ancestor
   {
   protected:
     // if true, perform nonuniform-to-uniform transform, else uniform-to-nonuniform
@@ -221,6 +221,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     const cmav<complex<Tpoints>,1> &points_in;
     // reference to nonuniform output data. In nu2u case, points to a 0-sized array.
     vmav<complex<Tpoints>,1> &points_out;
+    // reference to uniform input data. In nu2u case, points to a 0-sized array.
+    const cmav<complex<Tgrid>,ndim> &uniform_in;
+    // reference to uniform output data. In u2nu case, points to a 0-sized array.
+    vmav<complex<Tgrid>,ndim> &uniform_out;
     // requested epsilon value for this transform.
     double epsilon;
     // number of threads to use for this transform.
@@ -238,6 +242,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     // reference to coordinates of the non-uniform points. Shape is (npoints, ndim).
     const cmav<Tcoord,2> &coords;
 
+    // uniform grid dimensions
+    array<size_t, ndim> nuni;
+
     // holds the indices of the nonuniform points in the order in which they
     // should be processed
     quick_array<uint32_t> coord_idx;
@@ -252,6 +259,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
     Nufft_ancestor(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
+           const cmav<complex<Tgrid>,ndim> &uniform_in_, vmav<complex<Tgrid>,ndim> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
            double periodicity,
@@ -260,12 +268,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         forward(forward_),
         timers(gridding ? "gridding" : "degridding"),
         points_in(points_in_), points_out(points_out_),
+        uniform_in(uniform_in_), uniform_out(uniform_out_),
         epsilon(epsilon_),
         nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
         verbosity(verbosity_),
         coordfct(1./periodicity),
         fft_order(fft_order_),
-        coords(coords_)
+        coords(coords_),
+        nuni(gridding ? uniform_out.shape() : uniform_in.shape())
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many nonuniform points");
       checkShape(points_in.shape(), {coords.shape(0)});
@@ -285,24 +295,18 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     Tcoord: the floating-point type used for storing the coordinates of the
            non-uniform points.
  */
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft1d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft1d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>
   {
   private:
-    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>;
+    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>;
     using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward;
+          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::uniform_in, parent::uniform_out, parent::nuni;
 
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile=9;
-
-    // reference to uniform input data. In nu2u case, points to a 0-sized array.
-    const cmav<complex<Tgrid>,1> &uniform_in;
-    // reference to uniform output data. In u2nu case, points to a 0-sized array.
-    vmav<complex<Tgrid>,1> &uniform_out;
-    // uniform grid dimensions
-    size_t nxuni;
 
     // oversampled grid dimensions
     size_t nu;
@@ -579,7 +583,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity==0) return;
       cout << (gridding ? "Nonuniform to uniform:" : "Uniform to nonuniform:") << endl
            << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nxuni << "), "
+           << "grid=(" << nuni[0] << "), "
            << "oversampled grid=(" << nu;
       cout << "), supp=" << supp
            << ", eps=" << epsilon
@@ -601,13 +605,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       vfmav<complex<Tcalc>> fgrid(grid);
       c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
-      checkShape(uniform_out.shape(), {nxuni});
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      checkShape(uniform_out.shape(), nuni);
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iout, iin] = comp_indices(i, nxuni, nu, fft_order);
+          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nu, fft_order);
           uniform_out(iout) = complex<Tgrid>(grid(iin)*Tgrid(cfu[icfu]));
           }
         });
@@ -621,13 +625,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      checkShape(uniform_in.shape(), {nxuni});
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      checkShape(uniform_in.shape(), nuni);
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iin, iout] = comp_indices(i, nxuni, nu, fft_order);
+          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nu, fft_order);
           grid(iout) = uniform_in(iin)*Tcalc(cfu[icfu]);
           }
         });
@@ -650,10 +654,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double sigma_max,
            double periodicity,
            bool fft_order_)
-      : parent(coords_, points_in_, points_out_, epsilon_, forward_, nthreads_,
-               verbosity_, periodicity, fft_order_),
-        uniform_in(uniform_in_), uniform_out(uniform_out_),
-        nxuni(gridding ? uniform_out.shape(0) : uniform_in.shape(0))
+      : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
+               epsilon_, forward_, nthreads_, verbosity_, periodicity, fft_order_)
       {
       if (coords.shape(0)==0)
         {
@@ -663,7 +665,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni}, coords.shape(0), gridding,
+        {nuni[0]}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       timers.pop();
@@ -699,19 +701,17 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft2d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft2d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>
   {
   private:
-    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>;
+    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>;
     using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward;
+          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::uniform_in, parent::uniform_out, parent::nuni;
 
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
-    const cmav<complex<Tgrid>,2> &uniform_in;
-    vmav<complex<Tgrid>,2> &uniform_out;
-    size_t nxuni, nyuni;
 
     size_t nu, nv;
 
@@ -1045,7 +1045,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity==0) return;
       cout << (gridding ? "Gridding:" : "Degridding:") << endl
            << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nxuni << "x" << nyuni << "), "
+           << "grid=(" << nuni[0] << "x" << nuni[1] << "), "
            << "oversampled grid=(" << nu << "x" << nv;
       cout << "), supp=" << supp
            << ", eps=" << epsilon
@@ -1069,23 +1069,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       {
       vfmav<complex<Tcalc>> fgrid(grid);
       c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
-      auto fgridl=fgrid.subarray({{},{0,(nyuni+1)/2}});
+      auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
       c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nyuni/2,MAXIDX}});
+      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
       c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("grid correction");
-      checkShape(uniform_out.shape(), {nxuni, nyuni});
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nyuni/2+1, 1./nv, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      checkShape(uniform_out.shape(), nuni);
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nv, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iout, iin] = comp_indices(i, nxuni, nu, fft_order);
-          for (size_t j=0; j<nyuni; ++j)
+          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nu, fft_order);
+          for (size_t j=0; j<nuni[1]; ++j)
             {
-            auto [icfv, jout, jin] = comp_indices(j, nyuni, nv, fft_order);
+            auto [icfv, jout, jin] = comp_indices(j, nuni[1], nv, fft_order);
             uniform_out(iout,jout) = complex<Tgrid>(grid(iin,jin)*Tgrid(cfu[icfu]*cfv[icfv]));
             }
           }
@@ -1098,23 +1098,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv});
       timers.poppush("zeroing grid");
-      checkShape(uniform_in.shape(), {nxuni, nyuni});
+      checkShape(uniform_in.shape(), nuni);
 
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxuni/2}, {nyuni/2,nv-nyuni/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxuni/2, nu-nxuni/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxuni/2+1,MAXIDX}, {nyuni/2, nv-nyuni/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,nuni[0]/2}, {nuni[1]/2,nv-nuni[1]/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nuni[0]/2, nu-nuni[0]/2+1}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nu-nuni[0]/2+1,MAXIDX}, {nuni[1]/2, nv-nuni[1]/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nyuni/2+1, 1./nv, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nv, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iin, iout] = comp_indices(i, nxuni, nu, fft_order);
-          for (size_t j=0; j<nyuni; ++j)
+          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nu, fft_order);
+          for (size_t j=0; j<nuni[1]; ++j)
             {
-            auto [icfv, jin, jout] = comp_indices(j, nyuni, nv, fft_order);
+            auto [icfv, jin, jout] = comp_indices(j, nuni[1], nv, fft_order);
             grid(iout,jout) = uniform_in(iin,jin)*Tcalc(cfu[icfu]*cfv[icfv]);
             }
           }
@@ -1122,9 +1122,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("FFT");
       {
       vfmav<complex<Tcalc>> fgrid(grid);
-      auto fgridl=fgrid.subarray({{},{0,(nyuni+1)/2}});
+      auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
       c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nyuni/2,MAXIDX}});
+      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
       c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
       c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
       }
@@ -1144,11 +1144,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double sigma_max,
            double periodicity,
            bool fft_order_)
-      : parent(coords_, points_in_, points_out_, epsilon_, forward_, nthreads_,
-               verbosity_, periodicity, fft_order_),
-        uniform_in(uniform_in_), uniform_out(uniform_out_),
-        nxuni(gridding ? uniform_out.shape(0) : uniform_in.shape(0)),
-        nyuni(gridding ? uniform_out.shape(1) : uniform_in.shape(1))
+      : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
+               epsilon_, forward_, nthreads_, verbosity_, periodicity, fft_order_)
       {
       if (coords.shape(0)==0)
         {
@@ -1158,7 +1155,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni, nyuni}, coords.shape(0), gridding,
+        {nuni[0], nuni[1]}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       nv = dims[1];
@@ -1203,19 +1200,17 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft3d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft3d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>
   {
   private:
-    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord>;
+    using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>;
     using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward;
+          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::uniform_in, parent::uniform_out, parent::nuni;
 
     constexpr static int log2tile=4;
-    const cmav<complex<Tgrid>,3> &uniform_in;
-    vmav<complex<Tgrid>,3> &uniform_out;
-    size_t nxuni, nyuni, nzuni;
 
     size_t nu, nv, nw;
 
@@ -1596,7 +1591,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity==0) return;
       cout << (gridding ? "Gridding:" : "Degridding:") << endl
            << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nxuni << "x" << nyuni << "x" << nzuni << "), "
+           << "grid=(" << nuni[0] << "x" << nuni[1] << "x" << nuni[2] << "), "
            << "oversampled grid=(" << nu << "x" << nv << "x" << nw;
       cout << "), supp=" << supp
            << ", eps=" << epsilon
@@ -1617,8 +1612,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("FFT");
       {
       vfmav<complex<Tcalc>> fgrid(grid);
-      slice slz{0,(nzuni+1)/2}, shz{fgrid.shape(2)-nzuni/2,MAXIDX};
-      slice sly{0,(nyuni+1)/2}, shy{fgrid.shape(1)-nyuni/2,MAXIDX};
+      slice slz{0,(nuni[2]+1)/2}, shz{fgrid.shape(2)-nuni[2]/2,MAXIDX};
+      slice sly{0,(nuni[1]+1)/2}, shy{fgrid.shape(1)-nuni[1]/2,MAXIDX};
       c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
       auto fgridl=fgrid.subarray({{},{},slz});
       c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
@@ -1634,21 +1629,21 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("grid correction");
-      checkShape(uniform_out.shape(), {nxuni, nyuni, nzuni});
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nyuni/2+1, 1./nv, nthreads);
-      auto cfw = krn->corfunc(nzuni/2+1, 1./nw, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      checkShape(uniform_out.shape(), nuni);
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nv, nthreads);
+      auto cfw = krn->corfunc(nuni[2]/2+1, 1./nw, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iout, iin] = comp_indices(i, nxuni, nu, fft_order);
-          for (size_t j=0; j<nyuni; ++j)
+          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nu, fft_order);
+          for (size_t j=0; j<nuni[1]; ++j)
             {
-            auto [icfv, jout, jin] = comp_indices(j, nyuni, nv, fft_order);
-            for (size_t k=0; k<nzuni; ++k)
+            auto [icfv, jout, jin] = comp_indices(j, nuni[1], nv, fft_order);
+            for (size_t k=0; k<nuni[2]; ++k)
               {
-              auto [icfw, kout, kin] = comp_indices(k, nzuni, nw, fft_order);
+              auto [icfw, kout, kin] = comp_indices(k, nuni[2], nw, fft_order);
               uniform_out(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)*Tgrid(cfu[icfu]*cfv[icfv]*cfw[icfw]));
               }
             }
@@ -1662,24 +1657,24 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nu,nv,nw});
       timers.poppush("zeroing grid");
-      checkShape(uniform_in.shape(), {nxuni, nyuni, nzuni});
+      checkShape(uniform_in.shape(), nuni);
       // TODO: not all entries need to be zeroed, perhaps some time can be saved here
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      auto cfu = krn->corfunc(nxuni/2+1, 1./nu, nthreads);
-      auto cfv = krn->corfunc(nyuni/2+1, 1./nv, nthreads);
-      auto cfw = krn->corfunc(nzuni/2+1, 1./nw, nthreads);
-      execParallel(nxuni, nthreads, [&](size_t lo, size_t hi)
+      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nu, nthreads);
+      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nv, nthreads);
+      auto cfw = krn->corfunc(nuni[2]/2+1, 1./nw, nthreads);
+      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
-          auto [icfu, iin, iout] = comp_indices(i, nxuni, nu, fft_order);
-          for (size_t j=0; j<nyuni; ++j)
+          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nu, fft_order);
+          for (size_t j=0; j<nuni[1]; ++j)
             {
-            auto [icfv, jin, jout] = comp_indices(j, nyuni, nv, fft_order);
-            for (size_t k=0; k<nzuni; ++k)
+            auto [icfv, jin, jout] = comp_indices(j, nuni[1], nv, fft_order);
+            for (size_t k=0; k<nuni[2]; ++k)
               {
-              auto [icfw, kin, kout] = comp_indices(k, nzuni, nw, fft_order);
+              auto [icfw, kin, kout] = comp_indices(k, nuni[2], nw, fft_order);
               grid(iout,jout,kout) = uniform_in(iin,jin,kin)*Tcalc(cfu[icfu]*cfv[icfv]*cfw[icfw]);
               }
             }
@@ -1688,8 +1683,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.poppush("FFT");
       {
       vfmav<complex<Tcalc>> fgrid(grid);
-      slice slz{0,(nzuni+1)/2}, shz{fgrid.shape(2)-nzuni/2,MAXIDX};
-      slice sly{0,(nyuni+1)/2}, shy{fgrid.shape(1)-nyuni/2,MAXIDX};
+      slice slz{0,(nuni[2]+1)/2}, shz{fgrid.shape(2)-nuni[2]/2,MAXIDX};
+      slice sly{0,(nuni[1]+1)/2}, shy{fgrid.shape(1)-nuni[1]/2,MAXIDX};
       auto fgridll=fgrid.subarray({{},sly,slz});
       c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
       auto fgridlh=fgrid.subarray({{},sly,shz});
@@ -1720,12 +1715,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double sigma_max,
            double periodicity,
            bool fft_order_)
-      : parent(coords_, points_in_, points_out_, epsilon_, forward_, nthreads_,
-               verbosity_, periodicity, fft_order_),
-        uniform_in(uniform_in_), uniform_out(uniform_out_),
-        nxuni(gridding ? uniform_out.shape(0) : uniform_in.shape(0)),
-        nyuni(gridding ? uniform_out.shape(1) : uniform_in.shape(1)),
-        nzuni(gridding ? uniform_out.shape(2) : uniform_in.shape(2))
+      : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
+               epsilon_, forward_, nthreads_, verbosity_, periodicity, fft_order_)
       {
       if (coords.shape(0)==0)
         {
@@ -1735,7 +1726,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
       timers.push("parameter calculation");
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        {nxuni, nyuni, nzuni}, coords.shape(0), gridding,
+        {nuni[0], nuni[1], nuni[2]}, coords.shape(0), gridding,
         gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
       nu = dims[0];
       nv = dims[1];
