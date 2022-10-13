@@ -269,11 +269,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
            double sigma_min, double sigma_max,
-           double periodicity,
-           bool fft_order_)
+           double periodicity, bool fft_order_)
       : gridding(points_out_.size()==0),
         forward(forward_),
-        timers(gridding ? "gridding" : "degridding"),
+        timers(gridding ? "nu2u" : "u2nu"),
         points_in(points_in_), points_out(points_out_),
         uniform_in(uniform_in_), uniform_out(uniform_out_),
         epsilon(epsilon_),
@@ -286,8 +285,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       {
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many nonuniform points");
       checkShape(points_in.shape(), {coords.shape(0)});
-//FIXME later
-      if (coords.shape(0)==0) return;
+      if (coords.shape(0)==0)
+        {
+        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
+        return;
+        }
 
       timers.push("parameter calculation");
       vector<size_t> tdims{nuni.begin(), nuni.end()};
@@ -310,6 +312,30 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         MR_assert((nover[i]&1)==0, "oversampled dimensions must be even");
         }
       MR_assert(epsilon>0, "epsilon must be positive");
+      }
+
+    static string dim2string(const array<size_t, ndim> &arr)
+      {
+      ostringstream str;
+      str << arr[0];
+      for (size_t i=1; i<ndim; ++i) str << "x" << arr[i];
+      return str.str();
+      }
+
+    void report()
+      {
+      if (verbosity==0) return;
+      cout << (gridding ? "Nonuniform to uniform:" : "Uniform to nonuniform:") << endl
+           << "  nthreads=" << nthreads << ", "
+           << "grid=(" << dim2string(nuni) << "), "
+           << "oversampled grid=(" << dim2string(nover);
+      cout << "), supp=" << supp
+           << ", eps=" << epsilon
+           << endl;
+      cout << "  npoints=" << coords.shape(0) << endl;
+      cout << "  memory overhead: "
+           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
+           << reduce(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
   };
 
@@ -335,7 +361,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
           parent::timers, parent::krn, parent::fft_order, parent::forward,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
-          parent::shift, parent::maxi0;
+          parent::shift, parent::maxi0, parent::report;
 
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile=9;
@@ -604,22 +630,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void report()
-      {
-      if (verbosity==0) return;
-      cout << (gridding ? "Nonuniform to uniform:" : "Uniform to nonuniform:") << endl
-           << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nuni[0] << "), "
-           << "oversampled grid=(" << nover[0];
-      cout << "), supp=" << supp
-           << ", eps=" << epsilon
-           << endl;
-      cout << "  npoints=" << coords.shape(0) << endl;
-      cout << "  memory overhead: "
-           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
-           << nover[0]*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
-      }
-
     void nonuni2uni()
       {
       timers.push("allocating grid");
@@ -676,19 +686,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            const cmav<complex<Tgrid>,1> &uniform_in_, vmav<complex<Tgrid>,1> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min,
-           double sigma_max,
-           double periodicity,
-           bool fft_order_)
+           double sigma_min, double sigma_max,
+           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0)
-        {
-        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
-        return;
-        }
+      if (coords.shape(0)==0) return;
 
       MR_assert((nover[0]>>log2tile)<=(~uint32_t(0)), "nu too large");
 
@@ -722,7 +726,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
           parent::timers, parent::krn, parent::fft_order, parent::forward,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
-          parent::shift, parent::maxi0;
+          parent::shift, parent::maxi0, parent::report;
 
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
 
@@ -1048,22 +1052,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void report()
-      {
-      if (verbosity==0) return;
-      cout << (gridding ? "Gridding:" : "Degridding:") << endl
-           << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nuni[0] << "x" << nuni[1] << "), "
-           << "oversampled grid=(" << nover[0] << "x" << nover[1];
-      cout << "), supp=" << supp
-           << ", eps=" << epsilon
-           << endl;
-      cout << "  npoints=" << coords.shape(0) << endl;
-      cout << "  memory overhead: "
-           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
-           << nover[0]*nover[1]*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
-      }
-
     void nonuni2uni()
       {
       timers.push("allocating grid");
@@ -1148,19 +1136,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min,
-           double sigma_max,
-           double periodicity,
-           bool fft_order_)
+           double sigma_min, double sigma_max,
+           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0)
-        {
-        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
-        return;
-        }
+      if (coords.shape(0)==0) return;
 
       MR_assert((nover[0]>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nover[1]>>log2tile)<(size_t(1)<<16), "nv too large");
@@ -1198,7 +1180,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
           parent::timers, parent::krn, parent::fft_order, parent::forward,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
-          parent::shift, parent::maxi0;
+          parent::shift, parent::maxi0, parent::report;
 
     constexpr static int log2tile=4;
 
@@ -1571,22 +1553,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void report()
-      {
-      if (verbosity==0) return;
-      cout << (gridding ? "Gridding:" : "Degridding:") << endl
-           << "  nthreads=" << nthreads << ", "
-           << "grid=(" << nuni[0] << "x" << nuni[1] << "x" << nuni[2] << "), "
-           << "oversampled grid=(" << nover[0] << "x" << nover[1] << "x" << nover[2];
-      cout << "), supp=" << supp
-           << ", eps=" << epsilon
-           << endl;
-      cout << "  npoints=" << coords.shape(0) << endl;
-      cout << "  memory overhead: "
-           << coords.shape(0)*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
-           << nover[0]*nover[1]*nover[2]*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
-      }
-
     void nonuni2uni()
       {
       timers.push("allocating grid");
@@ -1696,19 +1662,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
            const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
            double epsilon_, bool forward_,
            size_t nthreads_, size_t verbosity_,
-           double sigma_min,
-           double sigma_max,
-           double periodicity,
-           bool fft_order_)
+           double sigma_min, double sigma_max,
+           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0)
-        {
-        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
-        return;
-        }
+      if (coords.shape(0)==0) return;
 
       MR_assert((nover[0]>>log2tile)<(uint32_t(1)<<10), "nu too large");
       MR_assert((nover[1]>>log2tile)<(uint32_t(1)<<10), "nv too large");
