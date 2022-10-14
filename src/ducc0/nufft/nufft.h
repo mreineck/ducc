@@ -339,6 +339,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
+
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord, size_t ndim> class Nufft;
+
 /*! Helper class for carrying out 1D nonuniform FFTs of types 1 and 2.
     Tcalc: the floating-point type in which all kernel-related calculations
            are performed
@@ -352,7 +355,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     Tcoord: the floating-point type used for storing the coordinates of the
            non-uniform points.
  */
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft1d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>
   {
   private:
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>;
@@ -400,7 +403,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = 2*nsafe+(1<<log2tile);
         static constexpr int suvec = su+vlen-1;
         static constexpr double xsupp=2./supp;
-        const Nufft1d *parent;
+        const Nufft *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,1> &grid;
         int iu0; // start index of the current nonuniform point
@@ -437,7 +440,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperNu2u(const Nufft1d *parent_, vmav<complex<Tcalc>,1> &grid_,
+        HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,1> &grid_,
           mutex &mylock_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000),
@@ -479,7 +482,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = 2*nsafe+(1<<log2tile);
         static constexpr int suvec = su+vlen-1;
         static constexpr double xsupp=2./supp;
-        const Nufft1d *parent;
+        const Nufft *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,1> &grid;
@@ -511,7 +514,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperU2nu(const Nufft1d *parent_, const cmav<complex<Tcalc>,1> &grid_)
+        HelperU2nu(const Nufft *parent_, const cmav<complex<Tcalc>,1> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000),
             bu0(-1000000),
@@ -677,13 +680,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    Nufft1d(const cmav<Tcoord,2> &coords_,
-           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-           const cmav<complex<Tgrid>,1> &uniform_in_, vmav<complex<Tgrid>,1> &uniform_out_,
-           double epsilon_, bool forward_,
-           size_t nthreads_, size_t verbosity_,
-           double sigma_min, double sigma_max,
-           double periodicity, bool fft_order_)
+    Nufft(const cmav<Tcoord,2> &coords_,
+          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
+          const cmav<complex<Tgrid>,1> &uniform_in_, vmav<complex<Tgrid>,1> &uniform_out_,
+          double epsilon_, bool forward_,
+          size_t nthreads_, size_t verbosity_,
+          double sigma_min, double sigma_max,
+          double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
@@ -713,7 +716,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft2d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>
   {
   private:
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>;
@@ -762,7 +765,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int su = supp+(1<<log2tile);
         static constexpr int sv = supp+(1<<log2tile);
         static constexpr double xsupp=2./supp;
-        const Nufft2d *parent;
+        const Nufft *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current nonuniform point
@@ -801,7 +804,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperNu2u(const Nufft2d *parent_, vmav<complex<Tcalc>,2> &grid_,
+        HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,2> &grid_,
           vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
@@ -846,7 +849,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int sv = supp+(1<<log2tile);
         static constexpr int svvec = max<size_t>(sv, ((supp+2*vlen-2)/vlen)*vlen);
         static constexpr double xsupp=2./supp;
-        const Nufft2d *parent;
+        const Nufft *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,2> &grid;
@@ -880,7 +883,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperU2nu(const Nufft2d *parent_, const cmav<complex<Tcalc>,2> &grid_)
+        HelperU2nu(const Nufft *parent_, const cmav<complex<Tcalc>,2> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
@@ -1115,13 +1118,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    Nufft2d(const cmav<Tcoord,2> &coords_,
-           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-           const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
-           double epsilon_, bool forward_,
-           size_t nthreads_, size_t verbosity_,
-           double sigma_min, double sigma_max,
-           double periodicity, bool fft_order_)
+    Nufft(const cmav<Tcoord,2> &coords_,
+          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
+          const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
+          double epsilon_, bool forward_,
+          size_t nthreads_, size_t verbosity_,
+          double sigma_min, double sigma_max,
+          double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
@@ -1155,7 +1158,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft3d: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> class Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>: public Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>
   {
   private:
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>;
@@ -1210,7 +1213,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int sv = supp+(1<<log2tile);
         static constexpr int sw = supp+(1<<log2tile);
         static constexpr double xsupp=2./supp;
-        const Nufft3d *parent;
+        const Nufft *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,3> &grid;
         int iu0, iv0, iw0; // start index of the current nonuniform point
@@ -1253,7 +1256,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperNu2u(const Nufft3d *parent_, vmav<complex<Tcalc>,3> &grid_,
+        HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,3> &grid_,
           vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
@@ -1304,7 +1307,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         static constexpr int sw = 2*nsafe+(1<<log2tile);
         static constexpr int swvec = max<size_t>(sw, ((supp+2*nvec-2)/nvec)*nvec);
         static constexpr double xsupp=2./supp;
-        const Nufft3d *parent;
+        const Nufft *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,3> &grid;
@@ -1341,7 +1344,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           };
         kbuf buf;
 
-        HelperU2nu(const Nufft3d *parent_, const cmav<complex<Tcalc>,3> &grid_)
+        HelperU2nu(const Nufft *parent_, const cmav<complex<Tcalc>,3> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000), iw0(-1000000),
             bu0(-1000000), bv0(-1000000), bw0(-1000000),
@@ -1621,13 +1624,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    Nufft3d(const cmav<Tcoord,2> &coords_,
-           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-           const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
-           double epsilon_, bool forward_,
-           size_t nthreads_, size_t verbosity_,
-           double sigma_min, double sigma_max,
-           double periodicity, bool fft_order_)
+    Nufft(const cmav<Tcoord,2> &coords_,
+          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
+          const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
+          double epsilon_, bool forward_,
+          size_t nthreads_, size_t verbosity_,
+          double sigma_min, double sigma_max,
+          double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
                epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
                periodicity, fft_order_)
@@ -1676,11 +1679,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   };
 
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> void nu2u(const cmav<Tcoord,2> &coord,
-  const cmav<complex<Tpoints>,1> &ms, bool forward,
-  double epsilon,
+  const cmav<complex<Tpoints>,1> &ms, bool forward, double epsilon,
   size_t nthreads, vfmav<complex<Tgrid>> &uniform, size_t verbosity,
-  double sigma_min,
-  double sigma_max,
+  double sigma_min, double sigma_max,
   double periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
@@ -1691,21 +1692,21 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     {
     auto uniform_in(vmav<complex<Tgrid>,1>::build_empty());
     vmav<complex<Tpoints>,1> uniform2(uniform);
-    Nufft1d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> par(coord, ms, points_out, uniform_in, uniform2,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==2)
     {
     auto uniform_in(vmav<complex<Tgrid>,2>::build_empty());
     vmav<complex<Tpoints>,2> uniform2(uniform);
-    Nufft2d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> par(coord, ms, points_out, uniform_in, uniform2,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==3)
     {
     auto uniform_in(vmav<complex<Tgrid>,3>::build_empty());
     vmav<complex<Tpoints>,3> uniform2(uniform);
-    Nufft3d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, ms, points_out, uniform_in, uniform2,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> par(coord, ms, points_out, uniform_in, uniform2,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   }
@@ -1723,19 +1724,19 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   if (ndim==1)
     {
     auto uniform_out(vmav<complex<Tgrid>,1>::build_empty());
-    Nufft1d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> par(coord, points_in, ms, uniform, uniform_out,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==2)
     {
     auto uniform_out(vmav<complex<Tgrid>,2>::build_empty());
-    Nufft2d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> par(coord, points_in, ms, uniform, uniform_out,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (ndim==3)
     {
     auto uniform_out(vmav<complex<Tgrid>,3>::build_empty());
-    Nufft3d<Tcalc, Tacc, Tpoints, Tgrid, Tcoord> par(coord, points_in, ms, uniform, uniform_out,
+    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> par(coord, points_in, ms, uniform, uniform_out,
       epsilon, forward, nthreads, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   }
