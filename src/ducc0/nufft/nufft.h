@@ -205,7 +205,7 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
   return make_tuple(minidx, bigdims);
   }
 
-template<typename Tacc, size_t ndim> constexpr int log2tile_;
+template<typename Tacc, size_t ndim> constexpr int log2tile_=-1;
 template<> constexpr int log2tile_<double, 1> = 9;
 template<> constexpr int log2tile_<float , 1> = 9;
 template<> constexpr int log2tile_<double, 2> = 4;
