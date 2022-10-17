@@ -96,6 +96,8 @@ class Scheduler
 size_t max_threads();
 void set_default_nthreads(size_t new_default_nthreads);
 size_t get_default_nthreads();
+inline size_t real_nthreads(size_t nthreads)
+  { return (nthreads==0) ? get_default_nthreads() : nthreads; }
 
 /// Execute \a func over \a nwork work items, on a single thread.
 void execSingle(size_t nwork,
@@ -206,6 +208,7 @@ template<typename T, typename Func> auto execWorklist
 using detail_threading::max_threads;
 using detail_threading::get_default_nthreads;
 using detail_threading::set_default_nthreads;
+using detail_threading::real_nthreads;
 using detail_threading::Scheduler;
 using detail_threading::execSingle;
 using detail_threading::execStatic;

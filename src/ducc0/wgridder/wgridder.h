@@ -1637,7 +1637,7 @@ timers.pop();
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
         epsilon(epsilon_),
         do_wgridding(do_wgridding_),
-        nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
+        nthreads(real_nthreads(nthreads_)),
         verbosity(verbosity_),
         negate_v(negate_v_), divide_by_n(divide_by_n_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
