@@ -34,7 +34,8 @@ auto None = py::none();
 
 template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &grid_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__, size_t verbosity, double sigma_min, double sigma_max)
+  py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
+  double periodicity, bool fft_order)
   {
   using Tpoints = Tgrid;
   auto coord = to_cmav<Tcoord,2>(coord_);
@@ -43,34 +44,41 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   auto out = to_vmav<complex<Tpoints>,1>(out_);
   {
   py::gil_scoped_release release;
-  u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
+  u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,
+                    sigma_min,sigma_max, periodicity, fft_order);
   }
   return move(out_);
   }
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out, size_t verbosity, double sigma_min, double sigma_max)
+  py::object &out, size_t verbosity, double sigma_min, double sigma_max,
+  double periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
     if (isPyarr<complex<double>>(grid))
-      return Py2_u2nu<double, double>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_u2nu<double, double>(grid, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     else if (isPyarr<complex<float>>(grid))
-      return Py2_u2nu<float, double>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_u2nu<float, double>(grid, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (isPyarr<float>(coord))
     {
     if (isPyarr<complex<double>>(grid))
-      return Py2_u2nu<double, float>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_u2nu<double, float>(grid, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     else if (isPyarr<complex<float>>(grid))
-      return Py2_u2nu<float, float>(grid, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_u2nu<float, float>(grid, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   MR_fail("not yet supported");
   }
 
 template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__, size_t verbosity, double sigma_min, double sigma_max)
+  py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
+  double periodicity, bool fft_order)
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
@@ -78,27 +86,33 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   auto out = to_vfmav<complex<Tgrid>>(out__);
   {
   py::gil_scoped_release release;
-  nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,sigma_min,sigma_max);
+  nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,
+                    sigma_min,sigma_max, periodicity, fft_order);
   }
   return move(out__);
   }
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out, size_t verbosity, double sigma_min, double sigma_max)
+  py::object &out, size_t verbosity, double sigma_min, double sigma_max,
+  double periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
     if (isPyarr<complex<double>>(points))
-      return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_nu2u<double, double>(points, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     else if (isPyarr<complex<float>>(points))
-      return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_nu2u<float, double>(points, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   else if (isPyarr<float>(coord))
     {
     if (isPyarr<complex<double>>(points))
-      return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_nu2u<double, float>(points, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     else if (isPyarr<complex<float>>(points))
-      return Py2_nu2u<float, float>(points, coord, forward, epsilon, nthreads, out, verbosity, sigma_min, sigma_max);
+      return Py2_nu2u<float, float>(points, coord, forward, epsilon, nthreads,
+        out, verbosity, sigma_min, sigma_max, periodicity, fft_order);
     }
   MR_fail("not yet supported");
   }
@@ -131,6 +145,11 @@ verbosity: int
     1: some diagnostic console output
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
+periodicity: float
+    periodicity of the coordinates
+fft_order: bool
+    if False, grids start with the most negative Fourier node
+    if True, grids start with the zero Fourier mode
 
 Returns
 -------
@@ -169,6 +188,11 @@ verbosity: int
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
     1.2 <= sigma_min < sigma_max <= 2.5
+periodicity: float
+    periodicity of the coordinates
+fft_order: bool
+    if False, grids start with the most negative Fourier node
+    if True, grids start with the zero Fourier mode
 
 Returns
 -------
@@ -183,10 +207,14 @@ void add_nufft(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("nufft");
 
-  m.def("u2nu", &Py_u2nu, u2nu_DS,  py::kw_only(), "grid"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
-  m.def("nu2u", &Py_nu2u, nu2u_DS, py::kw_only(), "points"_a, "coord"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
+  m.def("u2nu", &Py_u2nu, u2nu_DS,  py::kw_only(), "grid"_a, "coord"_a,
+        "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
+        "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
+        "fft_order"_a=false);
+  m.def("nu2u", &Py_nu2u, nu2u_DS, py::kw_only(), "points"_a, "coord"_a,
+        "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
+        "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
+        "fft_order"_a=false);
   }
 
 }
