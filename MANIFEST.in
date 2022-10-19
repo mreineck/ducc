@@ -57,6 +57,7 @@ include src/ducc0/healpix/healpix_tables.h
 
 include src/ducc0/wgridder/wgridder.h
 include src/ducc0/wgridder/wgridder_sycl.h
+include src/ducc0/wgridder/wgridder.cc
 
 include python/fft_pymod.cc
 include python/nufft_pymod.cc
