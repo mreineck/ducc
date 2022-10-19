@@ -205,13 +205,13 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
   return make_tuple(minidx, bigdims);
   }
 
-template<typename Tacc, size_t ndim> constexpr int log2tile_=-1;
-template<> constexpr int log2tile_<double, 1> = 9;
-template<> constexpr int log2tile_<float , 1> = 9;
-template<> constexpr int log2tile_<double, 2> = 4;
-template<> constexpr int log2tile_<float , 2> = 5;
-template<> constexpr int log2tile_<double, 3> = 4;
-template<> constexpr int log2tile_<float , 3> = 3;
+template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
+template<> constexpr inline int log2tile_<double, 1> = 9;
+template<> constexpr inline int log2tile_<float , 1> = 9;
+template<> constexpr inline int log2tile_<double, 2> = 4;
+template<> constexpr inline int log2tile_<float , 2> = 5;
+template<> constexpr inline int log2tile_<double, 3> = 4;
+template<> constexpr inline int log2tile_<float , 3> = 3;
 
 //
 // Start of real NUFFT functionality
@@ -220,10 +220,6 @@ template<> constexpr int log2tile_<float , 3> = 3;
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord, size_t ndim> class Nufft_ancestor
   {
   protected:
-    // if true, perform nonuniform-to-uniform transform, else uniform-to-nonuniform
-    bool gridding;
-    // if true, use negative exponent in the FFT, else positive
-    bool forward;
     TimerHierarchy timers;
     // reference to nonuniform input data. In u2nu case, points to a 0-sized array.
     const cmav<complex<Tpoints>,1> &points_in;
@@ -237,8 +233,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     double epsilon;
     // number of threads to use for this transform.
     size_t nthreads;
-    // 0: no output, 1: some diagnostic console output
-    size_t verbosity;
 
     // 1./<periodicity of coordinates>
     double coordfct;
@@ -270,30 +264,31 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile = log2tile_<Tacc,ndim>;
 
-    static_assert(sizeof(Tcalc)<=sizeof(Tacc), "bad type combination");
-    static_assert(sizeof(Tpoints)<=sizeof(Tcalc), "bad type combination");
-    static_assert(sizeof(Tgrid)<=sizeof(Tcalc), "bad type combination");
+    static_assert(sizeof(Tcalc)<=sizeof(Tacc),
+      "Tacc must be at least as accurate as Tcalc");
+    static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
+      "Tcalc must be at least as accurate as Tpoints");
+    static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
+      "Tcalc must be at least as accurate as Tgrid");
 
     Nufft_ancestor(const cmav<Tcoord,2> &coords_,
            const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
            const cmav<complex<Tgrid>,ndim> &uniform_in_, vmav<complex<Tgrid>,ndim> &uniform_out_,
-           double epsilon_, bool forward_,
-           size_t nthreads_, size_t verbosity_,
+           double epsilon_,
+           size_t nthreads_,
            double sigma_min, double sigma_max,
            double periodicity, bool fft_order_)
-      : gridding(points_out_.size()==0),
-        forward(forward_),
-        timers(gridding ? "nu2u" : "u2nu"),
+      : timers((points_out_.size()==0) ? "nu2u" : "u2nu"),
         points_in(points_in_), points_out(points_out_),
         uniform_in(uniform_in_), uniform_out(uniform_out_),
         epsilon(epsilon_),
         nthreads(real_nthreads(nthreads_)),
-        verbosity(verbosity_),
         coordfct(1./periodicity),
         fft_order(fft_order_),
         coords(coords_),
-        nuni(gridding ? uniform_out.shape() : uniform_in.shape())
+        nuni((points_out_.size()==0) ? uniform_out.shape() : uniform_in.shape())
       {
+      bool gridding = points_out_.size()==0;
       MR_assert(coords.shape(0)<=(~uint32_t(0)), "too many nonuniform points");
       checkShape(points_in.shape(), {coords.shape(0)});
       if (coords.shape(0)==0)
@@ -372,9 +367,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       return str.str();
       }
 
-    void report()
+    void report(bool gridding)
       {
-      if (verbosity==0) return;
       cout << (gridding ? "Nonuniform to uniform:" : "Uniform to nonuniform:") << endl
            << "  nthreads=" << nthreads << ", "
            << "grid=(" << dim2string(nuni) << "), "
@@ -410,10 +404,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   private:
     static constexpr size_t ndim=1;
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1>;
-    using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
+    using parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
-          parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::supp,
+          parent::timers, parent::krn, parent::fft_order,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
           parent::shift, parent::maxi0, parent::report, parent::log2tile,
           parent::ggetpix, parent::get_tile;
@@ -657,7 +651,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void nonuni2uni()
+    void nonuni2uni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,1>::build_noncritical(nover);
@@ -681,7 +675,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
       }
 
-    void uni2nonuni()
+    void uni2nonuni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,1>::build_noncritical(nover);
@@ -711,15 +705,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     Nufft(const cmav<Tcoord,2> &coords_,
           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
           const cmav<complex<Tgrid>,1> &uniform_in_, vmav<complex<Tgrid>,1> &uniform_out_,
-          double epsilon_, bool forward_,
-          size_t nthreads_, size_t verbosity_,
+          double epsilon_, bool forward,
+          size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
-               epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
+               epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
       if (coords.shape(0)==0) return;
+      bool gridding = points_out_.size()==0;
 
       MR_assert((nover[0]>>log2tile)<=(~uint32_t(0)), "nu too large");
 
@@ -736,8 +731,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       timers.pop();
 
-      report();
-      gridding ? nonuni2uni() : uni2nonuni();
+      if (verbosity>0) report(gridding);
+      gridding ? nonuni2uni(forward) : uni2nonuni(forward);
 
       if (verbosity>0)
         timers.report(cout);
@@ -749,10 +744,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   private:
     static constexpr size_t ndim=2;
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2>;
-    using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
+    using parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
-          parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::supp,
+          parent::timers, parent::krn, parent::fft_order,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
           parent::shift, parent::maxi0, parent::report, parent::log2tile,
           parent::ggetpix, parent::get_tile;
@@ -1042,7 +1037,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void nonuni2uni()
+    void nonuni2uni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,2>::build_noncritical(nover);
@@ -1079,7 +1074,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
       }
 
-    void uni2nonuni()
+    void uni2nonuni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,2>::build_noncritical(nover);
@@ -1124,15 +1119,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     Nufft(const cmav<Tcoord,2> &coords_,
           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
           const cmav<complex<Tgrid>,2> &uniform_in_, vmav<complex<Tgrid>,2> &uniform_out_,
-          double epsilon_, bool forward_,
-          size_t nthreads_, size_t verbosity_,
+          double epsilon_, bool forward,
+          size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
-               epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
+               epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
       if (coords.shape(0)==0) return;
+      bool gridding = points_out_.size()==0;
 
       MR_assert((nover[0]>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nover[1]>>log2tile)<(size_t(1)<<16), "nv too large");
@@ -1153,8 +1149,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
       timers.pop();
 
-      report();
-      gridding ? nonuni2uni() : uni2nonuni();
+      if (verbosity>0) report(gridding);
+      gridding ? nonuni2uni(forward) : uni2nonuni(forward);
 
       if (verbosity>0)
         timers.report(cout);
@@ -1166,10 +1162,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   private:
     static constexpr size_t ndim=3;
     using parent=Nufft_ancestor<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3>;
-    using parent::coordfct, parent::nsafe, parent::coord_idx, parent::nthreads,
+    using parent::coord_idx, parent::nthreads,
           parent::coords, parent::points_in, parent::points_out,
-          parent::verbosity, parent::gridding, parent::supp, parent::epsilon,
-          parent::timers, parent::krn, parent::fft_order, parent::forward,
+          parent::supp,
+          parent::timers, parent::krn, parent::fft_order,
           parent::uniform_in, parent::uniform_out, parent::nuni, parent::nover,
           parent::shift, parent::maxi0, parent::report, parent::log2tile,
           parent::ggetpix, parent::get_tile;
@@ -1492,7 +1488,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         });
       }
 
-    void nonuni2uni()
+    void nonuni2uni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nover[0],nover[1],nover[2]});
@@ -1542,7 +1538,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
       }
 
-    void uni2nonuni()
+    void uni2nonuni(bool forward)
       {
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,3>::build_noncritical({nover[0],nover[1],nover[2]});
@@ -1599,15 +1595,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     Nufft(const cmav<Tcoord,2> &coords_,
           const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
           const cmav<complex<Tgrid>,3> &uniform_in_, vmav<complex<Tgrid>,3> &uniform_out_,
-          double epsilon_, bool forward_,
-          size_t nthreads_, size_t verbosity_,
+          double epsilon_, bool forward,
+          size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
       : parent(coords_, points_in_, points_out_, uniform_in_, uniform_out_,
-               epsilon_, forward_, nthreads_, verbosity_, sigma_min, sigma_max,
+               epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
       if (coords.shape(0)==0) return;
+      bool gridding = points_out_.size()==0;
 
       MR_assert((nover[0]>>log2tile)<(uint32_t(1)<<10), "nu too large");
       MR_assert((nover[1]>>log2tile)<(uint32_t(1)<<10), "nv too large");
@@ -1642,8 +1639,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       bucket_sort2(key, coord_idx, (ntiles_u*ntiles_v*ntiles_w)<<(3*ssmall), nthreads);
       timers.pop();
 
-      report();
-      gridding ? nonuni2uni() : uni2nonuni();
+      if (verbosity>0) report(gridding);
+      gridding ? nonuni2uni(forward) : uni2nonuni(forward);
 
       if (verbosity>0)
         timers.report(cout);
