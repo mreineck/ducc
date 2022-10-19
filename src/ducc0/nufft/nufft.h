@@ -234,7 +234,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     bool fft_order;
 
     // reference to coordinates of the non-uniform points. Shape is (npoints, ndim).
-    const cmav<Tcoord,2> &coords;
+    const cmav<Tcoord,2> coords;
 
     // uniform grid dimensions
     array<size_t, ndim> nuni;
@@ -689,19 +689,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
   public:
     Nufft(const cmav<Tcoord,2> &coords_,
-          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-          const cmav<complex<Tgrid>,ndim> &uniform_in_, vmav<complex<Tgrid>,ndim> &uniform_out_,
+          const cmav<complex<Tpoints>,1> &points_in, vmav<complex<Tpoints>,1> &points_out,
+          const cmav<complex<Tgrid>,ndim> &uniform_in, vmav<complex<Tgrid>,ndim> &uniform_out,
           double epsilon_, bool forward,
           size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(points_out_.size()==0, coords_,
-               (points_out_.size()==0) ? uniform_out_.shape() : uniform_in_.shape(),
+      : parent(points_out.size()==0, coords_,
+               (points_out.size()==0) ? uniform_out.shape() : uniform_in.shape(),
                epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0) return;
-      bool gridding = points_out_.size()==0;
+      bool gridding = points_out.size()==0;
+      if (coords.shape(0)==0)
+        {
+        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
+        return;
+        }
 
       MR_assert((nover[0]>>log2tile)<=(~uint32_t(0)), "nu too large");
 
@@ -719,8 +723,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
 
       if (verbosity>0) report(gridding);
-      gridding ? nonuni2uni(forward, points_in_, uniform_out_)
-               : uni2nonuni(forward, uniform_in_, points_out_);
+      gridding ? nonuni2uni(forward, points_in, uniform_out)
+               : uni2nonuni(forward, uniform_in, points_out);
 
       if (verbosity>0)
         timers.report(cout);
@@ -1109,19 +1113,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
   public:
     Nufft(const cmav<Tcoord,2> &coords_,
-          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-          const cmav<complex<Tgrid>,ndim> &uniform_in_, vmav<complex<Tgrid>,ndim> &uniform_out_,
+          const cmav<complex<Tpoints>,1> &points_in, vmav<complex<Tpoints>,1> &points_out,
+          const cmav<complex<Tgrid>,ndim> &uniform_in, vmav<complex<Tgrid>,ndim> &uniform_out,
           double epsilon_, bool forward,
           size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(points_out_.size()==0, coords_,
-               (points_out_.size()==0) ? uniform_out_.shape() : uniform_in_.shape(),
+      : parent(points_out.size()==0, coords_,
+               (points_out.size()==0) ? uniform_out.shape() : uniform_in.shape(),
                epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0) return;
-      bool gridding = points_out_.size()==0;
+      bool gridding = points_out.size()==0;
+      if (coords.shape(0)==0)
+        {
+        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
+        return;
+        }
 
       MR_assert((nover[0]>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nover[1]>>log2tile)<(size_t(1)<<16), "nv too large");
@@ -1143,8 +1151,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
 
       if (verbosity>0) report(gridding);
-      gridding ? nonuni2uni(forward, points_in_, uniform_out_)
-               : uni2nonuni(forward, uniform_in_, points_out_);
+      gridding ? nonuni2uni(forward, points_in, uniform_out)
+               : uni2nonuni(forward, uniform_in, points_out);
 
       if (verbosity>0)
         timers.report(cout);
@@ -1591,19 +1599,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
   public:
     Nufft(const cmav<Tcoord,2> &coords_,
-          const cmav<complex<Tpoints>,1> &points_in_, vmav<complex<Tpoints>,1> &points_out_,
-          const cmav<complex<Tgrid>,ndim> &uniform_in_, vmav<complex<Tgrid>,ndim> &uniform_out_,
+          const cmav<complex<Tpoints>,1> &points_in, vmav<complex<Tpoints>,1> &points_out,
+          const cmav<complex<Tgrid>,ndim> &uniform_in, vmav<complex<Tgrid>,ndim> &uniform_out,
           double epsilon_, bool forward,
           size_t nthreads_, size_t verbosity,
           double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(points_out_.size()==0, coords_,
-               (points_out_.size()==0) ? uniform_out_.shape() : uniform_in_.shape(),
+      : parent(points_out.size()==0, coords_,
+               (points_out.size()==0) ? uniform_out.shape() : uniform_in.shape(),
                epsilon_, nthreads_, sigma_min, sigma_max,
                periodicity, fft_order_)
       {
-      if (coords.shape(0)==0) return;
-      bool gridding = points_out_.size()==0;
+      bool gridding = points_out.size()==0;
+      if (coords.shape(0)==0)
+        {
+        if (gridding) mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform_out);
+        return;
+        }
 
       MR_assert((nover[0]>>log2tile)<(uint32_t(1)<<10), "nu too large");
       MR_assert((nover[1]>>log2tile)<(uint32_t(1)<<10), "nv too large");
@@ -1639,8 +1651,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       timers.pop();
 
       if (verbosity>0) report(gridding);
-      gridding ? nonuni2uni(forward, points_in_, uniform_out_)
-               : uni2nonuni(forward, uniform_in_, points_out_);
+      gridding ? nonuni2uni(forward, points_in, uniform_out)
+               : uni2nonuni(forward, uniform_in, points_out);
 
       if (verbosity>0)
         timers.report(cout);
