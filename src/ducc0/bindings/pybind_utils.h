@@ -155,7 +155,6 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
 template<typename T, size_t len> array<T,len> to_array(const py::object &obj)
   {
   auto vec = py::cast<vector<T>>(obj);
-cout << vec.size() << " " << len << endl;
   MR_assert(vec.size()==len, "unexpected number of elements");
   array<T,len> res;
   for (size_t i=0;i<len; ++i) res[i] = vec[i];
