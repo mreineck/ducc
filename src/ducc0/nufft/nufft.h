@@ -283,7 +283,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
       }
 
     /*! Compute index of the tile into which \a in falls. */
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in)
+    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in) const
       {
       array<double,ndim> dum;
       array<int,ndim> i0;
@@ -293,7 +293,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
         res[i] = uint32_t((i0[i]+nsafe)>>log2tile);
       return res;
       }
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in, size_t lsq2)
+    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
       {
       array<double,ndim> dum;
       array<int,ndim> i0;
@@ -304,7 +304,28 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
       return res;
       }
 
-    static string dim2string(const array<size_t, ndim> &arr)
+    auto get_corfac() const
+      {
+      vector<vector<double>> cf(ndim);
+      for (size_t i=0; i<ndim; ++i)
+        cf[i] = krn->corfunc(nuni[i]/2+1, 1./nover[i], nthreads);
+      return cf;
+      }
+
+    template<typename Tcoord> void sort_coords(const cmav<Tcoord,2> &coords,
+      vmav<Tcoord,2> &coords_sorted)
+      {
+      timers.push("sorting coords");
+      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+        {
+        for (size_t i=lo; i<hi; ++i)
+          for (size_t d=0; d<ndim; ++d)
+            coords_sorted(i,d) = coords(coord_idx[i],d);
+        });
+      timers.pop();
+      }
+
+   static string dim2string(const array<size_t, ndim> &arr)
       {
       ostringstream str;
       str << arr[0];
@@ -393,7 +414,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile;
+          parent::log2tile, parent::get_corfac, parent::sort_coords;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -447,12 +468,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
           mutex &mylock_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
-            i0{-1000000},
-            b0{-1000000},
-            bufr({size_t(suvec)}),
-            bufi({size_t(suvec)}),
-            px0r(bufr.data()), px0i(bufi.data()),
-            mylock(mylock_)
+            i0{-1000000}, b0{-1000000},
+            bufr({size_t(suvec)}), bufi({size_t(suvec)}),
+            px0r(bufr.data()), px0i(bufi.data()), mylock(mylock_)
           { checkShape(grid.shape(), parent->nover); }
         ~HelperNu2u() { dump(); }
 
@@ -501,10 +519,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           {
           int inu = int(parent->nover[0]);
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
-            {
-            bufr(iu) = grid(idxu).real();
-            bufi(iu) = grid(idxu).imag();
-            }
+            { bufr(iu) = grid(idxu).real(); bufi(iu) = grid(idxu).imag(); }
           }
 
       public:
@@ -520,10 +535,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         HelperU2nu(const Nufft *parent_, const cmav<complex<Tcalc>,ndim> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
-            i0{-1000000},
-            b0{-1000000},
-            bufr({size_t(suvec)}),
-            bufi({size_t(suvec)}),
+            i0{-1000000}, b0{-1000000},
+            bufr({size_t(suvec)}), bufi({size_t(suvec)}),
             px0r(bufr.data()), px0i(bufi.data())
           { checkShape(grid.shape(), parent->nover); }
 
@@ -653,13 +666,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
       timers.poppush("grid correction");
       checkShape(uniform.shape(), nuni);
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
           auto [icfu, iout, iin] = comp_indices(i, nuni[0], nover[0], fft_order);
-          uniform(iout) = complex<Tgrid>(grid(iin)*Tgrid(cfu[icfu]));
+          uniform(iout) = complex<Tgrid>(grid(iin)*Tgrid(cf[0][icfu]));
           }
         });
       timers.pop();
@@ -676,13 +689,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
       checkShape(uniform.shape(), nuni);
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
           {
           auto [icfu, iin, iout] = comp_indices(i, nuni[0], nover[0], fft_order);
-          grid(iout) = uniform(iin)*Tcalc(cfu[icfu]);
+          grid(iout) = uniform(iin)*Tcalc(cf[0][icfu]);
           }
         });
       timers.poppush("FFT");
@@ -723,14 +736,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         coords_sorted({npoints,ndim})
       {
       build_index(coords);
-      timers.push("reshuffling coords");
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          for (size_t d=0; d<ndim; ++d)
-            coords_sorted(i,d) = coords(coord_idx[i],d);
-        });
-      timers.pop();
+      sort_coords(coords, coords_sorted);
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -800,7 +806,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile;
+          parent::log2tile, parent::get_corfac, parent::sort_coords;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -857,11 +863,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
           vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
-            i0{-1000000, -1000000},
-            b0{-1000000, -1000000},
+            i0{-1000000, -1000000}, b0{-1000000, -1000000},
             gbuf({size_t(su+1),size_t(sv)}),
-            px0(gbuf.data()),
-            locks(locks_)
+            px0(gbuf.data()), locks(locks_)
           { checkShape(grid.shape(), parent->nover); }
         ~HelperNu2u() { dump(); }
 
@@ -916,7 +920,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
-              bufri(2*iu,iv) = grid(idxu, idxv).real();
+              bufri(2*iu  ,iv) = grid(idxu, idxv).real();
               bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
               }
           }
@@ -934,8 +938,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         HelperU2nu(const Nufft *parent_, const cmav<complex<Tcalc>,ndim> &grid_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
-            i0{-1000000, -1000000},
-            b0{-1000000, -1000000},
+            i0{-1000000, -1000000}, b0{-1000000, -1000000},
             bufri({size_t(2*su+1),size_t(svvec)}),
             px0r(bufri.data()), px0i(bufri.data()+svvec)
           { checkShape(grid.shape(), parent->nover); }
@@ -1000,10 +1003,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points(nextidx));
             if (!sorted)
-              {
-              DUCC0_PREFETCH_R(&coords(nextidx,0));
-              DUCC0_PREFETCH_R(&coords(nextidx,1));
-              }
+              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
@@ -1056,10 +1056,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points(nextidx));
             if (!sorted)
-              {
-              DUCC0_PREFETCH_R(&coords(nextidx,0));
-              DUCC0_PREFETCH_R(&coords(nextidx,1));
-              }
+              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
@@ -1121,8 +1118,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
       timers.poppush("grid correction");
       checkShape(uniform.shape(), nuni);
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
-      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nover[1], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1131,7 +1127,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           for (size_t j=0; j<nuni[1]; ++j)
             {
             auto [icfv, jout, jin] = comp_indices(j, nuni[1], nover[1], fft_order);
-            uniform(iout,jout) = complex<Tgrid>(grid(iin,jin)*Tgrid(cfu[icfu]*cfv[icfv]));
+            uniform(iout,jout) = complex<Tgrid>(grid(iin,jin)*Tgrid(cf[0][icfu]*cf[1][icfv]));
             }
           }
         });
@@ -1153,8 +1149,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       { auto a0 = subarray<2>(grid, {{nuni[0]/2, nover[0]-nuni[0]/2+1}, {}}); quickzero(a0, nthreads); }
       { auto a0 = subarray<2>(grid, {{nover[0]-nuni[0]/2+1,MAXIDX}, {nuni[1]/2, nover[1]-nuni[1]/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
-      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nover[1], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1163,7 +1158,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           for (size_t j=0; j<nuni[1]; ++j)
             {
             auto [icfv, jin, jout] = comp_indices(j, nuni[1], nover[1], fft_order);
-            grid(iout,jout) = uniform(iin,jin)*Tcalc(cfu[icfu]*cfv[icfv]);
+            grid(iout,jout) = uniform(iin,jin)*Tcalc(cf[0][icfu]*cf[1][icfv]);
             }
           }
         });
@@ -1213,14 +1208,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         coords_sorted({npoints,ndim})
       {
       build_index(coords);
-      timers.push("reshuffling coords");
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          for (size_t d=0; d<ndim; ++d)
-            coords_sorted(i,d) = coords(coord_idx[i],d);
-        });
-      timers.pop();
+      sort_coords(coords, coords_sorted);
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -1290,7 +1278,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile;
+          parent::log2tile, parent::get_corfac, parent::sort_coords;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -1352,11 +1340,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
           vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
-            i0{-1000000, -1000000, -1000000},
-            b0{-1000000, -1000000, -1000000},
+            i0{-1000000, -1000000, -1000000}, b0{-1000000, -1000000, -1000000},
             gbuf({size_t(su),size_t(sv),size_t(sw)}),
-            px0(gbuf.data()),
-            locks(locks_)
+            px0(gbuf.data()), locks(locks_)
           { checkShape(grid.shape(), parent->nover); }
         ~HelperNu2u() { dump(); }
 
@@ -1509,11 +1495,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points(nextidx));
             if (!sorted)
-              {
-              DUCC0_PREFETCH_R(&coords(nextidx,0));
-              DUCC0_PREFETCH_R(&coords(nextidx,1));
-              DUCC0_PREFETCH_R(&coords(nextidx,2));
-              }
+              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
@@ -1566,11 +1548,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points(nextidx));
             if (!sorted)
-              {
-              DUCC0_PREFETCH_R(&coords(nextidx,0));
-              DUCC0_PREFETCH_R(&coords(nextidx,1));
-              DUCC0_PREFETCH_R(&coords(nextidx,2));
-              }
+              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
@@ -1652,9 +1630,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
       timers.poppush("grid correction");
       checkShape(uniform.shape(), nuni);
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
-      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nover[1], nthreads);
-      auto cfw = krn->corfunc(nuni[2]/2+1, 1./nover[2], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1666,7 +1642,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             for (size_t k=0; k<nuni[2]; ++k)
               {
               auto [icfw, kout, kin] = comp_indices(k, nuni[2], nover[2], fft_order);
-              uniform(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)*Tgrid(cfu[icfu]*cfv[icfv]*cfw[icfw]));
+              uniform(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)*Tgrid(cf[0][icfu]*cf[1][icfv]*cf[2][icfw]));
               }
             }
           }
@@ -1686,9 +1662,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       // TODO: not all entries need to be zeroed, perhaps some time can be saved here
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      auto cfu = krn->corfunc(nuni[0]/2+1, 1./nover[0], nthreads);
-      auto cfv = krn->corfunc(nuni[1]/2+1, 1./nover[1], nthreads);
-      auto cfw = krn->corfunc(nuni[2]/2+1, 1./nover[2], nthreads);
+      auto cf = get_corfac();
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
         for (auto i=lo; i<hi; ++i)
@@ -1700,7 +1674,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             for (size_t k=0; k<nuni[2]; ++k)
               {
               auto [icfw, kin, kout] = comp_indices(k, nuni[2], nover[2], fft_order);
-              grid(iout,jout,kout) = uniform(iin,jin,kin)*Tcalc(cfu[icfu]*cfv[icfv]*cfw[icfw]);
+              grid(iout,jout,kout) = uniform(iin,jin,kin)*Tcalc(cf[0][icfu]*cf[1][icfv]*cf[2][icfw]);
               }
             }
           }
@@ -1774,14 +1748,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         coords_sorted({npoints,ndim})
       {
       build_index(coords);
-      timers.push("reshuffling coords");
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          for (size_t d=0; d<ndim; ++d)
-            coords_sorted(i,d) = coords(coord_idx[i],d);
-        });
-      timers.pop();
+      sort_coords(coords, coords_sorted);
       }
 
     void nu2u(bool forward, size_t verbosity,
