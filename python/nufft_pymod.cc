@@ -198,7 +198,8 @@ class Py_Nufftplan
         MR_fail("unsupported");
       }
 
-    py::array nu2u(bool forward, size_t verbosity, const py::array &points_, py::array &uniform_)
+    py::array nu2u(bool forward, size_t verbosity,
+      const py::array &points_, py::object &uniform_)
       {
       if (pd1) return do_nu2u(pd1, forward, verbosity, points_, uniform_);
       if (pf1) return do_nu2u(pf1, forward, verbosity, points_, uniform_);
@@ -209,7 +210,7 @@ class Py_Nufftplan
       MR_fail("unsupported");
       }
     py::array u2nu(bool forward, size_t verbosity,
-      const py::array &uniform_, py::array &points_)
+      const py::array &uniform_, py::object &points_)
       {
       if (pd1) return do_u2nu(pd1, forward, verbosity, uniform_, points_);
       if (pf1) return do_u2nu(pf1, forward, verbosity, uniform_, points_);

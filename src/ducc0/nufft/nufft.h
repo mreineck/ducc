@@ -1916,41 +1916,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   if (ndim==1)
     {
     vmav<complex<Tgrid>,1> uniform2(uniform);
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> nufft(true, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> nufft(true, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, points, uniform2); 
-#endif
     }
   else if (ndim==2)
     {
     vmav<complex<Tgrid>,2> uniform2(uniform);
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> nufft(true, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> nufft(true, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, points, uniform2); 
-#endif
     }
   else if (ndim==3)
     {
     vmav<complex<Tgrid>,3> uniform2(uniform);
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> nufft(true, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> nufft(true, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, points, uniform2); 
-#endif
     }
   }
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> void u2nu(const cmav<Tcoord,2> &coord,
@@ -1966,42 +1948,23 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   if (ndim==1)
     {
     cmav<complex<Tgrid>,1> uniform2(uniform);
-#define PRESORT
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> nufft(false, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 1> nufft(false, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, points); 
-#endif
     }
   else if (ndim==2)
     {
     cmav<complex<Tgrid>,2> uniform2(uniform);
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> nufft(false, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 2> nufft(false, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, points); 
-#endif
     }
   else if (ndim==3)
     {
     cmav<complex<Tgrid>,3> uniform2(uniform);
-#ifndef PRESORT
     Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> nufft(false, points.shape(0), uniform2.shape(),
       epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
     nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-#else
-    Nufft<Tcalc, Tacc, Tpoints, Tgrid, Tcoord, 3> nufft(false, coord, uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, points); 
-#endif
     }
   }
 } // namespace detail_nufft
