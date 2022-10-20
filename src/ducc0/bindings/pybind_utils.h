@@ -152,6 +152,16 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
   return vmav<T,ndim>(tmp.data(), newshape, newstride);
   }
 
+template<typename T, size_t len> array<T,len> to_array(const py::object &obj)
+  {
+  auto vec = py::cast<vector<T>>(obj);
+cout << vec.size() << " " << len << endl;
+  MR_assert(vec.size()==len, "unexpected number of elements");
+  array<T,len> res;
+  for (size_t i=0;i<len; ++i) res[i] = vec[i];
+  return res;
+  }
+
 template<typename T> void zero_Pyarr(py::array_t<T> &arr, size_t nthreads=1)
   {
   auto arr2 = to_vfmav<T>(arr);
@@ -244,6 +254,7 @@ using detail_pybind::to_cmav;
 using detail_pybind::to_cmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
 using detail_pybind::to_vmav_with_optional_leading_dimensions;
+using detail_pybind::to_array;
 
 }
 

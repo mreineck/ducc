@@ -117,6 +117,37 @@ py::array Py_nu2u(const py::array &points,
   MR_fail("not yet supported");
   }
 
+template<typename T, size_t ndim> class Py_Nufft: public Nufft<T, T, T, T, T, ndim>
+  {
+  private:
+    using parent = Nufft<T, T, T, T, T, ndim>;
+
+  public:
+    Py_Nufft(bool gridding, const py::array &coord_,
+             const py::object &uniform_shape_,
+             double epsilon_, 
+             size_t nthreads_, 
+             double sigma_min, double sigma_max,
+             double periodicity, bool fft_order_)
+      : parent (gridding, to_cmav<T,2>(coord_), to_array<size_t,ndim>(uniform_shape_), epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_) {}
+    py::array nu2u(bool forward, size_t verbosity, const py::array &points_, py::array &uniform_)
+      {
+      auto points = to_cmav<complex<T>,1>(points_);
+      auto uniform = to_vmav<complex<T>,ndim>(uniform_);
+      parent::nu2u(forward, verbosity, points, uniform);
+      return uniform_;
+      }
+    py::array u2nu(bool forward, size_t verbosity,
+      const py::array &uniform_, py::array &points_)
+      {
+      auto uniform = to_cmav<complex<T>,ndim>(uniform_);
+      auto points = to_vmav<complex<T>,1>(points_);
+      parent::u2nu(forward, verbosity, uniform, points);
+      return points_;
+      }
+  };
+
+
 constexpr const char *u2nu_DS = R"""(
 Type 2 non-uniform FFT (uniform to non-uniform)
 
@@ -215,6 +246,28 @@ void add_nufft(py::module_ &msup)
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
         "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
+
+  using Nufft_d1 = Py_Nufft<double,1>;
+  py::class_<Nufft_d1> (m, "Nufft_d1", py::module_local())
+    .def(py::init<bool, const py::array &, const py::object &,
+                  double, size_t, double, double, double, bool>(),
+      "gridding"_a, "coord"_a, "uniform_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("nu2u", &Nufft_d1::nu2u, "forward"_a, "verbosity"_a, "points"_a, "uniform"_a)
+    .def("u2nu", &Nufft_d1::u2nu, "forward"_a, "verbosity"_a, "uniform"_a, "points"_a);
+  using Nufft_d2 = Py_Nufft<double,2>;
+  py::class_<Nufft_d2> (m, "Nufft_d2", py::module_local())
+    .def(py::init<bool, const py::array &, const py::object &,
+                  double, size_t, double, double, double, bool>(),
+      "gridding"_a, "coord"_a, "uniform_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("nu2u", &Nufft_d2::nu2u, "forward"_a, "verbosity"_a, "points"_a, "uniform"_a)
+    .def("u2nu", &Nufft_d2::u2nu, "forward"_a, "verbosity"_a, "uniform"_a, "points"_a);
+  using Nufft_d3 = Py_Nufft<double,3>;
+  py::class_<Nufft_d3> (m, "Nufft_d3", py::module_local())
+    .def(py::init<bool, const py::array &, const py::object &,
+                  double, size_t, double, double, double, bool>(),
+      "gridding"_a, "coord"_a, "uniform_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("nu2u", &Nufft_d3::nu2u, "forward"_a, "verbosity"_a, "points"_a, "uniform"_a)
+    .def("u2nu", &Nufft_d3::u2nu, "forward"_a, "verbosity"_a, "uniform"_a, "points"_a);
   }
 
 }
