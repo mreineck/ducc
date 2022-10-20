@@ -563,8 +563,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperNu2u<SUPP> hlp(this, grid, mylock);
         const auto * DUCC0_RESTRICT ku = hlp.buf.simd;
 
@@ -583,7 +581,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           auto v(points(row));
 
           Tacc vr(v.real()), vi(v.imag());
-          for (size_t cu=0; cu<NVEC; ++cu)
+          for (size_t cu=0; cu<hlp.nvec; ++cu)
             {
             auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*hlp.vlen;
             auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*hlp.vlen;
@@ -612,8 +610,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperU2nu<SUPP> hlp(this, grid);
         const auto * DUCC0_RESTRICT ku = hlp.buf.simd;
 
@@ -630,7 +626,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           sorted ? hlp.prep({coords(ix,0)})
                  : hlp.prep({coords(row,0)});
           mysimd<Tcalc> rr=0, ri=0;
-          for (size_t cu=0; cu<NVEC; ++cu)
+          for (size_t cu=0; cu<hlp.nvec; ++cu)
             {
             const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*hlp.vlen;
             const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*hlp.vlen;
@@ -749,8 +745,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, vmav<complex<Tpoints>,1> &points)
@@ -760,8 +755,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(false);
       uni2nonuni(forward, uniform, coords_sorted, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -778,8 +772,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(true);
       build_index(coords);
       nonuni2uni(forward, coords, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
@@ -791,8 +784,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(false);
       build_index(coords);
       uni2nonuni(forward, uniform, coords, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
   };
 
@@ -988,13 +980,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(coord_idx.size(), nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperNu2u<SUPP> hlp(this, grid, locks);
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
-        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+NVEC*vlen;
-        constexpr size_t NVEC2 = (2*SUPP+vlen-1)/vlen;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.nvec*hlp.vlen;
+        constexpr size_t NVEC2 = (2*SUPP+hlp.vlen-1)/hlp.vlen;
         union Txdata{
           array<complex<Tacc>,SUPP> c;
           array<mysimd<Tacc>,NVEC2> v;
@@ -1053,12 +1043,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperU2nu<SUPP> hlp(this, grid);
         constexpr int jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
-        const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
 
         constexpr size_t lookahead=3;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
@@ -1077,7 +1065,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                  : hlp.prep({coords(row,0), coords(row,1)});
           mysimd<Tcalc> rr=0, ri=0;
-          if constexpr (NVEC==1)
+          if constexpr (hlp.nvec==1)
             {
             for (size_t cu=0; cu<SUPP; ++cu)
               {
@@ -1094,7 +1082,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tcalc> tmpr(0), tmpi(0);
-              for (size_t cv=0; cv<NVEC; ++cv)
+              for (size_t cv=0; cv<hlp.nvec; ++cv)
                 {
                 const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
                 const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
@@ -1247,8 +1235,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, vmav<complex<Tpoints>,1> &points)
@@ -1258,8 +1245,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(false);
       uni2nonuni(forward, uniform, coords_sorted, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -1276,8 +1262,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(true);
       build_index(coords);
       nonuni2uni(forward, coords, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
@@ -1289,8 +1274,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(false);
       build_index(coords);
       uni2nonuni(forward, uniform, coords, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
   };
 
@@ -1504,14 +1488,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperNu2u<SUPP> hlp(this, grid, locks);
         constexpr auto ljump = hlp.lineJump();
         constexpr auto pjump = hlp.planeJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
-        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
-        const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*vlen*NVEC;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+        const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*hlp.vlen*hlp.nvec;
         union Txdata{
           array<complex<Tacc>,SUPP> c;
           array<Tacc,2*SUPP> f;
@@ -1569,14 +1551,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
-        constexpr size_t vlen=mysimd<Tcalc>::size();
-        constexpr size_t NVEC((SUPP+vlen-1)/vlen);
         HelperU2nu<SUPP> hlp(this, grid);
         constexpr auto ljump = hlp.lineJump();
         constexpr auto pjump = hlp.planeJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
-        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*NVEC;
-        const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*NVEC;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+        const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*hlp.nvec;
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
@@ -1596,7 +1576,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                  : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
           mysimd<Tcalc> rr=0, ri=0;
-          if constexpr (NVEC==1)
+          if constexpr (hlp.nvec==1)
             {
             for (size_t cu=0; cu<SUPP; ++cu)
               {
@@ -1622,7 +1602,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
               for (size_t cv=0; cv<SUPP; ++cv)
                 {
                 mysimd<Tcalc> tmp2r(0), tmp2i(0);
-                for (size_t cw=0; cw<NVEC; ++cw)
+                for (size_t cw=0; cw<hlp.nvec; ++cw)
                   {
                   const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*pjump + cv*ljump + hlp.vlen*cw;
                   const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*pjump + cv*ljump + hlp.vlen*cw;
@@ -1816,8 +1796,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, vmav<complex<Tpoints>,1> &points)
@@ -1827,8 +1806,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(false);
       uni2nonuni(forward, uniform, coords_sorted, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -1845,8 +1823,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(true);
       build_index(coords);
       nonuni2uni(forward, coords, points, uniform);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
     void u2nu(bool forward, size_t verbosity,
       const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
@@ -1858,8 +1835,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if (verbosity>0) report(false);
       build_index(coords);
       uni2nonuni(forward, uniform, coords, points);
-      if (verbosity>0)
-        timers.report(cout);
+      if (verbosity>0) timers.report(cout);
       }
   };
 
