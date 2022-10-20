@@ -265,43 +265,6 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
     static_assert(sizeof(Tcalc)<=sizeof(Tacc),
       "Tacc must be at least as accurate as Tcalc");
 
-  public:
-    Nufft_ancestor(bool gridding, size_t npoints_,
-           const array<size_t,ndim> &uniform_shape,
-           double epsilon_, size_t nthreads_,
-           double sigma_min, double sigma_max,
-           double periodicity, bool fft_order_)
-      : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
-        nthreads(real_nthreads(nthreads_)), coordfct(1./periodicity),
-        fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
-      {
-      MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
-
-      timers.push("parameter calculation");
-      vector<size_t> tdims{nuni.begin(), nuni.end()};
-      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        tdims, npoints, gridding, nthreads);
-      for (size_t i=0; i<ndim; ++i)
-        {
-        nover[i] = dims[i];
-        MR_assert((nover[i]>>log2tile)<=max_ntile<ndim>, "oversampled grid too large");
-        }
-      timers.pop();
-
-      krn = selectKernel(kidx);
-      supp = krn->support();
-      nsafe = (supp+1)/2;
-
-      for (size_t i=0; i<ndim; ++i)
-        {
-        shift[i] = supp*(-0.5)+1+nover[i];
-        maxi0[i] = (nover[i]+nsafe)-supp;
-        MR_assert(nover[i]>=2*nsafe, "oversampled length too small");
-        MR_assert((nover[i]&1)==0, "oversampled dimensions must be even");
-        }
-      MR_assert(epsilon>0, "epsilon must be positive");
-      }
-
     /*! Compute minimum index in the oversampled grid touched by the kernel
         around coordinate \a in. */
     template<typename Tcoord> [[gnu::always_inline]] void getpix(array<double,ndim> in,
@@ -363,6 +326,43 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
            << npoints*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
            << reduce(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
+
+  public:
+    Nufft_ancestor(bool gridding, size_t npoints_,
+           const array<size_t,ndim> &uniform_shape,
+           double epsilon_, size_t nthreads_,
+           double sigma_min, double sigma_max,
+           double periodicity, bool fft_order_)
+      : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
+        nthreads(real_nthreads(nthreads_)), coordfct(1./periodicity),
+        fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
+      {
+      MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
+
+      timers.push("parameter calculation");
+      vector<size_t> tdims{nuni.begin(), nuni.end()};
+      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
+        tdims, npoints, gridding, nthreads);
+      for (size_t i=0; i<ndim; ++i)
+        {
+        nover[i] = dims[i];
+        MR_assert((nover[i]>>log2tile)<=max_ntile<ndim>, "oversampled grid too large");
+        }
+      timers.pop();
+
+      krn = selectKernel(kidx);
+      supp = krn->support();
+      nsafe = (supp+1)/2;
+
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shift[i] = supp*(-0.5)+1+nover[i];
+        maxi0[i] = (nover[i]+nsafe)-supp;
+        MR_assert(nover[i]>=2*nsafe, "oversampled length too small");
+        MR_assert((nover[i]&1)==0, "oversampled dimensions must be even");
+        }
+      MR_assert(epsilon>0, "epsilon must be positive");
+      }
   };
 
 
@@ -421,9 +421,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
         // add the acumulated local tile to the global oversampled grid
         DUCC0_NOINLINE void dump()
           {
-          int inu = int(parent->nover[0]);
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
-
+          int inu = int(parent->nover[0]);
           {
           lock_guard<mutex> lock(mylock);
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
@@ -718,7 +717,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
       
   public:
-    using parent::Nufft_ancestor; // inherit constructor
+    using parent::parent; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
           const array<size_t, ndim> &uniform_shape_, double epsilon_, 
           size_t nthreads_, double sigma_min, double sigma_max,
@@ -836,9 +835,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         DUCC0_NOINLINE void dump()
           {
+          if (b0[0]<-nsafe) return; // nothing written into buffer yet
           int inu = int(parent->nover[0]);
           int inv = int(parent->nover[1]);
-          if (b0[0]<-nsafe) return; // nothing written into buffer yet
 
           int idxv0 = (b0[1]+inv)%inv;
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
@@ -1216,7 +1215,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    using parent::Nufft_ancestor; // inherit constructor
+    using parent::parent; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
           const array<size_t, ndim> &uniform_shape_, double epsilon_, 
           size_t nthreads_, double sigma_min, double sigma_max,
@@ -1335,10 +1334,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
 
         DUCC0_NOINLINE void dump()
           {
+          if (b0[0]<-nsafe) return; // nothing written into buffer yet
           int inu = int(parent->nover[0]);
           int inv = int(parent->nover[1]);
           int inw = int(parent->nover[2]);
-          if (b0[0]<-nsafe) return; // nothing written into buffer yet
 
           int idxv0 = (b0[1]+inv)%inv;
           int idxw0 = (b0[2]+inw)%inw;
@@ -1785,7 +1784,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
 
   public:
-    using parent::Nufft_ancestor; // inherit constructor
+    using parent::parent; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
           const array<size_t, ndim> &uniform_shape_, double epsilon_, 
           size_t nthreads_, double sigma_min, double sigma_max,
@@ -1864,11 +1863,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> void nu2u(const cmav<Tcoord,2> &coord,
-  const cmav<complex<Tpoints>,1> &points, bool forward, double epsilon,
-  size_t nthreads, vfmav<complex<Tgrid>> &uniform, size_t verbosity,
-  double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
+  void nu2u(const cmav<Tcoord,2> &coord, const cmav<complex<Tpoints>,1> &points,
+    bool forward, double epsilon, size_t nthreads,
+    vfmav<complex<Tgrid>> &uniform, size_t verbosity,
+    double sigma_min, double sigma_max, double periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -1895,12 +1894,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     nufft.nu2u(forward, verbosity, coord, points, uniform2); 
     }
   }
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord> void u2nu(const cmav<Tcoord,2> &coord,
-  const cfmav<complex<Tgrid>> &uniform, bool forward,
-  double epsilon, size_t nthreads, vmav<complex<Tpoints>,1> &points,
-  size_t verbosity,
-  double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
+  void u2nu(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
+    bool forward, double epsilon, size_t nthreads,
+    vmav<complex<Tpoints>,1> &points, size_t verbosity,
+    double sigma_min, double sigma_max, double periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
