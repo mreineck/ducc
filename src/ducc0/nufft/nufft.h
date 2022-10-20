@@ -325,6 +325,18 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
       timers.pop();
       }
 
+    template<typename Tpoints, typename Tgrid> bool prep_nu2u
+      (const cmav<complex<Tpoints>,1> &points, vmav<complex<Tgrid>,ndim> &uniform)
+      {
+      MR_assert(points.shape(0)==npoints, "number of points mismatch");
+      if (npoints==0)
+        {
+        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
+        return true;
+        }
+      return false;
+      }
+
    static string dim2string(const array<size_t, ndim> &arr)
       {
       ostringstream str;
@@ -414,7 +426,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile, parent::get_corfac, parent::sort_coords;
+          parent::log2tile, parent::get_corfac, parent::sort_coords,
+          parent::prep_nu2u;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -742,12 +755,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     void nu2u(bool forward, size_t verbosity,
       const cmav<complex<Tpoints>,1> &points, vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
@@ -768,12 +776,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()==0, "bad call");
       if (verbosity>0) report(true);
       build_index(coords);
@@ -806,7 +809,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile, parent::get_corfac, parent::sort_coords;
+          parent::log2tile, parent::get_corfac, parent::sort_coords,
+          parent::prep_nu2u;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -1214,12 +1218,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     void nu2u(bool forward, size_t verbosity,
       const cmav<complex<Tpoints>,1> &points, vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
@@ -1240,12 +1239,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()==0, "bad call");
       if (verbosity>0) report(true);
       build_index(coords);
@@ -1278,7 +1272,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
           parent::timers, parent::krn, parent::fft_order, parent::nuni,
           parent::nover, parent::shift, parent::maxi0, parent::report,
-          parent::log2tile, parent::get_corfac, parent::sort_coords;
+          parent::log2tile, parent::get_corfac, parent::sort_coords,
+          parent::prep_nu2u;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -1754,12 +1749,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     void nu2u(bool forward, size_t verbosity,
       const cmav<complex<Tpoints>,1> &points, vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()!=0, "bad call");
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords_sorted, points, uniform);
@@ -1780,12 +1770,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return;
-        }
+      if (prep_nu2u(points, uniform)) return;
       MR_assert(coords_sorted.size()==0, "bad call");
       if (verbosity>0) report(true);
       build_index(coords);
