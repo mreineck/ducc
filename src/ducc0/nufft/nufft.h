@@ -154,8 +154,9 @@ inline auto comp_indices(size_t idx, size_t nuni, size_t nbig, bool fft_order)
     grid size for the provided problem parameters. */
 template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
   double sigma_min, double sigma_max, const vector<size_t> &dims,
-  size_t npoints, bool gridding, size_t vlen, size_t nthreads)
+  size_t npoints, bool gridding, size_t nthreads)
   {
+  auto vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
   auto ndim = dims.size();
   auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
   double mincost = 1e300;
@@ -213,6 +214,11 @@ template<> constexpr inline int log2tile_<float , 2> = 5;
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
 
+template<size_t ndim> constexpr inline size_t max_ntile=-1;
+template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
+template<> constexpr inline size_t max_ntile<2> = (uint32_t(1<<16))-10;
+template<> constexpr inline size_t max_ntile<3> = (uint32_t(1<<10))-10;
+
 //
 // Start of real NUFFT functionality
 //
@@ -259,29 +265,27 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
     static_assert(sizeof(Tcalc)<=sizeof(Tacc),
       "Tacc must be at least as accurate as Tcalc");
 
+  public:
     Nufft_ancestor(bool gridding, size_t npoints_,
            const array<size_t,ndim> &uniform_shape,
-           double epsilon_,
-           size_t nthreads_,
+           double epsilon_, size_t nthreads_,
            double sigma_min, double sigma_max,
            double periodicity, bool fft_order_)
-      : timers(gridding ? "nu2u" : "u2nu"),
-        epsilon(epsilon_),
-        nthreads(real_nthreads(nthreads_)),
-        coordfct(1./periodicity),
-        fft_order(fft_order_),
-        npoints(npoints_),
-        nuni(uniform_shape)
+      : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
+        nthreads(real_nthreads(nthreads_)), coordfct(1./periodicity),
+        fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
       {
       MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
 
       timers.push("parameter calculation");
       vector<size_t> tdims{nuni.begin(), nuni.end()};
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>(epsilon, sigma_min, sigma_max,
-        tdims, npoints, gridding,
-        gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size(), nthreads);
+        tdims, npoints, gridding, nthreads);
       for (size_t i=0; i<ndim; ++i)
+        {
         nover[i] = dims[i];
+        MR_assert((nover[i]>>log2tile)<=max_ntile<ndim>, "oversampled grid too large");
+        }
       timers.pop();
 
       krn = selectKernel(kidx);
@@ -386,13 +390,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
       "Tcalc must be at least as accurate as Tgrid");
     using parent=Nufft_ancestor<Tcalc, Tacc, 1>;
-    using parent::coord_idx, parent::nthreads,
-          parent::npoints,
-          parent::supp,
-          parent::timers, parent::krn, parent::fft_order,
-          parent::nuni, parent::nover,
-          parent::shift, parent::maxi0, parent::report, parent::log2tile,
-          parent::getpix, parent::get_tile;
+    using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
+          parent::timers, parent::krn, parent::fft_order, parent::nuni,
+          parent::nover, parent::shift, parent::maxi0, parent::report,
+          parent::log2tile;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -556,7 +557,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if constexpr (SUPP>4)
         if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
 
       mutex mylock;
 
@@ -575,10 +576,11 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            if (!sorted)
+              DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
+          sorted ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
           auto v(points(row));
 
           Tacc vr(v.real()), vi(v.imag());
@@ -606,7 +608,8 @@ shortcut ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
       if constexpr (SUPP>4)
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
+
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
@@ -622,10 +625,11 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
+            if (!sorted) DUCC0_PREFETCH_R(&coords(nextidx,0));
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
+          sorted ? hlp.prep({coords(ix,0)})
+                 : hlp.prep({coords(row,0)});
           mysimd<Tcalc> rr=0, ri=0;
           for (size_t cu=0; cu<NVEC; ++cu)
             {
@@ -643,7 +647,7 @@ shortcut ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
       const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-timers.push("nu2u proper");
+      timers.push("nu2u proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
       timers.poppush("spreading");
@@ -664,13 +668,13 @@ timers.push("nu2u proper");
           }
         });
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
       const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
       {
-timers.push("u2nu proper");
+      timers.push("u2nu proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
       timers.poppush("zeroing grid");
@@ -693,7 +697,7 @@ timers.push("u2nu proper");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void build_index(const cmav<Tcoord,2> &coords)
@@ -714,19 +718,15 @@ timers.pop();
       }
       
   public:
+    using parent::Nufft_ancestor; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, 
-          size_t nthreads_, 
-          double sigma_min, double sigma_max,
+          const array<size_t, ndim> &uniform_shape_, double epsilon_, 
+          size_t nthreads_, double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(gridding, coords.shape(0), uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_),
+      : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_,
+               sigma_min, sigma_max, periodicity, fft_order_),
         coords_sorted({npoints,ndim})
       {
-      MR_assert((nover[0]>>log2tile)<=(~uint32_t(0)), "nu too large");
-
       build_index(coords);
       timers.push("reshuffling coords");
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
@@ -763,18 +763,6 @@ timers.pop();
       uni2nonuni(forward, uniform, coords_sorted, points);
       if (verbosity>0)
         timers.report(cout);
-      }
-
-    Nufft(bool gridding, size_t npoints_,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, size_t nthreads_,
-          double sigma_min, double sigma_max,
-          double periodicity, bool fft_order_)
-      : parent(gridding, npoints_, uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_)
-      {
-      MR_assert((nover[0]>>log2tile)<=(~uint32_t(0)), "nu too large");
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -818,13 +806,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
       "Tcalc must be at least as accurate as Tgrid");
     using parent=Nufft_ancestor<Tcalc, Tacc, 2>;
-    using parent::coord_idx, parent::nthreads,
-          parent::npoints,
-          parent::supp,
-          parent::timers, parent::krn, parent::fft_order,
-          parent::nuni, parent::nover,
-          parent::shift, parent::maxi0, parent::report, parent::log2tile,
-          parent::getpix, parent::get_tile;
+    using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
+          parent::timers, parent::krn, parent::fft_order, parent::nuni,
+          parent::nover, parent::shift, parent::maxi0, parent::report,
+          parent::log2tile;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -997,7 +982,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if constexpr (SUPP>4)
         if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
 
       vector<mutex> locks(nover[0]);
 
@@ -1025,11 +1010,15 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,1));
+            if (!sorted)
+              {
+              DUCC0_PREFETCH_R(&coords(nextidx,0));
+              DUCC0_PREFETCH_R(&coords(nextidx,1));
+              }
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0), coords(ix,1)}) : hlp.prep({coords(row,0), coords(row,1)});
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
+                 : hlp.prep({coords(row,0), coords(row,1)});
           auto v(points(row));
 
           for (size_t cv=0; cv<SUPP; ++cv)
@@ -1060,7 +1049,7 @@ shortcut ? hlp.prep({coords(ix,0), coords(ix,1)}) : hlp.prep({coords(row,0), coo
       if constexpr (SUPP>4)
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
 
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
@@ -1079,11 +1068,15 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,1));
+            if (!sorted)
+              {
+              DUCC0_PREFETCH_R(&coords(nextidx,0));
+              DUCC0_PREFETCH_R(&coords(nextidx,1));
+              }
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0), coords(ix,1)}) : hlp.prep({coords(row,0), coords(row,1)});
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
+                 : hlp.prep({coords(row,0), coords(row,1)});
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
             {
@@ -1122,7 +1115,7 @@ shortcut ? hlp.prep({coords(ix,0), coords(ix,1)}) : hlp.prep({coords(row,0), coo
       const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-timers.push("nu2u proper");
+      timers.push("nu2u proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
       timers.poppush("spreading");
@@ -1156,13 +1149,13 @@ timers.push("nu2u proper");
           }
         });
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
       const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
       {
-timers.push("u2nu proper");
+      timers.push("u2nu proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
       timers.poppush("zeroing grid");
@@ -1200,7 +1193,7 @@ timers.push("u2nu proper");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void build_index(const cmav<Tcoord,2> &coords)
@@ -1223,20 +1216,15 @@ timers.pop();
       }
 
   public:
+    using parent::Nufft_ancestor; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, 
-          size_t nthreads_, 
-          double sigma_min, double sigma_max,
+          const array<size_t, ndim> &uniform_shape_, double epsilon_, 
+          size_t nthreads_, double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(gridding, coords.shape(0), uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_),
+      : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_,
+               sigma_min, sigma_max, periodicity, fft_order_),
         coords_sorted({npoints,ndim})
       {
-      MR_assert((nover[0]>>log2tile)<(size_t(1)<<16), "nu too large");
-      MR_assert((nover[1]>>log2tile)<(size_t(1)<<16), "nv too large");
-
       build_index(coords);
       timers.push("reshuffling coords");
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
@@ -1273,19 +1261,6 @@ timers.pop();
       uni2nonuni(forward, uniform, coords_sorted, points);
       if (verbosity>0)
         timers.report(cout);
-      }
-
-    Nufft(bool gridding, size_t npoints_,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, size_t nthreads_,
-          double sigma_min, double sigma_max,
-          double periodicity, bool fft_order_)
-      : parent(gridding, npoints_, uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_)
-      {
-      MR_assert((nover[0]>>log2tile)<(size_t(1)<<16), "nu too large");
-      MR_assert((nover[1]>>log2tile)<(size_t(1)<<16), "nv too large");
       }
 
     void nu2u(bool forward, size_t verbosity,
@@ -1329,13 +1304,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
       "Tcalc must be at least as accurate as Tgrid");
     using parent=Nufft_ancestor<Tcalc, Tacc, 3>;
-    using parent::coord_idx, parent::nthreads,
-          parent::npoints,
-          parent::supp,
-          parent::timers, parent::krn, parent::fft_order,
-          parent::nuni, parent::nover,
-          parent::shift, parent::maxi0, parent::report, parent::log2tile,
-          parent::getpix, parent::get_tile;
+    using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp,
+          parent::timers, parent::krn, parent::fft_order, parent::nuni,
+          parent::nover, parent::shift, parent::maxi0, parent::report,
+          parent::log2tile;
 
     vmav<Tcoord,2> coords_sorted;
 
@@ -1526,7 +1498,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
       if constexpr (SUPP>4)
         if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
 
       vector<mutex> locks(nover[0]);
 
@@ -1555,12 +1527,16 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_R(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,1));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,2));
+            if (!sorted)
+              {
+              DUCC0_PREFETCH_R(&coords(nextidx,0));
+              DUCC0_PREFETCH_R(&coords(nextidx,1));
+              DUCC0_PREFETCH_R(&coords(nextidx,2));
+              }
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)}) : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
+                 : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
           auto v(points(row));
 
           for (size_t cw=0; cw<SUPP; ++cw)
@@ -1589,7 +1565,7 @@ shortcut ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)}) : hlp.prep({coor
       if constexpr (SUPP>4)
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
-bool shortcut = coords_sorted.size()!=0;
+      bool sorted = coords_sorted.size()!=0;
 
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
@@ -1610,12 +1586,16 @@ bool shortcut = coords_sorted.size()!=0;
             {
             auto nextidx = coord_idx[ix+lookahead];
             DUCC0_PREFETCH_W(&points(nextidx));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,0));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,1));
-if (!shortcut)            DUCC0_PREFETCH_R(&coords(nextidx,2));
+            if (!sorted)
+              {
+              DUCC0_PREFETCH_R(&coords(nextidx,0));
+              DUCC0_PREFETCH_R(&coords(nextidx,1));
+              DUCC0_PREFETCH_R(&coords(nextidx,2));
+              }
             }
           size_t row = coord_idx[ix];
-shortcut ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)}) : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
+                 : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
           mysimd<Tcalc> rr=0, ri=0;
           if constexpr (NVEC==1)
             {
@@ -1666,7 +1646,7 @@ shortcut ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)}) : hlp.prep({coor
       const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
-timers.push("nu2u proper");
+      timers.push("nu2u proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical({nover[0],nover[1],nover[2]});
       timers.poppush("spreading");
@@ -1713,13 +1693,13 @@ timers.push("nu2u proper");
           }
         });
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
       const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
       {
-timers.push("u2nu proper");
+      timers.push("u2nu proper");
       timers.push("allocating grid");
       auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical({nover[0],nover[1],nover[2]});
       timers.poppush("zeroing grid");
@@ -1769,7 +1749,7 @@ timers.push("u2nu proper");
       constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
-timers.pop();
+      timers.pop();
       }
 
     void build_index(const cmav<Tcoord,2> &coords)
@@ -1805,21 +1785,15 @@ timers.pop();
       }
 
   public:
+    using parent::Nufft_ancestor; // inherit constructor
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, 
-          size_t nthreads_, 
-          double sigma_min, double sigma_max,
+          const array<size_t, ndim> &uniform_shape_, double epsilon_, 
+          size_t nthreads_, double sigma_min, double sigma_max,
           double periodicity, bool fft_order_)
-      : parent(gridding, coords.shape(0), uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_),
+      : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_,
+               sigma_min, sigma_max, periodicity, fft_order_),
         coords_sorted({npoints,ndim})
       {
-      MR_assert((nover[0]>>log2tile)<(uint32_t(1)<<10), "nu too large");
-      MR_assert((nover[1]>>log2tile)<(uint32_t(1)<<10), "nv too large");
-      MR_assert((nover[2]>>log2tile)<(uint32_t(1)<<10), "nw too large");
-
       build_index(coords);
       timers.push("reshuffling coords");
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
@@ -1856,20 +1830,6 @@ timers.pop();
       uni2nonuni(forward, uniform, coords_sorted, points);
       if (verbosity>0)
         timers.report(cout);
-      }
-
-    Nufft(bool gridding, size_t npoints_,
-          const array<size_t, ndim> &uniform_shape_,
-          double epsilon_, size_t nthreads_,
-          double sigma_min, double sigma_max,
-          double periodicity, bool fft_order_)
-      : parent(gridding, npoints_, uniform_shape_,
-               epsilon_, nthreads_, sigma_min, sigma_max,
-               periodicity, fft_order_)
-      {
-      MR_assert((nover[0]>>log2tile)<(uint32_t(1)<<10), "nu too large");
-      MR_assert((nover[1]>>log2tile)<(uint32_t(1)<<10), "nv too large");
-      MR_assert((nover[2]>>log2tile)<(uint32_t(1)<<10), "nw too large");
       }
 
     void nu2u(bool forward, size_t verbosity,
