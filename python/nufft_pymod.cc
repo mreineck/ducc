@@ -123,15 +123,15 @@ class Py_Nufftplan
     vector<size_t> uniform_shape;
     size_t npoints;
 
-    unique_ptr<Nufft< float,  float,  float,  float,  float, 1>> pf1;
-    unique_ptr<Nufft<double, double, double, double, double, 1>> pd1;
-    unique_ptr<Nufft< float,  float,  float,  float,  float, 2>> pf2;
-    unique_ptr<Nufft<double, double, double, double, double, 2>> pd2;
-    unique_ptr<Nufft< float,  float,  float,  float,  float, 3>> pf3;
-    unique_ptr<Nufft<double, double, double, double, double, 3>> pd3;
+    unique_ptr<Nufft< float, float,  float, 1>> pf1;
+    unique_ptr<Nufft<double, double, double, 1>> pd1;
+    unique_ptr<Nufft< float,  float,  float, 2>> pf2;
+    unique_ptr<Nufft<double, double, double, 2>> pd2;
+    unique_ptr<Nufft< float,  float,  float, 3>> pf3;
+    unique_ptr<Nufft<double, double, double, 3>> pd3;
 
     template<typename T, size_t ndim> void construct(
-      unique_ptr<Nufft<T,T,T,T,T,ndim>> &ptr,
+      unique_ptr<Nufft<T,T,T,ndim>> &ptr,
       bool gridding, const py::array &coord_,
       const py::object &uniform_shape_,
       double epsilon_, 
@@ -139,12 +139,12 @@ class Py_Nufftplan
       double sigma_min, double sigma_max,
       double periodicity, bool fft_order_)
       {
-      ptr = make_unique<Nufft<T,T,T,T,T,ndim>>
+      ptr = make_unique<Nufft<T,T,T,ndim>>
         (gridding, to_cmav<T,2>(coord_), to_array<size_t,ndim>(uniform_shape_),
          epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
       }
     template<typename T, size_t ndim> py::array do_nu2u(
-      const unique_ptr<Nufft<T,T,T,T,T,ndim>> &ptr,
+      const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
       bool forward, size_t verbosity, const py::array &points_, py::object &uniform__) const
       {
       auto points = to_cmav<complex<T>,1>(points_);
@@ -154,7 +154,7 @@ class Py_Nufftplan
       return uniform_;
       }
     template<typename T, size_t ndim> py::array do_u2nu(
-      const unique_ptr<Nufft<T,T,T,T,T,ndim>> &ptr,
+      const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
       bool forward, size_t verbosity, const py::array &uniform_, py::object &points__) const
       {
       auto uniform = to_cmav<complex<T>,ndim>(uniform_);
