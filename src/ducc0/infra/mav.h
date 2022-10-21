@@ -842,65 +842,8 @@ template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
 
 // various operations involving fmav objects of the same shape -- experimental
 
-DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::stride_t> &str)
-  {
-  if (shp.size()>1)
-    {
-    // sort dimensions in order of descending stride, as far as possible
-    vector<size_t> strcrit(shp.size(),~size_t(0));
-    for (const auto &curstr: str)
-      for (size_t i=0; i<curstr.size(); ++i)
-        strcrit[i] = min(strcrit[i],size_t(abs(curstr[i])));
-
-    for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
-      {
-      auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)
-                        -strcrit.begin());
-      if ((dim+1!=lastdim) && (strcrit[dim]<strcrit[lastdim-1]))
-        {
-        swap(strcrit[dim], strcrit[lastdim-1]);
-        swap(shp[dim], shp[lastdim-1]);
-        for (auto &curstr: str)
-          swap(curstr[dim], curstr[lastdim-1]);
-        }
-      }
-    // try merging dimensions
-    size_t ndim = shp.size();
-    if (ndim>1)
-      for (size_t d0=ndim-2; d0+1>0; --d0)
-        {
-        bool can_merge = true;
-        for (const auto &curstr: str)
-          can_merge &= curstr[d0] == ptrdiff_t(shp[d0+1])*curstr[d0+1];
-        if (can_merge)
-          {
-          for (auto &curstr: str)
-            curstr.erase(curstr.begin()+d0);
-          shp[d0+1] *= shp[d0];
-          shp.erase(shp.begin()+d0);
-          }
-        }
-    }
-  }
-
-DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    if (info[0].shape(i)!=1) // remove axes of length 1
-      {
-      shp.push_back(info[0].shape(i));
-      for (size_t j=0; j<narr; ++j)
-        str[j].push_back(info[j].stride(i));
-      }
-  opt_shp_str(shp, str);
-  return make_tuple(shp, str);
-  }
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep(const vector<fmav_info> &info);
 
 template<typename Ttuple> constexpr inline size_t tuplelike_size()
   { return tuple_size_v<remove_reference_t<Ttuple>>; }
@@ -1061,22 +1004,8 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
   }
 
-DUCC0_NOINLINE auto multiprep_noopt(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    {
-    shp.push_back(info[0].shape(i));
-    for (size_t j=0; j<narr; ++j)
-      str[j].push_back(info[j].stride(i));
-    }
-  return make_tuple(shp, str);
-  }
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep_noopt(const vector<fmav_info> &info);
 
 template <typename Func, typename Arg, typename Ttuple, size_t... I>
 inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
