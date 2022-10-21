@@ -61,16 +61,16 @@ class Bench:
         values = self._values.astype(dtype)
 
         out = np.ones(shape, dtype=dtype)
-        plan = ducc0.nufft.plan(gridding=True, coord=coord, uniform_shape=shape, epsilon=epsilon, nthreads=nthreads)
+        plan = ducc0.nufft.plan(gridding=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
         t0 = time()
-        res_ducc = plan.nu2u(points=points, forward=True, verbosity=1, uniform=out)
+        res_ducc = plan.nu2u(points=points, forward=True, verbosity=1, out=out)
         res["ducc_trans_1"] = time()-t0
         res["err_ducc_trans_1"] = ducc0.misc.l2error(res_ducc, self._res_fiducial_1)
 
         out=np.ones(shape=(npoints,), dtype=dtype)
-        plan = ducc0.nufft.plan(gridding=False, coord=coord, uniform_shape=shape, epsilon=epsilon, nthreads=nthreads)
+        plan = ducc0.nufft.plan(gridding=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
         t0 = time()
-        res_ducc = plan.u2nu(uniform=values, forward=True, verbosity=1, points=out)
+        res_ducc = plan.u2nu(grid=values, forward=True, verbosity=1, out=out)
         res["ducc_trans_2"] = time()-t0
         res["err_ducc_trans_2"] = ducc0.misc.l2error(res_ducc, self._res_fiducial_2)
 
@@ -176,6 +176,6 @@ runbench(( 3162,3162,), 100000000, 8, "2da.png", False)
 runbench((100,100,100),  10000000, 1, "3d.png" , False)
 runbench((216,216,216), 100000000, 8, "3da.png", False)
 # NFFT.jl benchmarks
-#runbench((   512*512,),  512*512, 1, "bench_1d.png", False)
-#runbench((   512,512,),  512*512, 1, "bench_2d.png", False)
-#runbench((   64,64,64,), 64*64*64, 1, "bench_3d.png", False)
+#runbench(( 512*512,),  512*512, 1, "bench_1d.png", False)
+#runbench(( 512,512,),  512*512, 1, "bench_2d.png", False)
+#runbench((64,64,64,), 64*64*64, 1, "bench_3d.png", False)

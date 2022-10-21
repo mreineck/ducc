@@ -580,7 +580,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
-      vmav<complex<Tcalc>,ndim> &grid)
+      vmav<complex<Tcalc>,ndim> &grid) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
@@ -629,7 +629,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid, coords, points);
@@ -669,8 +669,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         });
       }
 
-    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward, const cmav<Tcoord,2> &coords,
-      const cmav<complex<Tpoints>,1> &points,
+    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward,
+      const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
       timers.push("nu2u proper");
@@ -696,8 +696,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.pop();
       }
 
-    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward,
+      const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
+      vmav<complex<Tpoints>,1> &points)
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
@@ -966,7 +967,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
-      vmav<complex<Tcalc>,ndim> &grid)
+      vmav<complex<Tcalc>,ndim> &grid) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
@@ -1028,7 +1029,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid, coords, points);
@@ -1092,8 +1093,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         });
       }
 
-    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward, const cmav<Tcoord,2> &coords,
-      const cmav<complex<Tpoints>,1> &points,
+    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward,
+      const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
       timers.push("nu2u proper");
@@ -1130,8 +1131,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.pop();
       }
 
-    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward,
+      const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
+      vmav<complex<Tpoints>,1> &points)
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
@@ -1432,7 +1434,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
-      vmav<complex<Tcalc>,ndim> &grid)
+      vmav<complex<Tcalc>,ndim> &grid) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
@@ -1493,7 +1495,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points) const
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid, coords, points);
@@ -1571,8 +1573,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         });
       }
 
-    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward, const cmav<Tcoord,2> &coords,
-      const cmav<complex<Tpoints>,1> &points,
+    template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward,
+      const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       vmav<complex<Tgrid>,ndim> &uniform)
       {
       timers.push("nu2u proper");
@@ -1622,8 +1624,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.pop();
       }
 
-    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward, const cmav<complex<Tgrid>,ndim> &uniform,
-      const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points)
+    template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward,
+      const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
+      vmav<complex<Tpoints>,1> &points)
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");

@@ -123,7 +123,7 @@ class Py_Nufftplan
     vector<size_t> uniform_shape;
     size_t npoints;
 
-    unique_ptr<Nufft< float, float,  float, 1>> pf1;
+    unique_ptr<Nufft< float,  float,  float, 1>> pf1;
     unique_ptr<Nufft<double, double, double, 1>> pd1;
     unique_ptr<Nufft< float,  float,  float, 2>> pf2;
     unique_ptr<Nufft<double, double, double, 2>> pd2;
@@ -233,7 +233,7 @@ grid : numpy.ndarray(1D/2D/3D, dtype=complex)
 coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
     the coordinates of the npoints non-uniform points.
     ndim must be the same as grid.ndim
-    2pi-periodicity is assumed; the coordinates don't have to lie inside a
+    Periodicity is assumed; the coordinates don't have to lie inside a
     particular interval, but smaller absolute coordinate values help accuracy
 forward : bool
     if True, perform the FFT with exponent -1, else +1.
@@ -274,7 +274,7 @@ points : numpy.ndarray((npoints,), dtype=numpy.complex)
 coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
     the coordinates of the npoints non-uniform points.
     ndim must be the same as out.ndim
-    2pi-periodicity is assumed; the coordinates don't have to lie inside a
+    Periodicity is assumed; the coordinates don't have to lie inside a
     particular interval, but smaller absolute coordinate values help accuracy
 forward : bool
     if True, perform the FFT with exponent -1, else +1.
@@ -307,6 +307,84 @@ numpy.ndarray(1D/2D/3D, same dtype as points)
     Identical to `out`.
 )""";
 
+constexpr const char *plan_init_DS = R"""(
+Nufft plan constructor
+
+Parameters
+----------
+gridding : bool
+    True: plan will be used for nu2u transforms
+    False: plan will be used for u2nu transforms
+    The resulting plan can actually be used for both transform types, but
+    optimization will be better for the requested type.
+coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the npoints non-uniform points.
+    Periodicity is assumed; the coordinates don't have to lie inside a
+    particular interval, but smaller absolute coordinate values help accuracy
+grid_shape : tuple(int) of length ndim
+    the shape of the uniform grid
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads : int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+periodicity: float
+    periodicity of the coordinates
+fft_order: bool
+    if False, grids start with the most negative Fourier node
+    if True, grids start with the zero Fourier mode
+)""";
+
+
+constexpr const char *plan_nu2u_DS = R"""(
+Perform a pre-planned nu2u transform.
+
+Parameters
+----------
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+verbosity: int
+    0: no console output
+    1: some diagnostic console output
+points : numpy.ndarray((npoints,), dtype=numpy.complex)
+    The input values at the specified non-uniform grid points
+out : numpy.ndarray(1D/2D/3D, same dtype as points)
+    if provided, this will be used to store he result.
+
+Returns
+-------
+numpy.ndarray(1D/2D/3D, same dtype as points)
+    the computed grid values.
+    Identical to `out` if it was provided.
+)""";
+
+constexpr const char *plan_u2nu_DS = R"""(
+Perform a pre-planned u2nu transform.
+
+Parameters
+----------
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+verbosity: int
+    0: no console output
+    1: some diagnostic console output
+grid : numpy.ndarray(1D/2D/3D, dtype=complex)
+    the grid of input data
+out : numpy.ndarray((npoints,), same data type as grid), optional
+    if provided, this will be used to store the result
+
+Returns
+-------
+numpy.ndarray((npoints,), same data type as grid)
+    the computed values at the specified non-uniform grid points.
+    Identical to `out` if it was provided.
+)""";
+
 
 void add_nufft(py::module_ &msup)
   {
@@ -325,9 +403,9 @@ void add_nufft(py::module_ &msup)
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,
                   double, size_t, double, double, double, bool>(),
-      py::kw_only(), "gridding"_a, "coord"_a, "uniform_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
-    .def("nu2u", &Py_Nufftplan::nu2u, py::kw_only(), "forward"_a, "verbosity"_a=0, "points"_a, "uniform"_a=None)
-    .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a, "verbosity"_a=0, "uniform"_a, "points"_a=None);
+      plan_init_DS, py::kw_only(), "gridding"_a, "coord"_a, "grid_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a, "verbosity"_a=0, "points"_a, "out"_a=None)
+    .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a, "verbosity"_a=0, "grid"_a, "out"_a=None);
   }
 
 }
