@@ -135,10 +135,6 @@ template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<floa
 #endif
 #endif
 
-template<size_t ndim> void checkShape
-  (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
-  { MR_assert(shp1==shp2, "shape mismatch"); }
-
 [[gnu::always_inline]] [[gnu::hot]]
 inline auto comp_indices(size_t idx, size_t nuni, size_t nbig, bool fft_order)
   {
@@ -218,10 +214,6 @@ template<size_t ndim> constexpr inline size_t max_ntile=-1;
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
 template<> constexpr inline size_t max_ntile<2> = (uint32_t(1<<16))-10;
 template<> constexpr inline size_t max_ntile<3> = (uint32_t(1<<10))-10;
-
-//
-// Start of real NUFFT functionality
-//
 
 template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
   {
