@@ -65,8 +65,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <exception>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
+#if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
+#include <unistd.h>
+#endif
 #endif
 #include "ducc0/infra/misc_utils.h"
+#include "ducc0/infra/error_handling.h"
 #endif
 
 namespace ducc0 {
@@ -75,7 +79,40 @@ namespace detail_threading {
 
 #ifndef DUCC0_NO_THREADING
 
-static const size_t max_threads_ = std::max<size_t>(1, std::thread::hardware_concurrency());
+static size_t get_max_threads_from_env()
+  {
+  auto evar=getenv("DUCC0_NUM_THREADS");
+  if (!evar)
+    return std::max<size_t>(1, std::thread::hardware_concurrency());
+  auto res = strtol(evar, nullptr, 10);
+  MR_assert(!errno, "error reading DUCC0_NUM_THREADS");
+  MR_assert(res>=0, "invalid value in DUCC0_NUM_THREADS");
+  if (res==0)
+    return std::max<size_t>(1, std::thread::hardware_concurrency());
+  return res;
+  }
+static int get_pin_info_from_env()
+  {
+  auto evar=getenv("DUCC0_PIN_DISTANCE");
+  if (!evar)
+    return -1; // do nothing at all
+  auto res = strtol(evar, nullptr, 10);
+  MR_assert(!errno, "error reading DUCC0_PIN_DISTANCE");
+  return res;
+  }
+static int get_pin_offset_from_env()
+  {
+  auto evar=getenv("DUCC0_PIN_OFFSET");
+  if (!evar)
+    return 0;
+  auto res = strtol(evar, nullptr, 10);
+  MR_assert(!errno, "error reading DUCC0_PIN_OFFSET");
+  return res;
+  }
+
+static const size_t max_threads_ = get_max_threads_from_env();
+static const int pin_info = get_pin_info_from_env();
+static const int pin_offset = get_pin_offset_from_env();
 
 std::atomic<size_t> default_nthreads_(max_threads_);
 
@@ -144,6 +181,25 @@ template <typename T> class concurrent_queue
     bool empty() const { return size_==0; }
   };
 
+#if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
+#warning pinning support enabled
+static void do_pinning(int ithread)
+  {
+  if (pin_info==-1) return;
+  int num_proc = sysconf(_SC_NPROCESSORS_ONLN);
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  int cpu_wanted = pin_offset + ithread*pin_info;
+  MR_assert(cpu_wanted<num_proc, "bad CPU number requested");
+  CPU_SET(cpu_wanted, &cpuset);
+  pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+  }
+#else
+#warning no pinning support available
+static void do_pinning(int /*ithread*/)
+  { return; }
+#endif
+
 class thread_pool
   {
   private:
@@ -160,8 +216,9 @@ class thread_pool
       void worker_main(
         std::atomic<bool> &shutdown_flag,
         std::atomic<size_t> &unscheduled_tasks,
-        concurrent_queue<std::function<void()>> &overflow_work)
+        concurrent_queue<std::function<void()>> &overflow_work, size_t ithread)
         {
+        do_pinning(ithread);
         using lock_t = std::unique_lock<std::mutex>;
         bool expect_work = true;
         while (!shutdown_flag || expect_work)
@@ -223,7 +280,7 @@ class thread_pool
           worker->busy_flag.clear();
           worker->work = nullptr;
           worker->thread = std::thread(
-            [worker, this]{ worker->worker_main(shutdown_, unscheduled_tasks_, overflow_work_); });
+            [worker, this, i]{ worker->worker_main(shutdown_, unscheduled_tasks_, overflow_work_, i); });
           }
         catch (...)
           {
