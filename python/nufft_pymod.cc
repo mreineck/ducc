@@ -312,7 +312,7 @@ Nufft plan constructor
 
 Parameters
 ----------
-gridding : bool
+nu2u : bool
     True: plan will be used for nu2u transforms
     False: plan will be used for u2nu transforms
     The resulting plan can actually be used for both transform types, but
@@ -403,7 +403,7 @@ void add_nufft(py::module_ &msup)
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,
                   double, size_t, double, double, double, bool>(),
-      plan_init_DS, py::kw_only(), "gridding"_a, "coord"_a, "grid_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
+      plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
     .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a, "verbosity"_a=0, "points"_a, "out"_a=None)
     .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a, "verbosity"_a=0, "grid"_a, "out"_a=None);
   }

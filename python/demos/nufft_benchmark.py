@@ -1,3 +1,18 @@
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright(C) 2022 Max-Planck-Society
+
 import ducc0
 import numpy as np
 from time import time
@@ -61,14 +76,14 @@ class Bench:
         values = self._values.astype(dtype)
 
         out = np.ones(shape, dtype=dtype)
-        plan = ducc0.nufft.plan(gridding=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
+        plan = ducc0.nufft.plan(nu2u=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
         t0 = time()
         res_ducc = plan.nu2u(points=points, forward=True, verbosity=1, out=out)
         res["ducc_trans_1"] = time()-t0
         res["err_ducc_trans_1"] = ducc0.misc.l2error(res_ducc, self._res_fiducial_1)
 
         out=np.ones(shape=(npoints,), dtype=dtype)
-        plan = ducc0.nufft.plan(gridding=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
+        plan = ducc0.nufft.plan(nu2u=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
         t0 = time()
         res_ducc = plan.u2nu(grid=values, forward=True, verbosity=1, out=out)
         res["ducc_trans_2"] = time()-t0
@@ -99,6 +114,8 @@ class Bench:
         points = self._points.astype(dtype)
         values = self._values.astype(dtype)
 
+        # Adding the "fftw=0" argument makes execution somewhat faster,
+        # but planning can be painfully slow.
         plan1 = finufft.Plan(1, self._shape, 1, eps=epsilon, isign=-1,
                              dtype="complex64" if singleprec else "complex128",
                              nthreads=nthreads, debug=1, fftw=0)
@@ -169,12 +186,12 @@ def runbench(shape, npoints, nthreads, fname, singleprec=False):
 
 
 # FINUFFT benchmarks
-runbench((   1000000,),  10000000, 1, "1d.png" , False)
-runbench((  10000000,), 100000000, 8, "1da.png", False)
-runbench(( 1000,1000,),  10000000, 1, "2d.png" , False)
-runbench(( 3162,3162,), 100000000, 8, "2da.png", False)
-runbench((100,100,100),  10000000, 1, "3d.png" , False)
-runbench((216,216,216), 100000000, 8, "3da.png", False)
+runbench((   1000000,),  10000000, 1, "finufft_1d_scalar.png"  , False)
+runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", False)
+runbench(( 1000,1000,),  10000000, 1, "finufft_2d_scalar.png"  , False)
+runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", False)
+runbench((100,100,100),  10000000, 1, "finufft_3d_scalar.png"  , False)
+runbench((216,216,216), 100000000, 8, "finufft_3d_parallel.png", False)
 # NFFT.jl benchmarks
 #runbench(( 512*512,),  512*512, 1, "bench_1d.png", False)
 #runbench(( 512,512,),  512*512, 1, "bench_2d.png", False)
