@@ -184,15 +184,17 @@ def runbench(shape, npoints, nthreads, fname, singleprec=False):
             res.append(tres)
     plot(res, fname)
 
-
+singleprec = False
 # FINUFFT benchmarks
-runbench((   1000000,),  10000000, 1, "finufft_1d_scalar.png"  , False)
-runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", False)
-runbench(( 1000,1000,),  10000000, 1, "finufft_2d_scalar.png"  , False)
-runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", False)
-runbench((100,100,100),  10000000, 1, "finufft_3d_scalar.png"  , False)
-runbench((216,216,216), 100000000, 8, "finufft_3d_parallel.png", False)
+if True:
+    runbench((   1000000,),  10000000, 1, "finufft_1d_scalar.png"  , singleprec)
+    runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
+    runbench(( 1000,1000,),  10000000, 1, "finufft_2d_scalar.png"  , singleprec)
+    runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", singleprec)
+    runbench((100,100,100),  10000000, 1, "finufft_3d_scalar.png"  , singleprec)
+    runbench((216,216,216), 100000000, 8, "finufft_3d_parallel.png", singleprec)
 # NFFT.jl benchmarks
-#runbench(( 512*512,),  512*512, 1, "bench_1d.png", False)
-#runbench(( 512,512,),  512*512, 1, "bench_2d.png", False)
-#runbench((64,64,64,), 64*64*64, 1, "bench_3d.png", False)
+if False:
+    runbench(( 512*512,),  512*512, 1, "bench_1d.png", singleprec)
+    runbench(( 512,512,),  512*512, 1, "bench_2d.png", singleprec)
+    runbench((64,64,64,), 64*64*64, 1, "bench_3d.png", singleprec)
