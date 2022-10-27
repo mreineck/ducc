@@ -145,7 +145,8 @@ class Py_Nufftplan
       }
     template<typename T, size_t ndim> py::array do_nu2u(
       const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
-      bool forward, size_t verbosity, const py::array &points_, py::object &uniform__) const
+      bool forward, size_t verbosity, const py::array &points_,
+      py::object &uniform__) const
       {
       auto points = to_cmav<complex<T>,1>(points_);
       auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape);
@@ -155,7 +156,8 @@ class Py_Nufftplan
       }
     template<typename T, size_t ndim> py::array do_u2nu(
       const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
-      bool forward, size_t verbosity, const py::array &uniform_, py::object &points__) const
+      bool forward, size_t verbosity, const py::array &uniform_,
+      py::object &points__) const
       {
       auto uniform = to_cmav<complex<T>,ndim>(uniform_);
       auto points_ = get_optional_Pyarr<complex<T>>(points__, {npoints});
@@ -179,20 +181,26 @@ class Py_Nufftplan
       if (isPyarr<double>(coord_))
         {
         if (ndim==1)
-          construct(pd1, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pd1, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+                    sigma_min, sigma_max, periodicity, fft_order_);
         else if (ndim==2)
-          construct(pd2, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pd2, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+            sigma_min, sigma_max, periodicity, fft_order_);
         else if (ndim==3)
-          construct(pd3, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pd3, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+            sigma_min, sigma_max, periodicity, fft_order_);
         }
       else if (isPyarr<float>(coord_))
         {
         if (ndim==1)
-          construct(pf1, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pf1, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+            sigma_min, sigma_max, periodicity, fft_order_);
         else if (ndim==2)
-          construct(pf2, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pf2, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+            sigma_min, sigma_max, periodicity, fft_order_);
         else if (ndim==3)
-          construct(pf3, gridding, coord_, uniform_shape_, epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+          construct(pf3, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+            sigma_min, sigma_max, periodicity, fft_order_);
         }
       else
         MR_fail("unsupported");
@@ -403,9 +411,13 @@ void add_nufft(py::module_ &msup)
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,
                   double, size_t, double, double, double, bool>(),
-      plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a, "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "periodicity"_a=2*pi, "fft_order"_a=false)
-    .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a, "verbosity"_a=0, "points"_a, "out"_a=None)
-    .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a, "verbosity"_a=0, "grid"_a, "out"_a=None);
+      plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a,
+      "verbosity"_a=0, "points"_a, "out"_a=None)
+    .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a,
+      "verbosity"_a=0, "grid"_a, "out"_a=None);
   }
 
 }
