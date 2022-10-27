@@ -81,6 +81,17 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
                            periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
 
+    if not singleprec:
+        plan = ducc0.nufft.plan(nu2u=True, coord=uvw, grid_shape=(nx,),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        dirty2 = plan.nu2u(points=ms, forward=forward)
+        plan = ducc0.nufft.plan(nu2u=False, coord=uvw, grid_shape=(nx,),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        ms2 = plan.u2nu(grid=dirty, forward=not forward)
+        check(dirty2, ms2)
+
     if have_finufft and not singleprec:
         comp = finufft.nufft1d2(uvw[:,0]*2*np.pi/periodicity, dirty,
                                 nthreads=nthreads,eps=epsilon,
@@ -129,6 +140,17 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
                            epsilon=epsilon, nthreads=nthreads,
                            periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
+
+    if not singleprec:
+        plan = ducc0.nufft.plan(nu2u=True, coord=uvw, grid_shape=(nx,ny),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        dirty2 = plan.nu2u(points=ms, forward=forward)
+        plan = ducc0.nufft.plan(nu2u=False, coord=uvw, grid_shape=(nx,ny),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        ms2 = plan.u2nu(grid=dirty, forward=not forward)
+        check(dirty2, ms2)
 
     if have_finufft and not singleprec:
         comp = finufft.nufft2d2(uvw[:,0]*2*np.pi/periodicity,
@@ -180,6 +202,17 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
                            epsilon=epsilon, nthreads=nthreads, verbosity=0,
                            periodicity=periodicity, fft_order=fft_order).astype("c16")
     check(dirty2, ms2)
+
+    if not singleprec:
+        plan = ducc0.nufft.plan(nu2u=True, coord=uvw, grid_shape=(nx, ny, nz),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        dirty2 = plan.nu2u(points=ms, forward=forward)
+        plan = ducc0.nufft.plan(nu2u=False, coord=uvw, grid_shape=(nx, ny, nz),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        ms2 = plan.u2nu(grid=dirty, forward=not forward)
+        check(dirty2, ms2)
 
     if have_finufft and not singleprec:
         comp = finufft.nufft3d2(uvw[:,0]*2*np.pi/periodicity,

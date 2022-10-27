@@ -1,6 +1,17 @@
 0.27.0:
 - general:
   - modernize CI and build machinery
+  - some code was moved from header files into .cc files to avoid duplicate
+    symbols in some situations.
+
+- nufft:
+  - added a "plan" class, which allows efficient repeated execution of
+    transform. (For transforms that are only executed once, the traditional
+    interface should be preferred.)
+  - added new parameters for data periodicity (formerly hardwired to 2pi) and
+    data ordering on the regular grids (formerly starting with the most negative
+    frequency, now also allows "standard" FFT ordering starting with the zero
+    mode).
 
 
 0.26.0:
