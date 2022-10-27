@@ -82,3 +82,4 @@ include python/demos/healpix_perftest.py
 include python/demos/totalconvolve_demo.py
 include python/demos/totalconvolve_usage.py
 include python/demos/sht_analysis_demo.py
+include python/demos/nufft_benchmark.py
