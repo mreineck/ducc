@@ -62,23 +62,23 @@ much quicker and does not require any compilers to be installed on the system.
 However, the code will most likely perform significantly worse (by a factor of
 two to three for some functions) than a custom built version.
 
-DUCC0 has been packaged for Alpine linux and can be installed with
+Additionally, pre-compiled binaries are distributed for the following systems.
 
-    apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0
+<a href="https://repology.org/project/python:ducc0/versions">
+<img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
+</a>
 
-on the Alpine edge distribution.
 
-
-Installing multiple versions simultaneously
--------------------------------------------
+Installing multiple major versions simultaneously
+-------------------------------------------------
 
 The interfaces of the DUCC components are expected to evolve over time; whenever
 an interface changes in a manner that is not backwards compatible, the DUCC
-version number will increase. As a consequence it might happen that one part of
-a Python code may use an older version of DUCC while at the same time another
-part requires a newer version. Since DUCC's version number is included in the
-module name itself (the module is not called `ducc`, but rather `ducc<X>`),
-this is not a problem, as multiple DUCC versions can be installed
+major version number will increase. As a consequence it might happen that one
+part of a Python code may use an older version of DUCC while at the same time
+another part requires a newer version. Since DUCC's major version number is
+included in the module name itself (the module is not called `ducc`, but rather
+`ducc<X>`), this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need

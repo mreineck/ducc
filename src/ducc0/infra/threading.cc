@@ -341,7 +341,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      nthreads_ = real_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -358,7 +358,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = DYNAMIC;
-      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      nthreads_ = real_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -374,7 +374,7 @@ class Distribution
       double fact_max, std::function<void(Scheduler &)> f)
       {
       mode = GUIDED;
-      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      nthreads_ = real_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -388,7 +388,7 @@ class Distribution
     void execParallel(size_t nthreads, std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = (nthreads==0) ? get_default_nthreads() : nthreads;
+      nthreads_ = real_nthreads(nthreads);
       nwork_ = nthreads_;
       chunksize_ = 1;
       thread_map(move(f));
@@ -514,7 +514,7 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t)> func)
   {
-  nthreads = (nthreads==0) ? get_default_nthreads() : nthreads;
+  nthreads = real_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
@@ -525,7 +525,7 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   {
-  nthreads = (nthreads==0) ? get_default_nthreads() : nthreads;
+  nthreads = real_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();

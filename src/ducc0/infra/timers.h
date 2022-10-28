@@ -135,7 +135,8 @@ class TimerHierarchy
               (tmp[i].first->second).report(indent+"|  ",twidth,slen,os);
               tsum+=tmp[i].second;
               }
-            printline(indent, twidth, slen, "<unaccounted>", total-tsum, total, os);
+            if (tsum<0.999*total)
+              printline(indent, twidth, slen, "<unaccounted>", total-tsum, total, os);
             if (indent!="") os << indent << "\n";
             }
           }
