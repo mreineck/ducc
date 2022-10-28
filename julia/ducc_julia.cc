@@ -109,4 +109,120 @@ void nufft_nu2u_julia_double (size_t ndim,
   nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,verbosity,sigma_min,sigma_max,periodicity,fft_order);
   }
 
+struct Tplan
+  {
+  size_t npoints;
+  vector<size_t> shp;
+  void *plan;
+  };
+
+Tplan *make_nufft_plan_double(int nu2u,
+                             size_t ndim,
+                             size_t npoints,
+                             const size_t *shape,
+                             const double *coord,
+                             double epsilon,
+                             size_t nthreads,
+                             double sigma_min,
+                             double sigma_max,
+                             double periodicity,
+                             int fft_order)
+  {
+  auto res = new Tplan{npoints,vector<size_t>(ndim),nullptr};
+  cmav<double,2> mycoord(coord,{npoints,ndim});
+  for (size_t i=0; i<ndim; ++i)
+    res->shp[i] = shape[ndim-1-i];
+  if (ndim==1)
+    {
+    array<size_t,1> myshape({shape[0]});
+    res->plan = new Nufft<double, double, double, 1>(nu2u, mycoord, myshape,
+      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+    }
+  else if (ndim==2)
+    {
+    array<size_t,2> myshape({shape[1],shape[0]});
+    res->plan = new Nufft<double, double, double, 2>(nu2u, mycoord, myshape,
+      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+    }
+  else if (ndim==3)
+    {
+    array<size_t,3> myshape({shape[2],shape[1],shape[0]});
+    res->plan = new Nufft<double, double, double, 3>(nu2u, mycoord, myshape,
+      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+    }
+  else
+    MR_fail("bad number of dimensions");
+  return res;
+  }
+
+void delete_nufft_plan_double(Tplan *plan)
+  {
+  if (plan->shp.size()==1)
+    delete reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
+  else if (plan->shp.size()==2)
+    delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
+  else if (plan->shp.size()==3)
+    delete reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
+  else
+    MR_fail("bad number of dimensions");
+  delete plan;
+  }
+
+void planned_nu2u(Tplan *plan, int forward, size_t verbosity,
+  const double *points, double *uniform)
+  {
+  cmav<complex<double>,1> mypoints(reinterpret_cast<const complex<double> *>(points), {plan->npoints});
+  if (plan->shp.size()==1)
+    {
+    array<size_t,1> myshape({plan->shp[0]});
+    vmav<complex<double>,1> myout(reinterpret_cast<complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
+    rplan->nu2u(forward, verbosity, mypoints, myout);
+    }
+  else if (plan->shp.size()==2)
+    {
+    array<size_t,2> myshape({plan->shp[0],plan->shp[1]});
+    vmav<complex<double>,2> myout(reinterpret_cast<complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
+    rplan->nu2u(forward, verbosity, mypoints, myout);
+    }
+  else if (plan->shp.size()==3)
+    {
+    array<size_t,3> myshape({plan->shp[0],plan->shp[1],plan->shp[2]});
+    vmav<complex<double>,3> myout(reinterpret_cast<complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
+    rplan->nu2u(forward, verbosity, mypoints, myout);
+    }
+  else
+    MR_fail("bad number of dimensions");
+  }
+
+void planned_u2nu(Tplan *plan, int forward, size_t verbosity,
+  const double *uniform, double *points)
+  {
+  vmav<complex<double>,1> mypoints(reinterpret_cast<complex<double> *>(points), {plan->npoints});
+  if (plan->shp.size()==1)
+    {
+    array<size_t,1> myshape({plan->shp[0]});
+    cmav<complex<double>,1> myuniform(reinterpret_cast<const complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
+    rplan->u2nu(forward, verbosity, myuniform, mypoints);
+    }
+  else if (plan->shp.size()==2)
+    {
+    array<size_t,2> myshape({plan->shp[0],plan->shp[1]});
+    cmav<complex<double>,2> myuniform(reinterpret_cast<const complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
+    rplan->u2nu(forward, verbosity, myuniform, mypoints);
+    }
+  else if (plan->shp.size()==3)
+    {
+    array<size_t,3> myshape({plan->shp[0],plan->shp[1],plan->shp[2]});
+    cmav<complex<double>,3> myuniform(reinterpret_cast<const complex<double> *>(uniform), myshape);
+    auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
+    rplan->u2nu(forward, verbosity, myuniform, mypoints);
+    }
+  else
+    MR_fail("bad number of dimensions");
+  }
 }
