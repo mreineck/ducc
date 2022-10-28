@@ -140,18 +140,19 @@ class Bench:
 
 def plot(res, fname):
     import matplotlib.pyplot as plt
+    fct = 1e9/res[0]["npoints"]
     have_finufft = "finufft_full_1" in res[0]
-    tducc1 = [r["ducc_full_1"] for r in res]
-    tducc2 = [r["ducc_full_2"] for r in res]
-    tducct1 = [r["ducc_trans_1"] for r in res]
-    tducct2 = [r["ducc_trans_2"] for r in res]
+    tducc1 = fct*np.array([r["ducc_full_1"] for r in res])
+    tducc2 = fct*np.array([r["ducc_full_2"] for r in res])
+    tducct1 = fct*np.array([r["ducc_trans_1"] for r in res])
+    tducct2 = fct*np.array([r["ducc_trans_2"] for r in res])
     educc1 = np.array([r["err_ducc_1"] for r in res])
     educc2 = np.array([r["err_ducc_2"] for r in res])
     educct1 = np.array([r["err_ducc_trans_1"] for r in res])
     educct2 = np.array([r["err_ducc_trans_2"] for r in res])
     if have_finufft:
-        tfinufft1 = [r["finufft_full_1"] for r in res]
-        tfinufft2 = [r["finufft_full_2"] for r in res]
+        tfinufft1 = fct*np.array([r["finufft_full_1"] for r in res])
+        tfinufft2 = fct*np.array([r["finufft_full_2"] for r in res])
         efinufft1 = np.array([r["err_finufft_1"] for r in res])
         efinufft2 = np.array([r["err_finufft_2"] for r in res])
     eps = np.array([r["epsilon"] for r in res])
@@ -166,9 +167,9 @@ def plot(res, fname):
         plt.plot(efinufft2,tfinufft2,label="finufft planned, type 2")
     plt.title("shape={}, npoints={}, nthreads={}".format(res[0]["shape"], res[0]["npoints"], res[0]["nthreads"]))
     plt.xlabel("real error")
-    plt.ylabel("t[s]")
+    plt.ylabel("ns per nonuniform point")
     plt.legend()
-    plt.savefig(fname)
+    plt.savefig(fname, bbox_inches='tight')
     plt.close()
 
 
@@ -188,13 +189,13 @@ singleprec = False
 # FINUFFT benchmarks
 if True:
     runbench((   1000000,),  10000000, 1, "finufft_1d_scalar.png"  , singleprec)
-    runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
     runbench(( 1000,1000,),  10000000, 1, "finufft_2d_scalar.png"  , singleprec)
-    runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", singleprec)
     runbench((100,100,100),  10000000, 1, "finufft_3d_scalar.png"  , singleprec)
+    runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
+    runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", singleprec)
     runbench((216,216,216), 100000000, 8, "finufft_3d_parallel.png", singleprec)
 # NFFT.jl benchmarks
-if False:
+if True:
     runbench(( 512*512,),  512*512, 1, "bench_1d.png", singleprec)
     runbench(( 512,512,),  512*512, 1, "bench_2d.png", singleprec)
     runbench((64,64,64,), 64*64*64, 1, "bench_3d.png", singleprec)
