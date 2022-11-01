@@ -127,7 +127,7 @@ The central algorithms are derived from Paul Swarztrauber's
 ducc.sht
 --------
 
-This package provides efficient spherical harmonic trasforms (SHTs). Its code
+This package provides efficient spherical harmonic transforms (SHTs). Its code
 is derived from [libsharp](https://arxiv.org/abs/1303.4945), but has been
 significantly enhanced.
 
