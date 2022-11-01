@@ -139,9 +139,13 @@ class Py_Nufftplan
       double sigma_min, double sigma_max,
       double periodicity, bool fft_order_)
       {
-      ptr = make_unique<Nufft<T,T,T,ndim>>
-        (gridding, to_cmav<T,2>(coord_), to_array<size_t,ndim>(uniform_shape_),
-         epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+      auto coord = to_cmav<T,2>(coord_);
+      auto shp = to_array<size_t,ndim>(uniform_shape_);
+      {
+      py::gil_scoped_release release;
+      ptr = make_unique<Nufft<T,T,T,ndim>> (gridding, coord, shp,
+        epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
+      }
       }
     template<typename T, size_t ndim> py::array do_nu2u(
       const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
@@ -151,7 +155,10 @@ class Py_Nufftplan
       auto points = to_cmav<complex<T>,1>(points_);
       auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape);
       auto uniform = to_vmav<complex<T>,ndim>(uniform_);
+      {
+      py::gil_scoped_release release;
       ptr->nu2u(forward, verbosity, points, uniform);
+      }
       return uniform_;
       }
     template<typename T, size_t ndim> py::array do_u2nu(
@@ -162,7 +169,10 @@ class Py_Nufftplan
       auto uniform = to_cmav<complex<T>,ndim>(uniform_);
       auto points_ = get_optional_Pyarr<complex<T>>(points__, {npoints});
       auto points = to_vmav<complex<T>,1>(points_);
+      {
+      py::gil_scoped_release release;
       ptr->u2nu(forward, verbosity, uniform, points);
+      }
       return points_;
       }
 

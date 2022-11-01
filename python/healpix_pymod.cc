@@ -109,12 +109,15 @@ class Pyhpbase
       const auto pix = to_cfmav<Tin>(in);
       auto out = myprep<Tin, double, 0, 1>(in, {}, {2});
       auto ang = to_vfmav<double>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
         pointing ptg = base.pix2ang(in());
         out(0) = ptg.theta;
         out(1) = ptg.phi;
         }, nthreads, pix, ang);
+      }
       return out;
       }
     py::array pix2ang (const py::array &in, size_t nthreads) const
@@ -127,10 +130,13 @@ class Pyhpbase
       const auto ang = to_cfmav<Tin>(in);
       auto out = myprep<Tin, int64_t, 1, 0>(in, {2}, {});
       auto pix = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
         out()=base.ang2pix(pointing(in(0),in(1)));
         }, nthreads, ang, pix);
+      }
       return out;
       }
     py::array ang2pix (const py::array &in, size_t nthreads) const
@@ -142,11 +148,14 @@ class Pyhpbase
       const auto pix = to_cfmav<Tin>(in);
       auto out = myprep<Tin, double, 0, 1>(in, {}, {3});
       auto vec = to_vfmav<double>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
         auto vec = base.pix2vec(in());
         out(0)=vec.x; out(1)=vec.y; out(2)=vec.z;
         }, nthreads, pix, vec);
+      }
       return out;
       }
     py::array pix2vec (const py::array &in, size_t nthreads) const
@@ -158,10 +167,13 @@ class Pyhpbase
       const auto vec = to_cfmav<Tin>(in);
       auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
         out()=base.vec2pix(vec3(in(0), in(1), in(2)));
         }, nthreads, vec, pix);
+      }
       return out;
       }
     py::array vec2pix (const py::array &in, size_t nthreads) const
@@ -173,12 +185,15 @@ class Pyhpbase
       const auto pix = to_cfmav<Tin>(in);
       auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {3});
       auto xyf = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
         int x_,y_,f_;
         base.pix2xyf(in(),x_,y_,f_);
         out(0)=x_; out(1)=y_; out(2)=f_;
         }, nthreads, pix, xyf);
+      }
       return out;
       }
     py::array pix2xyf (const py::array &in, size_t nthreads) const
@@ -190,10 +205,13 @@ class Pyhpbase
       const auto xyf = to_cfmav<Tin>(in);
       auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
       auto pix = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<1,0>([&](const auto &in, const auto &out)
         {
         out()=base.xyf2pix(in(0), in(1), in(2));
         }, nthreads, xyf, pix);
+      }
       return out;
       }
     py::array xyf2pix (const py::array &in, size_t nthreads) const
@@ -205,12 +223,15 @@ class Pyhpbase
       const auto pix = to_cfmav<Tin>(in);
       auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {8});
       auto neigh = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,1>([&](const auto &in, const auto &out)
         {
         array<int64_t,8> res;
         base.neighbors(in(),res);
         for (size_t j=0; j<8; ++j) out(j)=res[j];
         }, nthreads, pix, neigh);
+      }
       return out;
       }
     py::array neighbors (const py::array &in, size_t nthreads) const
@@ -222,8 +243,11 @@ class Pyhpbase
       const auto ring = to_cfmav<Tin>(in);
       auto out = make_Pyarr<int64_t>(ring.shape());
       auto nest = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.ring2nest(in()); }, nthreads, ring, nest);
+      }
       return out;
       }
     py::array ring2nest (const py::array &in, size_t nthreads) const
@@ -235,8 +259,11 @@ class Pyhpbase
       const auto nest = to_cfmav<Tin>(in);
       auto out = make_Pyarr<int64_t>(nest.shape());
       auto ring = to_vfmav<int64_t>(out);
+      {
+      py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.nest2ring(in()); }, nthreads, nest,ring);
+      }
       return out;
       }
     py::array nest2ring (const py::array &in, size_t nthreads) const
@@ -249,7 +276,10 @@ class Pyhpbase
         "ptg must be a 1D array with 2 values");
       rangeset<int64_t> pixset;
       auto ptg2 = to_cmav<Tin,1>(ptg);
+      {
+      py::gil_scoped_release release;
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
+      }
       auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
       auto oref=res.mutable_unchecked<2>();
       for (size_t i=0; i<pixset.nranges(); ++i)
@@ -302,11 +332,14 @@ template<typename Tin> py::array ang2vec2 (const py::array &in, size_t nthreads)
   auto ang = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {2}, {3});
   auto vec = to_vfmav<double>(out);
+  {
+  py::gil_scoped_release release;
   flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
     {
     vec3 v (pointing(in(0),in(1)));
     out(0)=v.x; out(1)=v.y; out(2)=v.z;
     }, nthreads, ang, vec);
+  }
   return out;
   }
 py::array ang2vec (const py::array &in, size_t nthreads)
@@ -317,11 +350,14 @@ template<typename Tin> py::array vec2ang2 (const py::array &in, size_t nthreads)
   auto vec = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {3}, {2});
   auto ang = to_vfmav<double>(out);
+  {
+  py::gil_scoped_release release;
   flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
     {
     pointing ptg (vec3(in(0),in(1),in(2)));
     out(0)=ptg.theta; out(1)=ptg.phi;
     }, nthreads, vec, ang);
+  }
   return out;
   }
 py::array vec2ang (const py::array &in, size_t nthreads)
@@ -334,12 +370,15 @@ template<typename Ti1, typename Ti2> py::array local_v_angle2
   auto vec2 = to_cfmav<Ti2>(in2);
   auto out = myprep<Ti1, double, 1, 0>(in1, {3}, {});
   auto angle = to_vfmav<double>(out);
+  {
+  py::gil_scoped_release release;
   flexible_mav_apply<1,1,0>([&](const auto &in0, const auto &in1,
     const auto &out)
     {
     out()=v_angle(vec3(in0(0),in0(1),in0(2)),
                   vec3(in1(0),in1(1),in1(2)));
     }, nthreads, vec1, vec2, angle);
+  }
   return out;
   }
 py::array local_v_angle (const py::array &in1, const py::array &in2,
