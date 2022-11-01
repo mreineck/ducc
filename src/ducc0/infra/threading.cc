@@ -63,6 +63,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <vector>
 #include <exception>
+#include <errno.h>
+#include <string.h>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
@@ -79,13 +81,22 @@ namespace detail_threading {
 
 #ifndef DUCC0_NO_THREADING
 
+static long mystrtol(const char *inp)
+  {
+  auto errno_bak = errno;
+  errno=0;
+  auto res = strtol(inp, nullptr, 10);
+  MR_assert(!errno, "error during strtol conversion ", strerror(errno));
+  errno=errno_bak;
+  return res;
+  }
+
 static size_t get_max_threads_from_env()
   {
   auto evar=getenv("DUCC0_NUM_THREADS");
   if (!evar)
     return std::max<size_t>(1, std::thread::hardware_concurrency());
-  auto res = strtol(evar, nullptr, 10);
-  MR_assert(!errno, "error reading DUCC0_NUM_THREADS");
+  auto res = mystrtol(evar);
   MR_assert(res>=0, "invalid value in DUCC0_NUM_THREADS");
   if (res==0)
     return std::max<size_t>(1, std::thread::hardware_concurrency());
@@ -96,8 +107,7 @@ static int get_pin_info_from_env()
   auto evar=getenv("DUCC0_PIN_DISTANCE");
   if (!evar)
     return -1; // do nothing at all
-  auto res = strtol(evar, nullptr, 10);
-  MR_assert(!errno, "error reading DUCC0_PIN_DISTANCE");
+  auto res = mystrtol(evar);
   return res;
   }
 static int get_pin_offset_from_env()
@@ -105,8 +115,7 @@ static int get_pin_offset_from_env()
   auto evar=getenv("DUCC0_PIN_OFFSET");
   if (!evar)
     return 0;
-  auto res = strtol(evar, nullptr, 10);
-  MR_assert(!errno, "error reading DUCC0_PIN_OFFSET");
+  auto res = mystrtol(evar);
   return res;
   }
 
