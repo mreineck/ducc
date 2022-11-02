@@ -5,13 +5,15 @@
     symbols in some situations.
 
 - nufft:
-  - added a "plan" class, which allows efficient repeated execution of
-    transform. (For transforms that are only executed once, the traditional
-    interface should be preferred.)
+  - added a "plan" class, which allows efficient repeated execution of a
+    transform with fixed grid geometry and nonuniform point positions.
+    (For transforms that are only executed once, the traditional interface
+    should be preferred.)
   - added new parameters for data periodicity (formerly hardwired to 2pi) and
     data ordering on the regular grids (formerly starting with the most negative
     frequency, now also allows "standard" FFT ordering starting with the zero
     mode).
+  - added a benchmark demo script for easier comparison to FINUFFT and NFFT.jl.
 
 
 0.26.0:
