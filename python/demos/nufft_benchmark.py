@@ -97,7 +97,7 @@ class Bench:
 
         out=np.ones(shape=(npoints,), dtype=dtype)
         t0 = time()
-        res_ducc = ducc0.nufft.u2nu(grid=values, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=1)
+        res_ducc = ducc0.nufft.u2nu(grid=values, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=1, out=out)
         res["ducc_full_2"] = time()-t0
         res["err_ducc_2"] = ducc0.misc.l2error(res_ducc, self._res_fiducial_2)
         return res

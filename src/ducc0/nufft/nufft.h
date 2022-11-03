@@ -425,7 +425,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
           double periodicity, bool fft_order_) \
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_, \
                sigma_min, sigma_max, periodicity, fft_order_), \
-        coords_sorted({npoints,ndim}) \
+        coords_sorted({npoints,ndim},UNINITIALIZED) \
       { \
       build_index(coords); \
       sort_coords(coords, coords_sorted); \
@@ -730,7 +730,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("nu2u proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
+      timers.poppush("zeroing grid");
+      mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, coords, points, grid);
@@ -756,7 +758,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
@@ -1090,7 +1092,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("nu2u proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
+      timers.poppush("zeroing grid");
+      mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, coords, points, grid);
@@ -1128,7 +1132,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
       timers.poppush("zeroing grid");
 
       // only zero the parts of the grid that are not filled afterwards anyway
@@ -1508,7 +1512,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("nu2u proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
+      timers.poppush("zeroing grid");
+      mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
       constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
       spreading_helper<maxsupp>(supp, coords, points, grid);
@@ -1559,7 +1565,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover);
+      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
       timers.poppush("zeroing grid");
       // TODO: not all entries need to be zeroed, perhaps some time can be saved here
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
