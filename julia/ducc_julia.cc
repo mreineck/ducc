@@ -56,7 +56,7 @@ void nufft_u2nu_julia_double (size_t ndim,
                               double periodicity,
                               int fft_order)
   {
-  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ndim,-1});
+  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ptrdiff_t(ndim),-1});
   vector<size_t> myshape(ndim);
   for (size_t i=0; i<ndim; ++i)
     myshape[i] = shape[ndim-1-i];
@@ -100,7 +100,7 @@ void nufft_nu2u_julia_double (size_t ndim,
                               double periodicity,
                               int fft_order)
   {
-  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ndim,-1});
+  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ptrdiff_t(ndim),-1});
   vector<size_t> myshape(ndim);
   for (size_t i=0; i<ndim; ++i)
     myshape[i] = shape[ndim-1-i];
@@ -129,7 +129,7 @@ Tplan *make_nufft_plan_double(int nu2u,
                              int fft_order)
   {
   auto res = new Tplan{npoints,vector<size_t>(ndim),nullptr};
-  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ndim,-1});
+  cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ptrdiff_t(ndim),-1});
   for (size_t i=0; i<ndim; ++i)
     res->shp[i] = shape[ndim-1-i];
   if (ndim==1)
