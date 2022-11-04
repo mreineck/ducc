@@ -103,7 +103,7 @@ template<typename T, size_t alignment=alignof(T)> class array_base
       if constexpr(alignment<=alignof(max_align_t))
         free(ptr);
       else
-#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#if 0 // ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
         free(ptr);
 #else
         if (ptr) free((reinterpret_cast<void**>(ptr))[-1]);
