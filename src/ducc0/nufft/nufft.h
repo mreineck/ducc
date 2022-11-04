@@ -36,6 +36,7 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <numeric>
 #if ((!defined(DUCC0_NO_SIMD)) && (defined(__AVX__)||defined(__SSE3__)))
 #include <x86intrin.h>
 #endif
@@ -355,7 +356,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
            << supp << ", eps=" << epsilon << endl << "  npoints=" << npoints
            << endl << "  memory overhead: "
            << npoints*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
-           << reduce(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
+           << accumulate(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
   public:
