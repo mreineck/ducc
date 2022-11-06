@@ -191,7 +191,6 @@ template <typename T> class concurrent_queue
   };
 
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
-#warning pinning support enabled
 static void do_pinning(int ithread)
   {
   if (pin_info==-1) return;
@@ -199,12 +198,11 @@ static void do_pinning(int ithread)
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   int cpu_wanted = pin_offset + ithread*pin_info;
-  MR_assert(cpu_wanted<num_proc, "bad CPU number requested");
+  MR_assert((cpu_wanted>=0)&&(cpu_wanted<num_proc), "bad CPU number requested");
   CPU_SET(cpu_wanted, &cpuset);
   pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
   }
 #else
-#warning no pinning support available
 static void do_pinning(int /*ithread*/)
   { return; }
 #endif
