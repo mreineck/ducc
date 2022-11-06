@@ -1,5 +1,5 @@
-#FROM debian:stable-slim
-FROM i386/debian:stable-slim
+FROM debian:stable-slim
+#FROM i386/debian:stable-slim
 RUN apt-get update && apt-get install -qq \
       # General environment
       git python3-pip python3-pytest gnupg wget \

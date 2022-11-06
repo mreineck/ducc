@@ -1,3 +1,0 @@
-g++ -O3 -march=native -ffast-math -I ../src/ ducc_julia.cc -Wfatal-errors -pthread -std=c++17 -g0 -s -fPIC -c
-g++ -O3 -march=native -o ducc_julia.so  ducc_julia.o -Wfatal-errors -pthread -std=c++17 -g0 -s -shared -fPIC
-
