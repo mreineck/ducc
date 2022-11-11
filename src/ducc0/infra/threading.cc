@@ -129,18 +129,15 @@ static thread_local bool in_parallel_region = false;
 static const int pin_info = get_pin_info_from_env();
 static const int pin_offset = get_pin_offset_from_env();
 
-std::atomic<size_t> default_nthreads_(max_threads_);
-
-inline size_t adjusted_nthreads(size_t nthreads)
-  { return in_parallel_region ? 1 : ((nthreads==0) ? get_default_nthreads() : nthreads); }
-
-size_t get_default_nthreads()
-  { return default_nthreads_; }
-
-void set_default_nthreads(size_t new_default_nthreads)
-  { default_nthreads_ = std::max<size_t>(1, new_default_nthreads); }
-
 size_t max_threads() { return max_threads_; }
+size_t adjust_nthreads(size_t nthreads)
+  {
+  if (in_parallel_region)
+    return 1;
+  if (nthreads==0)
+    return max_threads_;
+  return std::min(max_threads_, nthreads);
+  }
 
 class latch
   {
@@ -415,7 +412,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = adjusted_nthreads(nthreads);
+      nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -432,7 +429,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = DYNAMIC;
-      nthreads_ = adjusted_nthreads(nthreads);
+      nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -448,7 +445,7 @@ class Distribution
       double fact_max, std::function<void(Scheduler &)> f)
       {
       mode = GUIDED;
-      nthreads_ = adjusted_nthreads(nthreads);
+      nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -462,7 +459,7 @@ class Distribution
     void execParallel(size_t nthreads, std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = adjusted_nthreads(nthreads);
+      nthreads_ = adjust_nthreads(nthreads);
       nwork_ = nthreads_;
       chunksize_ = 1;
       thread_map(move(f));
@@ -588,7 +585,7 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t)> func)
   {
-  nthreads = adjusted_nthreads(nthreads);
+  nthreads = adjust_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
@@ -599,7 +596,7 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   {
-  nthreads = adjusted_nthreads(nthreads);
+  nthreads = adjust_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
@@ -610,9 +607,8 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
 
 #else
 
-size_t get_default_nthreads() { return 1; }
-void set_default_nthreads(size_t /* new_default_nthreads */) {}
 size_t max_threads() { return 1; }
+size_t adjust_nthreads(size_t /*nthreads*/) { return 1; }
 
 class MyScheduler: public Scheduler
   {
