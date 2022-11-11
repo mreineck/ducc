@@ -61,7 +61,6 @@ namespace detail_aligned_array {
 
 using namespace std;
 
-
 // std::aligned_alloc is a bit cursed ... it doesn't exist on MacOS < 10.15
 // and in musl. Let's unconditionally work around it for now.
 //#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
