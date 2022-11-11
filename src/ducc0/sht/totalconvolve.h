@@ -440,7 +440,7 @@ template<typename T> class ConvolverPlan
   public:
     ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
       size_t nthreads_)
-      : nthreads(real_nthreads(nthreads_)),
+      : nthreads(adjust_nthreads(nthreads_)),
         lmax(lmax_),
         kmax(kmax_),
         nphi_s(2*good_size_real(lmax+1)),
