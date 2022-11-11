@@ -61,6 +61,12 @@ namespace detail_aligned_array {
 
 using namespace std;
 
+// std::aligned_alloc is a bit cursed ... it doesn't exist on MacOS < 10.15
+// and in musl. Let's unconditionally work around it for now.
+//#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#define DUCC0_WORKAROUND_ALIGNED_ALLOC
+//#endif
+
 /// Bare bones array class.
 /** Mostly useful for uninitialized temporary buffers.
  *  \note Since this class operates on raw memory, it should only be used with
@@ -82,9 +88,7 @@ template<typename T, size_t alignment=alignof(T)> class array_base
       else
         {
         if (num==0) return nullptr;
-// FIXME: let's not use aligned_alloc on Apple for the moment,
-// it's only supported from 10.15 on...
-#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#if (!defined(DUCC0_WORKAROUND_ALIGNED_ALLOC))
         // aligned_alloc requires the allocated size to be a multiple of the
         // requested alignment, so increase size if necessary
         void *res = aligned_alloc(alignment,((num*sizeof(T)+alignment-1)/alignment)*alignment);
@@ -103,12 +107,14 @@ template<typename T, size_t alignment=alignof(T)> class array_base
       if constexpr(alignment<=alignof(max_align_t))
         free(ptr);
       else
-#if ((__cplusplus >= 201703L) && (!defined(__APPLE__)))
+#if (!defined(DUCC0_WORKAROUND_ALIGNED_ALLOC))
         free(ptr);
 #else
         if (ptr) free((reinterpret_cast<void**>(ptr))[-1]);
 #endif
       }
+
+#undef DUCC0_WORKAROUND_ALIGNED_ALLOC
 
   public:
     /// Creates a zero-sized array with no associated memory.
