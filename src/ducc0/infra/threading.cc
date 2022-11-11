@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2021 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -120,10 +120,14 @@ static int get_pin_offset_from_env()
   }
 
 static const size_t max_threads_ = get_max_threads_from_env();
+static thread_local bool in_parallel_region = false;
 static const int pin_info = get_pin_info_from_env();
 static const int pin_offset = get_pin_offset_from_env();
 
 std::atomic<size_t> default_nthreads_(max_threads_);
+
+inline size_t adjusted_nthreads(size_t nthreads)
+  { return in_parallel_region ? 1 : ((nthreads==0) ? get_default_nthreads() : nthreads); }
 
 size_t get_default_nthreads()
   { return default_nthreads_; }
@@ -225,6 +229,7 @@ class thread_pool
         std::atomic<size_t> &unscheduled_tasks,
         concurrent_queue<std::function<void()>> &overflow_work, size_t ithread)
         {
+        in_parallel_region = true;
         do_pinning(ithread);
         using lock_t = std::unique_lock<std::mutex>;
         bool expect_work = true;
@@ -405,7 +410,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = real_nthreads(nthreads);
+      nthreads_ = adjusted_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -422,7 +427,7 @@ class Distribution
       std::function<void(Scheduler &)> f)
       {
       mode = DYNAMIC;
-      nthreads_ = real_nthreads(nthreads);
+      nthreads_ = adjusted_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -438,7 +443,7 @@ class Distribution
       double fact_max, std::function<void(Scheduler &)> f)
       {
       mode = GUIDED;
-      nthreads_ = real_nthreads(nthreads);
+      nthreads_ = adjusted_nthreads(nthreads);
       if (nthreads_ == 1)
         return execSingle(nwork, move(f));
       nwork_ = nwork;
@@ -452,7 +457,7 @@ class Distribution
     void execParallel(size_t nthreads, std::function<void(Scheduler &)> f)
       {
       mode = STATIC;
-      nthreads_ = real_nthreads(nthreads);
+      nthreads_ = adjusted_nthreads(nthreads);
       nwork_ = nthreads_;
       chunksize_ = 1;
       thread_map(move(f));
@@ -578,7 +583,7 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t)> func)
   {
-  nthreads = real_nthreads(nthreads);
+  nthreads = adjusted_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
@@ -589,7 +594,7 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   {
-  nthreads = real_nthreads(nthreads);
+  nthreads = adjusted_nthreads(nthreads);
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
