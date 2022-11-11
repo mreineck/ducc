@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2021 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -93,14 +93,19 @@ static long mystrtol(const char *inp)
 
 static size_t get_max_threads_from_env()
   {
+#if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
+  size_t res = sysconf(_SC_NPROCESSORS_ONLN);
+#else
+  size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
+#endif
   auto evar=getenv("DUCC0_NUM_THREADS");
   if (!evar)
-    return std::max<size_t>(1, std::thread::hardware_concurrency());
-  auto res = mystrtol(evar);
-  MR_assert(res>=0, "invalid value in DUCC0_NUM_THREADS");
-  if (res==0)
-    return std::max<size_t>(1, std::thread::hardware_concurrency());
-  return res;
+    return res;
+  auto res2 = mystrtol(evar);
+  MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS");
+  if (res2==0)
+    return res;
+  return std::min<size_t>(res, res2);
   }
 static int get_pin_info_from_env()
   {
