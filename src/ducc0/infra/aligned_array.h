@@ -1,6 +1,6 @@
 /** \file ducc0/infra/aligned_array.h
  *
- * \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ * \copyright Copyright (C) 2019-2022 Max-Planck-Society
  * \author Martin Reinecke
  */
 
@@ -123,10 +123,19 @@ template<typename T, size_t alignment=alignof(T)> class array_base
     /// Creates an array with \a n entries.
     /** \note Memory is not initialized! */
     array_base(size_t n) : p(ralloc(n)), sz(n) {}
+    array_base(const array_base &) = delete;
     array_base(array_base &&other)
       : p(other.p), sz(other.sz)
       { other.p=nullptr; other.sz=0; }
     ~array_base() { dealloc(p); }
+
+    array_base &operator=(const array_base &) = delete;
+    array_base &operator=(array_base &&other)
+      {
+      swap(p, other.p);
+      swap(sz, other.sz);
+      return *this;
+      }
 
     /// If \a n is different from the current size, resizes the array to hold
     /// \a n elements.

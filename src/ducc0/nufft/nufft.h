@@ -202,14 +202,19 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
     }
   return make_tuple(minidx, bigdims);
   }
-
+//#define NEW_DUMP
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
 template<> constexpr inline int log2tile_<double, 1> = 9;
 template<> constexpr inline int log2tile_<float , 1> = 9;
 template<> constexpr inline int log2tile_<double, 2> = 4;
 template<> constexpr inline int log2tile_<float , 2> = 5;
+#ifdef NEW_DUMP
+template<> constexpr inline int log2tile_<double, 3> = 5;
+template<> constexpr inline int log2tile_<float , 3> = 5;
+#else
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
+#endif
 
 template<size_t ndim> constexpr inline size_t max_ntile=-1;
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
@@ -365,7 +370,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
       size_t nthreads_, double sigma_min, double sigma_max,
       double periodicity, bool fft_order_)
       : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
-        nthreads(real_nthreads(nthreads_)), coordfct(1./periodicity),
+        nthreads(adjust_nthreads(nthreads_)), coordfct(1./periodicity),
         fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
       {
       MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
@@ -1212,6 +1217,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         vmav<complex<Tcalc>,ndim> &grid;
         array<int,ndim> i0; // start index of the current nonuniform point
         array<int,ndim> b0; // start index of the current buffer
+#ifdef NEW_DUMP
+        array<int,ndim> imin,imax;
+#endif
 
         vmav<complex<Tacc>,ndim> gbuf;
         complex<Tacc> *px0;
@@ -1224,6 +1232,22 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           int inv = int(parent->nover[1]);
           int inw = int(parent->nover[2]);
 
+#ifdef NEW_DUMP
+          int idxv0 = (imin[1]+b0[1]+inv)%inv;
+          int idxw0 = (imin[2]+b0[2]+inw)%inw;
+          for (int iu=imin[0], idxu=(imin[0]+b0[0]+inu)%inu; iu<imax[0]; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            {
+            lock_guard<mutex> lock(locks[idxu]);
+            for (int iv=imin[1], idxv=idxv0; iv<imax[1]; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int iw=imin[2], idxw=idxw0; iw<imax[2]; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+                {
+                auto t=gbuf(iu,iv,iw);
+                grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                gbuf(iu,iv,iw) = 0;
+                }
+            }
+          imin={1000,1000,1000}; imax={-1000,-1000,-1000};
+#else
           int idxv0 = (b0[1]+inv)%inv;
           int idxw0 = (b0[2]+inw)%inw;
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
@@ -1237,6 +1261,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
                 gbuf(iu,iv,iw) = 0;
                 }
             }
+#endif
           }
 
       public:
@@ -1254,6 +1279,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           vector<mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             i0{-1000000, -1000000, -1000000}, b0{-1000000, -1000000, -1000000},
+#ifdef NEW_DUMP
+            imin{1000,1000,1000},imax{-1000,-1000,-1000},
+#endif
             gbuf({size_t(su),size_t(sv),size_t(sw)}),
             px0(gbuf.data()), locks(locks_) {}
         ~HelperNu2u() { dump(); }
@@ -1280,6 +1308,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
             b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
             b0[2]=((((i0[2]+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
+#ifdef NEW_DUMP
+          for (size_t i=0; i<ndim; ++i)
+            {
+            imin[i]=min<int>(imin[i],i0[i]-b0[i]);
+            imax[i]=max<int>(imax[i],i0[i]-b0[i]+supp);
+            }
+#endif
           p0 = px0 + (i0[0]-b0[0])*sv*sw + (i0[1]-b0[1])*sw + (i0[2]-b0[2]);
           }
       };
