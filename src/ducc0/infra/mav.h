@@ -158,7 +158,9 @@ class fmav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       auto ndim = shp.size();
-      stride_t res(ndim);
+      // MR using the static_cast just to avoid a GCC warning.
+//      stride_t res(ndim);
+      stride_t res(static_cast<int>(ndim));
       if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
