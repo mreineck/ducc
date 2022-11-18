@@ -93,7 +93,6 @@ template<typename T> void printmav(const T &d)
   }
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const ArrayDescriptor &desc)
   {
-printdesc(desc);
   static_assert(ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
   MR_assert(ndim==desc.ndim, "dimensionality mismatch");
   MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
@@ -108,7 +107,6 @@ printdesc(desc);
   }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
   {
-printdesc(desc);
   static_assert(ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
   MR_assert(ndim==desc.ndim, "dimensionality mismatch");
   MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
@@ -123,7 +121,6 @@ printdesc(desc);
   }
 template<typename T> cfmav<T> to_cfmav(const ArrayDescriptor &desc)
   {
-printdesc(desc);
   MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
   typename cfmav<T>::shape_t shp(desc.ndim);
   typename cfmav<T>::stride_t str(desc.ndim);
@@ -134,12 +131,24 @@ printdesc(desc);
     }
   return cfmav<T>(reinterpret_cast<const T *>(desc.data), shp, str);
   }
+template<typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
+  {
+  MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
+  typename vfmav<T>::shape_t shp(desc.ndim);
+  typename vfmav<T>::stride_t str(desc.ndim);
+  for (size_t i=0; i<desc.ndim; ++i)
+    {
+    shp[i] = desc.shape[desc.ndim-1-i];
+    str[i] = desc.stride[desc.ndim-1-i];
+    }
+  return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
+  }
 
 extern "C" {
 
-void nufft_u2nu_julia(ArrayDescriptor grid,
-                      ArrayDescriptor coord,
-                      int forward,
+int nufft_u2nu_julia(ArrayDescriptor grid,
+                     ArrayDescriptor coord,
+                     int forward,
                       double epsilon,
                       size_t nthreads,
                       ArrayDescriptor out,
@@ -149,6 +158,7 @@ void nufft_u2nu_julia(ArrayDescriptor grid,
                       double periodicity,
                       int fft_order)
   {
+try{
   if (coord.dtype==Typecode<double>::value)
     {
     auto mycoord_(to_cmav<double,2>(coord));
@@ -189,28 +199,70 @@ void nufft_u2nu_julia(ArrayDescriptor grid,
     else
       MR_fail("bad datatype");
     }
+}
+catch(...)
+  {return 1;}
+return 0;
   }
 
-//void nufft_nu2u_julia (ArrayDescriptor points,
-                       //ArrayDescriptor coord,
-                       //int forward,
-                       //double epsilon,
-                       //size_t nthreads,
-                       //ArrayDescriptor out,
-                       //size_t verbosity,
-                       //double sigma_min,
-                       //double sigma_max,
-                       //double periodicity,
-                       //int fft_order)
-  //{
-  //cmav<double,2> mycoord(coord+ndim-1,{npoints,ndim},{ptrdiff_t(ndim),-1});
-  //vector<size_t> myshape(ndim);
-  //for (size_t i=0; i<ndim; ++i)
-    //myshape[i] = shape[ndim-1-i];
-  //vfmav<complex<double>> myout(reinterpret_cast<complex<double> *>(out), myshape);
-  //cmav<complex<double>,1> mypoints(reinterpret_cast<const complex<double> *>(points), {npoints});
-  //nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,verbosity,sigma_min,sigma_max,periodicity,fft_order);
-  //}
+int nufft_nu2u_julia (ArrayDescriptor points,
+                       ArrayDescriptor coord,
+                       int forward,
+                       double epsilon,
+                       size_t nthreads,
+                       ArrayDescriptor out,
+                       size_t verbosity,
+                       double sigma_min,
+                       double sigma_max,
+                       double periodicity,
+                       int fft_order)
+  {
+try{
+  if (coord.dtype==Typecode<double>::value)
+    {
+    auto mycoord_(to_cmav<double,2>(coord));
+    // flip coord axis!
+    cmav<double,2> mycoord(mycoord_.data()+(mycoord_.shape(1)-1)*mycoord_.stride(1), mycoord_.shape(), {mycoord_.stride(0), -mycoord_.stride(1)});
+    if (points.dtype==Typecode<complex<double>>::value)
+      {
+      auto mypoints(to_cmav<complex<double>,1>(points));
+      auto myout(to_vfmav<complex<double>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,verbosity,sigma_min,sigma_max,periodicity,fft_order);
+      }
+    else if (points.dtype==Typecode<complex<float>>::value)
+      {
+      auto mypoints(to_cmav<complex<float>,1>(points));
+      auto myout(to_vfmav<complex<float>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,verbosity,sigma_min,sigma_max,periodicity,fft_order);
+      }
+    else
+      MR_fail("bad datatype");
+    }
+  else if (coord.dtype==Typecode<float>::value)
+    {
+    auto mycoord_(to_cmav<float,2>(coord));
+    // flip coord axis!
+    cmav<float,2> mycoord(mycoord_.data()+(mycoord_.shape(1)-1)*mycoord_.stride(1), mycoord_.shape(), {mycoord_.stride(0), -mycoord_.stride(1)});
+    if (points.dtype==Typecode<complex<float>>::value)
+      {
+      auto mypoints(to_cmav<complex<float>,1>(points));
+      auto myout(to_vfmav<complex<float>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,verbosity,sigma_min,sigma_max,periodicity,fft_order);
+      }
+    else
+      MR_fail("bad datatype");
+    }
+}
+catch(...)
+  {return 1;}
+return 0;
+  }
 
 struct Tplan
   {
@@ -230,6 +282,7 @@ Tplan *make_nufft_plan_julia(int nu2u,
                              double periodicity,
                              int fft_order)
   {
+try {
   auto myshape_(to_cmav<uint64_t, 1>(shape));
   auto ndim = myshape_.shape(0);
   if (coord.dtype==Typecode<double>::value)
@@ -293,10 +346,13 @@ Tplan *make_nufft_plan_julia(int nu2u,
     return res;
     }
   MR_fail("bad coordinate data type");
+}
+catch(const exception &e) { cout << e.what() << endl; return nullptr; }
   }
 
-void delete_nufft_plan_julia(Tplan *plan)
+int delete_nufft_plan_julia(Tplan *plan)
   {
+try {
   if (plan->shp.size()==1)
     if (plan->coord_type==Typecode<double>::value)
       delete reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
@@ -315,11 +371,16 @@ void delete_nufft_plan_julia(Tplan *plan)
   else
     MR_fail("bad number of dimensions");
   delete plan;
+}
+catch(const exception &e)
+  {cout<< e.what() << endl;return 1;}
+return 0;
   }
 
-void planned_nu2u_julia(Tplan *plan, int forward, size_t verbosity,
+int planned_nu2u_julia(Tplan *plan, int forward, size_t verbosity,
   ArrayDescriptor points, ArrayDescriptor uniform)
   {
+try {
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
@@ -377,11 +438,16 @@ void planned_nu2u_julia(Tplan *plan, int forward, size_t verbosity,
     }
   else
     MR_fail("unsupported data type");
+}
+catch(const exception &e)
+  {cout<< e.what() << endl;return 1;}
+return 0;
   }
 
-void planned_u2nu_julia(Tplan *plan, int forward, size_t verbosity,
+int planned_u2nu_julia(Tplan *plan, int forward, size_t verbosity,
   ArrayDescriptor uniform, ArrayDescriptor points)
   {
+try {
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
@@ -437,5 +503,10 @@ void planned_u2nu_julia(Tplan *plan, int forward, size_t verbosity,
     }
   else
     MR_fail("unsupported data type");
+}
+catch(const exception &e)
+  {cout<< e.what() << endl;return 1;}
+return 0;
   }
+
 }
