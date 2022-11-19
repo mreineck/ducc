@@ -326,8 +326,8 @@ int nufft_delete_plan(Tplan *plan)
     : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
   else if (plan->shp.size()==3)
     (plan->coord_type==Typecode<double>::value) ?
-      delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan)
-    : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
+      delete reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan)
+    : delete reinterpret_cast<Nufft<float,float,float, 3> *>(plan->plan);
   else
     MR_fail("bad number of dimensions");
   delete plan;
