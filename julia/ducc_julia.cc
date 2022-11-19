@@ -133,9 +133,12 @@ template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
     res.shape(), {res.stride(0), -res.stride(1)});
   }
 
+#define DUCC0_JULIA_TRY_BEGIN try{
+#define DUCC0_JULIA_TRY_END } catch(const exception &e) { cout << e.what() << endl; return 1; } return 0;
+
 extern "C" {
 
-int nufft_u2nu_julia(ArrayDescriptor grid,
+int nufft_u2nu(ArrayDescriptor grid,
                      ArrayDescriptor coord,
                      int forward,
                      double epsilon,
@@ -147,54 +150,50 @@ int nufft_u2nu_julia(ArrayDescriptor grid,
                      double periodicity,
                      int fft_order)
   {
-  try
+  DUCC0_JULIA_TRY_BEGIN
+  if (coord.dtype==Typecode<double>::value)
     {
-    if (coord.dtype==Typecode<double>::value)
+    auto mycoord = get_coord<double>(coord);
+    if (grid.dtype==Typecode<complex<double>>::value)
       {
-      auto mycoord = get_coord<double>(coord);
-      if (grid.dtype==Typecode<complex<double>>::value)
-        {
-        auto mygrid(to_cfmav<complex<double>>(grid));
-        auto myout(to_vmav<complex<double>,1>(out));
-        MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
-        u2nu<double,double>(mycoord,mygrid,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else if (grid.dtype==Typecode<complex<float>>::value)
-        {
-        auto mygrid(to_cfmav<complex<float>>(grid));
-        auto myout(to_vmav<complex<float>,1>(out));
-        MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
-        u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else
-        MR_fail("bad datatype");
+      auto mygrid(to_cfmav<complex<double>>(grid));
+      auto myout(to_vmav<complex<double>,1>(out));
+      MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
+      u2nu<double,double>(mycoord,mygrid,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
-    else if (coord.dtype==Typecode<float>::value)
+    else if (grid.dtype==Typecode<complex<float>>::value)
       {
-      auto mycoord = get_coord<float>(coord);
-      if (grid.dtype==Typecode<complex<float>>::value)
-        {
-        auto mygrid(to_cfmav<complex<float>>(grid));
-        auto myout(to_vmav<complex<float>,1>(out));
-        MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
-        u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else
-        MR_fail("bad datatype");
+      auto mygrid(to_cfmav<complex<float>>(grid));
+      auto myout(to_vmav<complex<float>,1>(out));
+      MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
+      u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
+    else
+      MR_fail("bad datatype");
     }
-  catch(const exception &e)
-    { cout << e.what() << endl; return 1; }
-  return 0;
+  else if (coord.dtype==Typecode<float>::value)
+    {
+    auto mycoord = get_coord<float>(coord);
+    if (grid.dtype==Typecode<complex<float>>::value)
+      {
+      auto mygrid(to_cfmav<complex<float>>(grid));
+      auto myout(to_vmav<complex<float>,1>(out));
+      MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
+      u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
+      }
+    else
+      MR_fail("bad datatype");
+    }
+  DUCC0_JULIA_TRY_END
   }
 
-int nufft_nu2u_julia (ArrayDescriptor points,
+int nufft_nu2u(ArrayDescriptor points,
                        ArrayDescriptor coord,
                        int forward,
                        double epsilon,
@@ -206,51 +205,47 @@ int nufft_nu2u_julia (ArrayDescriptor points,
                        double periodicity,
                        int fft_order)
   {
-  try
+  DUCC0_JULIA_TRY_BEGIN
+  if (coord.dtype==Typecode<double>::value)
     {
-    if (coord.dtype==Typecode<double>::value)
+    auto mycoord = get_coord<double>(coord);
+    if (points.dtype==Typecode<complex<double>>::value)
       {
-      auto mycoord = get_coord<double>(coord);
-      if (points.dtype==Typecode<complex<double>>::value)
-        {
-        auto mypoints(to_cmav<complex<double>,1>(points));
-        auto myout(to_vfmav<complex<double>>(out));
-        MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
-        nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else if (points.dtype==Typecode<complex<float>>::value)
-        {
-        auto mypoints(to_cmav<complex<float>,1>(points));
-        auto myout(to_vfmav<complex<float>>(out));
-        MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
-        nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else
-        MR_fail("bad datatype");
+      auto mypoints(to_cmav<complex<double>,1>(points));
+      auto myout(to_vfmav<complex<double>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
-    else if (coord.dtype==Typecode<float>::value)
+    else if (points.dtype==Typecode<complex<float>>::value)
       {
-      auto mycoord = get_coord<float>(coord);
-      if (points.dtype==Typecode<complex<float>>::value)
-        {
-        auto mypoints(to_cmav<complex<float>,1>(points));
-        auto myout(to_vfmav<complex<float>>(out));
-        MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
-        MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
-        nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
-          verbosity,sigma_min,sigma_max,periodicity,fft_order);
-        }
-      else
-        MR_fail("bad datatype");
+      auto mypoints(to_cmav<complex<float>,1>(points));
+      auto myout(to_vfmav<complex<float>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
+    else
+      MR_fail("bad datatype");
     }
-  catch(const exception &e)
-    { cout << e.what() << endl; return 1; }
-  return 0;
+  else if (coord.dtype==Typecode<float>::value)
+    {
+    auto mycoord = get_coord<float>(coord);
+    if (points.dtype==Typecode<complex<float>>::value)
+      {
+      auto mypoints(to_cmav<complex<float>,1>(points));
+      auto myout(to_vfmav<complex<float>>(out));
+      MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
+      MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
+      nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
+        verbosity,sigma_min,sigma_max,periodicity,fft_order);
+      }
+    else
+      MR_fail("bad datatype");
+    }
+  DUCC0_JULIA_TRY_END
   }
 
 struct Tplan
@@ -261,7 +256,7 @@ struct Tplan
   void *plan;
   };
 
-Tplan *make_nufft_plan_julia(int nu2u,
+Tplan *nufft_make_plan(int nu2u,
                              ArrayDescriptor shape,
                              ArrayDescriptor coord,
                              double epsilon,
@@ -318,161 +313,152 @@ Tplan *make_nufft_plan_julia(int nu2u,
     { cout << e.what() << endl; return nullptr; }
   }
 
-int delete_nufft_plan_julia(Tplan *plan)
+int nufft_delete_plan(Tplan *plan)
   {
-  try
-    {
-    if (plan->shp.size()==1)
-      (plan->coord_type==Typecode<double>::value) ?
-        delete reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan)
-      : delete reinterpret_cast<Nufft<float,float,float, 1> *>(plan->plan);
-    else if (plan->shp.size()==2)
-      (plan->coord_type==Typecode<double>::value) ?
-        delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan)
-      : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
-    else if (plan->shp.size()==3)
-      (plan->coord_type==Typecode<double>::value) ?
-        delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan)
-      : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
-    else
-      MR_fail("bad number of dimensions");
-    delete plan;
-    }
-  catch(const exception &e)
-    { cout<< e.what() << endl; return 1; }
-  return 0;
+  DUCC0_JULIA_TRY_BEGIN
+  if (plan->shp.size()==1)
+    (plan->coord_type==Typecode<double>::value) ?
+      delete reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan)
+    : delete reinterpret_cast<Nufft<float,float,float, 1> *>(plan->plan);
+  else if (plan->shp.size()==2)
+    (plan->coord_type==Typecode<double>::value) ?
+      delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan)
+    : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
+  else if (plan->shp.size()==3)
+    (plan->coord_type==Typecode<double>::value) ?
+      delete reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan)
+    : delete reinterpret_cast<Nufft<float,float,float, 2> *>(plan->plan);
+  else
+    MR_fail("bad number of dimensions");
+  delete plan;
+  DUCC0_JULIA_TRY_END
   }
 
-int planned_nu2u_julia(Tplan *plan, int forward, size_t verbosity,
+int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   ArrayDescriptor points, ArrayDescriptor uniform)
   {
-  try
+  DUCC0_JULIA_TRY_BEGIN
+  MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
+  for (size_t i=0; i<uniform.ndim; ++i)
+    MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
+  if (points.dtype==Typecode<complex<double>>::value)
     {
-    MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
-    for (size_t i=0; i<uniform.ndim; ++i)
-      MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
-    if (points.dtype==Typecode<complex<double>>::value)
+    MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
+    auto mypoints(to_cmav<complex<double>,1>(points));
+    if (plan->shp.size()==1)
       {
-      MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
-      auto mypoints(to_cmav<complex<double>,1>(points));
-      if (plan->shp.size()==1)
-        {
-        auto myout(to_vmav<complex<double>,1>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else if (plan->shp.size()==2)
-        {
-        auto myout(to_vmav<complex<double>,2>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else if (plan->shp.size()==3)
-        {
-        auto myout(to_vmav<complex<double>,3>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else
-        MR_fail("bad number of dimensions");
+      auto myout(to_vmav<complex<double>,1>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
       }
-    else if (points.dtype==Typecode<complex<float>>::value)
+    else if (plan->shp.size()==2)
       {
-      MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
-      auto mypoints(to_cmav<complex<float>,1>(points));
-      if (plan->shp.size()==1)
-        {
-        auto myout(to_vmav<complex<float>,1>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else if (plan->shp.size()==2)
-        {
-        auto myout(to_vmav<complex<float>,2>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else if (plan->shp.size()==3)
-        {
-        auto myout(to_vmav<complex<float>,3>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
-        rplan->nu2u(forward, verbosity, mypoints, myout);
-        }
-      else
-        MR_fail("bad number of dimensions");
+      auto myout(to_vmav<complex<double>,2>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
+      }
+    else if (plan->shp.size()==3)
+      {
+      auto myout(to_vmav<complex<double>,3>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
       }
     else
-      MR_fail("unsupported data type");
+      MR_fail("bad number of dimensions");
     }
-  catch(const exception &e)
-    { cout<< e.what() << endl; return 1; }
-  return 0;
+  else if (points.dtype==Typecode<complex<float>>::value)
+    {
+    MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
+    auto mypoints(to_cmav<complex<float>,1>(points));
+    if (plan->shp.size()==1)
+      {
+      auto myout(to_vmav<complex<float>,1>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
+      }
+    else if (plan->shp.size()==2)
+      {
+      auto myout(to_vmav<complex<float>,2>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
+      }
+    else if (plan->shp.size()==3)
+      {
+      auto myout(to_vmav<complex<float>,3>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
+      rplan->nu2u(forward, verbosity, mypoints, myout);
+      }
+    else
+      MR_fail("bad number of dimensions");
+    }
+  else
+    MR_fail("unsupported data type");
+  DUCC0_JULIA_TRY_END
   }
 
-int planned_u2nu_julia(Tplan *plan, int forward, size_t verbosity,
+int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   ArrayDescriptor uniform, ArrayDescriptor points)
   {
-  try
+  DUCC0_JULIA_TRY_BEGIN
+  MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
+  for (size_t i=0; i<uniform.ndim; ++i)
+    MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
+  if (points.dtype==Typecode<complex<double>>::value)
     {
-    MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
-    for (size_t i=0; i<uniform.ndim; ++i)
-      MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
-    if (points.dtype==Typecode<complex<double>>::value)
+    MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
+    auto mypoints(to_vmav<complex<double>,1>(points));
+    if (plan->shp.size()==1)
       {
-      MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
-      auto mypoints(to_vmav<complex<double>,1>(points));
-      if (plan->shp.size()==1)
-        {
-        auto myuniform(to_cmav<complex<double>,1>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else if (plan->shp.size()==2)
-        {
-        auto myuniform(to_cmav<complex<double>,2>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else if (plan->shp.size()==3)
-        {
-        auto myuniform(to_cmav<complex<double>,3>(uniform));
-        auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else
-        MR_fail("bad number of dimensions");
+      auto myuniform(to_cmav<complex<double>,1>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
-    else if (points.dtype==Typecode<complex<float>>::value)
+    else if (plan->shp.size()==2)
       {
-      MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
-      auto mypoints(to_vmav<complex<float>,1>(points));
-      if (plan->shp.size()==1)
-        {
-        auto myuniform(to_cmav<complex<float>,1>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else if (plan->shp.size()==2)
-        {
-        auto myuniform(to_cmav<complex<float>,2>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else if (plan->shp.size()==3)
-        {
-        auto myuniform(to_cmav<complex<float>,3>(uniform));
-        auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
-        rplan->u2nu(forward, verbosity, myuniform, mypoints);
-        }
-      else
-        MR_fail("bad number of dimensions");
+      auto myuniform(to_cmav<complex<double>,2>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
+      }
+    else if (plan->shp.size()==3)
+      {
+      auto myuniform(to_cmav<complex<double>,3>(uniform));
+      auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
     else
-      MR_fail("unsupported data type");
+      MR_fail("bad number of dimensions");
     }
-  catch(const exception &e)
-    { cout<< e.what() << endl; return 1; }
-  return 0;
+  else if (points.dtype==Typecode<complex<float>>::value)
+    {
+    MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
+    auto mypoints(to_vmav<complex<float>,1>(points));
+    if (plan->shp.size()==1)
+      {
+      auto myuniform(to_cmav<complex<float>,1>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
+      }
+    else if (plan->shp.size()==2)
+      {
+      auto myuniform(to_cmav<complex<float>,2>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
+      }
+    else if (plan->shp.size()==3)
+      {
+      auto myuniform(to_cmav<complex<float>,3>(uniform));
+      auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
+      rplan->u2nu(forward, verbosity, myuniform, mypoints);
+      }
+    else
+      MR_fail("bad number of dimensions");
+    }
+  else
+    MR_fail("unsupported data type");
+  DUCC0_JULIA_TRY_END
   }
 
 }
+
+#undef DUCC0_JULIA_TRY_BEGIN
+#undef DUCC0_JULIA_TRY_END
