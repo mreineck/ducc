@@ -15,115 +15,11 @@ g++ -O3 -march=native -o ducc_julia.so ducc_julia.o -Wfatal-errors -pthread -std
 #include "ducc0/math/gl_integrator.cc"
 #include "ducc0/math/gridding_kernel.cc"
 #include "ducc0/nufft/nufft.h"
+#include "ducc0/bindings/typecode.h"
+#include "ducc0/bindings/array_descriptor.h"
 
 using namespace ducc0;
 using namespace std;
-
-// typecode stuff
-
-// bits [0-4] contain the type size in bytes
-// bit 5 is 1 iff the type is unsigned
-// bit 6 is 1 iff the type is floating point
-// bit 7 is 1 iff the type is complex-valued
-constexpr size_t sizemask = 0x1f;
-constexpr size_t unsigned_bit = 0x20;
-constexpr size_t floating_point_bit = 0x40;
-constexpr size_t complex_bit = 0x80;
-
-template<typename T> class Typecode
-  {
-  private:
-    static constexpr size_t compute()
-      {
-      static_assert(!is_same<T,bool>::value, "no bools allowed");
-//      static_assert(is_arithmetic<T>::value, "need an arithmetic type");
-      static_assert(is_integral<T>::value||is_floating_point<T>::value, "need integral or floating point type");
-      static_assert(sizeof(T)<=8, "type size must be at most 8 bytes");
-      if constexpr(is_integral<T>::value)
-        return sizeof(T) + unsigned_bit*(!is_signed<T>::value);
-      if constexpr(is_floating_point<T>::value)
-        {
-        static_assert(is_signed<T>::value, "no support for unsigned floating point types");
-        return sizeof(T)+floating_point_bit;
-        }
-      }
-  public:
-    static constexpr size_t value = compute();
-  };
-template<typename T> class Typecode<complex<T>>
-  {
-  private:
-    static constexpr size_t compute()
-      {
-      static_assert(is_floating_point<T>::value, "need a floating point type");
-      return Typecode<T>::value + sizeof(T) + complex_bit;
-      }
-  public:
-    static constexpr size_t value = compute();
-  };
-
-constexpr size_t type_size(size_t tc) { return tc&sizemask; }
-constexpr bool type_is_unsigned(size_t tc) { return tc&unsigned_bit; }
-constexpr bool type_is_floating_point(size_t tc) { return tc&floating_point_bit; }
-constexpr bool type_is_complex(size_t tc) { return tc&complex_bit; }
-
-struct ArrayDescriptor
-  {
-  static constexpr size_t maxdim=5;
-
-  array<uint64_t, maxdim> shape;
-  array<int64_t, maxdim> stride;
-
-  void *data;
-  uint8_t ndim;
-  uint8_t dtype;
-  };
-template<typename T, size_t ndim> auto prep1(const ArrayDescriptor &desc)
-  {
-  static_assert(ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
-  MR_assert(ndim==desc.ndim, "dimensionality mismatch");
-  MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
-  typename mav_info<ndim>::shape_t shp;
-  typename mav_info<ndim>::stride_t str;
-  for (size_t i=0; i<ndim; ++i)
-    {
-    shp[i] = desc.shape[ndim-1-i];
-    str[i] = desc.stride[ndim-1-i];
-    }
-  return make_tuple(shp, str);
-  }
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep1<T, ndim>(desc);
-  return cmav<T, ndim>(reinterpret_cast<const T *>(desc.data), shp, str);
-  }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep1<T, ndim>(desc);
-  return vmav<T, ndim>(reinterpret_cast<T *>(desc.data), shp, str);
-  }
-template<typename T> auto prep2(const ArrayDescriptor &desc)
-  {
-  MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
-  typename fmav_info::shape_t shp(desc.ndim);
-  typename fmav_info::stride_t str(desc.ndim);
-  for (size_t i=0; i<desc.ndim; ++i)
-    {
-    shp[i] = desc.shape[desc.ndim-1-i];
-    str[i] = desc.stride[desc.ndim-1-i];
-    }
-  return make_tuple(shp, str);
-  }
-template<typename T> cfmav<T> to_cfmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep2<T>(desc);
-  return cfmav<T>(reinterpret_cast<const T *>(desc.data), shp, str);
-  }
-template<typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep2<T>(desc);
-  return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
-  }
 
 template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
   {
