@@ -44,7 +44,7 @@ class Bench:
             points=self._points.astype(np.complex128),
             coord=self._coord.astype(np.float64),
             forward=True,
-            epsilon=3e-13,
+            epsilon=2e-14,
             nthreads=0,
             verbosity=1,
             out=np.empty(shape, dtype=np.complex128))
@@ -53,7 +53,7 @@ class Bench:
             grid=self._values.astype(np.complex128),
             coord=self._coord.astype(np.float64),
             forward=True,
-            epsilon=3e-13,
+            epsilon=2e-14,
             nthreads=0,
             verbosity=1)
 
@@ -176,7 +176,7 @@ def plot(res, fname):
 def runbench(shape, npoints, nthreads, fname, singleprec=False):
     res=[]
     mybench = Bench(shape, npoints)
-    epslist = [4e-6, 1e-5, 1e-4, 1e-3, 1e-2] if singleprec else [4e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
+    epslist = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2] if singleprec else [2.5e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
     for eps in epslist:
         tres = mybench.run(eps, singleprec, nthreads)
         if have_finufft:
@@ -188,9 +188,9 @@ def runbench(shape, npoints, nthreads, fname, singleprec=False):
 singleprec = False
 # FINUFFT benchmarks
 if True:
-    runbench((   1000000,),  10000000, 1, "finufft_1d_scalar.png"  , singleprec)
-    runbench(( 1000,1000,),  10000000, 1, "finufft_2d_scalar.png"  , singleprec)
-    runbench((100,100,100),  10000000, 1, "finufft_3d_scalar.png"  , singleprec)
+    runbench((   1000000,),  10000000, 1, "finufft_1d_serial.png"  , singleprec)
+    runbench(( 1000,1000,),  10000000, 1, "finufft_2d_serial.png"  , singleprec)
+    runbench((100,100,100),  10000000, 1, "finufft_3d_serial.png"  , singleprec)
     runbench((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
     runbench(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", singleprec)
     runbench((216,216,216), 100000000, 8, "finufft_3d_parallel.png", singleprec)

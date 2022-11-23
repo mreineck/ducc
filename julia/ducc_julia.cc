@@ -23,7 +23,7 @@ using namespace std;
 
 template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
   {
-  auto res(to_cmav<T,2>(desc));
+  auto res(to_cmav<true,T,2>(desc));
   // flip coord axis!
   return cmav<T,2>(res.data()+(res.shape(1)-1)*res.stride(1),
     res.shape(), {res.stride(0), -res.stride(1)});
@@ -52,8 +52,8 @@ int nufft_u2nu(ArrayDescriptor grid,
     auto mycoord = get_coord<double>(coord);
     if (grid.dtype==Typecode<complex<double>>::value)
       {
-      auto mygrid(to_cfmav<complex<double>>(grid));
-      auto myout(to_vmav<complex<double>,1>(out));
+      auto mygrid(to_cfmav<true,complex<double>>(grid));
+      auto myout(to_vmav<true,complex<double>,1>(out));
       MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
       u2nu<double,double>(mycoord,mygrid,forward,epsilon,nthreads,myout,
@@ -61,8 +61,8 @@ int nufft_u2nu(ArrayDescriptor grid,
       }
     else if (grid.dtype==Typecode<complex<float>>::value)
       {
-      auto mygrid(to_cfmav<complex<float>>(grid));
-      auto myout(to_vmav<complex<float>,1>(out));
+      auto mygrid(to_cfmav<true,complex<float>>(grid));
+      auto myout(to_vmav<true,complex<float>,1>(out));
       MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
       u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
@@ -76,8 +76,8 @@ int nufft_u2nu(ArrayDescriptor grid,
     auto mycoord = get_coord<float>(coord);
     if (grid.dtype==Typecode<complex<float>>::value)
       {
-      auto mygrid(to_cfmav<complex<float>>(grid));
-      auto myout(to_vmav<complex<float>,1>(out));
+      auto mygrid(to_cfmav<true,complex<float>>(grid));
+      auto myout(to_vmav<true,complex<float>,1>(out));
       MR_assert(mycoord.shape(0)==myout.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==mygrid.ndim(), "dimensionality mismatch");
       u2nu<float,float>(mycoord,mygrid,forward,epsilon,nthreads,myout,
@@ -107,8 +107,8 @@ int nufft_nu2u(ArrayDescriptor points,
     auto mycoord = get_coord<double>(coord);
     if (points.dtype==Typecode<complex<double>>::value)
       {
-      auto mypoints(to_cmav<complex<double>,1>(points));
-      auto myout(to_vfmav<complex<double>>(out));
+      auto mypoints(to_cmav<true,complex<double>,1>(points));
+      auto myout(to_vfmav<true,complex<double>>(out));
       MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
       nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,
@@ -116,8 +116,8 @@ int nufft_nu2u(ArrayDescriptor points,
       }
     else if (points.dtype==Typecode<complex<float>>::value)
       {
-      auto mypoints(to_cmav<complex<float>,1>(points));
-      auto myout(to_vfmav<complex<float>>(out));
+      auto mypoints(to_cmav<true,complex<float>,1>(points));
+      auto myout(to_vfmav<true,complex<float>>(out));
       MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
       nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
@@ -131,8 +131,8 @@ int nufft_nu2u(ArrayDescriptor points,
     auto mycoord = get_coord<float>(coord);
     if (points.dtype==Typecode<complex<float>>::value)
       {
-      auto mypoints(to_cmav<complex<float>,1>(points));
-      auto myout(to_vfmav<complex<float>>(out));
+      auto mypoints(to_cmav<true,complex<float>,1>(points));
+      auto myout(to_vfmav<true,complex<float>>(out));
       MR_assert(mycoord.shape(0)==mypoints.shape(0), "npoints mismatch");
       MR_assert(mycoord.shape(1)==myout.ndim(), "dimensionality mismatch");
       nu2u<float,float>(mycoord,mypoints,forward,epsilon,nthreads,myout,
@@ -164,7 +164,7 @@ Tplan *nufft_make_plan(int nu2u,
   {
   try
     {
-    auto myshape(to_cmav<uint64_t, 1>(shape));
+    auto myshape(to_cmav<true, uint64_t, 1>(shape));
     auto ndim = myshape.shape(0);
     MR_assert(coord.ndim==2, "bad coordinate dimensionality");
     MR_assert(coord.shape[0]==ndim, "dimensionality mismatch");
@@ -240,22 +240,22 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   if (points.dtype==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
-    auto mypoints(to_cmav<complex<double>,1>(points));
+    auto mypoints(to_cmav<true,complex<double>,1>(points));
     if (plan->shp.size()==1)
       {
-      auto myout(to_vmav<complex<double>,1>(uniform));
+      auto myout(to_vmav<true,complex<double>,1>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
     else if (plan->shp.size()==2)
       {
-      auto myout(to_vmav<complex<double>,2>(uniform));
+      auto myout(to_vmav<true,complex<double>,2>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
     else if (plan->shp.size()==3)
       {
-      auto myout(to_vmav<complex<double>,3>(uniform));
+      auto myout(to_vmav<true,complex<double>,3>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
@@ -265,22 +265,22 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   else if (points.dtype==Typecode<complex<float>>::value)
     {
     MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
-    auto mypoints(to_cmav<complex<float>,1>(points));
+    auto mypoints(to_cmav<true,complex<float>,1>(points));
     if (plan->shp.size()==1)
       {
-      auto myout(to_vmav<complex<float>,1>(uniform));
+      auto myout(to_vmav<true,complex<float>,1>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
     else if (plan->shp.size()==2)
       {
-      auto myout(to_vmav<complex<float>,2>(uniform));
+      auto myout(to_vmav<true,complex<float>,2>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
     else if (plan->shp.size()==3)
       {
-      auto myout(to_vmav<complex<float>,3>(uniform));
+      auto myout(to_vmav<true,complex<float>,3>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
       rplan->nu2u(forward, verbosity, mypoints, myout);
       }
@@ -302,22 +302,22 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   if (points.dtype==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
-    auto mypoints(to_vmav<complex<double>,1>(points));
+    auto mypoints(to_vmav<true,complex<double>,1>(points));
     if (plan->shp.size()==1)
       {
-      auto myuniform(to_cmav<complex<double>,1>(uniform));
+      auto myuniform(to_cmav<true,complex<double>,1>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 1> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
     else if (plan->shp.size()==2)
       {
-      auto myuniform(to_cmav<complex<double>,2>(uniform));
+      auto myuniform(to_cmav<true,complex<double>,2>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 2> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
     else if (plan->shp.size()==3)
       {
-      auto myuniform(to_cmav<complex<double>,3>(uniform));
+      auto myuniform(to_cmav<true,complex<double>,3>(uniform));
       auto rplan = reinterpret_cast<Nufft<double, double, double, 3> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
@@ -327,22 +327,22 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   else if (points.dtype==Typecode<complex<float>>::value)
     {
     MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
-    auto mypoints(to_vmav<complex<float>,1>(points));
+    auto mypoints(to_vmav<true,complex<float>,1>(points));
     if (plan->shp.size()==1)
       {
-      auto myuniform(to_cmav<complex<float>,1>(uniform));
+      auto myuniform(to_cmav<true,complex<float>,1>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 1> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
     else if (plan->shp.size()==2)
       {
-      auto myuniform(to_cmav<complex<float>,2>(uniform));
+      auto myuniform(to_cmav<true,complex<float>,2>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 2> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }
     else if (plan->shp.size()==3)
       {
-      auto myuniform(to_cmav<complex<float>,3>(uniform));
+      auto myuniform(to_cmav<true,complex<float>,3>(uniform));
       auto rplan = reinterpret_cast<Nufft<float, float, float, 3> *>(plan->plan);
       rplan->u2nu(forward, verbosity, myuniform, mypoints);
       }

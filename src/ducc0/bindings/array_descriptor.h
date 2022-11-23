@@ -43,50 +43,62 @@ struct ArrayDescriptor
   uint8_t ndim;
   uint8_t dtype;
   };
-template<typename T, size_t ndim> auto prep1(const ArrayDescriptor &desc)
+
+template<bool swapdims, typename T1, typename T2> void copy_data
+  (const ArrayDescriptor &desc, T1 &shp, T2 &str)
+  {
+  auto ndim = desc.ndim;
+  if constexpr (swapdims)
+    for (size_t i=0; i<ndim; ++i)
+      {
+      shp[i] = desc.shape[ndim-1-i];
+      str[i] = desc.stride[ndim-1-i];
+      }
+  else
+    for (size_t i=0; i<ndim; ++i)
+      {
+      shp[i] = desc.shape[i];
+      str[i] = desc.stride[i];
+      }
+  }
+
+template<bool swapdims, typename T, size_t ndim> auto prep1
+  (const ArrayDescriptor &desc)
   {
   static_assert(ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
   MR_assert(ndim==desc.ndim, "dimensionality mismatch");
   MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
   typename mav_info<ndim>::shape_t shp;
   typename mav_info<ndim>::stride_t str;
-  for (size_t i=0; i<ndim; ++i)
-    {
-    shp[i] = desc.shape[ndim-1-i];
-    str[i] = desc.stride[ndim-1-i];
-    }
+  copy_data<swapdims>(desc, shp, str);
   return make_tuple(shp, str);
   }
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const ArrayDescriptor &desc)
+template<bool swapdims, typename T, size_t ndim> cmav<T,ndim> to_cmav(const ArrayDescriptor &desc)
   {
-  auto [shp, str] = prep1<T, ndim>(desc);
+  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
   return cmav<T, ndim>(reinterpret_cast<const T *>(desc.data), shp, str);
   }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
+template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
   {
-  auto [shp, str] = prep1<T, ndim>(desc);
+  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
   return vmav<T, ndim>(reinterpret_cast<T *>(desc.data), shp, str);
   }
-template<typename T> auto prep2(const ArrayDescriptor &desc)
+template<bool swapdims, typename T> auto prep2(const ArrayDescriptor &desc)
   {
   MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
   typename fmav_info::shape_t shp(desc.ndim);
   typename fmav_info::stride_t str(desc.ndim);
-  for (size_t i=0; i<desc.ndim; ++i)
-    {
-    shp[i] = desc.shape[desc.ndim-1-i];
-    str[i] = desc.stride[desc.ndim-1-i];
-    }
+  copy_data<swapdims>(desc, shp, str);
   return make_tuple(shp, str);
   }
-template<typename T> cfmav<T> to_cfmav(const ArrayDescriptor &desc)
+template<bool swapdims, typename T> cfmav<T> to_cfmav(const ArrayDescriptor &desc)
   {
-  auto [shp, str] = prep2<T>(desc);
+  auto [shp, str] = prep2<swapdims, T>(desc);
   return cfmav<T>(reinterpret_cast<const T *>(desc.data), shp, str);
   }
-template<typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
+template<bool swapdims, typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
   {
-  auto [shp, str] = prep2<T>(desc);
+  auto [shp, str] = prep2<swapdims, T>(desc);
   return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
   }
 

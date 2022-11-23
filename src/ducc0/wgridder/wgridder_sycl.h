@@ -496,10 +496,10 @@ timers.pop();
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
-      size_t minnu=0, minnv=0, minidx=KernelDB.size();
+      size_t minnu=0, minnv=0, minidx=~(size_t(0));
       for (size_t i=0; i<idx.size(); ++i)
         {
-        const auto &krn(KernelDB[idx[i]]);
+        const auto &krn(getKernel(idx[i]));
         auto supp = krn.W;
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
