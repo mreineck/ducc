@@ -36,8 +36,7 @@ function ArrayDescriptor(arr::StridedArray{T, N}) where {T,N}
                     Complex{Float32}=>200,
                     Complex{Float64}=>208,
                     UInt64=>40)
-    tcode = typedict[T]
-    ArrayDescriptor(shp, str, pointer(arr), N, tcode,)
+    return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
 end
 
 # This is the function that should be called by the end user
@@ -53,7 +52,7 @@ function nufft_u2nu(coord::StridedArray{T,2}, grid::StridedArray{T2,N};
 
     res = Vector{T2}(undef,size(coord)[2])
     GC.@preserve coord grid res
-      ret=ccall((:nufft_u2nu, ducclib), Cint, (ArrayDescriptor,ArrayDescriptor, Cint, Cdouble, Csize_t, ArrayDescriptor,Csize_t, Cdouble, Cdouble, Cdouble, Cint), ArrayDescriptor(grid), ArrayDescriptor(coord), 0, epsilon, nthreads, ArrayDescriptor(res), verbose, sigma_min, sigma_max, periodicity, fft_order)
+      ret=ccall((:nufft_u2nu, ducclib), Cint, (Ptr{ArrayDescriptor},Ptr{ArrayDescriptor}, Cint, Cdouble, Csize_t, Ptr{ArrayDescriptor},Csize_t, Cdouble, Cdouble, Cdouble, Cint), Ref(ArrayDescriptor(grid)), Ref(ArrayDescriptor(coord)), 0, epsilon, nthreads, Ref(ArrayDescriptor(res)), verbose, sigma_min, sigma_max, periodicity, fft_order)
     if ret!=0
       throw(error())
     end
@@ -70,7 +69,7 @@ function nufft_nu2u(coord::StridedArray{T,2}, points::StridedArray{T2,1}, N::NTu
     fft_order::Bool = true) where {T,T2,D}
 
     res = Array{T2}(undef,N)
-    GC.@preserve coord points res ret=ccall((:nufft_nu2u, ducclib), Cint, (ArrayDescriptor,ArrayDescriptor, Cint, Cdouble, Csize_t, ArrayDescriptor,Csize_t, Cdouble, Cdouble, Cdouble, Cint), ArrayDescriptor(points), ArrayDescriptor(coord), 0, epsilon, nthreads, ArrayDescriptor(res), verbose, sigma_min, sigma_max, periodicity, fft_order)
+    GC.@preserve coord points res ret=ccall((:nufft_nu2u, ducclib), Cint, (Ptr{ArrayDescriptor},Ptr{ArrayDescriptor}, Cint, Cdouble, Csize_t, Ptr{ArrayDescriptor},Csize_t, Cdouble, Cdouble, Cdouble, Cint), Ref(ArrayDescriptor(points)), Ref(ArrayDescriptor(coord)), 0, epsilon, nthreads, Ref(ArrayDescriptor(res)), verbose, sigma_min, sigma_max, periodicity, fft_order)
     if ret!=0
       throw(error())
     end
@@ -104,8 +103,8 @@ function nufft_make_plan(coords::Matrix{T}, N::NTuple{D,Int}; nu2u::Bool=false,
   end
   GC.@preserve N2 coords
   ptr = ccall((:nufft_make_plan, ducclib), Ptr{Cvoid}, 
-                (Cint, ArrayDescriptor, ArrayDescriptor, Cdouble, Csize_t, Cdouble, Cdouble, Cdouble, Cint), 
-                nu2u, ArrayDescriptor(N2), ArrayDescriptor(coords), epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order)
+                (Cint, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Cdouble, Csize_t, Cdouble, Cdouble, Cdouble, Cint), 
+                nu2u, Ref(ArrayDescriptor(N2)), Ref(ArrayDescriptor(coords)), epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order)
 
   if ptr==Ptr{Cvoid}(0)
     throw(error())
@@ -119,7 +118,7 @@ function nufft_make_plan(coords::Matrix{T}, N::NTuple{D,Int}; nu2u::Bool=false,
 end
 function nufft_nu2u_planned!(plan::NufftPlan, points::StridedArray{T,1}, uniform::StridedArray{T}; forward::Bool=false, verbose::Bool=false,) where {T}
   GC.@preserve points uniform
-  ret = ccall((:nufft_nu2u_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, ArrayDescriptor, ArrayDescriptor), plan.cplan, forward, verbose, ArrayDescriptor(points), ArrayDescriptor(uniform))
+  ret = ccall((:nufft_nu2u_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}), plan.cplan, forward, verbose, Ref(ArrayDescriptor(points)), Ref(ArrayDescriptor(uniform)))
   if ret!=0
     throw(error())
   end
@@ -127,7 +126,7 @@ end
 function nufft_nu2u_planned(plan::NufftPlan, points::StridedArray{T,1}; forward::Bool=false, verbose::Bool=false,) where {T}
   res = Array{T}(undef, Tuple(i for i in plan.N))
   GC.@preserve points res
-  ret = ccall((:nufft_nu2u_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, ArrayDescriptor, ArrayDescriptor), plan.cplan, forward, verbose, ArrayDescriptor(points), ArrayDescriptor(res))
+  ret = ccall((:nufft_nu2u_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}), plan.cplan, forward, verbose, Ref(ArrayDescriptor(points)), Ref(ArrayDescriptor(res)))
   if ret!=0
     throw(error())
   end
@@ -135,7 +134,7 @@ function nufft_nu2u_planned(plan::NufftPlan, points::StridedArray{T,1}; forward:
 end
 function nufft_u2nu_planned!(plan::NufftPlan, uniform::StridedArray{T}, points::StridedArray{T,1}; forward::Bool=true, verbose::Bool=false,) where {T}
   GC.@preserve uniform points
-  ret = ccall((:nufft_u2nu_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, ArrayDescriptor, ArrayDescriptor), plan.cplan, forward, verbose, ArrayDescriptor(uniform), ArrayDescriptor(points))
+  ret = ccall((:nufft_u2nu_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}), plan.cplan, forward, verbose, Ref(ArrayDescriptor(uniform)), Ref(ArrayDescriptor(points)))
   if ret!=0
     throw(error())
   end
@@ -143,7 +142,7 @@ end
 function nufft_u2nu_planned(plan::NufftPlan, uniform::StridedArray{T}; forward::Bool=true, verbose::Bool=false,) where {T}
   res = Array{T}(undef, plan.npoints)
   GC.@preserve uniform res
-  ret = ccall((:nufft_u2nu_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, ArrayDescriptor, ArrayDescriptor), plan.cplan, forward, verbose, ArrayDescriptor(uniform), ArrayDescriptor(res))
+  ret = ccall((:nufft_u2nu_planned, ducclib), Cint, (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}), plan.cplan, forward, verbose, Ref(ArrayDescriptor(uniform)), Ref(ArrayDescriptor(res)))
   if ret!=0
     throw(error())
   end

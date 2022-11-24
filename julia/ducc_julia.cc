@@ -34,12 +34,12 @@ template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
 
 extern "C" {
 
-int nufft_u2nu(ArrayDescriptor grid,
-                     ArrayDescriptor coord,
+int nufft_u2nu(const ArrayDescriptor *grid_,
+                     const ArrayDescriptor *coord_,
                      int forward,
                      double epsilon,
                      size_t nthreads,
-                     ArrayDescriptor out,
+                     ArrayDescriptor *out_,
                      size_t verbosity,
                      double sigma_min,
                      double sigma_max,
@@ -47,6 +47,9 @@ int nufft_u2nu(ArrayDescriptor grid,
                      int fft_order)
   {
   DUCC0_JULIA_TRY_BEGIN
+  const auto &grid(*grid_);
+  const auto &coord(*coord_);
+  auto &out(*out_);
   if (coord.dtype==Typecode<double>::value)
     {
     auto mycoord = get_coord<double>(coord);
@@ -89,12 +92,12 @@ int nufft_u2nu(ArrayDescriptor grid,
   DUCC0_JULIA_TRY_END
   }
 
-int nufft_nu2u(ArrayDescriptor points,
-                       ArrayDescriptor coord,
+int nufft_nu2u(const ArrayDescriptor *points_,
+                       const ArrayDescriptor *coord_,
                        int forward,
                        double epsilon,
                        size_t nthreads,
-                       ArrayDescriptor out,
+                       ArrayDescriptor *out_,
                        size_t verbosity,
                        double sigma_min,
                        double sigma_max,
@@ -102,6 +105,9 @@ int nufft_nu2u(ArrayDescriptor points,
                        int fft_order)
   {
   DUCC0_JULIA_TRY_BEGIN
+  const auto &points(*points_);
+  const auto &coord(*coord_);
+  auto &out(*out_);
   if (coord.dtype==Typecode<double>::value)
     {
     auto mycoord = get_coord<double>(coord);
@@ -153,8 +159,8 @@ struct Tplan
   };
 
 Tplan *nufft_make_plan(int nu2u,
-                             ArrayDescriptor shape,
-                             ArrayDescriptor coord,
+                             const ArrayDescriptor *shape_,
+                             const ArrayDescriptor *coord_,
                              double epsilon,
                              size_t nthreads,
                              double sigma_min,
@@ -164,6 +170,8 @@ Tplan *nufft_make_plan(int nu2u,
   {
   try
     {
+    const auto &shape(*shape_);
+    const auto &coord(*coord_);
     auto myshape(to_cmav<true, uint64_t, 1>(shape));
     auto ndim = myshape.shape(0);
     MR_assert(coord.ndim==2, "bad coordinate dimensionality");
@@ -231,9 +239,11 @@ int nufft_delete_plan(Tplan *plan)
   }
 
 int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
-  ArrayDescriptor points, ArrayDescriptor uniform)
+  const ArrayDescriptor *points_, ArrayDescriptor *uniform_)
   {
   DUCC0_JULIA_TRY_BEGIN
+  const auto &points(*points_);
+  auto &uniform(*uniform_);
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
@@ -293,9 +303,11 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   }
 
 int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
-  ArrayDescriptor uniform, ArrayDescriptor points)
+  const ArrayDescriptor *uniform_, ArrayDescriptor *points_)
   {
   DUCC0_JULIA_TRY_BEGIN
+  const auto &uniform(*uniform_);
+  auto &points(*points_);
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
