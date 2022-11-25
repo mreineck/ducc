@@ -241,20 +241,6 @@ function nufft_nu2u_planned(
 ) where {T}
   res = Array{T}(undef, Tuple(i for i in plan.N))
   nufft_nu2u_planned!(plan, points, res, forward=forward, verbose=verbose)
-#  GC.@preserve points res
-#  ret = ccall(
-#    (:nufft_nu2u_planned, libducc),
-#    Cint,
-#    (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}),
-#    plan.cplan,
-#    forward,
-#    verbose,
-#    Ref(ArrayDescriptor(points)),
-#    Ref(ArrayDescriptor(res)),
-#  )
-#  if ret != 0
-#    throw(error())
-#  end
   return res
 end
 
@@ -289,20 +275,6 @@ function nufft_u2nu_planned(
 ) where {T}
   res = Array{T}(undef, plan.npoints)
   nufft_u2nu_planned!(plan, uniform, res, forward=forward, verbose=verbose)
-#  GC.@preserve uniform res
-#  ret = ccall(
-#    (:nufft_u2nu_planned, libducc),
-#    Cint,
-#    (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}),
-#    plan.cplan,
-#    forward,
-#    verbose,
-#    Ref(ArrayDescriptor(uniform)),
-#    Ref(ArrayDescriptor(res)),
-#  )
-#  if ret != 0
-#    throw(error())
-#  end
   return res
 end
 

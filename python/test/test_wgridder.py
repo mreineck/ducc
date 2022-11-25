@@ -73,7 +73,6 @@ def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
     else:
         nm1 = 0.
         n = 1.
- #   dirty2 = dirty/n
     dirty2 = np.where(n>0, dirty/n, 0.)
     for row in range(uvw.shape[0]):
         for chan in range(freq.shape[0]):
