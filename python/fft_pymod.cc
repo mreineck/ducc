@@ -130,7 +130,7 @@ template<typename T> py::array c2c_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return move(out);
+  return std::move(out);
   }
 
 template<typename T> py::array c2c_sym_internal(const py::array &in,
@@ -156,7 +156,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
     c1 = conj(c);
     }, nthreads);
   }
-  return move(out);
+  return std::move(out);
   }
 
 py::array c2c(const py::array &a, const py::object &axes_, bool forward,
@@ -185,7 +185,7 @@ template<typename T> py::array r2c_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return move(out);
+  return std::move(out);
   }
 
 py::array r2c(const py::array &in, const py::object &axes_, bool forward,

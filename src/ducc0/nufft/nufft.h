@@ -160,10 +160,10 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
   constexpr double nref_fft=2048;
   constexpr double costref_fft=0.0693;
   vector<size_t> bigdims(ndim, 0);
-  size_t minidx=KernelDB.size();
+  size_t minidx=~(size_t(0));
   for (size_t i=0; i<idx.size(); ++i)
     {
-    const auto &krn(KernelDB[idx[i]]);
+    const auto &krn(getKernel(idx[i]));
     auto supp = krn.W;
     auto nvec = (supp+vlen-1)/vlen;
     auto ofactor = krn.ofactor;

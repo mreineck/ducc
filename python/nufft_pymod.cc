@@ -47,7 +47,7 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,
                     sigma_min,sigma_max, periodicity, fft_order);
   }
-  return move(out_);
+  return std::move(out_);
   }
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
@@ -89,7 +89,7 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,
                     sigma_min,sigma_max, periodicity, fft_order);
   }
-  return move(out__);
+  return std::move(out__);
   }
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,

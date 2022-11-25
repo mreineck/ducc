@@ -208,7 +208,7 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
-  return move(res);
+  return std::move(res);
   }
 
 py::array Py_GL_thetas(size_t nlat)
@@ -223,7 +223,7 @@ py::array Py_GL_thetas(size_t nlat)
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = acos(-x[i]);
   }
-  return move(res);
+  return std::move(res);
   }
 
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
@@ -485,6 +485,37 @@ To generate multiple independent noise streams, use different `OofaNoise`
 objects (and supply them with independent Gaussian noise streams)! 
 )""";
 
+template<typename T> T esknew (T v, T beta, T e0)
+  {
+  auto tmp = (1-v)*(1+v);
+  auto tmp2 = tmp>=0;
+  return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
+  }
+
+py::array get_kernel(double beta, double e0, size_t W, size_t npoints)
+  {
+  auto res_ = make_Pyarr<double>({npoints});
+  auto res = to_vmav<double,1>(res_);
+  for (size_t i=0; i<npoints; ++i)
+    {
+    res(i) = esknew((i+0.5)/npoints, W*beta, e0);
+    }
+  return res_;
+  }
+py::array get_correction(double beta, double e0, size_t W, size_t npoints, double dx)
+  {
+  auto res_ = make_Pyarr<double>({npoints});
+  auto res = to_vmav<double,1>(res_);
+  beta*=W;
+  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
+  ducc0::detail_gridding_kernel::GLFullCorrection corr (W, lam);
+  auto vec=corr.corfunc(npoints, dx);
+
+  for (size_t i=0; i<npoints; ++i)
+    res(i) = vec[i];
+  return res_;
+  }
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -517,6 +548,9 @@ void add_misc(py::module_ &msup)
       "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
+
+  m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
+  m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
   }
 
 }

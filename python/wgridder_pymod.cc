@@ -65,7 +65,7 @@ template<typename T> py::array Py2_vis2dirty_tuning(const py::array &uvw_,
       do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
       sigma_max, center_x, center_y);
   }
-  return move(dirty);
+  return std::move(dirty);
   }
 py::array Py_vis2dirty_tuning(const py::array &uvw,
   const py::array &freq, const py::array &vis, const py::object &wgt,
@@ -193,7 +193,7 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
         do_wgridding,nthreads,dirty2,verbosity,flip_v,divide_by_n, sigma_min,
         sigma_max, center_x, center_y, allow_nshift);
   }
-  return move(dirty);
+  return std::move(dirty);
   }
 py::array Py_vis2dirty(const py::array &uvw,
   const py::array &freq, const py::array &vis, const py::object &wgt,
@@ -300,7 +300,7 @@ template<typename T> py::array Py2_dirty2vis_tuning(const py::array &uvw_,
     do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
     sigma_max, center_x, center_y);
   }
-  return move(vis);
+  return std::move(vis);
   }
 py::array Py_dirty2vis_tuning(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,
@@ -404,7 +404,7 @@ template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
       do_wgridding,nthreads,vis2,verbosity,flip_v,divide_by_n, sigma_min,
       sigma_max, center_x, center_y, allow_nshift);
   }
-  return move(vis);
+  return std::move(vis);
   }
 py::array Py_dirty2vis(const py::array &uvw,
   const py::array &freq, const py::array &dirty, const py::object &wgt,

@@ -361,33 +361,30 @@ template<size_t W, typename Tsimd> class TemplateKernel
 struct KernelParams
   {
   size_t W;
-  double ofactor, epsilon, beta, e0, corr_range;
+  double ofactor, epsilon, beta, e0;
+  size_t ndim;
+  bool singleprec;
   };
 
-extern const vector<KernelParams> KernelDB;
-
 shared_ptr<PolynomialKernel> selectKernel(size_t idx);
+const KernelParams &getKernel(size_t idx);
 
 template<typename T> constexpr inline size_t Wmax()
   { return is_same<T,float>::value ? 8 : 16; }
 
-
-template<typename T>double kernelEps(size_t idx, size_t ndim)
-  {
-  return ndim*KernelDB[idx].epsilon
-       + numeric_limits<T>::epsilon()*pow(KernelDB[idx].corr_range, ndim);
-  }
+extern const vector<KernelParams> KernelDB;
 
 /*! Returns the 2-parameter ES kernel for the given oversampling factor,
  *  dimensionality, and error that has the smallest support. */
 template<typename T> auto selectKernel(double ofactor, size_t ndim, double epsilon)
   {
+  constexpr bool singleprec = is_same<T, float>::value;
   size_t Wmin = Wmax<T>();
   size_t idx = KernelDB.size();
   for (size_t i=0; i<KernelDB.size(); ++i)
     {
-    double eps = kernelEps<T>(i, ndim);
-    if ((KernelDB[i].ofactor<=ofactor) && (eps<=epsilon)
+    if  ((KernelDB[i].ndim==ndim) && (KernelDB[i].singleprec==singleprec)
+      && (KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon)
       && (KernelDB[i].W<=Wmin))
       {
       idx = i;
@@ -400,6 +397,7 @@ template<typename T> auto selectKernel(double ofactor, size_t ndim, double epsil
 template<typename T> auto getAvailableKernels(double epsilon,
   size_t ndim, double ofactor_min=1.1, double ofactor_max=2.6)
   {
+  constexpr bool singleprec = is_same<T, float>::value;
   vector<double> ofc(20, ofactor_max);
   vector<size_t> idx(20, KernelDB.size());
   size_t Wlim = Wmax<T>();
@@ -407,8 +405,8 @@ template<typename T> auto getAvailableKernels(double epsilon,
     {
     auto ofactor = KernelDB[i].ofactor;
     size_t W = KernelDB[i].W;
-    double eps = kernelEps<T>(i, ndim);
-    if ((W<=Wlim) && (eps<=epsilon)
+    if ((KernelDB[i].ndim==ndim) && (KernelDB[i].singleprec==singleprec)
+      && (W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
       && (ofactor<=ofc[W]) && (ofactor>=ofactor_min))
       {
       ofc[W] = ofactor;
@@ -425,12 +423,12 @@ template<typename T> auto getAvailableKernels(double epsilon,
 }
 
 using detail_gridding_kernel::GriddingKernel;
+using detail_gridding_kernel::getKernel;
 using detail_gridding_kernel::selectKernel;
 using detail_gridding_kernel::getAvailableKernels;
 using detail_gridding_kernel::PolynomialKernel;
 using detail_gridding_kernel::TemplateKernel;
 using detail_gridding_kernel::KernelParams;
-using detail_gridding_kernel::KernelDB;
 
 }
 

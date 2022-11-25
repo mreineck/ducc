@@ -854,7 +854,9 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
       d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) |
+      // The bitwise or operator is deliberate!
+      // Silencing clang compiler warning by casting to int...
+      if (int(rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol)) |
           rescale(d.l1m[i],d.l2m[i],d.scm[i],sharp_ftol))
         below_limit &= all_of(d.scp[i]<1) &&
                        all_of(d.scm[i]<1);

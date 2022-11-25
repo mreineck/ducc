@@ -56,7 +56,36 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
             else:
                 res += (ms[row, chan]*wgt[row, chan]
                         * np.exp(2j*np.pi*phase)).real
-    return res/n
+    return np.where(n>0, res/n, 0.)
+
+def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
+                     apply_w, mask):
+    nxdirty, nydirty = dirty.shape
+    x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
+                       indexing='ij')
+    x *= xpixsize
+    y *= ypixsize
+    res = np.zeros((uvw.shape[0], freq.shape[0]), dtype=np.complex128)
+    eps = x**2+y**2
+    if apply_w:
+        nm1 = -eps/(np.sqrt(1.-eps)+1.)
+        n = nm1+1
+    else:
+        nm1 = 0.
+        n = 1.
+    dirty2 = np.where(n>0, dirty/n, 0.)
+    for row in range(uvw.shape[0]):
+        for chan in range(freq.shape[0]):
+            if mask is not None and mask[row, chan] == 0:
+                continue
+            phase = (-freq[chan]/SPEEDOFLIGHT *
+                     (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
+            if wgt is None:
+                res[row, chan] = np.sum(dirty2*np.exp(2j*np.pi*phase))
+            else:
+                res[row, chan] = np.sum((dirty2*wgt[row, chan]
+                        * np.exp(2j*np.pi*phase)))
+    return res
 
 
 def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
@@ -213,7 +242,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
 
 
-@pmp('nx', [(16, 2), (66, 4)])
+@pmp('nx', [(18, 2), (66, 4)])
 @pmp('ny', [(64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
@@ -306,6 +335,11 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+    x1 = explicit_degridder(uvw, freq, ref, wgt, pixsizex,
+                           pixsizey, wstacking, None)
+    x2 = ng.dirty2ms(uvw, freq, ref, wgt, pixsizex, pixsizey, 0, 0,
+                      epsilon, wstacking, nthreads, 0).astype("c16")
+    assert_allclose(ducc0.misc.l2error(x1,x2), 0, atol=epsilon)
 
 
 @pmp('nx', [(30, 3), (128, 2)])
