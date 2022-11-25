@@ -853,11 +853,11 @@ template<typename Ttuple> constexpr inline size_t tuplelike_size()
 template <typename Func, typename Ttuple, size_t... I>
 inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
   index_sequence<I...>)
-  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
+  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
 template<typename Func, typename Ttuple> inline void call_with_tuple
   (Func &&func, Ttuple &&tuple)
   {
-  call_with_tuple_impl(forward<Func>(func), tuple,
+  call_with_tuple_impl(std::forward<Func>(func), tuple,
                        make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template <typename Func, typename Ttuple, size_t... I>
@@ -867,7 +867,7 @@ inline void call_with_tuple2_impl(Func &&func, const Ttuple& tuple,
 template<typename Func, typename Ttuple> inline void call_with_tuple2
   (Func &&func, Ttuple &&tuple)
   {
-  call_with_tuple2_impl(forward<Func>(func), tuple,
+  call_with_tuple2_impl(std::forward<Func>(func), tuple,
                         make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 
@@ -878,7 +878,7 @@ inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Func &&func,
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
-  return tuple_transform_impl(inputs, forward<Func>(func),
+  return tuple_transform_impl(inputs, std::forward<Func>(func),
                               make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
@@ -888,7 +888,7 @@ inline void tuple_for_each_impl(tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
 inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Func &&func,
@@ -897,7 +897,7 @@ inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each(const tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename...Ts, typename Func, size_t... Is>
@@ -911,7 +911,7 @@ inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
 template<typename... Ts, typename Func>
 inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Func &&func)
   {
-  return tuple_transform_idx_impl(inputs, forward<Func>(func),
+  return tuple_transform_idx_impl(inputs, std::forward<Func>(func),
                                   make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
@@ -921,7 +921,7 @@ inline void tuple_for_each_idx_impl(tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each_idx(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_idx_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_idx_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
@@ -977,9 +977,9 @@ template<typename Func, typename Ttuple>
     size_t nthreads, bool last_contiguous)
   {
   if (shp.size()==0)
-    call_with_tuple(forward<Func>(func), to_ref(ptrs));
+    call_with_tuple(std::forward<Func>(func), to_ref(ptrs));
   else if (nthreads==1)
-    applyHelper(0, shp, str, ptrs, forward<Func>(func), last_contiguous);
+    applyHelper(0, shp, str, ptrs, std::forward<Func>(func), last_contiguous);
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1003,7 +1003,7 @@ template<typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
+  applyHelper(shp, str, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
@@ -1012,11 +1012,11 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
 template <typename Func, typename Arg, typename Ttuple, size_t... I>
 inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
   index_sequence<I...>)
-  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
+  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
 template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
   (Func &&func, Arg &&arg, Ttuple &&tuple)
   {
-  call_with_tuple_arg_impl(forward<Func>(func), arg, tuple,
+  call_with_tuple_arg_impl(std::forward<Func>(func), arg, tuple,
                        make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template<typename Ttuple, typename Func>
@@ -1048,9 +1048,9 @@ template<typename Func, typename Ttuple>
     size_t nthreads, vector<size_t> &index)
   {
   if (shp.size()==0)
-    call_with_tuple_arg(forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
+    call_with_tuple_arg(std::forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
   else if (nthreads==1)
-    applyHelper_with_index(0, shp, str, ptrs, forward<Func>(func), index);
+    applyHelper_with_index(0, shp, str, ptrs, std::forward<Func>(func), index);
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1072,7 +1072,7 @@ template<typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper_with_index(shp, str, ptrs, forward<Func>(func), nthreads, index);
+  applyHelper_with_index(shp, str, ptrs, std::forward<Func>(func), nthreads, index);
   }
 
 
@@ -1124,7 +1124,7 @@ template<typename... Ts, typename ...Qs, typename Func>
 inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
   Func &&func)
   {
-  return tuple_transform2_impl(i1, i2, forward<Func>(func),
+  return tuple_transform2_impl(i1, i2, std::forward<Func>(func),
                                make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename Tptrs, typename Tinfos>
@@ -1176,7 +1176,7 @@ template<typename Tptrs, typename Tinfos, typename Func>
   if (shp.size()==0)
     call_with_tuple2(func, make_mavrefs(ptrs, infos));
   else if (nthreads==1)
-    flexible_mav_applyHelper(0, shp, str, ptrs, infos, forward<Func>(func));
+    flexible_mav_applyHelper(0, shp, str, ptrs, infos, std::forward<Func>(func));
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1201,7 +1201,7 @@ template<typename Ttuple, typename Tdim, typename Func>
   auto infos2 = tuple_transform(fullinfos, [](const auto &arg)
                                 { return get<1>(arg); });
   auto ptrs = tuple_transform(tuple, [](auto &&arg){return arg.data();});
-  flexible_mav_applyHelper(shp, str, ptrs, infos2, forward<Func>(func), nthreads);
+  flexible_mav_applyHelper(shp, str, ptrs, infos2, std::forward<Func>(func), nthreads);
   }
 
 template<size_t nd0, typename T0, typename Func>
@@ -1209,7 +1209,7 @@ template<size_t nd0, typename T0, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0),
                       forward_as_tuple(Xdim<nd0>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
@@ -1217,7 +1217,7 @@ template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 template<size_t nd0, size_t nd1, size_t nd2,
@@ -1226,7 +1226,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1, m2),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>(), Xdim<nd2>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 }

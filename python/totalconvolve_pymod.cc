@@ -190,7 +190,7 @@ template<typename T> class Py_Interpolator
         conv.interpol(subcube, 0, 0, ptheta, pphi, ppsi, subres);
         }
       }
-      return move(res);
+      return std::move(res);
       }
 
     void Py_deinterpol(const py::array &ptg, const py::array &data)
@@ -255,7 +255,7 @@ template<typename T> class Py_Interpolator
           }
         }
       }
-      return move(res);
+      return std::move(res);
       }
   };
 

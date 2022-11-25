@@ -208,7 +208,7 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
-  return move(res);
+  return std::move(res);
   }
 
 py::array Py_GL_thetas(size_t nlat)
@@ -223,7 +223,7 @@ py::array Py_GL_thetas(size_t nlat)
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = acos(-x[i]);
   }
-  return move(res);
+  return std::move(res);
   }
 
 template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)

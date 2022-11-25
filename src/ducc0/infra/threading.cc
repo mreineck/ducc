@@ -406,7 +406,7 @@ class Distribution
       single_done = false;
       nwork_ = nwork;
       nthreads_ = 1;
-      thread_map(move(f));
+      thread_map(std::move(f));
       }
     void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
       std::function<void(Scheduler &)> f)
@@ -414,16 +414,16 @@ class Distribution
       mode = STATIC;
       nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
-        return execSingle(nwork, move(f));
+        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? (nwork_+nthreads_-1)/nthreads_
                                  : chunksize;
       if (chunksize_>=nwork_)
-        return execSingle(nwork_, move(f));
+        return execSingle(nwork_, std::move(f));
       nextstart.resize(nthreads_);
       for (size_t i=0; i<nextstart.size(); ++i)
         nextstart[i] = i*chunksize_;
-      thread_map(move(f));
+      thread_map(std::move(f));
       }
     void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
       std::function<void(Scheduler &)> f)
@@ -431,15 +431,15 @@ class Distribution
       mode = DYNAMIC;
       nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
-        return execSingle(nwork, move(f));
+        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? 1 : chunksize;
       if (chunksize_ >= nwork)
-        return execSingle(nwork, move(f));
+        return execSingle(nwork, std::move(f));
       if (chunksize_*nthreads_>=nwork_)
-        return execStatic(nwork, nthreads, 0, move(f));
+        return execStatic(nwork, nthreads, 0, std::move(f));
       cur_dynamic_ = 0;
-      thread_map(move(f));
+      thread_map(std::move(f));
       }
     void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
       double fact_max, std::function<void(Scheduler &)> f)
@@ -447,14 +447,14 @@ class Distribution
       mode = GUIDED;
       nthreads_ = adjust_nthreads(nthreads);
       if (nthreads_ == 1)
-        return execSingle(nwork, move(f));
+        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize_min<1) ? 1 : chunksize_min;
       if (chunksize_*nthreads_>=nwork_)
-        return execStatic(nwork, nthreads, 0, move(f));
+        return execStatic(nwork, nthreads, 0, std::move(f));
       fact_max_ = fact_max;
       cur_ = 0;
-      thread_map(move(f));
+      thread_map(std::move(f));
       }
     void execParallel(size_t nthreads, std::function<void(Scheduler &)> f)
       {
@@ -462,7 +462,7 @@ class Distribution
       nthreads_ = adjust_nthreads(nthreads);
       nwork_ = nthreads_;
       chunksize_ = 1;
-      thread_map(move(f));
+      thread_map(std::move(f));
       }
     Range getNext(size_t thread_id)
       {
@@ -557,30 +557,30 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
 void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execSingle(nwork, move(func));
+  dist.execSingle(nwork, std::move(func));
   }
 void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execStatic(nwork, nthreads, chunksize, move(func));
+  dist.execStatic(nwork, nthreads, chunksize, std::move(func));
   }
 void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execDynamic(nwork, nthreads, chunksize, move(func));
+  dist.execDynamic(nwork, nthreads, chunksize, std::move(func));
   }
 void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   double fact_max, std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execGuided(nwork, nthreads, chunksize_min, fact_max, move(func));
+  dist.execGuided(nwork, nthreads, chunksize_min, fact_max, std::move(func));
   }
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
   {
   Distribution dist;
-  dist.execParallel(nthreads, move(func));
+  dist.execParallel(nthreads, std::move(func));
   }
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t)> func)
