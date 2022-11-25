@@ -287,7 +287,7 @@ class Pyhpbase
         oref(i,0)=pixset.ivbegin(i);
         oref(i,1)=pixset.ivend(i);
         }
-      return std::move(res);
+      return res;
       }
     py::array query_disc(const py::array &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,

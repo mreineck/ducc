@@ -47,7 +47,7 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,
                     sigma_min,sigma_max, periodicity, fft_order);
   }
-  return std::move(out_);
+  return out_;
   }
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
@@ -77,23 +77,23 @@ py::array Py_u2nu(const py::array &grid,
 
 template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
+  py::array &out_, size_t verbosity, double sigma_min, double sigma_max,
   double periodicity, bool fft_order)
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
   auto points = to_cmav<complex<Tpoints>,1>(points_);
-  auto out = to_vfmav<complex<Tgrid>>(out__);
+  auto out = to_vfmav<complex<Tgrid>>(out_);
   {
   py::gil_scoped_release release;
   nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,
                     sigma_min,sigma_max, periodicity, fft_order);
   }
-  return std::move(out__);
+  return out_;
   }
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out, size_t verbosity, double sigma_min, double sigma_max,
+  py::array &out, size_t verbosity, double sigma_min, double sigma_max,
   double periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))

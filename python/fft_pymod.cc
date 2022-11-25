@@ -130,7 +130,7 @@ template<typename T> py::array c2c_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 template<typename T> py::array c2c_sym_internal(const py::array &in,
@@ -156,7 +156,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
     c1 = conj(c);
     }, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array c2c(const py::array &a, const py::object &axes_, bool forward,
@@ -185,7 +185,7 @@ template<typename T> py::array r2c_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array r2c(const py::array &in, const py::object &axes_, bool forward,
@@ -208,7 +208,7 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array r2r_fftpack(const py::array &in, const py::object &axes_,
@@ -232,7 +232,7 @@ template<typename T> py::array r2r_fftw_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array r2r_fftw(const py::array &in, const py::object &axes_,
@@ -257,7 +257,7 @@ template<typename T> py::array dct_internal(const py::array &in,
   bool ortho = inorm == true;
   ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array dct(const py::array &in, int type, const py::object &axes_,
@@ -283,7 +283,7 @@ template<typename T> py::array dst_internal(const py::array &in,
   bool ortho = inorm == true;
   ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array dst(const py::array &in, int type, const py::object &axes_,
@@ -313,7 +313,7 @@ template<typename T> py::array c2r_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
   ducc0::c2r(ain, aout, axes, forward, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array c2r(const py::array &in, const py::object &axes_, size_t lastsize,
@@ -335,7 +335,7 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array separable_hartley(const py::array &in, const py::object &axes_,
@@ -357,7 +357,7 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
-  return std::move(out);
+  return out;
   }
 
 py::array genuine_hartley(const py::array &in, const py::object &axes_,
@@ -402,7 +402,7 @@ template<typename T> py::array convolve_axis_internal(const py::array &in_,
   py::gil_scoped_release release;
   ducc0::convolve_axis(in, out, axis, kernel, nthreads);
   }
-  return std::move(out_);
+  return out_;
   }
 
 template<typename T> py::array convolve_axis_internal_c(const py::array &in_,

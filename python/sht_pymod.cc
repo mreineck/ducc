@@ -55,7 +55,7 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
-  return std::move(res);
+  return res;
   }
 
 py::array Py_GL_thetas(size_t nlat)
@@ -66,7 +66,7 @@ py::array Py_GL_thetas(size_t nlat)
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = acos(-x[i]);
-  return std::move(res);
+  return res;
   }
 
 template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
@@ -81,7 +81,7 @@ template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
   Alm_Base base(lmax,lmax);
   rotate_alm(base, a2, psi, theta, phi, nthreads);
   }
-  return std::move(alm);
+  return alm;
   }
 py::array Py_rotate_alm(const py::array &alm, size_t lmax,
   double psi, double theta, double phi, size_t nthreads)
