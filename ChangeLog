@@ -3,10 +3,12 @@
     - allow control over multithreading via environment variables
       DUCC0_NUM_THREADS, DUCC0_PIN_DISTANCE, and DUCC0_PIN_OFFSET.
       This is still experimental and may change in the future.
+
 - nufft/wgridder:
     - changed kernel database to hold optimized kernels depending on
-      dimensionality and floating point accuracy. This allows slightly better
-      tuning and improves maximum attainable accuracy in 2D and 3D.
+      dimensionality and floating point accuracy. This allows for slightly
+      better tuning and improves maximum attainable accuracy in 2D and 3D.
+
 - julia:
     - start of a Julia wrapper, currently focused on nufft support
 
