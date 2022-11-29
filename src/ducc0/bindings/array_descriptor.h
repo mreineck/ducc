@@ -102,6 +102,20 @@ template<bool swapdims, typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
   return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
   }
 
+template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
+  (const ArrayDescriptor &desc)
+  {
+  MR_assert(Typecode<Tin>::value==desc.dtype, "data type mismatch");
+  MR_assert(desc.ndim==1, "need 1D array for conversion to vector");
+  vector<Tout> res;
+  res.reserve(desc.shape[0]);
+  auto data = reinterpret_cast<const Tin *>(desc.data);
+  for (size_t i=0; i<desc.shape[0]; ++i)
+    res.push_back(swap_content ? data[(desc.shape[0]-1-i)*desc.stride[0]]
+                               : data[i*desc.stride[0]]);
+  return res;
+  }
+
 }
 
 using detail_array_descriptor::ArrayDescriptor;
@@ -109,6 +123,7 @@ using detail_array_descriptor::to_cmav;
 using detail_array_descriptor::to_vmav;
 using detail_array_descriptor::to_cfmav;
 using detail_array_descriptor::to_vfmav;
+using detail_array_descriptor::to_vector;
 
 }
 

@@ -34,6 +34,34 @@ template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
 
 extern "C" {
 
+// FFT
+int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
+  const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
+  {
+  DUCC0_JULIA_TRY_BEGIN
+  const auto &in(*in_);
+  auto &out(*out_);
+  const auto &axes(*axes_);
+  auto myaxes(to_vector<true, uint64_t, size_t>(axes));
+  if (in.dtype==Typecode<complex<double>>::value)
+    {
+    auto myin(to_cfmav<true,complex<double>>(in));
+    auto myout(to_vfmav<true,complex<double>>(out));
+    c2c(myin, myout, myaxes, forward, fct, nthreads);
+    }
+  else if (in.dtype==Typecode<complex<float>>::value)
+    {
+    auto myin(to_cfmav<true,complex<float>>(in));
+    auto myout(to_vfmav<true,complex<float>>(out));
+    c2c(myin, myout, myaxes, forward, float(fct), nthreads);
+    }
+  else
+    MR_fail("bad datatype");
+  DUCC0_JULIA_TRY_END
+  }
+
+// NUFFT
+
 int nufft_u2nu(const ArrayDescriptor *grid_,
                      const ArrayDescriptor *coord_,
                      int forward,
@@ -172,24 +200,22 @@ Tplan *nufft_make_plan(int nu2u,
     {
     const auto &shape(*shape_);
     const auto &coord(*coord_);
-    auto myshape(to_cmav<true, uint64_t, 1>(shape));
-    auto ndim = myshape.shape(0);
+    auto myshape = to_vector<true, uint64_t, size_t>(shape);
+    auto ndim = myshape.size();
     MR_assert(coord.ndim==2, "bad coordinate dimensionality");
     MR_assert(coord.shape[0]==ndim, "dimensionality mismatch");
-    auto res = new Tplan{coord.shape[1],vector<size_t>(ndim),coord.dtype,nullptr};
-    for (size_t i=0; i<ndim; ++i)
-      res->shp[i] = myshape(ndim-1-i);
+    auto res = new Tplan{coord.shape[1],myshape,coord.dtype,nullptr};
     if (coord.dtype==Typecode<double>::value)
       {
       auto mycoord = get_coord<double>(coord);
       if (ndim==1)
-        res->plan = new Nufft<double, double, double, 1>(nu2u, mycoord, array<size_t,1>{myshape(0)},
+        res->plan = new Nufft<double, double, double, 1>(nu2u, mycoord, array<size_t,1>{myshape[0]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else if (ndim==2)
-        res->plan = new Nufft<double, double, double, 2>(nu2u, mycoord, array<size_t,2>{myshape(1),myshape(0)},
+        res->plan = new Nufft<double, double, double, 2>(nu2u, mycoord, array<size_t,2>{myshape[0],myshape[1]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else if (ndim==3)
-        res->plan = new Nufft<double, double, double, 3>(nu2u, mycoord, array<size_t,3>{myshape(2),myshape(1),myshape(0)},
+        res->plan = new Nufft<double, double, double, 3>(nu2u, mycoord, array<size_t,3>{myshape[0],myshape[1],myshape[2]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else
         MR_fail("bad number of dimensions");
@@ -199,13 +225,13 @@ Tplan *nufft_make_plan(int nu2u,
       {
       auto mycoord = get_coord<float>(coord);
       if (ndim==1)
-        res->plan = new Nufft<float, float, float, 1>(nu2u, mycoord, array<size_t,1>{myshape(0)},
+        res->plan = new Nufft<float, float, float, 1>(nu2u, mycoord, array<size_t,1>{myshape[0]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else if (ndim==2)
-        res->plan = new Nufft<float, float, float, 2>(nu2u, mycoord, array<size_t,2>{myshape(1),myshape(0)},
+        res->plan = new Nufft<float, float, float, 2>(nu2u, mycoord, array<size_t,2>{myshape[0],myshape[1]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else if (ndim==3)
-        res->plan = new Nufft<float, float, float, 3>(nu2u, mycoord, array<size_t,3>{myshape(2),myshape(1),myshape(0)},
+        res->plan = new Nufft<float, float, float, 3>(nu2u, mycoord, array<size_t,3>{myshape[0],myshape[1],myshape[2]},
           epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       else
         MR_fail("bad number of dimensions");
