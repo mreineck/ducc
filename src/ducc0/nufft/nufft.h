@@ -204,8 +204,10 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
   }
 //#define NEW_DUMP
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
+template<> constexpr inline int log2tile_<long double, 1> = 9;
 template<> constexpr inline int log2tile_<double, 1> = 9;
 template<> constexpr inline int log2tile_<float , 1> = 9;
+template<> constexpr inline int log2tile_<long double, 2> = 4;
 template<> constexpr inline int log2tile_<double, 2> = 4;
 template<> constexpr inline int log2tile_<float , 2> = 5;
 #ifdef NEW_DUMP
@@ -215,6 +217,7 @@ template<> constexpr inline int log2tile_<float , 3> = 5;
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
 #endif
+template<> constexpr inline int log2tile_<long double, 3> = 4;
 
 template<size_t ndim> constexpr inline size_t max_ntile=-1;
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
@@ -740,7 +743,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
       spreading_helper<maxsupp>(supp, coords, points, grid);
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
@@ -751,7 +754,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         for (auto i=lo; i<hi; ++i)
           {
           auto [icfu, iout, iin] = comp_indices(i, nuni[0], nover[0], fft_order);
-          uniform(iout) = complex<Tgrid>(grid(iin)*Tgrid(corfac[0][icfu]));
+          uniform(iout) = complex<Tgrid>(grid(iin)*Tcalc(corfac[0][icfu]));
           }
         });
       timers.pop();
@@ -773,14 +776,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         for (auto i=lo; i<hi; ++i)
           {
           auto [icfu, iin, iout] = comp_indices(i, nuni[0], nover[0], fft_order);
-          grid(iout) = uniform(iin)*Tcalc(corfac[0][icfu]);
+          grid(iout) = complex<Tcalc>(uniform(iin))*Tcalc(corfac[0][icfu]);
           }
         });
       timers.poppush("FFT");
       vfmav<complex<Tcalc>> fgrid(grid);
       c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
       timers.poppush("interpolation");
-      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
       timers.pop();
@@ -1005,7 +1008,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                  : hlp.prep({coords(row,0), coords(row,1)});
-          auto v(points(row));
+          complex<Tacc> v(points(row));
 
           for (size_t cv=0; cv<SUPP; ++cv)
             xdata.c[cv] = kv[cv]*v;
@@ -1102,7 +1105,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
       spreading_helper<maxsupp>(supp, coords, points, grid);
 
       timers.poppush("FFT");
@@ -1124,7 +1127,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
             {
             auto [icfv, jout, jin] = comp_indices(j, nuni[1], nover[1], fft_order);
             uniform(iout,jout) = complex<Tgrid>(grid(iin,jin)
-              *Tgrid(corfac[0][icfu]*corfac[1][icfv]));
+              *Tcalc(corfac[0][icfu]*corfac[1][icfv]));
             }
           }
         });
@@ -1154,7 +1157,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           for (size_t j=0; j<nuni[1]; ++j)
             {
             auto [icfv, jin, jout] = comp_indices(j, nuni[1], nover[1], fft_order);
-            grid(iout,jout) = uniform(iin,jin)
+            grid(iout,jout) = complex<Tcalc>(uniform(iin,jin))
               *Tcalc(corfac[0][icfu]*corfac[1][icfv]);
             }
           }
@@ -1169,7 +1172,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("interpolation");
-      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
       timers.pop();
@@ -1443,7 +1446,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                  : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
-          auto v(points(row));
+          complex<Tacc> v(points(row));
 
           for (size_t cw=0; cw<SUPP; ++cw)
             xdata.c[cw]=kw[cw]*v;
@@ -1552,7 +1555,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      constexpr size_t maxsupp = is_same<Tacc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
       spreading_helper<maxsupp>(supp, coords, points, grid);
       timers.poppush("FFT");
       {
@@ -1586,7 +1589,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
               {
               auto [icfw, kout, kin] = comp_indices(k, nuni[2], nover[2], fft_order);
               uniform(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)
-                *Tgrid(corfac[0][icfu]*corfac[1][icfv]*corfac[2][icfw]));
+                *Tcalc(corfac[0][icfu]*corfac[1][icfv]*corfac[2][icfw]));
               }
             }
           }
@@ -1617,7 +1620,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
             for (size_t k=0; k<nuni[2]; ++k)
               {
               auto [icfw, kin, kout] = comp_indices(k, nuni[2], nover[2], fft_order);
-              grid(iout,jout,kout) = uniform(iin,jin,kin)
+              grid(iout,jout,kout) = complex<Tcalc>(uniform(iin,jin,kin))
                 *Tcalc(corfac[0][icfu]*corfac[1][icfv]*corfac[2][icfw]);
               }
             }
@@ -1643,7 +1646,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("interpolation");
-      constexpr size_t maxsupp = is_same<Tcalc, double>::value ? 16 : 8;
+      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
       interpolation_helper<maxsupp>(supp, grid, coords, points);
       timers.pop();
       timers.pop();
