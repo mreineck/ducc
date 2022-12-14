@@ -32,6 +32,7 @@
 
 #include <cmath>
 #include <limits>
+#include <iostream>
 #include "ducc0/infra/mav.h"
 
 namespace ducc0 {

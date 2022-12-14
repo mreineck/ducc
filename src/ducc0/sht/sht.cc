@@ -2459,6 +2459,36 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
            alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
+template tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<double>,2> &alm, // (ncomp, *)
+  const cmav<double,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
+template tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<float>,2> &alm, // (ncomp, *)
+  const cmav<float,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
 
 template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
