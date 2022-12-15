@@ -851,7 +851,8 @@ void add_fft(py::module_ &msup)
     "axis"_a, "kernel"_a, "nthreads"_a=1);
 
   static PyMethodDef good_size_meth[] =
-    {{"good_size", good_size, METH_VARARGS, good_size_DS}, {0, 0, 0, 0}};
+    {{"good_size", good_size, METH_VARARGS, good_size_DS},
+     {nullptr, nullptr, 0, nullptr}};
   PyModule_AddFunctions(m.ptr(), good_size_meth);
   }
 

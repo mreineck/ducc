@@ -87,7 +87,9 @@ else:
                                '-Woverloaded-virtual',
                                '-Wcast-qual',
                                '-Wcast-align',
-                               '-Wpointer-arith']
+                               '-Wpointer-arith',
+                               '-Wnon-virtual-dtor',
+                               '-Wzero-as-null-pointer-constant']
     extra_compile_args += ['-pthread']
     python_module_link_args += ['-Wl,-rpath,$ORIGIN', '-pthread']
     if do_native:
