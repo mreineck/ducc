@@ -94,7 +94,12 @@ static long mystrtol(const char *inp)
 static size_t get_max_threads_from_env()
   {
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
-  size_t res = sysconf(_SC_NPROCESSORS_ONLN);
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  pthread_getaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+  size_t res=0;
+  for (size_t i=0; i<CPU_SETSIZE; ++i)
+    if (CPU_ISSET(i, &cpuset)) ++res;
 #else
   size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
 #endif
