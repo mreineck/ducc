@@ -358,7 +358,6 @@ fft_order: bool
     if True, grids start with the zero Fourier mode
 )""";
 
-
 constexpr const char *plan_nu2u_DS = R"""(
 Perform a pre-planned nu2u transform.
 
@@ -403,6 +402,25 @@ numpy.ndarray((npoints,), same data type as grid)
     Identical to `out` if it was provided.
 )""";
 
+constexpr const char *bestEpsilon_DS = R"""(
+Computes the smallest possible error for the given NUFFT parameters.
+
+Parameters
+----------
+ndim : int (1-3)
+    the dimensionality of the transform
+singleprec : bool
+    True if np.float32/np.complex64 are used, otherwise False
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+
+Returns
+-------
+float
+    the smallest possible error that can be achieved for the given parameters.
+)""";
+
 
 void add_nufft(py::module_ &msup)
   {
@@ -417,6 +435,8 @@ void add_nufft(py::module_ &msup)
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
         "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
+  m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
+        "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,

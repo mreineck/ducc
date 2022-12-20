@@ -1558,4 +1558,16 @@ shared_ptr<PolynomialKernel> selectKernel(size_t idx)
   return make_shared<PolynomialKernel>(supp, supp+3, lam, GLFullCorrection(supp, lam));
   }
 
+double bestEpsilon(size_t ndim, bool singleprec,
+  double ofactor_min, double ofactor_max)
+  {
+  double res = 1.;
+  for (const auto &krn:KernelDB)
+    if ((krn.ndim==ndim) && (krn.singleprec==singleprec)
+      && (krn.epsilon<=res)
+      && (krn.ofactor<=ofactor_max) && (krn.ofactor>=ofactor_min))
+      res = krn.epsilon;
+  return res;
+  }
+
 }}

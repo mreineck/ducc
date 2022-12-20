@@ -39,12 +39,12 @@ class Bench:
                  + 1j * np.random.uniform(size=npoints)-0.5j).astype(np.complex64)
         self._values = (np.random.uniform(size=shape)-0.5
                  + 1j * np.random.uniform(size=shape)-0.5j).astype(np.complex64)
-
+        eps = 1.0001*ducc0.nufft.bestEpsilon(ndim=ndim, singleprec=False)
         self._res_fiducial_1 = ducc0.nufft.nu2u(
             points=self._points.astype(np.complex128),
             coord=self._coord.astype(np.float64),
             forward=True,
-            epsilon=2e-14,
+            epsilon=eps,
             nthreads=0,
             verbosity=1,
             out=np.empty(shape, dtype=np.complex128))
@@ -53,7 +53,7 @@ class Bench:
             grid=self._values.astype(np.complex128),
             coord=self._coord.astype(np.float64),
             forward=True,
-            epsilon=2e-14,
+            epsilon=eps,
             nthreads=0,
             verbosity=1)
 
@@ -176,7 +176,10 @@ def plot(res, fname):
 def runbench(shape, npoints, nthreads, fname, singleprec=False):
     res=[]
     mybench = Bench(shape, npoints)
-    epslist = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2] if singleprec else [2.5e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
+    if singleprec:
+        epslist = [[2.5e-7, 4.5e-7, 8.2e-7][len(shape)-1], 1e-5, 1e-4, 1e-3, 1e-2]
+    else:
+        epslist = [[4e-15, 8e-15, 2e-14][len(shape)-1], 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
     for eps in epslist:
         tres = mybench.run(eps, singleprec, nthreads)
         if have_finufft:

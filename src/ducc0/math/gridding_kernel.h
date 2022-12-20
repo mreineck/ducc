@@ -420,12 +420,16 @@ template<typename T> auto getAvailableKernels(double epsilon,
   return res;
   }
 
+double bestEpsilon(size_t ndim, bool singleprec,
+  double ofactor_min=1.1, double ofactor_max=2.6);
+
 }
 
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::getKernel;
 using detail_gridding_kernel::selectKernel;
 using detail_gridding_kernel::getAvailableKernels;
+using detail_gridding_kernel::bestEpsilon;
 using detail_gridding_kernel::PolynomialKernel;
 using detail_gridding_kernel::TemplateKernel;
 using detail_gridding_kernel::KernelParams;
