@@ -43,6 +43,27 @@ function ArrayDescriptor(arr::StridedArray{T,N}) where {T,N}
   return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
 end
 
+function nufft_best_epsilon(
+  ndim::Unsigned,
+  singleprec::Bool,
+  sigma_min::AbstractFloat=1.1,
+  sigma_max::AbstractFloat=2.6)
+
+  res = ccall(
+    (:nufft_best_epsilon, libducc),
+    Cdouble,
+    (
+      Csize_t,
+      Cint,
+      Cdouble,
+      Cdouble,
+    ), ndim, singleprec, sigma_min, sigma_max)
+  if res <= 0
+    throw(error())
+  end
+  return res
+end
+
 # This is the function that should be called by the end user
 function nufft_u2nu(
   coord::StridedArray{T,2},
@@ -278,9 +299,74 @@ function nufft_u2nu_planned(
   return res
 end
 
+function sht_alm2leg(
+  alm::StridedArray{T,2},
+  spin::Unsigned,
+  lmax::Unsigned,
+  mval::StridedArray{Csize_t,1},
+  mstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  lstride::Int,
+  theta::StridedArray{Cdouble,1},
+  nthreads::Unsigned
+  ) where{T}
+  ncomp = size(alm)[2]
+  ntheta = size(theta)[1]
+  nm = size(mval)[1]
+  res = Array{T}(undef, (nm, ntheta, ncomp))
+  GC.@preserve alm mval mstart theta res
+  ret = ccall(
+    (:sht_alm2leg, libducc),
+    Cint,
+    (Ptr{ArrayDescriptor}, Csize_t, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Cptrdiff_t, Ptr{ArrayDescriptor}, Csize_t, Ptr{ArrayDescriptor}),
+    Ref(ArrayDescriptor(alm)),
+    spin,
+    lmax,
+    Ref(ArrayDescriptor(mval)),
+    Ref(ArrayDescriptor(mstart)),
+    lstride,
+    Ref(ArrayDescriptor(theta)),
+    nthreads,
+    Ref(ArrayDescriptor(leg)))
+  if ret != 0
+    throw(error())
+  end
 end
 
+function sht_leg2map(
+  leg::StridedArray{Complex{T},3},
+  nphi::StridedArray{Csize_t,1},
+  phi0::StridedArray{Cdouble,1},
+  ringstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  pixstride::Int,
+  nthreads::Unsigned,
+  ) where{T}
+  ncomp = size(leg)[3]
+# FIXME: determine number of pixels as max(nphi+ringstart)
+# I don't know how to do this elegantly in Julia
+  npix = 42
+  res = Array{T}(undef, (npix, ncomp))
+  GC.@preserve leg nphi phi0 ringstart res
+  ret = ccall(
+    (:sht_leg2map, libducc),
+    Cint,
+    (Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Cptrdiff_t, Csize_t, Ptr{ArrayDescriptor}),
+    Ref(ArrayDescriptor(leg)),
+    Ref(ArrayDescriptor(nphi)),
+    Ref(ArrayDescriptor(phi0)),
+    Ref(ArrayDescriptor(ringstart)),
+    pixstride,
+    nthreads,
+    Ref(ArrayDescriptor(res)))
+  if ret != 0
+    throw(error())
+  end
+end
+
+end
+
+
 # some demo calls
+println(Ducc0.nufft_best_epsilon(UInt64(2),true))
 npoints = 1000000
 shp = (1000, 1000)
 coord = rand(Float64, length(shp), npoints) .- Float32(0.5)
