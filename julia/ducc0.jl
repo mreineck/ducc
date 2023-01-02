@@ -64,7 +64,6 @@ function nufft_best_epsilon(
   return res
 end
 
-# This is the function that should be called by the end user
 function nufft_u2nu(
   coord::StridedArray{T,2},
   grid::StridedArray{T2,N};
@@ -84,24 +83,24 @@ function nufft_u2nu(
     (:nufft_u2nu, libducc),
     Cint,
     (
-      Ptr{ArrayDescriptor},
-      Ptr{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
       Cint,
       Cdouble,
       Csize_t,
-      Ptr{ArrayDescriptor},
+      Ref{ArrayDescriptor},
       Csize_t,
       Cdouble,
       Cdouble,
       Cdouble,
       Cint,
     ),
-    Ref(ArrayDescriptor(grid)),
-    Ref(ArrayDescriptor(coord)),
+    ArrayDescriptor(grid),
+    ArrayDescriptor(coord),
     0,
     epsilon,
     nthreads,
-    Ref(ArrayDescriptor(res)),
+    ArrayDescriptor(res),
     verbose,
     sigma_min,
     sigma_max,
@@ -129,28 +128,29 @@ function nufft_nu2u(
 ) where {T,T2,D}
 
   res = Array{T2}(undef, N)
-  GC.@preserve coord points res ret = ccall(
+  GC.@preserve coord points res
+  ret = ccall(
     (:nufft_nu2u, libducc),
     Cint,
     (
-      Ptr{ArrayDescriptor},
-      Ptr{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
       Cint,
       Cdouble,
       Csize_t,
-      Ptr{ArrayDescriptor},
+      Ref{ArrayDescriptor},
       Csize_t,
       Cdouble,
       Cdouble,
       Cdouble,
       Cint,
     ),
-    Ref(ArrayDescriptor(points)),
-    Ref(ArrayDescriptor(coord)),
+    ArrayDescriptor(points),
+    ArrayDescriptor(coord),
     0,
     epsilon,
     nthreads,
-    Ref(ArrayDescriptor(res)),
+    ArrayDescriptor(res),
     verbose,
     sigma_min,
     sigma_max,
@@ -170,12 +170,12 @@ mutable struct NufftPlan
 end
 
 function nufft_delete_plan!(plan::NufftPlan)
-  if plan.cplan != Ptr{Cvoid}(0)
+  if plan.cplan != C_NULL
     ret = ccall((:nufft_delete_plan, libducc), Cint, (Ptr{Cvoid},), plan.cplan)
     if ret != 0
       throw(error())
     end
-    plan.cplan = Ptr{Cvoid}(0)
+    plan.cplan = C_NULL
   end
 end
 
@@ -200,8 +200,8 @@ function nufft_make_plan(
     Ptr{Cvoid},
     (
       Cint,
-      Ptr{ArrayDescriptor},
-      Ptr{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
       Cdouble,
       Csize_t,
       Cdouble,
@@ -220,7 +220,7 @@ function nufft_make_plan(
     fft_order,
   )
 
-  if ptr == Ptr{Cvoid}(0)
+  if ptr == C_NULL
     throw(error())
   end
   p = NufftPlan(N2, size(coords)[2], ptr)
@@ -242,7 +242,7 @@ function nufft_nu2u_planned!(
   ret = ccall(
     (:nufft_nu2u_planned, libducc),
     Cint,
-    (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}),
+    (Ptr{Cvoid}, Cint, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}),
     plan.cplan,
     forward,
     verbose,
@@ -276,7 +276,7 @@ function nufft_u2nu_planned!(
   ret = ccall(
     (:nufft_u2nu_planned, libducc),
     Cint,
-    (Ptr{Cvoid}, Cint, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}),
+    (Ptr{Cvoid}, Cint, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}),
     plan.cplan,
     forward,
     verbose,
@@ -317,7 +317,7 @@ function sht_alm2leg(
   ret = ccall(
     (:sht_alm2leg, libducc),
     Cint,
-    (Ptr{ArrayDescriptor}, Csize_t, Csize_t, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Cptrdiff_t, Ptr{ArrayDescriptor}, Csize_t, Ptr{ArrayDescriptor}),
+    (Ref{ArrayDescriptor}, Csize_t, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Cptrdiff_t, Ref{ArrayDescriptor}, Csize_t, Ref{ArrayDescriptor}),
     Ref(ArrayDescriptor(alm)),
     spin,
     lmax,
@@ -349,7 +349,7 @@ function sht_leg2map(
   ret = ccall(
     (:sht_leg2map, libducc),
     Cint,
-    (Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Ptr{ArrayDescriptor}, Cptrdiff_t, Csize_t, Ptr{ArrayDescriptor}),
+    (Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Cptrdiff_t, Csize_t, Ref{ArrayDescriptor}),
     Ref(ArrayDescriptor(leg)),
     Ref(ArrayDescriptor(nphi)),
     Ref(ArrayDescriptor(phi0)),
