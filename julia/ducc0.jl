@@ -4,6 +4,9 @@
 
 # This code does not work out of the box since I have not updated ducc0_jll yet.
 # It should mainly serve as a base for discussion.
+
+# Formatting: format_file("ducc0.jl",indent=2,remove_extra_newlines=true)
+
 module Ducc0
 
 #import ducc0_jll
@@ -46,18 +49,18 @@ end
 function nufft_best_epsilon(
   ndim::Unsigned,
   singleprec::Bool,
-  sigma_min::AbstractFloat=1.1,
-  sigma_max::AbstractFloat=2.6)
-
+  sigma_min::AbstractFloat = 1.1,
+  sigma_max::AbstractFloat = 2.6,
+)
   res = ccall(
     (:nufft_best_epsilon, libducc),
     Cdouble,
-    (
-      Csize_t,
-      Cint,
-      Cdouble,
-      Cdouble,
-    ), ndim, singleprec, sigma_min, sigma_max)
+    (Csize_t, Cint, Cdouble, Cdouble),
+    ndim,
+    singleprec,
+    sigma_min,
+    sigma_max,
+  )
   if res <= 0
     throw(error())
   end
@@ -67,16 +70,15 @@ end
 function nufft_u2nu(
   coord::StridedArray{T,2},
   grid::StridedArray{T2,N};
-  forward::Bool=true,
-  verbose::Bool=false,
-  epsilon::AbstractFloat=1e-5,
-  nthreads::Unsigned=UInt32(1),
-  sigma_min::AbstractFloat=1.1,
-  sigma_max::AbstractFloat=2.6,
-  periodicity::AbstractFloat=2π,
-  fft_order::Bool=true,
+  forward::Bool = true,
+  verbose::Bool = false,
+  epsilon::AbstractFloat = 1e-5,
+  nthreads::Unsigned = UInt32(1),
+  sigma_min::AbstractFloat = 1.1,
+  sigma_max::AbstractFloat = 2.6,
+  periodicity::AbstractFloat = 2π,
+  fft_order::Bool = true,
 ) where {T,T2,N}
-
   res = Vector{T2}(undef, size(coord)[2])
   GC.@preserve coord grid res
   ret = ccall(
@@ -117,16 +119,15 @@ function nufft_nu2u(
   coord::StridedArray{T,2},
   points::StridedArray{T2,1},
   N::NTuple{D,Int};
-  forward::Bool=true,
-  verbose::Bool=false,
-  epsilon::AbstractFloat=1e-5,
-  nthreads::Unsigned=UInt32(1),
-  sigma_min::AbstractFloat=1.1,
-  sigma_max::AbstractFloat=2.6,
-  periodicity::AbstractFloat=2π,
-  fft_order::Bool=true,
+  forward::Bool = true,
+  verbose::Bool = false,
+  epsilon::AbstractFloat = 1e-5,
+  nthreads::Unsigned = UInt32(1),
+  sigma_min::AbstractFloat = 1.1,
+  sigma_max::AbstractFloat = 2.6,
+  periodicity::AbstractFloat = 2π,
+  fft_order::Bool = true,
 ) where {T,T2,D}
-
   res = Array{T2}(undef, N)
   GC.@preserve coord points res
   ret = ccall(
@@ -182,13 +183,13 @@ end
 function nufft_make_plan(
   coords::Matrix{T},
   N::NTuple{D,Int};
-  nu2u::Bool=false,
-  epsilon::AbstractFloat=1e-5,
-  nthreads::Unsigned=UInt32(1),
-  sigma_min::AbstractFloat=1.1,
-  sigma_max::AbstractFloat=2.6,
-  periodicity::AbstractFloat=2π,
-  fft_order::Bool=true,
+  nu2u::Bool = false,
+  epsilon::AbstractFloat = 1e-5,
+  nthreads::Unsigned = UInt32(1),
+  sigma_min::AbstractFloat = 1.1,
+  sigma_max::AbstractFloat = 2.6,
+  periodicity::AbstractFloat = 2π,
+  fft_order::Bool = true,
 ) where {T,D}
   N2 = Vector{UInt64}(undef, D)
   for i = 1:D
@@ -235,8 +236,8 @@ function nufft_nu2u_planned!(
   plan::NufftPlan,
   points::StridedArray{T,1},
   uniform::StridedArray{T};
-  forward::Bool=false,
-  verbose::Bool=false,
+  forward::Bool = false,
+  verbose::Bool = false,
 ) where {T}
   GC.@preserve points uniform
   ret = ccall(
@@ -257,11 +258,11 @@ end
 function nufft_nu2u_planned(
   plan::NufftPlan,
   points::StridedArray{T,1};
-  forward::Bool=false,
-  verbose::Bool=false,
+  forward::Bool = false,
+  verbose::Bool = false,
 ) where {T}
   res = Array{T}(undef, Tuple(i for i in plan.N))
-  nufft_nu2u_planned!(plan, points, res, forward=forward, verbose=verbose)
+  nufft_nu2u_planned!(plan, points, res, forward = forward, verbose = verbose)
   return res
 end
 
@@ -269,8 +270,8 @@ function nufft_u2nu_planned!(
   plan::NufftPlan,
   uniform::StridedArray{T},
   points::StridedArray{T,1};
-  forward::Bool=true,
-  verbose::Bool=false,
+  forward::Bool = true,
+  verbose::Bool = false,
 ) where {T}
   GC.@preserve uniform points
   ret = ccall(
@@ -291,11 +292,11 @@ end
 function nufft_u2nu_planned(
   plan::NufftPlan,
   uniform::StridedArray{T};
-  forward::Bool=true,
-  verbose::Bool=false,
+  forward::Bool = true,
+  verbose::Bool = false,
 ) where {T}
   res = Array{T}(undef, plan.npoints)
-  nufft_u2nu_planned!(plan, uniform, res, forward=forward, verbose=verbose)
+  nufft_u2nu_planned!(plan, uniform, res, forward = forward, verbose = verbose)
   return res
 end
 
@@ -307,8 +308,8 @@ function sht_alm2leg(
   mstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
   lstride::Int,
   theta::StridedArray{Cdouble,1},
-  nthreads::Unsigned
-  ) where{T}
+  nthreads::Unsigned,
+) where {T}
   ncomp = size(alm)[2]
   ntheta = size(theta)[1]
   nm = size(mval)[1]
@@ -317,7 +318,17 @@ function sht_alm2leg(
   ret = ccall(
     (:sht_alm2leg, libducc),
     Cint,
-    (Ref{ArrayDescriptor}, Csize_t, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Cptrdiff_t, Ref{ArrayDescriptor}, Csize_t, Ref{ArrayDescriptor}),
+    (
+      Ref{ArrayDescriptor},
+      Csize_t,
+      Csize_t,
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Cptrdiff_t,
+      Ref{ArrayDescriptor},
+      Csize_t,
+      Ref{ArrayDescriptor},
+    ),
     Ref(ArrayDescriptor(alm)),
     spin,
     lmax,
@@ -326,7 +337,8 @@ function sht_alm2leg(
     lstride,
     Ref(ArrayDescriptor(theta)),
     nthreads,
-    Ref(ArrayDescriptor(leg)))
+    Ref(ArrayDescriptor(leg)),
+  )
   if ret != 0
     throw(error())
   end
@@ -339,24 +351,33 @@ function sht_leg2map(
   ringstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
   pixstride::Int,
   nthreads::Unsigned,
-  ) where{T}
+) where {T}
   ncomp = size(leg)[3]
-# FIXME: determine number of pixels as max(nphi+ringstart)
-# I don't know how to do this elegantly in Julia
+  # FIXME: determine number of pixels as max(nphi+ringstart)
+  # I don't know how to do this elegantly in Julia
   npix = 42
   res = Array{T}(undef, (npix, ncomp))
   GC.@preserve leg nphi phi0 ringstart res
   ret = ccall(
     (:sht_leg2map, libducc),
     Cint,
-    (Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}, Cptrdiff_t, Csize_t, Ref{ArrayDescriptor}),
+    (
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Ref{ArrayDescriptor},
+      Cptrdiff_t,
+      Csize_t,
+      Ref{ArrayDescriptor},
+    ),
     Ref(ArrayDescriptor(leg)),
     Ref(ArrayDescriptor(nphi)),
     Ref(ArrayDescriptor(phi0)),
     Ref(ArrayDescriptor(ringstart)),
     pixstride,
     nthreads,
-    Ref(ArrayDescriptor(res)))
+    Ref(ArrayDescriptor(res)),
+  )
   if ret != 0
     throw(error())
   end
@@ -364,9 +385,8 @@ end
 
 end
 
-
 # some demo calls
-println(Ducc0.nufft_best_epsilon(UInt64(2),true))
+println(Ducc0.nufft_best_epsilon(UInt64(2), true))
 npoints = 1000000
 shp = (1000, 1000)
 coord = rand(Float64, length(shp), npoints) .- Float32(0.5)
