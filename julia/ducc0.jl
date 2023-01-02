@@ -21,7 +21,7 @@ struct ArrayDescriptor
   dtype::UInt8              # magic values determining the data type
 end
 
-function ArrayDescriptor(arr::StridedArray{T,N}) where {T,N}
+function Desc(arr::StridedArray{T,N}) where {T,N}
   @assert N <= 10
   # MR the next lines just serve to put shape and stride information into the
   # fixed-size tuples of the descriptor ... is tere an easier way to do this?
@@ -45,6 +45,8 @@ function ArrayDescriptor(arr::StridedArray{T,N}) where {T,N}
   )
   return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
 end
+
+Dref = Ref{ArrayDescriptor}
 
 function nufft_best_epsilon(
   ndim::Unsigned,
@@ -84,25 +86,13 @@ function nufft_u2nu(
   ret = ccall(
     (:nufft_u2nu, libducc),
     Cint,
-    (
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Cint,
-      Cdouble,
-      Csize_t,
-      Ref{ArrayDescriptor},
-      Csize_t,
-      Cdouble,
-      Cdouble,
-      Cdouble,
-      Cint,
-    ),
-    ArrayDescriptor(grid),
-    ArrayDescriptor(coord),
+    (Dref, Dref, Cint, Cdouble, Csize_t, Dref, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
+    Desc(grid),
+    Desc(coord),
     0,
     epsilon,
     nthreads,
-    ArrayDescriptor(res),
+    Desc(res),
     verbose,
     sigma_min,
     sigma_max,
@@ -133,25 +123,13 @@ function nufft_nu2u(
   ret = ccall(
     (:nufft_nu2u, libducc),
     Cint,
-    (
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Cint,
-      Cdouble,
-      Csize_t,
-      Ref{ArrayDescriptor},
-      Csize_t,
-      Cdouble,
-      Cdouble,
-      Cdouble,
-      Cint,
-    ),
-    ArrayDescriptor(points),
-    ArrayDescriptor(coord),
+    (Dref, Dref, Cint, Cdouble, Csize_t, Dref, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
+    Desc(points),
+    Desc(coord),
     0,
     epsilon,
     nthreads,
-    ArrayDescriptor(res),
+    Desc(res),
     verbose,
     sigma_min,
     sigma_max,
@@ -199,20 +177,10 @@ function nufft_make_plan(
   ptr = ccall(
     (:nufft_make_plan, libducc),
     Ptr{Cvoid},
-    (
-      Cint,
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Cdouble,
-      Csize_t,
-      Cdouble,
-      Cdouble,
-      Cdouble,
-      Cint,
-    ),
+    (Cint, Dref, Dref, Cdouble, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
     nu2u,
-    Ref(ArrayDescriptor(N2)),
-    Ref(ArrayDescriptor(coords)),
+    Desc(N2),
+    Desc(coords),
     epsilon,
     nthreads,
     sigma_min,
@@ -243,12 +211,12 @@ function nufft_nu2u_planned!(
   ret = ccall(
     (:nufft_nu2u_planned, libducc),
     Cint,
-    (Ptr{Cvoid}, Cint, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}),
+    (Ptr{Cvoid}, Cint, Csize_t, Dref, Dref),
     plan.cplan,
     forward,
     verbose,
-    Ref(ArrayDescriptor(points)),
-    Ref(ArrayDescriptor(uniform)),
+    Desc(points),
+    Desc(uniform),
   )
   if ret != 0
     throw(error())
@@ -277,12 +245,12 @@ function nufft_u2nu_planned!(
   ret = ccall(
     (:nufft_u2nu_planned, libducc),
     Cint,
-    (Ptr{Cvoid}, Cint, Csize_t, Ref{ArrayDescriptor}, Ref{ArrayDescriptor}),
+    (Ptr{Cvoid}, Cint, Csize_t, Dref, Dref),
     plan.cplan,
     forward,
     verbose,
-    Ref(ArrayDescriptor(uniform)),
-    Ref(ArrayDescriptor(points)),
+    Desc(uniform),
+    Desc(points),
   )
   if ret != 0
     throw(error())
@@ -318,26 +286,16 @@ function sht_alm2leg(
   ret = ccall(
     (:sht_alm2leg, libducc),
     Cint,
-    (
-      Ref{ArrayDescriptor},
-      Csize_t,
-      Csize_t,
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Cptrdiff_t,
-      Ref{ArrayDescriptor},
-      Csize_t,
-      Ref{ArrayDescriptor},
-    ),
-    Ref(ArrayDescriptor(alm)),
+    (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
+    Desc(alm),
     spin,
     lmax,
-    Ref(ArrayDescriptor(mval)),
-    Ref(ArrayDescriptor(mstart)),
+    Desc(mval),
+    Desc(mstart),
     lstride,
-    Ref(ArrayDescriptor(theta)),
+    Desc(theta),
     nthreads,
-    Ref(ArrayDescriptor(leg)),
+    Desc(leg),
   )
   if ret != 0
     throw(error())
@@ -361,22 +319,14 @@ function sht_leg2map(
   ret = ccall(
     (:sht_leg2map, libducc),
     Cint,
-    (
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Ref{ArrayDescriptor},
-      Cptrdiff_t,
-      Csize_t,
-      Ref{ArrayDescriptor},
-    ),
-    Ref(ArrayDescriptor(leg)),
-    Ref(ArrayDescriptor(nphi)),
-    Ref(ArrayDescriptor(phi0)),
-    Ref(ArrayDescriptor(ringstart)),
+    (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
+    Desc(leg),
+    Desc(nphi),
+    Desc(phi0),
+    Desc(ringstart),
     pixstride,
     nthreads,
-    Ref(ArrayDescriptor(res)),
+    Desc(res),
   )
   if ret != 0
     throw(error())
