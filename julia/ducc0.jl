@@ -311,9 +311,7 @@ function sht_leg2map(
   nthreads::Unsigned,
 ) where {T}
   ncomp = size(leg)[3]
-  # FIXME: determine number of pixels as max(nphi+ringstart)
-  # I don't know how to do this elegantly in Julia
-  npix = 42
+  npix = maximum(ringstart+nphi)
   res = Array{T}(undef, (npix, ncomp))
   GC.@preserve leg nphi phi0 ringstart res
   ret = ccall(
