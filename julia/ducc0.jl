@@ -1,6 +1,4 @@
 # proposed interface to pass array and type information from Julia to C++
-# TODO: when C++ throws an exception, the whole Julia interpreter crashes ...
-# would be nice to avoid this and throw a Julia exception instead.
 
 # This code does not work out of the box since I have not updated ducc0_jll yet.
 # It should mainly serve as a base for discussion.
@@ -311,7 +309,7 @@ function sht_leg2map(
   nthreads::Unsigned,
 ) where {T}
   ncomp = size(leg)[3]
-  npix = maximum(ringstart+nphi)
+  npix = maximum(ringstart + nphi)
   res = Array{T}(undef, (npix, ncomp))
   GC.@preserve leg nphi phi0 ringstart res
   ret = ccall(
