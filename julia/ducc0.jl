@@ -19,6 +19,21 @@ struct ArrayDescriptor
   dtype::UInt8              # magic values determining the data type
 end
 
+# convert data types to type codes for communication with ducc
+function typecode(tp::Type)
+  if tp <: AbstractFloat
+    return return sizeof(tp(0)) - 1
+  elseif tp <: Unsigned
+    return return sizeof(tp(0)) - 1 + 32
+  elseif tp <: Signed
+    return return sizeof(tp(0)) - 1 + 16
+  elseif tp == Complex{Float32}
+    return typecode(Float32) + 64
+  elseif tp == Complex{Float64}
+    return typecode(Float64) + 64
+  end
+end
+
 function Desc(arr::StridedArray{T,N}) where {T,N}
   @assert N <= 10
   # MR the next lines just serve to put shape and stride information into the
@@ -33,15 +48,7 @@ function Desc(arr::StridedArray{T,N}) where {T,N}
   str = NTuple{10,Int64}(v for v in str)
   # .. up to here
 
-  # MR this should probably be a static variable if such a thing exists
-  typedict = Dict(
-    Float32 => 3,
-    Float64 => 7,
-    Complex{Float32} => 67,
-    Complex{Float64} => 71,
-    UInt64 => 39,
-  )
-  return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
+  return ArrayDescriptor(shp, str, pointer(arr), N, typecode(T))
 end
 
 Dref = Ref{ArrayDescriptor}
