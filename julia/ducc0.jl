@@ -22,7 +22,7 @@ end
 function Desc(arr::StridedArray{T,N}) where {T,N}
   @assert N <= 10
   # MR the next lines just serve to put shape and stride information into the
-  # fixed-size tuples of the descriptor ... is tere an easier way to do this?
+  # fixed-size tuples of the descriptor ... is there an easier way to do this?
   shp = zeros(UInt64, 10)
   str = zeros(Int64, 10)
   for i = 1:N
@@ -35,11 +35,11 @@ function Desc(arr::StridedArray{T,N}) where {T,N}
 
   # MR this should probably be a static variable if such a thing exists
   typedict = Dict(
-    Float32 => 68,
-    Float64 => 72,
-    Complex{Float32} => 200,
-    Complex{Float64} => 208,
-    UInt64 => 40,
+    Float32 => 3,
+    Float64 => 7,
+    Complex{Float32} => 67,
+    Complex{Float64} => 71,
+    UInt64 => 39,
   )
   return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
 end
@@ -48,7 +48,7 @@ Dref = Ref{ArrayDescriptor}
 
 function nufft_best_epsilon(
   ndim::Unsigned,
-  singleprec::Bool,
+  singleprec::Bool;
   sigma_min::AbstractFloat = 1.1,
   sigma_max::AbstractFloat = 2.6,
 )
