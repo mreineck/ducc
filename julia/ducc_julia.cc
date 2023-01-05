@@ -430,7 +430,6 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
     MR_fail("unsupported data type");
   DUCC0_JULIA_TRY_END
   }
-}
 
 int sht_leg2map(const ArrayDescriptor *leg_,
   const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
@@ -457,6 +456,8 @@ int sht_leg2map(const ArrayDescriptor *leg_,
     MR_fail("unsupported data type");
   DUCC0_JULIA_TRY_END
   }
+
+} // extern "C"
 
 #undef DUCC0_JULIA_TRY_BEGIN
 #undef DUCC0_JULIA_TRY_END
