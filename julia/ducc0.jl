@@ -19,10 +19,25 @@ struct ArrayDescriptor
   dtype::UInt8              # magic values determining the data type
 end
 
+# convert data types to type codes for communication with ducc
+function typecode(tp::Type)
+  if tp <: AbstractFloat
+    return return sizeof(tp(0)) - 1
+  elseif tp <: Unsigned
+    return return sizeof(tp(0)) - 1 + 32
+  elseif tp <: Signed
+    return return sizeof(tp(0)) - 1 + 16
+  elseif tp == Complex{Float32}
+    return typecode(Float32) + 64
+  elseif tp == Complex{Float64}
+    return typecode(Float64) + 64
+  end
+end
+
 function Desc(arr::StridedArray{T,N}) where {T,N}
   @assert N <= 10
   # MR the next lines just serve to put shape and stride information into the
-  # fixed-size tuples of the descriptor ... is tere an easier way to do this?
+  # fixed-size tuples of the descriptor ... is there an easier way to do this?
   shp = zeros(UInt64, 10)
   str = zeros(Int64, 10)
   for i = 1:N
@@ -33,22 +48,14 @@ function Desc(arr::StridedArray{T,N}) where {T,N}
   str = NTuple{10,Int64}(v for v in str)
   # .. up to here
 
-  # MR this should probably be a static variable if such a thing exists
-  typedict = Dict(
-    Float32 => 68,
-    Float64 => 72,
-    Complex{Float32} => 200,
-    Complex{Float64} => 208,
-    UInt64 => 40,
-  )
-  return ArrayDescriptor(shp, str, pointer(arr), N, typedict[T])
+  return ArrayDescriptor(shp, str, pointer(arr), N, typecode(T))
 end
 
 Dref = Ref{ArrayDescriptor}
 
 function nufft_best_epsilon(
   ndim::Unsigned,
-  singleprec::Bool,
+  singleprec::Bool;
   sigma_min::AbstractFloat = 1.1,
   sigma_max::AbstractFloat = 2.6,
 )
