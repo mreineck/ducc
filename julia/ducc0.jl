@@ -9,7 +9,7 @@ module Ducc0
 
 #import ducc0_jll
 #const libducc = ducc0_jll.libducc_julia
-const libducc = "/home/martin/codes/ducc/julia/ducc_julia.so"  # FIXME
+const libducc = "/home/leoab/OneDrive/UNI/ducc/julia/ducc_julia.so"  # FIXME
 
 struct ArrayDescriptor
   shape::NTuple{10,UInt64}  # length of every axis
@@ -293,10 +293,12 @@ function sht_alm2leg(
     lstride,
     Desc(theta),
     nthreads,
-    Desc(leg),
+    Desc(res),
   )
   if ret != 0
     throw(error())
+  else
+    res
   end
 end
 
@@ -326,6 +328,8 @@ function sht_leg2map(
   )
   if ret != 0
     throw(error())
+  else
+    res
   end
 end
 

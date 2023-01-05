@@ -431,6 +431,7 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   DUCC0_JULIA_TRY_END
   }
 }
+
 int sht_leg2map(const ArrayDescriptor *leg_,
   const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
   const ArrayDescriptor *ringstart_,
