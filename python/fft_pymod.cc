@@ -1,7 +1,7 @@
 /*
 This file is part of pocketfft.
 
-Copyright (C) 2010-2020 Max-Planck-Society
+Copyright (C) 2010-2023 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -296,7 +296,7 @@ py::array dst(const py::array &in, int type, const py::object &axes_,
 
 template<typename T> py::array c2r_internal(const py::array &in,
   const py::object &axes_, size_t lastsize, bool forward, int inorm,
-  bool allow_overwriting_input, py::object &out_, size_t nthreads)
+  py::object &out_, size_t nthreads, bool allow_overwriting_input)
   {
   auto axes = makeaxes(in, axes_);
   size_t axis = axes.back();
@@ -326,10 +326,11 @@ template<typename T> py::array c2r_internal(const py::array &in,
   }
 
 py::array c2r(py::array &in, const py::object &axes_, size_t lastsize,
-  bool forward, int inorm, bool overwrite_input, py::object &out_, size_t nthreads)
+  bool forward, int inorm, py::object &out_, size_t nthreads,
+  bool allow_overwriting_input)
   {
   DISPATCH(in, c128, c64, clong, c2r_internal, (in, axes_, lastsize, forward,
-    inorm, overwrite_input, out_, nthreads))
+    inorm, out_, nthreads, allow_overwriting_input))
   }
 
 template<typename T> py::array separable_hartley_internal(const py::array &in,
@@ -529,9 +530,6 @@ inorm : int
       | 2 : divide by N
 
     where N is the product of the lengths of the transformed output axes.
-allow_overwriting_input : bool
-    If `True`, the input array may be overwritten with some intermediate data.
-    This can avoid allocating temporary variables and improve performance.
 out : numpy.ndarray (real type with same accuracy as `a`)
     For the required shape, see the `Returns` section.
     Must not overlap with `a`.
@@ -539,6 +537,9 @@ out : numpy.ndarray (real type with same accuracy as `a`)
 nthreads : int
     Number of threads to use. If 0, use the system default (typically the number
     of hardware threads on the compute node).
+allow_overwriting_input : bool
+    If `True`, the input array may be overwritten with some intermediate data.
+    This can avoid allocating temporary variables and improve performance.
 
 Returns
 -------
@@ -846,8 +847,8 @@ void add_fft(py::module_ &msup)
   m.def("r2c", r2c, r2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,
     "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("c2r", c2r, c2r_DS, "a"_a, "axes"_a=None, "lastsize"_a=0,
-    "forward"_a=true, "inorm"_a=0, "allow_overwriting_input"_a=false,
-    "out"_a=None, "nthreads"_a=1);
+    "forward"_a=true, "inorm"_a=0, "out"_a=None, "nthreads"_a=1,
+    "allow_overwriting_input"_a=false);
   m.def("r2r_fftpack", r2r_fftpack, r2r_fftpack_DS, "a"_a, "axes"_a,
     "real2hermitian"_a, "forward"_a, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("r2r_fftw", r2r_fftw, r2r_fftw_DS, "a"_a, "axes"_a,

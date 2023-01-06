@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2022 Max-Planck-Society
+Copyright (C) 2010-2023 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
