@@ -4,6 +4,10 @@
       DUCC0_NUM_THREADS, DUCC0_PIN_DISTANCE, and DUCC0_PIN_OFFSET.
       This is still experimental and may change in the future.
 
+- fft:
+    - introduce a flag `allow_overwriting_input` to `c2r`, which can allow
+      faster execution by avoiding temporary arrays
+
 - nufft/wgridder:
     - changed kernel database to hold optimized kernels depending on
       dimensionality and floating point accuracy. This allows for slightly
