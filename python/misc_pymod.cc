@@ -563,13 +563,38 @@ template<typename Ti, typename To> void roll_resize_roll(
       }
     }
   }
+template<typename Ti, typename To> void roll_resize_roll_threaded(
+  const Ti *in, const size_t *szi, const ptrdiff_t *stri,
+  To *out, const size_t *szo, const ptrdiff_t *stro,
+  const size_t *ri, const size_t *ro, size_t ndim, size_t nthreads)
+  {
+  size_t smin=min(*szi,*szo);
+  execParallel(smin, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      size_t ii=min(i-*ri, i-*ri+*szi);
+      roll_resize_roll(in+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, 1, ndim);
+      }
+    });
+  execParallel(*szo-smin, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=smin+lo; i<smin+hi; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      fill_zero(out+ io* *stro, szo+1, stro+1, 1, ndim);
+      }
+    });
+  }
 
 template<typename Ti, typename To> py::array roll_resize_roll(const py::array &in_,
-  py::array &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_)
+  py::array &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_, size_t nthreads)
   {
   auto in(to_cfmav<Ti>(in_));
   auto out(to_vfmav<To>(out_));
   size_t ndim = in.ndim();
+  nthreads = adjust_nthreads(nthreads);
   MR_assert(out.ndim()==ndim, "dimensionality mismatch");
   MR_assert(ri_.size()==ndim, "dimensionality mismatch");
   MR_assert(ro_.size()==ndim, "dimensionality mismatch");
@@ -581,23 +606,29 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
     tmp = ro_[i]%ptrdiff_t(out.shape(i));
     ro.push_back(size_t((tmp<0) ? tmp+out.shape(i) : tmp));
     }
-  roll_resize_roll(in.data(), in.shape().data(), in.stride().data(),
-    out.data(), out.shape().data(), out.stride().data(),
-    ri.data(), ro.data(), 0, ndim);
+  if ((ndim>1)&&(nthreads>1))
+    roll_resize_roll_threaded(in.data(), in.shape().data(), in.stride().data(),
+      out.data(), out.shape().data(), out.stride().data(),
+      ri.data(), ro.data(), ndim, nthreads);
+  else
+    roll_resize_roll(in.data(), in.shape().data(), in.stride().data(),
+      out.data(), out.shape().data(), out.stride().data(),
+      ri.data(), ro.data(), 0, ndim);
   return out_;
   }
 
 py::array Py_roll_resize_roll(const py::array &in,
-  py::array &out, const vector<int64_t> &ri, const vector<int64_t> &ro)
+  py::array &out, const vector<int64_t> &ri, const vector<int64_t> &ro,
+  size_t nthreads=1)
   {
   if (isPyarr<float>(in))
-    return roll_resize_roll<float,float>(in, out, ri, ro);
+    return roll_resize_roll<float,float>(in, out, ri, ro, nthreads);
   else if (isPyarr<double>(out))
-    return roll_resize_roll<double,double>(in, out, ri, ro);
+    return roll_resize_roll<double,double>(in, out, ri, ro, nthreads);
   else if (isPyarr<complex<float>>(in))
-    return roll_resize_roll<complex<float>,complex<float>>(in, out, ri, ro);
+    return roll_resize_roll<complex<float>,complex<float>>(in, out, ri, ro, nthreads);
   else if (isPyarr<complex<double>>(out))
-    return roll_resize_roll<complex<double>,complex<double>>(in, out, ri, ro);
+    return roll_resize_roll<complex<double>,complex<double>>(in, out, ri, ro, nthreads);
   else
     MR_fail("type matching failed");
   }
@@ -664,7 +695,7 @@ void add_misc(py::module_ &msup)
   m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
 
-  m.def("roll_resize_roll", Py_roll_resize_roll,"in"_a, "out"_a, "ri"_a, "ro"_a);
+  m.def("roll_resize_roll", Py_roll_resize_roll,"in"_a, "out"_a, "ri"_a, "ro"_a, "nthreads"_a=1);
   }
 
 }
