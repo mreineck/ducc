@@ -516,6 +516,118 @@ py::array get_correction(double beta, double e0, size_t W, size_t npoints, doubl
   return res_;
   }
 
+template<typename To> void fill_zero(
+  To *out, const size_t *szo, const ptrdiff_t *stro,
+  size_t idim, size_t ndim)
+  {
+  if (idim+1==ndim)
+    for (size_t i=0; i<*szo; ++i)
+      out[i* *stro] = To(0);
+  else
+    for (size_t i=0; i<*szo; ++i)
+      fill_zero(out+ i* *stro, szo+1, stro+1, idim+1, ndim);
+  }
+template<typename Ti, typename To> void roll_resize_roll(
+  const Ti *in, const size_t *szi, const ptrdiff_t *stri,
+  To *out, const size_t *szo, const ptrdiff_t *stro,
+  const size_t *ri, const size_t *ro, size_t idim, size_t ndim)
+  {
+  if (idim+1==ndim)
+    {
+    size_t smin=min(*szi,*szo);
+    for (size_t i=0; i<smin; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      size_t ii=min(i-*ri, i-*ri+*szi);
+      out[io* *stro] = To(in[ii * *stri]);
+      }
+    for (size_t i=smin; i<*szo; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      out[io* *stro] = To(0);
+      }
+    }
+  else
+    {
+    size_t smin=min(*szi,*szo);
+    for (size_t i=0; i<smin; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      size_t ii=min(i-*ri, i-*ri+*szi);
+      roll_resize_roll(in+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, idim+1, ndim);
+      }
+    for (size_t i=smin; i<*szo; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      fill_zero(out+ io* *stro, szo+1, stro+1, idim+1, ndim);
+      }
+    }
+  }
+
+template<typename Ti, typename To> py::array roll_resize_roll(const py::array &in_,
+  py::array &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_)
+  {
+  auto in(to_cfmav<Ti>(in_));
+  auto out(to_vfmav<To>(out_));
+  size_t ndim = in.ndim();
+  MR_assert(out.ndim()==ndim, "dimensionality mismatch");
+  MR_assert(ri_.size()==ndim, "dimensionality mismatch");
+  MR_assert(ro_.size()==ndim, "dimensionality mismatch");
+  vector<size_t> ri, ro;
+  for (size_t i=0; i<ndim; ++i)
+    {
+    ptrdiff_t tmp = ri_[i]%ptrdiff_t(in.shape(i));
+    ri.push_back(size_t((tmp<0) ? tmp+in.shape(i) : tmp));
+    tmp = ro_[i]%ptrdiff_t(out.shape(i));
+    ro.push_back(size_t((tmp<0) ? tmp+out.shape(i) : tmp));
+    }
+  roll_resize_roll(in.data(), in.shape().data(), in.stride().data(),
+    out.data(), out.shape().data(), out.stride().data(),
+    ri.data(), ro.data(), 0, ndim);
+  return out_;
+  }
+
+py::array Py_roll_resize_roll(const py::array &in,
+  py::array &out, const vector<int64_t> &ri, const vector<int64_t> &ro)
+  {
+  if (isPyarr<float>(in))
+    return roll_resize_roll<float,float>(in, out, ri, ro);
+  else if (isPyarr<double>(out))
+    return roll_resize_roll<double,double>(in, out, ri, ro);
+  else if (isPyarr<complex<float>>(in))
+    return roll_resize_roll<complex<float>,complex<float>>(in, out, ri, ro);
+  else if (isPyarr<complex<double>>(out))
+    return roll_resize_roll<complex<double>,complex<double>>(in, out, ri, ro);
+  else
+    MR_fail("type matching failed");
+  }
+
+constexpr const char *Py_roll_resize_roll_DS = R"""(
+Performs the equivalent to
+
+tmp = np.roll(in, ri, axis=tuple(range(in.ndim)))
+tmp = tmp.resize(out.shape)
+tmp = np.roll(tmp,ro, axis=tuple(range(out.ndim))
+out[()] = tmp
+
+Parameters
+----------
+rnd : numpy.ndarray((nsamples,), dtype=numpy.float64)
+    input Gaussian random numbers with mean=0 and sigma=1
+
+Returns
+-------
+numpy.ndarray((nsamples,), dtype=numpy.float64):
+    the filtered noise samples with the requested spectral shape.
+
+Notes
+-----
+Subsequent calls to this method will continue the same noise stream; i.e. it
+is possible to generate a very long noise time stream chunk by chunk.
+To generate multiple independent noise streams, use different `OofaNoise`
+objects (and supply them with independent Gaussian noise streams)! 
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -551,6 +663,8 @@ void add_misc(py::module_ &msup)
 
   m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
+
+  m.def("roll_resize_roll", Py_roll_resize_roll,"in"_a, "out"_a, "ri"_a, "ro"_a);
   }
 
 }
