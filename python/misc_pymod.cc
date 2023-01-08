@@ -517,55 +517,82 @@ py::array get_correction(double beta, double e0, size_t W, size_t npoints, doubl
   }
 
 template<typename To> void fill_zero(
-  To *out, const size_t *szo, const ptrdiff_t *stro,
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   size_t idim, size_t ndim)
   {
-  if (idim+1==ndim)
-    for (size_t i=0; i<*szo; ++i)
-      out[i* *stro] = To(0);
-  else
-    for (size_t i=0; i<*szo; ++i)
-      fill_zero(out+ i* *stro, szo+1, stro+1, idim+1, ndim);
-  }
-template<typename Ti, typename To> void roll_resize_roll(
-  const Ti *in, const size_t *szi, const ptrdiff_t *stri,
-  To *out, const size_t *szo, const ptrdiff_t *stro,
-  const size_t *ri, const size_t *ro, size_t idim, size_t ndim)
-  {
+  const size_t lszo=*szo;
+  const ptrdiff_t lstro=*stro;
   if (idim+1==ndim)
     {
-    size_t smin=min(*szi,*szo);
-    for (size_t i=0; i<smin; ++i)
+    if (lstro==1)
+      for (size_t i=0; i<lszo; ++i)
+        out[i] = To(0);
+    else
+      for (size_t i=0; i<lszo; ++i)
+        out[i*lstro] = To(0);
+    }
+  else
+    for (size_t i=0; i<lszo; ++i)
+      fill_zero(out+i*lstro, szo+1, stro+1, idim+1, ndim);
+  }
+template<typename Ti, typename To> void roll_resize_roll(
+  const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
+  const size_t *ri, const size_t *ro, size_t idim, size_t ndim)
+  {
+  const size_t lszi=*szi, lszo=*szo, lri=*ri, lro=*ro;
+  const ptrdiff_t lstri=*stri, lstro=*stro;
+  const size_t smin=min(lszi,lszo);
+  if (idim+1==ndim)
+    {
+    size_t io=lro, ii=lszi-lri, i=0;
+    while(i<smin)
       {
-      size_t io=min(i+*ro, i+*ro-*szo);
-      size_t ii=min(i-*ri, i-*ri+*szi);
-      out[io* *stro] = To(in[ii * *stri]);
+      size_t minstep = smin-i;
+      minstep = min(minstep, lszo-io);
+      minstep = min(minstep, lszi-ii);
+      if ((lstri==1)&&(lstro==1))
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[io+ix] = To(inp[ii+ix*lstri]);
+      else
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[(io+ix)*lstro] = To(inp[(ii+ix)*lstri]);
+      i+=minstep;
+      io+=minstep; if (io==lszo) io=0;
+      ii+=minstep; if (ii==lszi) ii=0;
       }
-    for (size_t i=smin; i<*szo; ++i)
+    while(i<lszo)
       {
-      size_t io=min(i+*ro, i+*ro-*szo);
-      out[io* *stro] = To(0);
+      size_t minstep = lszo-i;
+      minstep = min(minstep, lszo-io);
+      if (lstro==1)
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[io+ix] = To(0);
+      else
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[(io+ix)*lstro] = To(0);
+      i+=minstep;
+      io+=minstep; if (io==lszo) io=0;
       }
     }
   else
     {
-    size_t smin=min(*szi,*szo);
     for (size_t i=0; i<smin; ++i)
       {
-      size_t io=min(i+*ro, i+*ro-*szo);
-      size_t ii=min(i-*ri, i-*ri+*szi);
-      roll_resize_roll(in+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, idim+1, ndim);
+      size_t io=min(i+lro, i+lro-lszo);
+      size_t ii=min(i-lri, i-lri+lszi);
+      roll_resize_roll(inp+ii*lstri, szi+1, stri+1, out+io*lstro, szo+1, stro+1, ri+1, ro+1, idim+1, ndim);
       }
-    for (size_t i=smin; i<*szo; ++i)
+    for (size_t i=smin; i<lszo; ++i)
       {
-      size_t io=min(i+*ro, i+*ro-*szo);
-      fill_zero(out+ io* *stro, szo+1, stro+1, idim+1, ndim);
+      size_t io=min(i+lro, i+lro-lszo);
+      fill_zero(out+ io*lstro, szo+1, stro+1, idim+1, ndim);
       }
     }
   }
 template<typename Ti, typename To> void roll_resize_roll_threaded(
-  const Ti *in, const size_t *szi, const ptrdiff_t *stri,
-  To *out, const size_t *szo, const ptrdiff_t *stro,
+  const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   const size_t *ri, const size_t *ro, size_t ndim, size_t nthreads)
   {
   size_t smin=min(*szi,*szo);
@@ -575,7 +602,7 @@ template<typename Ti, typename To> void roll_resize_roll_threaded(
       {
       size_t io=min(i+*ro, i+*ro-*szo);
       size_t ii=min(i-*ri, i-*ri+*szi);
-      roll_resize_roll(in+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, 1, ndim);
+      roll_resize_roll(inp+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, 1, ndim);
       }
     });
   execParallel(*szo-smin, nthreads, [&](size_t lo, size_t hi)
@@ -588,12 +615,12 @@ template<typename Ti, typename To> void roll_resize_roll_threaded(
     });
   }
 
-template<typename Ti, typename To> py::array roll_resize_roll(const py::array &in_,
+template<typename Ti, typename To> py::array roll_resize_roll(const py::array &inp_,
   py::array &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_, size_t nthreads)
   {
-  auto in(to_cfmav<Ti>(in_));
+  auto inp(to_cfmav<Ti>(inp_));
   auto out(to_vfmav<To>(out_));
-  size_t ndim = in.ndim();
+  size_t ndim = inp.ndim();
   nthreads = adjust_nthreads(nthreads);
   MR_assert(out.ndim()==ndim, "dimensionality mismatch");
   MR_assert(ri_.size()==ndim, "dimensionality mismatch");
@@ -601,34 +628,34 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
   vector<size_t> ri, ro;
   for (size_t i=0; i<ndim; ++i)
     {
-    ptrdiff_t tmp = ri_[i]%ptrdiff_t(in.shape(i));
-    ri.push_back(size_t((tmp<0) ? tmp+in.shape(i) : tmp));
+    ptrdiff_t tmp = ri_[i]%ptrdiff_t(inp.shape(i));
+    ri.push_back(size_t((tmp<0) ? tmp+inp.shape(i) : tmp));
     tmp = ro_[i]%ptrdiff_t(out.shape(i));
     ro.push_back(size_t((tmp<0) ? tmp+out.shape(i) : tmp));
     }
   if ((ndim>1)&&(nthreads>1))
-    roll_resize_roll_threaded(in.data(), in.shape().data(), in.stride().data(),
+    roll_resize_roll_threaded(inp.data(), inp.shape().data(), inp.stride().data(),
       out.data(), out.shape().data(), out.stride().data(),
       ri.data(), ro.data(), ndim, nthreads);
   else
-    roll_resize_roll(in.data(), in.shape().data(), in.stride().data(),
+    roll_resize_roll(inp.data(), inp.shape().data(), inp.stride().data(),
       out.data(), out.shape().data(), out.stride().data(),
       ri.data(), ro.data(), 0, ndim);
   return out_;
   }
 
-py::array Py_roll_resize_roll(const py::array &in,
+py::array Py_roll_resize_roll(const py::array &inp,
   py::array &out, const vector<int64_t> &ri, const vector<int64_t> &ro,
   size_t nthreads=1)
   {
-  if (isPyarr<float>(in))
-    return roll_resize_roll<float,float>(in, out, ri, ro, nthreads);
+  if (isPyarr<float>(inp))
+    return roll_resize_roll<float,float>(inp, out, ri, ro, nthreads);
   else if (isPyarr<double>(out))
-    return roll_resize_roll<double,double>(in, out, ri, ro, nthreads);
-  else if (isPyarr<complex<float>>(in))
-    return roll_resize_roll<complex<float>,complex<float>>(in, out, ri, ro, nthreads);
+    return roll_resize_roll<double,double>(inp, out, ri, ro, nthreads);
+  else if (isPyarr<complex<float>>(inp))
+    return roll_resize_roll<complex<float>,complex<float>>(inp, out, ri, ro, nthreads);
   else if (isPyarr<complex<double>>(out))
-    return roll_resize_roll<complex<double>,complex<double>>(in, out, ri, ro, nthreads);
+    return roll_resize_roll<complex<double>,complex<double>>(inp, out, ri, ro, nthreads);
   else
     MR_fail("type matching failed");
   }
@@ -636,27 +663,30 @@ py::array Py_roll_resize_roll(const py::array &in,
 constexpr const char *Py_roll_resize_roll_DS = R"""(
 Performs the equivalent to
 
-tmp = np.roll(in, ri, axis=tuple(range(in.ndim)))
-tmp = tmp.resize(out.shape)
-tmp = np.roll(tmp,ro, axis=tuple(range(out.ndim))
-out[()] = tmp
+tmp = np.roll(inp, ri, axis=tuple(range(inp.ndim)))
+slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
+tmp2 = np.zeros(out.shape, dtype=inp.dtype)
+tmp2[slices] = tmp[slices]
+out[()] = np.roll(tmp2, ro, axis=tuple(range(out.ndim)))
+return out
 
 Parameters
 ----------
-rnd : numpy.ndarray((nsamples,), dtype=numpy.float64)
-    input Gaussian random numbers with mean=0 and sigma=1
+inp : numpy.ndarray(any shape, dtype=float or complex)
+    input array
+out : numpy.ndarray(any shape, same dimensionality and dtype as `in`)
+    output array
+ri : tuple(int), length=inp.ndim
+    amount of rolling for the input array 
+ro : tuple(int), length=out.ndim
+    amount of rolling for the output array 
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
 
 Returns
 -------
-numpy.ndarray((nsamples,), dtype=numpy.float64):
-    the filtered noise samples with the requested spectral shape.
-
-Notes
------
-Subsequent calls to this method will continue the same noise stream; i.e. it
-is possible to generate a very long noise time stream chunk by chunk.
-To generate multiple independent noise streams, use different `OofaNoise`
-objects (and supply them with independent Gaussian noise streams)! 
+numpy.ndarray : identical to out
 )""";
 
 constexpr const char *misc_DS = R"""(
@@ -695,7 +725,8 @@ void add_misc(py::module_ &msup)
   m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
 
-  m.def("roll_resize_roll", Py_roll_resize_roll,"in"_a, "out"_a, "ri"_a, "ro"_a, "nthreads"_a=1);
+  m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
+    "inp"_a, "out"_a, "ri"_a, "ro"_a, "nthreads"_a=1);
   }
 
 }
