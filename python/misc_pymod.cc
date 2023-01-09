@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -661,13 +661,13 @@ py::array Py_roll_resize_roll(const py::array &inp,
   }
 
 constexpr const char *Py_roll_resize_roll_DS = R"""(
-Performs the equivalent to
+Performs operations equivalent to
 
-tmp = np.roll(inp, ri, axis=tuple(range(inp.ndim)))
-slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
+tmp = np.roll(inp, roll_inp, axis=tuple(range(inp.ndim)))
 tmp2 = np.zeros(out.shape, dtype=inp.dtype)
+slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
 tmp2[slices] = tmp[slices]
-out[()] = np.roll(tmp2, ro, axis=tuple(range(out.ndim)))
+out[()] = np.roll(tmp2, roll_out, axis=tuple(range(out.ndim)))
 return out
 
 Parameters
@@ -676,9 +676,9 @@ inp : numpy.ndarray(any shape, dtype=float or complex)
     input array
 out : numpy.ndarray(any shape, same dimensionality and dtype as `in`)
     output array
-ri : tuple(int), length=inp.ndim
+roll_inp : tuple(int), length=inp.ndim
     amount of rolling for the input array 
-ro : tuple(int), length=out.ndim
+roll_out : tuple(int), length=out.ndim
     amount of rolling for the output array 
 nthreads : int
     Number of threads to use. If 0, use the system default (typically the number
@@ -726,7 +726,7 @@ void add_misc(py::module_ &msup)
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
 
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
-    "inp"_a, "out"_a, "ri"_a, "ro"_a, "nthreads"_a=1);
+    "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
   }
 
 }
