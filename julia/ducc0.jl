@@ -9,8 +9,8 @@ module Ducc0
 
 #import ducc0_jll
 #const libducc = ducc0_jll.libducc_julia
-const libducc = "/home/martin/codes/ducc/julia/ducc_julia.so" # FIXME
-#"/home/leoab/OneDrive/UNI/ducc/julia/ducc_julia.so"
+const libducc = "/home/leoab/OneDrive/UNI/ducc/julia/ducc_julia.so" # FIXME
+#"/home/martin/codes/ducc/julia/ducc_julia.so"
 
 struct ArrayDescriptor
   shape::NTuple{10,UInt64}  # length of every axis
@@ -370,8 +370,7 @@ function sht_leg2alm(
   nthreads::Unsigned,
 ) where {T}
   ncomp = size(leg, 3)
-  nm = length(mval)
-  alm = Array{Complex{T}}(undef, (nm, ncomp))
+  alm = Array{Complex{T}}(undef, (maximum(mstart)+lmax+1, ncomp)) # FIXME: still 0-based as well!!
   sht_leg2alm!(leg, alm, spin, lmax, mval, mstart, lstride, theta, nthreads)
 end
 
