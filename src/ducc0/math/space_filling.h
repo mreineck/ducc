@@ -165,10 +165,14 @@ uint64_t morton2peano2D_64(uint64_t v, unsigned bits);
 uint64_t peano2morton2D_64(uint64_t v, unsigned bits);
 
 uint32_t morton2peano3D_32(uint32_t v, unsigned bits);
+template<unsigned bits>uint32_t morton2peano3D_32(uint32_t v);
 uint32_t peano2morton3D_32(uint32_t v, unsigned bits);
+template<unsigned bits>uint32_t peano2morton3D_32(uint32_t v);
 
 uint64_t morton2peano3D_64(uint64_t v, unsigned bits);
+template<unsigned bits>uint64_t morton2peano3D_64(uint64_t v);
 uint64_t peano2morton3D_64(uint64_t v, unsigned bits);
+template<unsigned bits>uint64_t peano2morton3D_64(uint64_t v);
 
 inline uint32_t coord2block2D_32(std::array<uint32_t,2> xy)
   { return (xy[0]&0xffff) | (xy[1]<<16); }
