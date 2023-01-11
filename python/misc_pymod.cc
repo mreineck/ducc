@@ -687,6 +687,10 @@ nthreads : int
 Returns
 -------
 numpy.ndarray : identical to out
+
+Notes
+-----
+`inp` and `out` must not overlap in memory.
 )""";
 
 constexpr const char *misc_DS = R"""(
