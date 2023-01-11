@@ -149,17 +149,52 @@ std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
 
 static inline uint64_t spread2D_64 (uint64_t v)
   {
-  uint64_t v0=v&0xffu;
-  uint64_t v1=(v&0xff00u)<<8;
-  uint64_t v2=(v&0xff0000u)<<16;
-  uint64_t v3=(v&0xff000000u)<<24;
-  v = v0|v1|v2|v3;
-  v0= v&0x0303030303030303u;
-  v1=(v&0x0c0c0c0c0c0c0c0cu)<<2;
-  v2=(v&0x3030303030303030u)<<4;
-  v3=(v&0xc0c0c0c0c0c0c0c0u)<<6;
-  v = v0|v1|v2|v3;
+  v =  (v&0x00000000000000ffu)
+    | ((v&0x000000000000ff00u)<<8)
+    | ((v&0x0000000000ff0000u)<<16)
+    | ((v&0x00000000ff000000u)<<24);
+  v =  (v&0x0303030303030303u)
+    | ((v&0x0c0c0c0c0c0c0c0cu)<<2)
+    | ((v&0x3030303030303030u)<<4)
+    | ((v&0xc0c0c0c0c0c0c0c0u)<<6);
   v = (v|(v<< 1)) & 0x5555555555555555u;
+  return v;
+  }
+static inline uint32_t spread2D_32 (uint32_t v)
+  {
+  v =  (v&0x0000000fu)
+    | ((v&0x000000f0u)<< 4)
+    | ((v&0x00000f00u)<< 8)
+    | ((v&0x0000f000u)<<12);
+  v =  (v&0x01010101u)
+    | ((v&0x02020202u)<< 1)
+    | ((v&0x04040404u)<< 2)
+    | ((v&0x08080808u)<< 3);
+  return v;
+  }
+static inline uint64_t compress2D_64 (uint64_t v)
+  {
+//BROKEN
+  v =  (v    )&0x01010101u)
+    | ((v>> 1)&0x02020202u)
+    | ((v>> 2)&0x04040404u)
+    | ((v>> 3)&0x08080808u);
+  v =  (v    )&0x0000000fu)
+    | ((v>> 4)&0x000000f0u)
+    | ((v>> 8)&0x00000f00u)
+    | ((v>>12)&0x0000f000u);
+  return v;
+  }
+static inline uint32_t compress2D_32 (uint32_t v)
+  {
+  v =  (v    )&0x01010101u)
+    | ((v>> 1)&0x02020202u)
+    | ((v>> 2)&0x04040404u)
+    | ((v>> 3)&0x08080808u);
+  v =  (v    )&0x0000000fu)
+    | ((v>> 4)&0x000000f0u)
+    | ((v>> 8)&0x00000f00u)
+    | ((v>>12)&0x0000f000u);
   return v;
   }
 static inline uint64_t compress2D_64 (uint64_t v)
