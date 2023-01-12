@@ -284,7 +284,7 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   auto &uniform(*uniform_);
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
-    MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
+    MR_assert(uniform.shape[i]==plan->shp[uniform.ndim-1-i], "array dimension mismatch");
   if (points.dtype==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
@@ -348,7 +348,7 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   auto &points(*points_);
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
-    MR_assert(uniform.shape[i]==plan->shp[i], "array dimension mismatch");
+    MR_assert(uniform.shape[i]==plan->shp[uniform.ndim-1-i], "array dimension mismatch");
   if (points.dtype==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
