@@ -3,13 +3,15 @@
 # This code does not work out of the box since I have not updated ducc0_jll yet.
 # It should mainly serve as a base for discussion.
 
-# Formatting: format_file("ducc0.jl",indent=2,remove_extra_newlines=true)
+# Formatting: using JuliaFormatter; format_file("ducc0.jl",indent=2,remove_extra_newlines=true)
 
 module Ducc0
 
+module Support
+
 #import ducc0_jll
 #const libducc = ducc0_jll.libducc_julia
-const libducc = "/home/leoab/OneDrive/UNI/ducc/julia/ducc_julia.so" # FIXME
+const libducc = "/home/martin/codes/ducc/julia/ducc_julia.so" # FIXME
 #"/home/martin/codes/ducc/julia/ducc_julia.so"
 
 struct ArrayDescriptor
@@ -23,11 +25,11 @@ end
 # convert data types to type codes for communication with ducc
 function typecode(tp::Type)
   if tp <: AbstractFloat
-    return return sizeof(tp(0)) - 1
+    return sizeof(tp(0)) - 1
   elseif tp <: Unsigned
-    return return sizeof(tp(0)) - 1 + 32
+    return sizeof(tp(0)) - 1 + 32
   elseif tp <: Signed
-    return return sizeof(tp(0)) - 1 + 16
+    return sizeof(tp(0)) - 1 + 16
   elseif tp == Complex{Float32}
     return typecode(Float32) + 64
   elseif tp == Complex{Float64}
@@ -35,26 +37,28 @@ function typecode(tp::Type)
   end
 end
 
-function Desc(arr::StridedArray{T,N}) where {T,N}
+function desc(arr::StridedArray{T,N}) where {T,N}
   @assert N <= 10
-  # MR the next lines just serve to put shape and stride information into the
-  # fixed-size tuples of the descriptor ... is there an easier way to do this?
-  shp = zeros(UInt64, 10)
-  str = zeros(Int64, 10)
-  for i = 1:N
-    shp[i] = size(arr)[i]
-    str[i] = strides(arr)[i]
-  end
-  shp = NTuple{10,UInt64}(v for v in shp)
-  str = NTuple{10,Int64}(v for v in str)
-  # .. up to here
-
-  return ArrayDescriptor(shp, str, pointer(arr), N, typecode(T))
+  ArrayDescriptor(
+    NTuple{10,UInt64}(i <= N ? size(arr)[i] : 0 for i = 1:10),
+    NTuple{10,Int64}(i <= N ? strides(arr)[i] : 0 for i = 1:10),
+    pointer(arr),
+    N,
+    typecode(T),
+  )
 end
 
 Dref = Ref{ArrayDescriptor}
 
-function nufft_best_epsilon(
+export libducc, desc, Dref
+
+end  # module Support
+
+module Nufft
+
+using ..Support
+
+function best_epsilon(
   ndim::Unsigned,
   singleprec::Bool;
   sigma_min::AbstractFloat = 1.1,
@@ -69,13 +73,11 @@ function nufft_best_epsilon(
     sigma_min,
     sigma_max,
   )
-  if res <= 0
-    throw(error())
-  end
+  res <= 0 && throw(error())
   return res
 end
 
-function nufft_u2nu(
+function u2nu(
   coord::StridedArray{T,2},
   grid::StridedArray{T2,N};
   forward::Bool = true,
@@ -93,25 +95,23 @@ function nufft_u2nu(
     (:nufft_u2nu, libducc),
     Cint,
     (Dref, Dref, Cint, Cdouble, Csize_t, Dref, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
-    Desc(grid),
-    Desc(coord),
+    desc(grid),
+    desc(coord),
     0,
     epsilon,
     nthreads,
-    Desc(res),
+    desc(res),
     verbose,
     sigma_min,
     sigma_max,
     periodicity,
     fft_order,
   )
-  if ret != 0
-    throw(error())
-  end
+  ret != 0 && throw(error())
   return res
 end
 
-function nufft_nu2u(
+function nu2u(
   coord::StridedArray{T,2},
   points::StridedArray{T2,1},
   N::NTuple{D,Int};
@@ -130,21 +130,19 @@ function nufft_nu2u(
     (:nufft_nu2u, libducc),
     Cint,
     (Dref, Dref, Cint, Cdouble, Csize_t, Dref, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
-    Desc(points),
-    Desc(coord),
+    desc(points),
+    desc(coord),
     0,
     epsilon,
     nthreads,
-    Desc(res),
+    desc(res),
     verbose,
     sigma_min,
     sigma_max,
     periodicity,
     fft_order,
   )
-  if ret != 0
-    throw(error())
-  end
+  ret != 0 && throw(error())
   return res
 end
 
@@ -154,17 +152,15 @@ mutable struct NufftPlan
   cplan::Ptr{Cvoid}
 end
 
-function nufft_delete_plan!(plan::NufftPlan)
+function delete_plan!(plan::NufftPlan)
   if plan.cplan != C_NULL
     ret = ccall((:nufft_delete_plan, libducc), Cint, (Ptr{Cvoid},), plan.cplan)
-    if ret != 0
-      throw(error())
-    end
+    ret != 0 && throw(error())
     plan.cplan = C_NULL
   end
 end
 
-function nufft_make_plan(
+function make_plan(
   coords::Matrix{T},
   N::NTuple{D,Int};
   nu2u::Bool = false,
@@ -185,8 +181,8 @@ function nufft_make_plan(
     Ptr{Cvoid},
     (Cint, Dref, Dref, Cdouble, Csize_t, Cdouble, Cdouble, Cdouble, Cint),
     nu2u,
-    Desc(N2),
-    Desc(coords),
+    desc(N2),
+    desc(coords),
     epsilon,
     nthreads,
     sigma_min,
@@ -195,18 +191,16 @@ function nufft_make_plan(
     fft_order,
   )
 
-  if ptr == C_NULL
-    throw(error())
-  end
+  ptr == C_NULL && throw(error())
   p = NufftPlan(N2, size(coords)[2], ptr)
   finalizer(p -> begin
-    nufft_delete_plan!(p)
+    delete_plan!(p)
   end, p)
 
   return p
 end
 
-function nufft_nu2u_planned!(
+function nu2u_planned!(
   plan::NufftPlan,
   points::StridedArray{T,1},
   uniform::StridedArray{T};
@@ -221,26 +215,24 @@ function nufft_nu2u_planned!(
     plan.cplan,
     forward,
     verbose,
-    Desc(points),
-    Desc(uniform),
+    desc(points),
+    desc(uniform),
   )
-  if ret != 0
-    throw(error())
-  end
+  ret != 0 && throw(error())
 end
 
-function nufft_nu2u_planned(
+function nu2u_planned(
   plan::NufftPlan,
   points::StridedArray{T,1};
   forward::Bool = false,
   verbose::Bool = false,
 ) where {T}
   res = Array{T}(undef, Tuple(i for i in plan.N))
-  nufft_nu2u_planned!(plan, points, res, forward = forward, verbose = verbose)
+  nu2u_planned!(plan, points, res, forward = forward, verbose = verbose)
   return res
 end
 
-function nufft_u2nu_planned!(
+function u2nu_planned!(
   plan::NufftPlan,
   uniform::StridedArray{T},
   points::StridedArray{T,1};
@@ -255,26 +247,30 @@ function nufft_u2nu_planned!(
     plan.cplan,
     forward,
     verbose,
-    Desc(uniform),
-    Desc(points),
+    desc(uniform),
+    desc(points),
   )
-  if ret != 0
-    throw(error())
-  end
+  ret != 0 && throw(error())
 end
 
-function nufft_u2nu_planned(
+function u2nu_planned(
   plan::NufftPlan,
   uniform::StridedArray{T};
   forward::Bool = true,
   verbose::Bool = false,
 ) where {T}
   res = Array{T}(undef, plan.npoints)
-  nufft_u2nu_planned!(plan, uniform, res, forward = forward, verbose = verbose)
+  u2nu_planned!(plan, uniform, res, forward = forward, verbose = verbose)
   return res
 end
 
-function sht_alm2leg!(
+end  # module Nufft
+
+module Sht
+
+using ..Support
+
+function alm2leg!(
   alm::StridedArray{Complex{T},2},
   leg::StridedArray{Complex{T},3},
   spin::Unsigned,
@@ -286,29 +282,26 @@ function sht_alm2leg!(
   nthreads::Unsigned,
 ) where {T}
   GC.@preserve alm mval mstart theta leg begin
-  ret = ccall(
-    (:sht_alm2leg, libducc),
-    Cint,
-    (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
-    Desc(alm),
-    spin,
-    lmax,
-    Desc(mval),
-    Desc(mstart),
-    lstride,
-    Desc(theta),
-    nthreads,
-    Desc(leg),
-  )
+    ret = ccall(
+      (:sht_alm2leg, libducc),
+      Cint,
+      (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
+      desc(alm),
+      spin,
+      lmax,
+      desc(mval),
+      desc(mstart),
+      lstride,
+      desc(theta),
+      nthreads,
+      desc(leg),
+    )
   end
-  if ret != 0
-    throw(error())
-  else
-    leg
-  end
+  ret != 0 && throw(error())
+  return leg
 end
 
-function sht_alm2leg(
+function alm2leg(
   alm::StridedArray{Complex{T},2},
   spin::Unsigned,
   lmax::Unsigned,
@@ -322,10 +315,11 @@ function sht_alm2leg(
   ntheta = length(theta)
   nm = length(mval)
   leg = Array{Complex{T}}(undef, (nm, ntheta, ncomp))
-  sht_alm2leg!(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads)
+  alm2leg!(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads)
+  return leg
 end
 
-function sht_leg2alm!(
+function leg2alm!(
   leg::StridedArray{Complex{T},3},
   alm::StridedArray{Complex{T},2},
   spin::Unsigned,
@@ -337,29 +331,26 @@ function sht_leg2alm!(
   nthreads::Unsigned,
 ) where {T}
   GC.@preserve leg mval mstart theta alm begin
-  ret = ccall(
-    (:sht_leg2alm, libducc),
-    Cint,
-    (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
-    Desc(leg),
-    spin,
-    lmax,
-    Desc(mval),
-    Desc(mstart),
-    lstride,
-    Desc(theta),
-    nthreads,
-    Desc(alm),
-  )
+    ret = ccall(
+      (:sht_leg2alm, libducc),
+      Cint,
+      (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
+      desc(leg),
+      spin,
+      lmax,
+      desc(mval),
+      desc(mstart),
+      lstride,
+      desc(theta),
+      nthreads,
+      desc(alm),
+    )
   end
-  if ret != 0
-    throw(error())
-  else
-    alm
-  end
+  ret != 0 && throw(error())
+  return alm
 end
 
-function sht_leg2alm(
+function leg2alm(
   leg::StridedArray{Complex{T},3},
   spin::Unsigned,
   lmax::Unsigned,
@@ -370,11 +361,11 @@ function sht_leg2alm(
   nthreads::Unsigned,
 ) where {T}
   ncomp = size(leg, 3)
-  alm = Array{Complex{T}}(undef, (maximum(mstart)+lmax+1, ncomp)) # FIXME: still 0-based as well!!
-  sht_leg2alm!(leg, alm, spin, lmax, mval, mstart, lstride, theta, nthreads)
+  alm = Array{Complex{T}}(undef, (maximum(mstart) + lmax + 1, ncomp)) # FIXME: still 0-based as well!!
+  leg2alm!(leg, alm, spin, lmax, mval, mstart, lstride, theta, nthreads)
 end
 
-function sht_leg2map!(
+function leg2map!(
   leg::StridedArray{Complex{T},3},
   map::StridedArray{T,2},
   nphi::StridedArray{Csize_t,1},
@@ -384,27 +375,24 @@ function sht_leg2map!(
   nthreads::Unsigned,
 ) where {T}
   GC.@preserve leg nphi phi0 ringstart map begin
-  ret = ccall(
-    (:sht_leg2map, libducc),
-    Cint,
-    (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
-    Desc(leg),
-    Desc(nphi),
-    Desc(phi0),
-    Desc(ringstart),
-    pixstride,
-    nthreads,
-    Desc(map),
-  )
+    ret = ccall(
+      (:sht_leg2map, libducc),
+      Cint,
+      (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
+      desc(leg),
+      desc(nphi),
+      desc(phi0),
+      desc(ringstart),
+      pixstride,
+      nthreads,
+      desc(map),
+    )
   end
-  if ret != 0
-    throw(error())
-  else
-    map
-  end
+  ret != 0 && throw(error())
+  return map
 end
 
-function sht_leg2map(
+function leg2map(
   leg::StridedArray{Complex{T},3},
   nphi::StridedArray{Csize_t,1},
   phi0::StridedArray{Cdouble,1},
@@ -415,10 +403,10 @@ function sht_leg2map(
   ncomp = size(leg, 3)
   npix = maximum(ringstart + nphi)
   map = Array{T}(undef, (npix, ncomp))
-  sht_leg2map!(leg, map, nphi, phi0, ringstart, pixstride, nthreads)
+  leg2map!(leg, map, nphi, phi0, ringstart, pixstride, nthreads)
 end
 
-function sht_map2leg!(
+function map2leg!(
   map::StridedArray{T,2},
   leg::StridedArray{Complex{T},3},
   nphi::StridedArray{Csize_t,1},
@@ -428,27 +416,24 @@ function sht_map2leg!(
   nthreads::Unsigned,
 ) where {T}
   GC.@preserve map nphi phi0 ringstart leg begin
-  ret = ccall(
-    (:sht_map2leg, libducc),
-    Cint,
-    (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
-    Desc(map),
-    Desc(nphi),
-    Desc(phi0),
-    Desc(ringstart),
-    pixstride,
-    nthreads,
-    Desc(leg),
-  )
+    ret = ccall(
+      (:sht_map2leg, libducc),
+      Cint,
+      (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
+      desc(map),
+      desc(nphi),
+      desc(phi0),
+      desc(ringstart),
+      pixstride,
+      nthreads,
+      desc(leg),
+    )
   end
-  if ret != 0
-    throw(error())
-  else
-    leg
-  end
+  ret != 0 && throw(error())
+  return leg
 end
 
-function sht_map2leg(
+function map2leg(
   map::StridedArray{T,2},
   nphi::StridedArray{Csize_t,1},
   phi0::StridedArray{Cdouble,1},
@@ -460,28 +445,30 @@ function sht_map2leg(
   ncomp = size(map, 2)
   ntheta = length(ringstart)
   leg = Array{Complex{T}}(undef, (nm, ntheta, ncomp))
-  sht_map2leg!(map, leg, nphi, phi0, ringstart, pixstride, nthreads)
+  map2leg!(map, leg, nphi, phi0, ringstart, pixstride, nthreads)
 end
 
-end
+end  # module Sht
+
+end  # module Ducc0
 
 # some demo calls
-println(Ducc0.nufft_best_epsilon(UInt64(2), true))
+println(Ducc0.Nufft.best_epsilon(UInt64(2), true))
 npoints = 1000000
 shp = (1000, 1000)
 coord = rand(Float64, length(shp), npoints) .- Float32(0.5)
-plan = Ducc0.nufft_make_plan(coord, shp)
+plan = Ducc0.Nufft.make_plan(coord, shp)
 points = rand(Complex{Float64}, (npoints,))
-Ducc0.nufft_nu2u_planned(plan, points)
+Ducc0.Nufft.nu2u_planned(plan, points)
 grid = ones(Complex{Float64}, shp)
-Ducc0.nufft_u2nu_planned(plan, grid)
+Ducc0.Nufft.u2nu_planned(plan, grid)
 coord = rand(Float32, length(shp), npoints) .- Float32(0.5)
-plan = Ducc0.nufft_make_plan(coord, shp)
+plan = Ducc0.Nufft.make_plan(coord, shp)
 points = rand(Complex{Float32}, (npoints,))
-Ducc0.nufft_nu2u_planned(plan, points)
+Ducc0.Nufft.nu2u_planned(plan, points)
 grid = ones(Complex{Float32}, shp)
-Ducc0.nufft_u2nu_planned(plan, grid)
-Ducc0.nufft_u2nu_planned!(plan, grid, points)
-Ducc0.nufft_nu2u_planned!(plan, points, grid)
-Ducc0.nufft_nu2u(coord, points, shp)
-Ducc0.nufft_u2nu(coord, grid)
+Ducc0.Nufft.u2nu_planned(plan, grid)
+Ducc0.Nufft.u2nu_planned!(plan, grid, points)
+Ducc0.Nufft.nu2u_planned!(plan, points, grid)
+Ducc0.Nufft.nu2u(coord, points, shp)
+Ducc0.Nufft.u2nu(coord, grid)

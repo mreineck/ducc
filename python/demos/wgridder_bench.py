@@ -41,12 +41,13 @@ def load_ms(ms):
 def main():
 #    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2.
 #    ms, fov_deg = '/home/martin/ms/1052736496-averaged.npz', 25.
-    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
-#    ms, fov_deg = '/home/martin/ms/G330.89-0.36.npz', 2.
+#    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
+    ms, fov_deg = '/home/martin/ms/G330.89-0.36.npz', 2.
 #    ms, fov_deg = '/home/martin/ms/bigms.npz', 0.0005556*1800
 #    ms, fov_deg = '/home/martin/ms/L_UV_DATA-IF1.npz', 1.
 #    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.npz', 0.08
 #    ms, fov_deg = '/data/L_UV_DATA-IF1.npz', 1.
+#    ms, fov_deg = '/home/martin/ms/ska_low.npz', 5.5*2  # for 16384 px
 
     if os.path.splitext(ms)[1] == ".ms":
         data = load_ms(ms)
@@ -84,12 +85,30 @@ def main():
             uvw=uvw, freq=freq, vis=vis, wgt=wgt,
             mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
             pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
-            nthreads=nthreads, verbosity=verbosity, flip_v=False, gpu=False,
+            nthreads=nthreads, verbosity=verbosity, flip_v=False,
             double_precision_accumulation=False)
         mintime = min(mintime, time()-t0)
     print()
     print("Best time: {:.4f} s".format(mintime))
     print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
+    print()
+
+    print('Tuned CPU gridding...')
+    print()
+    mintime=1e300
+    for _ in range(ntries):
+        t0 = time()
+        dirty_t = wgridder.vis2dirty_tuning(
+            uvw=uvw, freq=freq, vis=vis, wgt=wgt,
+            mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
+            pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
+            nthreads=nthreads, verbosity=verbosity, flip_v=False,
+            double_precision_accumulation=False)
+        mintime = min(mintime, time()-t0)
+    print()
+    print("Best time: {:.4f} s".format(mintime))
+    print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
+    print("L2 error compared to untuned CPU: {:.2e}".format(ducc0.misc.l2error(dirty,dirty_t)))
     print()
 
 #    import matplotlib.pyplot as plt
@@ -144,6 +163,24 @@ def main():
     print("Best time: {:.4f} s".format(mintime))
     print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
     print()
+    vis_out_t = vis.copy()
+    print('Tuned CPU degridding...')
+    print()
+    mintime=1e300
+    for _ in range(ntries):
+        t0 = time()
+        vis_out_t = wgridder.dirty2vis_tuning(
+            uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+            mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
+            do_wgridding=do_wgridding, nthreads=nthreads, verbosity=verbosity,
+            flip_v=False, vis=vis_out_t)
+        mintime = min(mintime, time()-t0)
+    print()
+    print("Best time: {:.4f} s".format(mintime))
+    print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
+    print("L2 error compared to untuned CPU: {:.2e}".format(ducc0.misc.l2error(vis_out,vis_out_t)))
+    print()
+    del vis_out_t
     if do_sycl:
         vis_out_g = vis.copy()
         print('SYCL degridding...')

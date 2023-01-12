@@ -445,7 +445,7 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
     {
     auto leg(to_cmav<true,complex<double>,3>(*leg_));
     auto alm(to_vmav<true,complex<double>,2>(*alm_));
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads); //FIXME: this line seg faults
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
     }
   else if (leg_->dtype==Typecode<complex<float>>::value)
     {
