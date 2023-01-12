@@ -431,6 +431,33 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   DUCC0_JULIA_TRY_END
   }
 
+int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
+  size_t lmax, const ArrayDescriptor *mval_, const ArrayDescriptor *mstart_,
+  ptrdiff_t lstride, const ArrayDescriptor *theta_, size_t nthreads,
+  ArrayDescriptor *alm_)
+  {
+  DUCC0_JULIA_TRY_BEGIN
+  auto mval(to_cmav<true,size_t,1>(*mval_));
+// FIXME: subtract 1?
+  auto mstart(to_cmav<true,size_t,1>(*mstart_));
+  auto theta(to_cmav<true,double,1>(*theta_));
+  if (leg_->dtype==Typecode<complex<double>>::value)
+    {
+    auto leg(to_cmav<true,complex<double>,3>(*leg_));
+    auto alm(to_vmav<true,complex<double>,2>(*alm_));
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads); //FIXME: this line seg faults
+    }
+  else if (leg_->dtype==Typecode<complex<float>>::value)
+    {
+    auto leg(to_cmav<true,complex<float>,3>(*leg_));
+    auto alm(to_vmav<true,complex<float>,2>(*alm_));
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    }
+  else
+    MR_fail("unsupported data type");
+  DUCC0_JULIA_TRY_END
+  }
+
 int sht_leg2map(const ArrayDescriptor *leg_,
   const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
   const ArrayDescriptor *ringstart_,
@@ -456,6 +483,32 @@ int sht_leg2map(const ArrayDescriptor *leg_,
     MR_fail("unsupported data type");
   DUCC0_JULIA_TRY_END
   }
+
+  int sht_map2leg(const ArrayDescriptor *map_,
+    const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
+    const ArrayDescriptor *ringstart_,
+    ptrdiff_t pixstride, size_t nthreads, ArrayDescriptor *leg_)
+    {
+    DUCC0_JULIA_TRY_BEGIN
+    auto nphi(to_cmav<true,size_t,1>(*nphi_));
+    auto phi0(to_cmav<true,double,1>(*phi0_));
+    auto ringstart(to_cmav<true,size_t,1>(*ringstart_));
+    if (map_->dtype==Typecode<double>::value)
+      {
+      auto map(to_cmav<true,double,2>(*map_));
+      auto leg(to_vmav<true,complex<double>,3>(*leg_));
+      map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+      }
+    else if (map_->dtype==Typecode<float>::value)
+      {
+      auto map(to_cmav<true,float,2>(*map_));
+      auto leg(to_vmav<true,complex<float>,3>(*leg_));
+      map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+      }
+    else
+      MR_fail("unsupported data type");
+    DUCC0_JULIA_TRY_END
+    }
 
 } // extern "C"
 
