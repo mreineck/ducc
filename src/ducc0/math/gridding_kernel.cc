@@ -1561,12 +1561,14 @@ shared_ptr<PolynomialKernel> selectKernel(size_t idx)
 double bestEpsilon(size_t ndim, bool singleprec,
   double ofactor_min, double ofactor_max)
   {
-  double res = 1.;
+  MR_assert((ndim>=1) && (ndim<=3), "bad dimensionality");
+  double res = 1000.;
   for (const auto &krn:KernelDB)
     if ((krn.ndim==ndim) && (krn.singleprec==singleprec)
       && (krn.epsilon<=res)
       && (krn.ofactor<=ofactor_max) && (krn.ofactor>=ofactor_min))
       res = krn.epsilon;
+  MR_assert(res<1000., "no appropriate kernel found");
   return res;
   }
 

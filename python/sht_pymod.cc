@@ -1179,6 +1179,8 @@ map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64)
 leg: None or numpy.ndarray((ncomp, ntheta, mmax+1), dtype=numpy.complex of same accuracy as `map`)
     output array containing the Legendre coefficients
     if `None`, a new suitable array is allocated
+    The entries in leg[:,:,m] correspond to quantum number m, i.e. the m values
+    will be stored in ascending order.
 nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1214,7 +1216,9 @@ Transforms one or more sets of Legendre coefficients to maps.
 Parameters
 ----------
 leg: numpy.ndarray((ncomp, ntheta, mmax+1), numppy.complex64 or numpy.complex128)
-    input array containing the Legendre coefficients
+    input array containing the Legendre coefficients.
+    The entries in leg[:,:,m] correspond to quantum number m, i.e. the m values
+    must be stored in ascending order, and complete.
 map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`
     the map pixel data.
     The second dimension must be large enough to accommodate all pixels, which
@@ -1570,7 +1574,7 @@ alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same pre
     if `None`, a new suitable array is allocated
 map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
     The last dimension must be large enough to accommodate all pixels, which
-    are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
+    are stored according to the parameters `nphi`, `ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
 nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)

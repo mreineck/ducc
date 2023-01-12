@@ -4,13 +4,21 @@
       DUCC0_NUM_THREADS, DUCC0_PIN_DISTANCE, and DUCC0_PIN_OFFSET.
       This is still experimental and may change in the future.
 
+- fft:
+    - introduce a flag `allow_overwriting_input` to `c2r`, which can speed up
+      execution by avoiding temporary arrays
+
 - nufft/wgridder:
     - changed kernel database to hold optimized kernels depending on
       dimensionality and floating point accuracy. This allows for slightly
       better tuning and improves maximum attainable accuracy in 2D and 3D.
 
 - julia:
-    - start of a Julia wrapper, currently focused on nufft support
+    - start of a Julia wrapper, currently focused on NUFFT and SHT support
+
+- misc:
+    - new function `roll_resize_roll`, which allows efficient combined
+      rolling/padding/truncation of arrays.
 
 
 0.27.0:
