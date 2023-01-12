@@ -9,7 +9,8 @@ module Ducc0
 
 #import ducc0_jll
 #const libducc = ducc0_jll.libducc_julia
-const libducc = "/home/martin/codes/ducc/julia/ducc_julia.so"  # FIXME
+const libducc = "/home/leoab/OneDrive/UNI/ducc/julia/ducc_julia.so" # FIXME
+#"/home/martin/codes/ducc/julia/ducc_julia.so"
 
 struct ArrayDescriptor
   shape::NTuple{10,UInt64}  # length of every axis
@@ -273,8 +274,9 @@ function nufft_u2nu_planned(
   return res
 end
 
-function sht_alm2leg(
-  alm::StridedArray{T,2},
+function sht_alm2leg!(
+  alm::StridedArray{Complex{T},2},
+  leg::StridedArray{Complex{T},3},
   spin::Unsigned,
   lmax::Unsigned,
   mval::StridedArray{Csize_t,1},
@@ -283,11 +285,7 @@ function sht_alm2leg(
   theta::StridedArray{Cdouble,1},
   nthreads::Unsigned,
 ) where {T}
-  ncomp = size(alm)[2]
-  ntheta = size(theta)[1]
-  nm = size(mval)[1]
-  res = Array{T}(undef, (nm, ntheta, ncomp))
-  GC.@preserve alm mval mstart theta res
+  GC.@preserve alm mval mstart theta leg begin
   ret = ccall(
     (:sht_alm2leg, libducc),
     Cint,
@@ -302,8 +300,107 @@ function sht_alm2leg(
     nthreads,
     Desc(leg),
   )
+  end
   if ret != 0
     throw(error())
+  else
+    leg
+  end
+end
+
+function sht_alm2leg(
+  alm::StridedArray{Complex{T},2},
+  spin::Unsigned,
+  lmax::Unsigned,
+  mval::StridedArray{Csize_t,1},
+  mstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  lstride::Int,
+  theta::StridedArray{Cdouble,1},
+  nthreads::Unsigned,
+) where {T}
+  ncomp = size(alm, 2)
+  ntheta = length(theta)
+  nm = length(mval)
+  leg = Array{Complex{T}}(undef, (nm, ntheta, ncomp))
+  sht_alm2leg!(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads)
+end
+
+function sht_leg2alm!(
+  leg::StridedArray{Complex{T},3},
+  alm::StridedArray{Complex{T},2},
+  spin::Unsigned,
+  lmax::Unsigned,
+  mval::StridedArray{Csize_t,1},
+  mstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  lstride::Int,
+  theta::StridedArray{Cdouble,1},
+  nthreads::Unsigned,
+) where {T}
+  GC.@preserve leg mval mstart theta alm begin
+  ret = ccall(
+    (:sht_leg2alm, libducc),
+    Cint,
+    (Dref, Csize_t, Csize_t, Dref, Dref, Cptrdiff_t, Dref, Csize_t, Dref),
+    Desc(leg),
+    spin,
+    lmax,
+    Desc(mval),
+    Desc(mstart),
+    lstride,
+    Desc(theta),
+    nthreads,
+    Desc(alm),
+  )
+  end
+  if ret != 0
+    throw(error())
+  else
+    alm
+  end
+end
+
+function sht_leg2alm(
+  leg::StridedArray{Complex{T},3},
+  spin::Unsigned,
+  lmax::Unsigned,
+  mval::StridedArray{Csize_t,1},
+  mstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  lstride::Int,
+  theta::StridedArray{Cdouble,1},
+  nthreads::Unsigned,
+) where {T}
+  ncomp = size(leg, 3)
+  alm = Array{Complex{T}}(undef, (maximum(mstart)+lmax+1, ncomp)) # FIXME: still 0-based as well!!
+  sht_leg2alm!(leg, alm, spin, lmax, mval, mstart, lstride, theta, nthreads)
+end
+
+function sht_leg2map!(
+  leg::StridedArray{Complex{T},3},
+  map::StridedArray{T,2},
+  nphi::StridedArray{Csize_t,1},
+  phi0::StridedArray{Cdouble,1},
+  ringstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  pixstride::Int,
+  nthreads::Unsigned,
+) where {T}
+  GC.@preserve leg nphi phi0 ringstart map begin
+  ret = ccall(
+    (:sht_leg2map, libducc),
+    Cint,
+    (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
+    Desc(leg),
+    Desc(nphi),
+    Desc(phi0),
+    Desc(ringstart),
+    pixstride,
+    nthreads,
+    Desc(map),
+  )
+  end
+  if ret != 0
+    throw(error())
+  else
+    map
   end
 end
 
@@ -315,25 +412,55 @@ function sht_leg2map(
   pixstride::Int,
   nthreads::Unsigned,
 ) where {T}
-  ncomp = size(leg)[3]
+  ncomp = size(leg, 3)
   npix = maximum(ringstart + nphi)
-  res = Array{T}(undef, (npix, ncomp))
-  GC.@preserve leg nphi phi0 ringstart res
+  map = Array{T}(undef, (npix, ncomp))
+  sht_leg2map!(leg, map, nphi, phi0, ringstart, pixstride, nthreads)
+end
+
+function sht_map2leg!(
+  map::StridedArray{T,2},
+  leg::StridedArray{Complex{T},3},
+  nphi::StridedArray{Csize_t,1},
+  phi0::StridedArray{Cdouble,1},
+  ringstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  pixstride::Int,
+  nthreads::Unsigned,
+) where {T}
+  GC.@preserve map nphi phi0 ringstart leg begin
   ret = ccall(
-    (:sht_leg2map, libducc),
+    (:sht_map2leg, libducc),
     Cint,
     (Dref, Dref, Dref, Dref, Cptrdiff_t, Csize_t, Dref),
-    Desc(leg),
+    Desc(map),
     Desc(nphi),
     Desc(phi0),
     Desc(ringstart),
     pixstride,
     nthreads,
-    Desc(res),
+    Desc(leg),
   )
+  end
   if ret != 0
     throw(error())
+  else
+    leg
   end
+end
+
+function sht_map2leg(
+  map::StridedArray{T,2},
+  nphi::StridedArray{Csize_t,1},
+  phi0::StridedArray{Cdouble,1},
+  ringstart::StridedArray{Csize_t,1}, # FIXME: this is still 0-based at the moment
+  nm::Int,
+  pixstride::Int,
+  nthreads::Unsigned,
+) where {T}
+  ncomp = size(map, 2)
+  ntheta = length(ringstart)
+  leg = Array{Complex{T}}(undef, (nm, ntheta, ncomp))
+  sht_map2leg!(map, leg, nphi, phi0, ringstart, pixstride, nthreads)
 end
 
 end
