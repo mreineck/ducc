@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -516,6 +516,183 @@ py::array get_correction(double beta, double e0, size_t W, size_t npoints, doubl
   return res_;
   }
 
+template<typename To> void fill_zero(
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
+  size_t idim, size_t ndim)
+  {
+  const size_t lszo=*szo;
+  const ptrdiff_t lstro=*stro;
+  if (idim+1==ndim)
+    {
+    if (lstro==1)
+      for (size_t i=0; i<lszo; ++i)
+        out[i] = To(0);
+    else
+      for (size_t i=0; i<lszo; ++i)
+        out[i*lstro] = To(0);
+    }
+  else
+    for (size_t i=0; i<lszo; ++i)
+      fill_zero(out+i*lstro, szo+1, stro+1, idim+1, ndim);
+  }
+template<typename Ti, typename To> void roll_resize_roll(
+  const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
+  const size_t *ri, const size_t *ro, size_t idim, size_t ndim)
+  {
+  const size_t lszi=*szi, lszo=*szo, lri=*ri, lro=*ro;
+  const ptrdiff_t lstri=*stri, lstro=*stro;
+  const size_t smin=min(lszi,lszo);
+  if (idim+1==ndim)
+    {
+    size_t io=lro, ii=lszi-lri, i=0;
+    while(i<smin)
+      {
+      size_t minstep = smin-i;
+      minstep = min(minstep, lszo-io);
+      minstep = min(minstep, lszi-ii);
+      if ((lstri==1)&&(lstro==1))
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[io+ix] = To(inp[ii+ix*lstri]);
+      else
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[(io+ix)*lstro] = To(inp[(ii+ix)*lstri]);
+      i+=minstep;
+      io+=minstep; if (io==lszo) io=0;
+      ii+=minstep; if (ii==lszi) ii=0;
+      }
+    while(i<lszo)
+      {
+      size_t minstep = lszo-i;
+      minstep = min(minstep, lszo-io);
+      if (lstro==1)
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[io+ix] = To(0);
+      else
+        for(size_t ix=0; ix<minstep; ++ix)
+          out[(io+ix)*lstro] = To(0);
+      i+=minstep;
+      io+=minstep; if (io==lszo) io=0;
+      }
+    }
+  else
+    {
+    for (size_t i=0; i<smin; ++i)
+      {
+      size_t io=min(i+lro, i+lro-lszo);
+      size_t ii=min(i-lri, i-lri+lszi);
+      roll_resize_roll(inp+ii*lstri, szi+1, stri+1, out+io*lstro, szo+1, stro+1, ri+1, ro+1, idim+1, ndim);
+      }
+    for (size_t i=smin; i<lszo; ++i)
+      {
+      size_t io=min(i+lro, i+lro-lszo);
+      fill_zero(out+ io*lstro, szo+1, stro+1, idim+1, ndim);
+      }
+    }
+  }
+template<typename Ti, typename To> void roll_resize_roll_threaded(
+  const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
+  To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
+  const size_t *ri, const size_t *ro, size_t ndim, size_t nthreads)
+  {
+  size_t smin=min(*szi,*szo);
+  execParallel(smin, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=lo; i<hi; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      size_t ii=min(i-*ri, i-*ri+*szi);
+      roll_resize_roll(inp+ ii* *stri, szi+1, stri+1, out+ io* *stro, szo+1, stro+1, ri+1, ro+1, 1, ndim);
+      }
+    });
+  execParallel(*szo-smin, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t i=smin+lo; i<smin+hi; ++i)
+      {
+      size_t io=min(i+*ro, i+*ro-*szo);
+      fill_zero(out+ io* *stro, szo+1, stro+1, 1, ndim);
+      }
+    });
+  }
+
+template<typename Ti, typename To> py::array roll_resize_roll(const py::array &inp_,
+  py::array &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_, size_t nthreads)
+  {
+  auto inp(to_cfmav<Ti>(inp_));
+  auto out(to_vfmav<To>(out_));
+  size_t ndim = inp.ndim();
+  nthreads = adjust_nthreads(nthreads);
+  MR_assert(out.ndim()==ndim, "dimensionality mismatch");
+  MR_assert(ri_.size()==ndim, "dimensionality mismatch");
+  MR_assert(ro_.size()==ndim, "dimensionality mismatch");
+  vector<size_t> ri, ro;
+  for (size_t i=0; i<ndim; ++i)
+    {
+    ptrdiff_t tmp = ri_[i]%ptrdiff_t(inp.shape(i));
+    ri.push_back(size_t((tmp<0) ? tmp+inp.shape(i) : tmp));
+    tmp = ro_[i]%ptrdiff_t(out.shape(i));
+    ro.push_back(size_t((tmp<0) ? tmp+out.shape(i) : tmp));
+    }
+  if ((ndim>1)&&(nthreads>1))
+    roll_resize_roll_threaded(inp.data(), inp.shape().data(), inp.stride().data(),
+      out.data(), out.shape().data(), out.stride().data(),
+      ri.data(), ro.data(), ndim, nthreads);
+  else
+    roll_resize_roll(inp.data(), inp.shape().data(), inp.stride().data(),
+      out.data(), out.shape().data(), out.stride().data(),
+      ri.data(), ro.data(), 0, ndim);
+  return out_;
+  }
+
+py::array Py_roll_resize_roll(const py::array &inp,
+  py::array &out, const vector<int64_t> &ri, const vector<int64_t> &ro,
+  size_t nthreads=1)
+  {
+  if (isPyarr<float>(inp))
+    return roll_resize_roll<float,float>(inp, out, ri, ro, nthreads);
+  else if (isPyarr<double>(out))
+    return roll_resize_roll<double,double>(inp, out, ri, ro, nthreads);
+  else if (isPyarr<complex<float>>(inp))
+    return roll_resize_roll<complex<float>,complex<float>>(inp, out, ri, ro, nthreads);
+  else if (isPyarr<complex<double>>(out))
+    return roll_resize_roll<complex<double>,complex<double>>(inp, out, ri, ro, nthreads);
+  else
+    MR_fail("type matching failed");
+  }
+
+constexpr const char *Py_roll_resize_roll_DS = R"""(
+Performs operations equivalent to
+
+tmp = np.roll(inp, roll_inp, axis=tuple(range(inp.ndim)))
+tmp2 = np.zeros(out.shape, dtype=inp.dtype)
+slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
+tmp2[slices] = tmp[slices]
+out[()] = np.roll(tmp2, roll_out, axis=tuple(range(out.ndim)))
+return out
+
+Parameters
+----------
+inp : numpy.ndarray(any shape, dtype=float or complex)
+    input array
+out : numpy.ndarray(any shape, same dimensionality and dtype as `in`)
+    output array
+roll_inp : tuple(int), length=inp.ndim
+    amount of rolling for the input array 
+roll_out : tuple(int), length=out.ndim
+    amount of rolling for the output array 
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
+
+Returns
+-------
+numpy.ndarray : identical to out
+
+Notes
+-----
+`inp` and `out` must not overlap in memory.
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -551,6 +728,9 @@ void add_misc(py::module_ &msup)
 
   m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
+
+  m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
+    "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
   }
 
 }

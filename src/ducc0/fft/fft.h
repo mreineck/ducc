@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2022 Max-Planck-Society
+Copyright (C) 2010-2023 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
@@ -1670,6 +1670,19 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
+template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
+  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+  size_t nthreads=1)
+  {
+  if (axes.size()==1)
+    return c2r(in, out, axes[0], forward, fct, nthreads);
+  util::sanity_check_cr(in, out, axes);
+  if (in.size()==0) return;
+  auto newaxes = shape_t{axes.begin(), --axes.end()};
+  c2c(in, in, newaxes, forward, T(1), nthreads);
+  c2r(in, out, axes.back(), forward, fct, nthreads);
+  }
+
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
   vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1)
@@ -2028,6 +2041,7 @@ using detail_fft::FORWARD;
 using detail_fft::BACKWARD;
 using detail_fft::c2c;
 using detail_fft::c2r;
+using detail_fft::c2r_mut;
 using detail_fft::r2c;
 using detail_fft::r2r_fftpack;
 using detail_fft::r2r_fftw;

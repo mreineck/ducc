@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022 Max-Planck-Society
+/* Copyright (C) 2022-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 
@@ -31,14 +31,15 @@ namespace detail_typecode {
 
 using namespace std;
 
-// bits [0-4] contain the type size in bytes
-// bit 5 is 1 iff the type is unsigned
-// bit 6 is 1 iff the type is floating point
-// bit 7 is 1 iff the type is complex-valued
-constexpr size_t sizemask = 0x1f;
-constexpr size_t unsigned_bit = 0x20;
-constexpr size_t floating_point_bit = 0x40;
-constexpr size_t complex_bit = 0x80;
+// bits [0-3]: the type size in bytes - 1
+// bits [4-5]: 0 = float, 1 = signed int, 2 = unsigned int (, 3 = bool)
+// bits [6-7]: number of primitive variables in one element - 1
+constexpr size_t sizeshift = 0x0;
+constexpr size_t typeshift = 0x4;
+constexpr size_t numshift = 0x6;
+constexpr size_t floatcode = 0x0;
+constexpr size_t sintcode = 0x1;
+constexpr size_t uintcode = 0x2;
 
 template<typename T> class Typecode
   {
@@ -48,15 +49,14 @@ template<typename T> class Typecode
       static_assert(!is_same<T,bool>::value, "no bools allowed");
       static_assert(is_integral<T>::value||is_floating_point<T>::value,
         "need integral or floating point type");
-      static_assert(sizeof(T)<=8, "type size must be at most 8 bytes");
-      if constexpr(is_integral<T>::value)
-        return sizeof(T) + unsigned_bit*(!is_signed<T>::value);
+      static_assert(sizeof(T)<=16, "type size must be at most 16 bytes");
       if constexpr(is_floating_point<T>::value)
-        {
         static_assert(is_signed<T>::value,
           "no support for unsigned floating point types");
-        return sizeof(T)+floating_point_bit;
-        }
+      return ((sizeof(T)-1)<<sizeshift) +
+             ((floatcode*is_floating_point<T>::value
+              +sintcode*(is_integral<T>::value&&is_signed<T>::value)
+              +uintcode*(is_integral<T>::value&&(!is_signed<T>::value)))<<typeshift);
       }
 
   public:
@@ -69,17 +69,12 @@ template<typename T> class Typecode<complex<T>>
     static constexpr size_t compute()
       {
       static_assert(is_floating_point<T>::value, "need a floating point type");
-      return Typecode<T>::value + sizeof(T) + complex_bit;
+      return Typecode<T>::value + (size_t(1)<<numshift);
       }
 
   public:
     static constexpr size_t value = compute();
   };
-
-//constexpr size_t type_size(size_t tc) { return tc&sizemask; }
-//constexpr bool type_is_unsigned(size_t tc) { return tc&unsigned_bit; }
-//constexpr bool type_is_floating_point(size_t tc) { return tc&floating_point_bit; }
-//constexpr bool type_is_complex(size_t tc) { return tc&complex_bit; }
 
 }
 

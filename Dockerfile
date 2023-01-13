@@ -13,4 +13,5 @@ RUN apt-get update && apt-get install -qq \
       doxygen graphviz \
       && rm -rf /var/lib/apt/lists/*
 # RUN pip install numba   # demo dependency
-RUN pip install sphinx pydata-sphinx-theme
+# FIXME: sphinx is currently pinned to 5.3, since 6.0 does not play well with pydata-theme
+RUN pip install sphinx==5.3 pydata-sphinx-theme
