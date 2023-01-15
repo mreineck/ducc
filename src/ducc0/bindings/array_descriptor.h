@@ -78,6 +78,12 @@ template<bool swapdims, typename T, size_t ndim> cmav<T,ndim> to_cmav(const Arra
   auto [shp, str] = prep1<swapdims, T, ndim>(desc);
   return cmav<T, ndim>(reinterpret_cast<const T *>(desc.data), shp, str);
   }
+template<bool swapdims, typename T, typename T2, size_t ndim> cmav<T2,ndim> to_cmav_with_typecast(const ArrayDescriptor &desc)
+  {
+  static_assert(sizeof(T)==sizeof(T2), "type size mismatch");
+  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
+  return cmav<T2, ndim>(reinterpret_cast<const T2 *>(desc.data), shp, str);
+  }
 template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
   {
   auto [shp, str] = prep1<swapdims, T, ndim>(desc);
@@ -120,6 +126,7 @@ template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
 
 using detail_array_descriptor::ArrayDescriptor;
 using detail_array_descriptor::to_cmav;
+using detail_array_descriptor::to_cmav_with_typecast;
 using detail_array_descriptor::to_vmav;
 using detail_array_descriptor::to_cfmav;
 using detail_array_descriptor::to_vfmav;

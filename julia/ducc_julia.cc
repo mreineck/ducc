@@ -412,7 +412,7 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   DUCC0_JULIA_TRY_BEGIN
   auto mval(to_cmav<true,size_t,1>(*mval_));
 // FIXME: subtract 1?
-  auto mstart(to_cmav<true,size_t,1>(*mstart_));
+  auto mstart(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_));
   auto theta(to_cmav<true,double,1>(*theta_));
   if (alm_->dtype==Typecode<complex<double>>::value)
     {
@@ -439,7 +439,7 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
   DUCC0_JULIA_TRY_BEGIN
   auto mval(to_cmav<true,size_t,1>(*mval_));
 // FIXME: subtract 1?
-  auto mstart(to_cmav<true,size_t,1>(*mstart_));
+  auto mstart(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_));
   auto theta(to_cmav<true,double,1>(*theta_));
   if (leg_->dtype==Typecode<complex<double>>::value)
     {
