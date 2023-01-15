@@ -1,25 +1,17 @@
 /*
- *  This file is part of libc_utils.
- *
- *  libc_utils is free software; you can redistribute it and/or modify
+ *  This code is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
  *
- *  libc_utils is distributed in the hope that it will be useful,
+ *  This code is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with libc_utils; if not, write to the Free Software
+ *  along with this code; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
-
-/*
- *  libc_utils is being developed at the Max-Planck-Institut fuer Astrophysik
- *  and financially supported by the Deutsches Zentrum fuer Luft- und Raumfahrt
- *  (DLR).
  */
 
 /*
@@ -31,16 +23,10 @@
 
 #include "ducc0/math/space_filling.h"
 #include "ducc0/infra/error_handling.h"
-#include <iostream>
-#include <iomanip>
 
 namespace ducc0 {
 
-#ifndef DUCC0_USE_PDEP_PEXT
-
-#if 1
-
-namespace {
+#if 0
 
 static constexpr const uint16_t utab[] = {
 #define Z(a) 0x##a##0, 0x##a##1, 0x##a##4, 0x##a##5
@@ -60,8 +46,6 @@ X(0),X(8),X(2048),X(2056)
 #undef Y
 #undef Z
 };
-
-}
 
 uint32_t spread_bits_2D_32 (uint32_t v)
   {
@@ -145,59 +129,27 @@ std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
   }
 
 #else
-// alternative implementation, usually slower
 
-static inline uint64_t spread2D_64 (uint64_t v)
+inline uint64_t spread_bits_2D_64 (uint64_t v)
   {
-  v =  (v&0x00000000000000ffu)
-    | ((v&0x000000000000ff00u)<<8)
-    | ((v&0x0000000000ff0000u)<<16)
-    | ((v&0x00000000ff000000u)<<24);
-  v =  (v&0x0303030303030303u)
-    | ((v&0x0c0c0c0c0c0c0c0cu)<<2)
-    | ((v&0x3030303030303030u)<<4)
-    | ((v&0xc0c0c0c0c0c0c0c0u)<<6);
+  v&=0xffffffffu;
+  v = (v|(v<<16)) & 0x0000ffff0000ffffu;
+  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffu;
+  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fu;
+  v = (v|(v<< 2)) & 0x3333333333333333u;
   v = (v|(v<< 1)) & 0x5555555555555555u;
   return v;
   }
-static inline uint32_t spread2D_32 (uint32_t v)
+inline uint32_t spread_bits_2D_32 (uint32_t v)
   {
-  v =  (v&0x0000000fu)
-    | ((v&0x000000f0u)<< 4)
-    | ((v&0x00000f00u)<< 8)
-    | ((v&0x0000f000u)<<12);
-  v =  (v&0x01010101u)
-    | ((v&0x02020202u)<< 1)
-    | ((v&0x04040404u)<< 2)
-    | ((v&0x08080808u)<< 3);
+  v&=0xffffu;
+  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffu;
+  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fu;
+  v = (v|(v<< 2)) & 0x3333333333333333u;
+  v = (v|(v<< 1)) & 0x5555555555555555u;
   return v;
   }
-static inline uint64_t compress2D_64 (uint64_t v)
-  {
-//BROKEN
-  v =  (v    )&0x01010101u)
-    | ((v>> 1)&0x02020202u)
-    | ((v>> 2)&0x04040404u)
-    | ((v>> 3)&0x08080808u);
-  v =  (v    )&0x0000000fu)
-    | ((v>> 4)&0x000000f0u)
-    | ((v>> 8)&0x00000f00u)
-    | ((v>>12)&0x0000f000u);
-  return v;
-  }
-static inline uint32_t compress2D_32 (uint32_t v)
-  {
-  v =  (v    )&0x01010101u)
-    | ((v>> 1)&0x02020202u)
-    | ((v>> 2)&0x04040404u)
-    | ((v>> 3)&0x08080808u);
-  v =  (v    )&0x0000000fu)
-    | ((v>> 4)&0x000000f0u)
-    | ((v>> 8)&0x00000f00u)
-    | ((v>>12)&0x0000f000u);
-  return v;
-  }
-static inline uint64_t compress2D_64 (uint64_t v)
+inline uint64_t compress_bits_2D_64 (uint64_t v)
   {
   v&=0x5555555555555555u;
   v = (v|(v>> 1)) & 0x3333333333333333u;
@@ -207,36 +159,43 @@ static inline uint64_t compress2D_64 (uint64_t v)
   v = (v|(v>>16)) & 0x00000000ffffffffu;
   return v;
   }
+inline uint32_t compress_bits_2D_32 (uint32_t v)
+  {
+  v&=0x55555555u;
+  v = (v|(v>> 1)) & 0x33333333u;
+  v = (v|(v>> 2)) & 0x0f0f0f0fu;
+  v = (v|(v>> 4)) & 0x00ff00ffu;
+  v = (v|(v>> 8)) & 0x0000ffffu;
+  return v;
+  }
 
 uint32_t block2morton2D_32 (uint32_t v)
-  { uint64_t t=spread2D_64(v); return (t | (t>>31)) & 0xffffffffu; }
-uint32_t coord2morton2D_32 (uint32_t x, uint32_t y)
+  { uint64_t t=spread_bits_2D_64(v); return (t | (t>>31)) & 0xffffffffu; }
+uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)
   {
-  uint64_t t=spread2D_64((x&0xffff)|(y<<16));
+  uint64_t t=spread_bits_2D_64((xy[0]&0xffff)|(xy[1]<<16));
   return (t | (t>>31)) & 0xffffffffu;
   }
 uint32_t morton2block2D_32 (uint32_t v)
-  { uint64_t t=v; t|=t<<31; t=compress2D_64(t); return t; }
-void morton2coord2D_32 (uint32_t v, uint32_t *x, uint32_t *y)
+  { uint64_t t=v; t|=t<<31; t=compress_bits_2D_64(t); return t; }
+
+std::array<uint32_t,2> morton2coord2D_32 (uint32_t v)
   {
-  uint64_t t=v; t|=t<<31; t=compress2D_64(t);
-  *x = t&0xffff;
-  *y = t>>16;
+  uint64_t t=v; t|=t<<31; t=compress_bits_2D_64(t);
+  return {uint32_t(t&0xffff), uint32_t(t>>16)};
   }
 uint64_t block2morton2D_64 (uint64_t v)
-  { return spread2D_64(v) | (spread2D_64(v>>32)<<1); }
-uint64_t coord2morton2D_64 (uint64_t x, uint64_t y)
-  { return spread2D_64(x) | (spread2D_64(y)<<1); }
+  { return spread_bits_2D_64(v) | (spread_bits_2D_64(v>>32)<<1); }
+uint64_t coord2morton2D_64 (std::array<uint64_t,2> xy)
+  { return spread_bits_2D_64(xy[0]) | (spread_bits_2D_64(xy[1])<<1); }
 uint64_t morton2block2D_64 (uint64_t v)
-  { return compress2D_64(v) | (compress2D_64(v>>1)<<32); }
-void morton2coord2D_64 (uint64_t v, uint64_t *x, uint64_t *y)
-  { *x = compress2D_64(v); *y = compress2D_64(v>>1); }
+  { return compress_bits_2D_64(v) | (compress_bits_2D_64(v>>1)<<32); }
+std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
+  { return {compress_bits_2D_64(v), compress_bits_2D_64(v>>1)}; }
 
 #endif
 
-namespace {
-
-inline uint32_t spread3D_32 (uint32_t v)
+inline uint32_t spread_bits_3D_32 (uint32_t v)
   {
   v&=0x3ff;
   v = (v|(v<< 8)|(v<<16)) & 0x0f00f00fu;
@@ -244,7 +203,7 @@ inline uint32_t spread3D_32 (uint32_t v)
   v = (v|(v<< 2)) & 0x49249249u;
   return v;
   }
-inline uint32_t compress3D_32 (uint32_t v)
+inline uint32_t compress_bits_3D_32 (uint32_t v)
   {
   v&=0x9249249u;
   v = (v|(v>> 2)) & 0xc30c30c3u;
@@ -252,7 +211,7 @@ inline uint32_t compress3D_32 (uint32_t v)
   v = (v|(v>> 8)|(v>>16)) & 0x3ffu;
   return v;
   }
-inline uint64_t spread3D_64 (uint64_t v)
+inline uint64_t spread_bits_3D_64 (uint64_t v)
   {
   v&=0x1fffff;
   v = (v|(v<<16)|(v<<32)) & 0x00ff0000ff0000ffu;
@@ -261,7 +220,7 @@ inline uint64_t spread3D_64 (uint64_t v)
   v = (v|(v<< 2)) & 0x9249249249249249u;
   return v;
   }
-inline uint64_t compress3D_64 (uint64_t v)
+inline uint64_t compress_bits_3D_64 (uint64_t v)
   {
   v&=0x1249249249249249u;
   v=(v|(v>> 2)) & 0x30c30c30c30c30c3u;
@@ -271,61 +230,57 @@ inline uint64_t compress3D_64 (uint64_t v)
   return v;
   }
 
-}
-
 uint32_t block2morton3D_32 (uint32_t v)
   {
   uint32_t v2=v&0xfffff;
-  uint64_t v3=spread3D_64(v2);
+  uint64_t v3=spread_bits_3D_64(v2);
   v3=(v3|(v3>>29))&0x1fffffff;
-  return uint32_t(v3)|(spread3D_32(v>>20)<<2);
+  return uint32_t(v3)|(spread_bits_3D_32(v>>20)<<2);
   }
 uint32_t coord2morton3D_32 (std::array<uint32_t,3> xyz)
   {
   uint32_t v2=(xyz[0]&0x3ff)|((xyz[1]&0x3ff)<<10);
-  uint64_t v3=spread3D_64(v2);
+  uint64_t v3=spread_bits_3D_64(v2);
   v3=(v3|(v3>>29))&0x1fffffff;
-  return uint32_t(v3)|(spread3D_32(xyz[2]&0x3ff)<<2);
+  return uint32_t(v3)|(spread_bits_3D_32(xyz[2]&0x3ff)<<2);
   }
 uint32_t morton2block3D_32 (uint32_t v)
   {
-  return compress3D_32(v)
-      | (compress3D_32(v>>1)<<10)
-      | (compress3D_32(v>>2)<<20);
+  return compress_bits_3D_32(v)
+      | (compress_bits_3D_32(v>>1)<<10)
+      | (compress_bits_3D_32(v>>2)<<20);
   }
 std::array<uint32_t,3> morton2coord3D_32 (uint32_t v)
   {
-  return {compress3D_32(v),
-          compress3D_32(v>>1),
-          compress3D_32(v>>2)};
+  return {compress_bits_3D_32(v),
+          compress_bits_3D_32(v>>1),
+          compress_bits_3D_32(v>>2)};
   }
 
 uint64_t block2morton3D_64 (uint64_t v)
   {
-  return spread3D_64(v)
-      | (spread3D_64(v>>21)<<1)
-      | (spread3D_64(v>>42)<<2);
+  return spread_bits_3D_64(v)
+      | (spread_bits_3D_64(v>>21)<<1)
+      | (spread_bits_3D_64(v>>42)<<2);
   }
 uint64_t coord2morton3D_64 (std::array<uint64_t,3> xyz)
   {
-  return spread3D_64(xyz[0])
-      | (spread3D_64(xyz[1])<<1)
-      | (spread3D_64(xyz[2])<<2);
+  return spread_bits_3D_64(xyz[0])
+      | (spread_bits_3D_64(xyz[1])<<1)
+      | (spread_bits_3D_64(xyz[2])<<2);
   }
 uint64_t morton2block3D_64 (uint64_t v)
   {
-  return compress3D_64(v)
-      | (compress3D_64(v>>1)<<21)
-      | (compress3D_64(v>>2)<<42);
+  return compress_bits_3D_64(v)
+      | (compress_bits_3D_64(v>>1)<<21)
+      | (compress_bits_3D_64(v>>2)<<42);
   }
 std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
   {
-  return { compress3D_64(v),
-           compress3D_64(v>>1),
-           compress3D_64(v>>2)};
+  return { compress_bits_3D_64(v),
+           compress_bits_3D_64(v>>1),
+           compress_bits_3D_64(v>>2)};
   }
-
-#endif
 
 namespace {
 
@@ -845,107 +800,54 @@ static constexpr const uint16_t p2m3D_2[24][64]={
   861,1369,1368, 156, 158,1498,1499,1119,
  1467, 954, 952, 633, 637,1276,1278,1535}
 };
-#if 0
-void init_peano2d (void)
-  {
-  peano2d_done=true;
 
-  for (unsigned d=0; d<4; ++d)
-    for (uint32_t p=0; p<64; ++p)
-      {
-      unsigned rot1=d, rot2=d;
-      uint32_t v = p<<26;
-      uint32_t res1=0, res2=0;
-      for (unsigned i=0; i<3; ++i)
-        {
-        unsigned tab1=m2p2D_1[rot1][v>>30];
-        unsigned tab2=p2m2D_1[rot2][v>>30];
-        v<<=2;
-        res1 = (res1<<2) | (tab1&0x3);
-        res2 = (res2<<2) | (tab2&0x3);
-        rot1 = tab1>>2;
-        rot2 = tab2>>2;
-        }
-      m2p2D_3[d][p]=res1|(rot1<<6);
-      p2m2D_3[d][p]=res2|(rot2<<6);
-      }
-  }
-void init_peano3d (void)
+template<unsigned rbits, typename T> inline T morton2peano2D_sub(unsigned rot,
+  T res, T v)
   {
-  peano3d_done=true;
-
-  for (unsigned d=0; d<24; ++d)
-    for (uint32_t p=0; p<64; ++p)
-      {
-      unsigned rot1=d, rot2=d;
-      uint32_t v = p<<26;
-      uint32_t res1=0, res2=0;
-      for (unsigned i=0; i<2; ++i)
-        {
-        unsigned tab1=m2p3D_1[rot1][v>>29];
-        unsigned tab2=p2m3D_1[rot2][v>>29];
-        v<<=3;
-        res1 = (res1<<3) | (tab1&0x7);
-        res2 = (res2<<3) | (tab2&0x7);
-        rot1 = tab1>>3;
-        rot2 = tab2>>3;
-        }
-      m2p3D_2[d][p]=res1|(rot1<<6);
-      p2m3D_2[d][p]=res2|(rot2<<6);
-      }
+  constexpr unsigned nbits = 8*sizeof(T);
+  static_assert(2*rbits<=nbits, "too many significant bits");
+  // if constexpr (rbits==0) return res;
+  if constexpr (rbits==1)
+    return (res<<2)|(m2p2D_1[rot][v>>(nbits-2)]&0x3);
+  if constexpr (rbits==2)
+    {
+    unsigned tab=m2p2D_1[rot][v>>(nbits-2)];
+    return morton2peano2D_sub<rbits-1>(tab>>2, (res<<2)|(tab&0x3), v<<2);
+    }
+  if constexpr (rbits==3)
+    return (res<<6)|(m2p2D_3[rot][v>>(nbits-6)]&0x3fu);
+  if constexpr (rbits>3)
+    {
+    unsigned tab=m2p2D_3[rot][v>>(nbits-6)];
+    return morton2peano2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
+    }
   }
-#endif
-}
-
-uint32_t morton2peano3D_32(uint32_t v, unsigned bits)
+template<unsigned rbits, typename T> inline T peano2morton2D_sub(unsigned rot,
+  T res, T v)
   {
-  unsigned rot = 0;
-  uint32_t res = 0;
-  v<<=3*(10-bits)+2;
-  unsigned i=0;
-  for (; i+1<bits; i+=2)
+  constexpr unsigned nbits = 8*sizeof(T);
+  static_assert(2*rbits<=nbits, "too many significant bits");
+  // if constexpr (rbits==0) return res;
+  if constexpr (rbits==1)
+    return (res<<2)|(p2m2D_1[rot][v>>(nbits-2)]&0x3);
+  if constexpr (rbits==2)
     {
-    unsigned tab=m2p3D_2[rot][v>>26];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
+    unsigned tab=p2m2D_1[rot][v>>(nbits-2)];
+    return peano2morton2D_sub<rbits-1>(tab>>2, (res<<2)|(tab&0x3), v<<2);
     }
-  for (; i<bits; ++i)
+  if constexpr (rbits==3)
+    return (res<<6)|(p2m2D_3[rot][v>>(nbits-6)]&0x3fu);
+  if constexpr (rbits>3)
     {
-    unsigned tab=m2p3D_1[rot][v>>29];
-    v<<=3;
-    res = (res<<3) | (tab&0x7);
-    rot = tab>>3;
+    unsigned tab=p2m2D_3[rot][v>>(nbits-6)];
+    return peano2morton2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
     }
-  return res;
-  }
-uint32_t peano2morton3D_32(uint32_t v, unsigned bits)
-  {
-  unsigned rot = 0;
-  uint32_t res = 0;
-  v<<=3*(10-bits)+2;
-  unsigned i=0;
-  for (; i+1<bits; i+=2)
-    {
-    unsigned tab=p2m3D_2[rot][v>>26];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
-    }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=p2m3D_1[rot][v>>29];
-    v<<=3;
-    res = (res<<3) | (tab&0x7);
-    rot = tab>>3;
-    }
-  return res;
   }
 
 template<unsigned rbits, typename T> inline T morton2peano3D_sub(unsigned rot,
   T res, T v)
   {
-  constexpr size_t nbits = 8*sizeof(T);
+  constexpr unsigned nbits = 8*sizeof(T);
   static_assert(3*rbits<=nbits, "too many significant bits");
   // if constexpr (rbits==0) return res;
   if constexpr (rbits==1)
@@ -961,7 +863,7 @@ template<unsigned rbits, typename T> inline T morton2peano3D_sub(unsigned rot,
 template<unsigned rbits, typename T> inline T peano2morton3D_sub(unsigned rot,
   T res, T v)
   {
-  constexpr size_t nbits = 8*sizeof(T);
+  constexpr unsigned nbits = 8*sizeof(T);
   static_assert(3*rbits<=nbits, "too many significant bits");
   // if constexpr (rbits==0) return res;
   if constexpr (rbits==1)
@@ -974,218 +876,239 @@ template<unsigned rbits, typename T> inline T peano2morton3D_sub(unsigned rot,
     return peano2morton3D_sub<rbits-2>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
     }
   }
-template<unsigned bits> uint64_t morton2peano3D_64(uint64_t v)
+
+template<unsigned bits> uint64_t tmorton2peano2D_64(uint64_t v)
+  { return morton2peano2D_sub<bits, uint64_t>(0, 0, v<<(64-(bits<<1))); }
+template<unsigned bits> uint64_t tpeano2morton2D_64(uint64_t v)
+  { return peano2morton2D_sub<bits, uint64_t>(0, 0, v<<(64-(bits<<1))); }
+template<unsigned bits> uint32_t tmorton2peano2D_32(uint32_t v)
+  { return morton2peano2D_sub<bits, uint32_t>(0, 0, v<<(32-(bits<<1))); }
+template<unsigned bits> uint32_t tpeano2morton2D_32(uint32_t v)
+  { return peano2morton2D_sub<bits, uint32_t>(0, 0, v<<(32-(bits<<1))); }
+template<unsigned bits> uint64_t tmorton2peano3D_64(uint64_t v)
   { return morton2peano3D_sub<bits, uint64_t>(0, 0, v<<(3*(21-bits)+1)); }
-template<unsigned bits> uint64_t peano2morton3D_64(uint64_t v)
+template<unsigned bits> uint64_t tpeano2morton3D_64(uint64_t v)
   { return peano2morton3D_sub<bits, uint64_t>(0, 0, v<<(3*(21-bits)+1)); }
-template<unsigned bits> uint32_t morton2peano3D_32(uint32_t v)
+template<unsigned bits> uint32_t tmorton2peano3D_32(uint32_t v)
   { return morton2peano3D_sub<bits, uint32_t>(0, 0, v<<(3*(10-bits)+2)); }
-template<unsigned bits> uint32_t peano2morton3D_32(uint32_t v)
+template<unsigned bits> uint32_t tpeano2morton3D_32(uint32_t v)
   { return peano2morton3D_sub<bits, uint32_t>(0, 0, v<<(3*(10-bits)+2)); }
-template uint64_t morton2peano3D_64<20>(uint64_t v);
-template uint64_t morton2peano3D_64<21>(uint64_t v);
-template uint64_t peano2morton3D_64<20>(uint64_t v);
-template uint64_t peano2morton3D_64<21>(uint64_t v);
-template uint64_t morton2peano3D_64<10>(uint64_t v);
-template uint64_t peano2morton3D_64<10>(uint64_t v);
-template uint32_t morton2peano3D_32<10>(uint32_t v);
-template uint32_t peano2morton3D_32<10>(uint32_t v);
+
+}  // unnamed namespace
+
+uint32_t morton2peano3D_32(uint32_t v, unsigned bits)
+  {
+  switch(bits)
+    {
+    case  1: return tmorton2peano3D_32< 1>(v);
+    case  2: return tmorton2peano3D_32< 2>(v);
+    case  3: return tmorton2peano3D_32< 3>(v);
+    case  4: return tmorton2peano3D_32< 4>(v);
+    case  5: return tmorton2peano3D_32< 5>(v);
+    case  6: return tmorton2peano3D_32< 6>(v);
+    case  7: return tmorton2peano3D_32< 7>(v);
+    case  8: return tmorton2peano3D_32< 8>(v);
+    case  9: return tmorton2peano3D_32< 9>(v);
+    case 10: return tmorton2peano3D_32<10>(v);
+    default: MR_fail("bad bits number");
+    }
+  }
+uint32_t peano2morton3D_32(uint32_t v, unsigned bits)
+  {
+  switch(bits)
+    {
+    case  1: return tpeano2morton3D_32< 1>(v);
+    case  2: return tpeano2morton3D_32< 2>(v);
+    case  3: return tpeano2morton3D_32< 3>(v);
+    case  4: return tpeano2morton3D_32< 4>(v);
+    case  5: return tpeano2morton3D_32< 5>(v);
+    case  6: return tpeano2morton3D_32< 6>(v);
+    case  7: return tpeano2morton3D_32< 7>(v);
+    case  8: return tpeano2morton3D_32< 8>(v);
+    case  9: return tpeano2morton3D_32< 9>(v);
+    case 10: return tpeano2morton3D_32<10>(v);
+    default: MR_fail("bad bits number");
+    }
+  }
 uint64_t morton2peano3D_64(uint64_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint64_t res = 0;
-  v<<=3*(21-bits)+1;
-#define DUCC0_PROCESS_2 { unsigned tab = m2p3D_2[rot][v>>(64-6)];rot = tab>>6; res = (res<<6)|(tab&0x3fu); v <<= 6; }[[fallthrough]];
-  switch (bits)
+  switch(bits)
     {
-    case 21: DUCC0_PROCESS_2
-    case 19: DUCC0_PROCESS_2
-    case 17: DUCC0_PROCESS_2
-    case 15: DUCC0_PROCESS_2
-    case 13: DUCC0_PROCESS_2
-    case 11: DUCC0_PROCESS_2
-    case  9: DUCC0_PROCESS_2
-    case  7: DUCC0_PROCESS_2
-    case  5: DUCC0_PROCESS_2
-    case  3: DUCC0_PROCESS_2
-    case  1: 
-      {
-      unsigned tab=m2p3D_1[rot][v>>61];
-      return (res<<3) | (tab&0x7);
-      }
-    case 20: DUCC0_PROCESS_2
-    case 18: DUCC0_PROCESS_2
-    case 16: DUCC0_PROCESS_2
-    case 14: DUCC0_PROCESS_2
-    case 12: DUCC0_PROCESS_2
-    case 10: DUCC0_PROCESS_2
-    case  8: DUCC0_PROCESS_2
-    case  6: DUCC0_PROCESS_2
-    case  4: DUCC0_PROCESS_2
-    case  2: 
-      {
-      unsigned tab=m2p3D_2[rot][v>>58];
-      return (res<<6) | (tab&0x3fu);
-      }
-    default:
-      MR_fail("bad number of bits");
+    case  1: return tmorton2peano3D_64< 1>(v);
+    case  2: return tmorton2peano3D_64< 2>(v);
+    case  3: return tmorton2peano3D_64< 3>(v);
+    case  4: return tmorton2peano3D_64< 4>(v);
+    case  5: return tmorton2peano3D_64< 5>(v);
+    case  6: return tmorton2peano3D_64< 6>(v);
+    case  7: return tmorton2peano3D_64< 7>(v);
+    case  8: return tmorton2peano3D_64< 8>(v);
+    case  9: return tmorton2peano3D_64< 9>(v);
+    case 10: return tmorton2peano3D_64<10>(v);
+    case 11: return tmorton2peano3D_64<11>(v);
+    case 12: return tmorton2peano3D_64<12>(v);
+    case 13: return tmorton2peano3D_64<13>(v);
+    case 14: return tmorton2peano3D_64<14>(v);
+    case 15: return tmorton2peano3D_64<15>(v);
+    case 16: return tmorton2peano3D_64<16>(v);
+    case 17: return tmorton2peano3D_64<17>(v);
+    case 18: return tmorton2peano3D_64<18>(v);
+    case 19: return tmorton2peano3D_64<19>(v);
+    case 20: return tmorton2peano3D_64<20>(v);
+    case 21: return tmorton2peano3D_64<21>(v);
+    default: MR_fail("bad bits number");
     }
-#undef DUCC0_PROCESS_2
   }
-#if 1
 uint64_t peano2morton3D_64(uint64_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint64_t res = 0;
-  v<<=3*(21-bits)+1;
-#define DUCC0_PROCESS_2 { unsigned tab = p2m3D_2[rot][v>>(64-6)];rot = tab>>6; res = (res<<6)|(tab&0x3fu); v <<= 6; }[[fallthrough]];
-  switch (bits)
+  switch(bits)
     {
-    case 21: DUCC0_PROCESS_2
-    case 19: DUCC0_PROCESS_2
-    case 17: DUCC0_PROCESS_2
-    case 15: DUCC0_PROCESS_2
-    case 13: DUCC0_PROCESS_2
-    case 11: DUCC0_PROCESS_2
-    case  9: DUCC0_PROCESS_2
-    case  7: DUCC0_PROCESS_2
-    case  5: DUCC0_PROCESS_2
-    case  3: DUCC0_PROCESS_2
-    case  1: 
-      {
-      unsigned tab=p2m3D_1[rot][v>>61];
-      return (res<<3) | (tab&0x7);
-      }
-    case 20: DUCC0_PROCESS_2
-    case 18: DUCC0_PROCESS_2
-    case 16: DUCC0_PROCESS_2
-    case 14: DUCC0_PROCESS_2
-    case 12: DUCC0_PROCESS_2
-    case 10: DUCC0_PROCESS_2
-    case  8: DUCC0_PROCESS_2
-    case  6: DUCC0_PROCESS_2
-    case  4: DUCC0_PROCESS_2
-    case  2: 
-      {
-      unsigned tab=p2m3D_2[rot][v>>58];
-      return (res<<6) | (tab&0x3fu);
-      }
-    default:
-      MR_fail("bad number of bits");
+    case  1: return tpeano2morton3D_64< 1>(v);
+    case  2: return tpeano2morton3D_64< 2>(v);
+    case  3: return tpeano2morton3D_64< 3>(v);
+    case  4: return tpeano2morton3D_64< 4>(v);
+    case  5: return tpeano2morton3D_64< 5>(v);
+    case  6: return tpeano2morton3D_64< 6>(v);
+    case  7: return tpeano2morton3D_64< 7>(v);
+    case  8: return tpeano2morton3D_64< 8>(v);
+    case  9: return tpeano2morton3D_64< 9>(v);
+    case 10: return tpeano2morton3D_64<10>(v);
+    case 11: return tpeano2morton3D_64<11>(v);
+    case 12: return tpeano2morton3D_64<12>(v);
+    case 13: return tpeano2morton3D_64<13>(v);
+    case 14: return tpeano2morton3D_64<14>(v);
+    case 15: return tpeano2morton3D_64<15>(v);
+    case 16: return tpeano2morton3D_64<16>(v);
+    case 17: return tpeano2morton3D_64<17>(v);
+    case 18: return tpeano2morton3D_64<18>(v);
+    case 19: return tpeano2morton3D_64<19>(v);
+    case 20: return tpeano2morton3D_64<20>(v);
+    case 21: return tpeano2morton3D_64<21>(v);
+    default: MR_fail("bad bits number");
     }
-#undef DUCC0_PROCESS_2
   }
-#else
-uint64_t peano2morton3D_64(uint64_t v, unsigned bits)
-  {
-  unsigned rot = 0;
-  uint64_t res = 0;
-  v<<=3*(21-bits)+1;
-  unsigned i=0;
-  for (; i+1<bits; i+=2)
-    {
-    unsigned tab=p2m3D_2[rot][v>>58];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
-    }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=p2m3D_1[rot][v>>61];
-    v<<=3;
-    res = (res<<3) | (tab&0x7);
-    rot = tab>>3;
-    }
-  return res;
-  }
-#endif
 uint32_t morton2peano2D_32(uint32_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint32_t res = 0;
-  v<<=32-(bits<<1);
-  unsigned i=0;
-  for (; i+2<bits; i+=3)
+  switch(bits)
     {
-    unsigned tab=m2p2D_3[rot][v>>26];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
+    case  1: return tmorton2peano2D_32< 1>(v);
+    case  2: return tmorton2peano2D_32< 2>(v);
+    case  3: return tmorton2peano2D_32< 3>(v);
+    case  4: return tmorton2peano2D_32< 4>(v);
+    case  5: return tmorton2peano2D_32< 5>(v);
+    case  6: return tmorton2peano2D_32< 6>(v);
+    case  7: return tmorton2peano2D_32< 7>(v);
+    case  8: return tmorton2peano2D_32< 8>(v);
+    case  9: return tmorton2peano2D_32< 9>(v);
+    case 10: return tmorton2peano2D_32<10>(v);
+    case 11: return tmorton2peano2D_32<11>(v);
+    case 12: return tmorton2peano2D_32<12>(v);
+    case 13: return tmorton2peano2D_32<13>(v);
+    case 14: return tmorton2peano2D_32<14>(v);
+    case 15: return tmorton2peano2D_32<15>(v);
+    case 16: return tmorton2peano2D_32<16>(v);
+    default: MR_fail("bad bits number");
     }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=m2p2D_1[rot][v>>30];
-    v<<=2;
-    res = (res<<2) | (tab&0x3);
-    rot = tab>>2;
-    }
-  return res;
   }
 uint32_t peano2morton2D_32(uint32_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint32_t res = 0;
-  v<<=32-(bits<<1);
-  unsigned i=0;
-  for (; i+2<bits; i+=3)
+  switch(bits)
     {
-    unsigned tab=p2m2D_3[rot][v>>26];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
+    case  1: return tpeano2morton2D_32< 1>(v);
+    case  2: return tpeano2morton2D_32< 2>(v);
+    case  3: return tpeano2morton2D_32< 3>(v);
+    case  4: return tpeano2morton2D_32< 4>(v);
+    case  5: return tpeano2morton2D_32< 5>(v);
+    case  6: return tpeano2morton2D_32< 6>(v);
+    case  7: return tpeano2morton2D_32< 7>(v);
+    case  8: return tpeano2morton2D_32< 8>(v);
+    case  9: return tpeano2morton2D_32< 9>(v);
+    case 10: return tpeano2morton2D_32<10>(v);
+    case 11: return tpeano2morton2D_32<11>(v);
+    case 12: return tpeano2morton2D_32<12>(v);
+    case 13: return tpeano2morton2D_32<13>(v);
+    case 14: return tpeano2morton2D_32<14>(v);
+    case 15: return tpeano2morton2D_32<15>(v);
+    case 16: return tpeano2morton2D_32<16>(v);
+    default: MR_fail("bad bits number");
     }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=p2m2D_1[rot][v>>30];
-    v<<=2;
-    res = (res<<2) | (tab&0x3);
-    rot = tab>>2;
-    }
-  return res;
   }
 uint64_t morton2peano2D_64(uint64_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint64_t res = 0;
-  v<<=64-(bits<<1);
-  unsigned i=0;
-  for (; i+2<bits; i+=3)
+  switch(bits)
     {
-    unsigned tab=m2p2D_3[rot][v>>58];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
+    case  1: return tmorton2peano2D_64< 1>(v);
+    case  2: return tmorton2peano2D_64< 2>(v);
+    case  3: return tmorton2peano2D_64< 3>(v);
+    case  4: return tmorton2peano2D_64< 4>(v);
+    case  5: return tmorton2peano2D_64< 5>(v);
+    case  6: return tmorton2peano2D_64< 6>(v);
+    case  7: return tmorton2peano2D_64< 7>(v);
+    case  8: return tmorton2peano2D_64< 8>(v);
+    case  9: return tmorton2peano2D_64< 9>(v);
+    case 10: return tmorton2peano2D_64<10>(v);
+    case 11: return tmorton2peano2D_64<11>(v);
+    case 12: return tmorton2peano2D_64<12>(v);
+    case 13: return tmorton2peano2D_64<13>(v);
+    case 14: return tmorton2peano2D_64<14>(v);
+    case 15: return tmorton2peano2D_64<15>(v);
+    case 16: return tmorton2peano2D_64<16>(v);
+    case 17: return tmorton2peano2D_64<17>(v);
+    case 18: return tmorton2peano2D_64<18>(v);
+    case 19: return tmorton2peano2D_64<19>(v);
+    case 20: return tmorton2peano2D_64<20>(v);
+    case 21: return tmorton2peano2D_64<21>(v);
+    case 22: return tmorton2peano2D_64<22>(v);
+    case 23: return tmorton2peano2D_64<23>(v);
+    case 24: return tmorton2peano2D_64<24>(v);
+    case 25: return tmorton2peano2D_64<25>(v);
+    case 26: return tmorton2peano2D_64<26>(v);
+    case 27: return tmorton2peano2D_64<27>(v);
+    case 28: return tmorton2peano2D_64<28>(v);
+    case 29: return tmorton2peano2D_64<29>(v);
+    case 30: return tmorton2peano2D_64<30>(v);
+    case 31: return tmorton2peano2D_64<31>(v);
+    case 32: return tmorton2peano2D_64<32>(v);
+    default: MR_fail("bad bits number");
     }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=m2p2D_1[rot][v>>62];
-    v<<=2;
-    res = (res<<2) | (tab&0x3);
-    rot = tab>>2;
-    }
-  return res;
   }
 uint64_t peano2morton2D_64(uint64_t v, unsigned bits)
   {
-  unsigned rot = 0;
-  uint64_t res = 0;
-  v<<=64-(bits<<1);
-  unsigned i=0;
-  for (; i+2<bits; i+=3)
+  switch(bits)
     {
-    unsigned tab=p2m2D_3[rot][v>>58];
-    v<<=6;
-    res = (res<<6) | (tab&0x3fu);
-    rot = tab>>6;
+    case  1: return tpeano2morton2D_64< 1>(v);
+    case  2: return tpeano2morton2D_64< 2>(v);
+    case  3: return tpeano2morton2D_64< 3>(v);
+    case  4: return tpeano2morton2D_64< 4>(v);
+    case  5: return tpeano2morton2D_64< 5>(v);
+    case  6: return tpeano2morton2D_64< 6>(v);
+    case  7: return tpeano2morton2D_64< 7>(v);
+    case  8: return tpeano2morton2D_64< 8>(v);
+    case  9: return tpeano2morton2D_64< 9>(v);
+    case 10: return tpeano2morton2D_64<10>(v);
+    case 11: return tpeano2morton2D_64<11>(v);
+    case 12: return tpeano2morton2D_64<12>(v);
+    case 13: return tpeano2morton2D_64<13>(v);
+    case 14: return tpeano2morton2D_64<14>(v);
+    case 15: return tpeano2morton2D_64<15>(v);
+    case 16: return tpeano2morton2D_64<16>(v);
+    case 17: return tpeano2morton2D_64<17>(v);
+    case 18: return tpeano2morton2D_64<18>(v);
+    case 19: return tpeano2morton2D_64<19>(v);
+    case 20: return tpeano2morton2D_64<20>(v);
+    case 21: return tpeano2morton2D_64<21>(v);
+    case 22: return tpeano2morton2D_64<22>(v);
+    case 23: return tpeano2morton2D_64<23>(v);
+    case 24: return tpeano2morton2D_64<24>(v);
+    case 25: return tpeano2morton2D_64<25>(v);
+    case 26: return tpeano2morton2D_64<26>(v);
+    case 27: return tpeano2morton2D_64<27>(v);
+    case 28: return tpeano2morton2D_64<28>(v);
+    case 29: return tpeano2morton2D_64<29>(v);
+    case 30: return tpeano2morton2D_64<30>(v);
+    case 31: return tpeano2morton2D_64<31>(v);
+    case 32: return tpeano2morton2D_64<32>(v);
+    default: MR_fail("bad bits number");
     }
-  for (; i<bits; ++i)
-    {
-    unsigned tab=p2m2D_1[rot][v>>62];
-    v<<=2;
-    res = (res<<2) | (tab&0x3);
-    rot = tab>>2;
-    }
-  return res;
   }
 
 }
