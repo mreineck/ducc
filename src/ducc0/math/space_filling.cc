@@ -26,7 +26,13 @@
 
 namespace ducc0 {
 
+#ifndef DUCC0_USE_PDEP_PEXT
+
 #if 0
+// this variant is sometimes faster than the functions in the else-branch, but
+// its tables need valuable L1 space.
+
+namespace {
 
 static constexpr const uint16_t utab[] = {
 #define Z(a) 0x##a##0, 0x##a##1, 0x##a##4, 0x##a##5
@@ -47,6 +53,8 @@ X(0),X(8),X(2048),X(2056)
 #undef Z
 };
 
+} // unnamed namespace
+
 uint32_t spread_bits_2D_32 (uint32_t v)
   {
   using I=uint32_t;
@@ -58,7 +66,6 @@ uint64_t spread_bits_2D_64 (uint64_t v)
   return  I(utab[ v     &0xff])      | (I(utab[(v>> 8)&0xff])<<16)
        | (I(utab[(v>>16)&0xff])<<32) | (I(utab[(v>>24)&0xff])<<48);
   }
-
 uint32_t block2morton2D_32 (uint32_t v)
   {
   using I=uint32_t;
@@ -149,6 +156,9 @@ inline uint32_t spread_bits_2D_32 (uint32_t v)
   v = (v|(v<< 1)) & 0x5555555555555555u;
   return v;
   }
+
+namespace {
+
 inline uint64_t compress_bits_2D_64 (uint64_t v)
   {
   v&=0x5555555555555555u;
@@ -159,6 +169,7 @@ inline uint64_t compress_bits_2D_64 (uint64_t v)
   v = (v|(v>>16)) & 0x00000000ffffffffu;
   return v;
   }
+#if 0  // currently not needed
 inline uint32_t compress_bits_2D_32 (uint32_t v)
   {
   v&=0x55555555u;
@@ -168,6 +179,9 @@ inline uint32_t compress_bits_2D_32 (uint32_t v)
   v = (v|(v>> 8)) & 0x0000ffffu;
   return v;
   }
+#endif
+
+}  // unnamed namespace
 
 uint32_t block2morton2D_32 (uint32_t v)
   { uint64_t t=spread_bits_2D_64(v); return (t | (t>>31)) & 0xffffffffu; }
@@ -194,6 +208,8 @@ std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
   { return {compress_bits_2D_64(v), compress_bits_2D_64(v>>1)}; }
 
 #endif
+
+namespace {
 
 inline uint32_t spread_bits_3D_32 (uint32_t v)
   {
@@ -229,6 +245,8 @@ inline uint64_t compress_bits_3D_64 (uint64_t v)
   v=(v|(v>>16)|(v>>32)) & 0x1fffffu;
   return v;
   }
+
+} // unnamed namespace
 
 uint32_t block2morton3D_32 (uint32_t v)
   {
@@ -281,6 +299,8 @@ std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
            compress_bits_3D_64(v>>1),
            compress_bits_3D_64(v>>2)};
   }
+
+#endif
 
 namespace {
 
@@ -910,7 +930,7 @@ uint32_t morton2peano3D_32(uint32_t v, unsigned bits)
     case  8: return tmorton2peano3D_32< 8>(v);
     case  9: return tmorton2peano3D_32< 9>(v);
     case 10: return tmorton2peano3D_32<10>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint32_t peano2morton3D_32(uint32_t v, unsigned bits)
@@ -927,7 +947,7 @@ uint32_t peano2morton3D_32(uint32_t v, unsigned bits)
     case  8: return tpeano2morton3D_32< 8>(v);
     case  9: return tpeano2morton3D_32< 9>(v);
     case 10: return tpeano2morton3D_32<10>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint64_t morton2peano3D_64(uint64_t v, unsigned bits)
@@ -955,7 +975,7 @@ uint64_t morton2peano3D_64(uint64_t v, unsigned bits)
     case 19: return tmorton2peano3D_64<19>(v);
     case 20: return tmorton2peano3D_64<20>(v);
     case 21: return tmorton2peano3D_64<21>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint64_t peano2morton3D_64(uint64_t v, unsigned bits)
@@ -983,7 +1003,7 @@ uint64_t peano2morton3D_64(uint64_t v, unsigned bits)
     case 19: return tpeano2morton3D_64<19>(v);
     case 20: return tpeano2morton3D_64<20>(v);
     case 21: return tpeano2morton3D_64<21>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint32_t morton2peano2D_32(uint32_t v, unsigned bits)
@@ -1006,7 +1026,7 @@ uint32_t morton2peano2D_32(uint32_t v, unsigned bits)
     case 14: return tmorton2peano2D_32<14>(v);
     case 15: return tmorton2peano2D_32<15>(v);
     case 16: return tmorton2peano2D_32<16>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint32_t peano2morton2D_32(uint32_t v, unsigned bits)
@@ -1029,7 +1049,7 @@ uint32_t peano2morton2D_32(uint32_t v, unsigned bits)
     case 14: return tpeano2morton2D_32<14>(v);
     case 15: return tpeano2morton2D_32<15>(v);
     case 16: return tpeano2morton2D_32<16>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint64_t morton2peano2D_64(uint64_t v, unsigned bits)
@@ -1068,7 +1088,7 @@ uint64_t morton2peano2D_64(uint64_t v, unsigned bits)
     case 30: return tmorton2peano2D_64<30>(v);
     case 31: return tmorton2peano2D_64<31>(v);
     case 32: return tmorton2peano2D_64<32>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 uint64_t peano2morton2D_64(uint64_t v, unsigned bits)
@@ -1107,7 +1127,7 @@ uint64_t peano2morton2D_64(uint64_t v, unsigned bits)
     case 30: return tpeano2morton2D_64<30>(v);
     case 31: return tpeano2morton2D_64<31>(v);
     case 32: return tpeano2morton2D_64<32>(v);
-    default: MR_fail("bad bits number");
+    default: MR_fail("bad number of requested bits");
     }
   }
 
