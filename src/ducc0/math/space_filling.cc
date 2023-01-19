@@ -15,7 +15,8 @@
  */
 
 /*
- *  Utilities for conversion between coordinates, Morton, and Peano indices
+ *  Utilities for conversion between integer coordinates, Morton indices,
+ *  and Peano-Hilbert indices
  *
  *  Copyright (C) 2015-2023 Max-Planck-Society
  *  Author: Martin Reinecke
