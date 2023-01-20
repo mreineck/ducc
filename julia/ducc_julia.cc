@@ -26,7 +26,7 @@ Creating the shared library:
 
 g++ -O3 -march=native -o ducc_julia.so ducc_julia.o -Wfatal-errors -pthread -std=c++17 -shared -fPIC
 
-CONVENTIONS USED FOR THIE WRAPPER:
+CONVENTIONS USED FOR THIS WRAPPER:
  - passed ArrayDescriptors are in Julia order, i.e. all axis-swapping etc. will
    take place on the C++ side, if necessary
  - if axis indices or array indices are passed, they are assumed to be one-based
@@ -71,6 +71,7 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   auto &out(*out_);
   const auto &axes(*axes_);
   auto myaxes(to_vector_subtract_1<true, uint64_t, size_t>(axes));
+  for (auto &a: myaxes) a = in.ndim-1-a;
   if (in.dtype==Typecode<complex<double>>::value)
     {
     auto myin(to_cfmav<true,complex<double>>(in));
