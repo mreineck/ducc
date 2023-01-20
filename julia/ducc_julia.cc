@@ -1,13 +1,35 @@
-// file ducc_julia.cc
+/*
+ *  This code is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This code is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this code; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+/* Copyright (C) 2022-2023 Max-Planck-Society, Leo A. Bianchi
+   Authors: Martin Reinecke, Leo A. Bianchi */
 
 /*
 Compilation: (the -I path must point to the src/ directory in the ducc0 checkout)
 
-g++ -O3 -march=native -ffast-math -I ../src/ ducc_julia.cc -Wfatal-errors -pthread -std=c++17 -fPIC -c
+g++ -O3 -march=native -ffast-math -I ../src/ ducc_julia.cc -Wfatal-errors -pthread -std=c++17 -fPIC -c -fvisibility=hidden
 
 Creating the shared library:
 
 g++ -O3 -march=native -o ducc_julia.so ducc_julia.o -Wfatal-errors -pthread -std=c++17 -shared -fPIC
+
+CONVENTIONS USED FOR THIE WRAPPER:
+ - passed ArrayDescriptors are in Julia order, i.e. all axis-swapping etc. will
+   take place on the C++ side, if necessary
+ - if array indices or offsets are passed, they are assumed to be one-based
 */
 
 #include "ducc0/infra/threading.cc"
@@ -33,9 +55,14 @@ template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
 #define DUCC0_JULIA_TRY_BEGIN try{
 #define DUCC0_JULIA_TRY_END } catch(const exception &e) { cout << e.what() << endl; return 1; } return 0;
 
-extern "C" {
+#if defined _WIN32 || defined __CYGWIN__
+#define DUCC0_INTERFACE_FUNCTION extern "C" [[gnu::dllexport]]
+#else
+#define DUCC0_INTERFACE_FUNCTION extern "C" [[gnu::visibility("default")]]
+#endif
 
 // FFT
+DUCC0_INTERFACE_FUNCTION
 int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
   {
@@ -43,7 +70,7 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &in(*in_);
   auto &out(*out_);
   const auto &axes(*axes_);
-  auto myaxes(to_vector<true, uint64_t, size_t>(axes));
+  auto myaxes(to_vector_subtract_1<true, uint64_t, size_t>(axes));
   if (in.dtype==Typecode<complex<double>>::value)
     {
     auto myin(to_cfmav<true,complex<double>>(in));
@@ -63,6 +90,7 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
 
 // NUFFT
 
+DUCC0_INTERFACE_FUNCTION
 double nufft_best_epsilon(size_t ndim, int singleprec,
   double ofactor_min, double ofactor_max)
   {
@@ -74,6 +102,7 @@ double nufft_best_epsilon(size_t ndim, int singleprec,
     { cout << e.what() << endl; return -1.; }
   }
 
+DUCC0_INTERFACE_FUNCTION
 int nufft_u2nu(const ArrayDescriptor *grid_,
                      const ArrayDescriptor *coord_,
                      int forward,
@@ -132,6 +161,7 @@ int nufft_u2nu(const ArrayDescriptor *grid_,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int nufft_nu2u(const ArrayDescriptor *points_,
                        const ArrayDescriptor *coord_,
                        int forward,
@@ -198,6 +228,7 @@ struct Tplan
   void *plan;
   };
 
+DUCC0_INTERFACE_FUNCTION
 Tplan *nufft_make_plan(int nu2u,
                              const ArrayDescriptor *shape_,
                              const ArrayDescriptor *coord_,
@@ -255,6 +286,7 @@ Tplan *nufft_make_plan(int nu2u,
     { cout << e.what() << endl; return nullptr; }
   }
 
+DUCC0_INTERFACE_FUNCTION
 int nufft_delete_plan(Tplan *plan)
   {
   DUCC0_JULIA_TRY_BEGIN
@@ -276,6 +308,7 @@ int nufft_delete_plan(Tplan *plan)
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   const ArrayDescriptor *points_, ArrayDescriptor *uniform_)
   {
@@ -340,6 +373,7 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   const ArrayDescriptor *uniform_, ArrayDescriptor *points_)
   {
@@ -404,6 +438,7 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   size_t lmax, const ArrayDescriptor *mval_, const ArrayDescriptor *mstart_,
   ptrdiff_t lstride, const ArrayDescriptor *theta_, size_t nthreads,
@@ -411,8 +446,7 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   {
   DUCC0_JULIA_TRY_BEGIN
   auto mval(to_cmav<true,size_t,1>(*mval_));
-// FIXME: subtract 1?
-  auto mstart(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_));
+  auto mstart(subtract_1(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_)));
   auto theta(to_cmav<true,double,1>(*theta_));
   if (alm_->dtype==Typecode<complex<double>>::value)
     {
@@ -431,6 +465,7 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
   size_t lmax, const ArrayDescriptor *mval_, const ArrayDescriptor *mstart_,
   ptrdiff_t lstride, const ArrayDescriptor *theta_, size_t nthreads,
@@ -438,8 +473,7 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
   {
   DUCC0_JULIA_TRY_BEGIN
   auto mval(to_cmav<true,size_t,1>(*mval_));
-// FIXME: subtract 1?
-  auto mstart(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_));
+  auto mstart(subtract_1(to_cmav_with_typecast<true,ptrdiff_t,size_t,1>(*mstart_)));
   auto theta(to_cmav<true,double,1>(*theta_));
   if (leg_->dtype==Typecode<complex<double>>::value)
     {
@@ -458,6 +492,7 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
 int sht_leg2map(const ArrayDescriptor *leg_,
   const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
   const ArrayDescriptor *ringstart_,
@@ -484,6 +519,7 @@ int sht_leg2map(const ArrayDescriptor *leg_,
   DUCC0_JULIA_TRY_END
   }
 
+DUCC0_INTERFACE_FUNCTION
   int sht_map2leg(const ArrayDescriptor *map_,
     const ArrayDescriptor *nphi_, const ArrayDescriptor *phi0_,
     const ArrayDescriptor *ringstart_,
@@ -509,8 +545,6 @@ int sht_leg2map(const ArrayDescriptor *leg_,
       MR_fail("unsupported data type");
     DUCC0_JULIA_TRY_END
     }
-
-} // extern "C"
 
 #undef DUCC0_JULIA_TRY_BEGIN
 #undef DUCC0_JULIA_TRY_END
