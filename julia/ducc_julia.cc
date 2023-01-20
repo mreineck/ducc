@@ -29,7 +29,7 @@ g++ -O3 -march=native -o ducc_julia.so ducc_julia.o -Wfatal-errors -pthread -std
 CONVENTIONS USED FOR THIE WRAPPER:
  - passed ArrayDescriptors are in Julia order, i.e. all axis-swapping etc. will
    take place on the C++ side, if necessary
- - if array indices or offsets are passed, they are assumed to be one-based
+ - if axis indices or array indices are passed, they are assumed to be one-based
 */
 
 #include "ducc0/infra/threading.cc"
@@ -501,7 +501,7 @@ int sht_leg2map(const ArrayDescriptor *leg_,
   DUCC0_JULIA_TRY_BEGIN
   auto nphi(to_cmav<true,size_t,1>(*nphi_));
   auto phi0(to_cmav<true,double,1>(*phi0_));
-  auto ringstart(to_cmav<true,size_t,1>(*ringstart_));
+  auto ringstart(subtract_1(to_cmav<true,size_t,1>(*ringstart_)));
   if (leg_->dtype==Typecode<complex<double>>::value)
     {
     auto leg(to_cmav<true,complex<double>,3>(*leg_));
@@ -528,7 +528,7 @@ DUCC0_INTERFACE_FUNCTION
     DUCC0_JULIA_TRY_BEGIN
     auto nphi(to_cmav<true,size_t,1>(*nphi_));
     auto phi0(to_cmav<true,double,1>(*phi0_));
-    auto ringstart(to_cmav<true,size_t,1>(*ringstart_));
+    auto ringstart(subtract_1(to_cmav<true,size_t,1>(*ringstart_)));
     if (map_->dtype==Typecode<double>::value)
       {
       auto map(to_cmav<true,double,2>(*map_));
