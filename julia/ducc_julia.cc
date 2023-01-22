@@ -89,6 +89,58 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
     MR_fail("bad datatype");
   DUCC0_JULIA_TRY_END
   }
+DUCC0_INTERFACE_FUNCTION
+int fft_r2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
+  const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
+  {
+  DUCC0_JULIA_TRY_BEGIN
+  const auto &in(*in_);
+  auto &out(*out_);
+  const auto &axes(*axes_);
+  auto myaxes(to_vector_subtract_1<false, uint64_t, size_t>(axes));
+  for (auto &a: myaxes) a = in.ndim-1-a;
+  if (in.dtype==Typecode<double>::value)
+    {
+    auto myin(to_cfmav<true,double>(in));
+    auto myout(to_vfmav<true,complex<double>>(out));
+    r2c(myin, myout, myaxes, forward, fct, nthreads);
+    }
+  else if (in.dtype==Typecode<float>::value)
+    {
+    auto myin(to_cfmav<true,float>(in));
+    auto myout(to_vfmav<true,complex<float>>(out));
+    r2c(myin, myout, myaxes, forward, float(fct), nthreads);
+    }
+  else
+    MR_fail("bad datatype");
+  DUCC0_JULIA_TRY_END
+  }
+DUCC0_INTERFACE_FUNCTION
+int fft_c2r(const ArrayDescriptor *in_, ArrayDescriptor *out_,
+  const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
+  {
+  DUCC0_JULIA_TRY_BEGIN
+  const auto &in(*in_);
+  auto &out(*out_);
+  const auto &axes(*axes_);
+  auto myaxes(to_vector_subtract_1<false, uint64_t, size_t>(axes));
+  for (auto &a: myaxes) a = in.ndim-1-a;
+  if (in.dtype==Typecode<complex<double>>::value)
+    {
+    auto myin(to_cfmav<true,complex<double>>(in));
+    auto myout(to_vfmav<true,double>(out));
+    c2r(myin, myout, myaxes, forward, fct, nthreads);
+    }
+  else if (in.dtype==Typecode<complex<float>>::value)
+    {
+    auto myin(to_cfmav<true,complex<float>>(in));
+    auto myout(to_vfmav<true,float>(out));
+    c2r(myin, myout, myaxes, forward, float(fct), nthreads);
+    }
+  else
+    MR_fail("bad datatype");
+  DUCC0_JULIA_TRY_END
+  }
 
 // NUFFT
 
