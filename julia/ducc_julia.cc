@@ -62,6 +62,7 @@ template<typename T> cmav<T,2> get_coord(const ArrayDescriptor &desc)
 #endif
 
 // FFT
+
 DUCC0_INTERFACE_FUNCTION
 int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
@@ -70,7 +71,7 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &in(*in_);
   auto &out(*out_);
   const auto &axes(*axes_);
-  auto myaxes(to_vector_subtract_1<true, uint64_t, size_t>(axes));
+  auto myaxes(to_vector_subtract_1<false, uint64_t, size_t>(axes));
   for (auto &a: myaxes) a = in.ndim-1-a;
   if (in.dtype==Typecode<complex<double>>::value)
     {
