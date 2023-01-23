@@ -484,7 +484,9 @@ a : numpy.ndarray (any real type)
     The input data
 axes : list of integers
     The axes along which the FFT is carried out.
-    If not set, all axes will be transformed in ascending order.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    The real-to-complex transform will be executed along `axes[-1]`,
+    and will be executed first.
 forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
@@ -506,8 +508,8 @@ Returns
 -------
 numpy.ndarray (complex type with same accuracy as `a`)
     The transformed data. The shape is identical to that of the input array,
-    except for the axis that was transformed last. If the length of that axis
-    was n on input, it is n//2+1 on output.
+    except for `axes[-1]`. If the length of that axis was n on input,
+    it is n//2+1 on output.
 )""";
 
 const char *c2r_DS = R"""(Performs an FFT whose output is strictly real.
@@ -518,7 +520,9 @@ a : numpy.ndarray (any complex type)
     The input data
 axes : list of integers
     The axes along which the FFT is carried out.
-    If not set, all axes will be transformed in ascending order.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    The complex-to-real transform will be executed along `axes[-1]`,
+    and will be executed last.
 lastsize : the output size of the last axis to be transformed.
     If the corresponding input axis has size n, this can be 2*n-2 or 2*n-1.
 forward : bool
@@ -545,8 +549,7 @@ Returns
 -------
 numpy.ndarray (real type with same accuracy as `a`)
     The transformed data. The shape is identical to that of the input array,
-    except for the axis that was transformed last, which has now `lastsize`
-    entries.
+    except for `axes[-1]`, which has now `lastsize` entries.
 )""";
 
 const char *r2r_fftpack_DS = R"""(Performs a real-valued FFT using FFTPACK's halfcomplex storage scheme.
@@ -557,7 +560,8 @@ a : numpy.ndarray (any real type)
     The input data
 axes : list of integers
     The axes along which the FFT is carried out.
-    If not set, all axes will be transformed.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
 real2hermitian : bool
     if True, the input is purely real and the output will have Hermitian
     symmetry and be stored in FFTPACK's halfcomplex ordering, otherwise the
@@ -592,7 +596,8 @@ a : numpy.ndarray (any real type)
     The input data
 axes : list of integers
     The axes along which the FFT is carried out.
-    If not set, all axes will be transformed.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
 forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
 inorm : int
@@ -626,7 +631,8 @@ a : numpy.ndarray (any real type)
     The input data
 axes : list of integers
     The axes along which the transform is carried out.
-    If not set, all axes will be transformed.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
 inorm : int
     Normalization type
       | 0 : no normalization
@@ -690,7 +696,8 @@ type : integer
     the type of DCT. Must be in [1; 4].
 axes : list of integers
     The axes along which the transform is carried out.
-    If not set, all axes will be transformed.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
 inorm : integer
     the normalization type
       | 0 : no normalization
@@ -736,7 +743,8 @@ type : integer
     the type of DST. Must be in [1; 4].
 axes : list of integers
     The axes along which the transform is carried out.
-    If not set, all axes will be transformed.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
 inorm : int
     Normalization type
       | 0 : no normalization
