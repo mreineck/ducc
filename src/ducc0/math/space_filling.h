@@ -75,7 +75,7 @@ inline std::array<uint64_t,3> block2coord3D_64(uint64_t v)
 #ifndef DUCC0_USE_PDEP_PEXT
 
 // FIXME: these two are only needed for a very specific case in the Healpix
-// neighbors() function. Perhaps we can solve this diffrently?
+// neighbors() function. Perhaps we can solve this differently?
 uint32_t spread_bits_2D_32 (uint32_t v);
 uint64_t spread_bits_2D_64 (uint64_t v);
 
