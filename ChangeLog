@@ -16,6 +16,9 @@
 - julia:
     - start of a Julia wrapper, currently focused on NUFFT and SHT support
 
+- math:
+    - computations involving Peano-Hilbert indices are now much faster 
+
 - misc:
     - new function `roll_resize_roll`, which allows efficient combined
       rolling/padding/truncation of arrays.
