@@ -1541,7 +1541,7 @@ MR_fail("must not get here");
 
   public:
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
-      const Troots<Tfs> &roots, bool vectorize=false)
+      const Troots<Tfs> &roots, bool /*vectorize*/=false)
       : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false),
         myroots(roots)
       {
