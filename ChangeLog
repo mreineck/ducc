@@ -14,7 +14,7 @@
       better tuning and improves maximum attainable accuracy in 2D and 3D.
 
 - julia:
-    - start of a Julia wrapper, currently focused on NUFFT and SHT support
+    - start of a Julia wrapper, currently focused on FFT, NUFFT and SHT support
 
 - misc:
     - new function `roll_resize_roll`, which allows efficient combined

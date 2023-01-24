@@ -14,9 +14,8 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022 Max-Planck-Society
+/* Copyright (C) 2022-2023 Max-Planck-Society
    Author: Martin Reinecke */
-
 
 #ifndef DUCC0_ARRAY_DESCRIPTOR_H
 #define DUCC0_ARRAY_DESCRIPTOR_H
@@ -121,7 +120,30 @@ template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
                                : data[i*desc.stride[0]]);
   return res;
   }
+template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector_subtract_1
+  (const ArrayDescriptor &desc)
+  {
+  static_assert(is_integral<Tin>::value, "need an integral type for this");
+  MR_assert(Typecode<Tin>::value==desc.dtype, "data type mismatch");
+  MR_assert(desc.ndim==1, "need 1D array for conversion to vector");
+  vector<Tout> res;
+  res.reserve(desc.shape[0]);
+  auto data = reinterpret_cast<const Tin *>(desc.data);
+  for (size_t i=0; i<desc.shape[0]; ++i)
+    {
+    Tin val = (swap_content ? data[(desc.shape[0]-1-i)*desc.stride[0]]
+                            : data[i*desc.stride[0]]) - Tin(1);
+    res.push_back(Tout(val));
+    }
+  return res;
+  }
 
+template<typename T, size_t ndim> cmav<T,ndim> subtract_1(const cmav<T,ndim> &inp)
+  {
+  vmav<T,ndim> res(inp.shape());
+  mav_apply([](T &v1, const T &v2){v1=v2-T(1);}, 1, res, inp);
+  return res;
+  }
 }
 
 using detail_array_descriptor::ArrayDescriptor;
@@ -131,6 +153,8 @@ using detail_array_descriptor::to_vmav;
 using detail_array_descriptor::to_cfmav;
 using detail_array_descriptor::to_vfmav;
 using detail_array_descriptor::to_vector;
+using detail_array_descriptor::to_vector_subtract_1;
+using detail_array_descriptor::subtract_1;
 
 }
 
