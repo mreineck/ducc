@@ -55,8 +55,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstddef>
 #include <functional>
+#ifndef DUCC0_NO_THREADING
 #include <mutex>
 #include <condition_variable>
+#endif
 #include <optional>
 
 namespace ducc0 {
@@ -144,6 +146,8 @@ inline void execParallel(size_t nwork, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   { execParallel(0, nwork, nthreads, func); }
 
+#ifndef DUCC0_NO_THREADING
+
 template<typename T> class Worklist
   {
   private:
@@ -183,6 +187,37 @@ template<typename T> class Worklist
       cv.notify_one();
       }
   };
+  
+#else
+
+template<typename T> class Worklist
+  {
+  private:
+    std::vector<T> items;
+
+  public:
+    Worklist(const std::vector<T> &items_)
+      : items(items_) {}
+
+    std::optional<T> get_item()
+      {
+      if (!items.empty())
+        {
+        auto res = items.back();
+        items.pop_back();
+        return res;
+        }
+      else
+        return {};
+      }
+    void startup() {}
+    void put_item(const T &item)
+      {
+      items.push_back(item);
+      }
+  };
+
+#endif
 
 /// Execute \a func on work items in \a items over \a nthreads threads.
 /** While processing a work item, \a func may submit further items to the list
