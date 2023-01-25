@@ -240,6 +240,7 @@ template<typename T, typename Func> auto execWorklist
 
 using detail_threading::max_threads;
 using detail_threading::adjust_nthreads;
+using detail_threading::Range;
 using detail_threading::Scheduler;
 using detail_threading::execSingle;
 using detail_threading::execStatic;

@@ -161,11 +161,6 @@ struct util // hack to avoid duplicate symbols
         "axis length mismatch");
     }
 
-#ifdef DUCC0_NO_THREADING
-  static size_t thread_count (size_t /*nthreads*/, const fmav_info &/*info*/,
-    size_t /*axis*/, size_t /*vlen*/)
-    { return 1; }
-#else
   static size_t thread_count (size_t nthreads, const fmav_info &info,
     size_t axis, size_t vlen)
     {
@@ -174,10 +169,9 @@ struct util // hack to avoid duplicate symbols
     size_t parallel = size / (info.shape(axis) * vlen);
     if (info.shape(axis) < 1000)
       parallel /= 4;
-    size_t max_threads = ducc0::adjust_nthreads(nthreads);
-    return std::max(size_t(1), std::min(parallel, max_threads));
+    if (nthreads == 0) return parallel;
+    return std::min(parallel, nthreads);
     }
-#endif
   };
 
 
@@ -897,10 +891,23 @@ template <typename T, size_t vlen> struct add_vec<Cmplx<T>, vlen>
   { using type = Cmplx<typename simd_select<T, vlen>::type>; };
 template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::type;
 
+/// Parallel execution functor.
+using ExecParallelFunctor = std::function<void(size_t/*nthreads*/,
+                                            std::function<void(Scheduler&/*sched*/)>/*func*/)>;
+/// Default functor for parallel execution.
+struct DefaultExecParallelFunctor
+  {
+  inline void operator()(size_t nthreads, std::function<void(Scheduler&)> func) const
+    {
+    return execParallel(nthreads, std::move(func));
+    }
+  };
+
 template<typename Tplan, typename T, typename T0, typename Exec>
 DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec &exec,
-  const bool /*allow_inplace*/=true)
+  const bool /*allow_inplace*/=true,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   if ((in.ndim()==1)&&(in.stride(0)==1)&&(out.stride(0)==1))
     {
@@ -918,7 +925,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
-    execParallel(
+    exec_parallel(
       util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
       [&](Scheduler &sched) {
         constexpr auto vlen = fft_simdlen<T0>;
@@ -1179,12 +1186,13 @@ struct ExecDcst
 
 template<typename T> DUCC0_NOINLINE void general_r2c(
   const cfmav<T> &in, vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
-  size_t nthreads)
+  size_t nthreads,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
   auto plan = std::make_unique<pocketfft_r<T>>(in.shape(axis));
   size_t len=in.shape(axis);
-  execParallel(
+  exec_parallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
     [&](Scheduler &sched) {
     constexpr auto vlen = fft_simdlen<T>;
@@ -1297,12 +1305,13 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
   }
 template<typename T> DUCC0_NOINLINE void general_c2r(
   const cfmav<Cmplx<T>> &in, vfmav<T> &out, size_t axis, bool forward, T fct,
-  size_t nthreads)
+  size_t nthreads,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
   auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
   size_t len=out.shape(axis);
-  execParallel(
+  exec_parallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
     [&](Scheduler &sched) {
       constexpr auto vlen = fft_simdlen<T>;
@@ -1530,11 +1539,12 @@ struct ExecR2R
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a exec_parallel functor over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
-  T fct, size_t nthreads=1)
+template<typename T> DUCC0_NOINLINE void c2c(
+  const cfmav<std::complex<T>> &in, vfmav<std::complex<T>> &out,
+  const shape_t &axes, bool forward, T fct, size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
@@ -1549,7 +1559,8 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
         general_nd<pocketfft_c<T>>(in2, out2, axes2, fct, nthreads, ExecC2C{forward});
         return;
         }
-  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
+  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward},
+                             /*allow_inplace=*/true,  exec_parallel);
   }
 
 /// Fast Discrete Cosine Transform
@@ -1571,21 +1582,25 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
  *  necessary) to allow an orthonormalized transform.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a exec_parallel functor over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
-  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
+  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, true};
   if (type==1)
-    general_nd<T_dct1<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dct1<T>>(in, out, axes, fct, nthreads, exec,
+                          /*allow_inplace=*/true, exec_parallel);
   else if (type==4)
-    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec,
+                           /*allow_inplace=*/true, exec_parallel);
   else
-    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec,
+                            /*allow_inplace=*/true, exec_parallel);
   }
 
 /// Fast Discrete Sine Transform
@@ -1607,67 +1622,75 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
  *  necessary) to allow an orthonormalized transform.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a exec_parallel functor over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
-  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
+  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, false};
   if (type==1)
-    general_nd<T_dst1<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dst1<T>>(in, out, axes, fct, nthreads, exec,
+                          /*allow_inplace=*/true, exec_parallel);
   else if (type==4)
-    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec,
+                           /*allow_inplace=*/true, exec_parallel);
   else
-    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec,
+                            /*allow_inplace=*/true, exec_parallel);
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
-  size_t nthreads=1)
+  size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
   auto &out2(reinterpret_cast<vfmav<Cmplx<T>>&>(out));
-  general_r2c(in, out2, axis, forward, fct, nthreads);
+  general_r2c(in, out2, axis, forward, fct, nthreads, exec_parallel);
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   vfmav<std::complex<T>> &out, const shape_t &axes,
-  bool forward, T fct, size_t nthreads=1)
+  bool forward, T fct, size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   util::sanity_check_cr(out, in, axes);
   if (in.size()==0) return;
-  r2c(in, out, axes.back(), forward, fct, nthreads);
+  r2c(in, out, axes.back(), forward, fct, nthreads, exec_parallel);
   if (axes.size()==1) return;
 
   auto newaxes = shape_t{axes.begin(), --axes.end()};
-  c2c(out, out, newaxes, forward, T(1), nthreads);
+  c2c(out, out, newaxes, forward, T(1), nthreads, exec_parallel);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
+  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   util::sanity_check_cr(in, out, axis);
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T>>&>(in));
-  general_c2r(in2, out, axis, forward, fct, nthreads);
+  general_c2r(in2, out, axis, forward, fct, nthreads, exec_parallel);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   vfmav<T> &out, const shape_t &axes, bool forward, T fct,
-  size_t nthreads=1)
+  size_t nthreads=1,
+  const ExecParallelFunctor &exec_parallel=DefaultExecParallelFunctor())
   {
   if (axes.size()==1)
-    return c2r(in, out, axes[0], forward, fct, nthreads);
+    return c2r(in, out, axes[0], forward, fct, nthreads, exec_parallel);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
   auto atmp(vfmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
   auto newaxes = shape_t{axes.begin(), --axes.end()};
-  c2c(in, atmp, newaxes, forward, T(1), nthreads);
-  c2r(atmp, out, axes.back(), forward, fct, nthreads);
+  c2c(in, atmp, newaxes, forward, T(1), nthreads, exec_parallel);
+  c2r(atmp, out, axes.back(), forward, fct, nthreads, exec_parallel);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
