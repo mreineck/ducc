@@ -178,8 +178,78 @@ struct util // hack to avoid duplicate symbols
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
 #endif
+  static size_t chunk_size(size_t nwork, size_t nthreads, size_t vlen)
+    {
+    size_t chunk_size = (nwork + nthreads - 1) / nthreads;
+#ifndef DUCC0_NO_SIMD
+    // Round up to multiple of SIMD vector length.
+    chunk_size = ((chunk_size + vlen - 1) / vlen) * vlen;
+#endif
+    return chunk_size;
+    }
   };
 
+/// Parallel FFT execution functor.
+using ThreadingFunctor = std::function<
+  void(size_t/*nthreads*/, const fmav_info &/*info*/, size_t/*axis*/,
+    size_t/*vlen*/, std::function<void(Scheduler&/*sched*/)>/*func*/)>;
+
+/// Executes FFT in a single thread.
+struct SingleThreading
+  { 
+  inline void operator()(size_t /*nthreads*/, const fmav_info &info, size_t axis,
+    size_t /*vlen*/, std::function<void(Scheduler&)> func) const
+    {
+    size_t nwork = info.size() / info.shape(axis);
+    execSingle(nwork, std::move(func));
+    }
+  };
+
+/// Executes FFT with fixed-sized chunks statically assigned to threads.
+struct StaticThreading
+  { 
+  inline void operator()(size_t nthreads, const fmav_info &info, size_t axis,
+    size_t vlen, std::function<void(Scheduler&)> func) const
+    {
+    nthreads = util::thread_count(nthreads, info, axis, vlen);
+    size_t nwork = info.size() / info.shape(axis);
+    size_t chunk_size = util::chunk_size(nwork, nthreads, vlen);
+    execStatic(nwork, nthreads, chunk_size, std::move(func));
+    }
+  };
+
+// Executes FFT with fixed-sized chunks dynamically allocated to threads.
+struct DynamicThreading
+  { 
+  inline void operator()(size_t nthreads, const fmav_info &info, size_t axis,
+    size_t vlen, std::function<void(Scheduler&)> func) const
+    {
+    nthreads = util::thread_count(nthreads, info, axis, vlen);
+    size_t nwork = info.size() / info.shape(axis);
+    size_t chunk_size = util::chunk_size(nwork, nthreads, vlen);
+    execDynamic(nwork, nthreads, chunk_size, std::move(func));
+    }
+  };
+
+struct GuidedThreading
+  {
+  double fact_max;
+  GuidedThreading(double fact_max) : fact_max(fact_max) {}
+  inline void operator()(size_t nthreads, const fmav_info &info, size_t axis,
+    size_t vlen, std::function<void(Scheduler&)> func) const
+    {
+    nthreads = util::thread_count(nthreads, info, axis, vlen);
+    size_t nwork = info.size() / info.shape(axis);
+    size_t chunk_size = util::chunk_size(nwork, nthreads, vlen);
+    execGuided(nwork, nthreads, chunk_size, fact_max, std::move(func));
+    }
+  };
+  
+#ifdef DUCC0_NO_THREADING
+using DefaultThreading = SingleThreading;
+#else
+using DefaultThreading = StaticThreading;
+#endif
 
 //
 // sine/cosine transforms
@@ -560,7 +630,7 @@ template<size_t N> class multi_iter
 
   public:
     multi_iter(const fmav_info &iarr, const fmav_info &oarr, size_t idim,
-      size_t nshares, size_t myshare)
+      size_t lo, size_t hi)
       : rem(iarr.size()/iarr.shape(idim)), sstr_i(0), sstr_o(0), p_ii(0), p_oi(0)
       {
       MR_assert(oarr.ndim()==iarr.ndim(), "dimension mismatch");
@@ -610,10 +680,7 @@ template<size_t N> class multi_iter
         sstr_o = str_o[0];
         }
 
-      if (nshares==1) return;
-      if (nshares==0) throw std::runtime_error("can't run with zero threads");
-      if (myshare>=nshares) throw std::runtime_error("impossible share requested");
-      auto [lo, hi] = calcShare(nshares, myshare, rem);
+      if (lo == 0 && hi == rem) return;
       size_t todo = hi-lo;
 
       size_t chunk = rem;
@@ -900,7 +967,8 @@ template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::
 template<typename Tplan, typename T, typename T0, typename Exec>
 DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec &exec,
-  const bool /*allow_inplace*/=true)
+  const bool /*allow_inplace*/=true,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   if ((in.ndim()==1)&&(in.stride(0)==1)&&(out.stride(0)==1))
     {
@@ -918,80 +986,84 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
-    execParallel(
-      util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
+    threading(
+      nthreads, in, axes[iax], fft_simdlen<T0>,
       [&](Scheduler &sched) {
         constexpr auto vlen = fft_simdlen<T0>;
         constexpr size_t nmax = 16;
         const auto &tin(iax==0? in : out);
-        multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-        size_t nvec = 1;
-        if (it.critical_stride_trans(sizeof(T)))  // do bunches of transforms
-          nvec = nmax/vlen;
-        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), nvec, inplace);
-
-        if (nvec>1)
+        ducc0::Range range;
+        while ((range = sched.getNext()))
           {
+          multi_iter<nmax> it(tin, out, axes[iax], range.lo, range.hi);
+          size_t nvec = 1;
+          if (it.critical_stride_trans(sizeof(T)))  // do bunches of transforms
+            nvec = nmax/vlen;
+          TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), nvec, inplace);
+
+          if (nvec>1)
+            {
+#ifndef DUCC0_NO_SIMD
+            if constexpr (vlen>1)
+              {
+              TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
+              while (it.remaining()>=vlen*nvec)
+                {
+                it.advance(vlen*nvec);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+                }
+              }
+#endif
+            {
+            TmpStorage2<T,T,T0> storage2(storage);
+            while (it.remaining()>=nvec)
+              {
+              it.advance(nvec);
+              exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+              }
+            }
+            }
+
 #ifndef DUCC0_NO_SIMD
           if constexpr (vlen>1)
             {
             TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-            while (it.remaining()>=vlen*nvec)
+            while (it.remaining()>=vlen)
               {
-              it.advance(vlen*nvec);
-              exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+              it.advance(vlen);
+              exec(it, tin, out, storage2, *plan, fct, nth1d);
               }
             }
+          if constexpr (vlen>2)
+            if constexpr (simd_exists<T0,vlen/2>)
+              {
+              TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
+              if (it.remaining()>=vlen/2)
+                {
+                it.advance(vlen/2);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
+          if constexpr (vlen>4)
+            if constexpr (simd_exists<T0,vlen/4>)
+              {
+              TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
+              if (it.remaining()>=vlen/4)
+                {
+                it.advance(vlen/4);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
 #endif
           {
           TmpStorage2<T,T,T0> storage2(storage);
-          while (it.remaining()>=nvec)
+          while (it.remaining()>0)
             {
-            it.advance(nvec);
-            exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
+            it.advance(1);
+            exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
             }
           }
           }
-
-#ifndef DUCC0_NO_SIMD
-        if constexpr (vlen>1)
-          {
-          TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-          while (it.remaining()>=vlen)
-            {
-            it.advance(vlen);
-            exec(it, tin, out, storage2, *plan, fct, nth1d);
-            }
-          }
-        if constexpr (vlen>2)
-          if constexpr (simd_exists<T0,vlen/2>)
-            {
-            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/2)
-              {
-              it.advance(vlen/2);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
-              }
-            }
-        if constexpr (vlen>4)
-          if constexpr (simd_exists<T0,vlen/4>)
-            {
-            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/4)
-              {
-              it.advance(vlen/4);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
-              }
-            }
-#endif
-        {
-        TmpStorage2<T,T,T0> storage2(storage);
-        while (it.remaining()>0)
-          {
-          it.advance(1);
-          exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
-          }
-        }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
@@ -1179,135 +1251,21 @@ struct ExecDcst
 
 template<typename T> DUCC0_NOINLINE void general_r2c(
   const cfmav<T> &in, vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
-  size_t nthreads)
+  size_t nthreads,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
   auto plan = std::make_unique<pocketfft_r<T>>(in.shape(axis));
   size_t len=in.shape(axis);
-  execParallel(
-    util::thread_count(nthreads, in, axis, fft_simdlen<T>),
+  threading(
+    nthreads, in, axis, fft_simdlen<T>,
     [&](Scheduler &sched) {
     constexpr auto vlen = fft_simdlen<T>;
     TmpStorage<T,T> storage(in.size()/len, len, plan->bufsize(), 1, false);
-    multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-    if constexpr (vlen>1)
+    ducc0::Range range;
+    while ((range = sched.getNext()))
       {
-      TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
-      auto dbuf = storage2.dataBuf();
-      auto tbuf = storage2.transformBuf();
-      while (it.remaining()>=vlen)
-        {
-        it.advance(vlen);
-        copy_input(it, in, dbuf);
-        auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-        auto vout = out.data();
-        for (size_t j=0; j<vlen; ++j)
-          vout[it.oofs(j,0)].Set(res[0][j]);
-        size_t i=1, ii=1;
-        if (forward)
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
-        else
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-        if (i<len)
-          for (size_t j=0; j<vlen; ++j)
-            vout[it.oofs(j,ii)].Set(res[i][j]);
-        }
-      }
-    if constexpr (vlen>2)
-      if constexpr (simd_exists<T,vlen/2>)
-        if (it.remaining()>=vlen/2)
-          {
-          TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
-          auto dbuf = storage2.dataBuf();
-          auto tbuf = storage2.transformBuf();
-          it.advance(vlen/2);
-          copy_input(it, in, dbuf);
-          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-          auto vout = out.data();
-          for (size_t j=0; j<vlen/2; ++j)
-            vout[it.oofs(j,0)].Set(res[0][j]);
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-          if (i<len)
-            for (size_t j=0; j<vlen/2; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j]);
-          }
-    if constexpr (vlen>4)
-      if constexpr( simd_exists<T,vlen/4>)
-        if (it.remaining()>=vlen/4)
-          {
-          TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
-          auto dbuf = storage2.dataBuf();
-          auto tbuf = storage2.transformBuf();
-          it.advance(vlen/4);
-          copy_input(it, in, dbuf);
-          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-          auto vout = out.data();
-          for (size_t j=0; j<vlen/4; ++j)
-            vout[it.oofs(j,0)].Set(res[0][j]);
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-          if (i<len)
-            for (size_t j=0; j<vlen/4; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j]);
-          }
-#endif
-    {
-    TmpStorage2<T,T,T> storage2(storage);
-    auto dbuf = storage2.dataBuf();
-    auto tbuf = storage2.transformBuf();
-    while (it.remaining()>0)
-      {
-      it.advance(1);
-      copy_input(it, in, dbuf);
-      auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-      auto vout = out.data();
-      vout[it.oofs(0)].Set(res[0]);
-      size_t i=1, ii=1;
-      if (forward)
-        for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(res[i], res[i+1]);
-      else
-        for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(res[i], -res[i+1]);
-      if (i<len)
-        vout[it.oofs(ii)].Set(res[i]);
-      }
-    }
-    });  // end of parallel region
-  }
-template<typename T> DUCC0_NOINLINE void general_c2r(
-  const cfmav<Cmplx<T>> &in, vfmav<T> &out, size_t axis, bool forward, T fct,
-  size_t nthreads)
-  {
-  size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
-  size_t len=out.shape(axis);
-  execParallel(
-    util::thread_count(nthreads, in, axis, fft_simdlen<T>),
-    [&](Scheduler &sched) {
-      constexpr auto vlen = fft_simdlen<T>;
-      TmpStorage<T,T> storage(out.size()/len, len, plan->bufsize(), 1, false);
-      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
+      multi_iter<vlen> it(in, out, axis, range.lo, range.hi);
 #ifndef DUCC0_NO_SIMD
       if constexpr (vlen>1)
         {
@@ -1317,30 +1275,23 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
         while (it.remaining()>=vlen)
           {
           it.advance(vlen);
+          copy_input(it, in, dbuf);
+          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
+          auto vout = out.data();
           for (size_t j=0; j<vlen; ++j)
-            dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-          {
+            vout[it.oofs(j,0)].Set(res[0][j]);
           size_t i=1, ii=1;
           if (forward)
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen; ++j)
-                {
-                dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                }
+                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
           else
             for (; i<len-1; i+=2, ++ii)
               for (size_t j=0; j<vlen; ++j)
-                {
-                dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                }
+                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
           if (i<len)
             for (size_t j=0; j<vlen; ++j)
-              dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-          }
-          auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-          copy_output(it, res, out);
+              vout[it.oofs(j,ii)].Set(res[i][j]);
           }
         }
       if constexpr (vlen>2)
@@ -1351,63 +1302,49 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
             auto dbuf = storage2.dataBuf();
             auto tbuf = storage2.transformBuf();
             it.advance(vlen/2);
+            copy_input(it, in, dbuf);
+            auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
+            auto vout = out.data();
             for (size_t j=0; j<vlen/2; ++j)
-              dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-            {
+              vout[it.oofs(j,0)].Set(res[0][j]);
             size_t i=1, ii=1;
             if (forward)
               for (; i<len-1; i+=2, ++ii)
                 for (size_t j=0; j<vlen/2; ++j)
-                  {
-                  dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                  }
+                  vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
             else
               for (; i<len-1; i+=2, ++ii)
                 for (size_t j=0; j<vlen/2; ++j)
-                  {
-                  dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                  }
+                  vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
             if (i<len)
               for (size_t j=0; j<vlen/2; ++j)
-                dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-            }
-            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-            copy_output(it, res, out);
+                vout[it.oofs(j,ii)].Set(res[i][j]);
             }
       if constexpr (vlen>4)
-        if constexpr(simd_exists<T,vlen/4>)
+        if constexpr( simd_exists<T,vlen/4>)
           if (it.remaining()>=vlen/4)
             {
             TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
             auto dbuf = storage2.dataBuf();
             auto tbuf = storage2.transformBuf();
             it.advance(vlen/4);
+            copy_input(it, in, dbuf);
+            auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
+            auto vout = out.data();
             for (size_t j=0; j<vlen/4; ++j)
-              dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-            {
+              vout[it.oofs(j,0)].Set(res[0][j]);
             size_t i=1, ii=1;
             if (forward)
               for (; i<len-1; i+=2, ++ii)
                 for (size_t j=0; j<vlen/4; ++j)
-                  {
-                  dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                  }
+                  vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
             else
               for (; i<len-1; i+=2, ++ii)
                 for (size_t j=0; j<vlen/4; ++j)
-                  {
-                  dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                  }
+                  vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
             if (i<len)
               for (size_t j=0; j<vlen/4; ++j)
-                dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-            }
-            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-            copy_output(it, res, out);
+                vout[it.oofs(j,ii)].Set(res[i][j]);
             }
 #endif
       {
@@ -1417,28 +1354,173 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
       while (it.remaining()>0)
         {
         it.advance(1);
-        dbuf[0]=in.raw(it.iofs(0)).r;
-        {
+        copy_input(it, in, dbuf);
+        auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
+        auto vout = out.data();
+        vout[it.oofs(0)].Set(res[0]);
         size_t i=1, ii=1;
         if (forward)
           for (; i<len-1; i+=2, ++ii)
-            {
-            dbuf[i  ] =  in.raw(it.iofs(ii)).r;
-            dbuf[i+1] = -in.raw(it.iofs(ii)).i;
-            }
+            vout[it.oofs(ii)].Set(res[i], res[i+1]);
         else
           for (; i<len-1; i+=2, ++ii)
-            {
-            dbuf[i  ] = in.raw(it.iofs(ii)).r;
-            dbuf[i+1] = in.raw(it.iofs(ii)).i;
-            }
+            vout[it.oofs(ii)].Set(res[i], -res[i+1]);
         if (i<len)
-          dbuf[i] = in.raw(it.iofs(ii)).r;
-        }
-        auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-        copy_output(it, res, out);
+          vout[it.oofs(ii)].Set(res[i]);
         }
       }
+      }
+    });  // end of parallel region
+  }
+template<typename T> DUCC0_NOINLINE void general_c2r(
+  const cfmav<Cmplx<T>> &in, vfmav<T> &out, size_t axis, bool forward, T fct,
+  size_t nthreads,
+  const ThreadingFunctor &threading=DefaultThreading())
+  {
+  size_t nth1d = (in.ndim()==1) ? nthreads : 1;
+  auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
+  size_t len=out.shape(axis);
+  threading(
+    nthreads, in, axis, fft_simdlen<T>,
+    [&](Scheduler &sched) {
+      constexpr auto vlen = fft_simdlen<T>;
+      TmpStorage<T,T> storage(out.size()/len, len, plan->bufsize(), 1, false);
+      ducc0::Range range;
+      while ((range = sched.getNext()))
+        {
+        multi_iter<vlen> it(in, out, axis, range.lo, range.hi);
+#ifndef DUCC0_NO_SIMD
+        if constexpr (vlen>1)
+          {
+          TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
+          auto dbuf = storage2.dataBuf();
+          auto tbuf = storage2.transformBuf();
+          while (it.remaining()>=vlen)
+            {
+            it.advance(vlen);
+            for (size_t j=0; j<vlen; ++j)
+              dbuf[0][j]=in.raw(it.iofs(j,0)).r;
+            {
+            size_t i=1, ii=1;
+            if (forward)
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen; ++j)
+                  {
+                  dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
+                  dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
+                  }
+            else
+              for (; i<len-1; i+=2, ++ii)
+                for (size_t j=0; j<vlen; ++j)
+                  {
+                  dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
+                  dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
+                  }
+            if (i<len)
+              for (size_t j=0; j<vlen; ++j)
+                dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
+            }
+            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+            copy_output(it, res, out);
+            }
+          }
+        if constexpr (vlen>2)
+          if constexpr (simd_exists<T,vlen/2>)
+            if (it.remaining()>=vlen/2)
+              {
+              TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
+              auto dbuf = storage2.dataBuf();
+              auto tbuf = storage2.transformBuf();
+              it.advance(vlen/2);
+              for (size_t j=0; j<vlen/2; ++j)
+                dbuf[0][j]=in.raw(it.iofs(j,0)).r;
+              {
+              size_t i=1, ii=1;
+              if (forward)
+                for (; i<len-1; i+=2, ++ii)
+                  for (size_t j=0; j<vlen/2; ++j)
+                    {
+                    dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
+                    dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
+                    }
+              else
+                for (; i<len-1; i+=2, ++ii)
+                  for (size_t j=0; j<vlen/2; ++j)
+                    {
+                    dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
+                    dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
+                    }
+              if (i<len)
+                for (size_t j=0; j<vlen/2; ++j)
+                  dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
+              }
+              auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+              copy_output(it, res, out);
+              }
+        if constexpr (vlen>4)
+          if constexpr(simd_exists<T,vlen/4>)
+            if (it.remaining()>=vlen/4)
+              {
+              TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
+              auto dbuf = storage2.dataBuf();
+              auto tbuf = storage2.transformBuf();
+              it.advance(vlen/4);
+              for (size_t j=0; j<vlen/4; ++j)
+                dbuf[0][j]=in.raw(it.iofs(j,0)).r;
+              {
+              size_t i=1, ii=1;
+              if (forward)
+                for (; i<len-1; i+=2, ++ii)
+                  for (size_t j=0; j<vlen/4; ++j)
+                    {
+                    dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
+                    dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
+                    }
+              else
+                for (; i<len-1; i+=2, ++ii)
+                  for (size_t j=0; j<vlen/4; ++j)
+                    {
+                    dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
+                    dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
+                    }
+              if (i<len)
+                for (size_t j=0; j<vlen/4; ++j)
+                  dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
+              }
+              auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+              copy_output(it, res, out);
+              }
+#endif
+        {
+        TmpStorage2<T,T,T> storage2(storage);
+        auto dbuf = storage2.dataBuf();
+        auto tbuf = storage2.transformBuf();
+        while (it.remaining()>0)
+          {
+          it.advance(1);
+          dbuf[0]=in.raw(it.iofs(0)).r;
+          {
+          size_t i=1, ii=1;
+          if (forward)
+            for (; i<len-1; i+=2, ++ii)
+              {
+              dbuf[i  ] =  in.raw(it.iofs(ii)).r;
+              dbuf[i+1] = -in.raw(it.iofs(ii)).i;
+              }
+          else
+            for (; i<len-1; i+=2, ++ii)
+              {
+              dbuf[i  ] = in.raw(it.iofs(ii)).r;
+              dbuf[i+1] = in.raw(it.iofs(ii)).i;
+              }
+          if (i<len)
+            dbuf[i] = in.raw(it.iofs(ii)).r;
+          }
+          auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
+          copy_output(it, res, out);
+          }
+        }
+        }
     });  // end of parallel region
   }
 
@@ -1530,11 +1612,12 @@ struct ExecR2R
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a threading functor over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
-  T fct, size_t nthreads=1)
+template<typename T> DUCC0_NOINLINE void c2c(
+  const cfmav<std::complex<T>> &in, vfmav<std::complex<T>> &out,
+  const shape_t &axes, bool forward, T fct, size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
@@ -1549,7 +1632,8 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
         general_nd<pocketfft_c<T>>(in2, out2, axes2, fct, nthreads, ExecC2C{forward});
         return;
         }
-  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
+  general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward},
+                             /*allow_inplace=*/true,  threading);
   }
 
 /// Fast Discrete Cosine Transform
@@ -1571,21 +1655,25 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
  *  necessary) to allow an orthonormalized transform.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a threading functor over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
-  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
+  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, true};
   if (type==1)
-    general_nd<T_dct1<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dct1<T>>(in, out, axes, fct, nthreads, exec,
+                          /*allow_inplace=*/true, threading);
   else if (type==4)
-    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec,
+                           /*allow_inplace=*/true, threading);
   else
-    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec,
+                            /*allow_inplace=*/true, threading);
   }
 
 /// Fast Discrete Sine Transform
@@ -1607,67 +1695,75 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
  *  necessary) to allow an orthonormalized transform.
  *
  *  If the underlying array has more than one dimension, the computation will
- *  be distributed over \a nthreads threads.
+ *  be distributed using a \a threading functor over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
-  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1)
+  const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, false};
   if (type==1)
-    general_nd<T_dst1<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dst1<T>>(in, out, axes, fct, nthreads, exec,
+                          /*allow_inplace=*/true, threading);
   else if (type==4)
-    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst4<T>>(in, out, axes, fct, nthreads, exec,
+                           /*allow_inplace=*/true, threading);
   else
-    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
+    general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec,
+                            /*allow_inplace=*/true, threading);
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
-  size_t nthreads=1)
+  size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
   auto &out2(reinterpret_cast<vfmav<Cmplx<T>>&>(out));
-  general_r2c(in, out2, axis, forward, fct, nthreads);
+  general_r2c(in, out2, axis, forward, fct, nthreads, threading);
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   vfmav<std::complex<T>> &out, const shape_t &axes,
-  bool forward, T fct, size_t nthreads=1)
+  bool forward, T fct, size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   util::sanity_check_cr(out, in, axes);
   if (in.size()==0) return;
-  r2c(in, out, axes.back(), forward, fct, nthreads);
+  r2c(in, out, axes.back(), forward, fct, nthreads, threading);
   if (axes.size()==1) return;
 
   auto newaxes = shape_t{axes.begin(), --axes.end()};
-  c2c(out, out, newaxes, forward, T(1), nthreads);
+  c2c(out, out, newaxes, forward, T(1), nthreads, threading);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1)
+  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   util::sanity_check_cr(in, out, axis);
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T>>&>(in));
-  general_c2r(in2, out, axis, forward, fct, nthreads);
+  general_c2r(in2, out, axis, forward, fct, nthreads, threading);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   vfmav<T> &out, const shape_t &axes, bool forward, T fct,
-  size_t nthreads=1)
+  size_t nthreads=1,
+  const ThreadingFunctor &threading=DefaultThreading())
   {
   if (axes.size()==1)
-    return c2r(in, out, axes[0], forward, fct, nthreads);
+    return c2r(in, out, axes[0], forward, fct, nthreads, threading);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
   auto atmp(vfmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
   auto newaxes = shape_t{axes.begin(), --axes.end()};
-  c2c(in, atmp, newaxes, forward, T(1), nthreads);
-  c2r(atmp, out, axes.back(), forward, fct, nthreads);
+  c2c(in, atmp, newaxes, forward, T(1), nthreads, threading);
+  c2r(atmp, out, axes.back(), forward, fct, nthreads, threading);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
@@ -1835,7 +1931,7 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
 template<typename Tplan, typename T0, typename T, typename Exec>
 DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
-  const Exec &exec)
+  const Exec &exec, const ThreadingFunctor &threading=DefaultThreading())
   {
   std::unique_ptr<Tplan> plan1, plan2;
 
@@ -1850,47 +1946,50 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
     fkernel(i) = kernel(i);
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
 
-  execParallel(
-    util::thread_count(nthreads, in, axis, fft_simdlen<T0>),
+  threading(nthreads, in, axis, fft_simdlen<T0>,
     [&](Scheduler &sched) {
       constexpr auto vlen = fft_simdlen<T0>;
       TmpStorage<T,T0> storage(in.size()/l_in, l_in+l_out, bufsz, 1, false);
-      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-      if constexpr (vlen>1)
+      ducc0::Range range;
+      while ((range = sched.getNext()))
         {
-        TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-        while (it.remaining()>=vlen)
+        multi_iter<vlen> it(in, out, axis, range.lo, range.hi);
+#ifndef DUCC0_NO_SIMD
+        if constexpr (vlen>1)
           {
-          it.advance(vlen);
+          TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
+          while (it.remaining()>=vlen)
+            {
+            it.advance(vlen);
+            exec(it, in, out, storage2, *plan1, *plan2, fkernel);
+            }
+          }
+        if constexpr (vlen>2)
+          if constexpr (simd_exists<T,vlen/2>)
+            if (it.remaining()>=vlen/2)
+              {
+              TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
+              it.advance(vlen/2);
+              exec(it, in, out, storage2, *plan1, *plan2, fkernel);
+              }
+        if constexpr (vlen>4)
+          if constexpr (simd_exists<T,vlen/4>)
+            if (it.remaining()>=vlen/4)
+              {
+              TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
+              it.advance(vlen/4);
+              exec(it, in, out, storage2, *plan1, *plan2, fkernel);
+              }
+#endif
+        {
+        TmpStorage2<T,T,T0> storage2(storage);
+        while (it.remaining()>0)
+          {
+          it.advance(1);
           exec(it, in, out, storage2, *plan1, *plan2, fkernel);
           }
         }
-      if constexpr (vlen>2)
-        if constexpr (simd_exists<T,vlen/2>)
-          if (it.remaining()>=vlen/2)
-            {
-            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
-            it.advance(vlen/2);
-            exec(it, in, out, storage2, *plan1, *plan2, fkernel);
-            }
-      if constexpr (vlen>4)
-        if constexpr (simd_exists<T,vlen/4>)
-          if (it.remaining()>=vlen/4)
-            {
-            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
-            it.advance(vlen/4);
-            exec(it, in, out, storage2, *plan1, *plan2, fkernel);
-            }
-#endif
-      {
-      TmpStorage2<T,T,T0> storage2(storage);
-      while (it.remaining()>0)
-        {
-        it.advance(1);
-        exec(it, in, out, storage2, *plan1, *plan2, fkernel);
         }
-      }
     });  // end of parallel region
   }
 
