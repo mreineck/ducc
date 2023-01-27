@@ -1538,6 +1538,8 @@ timers.pop();
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
+        nu = max<size_t>(nu,16);
+        nv = max<size_t>(nv,16);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*nvec*vlen + ((2*nvec+1)*(supp+3)*vlen));

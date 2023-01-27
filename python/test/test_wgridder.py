@@ -242,7 +242,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
 
 
-@pmp('nx', [(18, 2), (66, 4)])
+@pmp('nx', [(6, 2), (18, 2), (66, 4)])
 @pmp('ny', [(64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
