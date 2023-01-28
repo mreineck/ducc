@@ -32,6 +32,8 @@ CONVENTIONS USED FOR THIS WRAPPER:
  - if axis indices or array indices are passed, they are assumed to be one-based
 */
 
+#define DUCC0_USE_PROPER_HARTLEY_CONVENTION
+
 #include "ducc0/infra/threading.cc"
 #include "ducc0/infra/mav.cc"
 #include "ducc0/math/gl_integrator.cc"
