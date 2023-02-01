@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2022 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
@@ -95,8 +95,14 @@ template<typename T> class cmembuf
       : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
     cmembuf(size_t sz)
       : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
+#if 1
     cmembuf(size_t sz, uninitialized_dummy)
       : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
+# else // "poison" the array with a fixed value; use for debugging
+    cmembuf(size_t sz, uninitialized_dummy)
+      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
+      { for (size_t i=0; i<sz; ++i) (*rawptr)[i]=T(42000000); }
+#endif
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
 
