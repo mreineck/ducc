@@ -172,6 +172,7 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
     for (size_t idim=0; idim<ndim; ++idim)
       {
       lbigdims[idim] = 2*good_size_complex(size_t(dims[idim]*ofactor*0.5)+1);
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
       gridsize *= lbigdims[idim];
       }
     double logterm = log(gridsize)/log(nref_fft*nref_fft);
@@ -1114,8 +1115,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
       auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
       c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
-      c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+      if (nuni[1]>1)
+        {
+        auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
+        c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+        }
       }
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
@@ -1145,9 +1149,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
 
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nuni[0]/2}, {nuni[1]/2,nover[1]-nuni[1]/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nuni[0]/2, nover[0]-nuni[0]/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nover[0]-nuni[0]/2+1,MAXIDX}, {nuni[1]/2, nover[1]-nuni[1]/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,(nuni[0]+1)/2}, {nuni[1]/2,nover[1]-nuni[1]/2}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{(nuni[0]+1)/2, nover[0]-nuni[0]/2}, {}}); quickzero(a0, nthreads); }
+      if (nuni[0]>1)
+        { auto a0 = subarray<2>(grid, {{nover[0]-nuni[0]/2,MAXIDX}, {nuni[1]/2, nover[1]-nuni[1]/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
@@ -1167,8 +1172,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       vfmav<complex<Tcalc>> fgrid(grid);
       auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
       c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
-      c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+      if (nuni[1]>1)
+        {
+        auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
+        c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
+        }
       c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("interpolation");
@@ -1565,16 +1573,28 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
       auto fgridl=fgrid.subarray({{},{},slz});
       c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{},shz});
-      c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+      if (nuni[2]>1)
+        {
+        auto fgridh=fgrid.subarray({{},{},shz});
+        c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+        }
       auto fgridll=fgrid.subarray({{},sly,slz});
       c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
-      auto fgridlh=fgrid.subarray({{},sly,shz});
-      c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
-      auto fgridhl=fgrid.subarray({{},shy,slz});
-      c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridhh=fgrid.subarray({{},shy,shz});
-      c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+      if (nuni[2]>1)
+        {
+        auto fgridlh=fgrid.subarray({{},sly,shz});
+        c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
+        }
+      if (nuni[1]>1)
+        {
+        auto fgridhl=fgrid.subarray({{},shy,slz});
+        c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
+        if (nuni[2]>1)
+          {
+          auto fgridhh=fgrid.subarray({{},shy,shz});
+          c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+          }
+        }
       }
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
@@ -1633,16 +1653,28 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       slice sly{0,(nuni[1]+1)/2}, shy{fgrid.shape(1)-nuni[1]/2,MAXIDX};
       auto fgridll=fgrid.subarray({{},sly,slz});
       c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
-      auto fgridlh=fgrid.subarray({{},sly,shz});
-      c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
-      auto fgridhl=fgrid.subarray({{},shy,slz});
-      c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
-      auto fgridhh=fgrid.subarray({{},shy,shz});
-      c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+      if (nuni[2]>1)
+        {
+        auto fgridlh=fgrid.subarray({{},sly,shz});
+        c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
+        }
+      if (nuni[1]>1)
+        {
+        auto fgridhl=fgrid.subarray({{},shy,slz});
+        c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
+        if (nuni[2]>1)
+          {
+          auto fgridhh=fgrid.subarray({{},shy,shz});
+          c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
+          }
+        }
       auto fgridl=fgrid.subarray({{},{},slz});
       c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
-      auto fgridh=fgrid.subarray({{},{},shz});
-      c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+      if (nuni[2]>1)
+        {
+        auto fgridh=fgrid.subarray({{},{},shz});
+        c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
+        }
       c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
       }
       timers.poppush("interpolation");
