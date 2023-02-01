@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2022 Max-Planck-Society
+/* Copyright (C) 2019-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_H
@@ -477,9 +477,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
         });
       timers.poppush("zeroing grid");
       // only zero the parts of the grid that have not been zeroed before
-      { auto a0 = subarray<2>(tmav, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(tmav, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(tmav, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(tmav, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(tmav, {{nxdirty/2, nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(tmav, {{nu-nxdirty/2,MAXIDX}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
       timers.pop();
       }
 
@@ -538,9 +538,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       timers.push("zeroing grid");
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2,MAXIDX}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -569,9 +569,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2, nv-nydirty/2+1}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxdirty/2,nu-nxdirty/2+1}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2+1,MAXIDX}, {nydirty/2,nv-nydirty/2+1}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nxdirty/2,nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
+      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2,MAXIDX}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = lshift-0.5*nxdirty*pixsize_x,
              y0 = mshift-0.5*nydirty*pixsize_y;
