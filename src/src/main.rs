@@ -1,22 +1,17 @@
-use ndarray::{Array, s};
-use ndarray_rand::RandomExt;
+use ndarray::{s, Array};
 use ndarray_rand::rand_distr::Uniform;
+use ndarray_rand::RandomExt;
 
 // use num_complex::Complex;
 
-
 #[cxx::bridge(namespace = "ducc0")]
 mod ffi {
-    // struct RustArrayDescriptor {
-    //     shape: [u64; 10],
-    //     stride: [i64; 10],
-    //     ndim: u8,
-    //     dtype: u8,
-    //     //data: *mut c_void
-    // }
-    
-    struct SimpleRustDescriptor {
-        ndim: u8
+    struct RustArrayDescriptor {
+        shape: [u64; 5],
+        //stride: [i64; 5],
+        ndim: u8,
+        //dtype: u8,
+        //data: *mut c_void
     }
 
     unsafe extern "C++" {
@@ -25,9 +20,12 @@ mod ffi {
         // type ArrayDescriptor;
         // fn getSimpleDescriptor(ndim: u8) -> UniquePtr<SimpleDescriptor>;
         // type SimpleDescriptor;
-        
-        fn get_ndim(inp: &SimpleRustDescriptor) -> u8;
-        fn set_ndim(desc: &mut SimpleRustDescriptor, n: u8);
+
+        fn get_ndim(inp: &RustArrayDescriptor) -> u8;
+        fn set_ndim(desc: &mut RustArrayDescriptor, n: u8);
+
+        fn get_shape(desc: &RustArrayDescriptor, idim: u8) -> u64;
+        // fn set_shape(desc: &mut RustArrayDescriptor, idim: u8, val: u64);
     }
 }
 
@@ -39,12 +37,15 @@ fn main() {
     // println!("Slice");
     // println!("{:8.4}", slice);
 
-    let mut arr = ffi::SimpleRustDescriptor{ndim: 2};
+    let mut arr = ffi::RustArrayDescriptor {
+        ndim: 2,
+        shape: [5, 6, 7, 0, 0],
+    };
     println!("{}", ffi::get_ndim(&arr));
 
     println!("Before {}", ffi::get_ndim(&arr));
     ffi::set_ndim(&mut arr, 3);
     println!("After {}", ffi::get_ndim(&arr));
 
-    // let b = ffi::getSimpleDescriptor(2: u8);
+    println!("Shape Before {}", ffi::get_shape(&arr, 1));
 }

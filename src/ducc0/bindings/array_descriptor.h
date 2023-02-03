@@ -159,13 +159,21 @@ using detail_array_descriptor::to_vector;
 using detail_array_descriptor::to_vector_subtract_1;
 using detail_array_descriptor::subtract_1;
 
-uint8_t get_ndim(const SimpleRustDescriptor &arg) {
+uint8_t get_ndim(const RustArrayDescriptor &arg) {
   return arg.ndim;
-};
+}
 
-void set_ndim(SimpleRustDescriptor &arg, uint8_t ndim) {
+void set_ndim(RustArrayDescriptor &arg, uint8_t ndim) {
   arg.ndim = ndim;
-};
+}
+
+uint64_t get_shape(const RustArrayDescriptor &arg, const uint8_t idim) {
+  return arg.shape[idim];
+}
+
+// void set_shape(const RustArrayDescriptor &arg, const uint8_t idim, const uint64_t val) {
+//   arg.shape[idim] = val;
+// };
 
 }
 
