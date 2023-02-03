@@ -1,7 +1,7 @@
 /** \file ducc0/infra/threading.h
  *  Mulithreading support, similar to functionality provided by OpenMP
  *
- * \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
+ * \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
  * \authors Peter Bell, Martin Reinecke
  */
 
@@ -66,6 +66,22 @@ namespace ducc0 {
 namespace detail_threading {
 
 using std::size_t;
+
+/// Abstract base class for minimalistiv thread pool functionality
+class thread_pool
+  {
+  public:
+    virtual ~thread_pool() {}
+    virtual size_t nthreads() const = 0;
+    virtual void submit(std::function<void()> work) = 0;
+  };
+
+/** Push the provided pool onto a (thread local) stack of thread pools.
+    This will be used to execute subsequent parallel regions,
+    until it is popped again. */
+void push_thread_pool(const std::shared_ptr<thread_pool> &pool);
+/** Pop the top of the (thread local) stack of thread pools. */
+void pop_thread_pool();
 
 /// Index range describing a chunk of work inside a parallellized loop
 struct Range
@@ -238,6 +254,9 @@ template<typename T, typename Func> auto execWorklist
 
 } // end of namespace detail_threading
 
+using detail_threading::thread_pool;
+using detail_threading::push_thread_pool;
+using detail_threading::pop_thread_pool;
 using detail_threading::max_threads;
 using detail_threading::adjust_nthreads;
 using detail_threading::Scheduler;

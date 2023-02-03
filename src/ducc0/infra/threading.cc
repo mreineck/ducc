@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -60,6 +60,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <condition_variable>
 #include <thread>
 #include <queue>
+#include <stack>
 #include <atomic>
 #include <vector>
 #include <exception>
@@ -218,7 +219,7 @@ static void do_pinning(int /*ithread*/)
   { return; }
 #endif
 
-class thread_pool
+class ducc_thread_pool: public thread_pool
   {
   private:
     // A reasonable guess, probably close enough for most hardware
@@ -283,8 +284,8 @@ class thread_pool
     concurrent_queue<std::function<void()>> overflow_work_;
     std::mutex mut_;
     std::vector<worker> workers_;
-    std::atomic<bool> shutdown_;
-    std::atomic<size_t> unscheduled_tasks_;
+    std::atomic<bool> shutdown_=false;
+    std::atomic<size_t> unscheduled_tasks_=0;
     using lock_t = std::lock_guard<std::mutex>;
 
     void create_threads()
@@ -321,14 +322,19 @@ class thread_pool
       }
 
   public:
-    explicit thread_pool(size_t nthreads):
+    explicit ducc_thread_pool(size_t nthreads):
       workers_(nthreads)
       { create_threads(); }
 
-    thread_pool(): thread_pool(max_threads_) {}
+    ducc_thread_pool(): ducc_thread_pool(max_threads_) {}
 
-    ~thread_pool() { shutdown(); }
+    // virtual
+    ~ducc_thread_pool() { shutdown(); }
 
+    // virtual
+    size_t nthreads() const { return workers_.size(); }
+
+    // virtual
     void submit(std::function<void()> work)
       {
       lock_t lock(mut_);
@@ -367,22 +373,52 @@ class thread_pool
       }
   };
 
-inline thread_pool &get_pool()
+// return a pointer to a singleton ducc_thread_pool, which is always available
+inline std::shared_ptr<ducc_thread_pool> get_master_pool()
   {
-  static thread_pool pool;
+  static auto master_pool=std::make_shared<ducc_thread_pool>();
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
     []{
     pthread_atfork(
-      +[]{ get_pool().shutdown(); },  // prepare
-      +[]{ get_pool().restart(); },   // parent
-      +[]{ get_pool().restart(); }    // child
+      +[]{ get_master_pool()->shutdown(); },  // prepare
+      +[]{ get_master_pool()->restart(); },   // parent
+      +[]{ get_master_pool()->restart(); }    // child
       );
     });
 #endif
+  return master_pool;
+  }
 
-  return pool;
+// Simple stack of thread pools
+class PoolManager
+  {
+  private:
+    std::stack<std::shared_ptr<thread_pool>> poolstack;
+
+  public:
+    PoolManager()
+      { poolstack.push(get_master_pool()); }  // push the default pool
+    const std::shared_ptr<thread_pool> active_pool()
+      { return poolstack.top(); }
+    void push(const std::shared_ptr<thread_pool> &pool)
+      { poolstack.push(pool); }
+    void pop()
+      { poolstack.pop(); }
+  };
+
+// We have a dedicated stack of thread pools on every thread
+thread_local PoolManager pool_manager;
+
+void push_thread_pool(const std::shared_ptr<thread_pool> &pool)
+  { pool_manager.push(pool); }
+void pop_thread_pool()
+  { pool_manager.pop(); }
+
+inline thread_pool &get_pool()
+  {
+  return *(pool_manager.active_pool());
   }
 
 class Distribution
@@ -537,14 +573,20 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   latch counter(nthreads_);
   std::exception_ptr ex;
   std::mutex ex_mut;
+  // we "copy" the currently active thread pool to all executing threads
+  // during the time of execution and pop it again at the end.
+  // Not sure if this is necessary/useful though.
+  auto cur_pool = pool_manager.active_pool();
   for (size_t i=0; i<nthreads_; ++i)
     {
     pool.submit(
-      [this, &f, i, &counter, &ex, &ex_mut] {
+      [this, &f, i, &counter, &ex, &ex_mut, cur_pool] {
       try
         {
+        push_thread_pool(cur_pool);
         MyScheduler sched(*this, i);
         f(sched);
+        pop_thread_pool();
         }
       catch (...)
         {
