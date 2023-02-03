@@ -21,9 +21,12 @@
 #define DUCC0_ARRAY_DESCRIPTOR_H
 
 #include <array>
+#include <iostream>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/bindings/typecode.h"
+
+#include "src/main.rs.h"
 
 namespace ducc0 {
 
@@ -155,6 +158,14 @@ using detail_array_descriptor::to_vfmav;
 using detail_array_descriptor::to_vector;
 using detail_array_descriptor::to_vector_subtract_1;
 using detail_array_descriptor::subtract_1;
+
+uint8_t get_ndim(const SimpleRustDescriptor &arg) {
+  return arg.ndim;
+};
+
+void set_ndim(SimpleRustDescriptor &arg, uint8_t ndim) {
+  arg.ndim = ndim;
+};
 
 }
 
