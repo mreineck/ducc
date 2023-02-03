@@ -67,7 +67,7 @@ namespace detail_threading {
 
 using std::size_t;
 
-/// Abstract base class for minimalistiv thread pool functionality
+/// Abstract base class for minimalistic thread pool functionality
 class thread_pool
   {
   public:
@@ -76,12 +76,18 @@ class thread_pool
     virtual void submit(std::function<void()> work) = 0;
   };
 
-/** Push the provided pool onto a (thread local) stack of thread pools.
-    This will be used to execute subsequent parallel regions,
-    until it is popped again. */
-void push_thread_pool(const std::shared_ptr<thread_pool> &pool);
-/** Pop the top of the (thread local) stack of thread pools. */
-void pop_thread_pool();
+std::shared_ptr<thread_pool> set_pool(std::shared_ptr<thread_pool> new_pool);
+
+class PoolGuard
+  {
+  private:
+    std::shared_ptr<thread_pool> old_pool_;
+  public:
+    PoolGuard(std::shared_ptr<thread_pool> pool)
+      { old_pool_ = set_pool(pool); }
+    ~PoolGuard()
+      { set_pool(old_pool_); }
+  };
 
 /// Index range describing a chunk of work inside a parallellized loop
 struct Range
@@ -255,8 +261,7 @@ template<typename T, typename Func> auto execWorklist
 } // end of namespace detail_threading
 
 using detail_threading::thread_pool;
-using detail_threading::push_thread_pool;
-using detail_threading::pop_thread_pool;
+using detail_threading::PoolGuard;
 using detail_threading::max_threads;
 using detail_threading::adjust_nthreads;
 using detail_threading::Scheduler;

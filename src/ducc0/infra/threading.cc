@@ -60,7 +60,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <condition_variable>
 #include <thread>
 #include <queue>
-#include <stack>
 #include <atomic>
 #include <vector>
 #include <exception>
@@ -391,35 +390,10 @@ inline std::shared_ptr<ducc_thread_pool> get_master_pool()
   return master_pool;
   }
 
-// Simple stack of thread pools
-class PoolManager
-  {
-  private:
-    std::stack<std::shared_ptr<thread_pool>> poolstack;
+thread_local std::shared_ptr<thread_pool> active_pool = get_master_pool();
 
-  public:
-    PoolManager()
-      { poolstack.push(get_master_pool()); }  // push the default pool
-    const std::shared_ptr<thread_pool> active_pool()
-      { return poolstack.top(); }
-    void push(const std::shared_ptr<thread_pool> &pool)
-      { poolstack.push(pool); }
-    void pop()
-      { poolstack.pop(); }
-  };
-
-// We have a dedicated stack of thread pools on every thread
-thread_local PoolManager pool_manager;
-
-void push_thread_pool(const std::shared_ptr<thread_pool> &pool)
-  { pool_manager.push(pool); }
-void pop_thread_pool()
-  { pool_manager.pop(); }
-
-inline thread_pool &get_pool()
-  {
-  return *(pool_manager.active_pool());
-  }
+std::shared_ptr<thread_pool> set_pool(std::shared_ptr<thread_pool> new_pool)
+  { return std::exchange(active_pool, new_pool); }
 
 class Distribution
   {
@@ -569,24 +543,23 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  auto & pool = get_pool();
   latch counter(nthreads_);
   std::exception_ptr ex;
   std::mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
-  // during the time of execution and pop it again at the end.
-  // Not sure if this is necessary/useful though.
-  auto cur_pool = pool_manager.active_pool();
+  // during the execution of f. This ensures that possible nested parallel
+  // regions are handled by the same pool and not by the one that happens
+  // to be active on the worker threads.
+  auto pool = active_pool;
   for (size_t i=0; i<nthreads_; ++i)
     {
-    pool.submit(
-      [this, &f, i, &counter, &ex, &ex_mut, cur_pool] {
+    pool->submit(
+      [this, &f, i, &counter, &ex, &ex_mut, pool] {
       try
         {
-        push_thread_pool(cur_pool);
+        PoolGuard guard(pool);
         MyScheduler sched(*this, i);
         f(sched);
-        pop_thread_pool();
         }
       catch (...)
         {
