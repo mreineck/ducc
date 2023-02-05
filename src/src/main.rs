@@ -4,7 +4,7 @@ use ndarray_rand::RandomExt;
 
 // use num_complex::Complex;
 
-#[cxx::bridge(namespace = "ducc0")]
+#[cxx::bridge(namespace = "ducc0::rustInterface")]
 mod ffi {
     struct RustArrayDescriptor {
         shape: [u64; 10],  // TODO Make the "10" variable
@@ -15,7 +15,9 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("ducc0/bindings/array_descriptor.h");
+        // include!("ducc0/bindings/array_descriptor.h");
+        include!("ducc_rust.h");
+
 
         fn get_ndim(inp: &RustArrayDescriptor) -> u8;
         fn get_dtype(inp: &RustArrayDescriptor) -> u8;
@@ -47,12 +49,13 @@ fn main() {
     let slice = a.slice(s![.., 1, ..]);
 
     let mut arr = ffi::RustArrayDescriptor {
-        ndim: 2,
-        dtype: 2,
+        ndim: slice.shape().len() as u8,
+        dtype: 7 as u8,  // double
         shape: format_shape(slice.shape()),
         stride: format_stride(slice.strides()),
         data: slice.as_ptr()
     };
+
     println!("{}", ffi::get_shape(&arr, 1));
     println!("{}", ffi::get_stride(&arr, 1));
     println!("{}", ffi::get_ndim(&arr));
