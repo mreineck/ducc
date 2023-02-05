@@ -72,7 +72,11 @@ class thread_pool
   {
   public:
     virtual ~thread_pool() {}
+    /// Returns the total number of threads managed by the pool
     virtual size_t nthreads() const = 0;
+    /** "Normalizes" a requested number of threads. A useful convention could be
+        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
+    virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
     virtual void submit(std::function<void()> work) = 0;
   };
 
@@ -115,9 +119,8 @@ class Scheduler
     virtual Range getNext() = 0;
   };
 
-/** Returns the maximum number of threads that are supported by the hardware,
- *  or the value of the environment variable DUCC0_NUM_THREADS,
- *  whichever is lower. */
+/** Returns the maximum number of threads that are supported by currently
+    active thread pool. */
 size_t max_threads();
 size_t adjust_nthreads(size_t nthreads);
 

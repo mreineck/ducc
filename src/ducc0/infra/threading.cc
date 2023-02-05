@@ -81,6 +81,34 @@ namespace detail_threading {
 
 #ifndef DUCC0_NO_THREADING
 
+class latch
+  {
+    std::atomic<size_t> num_left_;
+    std::mutex mut_;
+    std::condition_variable completed_;
+    using lock_t = std::unique_lock<std::mutex>;
+
+  public:
+    latch(size_t n): num_left_(n) {}
+
+    void count_down()
+      {
+      lock_t lock(mut_);
+      if (--num_left_)
+        return;
+      completed_.notify_all();
+      }
+
+    void wait()
+      {
+      lock_t lock(mut_);
+      completed_.wait(lock, [this]{ return is_ready(); });
+      }
+    bool is_ready() { return num_left_ == 0; }
+  };
+
+#ifndef DUCC0_NO_DEFAULT_THREADPOOL
+
 static long mystrtol(const char *inp)
   {
   auto errno_bak = errno;
@@ -133,44 +161,6 @@ static const size_t max_threads_ = get_max_threads_from_env();
 static thread_local bool in_parallel_region = false;
 static const int pin_info = get_pin_info_from_env();
 static const int pin_offset = get_pin_offset_from_env();
-
-size_t max_threads() { return max_threads_; }
-size_t adjust_nthreads(size_t nthreads)
-  {
-  if (in_parallel_region)
-    return 1;
-  if (nthreads==0)
-    return max_threads_;
-  return std::min(max_threads_, nthreads);
-  }
-
-class latch
-  {
-    std::atomic<size_t> num_left_;
-    std::mutex mut_;
-    std::condition_variable completed_;
-    using lock_t = std::unique_lock<std::mutex>;
-
-  public:
-    latch(size_t n): num_left_(n) {}
-
-    void count_down()
-      {
-      lock_t lock(mut_);
-      if (--num_left_)
-        return;
-      completed_.notify_all();
-      }
-
-    void wait()
-      {
-      lock_t lock(mut_);
-      completed_.wait(lock, [this]{ return is_ready(); });
-      }
-    bool is_ready() { return num_left_ == 0; }
-  };
-
-#ifndef DUCC0_NO_DEFAULT_THREADPOOL
 
 template <typename T> class concurrent_queue
   {
@@ -336,6 +326,15 @@ class ducc_thread_pool: public thread_pool
     size_t nthreads() const { return workers_.size(); }
 
     // virtual
+    size_t adjust_nthreads(size_t nthreads_in) const
+      {
+      if (in_parallel_region)
+        return 1;
+      if (nthreads_in==0)
+        return max_threads_;
+      return std::min(max_threads_, nthreads_in);
+      }
+    // virtual
     void submit(std::function<void()> work)
       {
       lock_t lock(mut_);
@@ -407,6 +406,11 @@ thread_pool *get_active_pool()
   MR_assert(active_pool!=nullptr, "no thread pool active");
   return active_pool;
   }
+
+size_t max_threads()
+  { return get_active_pool()->nthreads(); }
+size_t adjust_nthreads(size_t nthreads_in)
+  { return get_active_pool()->adjust_nthreads(nthreads_in); }
 
 class Distribution
   {
@@ -563,6 +567,9 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // during the execution of f. This ensures that possible nested parallel
   // regions are handled by the same pool and not by the one that happens
   // to be active on the worker threads.
+  // Alternatively we could put a "no-threading" thread pool onto the executing
+  // threads, which executes everything sequentially on its own thread,
+  // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
   for (size_t i=0; i<nthreads_; ++i)
     {
