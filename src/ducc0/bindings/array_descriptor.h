@@ -163,6 +163,10 @@ uint8_t get_ndim(const RustArrayDescriptor &arg) {
   return arg.ndim;
 }
 
+uint8_t get_dtype(const RustArrayDescriptor &arg) {
+  return arg.dtype;
+}
+
 void set_ndim(RustArrayDescriptor &arg, uint8_t ndim) {
   arg.ndim = ndim;
 }
@@ -171,9 +175,23 @@ uint64_t get_shape(const RustArrayDescriptor &arg, const uint8_t idim) {
   return arg.shape[idim];
 }
 
-// void set_shape(const RustArrayDescriptor &arg, const uint8_t idim, const uint64_t val) {
-//   arg.shape[idim] = val;
-// };
+int64_t get_stride(const RustArrayDescriptor &arg, const uint8_t idim) {
+  return arg.stride[idim];
+}
+
+void square(RustArrayDescriptor &arg) {
+
+  struct ArrayDescriptor ad;
+  ad.data = const_cast<double*>(arg.data); // THIS IS NOT NICE ;)
+  ad.ndim = arg.ndim;
+  // ad.dtype = arg.dtype;
+  ad.dtype = Typecode<double>::value;  // TODO
+  for (auto i=0; i<10; i++) {
+    ad.shape[i] = get_shape(arg, i);
+    ad.stride[i] = get_stride(arg, i);
+  }
+  auto bar = to_vfmav<false, double>(ad);  // TODO
+}
 
 }
 
