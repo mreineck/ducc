@@ -52,7 +52,6 @@ int64_t get_stride(const RustArrayDescriptor &arg, const uint8_t idim) {
 
 void square(RustArrayDescriptor &arg) {
   auto &ad(reinterpret_cast<ArrayDescriptor &>(arg));
-  ad.dtype = Typecode<double>::value;  // TODO
 
   // struct ArrayDescriptor ad;
   // ad.data = const_cast<double*>(arg.data); // THIS IS NOT NICE ;)
