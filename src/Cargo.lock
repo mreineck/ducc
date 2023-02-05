@@ -82,6 +82,7 @@ dependencies = [
  "cxx-build",
  "ndarray",
  "ndarray-rand",
+ "num-complex",
 ]
 
 [[package]]
