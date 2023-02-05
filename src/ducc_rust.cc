@@ -17,17 +17,15 @@
 /* Copyright (C) 2022-2023 Max-Planck-Society, Philipp Arras
    Authors: Philipp Arras */
 
+#include <cstdint>
+
 #include "ducc_rust.h"
 #include "src/main.rs.h"
-
-#include <iostream>
 
 #include "ducc0/infra/threading.cc"
 #include "ducc0/infra/mav.cc"
 #include "ducc0/bindings/typecode.h"
 #include "ducc0/bindings/array_descriptor.h"
-
-using namespace std;
 
 namespace ducc0 {
   namespace rustInterface {
@@ -53,8 +51,6 @@ int64_t get_stride(const RustArrayDescriptor &arg, const uint8_t idim) {
 }
 
 void square(RustArrayDescriptor &arg) {
-  cout << "BEGIN" << endl;
-
   auto &ad(reinterpret_cast<ArrayDescriptor &>(arg));
   ad.dtype = Typecode<double>::value;  // TODO
 
@@ -68,13 +64,8 @@ void square(RustArrayDescriptor &arg) {
   //   ad.stride[i] = get_stride(arg, i);
   // }
 
-  cout << "Point 1" << endl;
   auto bar = to_vfmav<false, double>(ad);  // TODO
-  cout << "Point 2" << endl;
   mav_apply([](double &v1){v1*=v1;}, 1, bar);
-  cout << "Point 3" << endl;
-
-  cout << "END" << endl;
 }
 }
 }

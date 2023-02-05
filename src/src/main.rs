@@ -7,17 +7,15 @@ use ndarray_rand::RandomExt;
 #[cxx::bridge(namespace = "ducc0::rustInterface")]
 mod ffi {
     struct RustArrayDescriptor {
-        shape: [u64; 10],  // TODO Make the "10" variable
+        shape: [u64; 10], // TODO Make the "10" variable
         stride: [i64; 10],
+        data: *const f64,
         ndim: u8,
         dtype: u8,
-        data: *const f64
     }
 
     unsafe extern "C++" {
-        // include!("ducc0/bindings/array_descriptor.h");
         include!("ducc_rust.h");
-
 
         fn get_ndim(inp: &RustArrayDescriptor) -> u8;
         fn get_dtype(inp: &RustArrayDescriptor) -> u8;
@@ -33,7 +31,7 @@ fn format_shape(ndinp: &[usize]) -> [u64; 10] {
     for (i, elem) in ndinp.iter().enumerate() {
         res[i] = *elem as u64;
     }
-    return res
+    return res;
 }
 
 fn format_stride(ndinp: &[isize]) -> [i64; 10] {
@@ -41,7 +39,7 @@ fn format_stride(ndinp: &[isize]) -> [i64; 10] {
     for (i, elem) in ndinp.iter().enumerate() {
         res[i] = *elem as i64;
     }
-    return res
+    return res;
 }
 
 fn main() {
@@ -50,10 +48,10 @@ fn main() {
 
     let mut arr = ffi::RustArrayDescriptor {
         ndim: slice.shape().len() as u8,
-        dtype: 7 as u8,  // double
+        dtype: 7 as u8, // double
         shape: format_shape(slice.shape()),
         stride: format_stride(slice.strides()),
-        data: slice.as_ptr()
+        data: slice.as_ptr(),
     };
 
     println!("{}", ffi::get_shape(&arr, 1));
