@@ -170,6 +170,8 @@ class latch
     bool is_ready() { return num_left_ == 0; }
   };
 
+#ifndef DUCC0_NO_DEFAULT_THREADPOOL
+
 template <typename T> class concurrent_queue
   {
     std::queue<T> q_;
@@ -373,9 +375,9 @@ class ducc_thread_pool: public thread_pool
   };
 
 // return a pointer to a singleton ducc_thread_pool, which is always available
-inline std::shared_ptr<ducc_thread_pool> get_master_pool()
+inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool=std::make_shared<ducc_thread_pool>();
+  static auto master_pool = new ducc_thread_pool();
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -390,10 +392,21 @@ inline std::shared_ptr<ducc_thread_pool> get_master_pool()
   return master_pool;
   }
 
-thread_local std::shared_ptr<thread_pool> active_pool = get_master_pool();
+thread_local thread_pool *active_pool = get_master_pool();
 
-std::shared_ptr<thread_pool> set_pool(std::shared_ptr<thread_pool> new_pool)
+#else
+
+thread_local thread_pool *active_pool = nullptr;
+
+#endif
+
+thread_pool *set_active_pool(thread_pool *new_pool)
   { return std::exchange(active_pool, new_pool); }
+thread_pool *get_active_pool()
+  {
+  MR_assert(active_pool!=nullptr, "no thread pool active");
+  return active_pool;
+  }
 
 class Distribution
   {
@@ -550,14 +563,14 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // during the execution of f. This ensures that possible nested parallel
   // regions are handled by the same pool and not by the one that happens
   // to be active on the worker threads.
-  auto pool = active_pool;
+  auto pool = get_active_pool();
   for (size_t i=0; i<nthreads_; ++i)
     {
     pool->submit(
       [this, &f, i, &counter, &ex, &ex_mut, pool] {
       try
         {
-        PoolGuard guard(pool);
+        ScopedUseThreadPool guard(*pool);
         MyScheduler sched(*this, i);
         f(sched);
         }

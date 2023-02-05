@@ -76,17 +76,17 @@ class thread_pool
     virtual void submit(std::function<void()> work) = 0;
   };
 
-std::shared_ptr<thread_pool> set_pool(std::shared_ptr<thread_pool> new_pool);
+thread_pool *set_active_pool(thread_pool *new_pool);
 
-class PoolGuard
+class ScopedUseThreadPool
   {
   private:
-    std::shared_ptr<thread_pool> old_pool_;
+    thread_pool *old_pool_;
   public:
-    PoolGuard(std::shared_ptr<thread_pool> pool)
-      { old_pool_ = set_pool(pool); }
-    ~PoolGuard()
-      { set_pool(old_pool_); }
+    ScopedUseThreadPool(thread_pool &pool)
+      { old_pool_ = set_active_pool(&pool); }
+    ~ScopedUseThreadPool()
+      { set_active_pool(old_pool_); }
   };
 
 /// Index range describing a chunk of work inside a parallellized loop
@@ -261,7 +261,7 @@ template<typename T, typename Func> auto execWorklist
 } // end of namespace detail_threading
 
 using detail_threading::thread_pool;
-using detail_threading::PoolGuard;
+using detail_threading::ScopedUseThreadPool;
 using detail_threading::max_threads;
 using detail_threading::adjust_nthreads;
 using detail_threading::Scheduler;
