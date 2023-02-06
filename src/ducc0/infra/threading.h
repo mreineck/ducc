@@ -53,32 +53,39 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_THREADING_H
 #define DUCC0_THREADING_H
 
+// FIXME: This feels rather clumsy. Is there a better way to achieve this?
+#define DUCC0_NO_LOWLEVEL_THREADING 0
+#define DUCC0_STDCXX_LOWLEVEL_THREADING 1
+
 #ifndef DUCC0_LOWLEVEL_THREADING
-#define DUCC0_LOWLEVEL_THREADING CXXSTD
+#define DUCC0_LOWLEVEL_THREADING DUCC0_STDCXX_LOWLEVEL_THREADING
 #endif
 
 #include <cstddef>
 #include <functional>
-#if DUCC0_LOWLEVEL_THREADING == CXXSTD
+#include <optional>
+
+// threading-specific headers
+#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <mutex>
 #include <condition_variable>
-#elif DUCC0_LOWLEVEL_THREADING == NONE
+#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
 // no headers needed
 #endif
-#include <optional>
 
 namespace ducc0 {
 
 namespace detail_threading {
 
-#if DUCC0_LOWLEVEL_THREADING == CXXSTD
+// define threading related types dependent on the underlying implementation
+#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
 
 using Mutex = std::mutex;
 using UniqueLock = std::unique_lock<std::mutex>;
 using LockGuard = std::lock_guard<std::mutex>;
 using CondVar = std::condition_variable;
 
-#elif DUCC0_LOWLEVEL_THREADING == NONE
+#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
 
 struct Mutex
   {
@@ -88,6 +95,17 @@ struct Mutex
 struct LockGuard
   {
   LockGuard(const Mutex &){}
+  };
+struct UniqueLock
+  {
+  UniqueLock(const Mutex &){}
+  };
+struct CondVar
+  {
+  template<class Predicate>
+    void wait(UniqueLock &, Predicate) {}
+  void notify_one() noexcept {}
+  void notify_all() noexcept {}
   };
 
 #endif
@@ -198,8 +216,6 @@ inline void execParallel(size_t nwork, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   { execParallel(0, nwork, nthreads, func); }
 
-#ifndef DUCC0_NO_THREADING
-
 template<typename T> class Worklist
   {
   private:
@@ -240,37 +256,6 @@ template<typename T> class Worklist
       }
   };
   
-#else
-
-template<typename T> class Worklist
-  {
-  private:
-    std::vector<T> items;
-
-  public:
-    Worklist(const std::vector<T> &items_)
-      : items(items_) {}
-
-    std::optional<T> get_item()
-      {
-      if (!items.empty())
-        {
-        auto res = items.back();
-        items.pop_back();
-        return res;
-        }
-      else
-        return {};
-      }
-    void startup() {}
-    void put_item(const T &item)
-      {
-      items.push_back(item);
-      }
-  };
-
-#endif
-
 /// Execute \a func on work items in \a items over \a nthreads threads.
 /** While processing a work item, \a func may submit further items to the list
  *  of work items. For this purpose, \a func must take a const T &

@@ -50,15 +50,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/misc_utils.h"
+#include <atomic>
+#include <utility>
 
-#ifndef DUCC0_NO_THREADING
+#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>
 #include <stdexcept>
-#include <utility>
 #include <cstdlib>
 #include <thread>
 #include <queue>
-#include <atomic>
 #include <vector>
 #include <exception>
 #include <errno.h>
@@ -69,15 +71,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 #endif
-#include "ducc0/infra/misc_utils.h"
-#include "ducc0/infra/error_handling.h"
 #endif
 
 namespace ducc0 {
 
 namespace detail_threading {
-
-#ifndef DUCC0_NO_THREADING
 
 class latch
   {
@@ -105,7 +103,7 @@ class latch
     bool is_ready() { return num_left_ == 0; }
   };
 
-#ifndef DUCC0_NO_DEFAULT_THREADPOOL
+#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
 
 static long mystrtol(const char *inp)
   {
@@ -391,7 +389,7 @@ inline ducc_thread_pool *get_master_pool()
 
 thread_local thread_pool *active_pool = get_master_pool();
 
-#else
+#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
 
 class ducc_pseudo_thread_pool: public thread_pool
   {
@@ -402,7 +400,7 @@ class ducc_pseudo_thread_pool: public thread_pool
     size_t nthreads() const { return 1; }
 
     // virtual
-    size_t adjust_nthreads(size_t nthreads_in) const
+    size_t adjust_nthreads(size_t /*nthreads_in*/) const
       { return 1; }
     // virtual
     void submit(std::function<void()> work)
@@ -665,64 +663,5 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
     func(tid, lo, hi);
     });
   }
-
-#else
-
-size_t max_threads() { return 1; }
-size_t adjust_nthreads(size_t /*nthreads*/) { return 1; }
-
-class MyScheduler: public Scheduler
-  {
-  private:
-    size_t nwork_;
-
-  public:
-    MyScheduler(size_t nwork) : nwork_(nwork) {}
-    virtual size_t num_threads() const { return 1; }
-    virtual size_t thread_num() const { return 0; }
-    virtual Range getNext()
-      {
-      Range res(0, nwork_);
-      nwork_=0;
-      return res;
-      }
-  };
-
-void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execStatic(size_t nwork, size_t, size_t,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execDynamic(size_t nwork, size_t, size_t,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execGuided(size_t nwork, size_t, size_t, double,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execParallel(size_t, std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(1);
-  func(sched);
-  }
-void execParallel(size_t work_lo, size_t work_hi, size_t,
-  std::function<void(size_t, size_t)> func)
-  { func(work_lo, work_hi); }
-void execParallel(size_t work_lo, size_t work_hi, size_t,
-  std::function<void(size_t, size_t, size_t)> func)
-  { func(0, work_lo, work_hi); }
-
-#endif
 
 }}
