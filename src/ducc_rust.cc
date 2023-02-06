@@ -17,54 +17,54 @@
 /* Copyright (C) 2022-2023 Max-Planck-Society, Philipp Arras
    Authors: Philipp Arras */
 
-#include <cstdint>
+// #include <cstdint>
+// 
+// #include "ducc0/infra/threading.cc"
+// #include "ducc0/infra/mav.cc"
+// #include "ducc0/bindings/typecode.h"
+// #include "ducc0/bindings/array_descriptor.h"
 
-#include "ducc_rust.h"
-#include "src/main.rs.h"
+// namespace ducc0 {
+// namespace rustInterface {
 
-#include "ducc0/infra/threading.cc"
-#include "ducc0/infra/mav.cc"
-#include "ducc0/bindings/typecode.h"
-#include "ducc0/bindings/array_descriptor.h"
+// uint8_t get_ndim(const RustArrayDescriptor &arg) {
+//   return arg.ndim;
+// }
+// 
+// uint8_t get_dtype(const RustArrayDescriptor &arg) {
+//   return arg.dtype;
+// }
+// 
+// void set_ndim(RustArrayDescriptor &arg, uint8_t ndim) {
+//   arg.ndim = ndim;
+// }
+// 
+// uint64_t get_shape(const RustArrayDescriptor &arg, const uint8_t idim) {
+//   return arg.shape[idim];
+// }
+// 
+// int64_t get_stride(const RustArrayDescriptor &arg, const uint8_t idim) {
+//   return arg.stride[idim];
+// }
 
-namespace ducc0 {
-  namespace rustInterface {
+double myfoo(double in){return in*in;}
 
-uint8_t get_ndim(const RustArrayDescriptor &arg) {
-  return arg.ndim;
-}
-
-uint8_t get_dtype(const RustArrayDescriptor &arg) {
-  return arg.dtype;
-}
-
-void set_ndim(RustArrayDescriptor &arg, uint8_t ndim) {
-  arg.ndim = ndim;
-}
-
-uint64_t get_shape(const RustArrayDescriptor &arg, const uint8_t idim) {
-  return arg.shape[idim];
-}
-
-int64_t get_stride(const RustArrayDescriptor &arg, const uint8_t idim) {
-  return arg.stride[idim];
-}
-
-void square(RustArrayDescriptor &arg) {
-  auto &ad(reinterpret_cast<ArrayDescriptor &>(arg));
-
-  // struct ArrayDescriptor ad;
-  // ad.data = const_cast<double*>(arg.data); // THIS IS NOT NICE ;)
-  // ad.ndim = arg.ndim;
-  // // ad.dtype = arg.dtype;
-  // ad.dtype = Typecode<double>::value;  // TODO
-  // for (auto i=0; i<10; i++) {
-  //   ad.shape[i] = get_shape(arg, i);
-  //   ad.stride[i] = get_stride(arg, i);
-  // }
-
-  auto bar = to_vfmav<false, double>(ad);  // TODO
-  mav_apply([](double &v1){v1*=v1;}, 1, bar);
-}
-}
-}
+//     struct RustArrayDescriptor;
+// void square(RustArrayDescriptor &arg) {
+//   auto &ad(reinterpret_cast<ducc0::ArrayDescriptor &>(arg));
+// 
+//   // struct ArrayDescriptor ad;
+//   // ad.data = const_cast<double*>(arg.data); // THIS IS NOT NICE ;)
+//   // ad.ndim = arg.ndim;
+//   // // ad.dtype = arg.dtype;
+//   // ad.dtype = Typecode<double>::value;  // TODO
+//   // for (auto i=0; i<10; i++) {
+//   //   ad.shape[i] = get_shape(arg, i);
+//   //   ad.stride[i] = get_stride(arg, i);
+//   // }
+// 
+//   auto bar = ducc0::to_vfmav<false, double>(ad);  // TODO
+//   ducc0::mav_apply([](double &v1){v1*=v1;}, 1, bar);
+// }
+// }
+// }

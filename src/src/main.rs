@@ -4,8 +4,9 @@ use ndarray_rand::RandomExt;
 
 // use num_complex::Complex;
 
-#[cxx::bridge(namespace = "ducc0::rustInterface")]
-mod ffi {
+// #[cxx::bridge(namespace = "ducc0::rustInterface")]
+// mod ffi {
+#[repr(C)]
     struct RustArrayDescriptor {
         shape: [u64; 10], // TODO Make the "10" variable
         stride: [i64; 10],
@@ -13,18 +14,18 @@ mod ffi {
         ndim: u8,
         dtype: u8,
     }
-
-    unsafe extern "C++" {
-        include!("ducc_rust.h");
-
-        fn get_ndim(inp: &RustArrayDescriptor) -> u8;
-        fn get_dtype(inp: &RustArrayDescriptor) -> u8;
-        fn get_shape(desc: &RustArrayDescriptor, idim: u8) -> u64;
-        fn get_stride(desc: &RustArrayDescriptor, idim: u8) -> i64;
-
-        fn square(inp: &mut RustArrayDescriptor);
-    }
-}
+// 
+//     unsafe extern "C++" {
+//         include!("ducc_rust.h");
+// 
+//         fn get_ndim(inp: &RustArrayDescriptor) -> u8;
+//         fn get_dtype(inp: &RustArrayDescriptor) -> u8;
+//         fn get_shape(desc: &RustArrayDescriptor, idim: u8) -> u64;
+//         fn get_stride(desc: &RustArrayDescriptor, idim: u8) -> i64;
+// 
+//         fn square(inp: &mut RustArrayDescriptor);
+//     }
+// }
 
 fn format_shape(ndinp: &[usize]) -> [u64; 10] {
     let mut res = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -42,11 +43,16 @@ fn format_stride(ndinp: &[isize]) -> [i64; 10] {
     return res;
 }
 
+extern {
+    // fn square(arr: &mut RustArrayDescriptor);
+    fn myfoo(x: f64) -> f64;
+}
+
 fn main() {
     let a = Array::random((5, 6, 7), Uniform::new(0., 11.));
     let slice = a.slice(s![.., 1, ..]);
 
-    let mut arr = ffi::RustArrayDescriptor {
+    let mut arr = RustArrayDescriptor {
         ndim: slice.shape().len() as u8,
         dtype: 7 as u8, // double
         shape: format_shape(slice.shape()),
@@ -54,15 +60,18 @@ fn main() {
         data: slice.as_ptr(),
     };
 
-    println!("{}", ffi::get_shape(&arr, 1));
-    println!("{}", ffi::get_stride(&arr, 1));
-    println!("{}", ffi::get_ndim(&arr));
-    println!("{}", ffi::get_dtype(&arr));
+    // println!("{}", ffi::get_shape(&arr, 1));
+    // println!("{}", ffi::get_stride(&arr, 1));
+    // println!("{}", ffi::get_ndim(&arr));
+    // println!("{}", ffi::get_dtype(&arr));
 
-    println!("{:?}", slice.shape());
-    println!("{:?}", slice.strides());
+    // println!("{:?}", slice.shape());
+    // println!("{:?}", slice.strides());
 
     println!("{:8.4}", slice);
-    ffi::square(&mut arr);
+    unsafe {
+    // square(&mut arr);
+    println!("{}", myfoo(32.1));
+    }
     println!("{:8.4}", slice);
 }

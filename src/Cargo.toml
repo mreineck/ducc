@@ -4,10 +4,9 @@ version = "0.28.0"
 edition = "2021"
 
 [dependencies]
-cxx = "1.0"
 num-complex = "0.4.3"
 ndarray = "0.15.6"
 ndarray-rand = "0.14.0"
 
 [build-dependencies]
-cxx-build = "1.0"
+cc = "1.0"
