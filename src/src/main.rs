@@ -38,7 +38,7 @@ extern "C" {
     // fn c2c_inplace(inpout: &mut RustArrayDescriptor);
 }
 
-fn slice2ArrayDesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
+fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
     let dtype: u8 = {
         if TypeId::of::<A>() == TypeId::of::<f64>() {
             7
@@ -66,7 +66,7 @@ fn slice2ArrayDesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Ru
 fn main() {
     let a = Array::random((5, 6, 7), Uniform::new(0. as f32, 11. as f32));
     let slice = a.slice(s![.., 1, ..]);
-    let mut arr = slice2ArrayDesc(slice);
+    let mut arr = slice2arrdesc(slice);
 
     println!("{:8.4}", slice);
     unsafe {
@@ -84,7 +84,7 @@ fn main() {
             *c = Complex { re, im };
         });
 
-    let mut arr2 = slice2ArrayDesc(m_c.slice(s![.., ..]));  // TODO Simplify!
+    let mut arr2 = slice2arrdesc(m_c.slice(s![.., ..]));  // TODO Simplify!
     println!("{:8.4}", m_c);
     unsafe {
         square(&mut arr2);
