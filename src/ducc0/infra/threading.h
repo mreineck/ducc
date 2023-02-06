@@ -93,7 +93,7 @@ class ScopedUseThreadPool
       { set_active_pool(old_pool_); }
   };
 
-/// Index range describing a chunk of work inside a parallellized loop
+/// Index range describing a chunk of work inside a parallelized loop
 struct Range
   {
   size_t lo, //< first index of the chunk

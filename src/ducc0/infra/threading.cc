@@ -395,7 +395,30 @@ thread_local thread_pool *active_pool = get_master_pool();
 
 #else
 
-thread_local thread_pool *active_pool = nullptr;
+class ducc_pseudo_thread_pool: public thread_pool
+  {
+  public:
+    ducc_pseudo_thread_pool() {}
+
+    // virtual
+    size_t nthreads() const { return 1; }
+
+    // virtual
+    size_t adjust_nthreads(size_t nthreads_in) const
+      { return 1; }
+    // virtual
+    void submit(std::function<void()> work)
+      { work(); }
+  };
+
+// return a pointer to a singleton ducc_thread_pool, which is always available
+inline ducc_pseudo_thread_pool *get_master_pool()
+  {
+  static auto master_pool = new ducc_pseudo_thread_pool();
+  return master_pool;
+  }
+
+thread_local thread_pool *active_pool = get_master_pool();
 
 #endif
 
