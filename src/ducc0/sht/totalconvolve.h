@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -31,7 +31,6 @@
 #include <vector>
 #include <complex>
 #include <cmath>
-#include <mutex>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/constants.h"
@@ -340,7 +339,7 @@ template<typename T> class ConvolverPlan
       constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
              ncp = cube.shape(2)/cellsize+10;
-      vmav<std::mutex,2> locks({nct,ncp});
+      vmav<Mutex,2> locks({nct,ncp});
 
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {

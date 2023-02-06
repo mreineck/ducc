@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022 Max-Planck-Society
+/* Copyright (C) 2022-2023 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
 #ifndef DUCC0_WGRIDDER_SYCL_H
@@ -542,7 +542,7 @@ timers.pop();
       nvis=0;
       wmin_d=1e300;
       wmax_d=-1e300;
-      mutex mut;
+      Mutex mut;
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         double lwmin_d=1e300, lwmax_d=-1e300;
@@ -559,7 +559,7 @@ timers.pop();
               lwmax_d = max(lwmax_d, w);
               }
         {
-        lock_guard<mutex> lock(mut);
+        LockGuard lock(mut);
         wmin_d = min(wmin_d, lwmin_d);
         wmax_d = max(wmax_d, lwmax_d);
         nvis += lnvis;

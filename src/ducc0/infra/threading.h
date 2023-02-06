@@ -53,17 +53,44 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_THREADING_H
 #define DUCC0_THREADING_H
 
+#ifndef DUCC0_LOWLEVEL_THREADING
+#define DUCC0_LOWLEVEL_THREADING CXXSTD
+#endif
+
 #include <cstddef>
 #include <functional>
-#ifndef DUCC0_NO_THREADING
+#if DUCC0_LOWLEVEL_THREADING == CXXSTD
 #include <mutex>
 #include <condition_variable>
+#elif DUCC0_LOWLEVEL_THREADING == NONE
+// no headers needed
 #endif
 #include <optional>
 
 namespace ducc0 {
 
 namespace detail_threading {
+
+#if DUCC0_LOWLEVEL_THREADING == CXXSTD
+
+using Mutex = std::mutex;
+using UniqueLock = std::unique_lock<std::mutex>;
+using LockGuard = std::lock_guard<std::mutex>;
+using CondVar = std::condition_variable;
+
+#elif DUCC0_LOWLEVEL_THREADING == NONE
+
+struct Mutex
+  {
+  void lock(){}
+  void unlock(){}
+  };
+struct LockGuard
+  {
+  LockGuard(const Mutex &){}
+  };
+
+#endif
 
 using std::size_t;
 
@@ -176,8 +203,8 @@ inline void execParallel(size_t nwork, size_t nthreads,
 template<typename T> class Worklist
   {
   private:
-    std::mutex mtx;
-    std::condition_variable cv;
+    Mutex mtx;
+    CondVar cv;
     size_t nworking{0};
     std::vector<T> items;
 
@@ -187,7 +214,7 @@ template<typename T> class Worklist
 
     std::optional<T> get_item()
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      UniqueLock lck(mtx);
       if ((--nworking==0) && items.empty()) cv.notify_all();
       cv.wait(lck,[&](){return (!items.empty()) || (nworking==0);});
       if (!items.empty())
@@ -202,12 +229,12 @@ template<typename T> class Worklist
       }
     void startup()
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      LockGuard lck(mtx);
       ++nworking;
       }
     void put_item(const T &item)
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      LockGuard lck(mtx);
       items.push_back(item);
       cv.notify_one();
       }
@@ -263,6 +290,8 @@ template<typename T, typename Func> auto execWorklist
 
 } // end of namespace detail_threading
 
+using detail_threading::Mutex;
+using detail_threading::LockGuard;
 using detail_threading::thread_pool;
 using detail_threading::ScopedUseThreadPool;
 using detail_threading::max_threads;

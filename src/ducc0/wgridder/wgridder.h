@@ -27,7 +27,6 @@
 #include <map>
 #include <type_traits>
 #include <utility>
-#include <mutex>
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
@@ -952,7 +951,7 @@ timers.pop();
         vmav<Tacc,2> bufr, bufi;
         Tacc *px0r, *px0i;
         double w0, xdw;
-        vector<mutex> &locks;
+        vector<Mutex> &locks;
 
         DUCC0_NOINLINE void dump()
           {
@@ -966,7 +965,7 @@ timers.pop();
             {
             int idxv = idxv0;
             {
-            lock_guard<mutex> lock(locks[idxu]);
+            LockGuard lock(locks[idxu]);
             for (int iv=0; iv<sv; ++iv)
               {
               grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
@@ -990,7 +989,7 @@ timers.pop();
         kbuf buf;
 
         HelperX2g2(const Params *parent_, vmav<complex<Tcalc>,2> &grid_,
-          vector<mutex> &locks_, double w0_=-1, double dw_=-1)
+          vector<Mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
             bu0(-1000000), bv0(-1000000),
@@ -1148,7 +1147,7 @@ timers.pop();
         if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
       MR_assert(supp==SUPP, "requested support out of range");
 
-      vector<mutex> locks(nu);
+      vector<Mutex> locks(nu);
 
       execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
         {
@@ -1589,7 +1588,7 @@ timers.pop();
       nvis=0;
       wmin_d=1e300;
       wmax_d=-1e300;
-      mutex mut;
+      Mutex mut;
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         double lwmin_d=1e300, lwmax_d=-1e300;
@@ -1610,7 +1609,7 @@ timers.pop();
               if (!gridding) ms_out(irow, ichan)=0;
               }
         {
-        lock_guard<mutex> lock(mut);
+        LockGuard lock(mut);
         wmin_d = min(wmin_d, lwmin_d);
         wmax_d = max(wmax_d, lwmax_d);
         nvis += lnvis;

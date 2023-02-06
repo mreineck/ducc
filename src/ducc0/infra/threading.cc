@@ -56,8 +56,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdexcept>
 #include <utility>
 #include <cstdlib>
-#include <mutex>
-#include <condition_variable>
 #include <thread>
 #include <queue>
 #include <atomic>
@@ -84,9 +82,9 @@ namespace detail_threading {
 class latch
   {
     std::atomic<size_t> num_left_;
-    std::mutex mut_;
-    std::condition_variable completed_;
-    using lock_t = std::unique_lock<std::mutex>;
+    Mutex mut_;
+    CondVar completed_;
+    using lock_t = UniqueLock;
 
   public:
     latch(size_t n): num_left_(n) {}
@@ -165,9 +163,9 @@ static const int pin_offset = get_pin_offset_from_env();
 template <typename T> class concurrent_queue
   {
     std::queue<T> q_;
-    std::mutex mut_;
+    Mutex mut_;
     std::atomic<size_t> size_;
-    using lock_t = std::lock_guard<std::mutex>;
+    using lock_t = LockGuard;
 
   public:
     void push(T val)
@@ -218,8 +216,8 @@ class ducc_thread_pool: public thread_pool
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
-      std::condition_variable work_ready;
-      std::mutex mut;
+      CondVar work_ready;
+      Mutex mut;
       std::atomic_flag busy_flag = ATOMIC_FLAG_INIT;
       std::function<void()> work;
 
@@ -230,7 +228,7 @@ class ducc_thread_pool: public thread_pool
         {
         in_parallel_region = true;
         do_pinning(ithread);
-        using lock_t = std::unique_lock<std::mutex>;
+        using lock_t = UniqueLock;
         bool expect_work = true;
         while (!shutdown_flag || expect_work)
           {
@@ -273,11 +271,11 @@ class ducc_thread_pool: public thread_pool
       };
 
     concurrent_queue<std::function<void()>> overflow_work_;
-    std::mutex mut_;
+    Mutex mut_;
     std::vector<worker> workers_;
     std::atomic<bool> shutdown_=false;
     std::atomic<size_t> unscheduled_tasks_=0;
-    using lock_t = std::lock_guard<std::mutex>;
+    using lock_t = LockGuard;
 
     void create_threads()
       {
@@ -439,7 +437,7 @@ class Distribution
   {
   private:
     size_t nthreads_;
-    std::mutex mut_;
+    Mutex mut_;
     size_t nwork_;
     size_t cur_;
     std::atomic<size_t> cur_dynamic_;
@@ -545,7 +543,7 @@ class Distribution
           }
         case GUIDED:
           {
-          std::unique_lock<std::mutex> lck(mut_);
+          LockGuard lck(mut_);
           if (cur_>=nwork_) return Range();
           auto rem = nwork_-cur_;
           size_t tmp = size_t((fact_max_*double(rem))/double(nthreads_));
@@ -585,7 +583,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
 
   latch counter(nthreads_);
   std::exception_ptr ex;
-  std::mutex ex_mut;
+  Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
   // during the execution of f. This ensures that possible nested parallel
   // regions are handled by the same pool and not by the one that happens
@@ -606,7 +604,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
         }
       catch (...)
         {
-        std::lock_guard<std::mutex> lock(ex_mut);
+        LockGuard lock(ex_mut);
         ex = std::current_exception();
         }
       counter.count_down();

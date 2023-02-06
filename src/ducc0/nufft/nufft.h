@@ -27,7 +27,6 @@
 #include <map>
 #include <type_traits>
 #include <utility>
-#include <mutex>
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
@@ -522,7 +521,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
         vmav<Tacc,ndim> bufr, bufi;
         Tacc *px0r, *px0i;
-        mutex &mylock;
+        Mutex &mylock;
 
         // add the acumulated local tile to the global oversampled grid
         DUCC0_NOINLINE void dump()
@@ -530,7 +529,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
           int inu = int(parent->nover[0]);
           {
-          lock_guard<mutex> lock(mylock);
+          LockGuard lock(mylock);
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
@@ -551,7 +550,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         kbuf buf;
 
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
-          mutex &mylock_)
+          Mutex &mylock_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             i0{-1000000}, b0{-1000000},
             bufr({size_t(suvec)}), bufi({size_t(suvec)}),
@@ -654,7 +653,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      mutex mylock;
+      Mutex mylock;
 
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
@@ -833,7 +832,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
         vmav<complex<Tacc>,ndim> gbuf;
         complex<Tacc> *px0;
-        vector<mutex> &locks;
+        vector<Mutex> &locks;
 
         DUCC0_NOINLINE void dump()
           {
@@ -844,7 +843,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           int idxv0 = (b0[1]+inv)%inv;
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
-            lock_guard<mutex> lock(locks[idxu]);
+            LockGuard lock(locks[idxu]);
             for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
@@ -865,7 +864,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         kbuf buf;
 
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
-          vector<mutex> &locks_)
+          vector<Mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             i0{-1000000, -1000000}, b0{-1000000, -1000000},
             gbuf({size_t(su+1),size_t(sv)}),
@@ -979,7 +978,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      vector<mutex> locks(nover[0]);
+      vector<Mutex> locks(nover[0]);
 
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(coord_idx.size(), nthreads, chunksz, [&](Scheduler &sched)
@@ -1234,7 +1233,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
         vmav<complex<Tacc>,ndim> gbuf;
         complex<Tacc> *px0;
-        vector<mutex> &locks;
+        vector<Mutex> &locks;
 
         DUCC0_NOINLINE void dump()
           {
@@ -1248,7 +1247,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           int idxw0 = (imin[2]+b0[2]+inw)%inw;
           for (int iu=imin[0], idxu=(imin[0]+b0[0]+inu)%inu; iu<imax[0]; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
-            lock_guard<mutex> lock(locks[idxu]);
+            LockGuard lock(locks[idxu]);
             for (int iv=imin[1], idxv=idxv0; iv<imax[1]; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               for (int iw=imin[2], idxw=idxw0; iw<imax[2]; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
@@ -1263,7 +1262,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           int idxw0 = (b0[2]+inw)%inw;
           for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
-            lock_guard<mutex> lock(locks[idxu]);
+            LockGuard lock(locks[idxu]);
             for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               for (int iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
@@ -1287,7 +1286,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         kbuf buf;
 
         HelperNu2u(const Nufft *parent_, vmav<complex<Tcalc>,ndim> &grid_,
-          vector<mutex> &locks_)
+          vector<Mutex> &locks_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             i0{-1000000, -1000000, -1000000}, b0{-1000000, -1000000, -1000000},
 #ifdef NEW_DUMP
@@ -1423,7 +1422,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      vector<mutex> locks(nover[0]);
+      vector<Mutex> locks(nover[0]);
 
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)

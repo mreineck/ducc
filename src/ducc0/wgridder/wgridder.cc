@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2022 Max-Planck-Society
+/* Copyright (C) 2019-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include "ducc0/wgridder/wgridder.h"
@@ -41,7 +41,7 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
 
   double wmin=1e300;
   double wmax=-1e300;
-  mutex mut;
+  Mutex mut;
 
   // determine wmin, wmax
   execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
@@ -56,7 +56,7 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
           lwmax = max(lwmax, w);
           }
     {
-    lock_guard<mutex> lock(mut);
+    LockGuard lock(mut);
     wmin = min(wmin, lwmin);
     wmax = max(wmax, lwmax);
     }
@@ -78,7 +78,7 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
           ++lhist[ibin];
           }
     {
-    lock_guard<mutex> lock(mut);
+    LockGuard lock(mut);
     for (size_t i=0; i<nbin; ++i) hist(i) += lhist[i];
     }
     });

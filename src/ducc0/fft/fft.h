@@ -68,9 +68,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <complex>
 #include <algorithm>
-#ifndef DUCC0_NO_THREADING
-#include <mutex>
-#endif
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
@@ -486,7 +483,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
 #ifndef DUCC0_NO_THREADING
-  static std::mutex mut;
+  static Mutex mut;
 #endif
 
   auto find_in_cache = [&]() -> std::shared_ptr<T>
@@ -510,7 +507,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
 
   {
 #ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
+  LockGuard lock(mut);
 #endif
   auto p = find_in_cache();
   if (p) return p;
@@ -518,7 +515,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   auto plan = std::make_shared<T>(length, vectorize);
   {
 #ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
+  LockGuard lock(mut);
 #endif
   auto p = find_in_cache();
   if (p) return p;
