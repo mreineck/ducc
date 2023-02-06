@@ -3,7 +3,7 @@ fn main() {
         .cpp(true)
         .file("ducc_rust.cc")
         .include(".")
-        .compile("libducc0.a");
+        .compile("ducc0");
 
     println!("cargo:rerun-if-changed=src/main.rs");
     println!("cargo:rerun-if-changed=ducc_rust.cc");
