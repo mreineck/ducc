@@ -1,7 +1,7 @@
+use ndarray::{ArrayView, Dimension};
+use num_complex::Complex;
 use std::any::TypeId;
 use std::ffi::c_void;
-use num_complex::Complex;
-use ndarray::{ArrayView, Dimension};
 
 // TODO Error handling
 
@@ -49,12 +49,12 @@ extern "C" {
     //     );
 }
 
-pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
-    let mut inp2 = slice2arrdesc(inp);
-    unsafe {
-        c_square(&mut inp2);
-    }
-}
+// pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
+//     let mut inp2 = slice2arrdesc(inp);
+//     unsafe {
+//         c_square(&mut inp2);
+//     }
+// }
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
     let dtype: u8 = {
@@ -111,16 +111,16 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
 #[cfg(test)]
 mod tests {
     use super::*;
-use ndarray_rand::rand_distr::Uniform;
-use ndarray_rand::RandomExt;
-use ndarray::{s, Array, Zip, IxDyn};
+    use ndarray::{s, Array, IxDyn, Zip};
+    use ndarray_rand::rand_distr::Uniform;
+    use ndarray_rand::RandomExt;
 
-    #[test]
-    fn square_test() {
-        let shape = (5, 6, 7);
-       let mut a = Array::random(shape, Uniform::new(-1., 2.));
-       let b = Array::zeros(shape);
-       b.assign(&a);
-       square::<IxDyn>(a);
-    }
+    // #[test]
+    // fn square_test() {
+    //     let shape = (5, 6, 7);
+    //     let mut a = Array::random(shape, Uniform::new(-1., 2.));
+    //     let b = Array::zeros(shape);
+    //     b.assign(&a);
+    //     square::<IxDyn>(a);
+    // }
 }

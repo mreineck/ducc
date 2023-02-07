@@ -1,7 +1,9 @@
 [package]
 name = "ducc0"
+description = "Wrapper around ducc0"
 version = "0.28.0"
 edition = "2021"
+license = "GPL-2.0-or-later"
 
 [dependencies]
 num-complex = "0.4.3"
