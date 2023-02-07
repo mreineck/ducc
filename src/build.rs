@@ -5,6 +5,6 @@ fn main() {
         .include(".")
         .compile("ducc0");
 
-    println!("cargo:rerun-if-changed=src/main.rs");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=ducc_rust.cc");
 }
