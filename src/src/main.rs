@@ -34,8 +34,21 @@ fn format_stride(ndinp: &[isize]) -> [i64; 10] {
 
 extern "C" {
     fn square(inp: &mut RustArrayDescriptor);
-    // fn c2c(inp: &RustArrayDescriptor, out: &mut RustArrayDescriptor);
-    // fn c2c_inplace(inpout: &mut RustArrayDescriptor);
+    fn c2c_double(
+        inp: &RustArrayDescriptor,
+        out: &mut RustArrayDescriptor,
+        axes: &[bool; 10],
+        forward: bool,
+        fct: f64,
+        nthreads: usize,
+    );
+    fn c2c_inplace_double(
+        inout: &mut RustArrayDescriptor,
+        axes: &[bool; 10],
+        forward: bool,
+        fct: f64,
+        nthreads: usize,
+    );
 }
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
@@ -45,15 +58,13 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
         } else if TypeId::of::<A>() == TypeId::of::<f32>() {
             3
         } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
-            7+64
+            7 + 64
         } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
-            3+64
+            3 + 64
         } else {
             panic!("typeid not working");
         }
     };
-    // assert_eq!(D.ndim, slc.shape().len());
-
     RustArrayDescriptor {
         ndim: slc.shape().len() as u8,
         dtype: dtype,
@@ -84,7 +95,7 @@ fn main() {
             *c = Complex { re, im };
         });
 
-    let mut arr2 = slice2arrdesc(m_c.slice(s![.., ..]));  // TODO Simplify!
+    let mut arr2 = slice2arrdesc(m_c.slice(s![.., ..])); // TODO Simplify!
     println!("{:8.4}", m_c);
     unsafe {
         square(&mut arr2);
