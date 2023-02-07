@@ -53,12 +53,28 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_THREADING_H
 #define DUCC0_THREADING_H
 
-// FIXME: This feels rather clumsy. Is there a better way to achieve this?
-#define DUCC0_NO_LOWLEVEL_THREADING 0
-#define DUCC0_STDCXX_LOWLEVEL_THREADING 1
+// Low level threading support can be influenced by the following macros:
+// - DUCC0_NO_LOWLEVEL_THREADING: if defined, multithreading is disabled
+//   and all parallel regions will be executed sequentially
+//   on the invoking thread
+// - DUCC0_CUSTOM_LOWLEVEL_THREADING: if defined, external definitions of
+//   Mutex, UniqueLock, LockGuard, CondVar, and thread_pool must be supplied,
+//   and the code will use those
+// Both macros must not be defined at the same time.
+// If neither macro is defined, standard ducc0 multihreading will be active.
 
-#ifndef DUCC0_LOWLEVEL_THREADING
-#define DUCC0_LOWLEVEL_THREADING DUCC0_STDCXX_LOWLEVEL_THREADING
+#define DUCC0_NO_LOWLEVEL_THREADING
+
+#if (defined(DUCC0_NO_LOWLEVEL_THREADING) && defined(DUCC0_CUSTOM_LOWLEVEL_THREADING))
+static_assert(false, "DUCC0_NO_LOWLEVEL_THREADING and DUCC0_CUSTOMLOWLEVEL_THREADING must not be both defined");
+#endif
+
+#if defined(DUCC0_STDCXX_LOWLEVEL_THREADING)
+static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined externally");
+#endif
+
+#if ((!defined(DUCC0_NO_LOWLEVEL_THREADING)) && (!defined(DUCC0_CUSTOM_LOWLEVEL_THREADING)))
+#define DUCC0_STDCXX_LOWLEVEL_THREADING
 #endif
 
 #include <cstddef>
@@ -66,10 +82,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 
 // threading-specific headers
-#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <mutex>
 #include <condition_variable>
-#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
+#endif
+
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
 // no headers needed
 #endif
 
@@ -78,15 +96,14 @@ namespace ducc0 {
 namespace detail_threading {
 
 // define threading related types dependent on the underlying implementation
-#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
-
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 using Mutex = std::mutex;
 using UniqueLock = std::unique_lock<std::mutex>;
 using LockGuard = std::lock_guard<std::mutex>;
 using CondVar = std::condition_variable;
+#endif
 
-#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
-
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
 struct Mutex
   {
   void lock(){}
@@ -107,7 +124,6 @@ struct CondVar
   void notify_one() noexcept {}
   void notify_all() noexcept {}
   };
-
 #endif
 
 using std::size_t;

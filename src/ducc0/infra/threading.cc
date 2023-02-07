@@ -55,7 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <utility>
 
-#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>
 #include <stdexcept>
 #include <cstdlib>
@@ -103,7 +103,7 @@ class latch
     bool is_ready() { return num_left_ == 0; }
   };
 
-#if DUCC0_LOWLEVEL_THREADING == DUCC0_STDCXX_LOWLEVEL_THREADING
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
 static long mystrtol(const char *inp)
   {
@@ -389,7 +389,9 @@ inline ducc_thread_pool *get_master_pool()
 
 thread_local thread_pool *active_pool = get_master_pool();
 
-#elif DUCC0_LOWLEVEL_THREADING == DUCC0_NO_LOWLEVEL_THREADING
+#endif
+
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
 
 class ducc_pseudo_thread_pool: public thread_pool
   {
