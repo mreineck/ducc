@@ -385,6 +385,14 @@ inline thread_pool *get_master_pool()
 
 thread_local thread_pool *active_pool = get_master_pool();
 
+thread_pool *set_active_pool(thread_pool *new_pool)
+  { return std::exchange(active_pool, new_pool); }
+thread_pool *get_active_pool()
+  {
+  MR_assert(active_pool!=nullptr, "no thread pool active");
+  return active_pool;
+  }
+
 #endif
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING
@@ -411,8 +419,6 @@ inline thread_pool *get_master_pool()
 
 thread_local thread_pool *active_pool = get_master_pool();
 
-#endif
-
 thread_pool *set_active_pool(thread_pool *new_pool)
   { return std::exchange(active_pool, new_pool); }
 thread_pool *get_active_pool()
@@ -420,6 +426,8 @@ thread_pool *get_active_pool()
   MR_assert(active_pool!=nullptr, "no thread pool active");
   return active_pool;
   }
+
+#endif
 
 size_t max_threads()
   { return get_active_pool()->nthreads(); }

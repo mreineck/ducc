@@ -58,7 +58,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   and all parallel regions will be executed sequentially
 //   on the invoking thread.
 // - DUCC0_CUSTOM_LOWLEVEL_THREADING: if defined, external definitions of
-//   Mutex, UniqueLock, LockGuard, CondVar, and thread_pool must be supplied,
+//   Mutex, UniqueLock, LockGuard, CondVar, thread_pool, set_active_pool(),
+//   and get active_pool() must be supplied,
 //   and the code will use those.
 // Both macros must not be defined at the same time.
 // If neither macro is defined, standard ducc0 multihreading will be active.
@@ -97,6 +98,11 @@ namespace ducc0 {
 
 namespace detail_threading {
 
+class thread_pool;
+
+thread_pool *set_active_pool(thread_pool *new_pool);
+thread_pool *get_active_pool();
+
 // define threading related types dependent on the underlying implementation
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 using Mutex = std::mutex;
@@ -129,15 +135,11 @@ struct CondVar
 #endif
 
 #ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
-// include/insert custom definitions of Mutex, LockGuard, UniqueLock, CondVar
-// and thread_pool here.
+// include/insert custom definitions of Mutex, LockGuard, UniqueLock, CondVar,
+// thread_pool, set_active_pool(), and get_active_pool() here.
 #endif
 
 using std::size_t;
-
-class thread_pool;
-
-thread_pool *set_active_pool(thread_pool *new_pool);
 
 class ScopedUseThreadPool
   {
