@@ -56,14 +56,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Low level threading support can be influenced by the following macros:
 // - DUCC0_NO_LOWLEVEL_THREADING: if defined, multithreading is disabled
 //   and all parallel regions will be executed sequentially
-//   on the invoking thread
+//   on the invoking thread.
 // - DUCC0_CUSTOM_LOWLEVEL_THREADING: if defined, external definitions of
 //   Mutex, UniqueLock, LockGuard, CondVar, and thread_pool must be supplied,
-//   and the code will use those
+//   and the code will use those.
 // Both macros must not be defined at the same time.
 // If neither macro is defined, standard ducc0 multihreading will be active.
-
-#define DUCC0_NO_LOWLEVEL_THREADING
 
 #if (defined(DUCC0_NO_LOWLEVEL_THREADING) && defined(DUCC0_CUSTOM_LOWLEVEL_THREADING))
 static_assert(false, "DUCC0_NO_LOWLEVEL_THREADING and DUCC0_CUSTOMLOWLEVEL_THREADING must not be both defined");
@@ -89,6 +87,10 @@ static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined extern
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING
 // no headers needed
+#endif
+
+#ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
+// include headers necessary for custom threading support here.
 #endif
 
 namespace ducc0 {
@@ -126,20 +128,14 @@ struct CondVar
   };
 #endif
 
+#ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
+// include/insert custom definitions of Mutex, LockGuard, UniqueLock, CondVar
+// and thread_pool here.
+#endif
+
 using std::size_t;
 
-/// Abstract base class for minimalistic thread pool functionality
-class thread_pool
-  {
-  public:
-    virtual ~thread_pool() {}
-    /// Returns the total number of threads managed by the pool
-    virtual size_t nthreads() const = 0;
-    /** "Normalizes" a requested number of threads. A useful convention could be
-        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
-    virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
-    virtual void submit(std::function<void()> work) = 0;
-  };
+class thread_pool;
 
 thread_pool *set_active_pool(thread_pool *new_pool);
 
