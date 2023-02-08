@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2022 Max-Planck-Society
+# Copyright(C) 2022-2023 Max-Planck-Society
 
 import ducc0
 import numpy as np
@@ -111,6 +111,7 @@ class Bench:
         ndim = len(shape)
         npoints = self._coord.shape[0]
         coord = self._coord.astype(rdtype)
+        coord = tuple(np.ascontiguousarray(coord[:,i]) for i in range(coord.shape[1]))
         points = self._points.astype(dtype)
         values = self._values.astype(dtype)
 
@@ -119,7 +120,7 @@ class Bench:
         plan1 = finufft.Plan(1, self._shape, 1, eps=epsilon, isign=-1,
                              dtype="complex64" if singleprec else "complex128",
                              nthreads=nthreads, debug=1, fftw=0)
-        plan1.setpts(*tuple(coord[:,i]for i in range(coord.shape[1])))
+        plan1.setpts(*coord)
         t0 = time()
         res_finufft = plan1.execute(points)
         res["finufft_full_1"] = time()-t0
@@ -129,7 +130,7 @@ class Bench:
         plan2 = finufft.Plan(2, shape, 1, eps=epsilon, isign=-1,
                             dtype="complex64" if singleprec else "complex128",
                             nthreads=nthreads, debug=1, fftw=0)
-        plan2.setpts(*tuple(coord[:,i]for i in range(coord.shape[1])))
+        plan2.setpts(*coord)
         t0 = time()
         res_finufft = plan2.execute(values)
         res["finufft_full_2"] = time()-t0
