@@ -41,7 +41,7 @@ namespace py = pybind11;
 
 py::object normalizeDtype(const py::object &dtype)
   {
-  py::object converter = py::module_::import("numpy").attr("dtype");
+  static py::object converter = py::module_::import("numpy").attr("dtype");
   return converter(dtype);
   }
 
@@ -246,8 +246,8 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
 
 template<typename T> bool isDtype(const py::object &dtype)
   {
-  auto tmp = make_Pyarr<T>({});
-  return tmp.dtype().is(dtype);
+  static const auto tmp = make_Pyarr<T>({}).dtype();
+  return tmp.is(dtype);
   }
 
 }
