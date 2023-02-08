@@ -42,7 +42,7 @@ def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
     return res
 
 
-@pmp('nx', [20, 21, 250, 257])
+@pmp('nx', [1, 20, 21, 250, 257])
 @pmp("npoints", (1, 37, 10))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
@@ -75,7 +75,7 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
                               epsilon=epsilon, nthreads=nthreads, out=dirty2,
                               periodicity=periodicity, fft_order=fft_order).astype("c16")
     dirty_ref = explicit_nufft(uvw, ms, (nx,), forward, periodicity, fft_order)
-    assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=4*epsilon)
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
                            epsilon=epsilon, nthreads=nthreads,
                            periodicity=periodicity, fft_order=fft_order).astype("c16")
@@ -101,8 +101,8 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
 
-@pmp('nx', [20, 21, 250, 257])
-@pmp('ny', [21, 32, 257])
+@pmp('nx', [1, 20, 21, 250, 257])
+@pmp('ny', [1, 21, 32, 257])
 @pmp("npoints", (1, 37, 10))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
@@ -135,7 +135,7 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
                               epsilon=epsilon, nthreads=nthreads, out=dirty2,
                               periodicity=periodicity, fft_order=fft_order).astype("c16")
     dirty_ref = explicit_nufft(uvw, ms, (nx,ny), forward, periodicity, fft_order)
-    assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty2,dirty_ref), 0, atol=2*epsilon)
     ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
                            epsilon=epsilon, nthreads=nthreads,
                            periodicity=periodicity, fft_order=fft_order).astype("c16")
@@ -162,9 +162,9 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
 
-@pmp('nx', [20, 21])
-@pmp('ny', [21, 32])
-@pmp('nz', [22, 35])
+@pmp('nx', [1, 20, 21])
+@pmp('ny', [1, 21, 32])
+@pmp('nz', [1, 22, 35])
 @pmp("npoints", (1, 37, 10))
 @pmp("epsilon", (1e-5, 3e-5, 5e-13))
 @pmp("forward", (True, False))

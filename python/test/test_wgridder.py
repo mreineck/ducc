@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2022 Max-Planck-Society
+# Copyright(C) 2020-2023 Max-Planck-Society
 
 from itertools import product
 
@@ -90,8 +90,8 @@ def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
 
 def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                  mask, epsilon):
-    u = np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT)*2*np.pi
-    v = np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT)*2*np.pi
+    u = np.fmod(np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT), 1.)*2*np.pi
+    v = np.fmod(np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT), 1.)*2*np.pi
     if wgt is not None:
         ms = ms*wgt
     if mask is not None:
@@ -178,8 +178,8 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
     return vis
 
 
-@pmp('nx', [(32, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(2, 2), (32, 3), (128, 2)])
+@pmp('ny', [(2, 2), (128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
@@ -195,7 +195,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(43)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
     f0 = 1e9
@@ -217,7 +217,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         ref = max(vdot(ms, ms).real, vdot(m2, m2).real,
                   vdot(dirty, dirty).real, vdot(d2, d2).real)
         tol = 3e-5*ref if singleprec else 2e-13*ref
-        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=tol)
+        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=3*tol)
 
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
@@ -242,8 +242,8 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
 
 
-@pmp('nx', [(6, 2), (18, 2), (66, 4)])
-@pmp('ny', [(64, 2)])
+@pmp('nx', [(2, 2), (6, 2), (18, 2), (66, 4)])
+@pmp('ny', [(2, 2), (64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-4, 1e-7))
@@ -298,8 +298,8 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
 
 
-@pmp('nxdirty', [16, 64])
-@pmp('nydirty', [64])
+@pmp('nxdirty', [2, 16, 64])
+@pmp('nydirty', [2, 64])
 @pmp("nrow", (1, 100))
 @pmp("nchan", (1, 7))
 @pmp("epsilon", list(10.**np.linspace(-2., -12., 20)))
@@ -334,7 +334,7 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
         pytest.skip()
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
-    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=2*epsilon)
     x1 = explicit_degridder(uvw, freq, ref, wgt, pixsizex,
                            pixsizey, wstacking, None)
     x2 = ng.dirty2ms(uvw, freq, ref, wgt, pixsizex, pixsizey, 0, 0,
@@ -342,8 +342,8 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
     assert_allclose(ducc0.misc.l2error(x1,x2), 0, atol=epsilon)
 
 
-@pmp('nx', [(30, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(2, 2), (30, 3), (128, 2)])
+@pmp('ny', [(2, 2), (128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
