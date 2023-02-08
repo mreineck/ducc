@@ -377,6 +377,50 @@ py::array genuine_hartley(const py::array &in, const py::object &axes_,
     out_, nthreads))
   }
 
+template<typename T> py::array separable_fht_internal(const py::array &in,
+  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  {
+  auto axes = makeaxes(in, axes_);
+  auto ain = to_cfmav<T>(in);
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
+  auto aout = to_vfmav<T>(out);
+  {
+  py::gil_scoped_release release;
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  ducc0::r2r_separable_fht(ain, aout, axes, fct, nthreads);
+  }
+  return out;
+  }
+
+py::array separable_fht(const py::array &in, const py::object &axes_,
+  int inorm, py::object &out_, size_t nthreads)
+  {
+  DISPATCH(in, f64, f32, flong, separable_fht_internal, (in, axes_, inorm,
+    out_, nthreads))
+  }
+
+template<typename T> py::array genuine_fht_internal(const py::array &in,
+  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  {
+  auto axes = makeaxes(in, axes_);
+  auto ain = to_cfmav<T>(in);
+  auto out = get_optional_Pyarr<T>(out_, ain.shape());
+  auto aout = to_vfmav<T>(out);
+  {
+  py::gil_scoped_release release;
+  T fct = norm_fct<T>(inorm, ain.shape(), axes);
+  ducc0::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
+  }
+  return out;
+  }
+
+py::array genuine_fht(const py::array &in, const py::object &axes_,
+  int inorm, py::object &out_, size_t nthreads)
+  {
+  DISPATCH(in, f64, f32, flong, genuine_fht_internal, (in, axes_, inorm,
+    out_, nthreads))
+  }
+
 // Export good_size in raw C-API to reduce overhead (~4x faster)
 PyObject * good_size(PyObject * /*self*/, PyObject * args)
   {
@@ -620,7 +664,7 @@ numpy.ndarray (same shape and data type as `a`)
     The transformed data. The shape is identical to that of the input array.
 )""";
 
-const char *separable_hartley_DS = R"""(Performs a separable Hartley transform.
+const char *separable_hartley_DS = R"""(Performs a separable Hartley-like transform.
 For every requested axis, a 1D forward Fourier transform is carried out, and
 the real and imaginary parts of the result are added before the next axis is
 processed.
@@ -651,11 +695,87 @@ Returns
 -------
 numpy.ndarray (same shape and data type as `a`)
     The transformed data
+
+Notes
+-----
+DEPRECATED: this function uses a nonstandard Hartley convention.
+Only use if you know exactly what you are doing!
 )""";
 
-const char *genuine_hartley_DS = R"""(Performs a full Hartley transform.
-A full Fourier transform is carried out over the requested axes, and the
+const char *genuine_hartley_DS = R"""(Performs a full Hartley-like transform.
+A full forward Fourier transform is carried out over the requested axes, and the
 sum of real and imaginary parts of the result is stored in the output
+array. For a single transformed axis, this is identical to `separable_hartley`,
+but when transforming multiple axes, the results are different.
+
+Parameters
+----------
+a : numpy.ndarray (any real type)
+    The input data
+axes : list of integers
+    The axes along which the transform is carried out.
+    If not set, all axes will be transformed.
+inorm : int
+    Normalization type
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
+    where N is the product of the lengths of the transformed axes.
+out : numpy.ndarray (same shape and data type as `a`)
+    May be identical to `a`, but if it isn't, it must not overlap with `a`.
+    If None, a new array is allocated to store the output.
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
+
+Returns
+-------
+numpy.ndarray (same shape and data type as `a`)
+    The transformed data
+
+Notes
+-----
+DEPRECATED: this function uses a nonstandard Hartley convention.
+Only use if you know exactly what you are doing!
+)""";
+
+const char *separable_fht_DS = R"""(Performs a separable Hartley transform.
+For every requested axis, a 1D forward Fourier transform is carried out, and
+the intermediate result is its real part minus its imaginary part.
+Then the next axis is processed.
+
+Parameters
+----------
+a : numpy.ndarray (any real type)
+    The input data
+axes : list of integers
+    The axes along which the transform is carried out.
+    If not set, this is assumed to be `list(range(a.ndim))`.
+    Axes will be transformed in the specified order.
+inorm : int
+    Normalization type
+      | 0 : no normalization
+      | 1 : divide by sqrt(N)
+      | 2 : divide by N
+
+    where N is the product of the lengths of the transformed axes.
+out : numpy.ndarray (same shape and data type as `a`)
+    May be identical to `a`, but if it isn't, it must not overlap with `a`.
+    If None, a new array is allocated to store the output.
+nthreads : int
+    Number of threads to use. If 0, use the system default (typically the number
+    of hardware threads on the compute node).
+
+Returns
+-------
+numpy.ndarray (same shape and data type as `a`)
+    The transformed data
+)""";
+
+const char *genuine_fht_DS = R"""(Performs a full Hartley transform.
+A full forward Fourier transform is carried out over the requested axes, and the
+real part minus the imaginary part of the result is stored in the output
 array. For a single transformed axis, this is identical to `separable_hartley`,
 but when transforming multiple axes, the results are different.
 
@@ -864,6 +984,10 @@ void add_fft(py::module_ &msup)
   m.def("separable_hartley", separable_hartley, separable_hartley_DS, "a"_a,
     "axes"_a=None, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("genuine_hartley", genuine_hartley, genuine_hartley_DS, "a"_a,
+    "axes"_a=None, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
+  m.def("separable_fht", separable_fht, separable_fht_DS, "a"_a,
+    "axes"_a=None, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
+  m.def("genuine_fht", genuine_fht, genuine_fht_DS, "a"_a,
     "axes"_a=None, "inorm"_a=0, "out"_a=None, "nthreads"_a=1);
   m.def("dct", dct, dct_DS, "a"_a, "type"_a, "axes"_a=None, "inorm"_a=0,
     "out"_a=None, "nthreads"_a=1);
