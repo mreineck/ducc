@@ -58,8 +58,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   and all parallel regions will be executed sequentially
 //   on the invoking thread.
 // - DUCC0_CUSTOM_LOWLEVEL_THREADING: if defined, external definitions of
-//   Mutex, UniqueLock, LockGuard, CondVar, thread_pool, set_active_pool(),
-//   and get active_pool() must be supplied,
+//   Mutex, UniqueLock, LockGuard, CondVar, set_active_pool(),
+//   and get active_pool() must be supplied in "ducc0_custom_lowlevel_threading.h"
 //   and the code will use those.
 // Both macros must not be defined at the same time.
 // If neither macro is defined, standard ducc0 multihreading will be active.
@@ -90,15 +90,33 @@ static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined extern
 // no headers needed
 #endif
 
+namespace ducc0 {
+namespace detail_threading {
+
+using std::size_t;
+
+/// Abstract base class for minimalistic thread pool functionality
+class thread_pool
+  {
+  public:
+    virtual ~thread_pool() {}
+    /// Returns the total number of threads managed by the pool
+    virtual size_t nthreads() const = 0;
+    /** "Normalizes" a requested number of threads. A useful convention could be
+        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
+    virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
+    virtual void submit(std::function<void()> work) = 0;
+  };
+
+}}
+
 #ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
-// include headers necessary for custom threading support here.
+#include "ducc0_custom_lowlevel_threading.h"
 #endif
 
 namespace ducc0 {
 
 namespace detail_threading {
-
-class thread_pool;
 
 thread_pool *set_active_pool(thread_pool *new_pool);
 thread_pool *get_active_pool();
@@ -132,11 +150,6 @@ struct CondVar
   void notify_one() noexcept {}
   void notify_all() noexcept {}
   };
-#endif
-
-#ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
-// include/insert custom definitions of Mutex, LockGuard, UniqueLock, CondVar,
-// thread_pool, set_active_pool(), and get_active_pool() here.
 #endif
 
 using std::size_t;

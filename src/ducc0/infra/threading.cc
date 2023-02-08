@@ -206,7 +206,7 @@ static void do_pinning(int /*ithread*/)
   { return; }
 #endif
 
-class thread_pool
+class ducc_thread_pool: public thread_pool
   {
   private:
     // A reasonable guess, probably close enough for most hardware
@@ -309,16 +309,19 @@ class thread_pool
       }
 
   public:
-    explicit thread_pool(size_t nthreads):
+    explicit ducc_thread_pool(size_t nthreads):
       workers_(nthreads)
       { create_threads(); }
 
-    thread_pool(): thread_pool(max_threads_) {}
+    ducc_thread_pool(): ducc_thread_pool(max_threads_) {}
 
-    ~thread_pool() { shutdown(); }
+    //virtual
+    ~ducc_thread_pool() { shutdown(); }
 
+    //virtual
     size_t nthreads() const { return workers_.size(); }
 
+    //virtual
     size_t adjust_nthreads(size_t nthreads_in) const
       {
       if (in_parallel_region)
@@ -327,6 +330,7 @@ class thread_pool
         return max_threads_;
       return std::min(max_threads_, nthreads_in);
       }
+    //virtual
     void submit(std::function<void()> work)
       {
       lock_t lock(mut_);
@@ -366,9 +370,9 @@ class thread_pool
   };
 
 // return a pointer to a singleton thread_pool, which is always available
-inline thread_pool *get_master_pool()
+inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new thread_pool();
+  static auto master_pool = new ducc_thread_pool();
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -397,23 +401,26 @@ thread_pool *get_active_pool()
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING
 
-class thread_pool
+class ducc_pseudo_thread_pool: public thread_pool
   {
   public:
-    thread_pool() {}
+    ducc_pseudo_thread_pool() {}
 
+    //virtual
     size_t nthreads() const { return 1; }
 
+    //virtual
     size_t adjust_nthreads(size_t /*nthreads_in*/) const
       { return 1; }
+    //virtual
     void submit(std::function<void()> work)
       { work(); }
   };
 
 // return a pointer to a singleton thread_pool, which is always available
-inline thread_pool *get_master_pool()
+inline ducc_pseudo_thread_pool *get_master_pool()
   {
-  static auto master_pool = new thread_pool();
+  static auto master_pool = new ducc_pseudo_thread_pool();
   return master_pool;
   }
 
