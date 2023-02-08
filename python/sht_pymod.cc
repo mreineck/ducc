@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2022 Max-Planck-Society
+ *  Copyright (C) 2017-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -787,7 +787,7 @@ template<typename T> class Py_sharpjob
     string repr() const
       {
       return "<sharpjob_d: lmax=" + dataToString(lmax_) +
-        ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
+        ", mmax=" + dataToString(mmax_) + ", npix=" + dataToString(npix_) +".>";
       }
 
     void set_nthreads(size_t nthreads_)

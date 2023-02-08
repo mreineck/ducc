@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020-2022 Max-Planck-Society
+/* Copyright (C) 2020-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 
@@ -38,6 +38,12 @@ using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
 
 namespace py = pybind11;
+
+py::object normalizeDtype(const py::object &dtype)
+  {
+  py::object converter = py::module_::import("numpy").attr("dtype");
+  return converter(dtype);
+  }
 
 bool isPyarr(const py::object &obj)
   { return py::isinstance<py::array>(obj); }
@@ -238,6 +244,12 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
   return tmp;
   }
 
+template<typename T> bool isDtype(const py::object &dtype)
+  {
+  auto tmp = make_Pyarr<T>({});
+  return tmp.dtype().is(dtype);
+  }
+
 }
 
 using detail_pybind::isPyarr;
@@ -254,6 +266,8 @@ using detail_pybind::to_cmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
 using detail_pybind::to_vmav_with_optional_leading_dimensions;
 using detail_pybind::to_array;
+using detail_pybind::normalizeDtype;
+using detail_pybind::isDtype;
 
 }
 
