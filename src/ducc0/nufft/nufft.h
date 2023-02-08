@@ -966,7 +966,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           p0i = px0i+ofs;
           }
       };
+
 #if 0
+// FIXME: this version of the function is actually a bit faster than the one
+// below, but it fails on some targets (aarch64 and s390x); not sure whether
+// this is caused by too liberal type punning or by compiler problems.
+// The alternative version is not much slower, but it might be worth to try
+// additional tuning.
+
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
@@ -1029,7 +1036,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       }
+
 #else
+
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
@@ -1094,7 +1103,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       }
+
 #endif
+
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
       const cmav<Tcoord,2> &coords, vmav<complex<Tpoints>,1> &points) const
