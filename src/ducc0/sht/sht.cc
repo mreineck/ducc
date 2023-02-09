@@ -1652,7 +1652,7 @@ void get_gridweights(const string &type, vmav<double,1> &wgt)
 
 vmav<double,1> get_gridweights(const string &type, size_t nrings)
   {
-  vmav<double,1> wgt({nrings});
+  vmav<double,1> wgt({nrings}, UNINITIALIZED);
   get_gridweights(type, wgt);
   return wgt;
   }
@@ -1805,7 +1805,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
     if (ntheta_tmp<=nrings)
@@ -1817,7 +1817,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
     else
       {
 //FIXME noncrit?
-      vmav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)});
+      vmav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED);
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
@@ -1832,7 +1832,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,nalm});
+    vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
 
     while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
       {
@@ -1878,10 +1878,10 @@ template<typename T> void leg2alm(  // associated Legendre transform
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}));
+    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
     resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
     leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
     return;
@@ -1894,7 +1894,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,ncomp});
+    vmav<complex<double>,2> almtmp({lmax+2,ncomp}, UNINITIALIZED);
 
     while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
       {
@@ -1935,10 +1935,10 @@ template<typename T> void leg2map(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
     {
     ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2});
+    vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
     while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
       {
       for (size_t icomp=0; icomp<ncomp; ++icomp)
@@ -1972,10 +1972,10 @@ template<typename T> void map2leg(  // FFT
     nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
     {
     ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2});
+    vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
     while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
       {
       for (size_t icomp=0; icomp<ncomp; ++icomp)
@@ -2261,7 +2261,7 @@ template<typename T> void synthesis(
   SHT_mode mode)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
 
@@ -2269,10 +2269,10 @@ template<typename T> void synthesis(
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
@@ -2281,7 +2281,7 @@ template<typename T> void synthesis(
     }
   else
     {
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
@@ -2332,20 +2332,20 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> 
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
   vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
                 {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads,
   mode);
@@ -2372,7 +2372,7 @@ template<typename T> void adjoint_synthesis(
   size_t nthreads)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
 
@@ -2380,10 +2380,10 @@ template<typename T> void adjoint_synthesis(
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
@@ -2392,7 +2392,7 @@ template<typename T> void adjoint_synthesis(
     }
   else
     {
-    auto leg(vmav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
     }
@@ -2494,9 +2494,9 @@ template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
   const string &geometry, size_t nthreads)
   {
-  auto nphi = vmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = vmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
@@ -2544,10 +2544,10 @@ template<typename T> void analysis_2d(
   MR_assert(map.shape(1)>=nrings_min,
     "too few rings for analysis up to requested lmax");
 
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
-  vmav<double,1> theta({nphi.shape(0)});
+  vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
@@ -2563,7 +2563,7 @@ template<typename T> void analysis_2d(
       { npi=true; spi=false; }
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
@@ -2576,7 +2576,7 @@ template<typename T> void analysis_2d(
         }
 
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
-    vmav<double,1> newtheta({ntheta_leg});
+    vmav<double,1> newtheta({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       newtheta(i) = (pi*i)/(ntheta_leg-1);
     leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads);
@@ -2585,7 +2585,7 @@ template<typename T> void analysis_2d(
   else
     {
     auto wgt = get_gridweights(geometry, theta.shape(0));
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}, UNINITIALIZED));
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     for (size_t i=0; i<leg.shape(0); ++i)
       for (size_t j=0; j<leg.shape(1); ++j)
@@ -2604,13 +2604,13 @@ template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
@@ -2651,10 +2651,10 @@ template<typename T> void adjoint_analysis_2d(
   MR_assert(map.shape(1)>=nrings_min,
     "too few rings for adjoint analysis up to requested lmax");
 
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
-  vmav<double,1> theta({nphi.shape(0)});
+  vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
@@ -2670,11 +2670,11 @@ template<typename T> void adjoint_analysis_2d(
       { npo=true; spo=false; }
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
 
-    vmav<double,1> theta_tmp({ntheta_leg});
+    vmav<double,1> theta_tmp({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       theta_tmp(i) = (pi*i)/(ntheta_leg-1);
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
@@ -2692,7 +2692,7 @@ template<typename T> void adjoint_analysis_2d(
   else
     {
     auto wgt = get_gridweights(geometry, theta.shape(0));
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}, UNINITIALIZED));
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
     for (size_t i=0; i<leg.shape(0); ++i)
       for (size_t j=0; j<leg.shape(1); ++j)
@@ -2708,22 +2708,22 @@ template<typename T> void adjoint_analysis_2d(
 template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads)
   {
-  auto nphi = vmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = vmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
   vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
                 {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0,
     ringstart, pixstride, nthreads);
   }
