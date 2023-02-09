@@ -27,7 +27,7 @@ using shape_t = vector<size_t>;
 #include "ducc0/infra/mav.cc"
 #include "ducc0/bindings/typecode.h"
 #include "ducc0/bindings/array_descriptor.h"
-// #include "ducc0/fft/fft.h"
+#include "ducc0/fft/fft.h"
 
 static constexpr size_t MAXDIM=10;
 
@@ -36,22 +36,24 @@ template<typename T> void square_impl(ducc0::ArrayDescriptor &arg) {
    ducc0::mav_apply([](T &v1){v1*=v1;}, 1, bar);
 }
 
-// template<typename T>
-// void c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out, const bool axes[MAXDIM], const bool forward, const T fct, const size_t nthreads) {
-//   auto in_mav = ducc0::to_cfmav<false, complex<T>>(in);
-//   auto out_mav = ducc0::to_vfmav<false, complex<T>>(out);
-// 
-//   shape_t axes1;
-//   for (size_t i=0; i<MAXDIM; i++)
-//     if (axes[i])
-//       axes1.emplace_back(i);
-// 
-//   ducc0::c2c(in_mav, out_mav, axes1, forward, fct, nthreads);
-// }
+template<typename T>
+void c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out, const ducc0::ArrayDescriptor &axes, const bool forward, const T fct, const size_t nthreads) {
+  auto in_mav = ducc0::to_cfmav<false, complex<T>>(in);
+  auto out_mav = ducc0::to_vfmav<false, complex<T>>(out);
+
+  auto axes_mav = ducc0::to_cfmav<false, size_t>(axes);
+  // TODO Check if 1d etc.
+
+  shape_t axes1;
+  for (size_t i=0; i<axes_mav.shape(0); i++)
+    axes1.push_back(axes_mav(i));
+
+  ducc0::c2c(in_mav, out_mav, axes1, forward, fct, nthreads);
+}
 
 extern "C" {
 
-void square(ducc0::ArrayDescriptor &arg) {
+void c_square(ducc0::ArrayDescriptor &arg) {
   auto typec = arg.dtype;
   if (typec == ducc0::Typecode<double>::value)
     square_impl<double>(arg);
@@ -65,9 +67,9 @@ void square(ducc0::ArrayDescriptor &arg) {
     MR_fail("asdf");
  }
 
-// void c2c_double(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out, const bool axes[MAXDIM], const bool forward, const double fct, const size_t nthreads) {
-//   c2c(in, out, axes, forward, fct, nthreads);
-// }
+void c2c_double(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out, const ducc0::ArrayDescriptor &axes, const bool forward, const double fct, const size_t nthreads) {
+  c2c(in, out, axes, forward, fct, nthreads);
+}
 // void c2c_float(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out, const bool axes[MAXDIM], const bool forward, const float fct, const size_t nthreads) {
 //   c2c(in, out, axes, forward, fct, nthreads);
 // }

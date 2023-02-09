@@ -1,4 +1,4 @@
-use ndarray::{ArrayView, Dimension};
+use ndarray::{ArrayView, Dimension, ArrayViewMut, array, ArrayBase, Array1};
 use num_complex::Complex;
 use std::any::TypeId;
 use std::ffi::c_void;
@@ -32,29 +32,70 @@ fn format_stride(ndinp: &[isize]) -> [i64; 10] {
 
 extern "C" {
     fn c_square(inp: &mut RustArrayDescriptor);
-    //     fn c2c_double(
-    //         inp: &RustArrayDescriptor,
-    //         out: &mut RustArrayDescriptor,
-    //         axes: &[bool; 10],
-    //         forward: bool,
-    //         fct: f64,
-    //         nthreads: usize,
-    //     );
-    //     fn c2c_inplace_double(
-    //         inout: &mut RustArrayDescriptor,
-    //         axes: &[bool; 10],
-    //         forward: bool,
-    //         fct: f64,
-    //         nthreads: usize,
-    //     );
+    fn c2c_double(
+        inp: &RustArrayDescriptor,
+        out: &mut RustArrayDescriptor,
+        axes: &RustArrayDescriptor,
+        forward: bool,
+        fct: f64,
+        nthreads: usize,
+    );
+    fn c2c_inplace_double(
+        inout: &mut RustArrayDescriptor,
+        axes: &RustArrayDescriptor,
+        forward: bool,
+        fct: f64,
+        nthreads: usize,
+    );
 }
 
-// pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
-//     let mut inp2 = slice2arrdesc(inp);
-//     unsafe {
-//         c_square(&mut inp2);
-//     }
-// }
+pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
+    let mut inp2 = mutslice2arrdesc(inp);
+    unsafe {
+        c_square(&mut inp2);
+    }
+}
+
+// TODO proper handling of fct dtype
+pub fn c2c<A: 'static, D: ndarray::Dimension>(inp: ArrayView<Complex<A>, D>, out: ArrayViewMut<Complex<A>, D>, axes: Vec<usize>,
+    forward: bool, fct: f64, nthreads: usize ) {
+    let inp2 = slice2arrdesc(inp);
+    let mut out2 = mutslice2arrdesc(out);
+    let axes2 = Array1::from_vec(axes);
+    let axes3 = slice2arrdesc(axes2.view());
+    if TypeId::of::<A>() == TypeId::of::<f64>() {
+    unsafe{
+    c2c_double(&inp2, &mut out2, &axes3, forward, fct, nthreads);
+    }
+    }
+    else {
+            panic!("typeid not working");
+    }
+
+}
+
+fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayViewMut<'a, A, D>) -> RustArrayDescriptor {
+    let dtype: u8 = {
+        if TypeId::of::<A>() == TypeId::of::<f64>() {
+            7
+        } else if TypeId::of::<A>() == TypeId::of::<f32>() {
+            3
+        } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
+            7 + 64
+        } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
+            3 + 64
+        } else {
+            panic!("typeid not working");
+        }
+    };
+    RustArrayDescriptor {
+        ndim: slc.shape().len() as u8,
+        dtype: dtype,
+        shape: format_shape(slc.shape()),
+        stride: format_stride(slc.strides()),
+        data: slc.as_ptr() as *mut c_void,
+    }
+}
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
     let dtype: u8 = {
@@ -115,12 +156,21 @@ mod tests {
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
 
-    // #[test]
-    // fn square_test() {
-    //     let shape = (5, 6, 7);
-    //     let mut a = Array::random(shape, Uniform::new(-1., 2.));
-    //     let b = Array::zeros(shape);
-    //     b.assign(&a);
-    //     square::<IxDyn>(a);
-    // }
+    #[test]
+    fn square_test() {
+        let shape = (2, 3, 3);
+        let mut a = Array::random(shape, Uniform::new(-1., 10.));
+
+        println!("{:8.4}", a);
+        square(a.view_mut());
+        println!("{:8.4}", a);
+
+        let b = Array::ones(shape);
+        let mut c = Array::ones(shape);
+        let axes =vec![0];
+        println!("{:8.4}", b);
+        c2c(b.view(), c.view_mut(), axes, true, 1., 1);
+        println!("{:8.4}", c);
+
+    }
 }
