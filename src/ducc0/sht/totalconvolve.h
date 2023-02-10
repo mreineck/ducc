@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -77,7 +77,7 @@ template<typename T> class ConvolverPlan
       auto axlen_big = max(axlen, axlen2);
       auto axlen_small = min(axlen, axlen2);
       auto fct = kernel->corfunc(axlen_small/2+1, 1./axlen_big, nthreads);
-      vmav<T,1> k2({axlen});
+      vmav<T,1> k2({axlen}, UNINITIALIZED);
       mav_apply([](T &v){v=T(0);}, 1, k2);
       {
       k2(0) = T(fct[0])/axlen_small;
@@ -95,7 +95,7 @@ template<typename T> class ConvolverPlan
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({nphi_b,nphi_s});
+      vmav<T,2> tmp({nphi_b,nphi_s}, UNINITIALIZED);
       // copy and extend to second half
       for (size_t j=0; j<nphi_s; ++j)
         tmp(0,j) = arr(0,j);
@@ -122,7 +122,7 @@ template<typename T> class ConvolverPlan
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({nphi_b,nphi_s});
+      vmav<T,2> tmp({nphi_b,nphi_s}, UNINITIALIZED);
       auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
       vector<T> k2(fct.size());
       for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
@@ -505,7 +505,7 @@ template<typename T> class ConvolverPlan
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
       Alm_Base base(lmax, lmax);
-      vmav<complex<T>,2> aarr({nplanes,base.Num_Alms()});
+      vmav<complex<T>,2> aarr({nplanes,base.Num_Alms()}, UNINITIALIZED);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           {
@@ -640,7 +640,7 @@ template<typename T> class ConvolverPlan
         }
       auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
-      vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()});
+      vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()}, UNINITIALIZED);
       adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
@@ -657,8 +657,8 @@ template<typename T> class ConvolverPlan
     void updateSlm(vmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
       size_t mbeam, vmav<T,3> &planes) const
       {
-      vmav<complex<T>,2> vslm(&slm(0), {1,slm.shape(0)}, {0,slm.stride(0)});
-      cmav<complex<T>,2> vblm(&blm(0), {1,blm.shape(0)}, {0,blm.stride(0)});
+      vmav<complex<T>,2> vslm(slm.data(), {1,slm.shape(0)}, {0,slm.stride(0)});
+      cmav<complex<T>,2> vblm(blm.data(), {1,blm.shape(0)}, {0,blm.stride(0)});
       updateSlm(vslm, vblm, mbeam, planes);
       }
 

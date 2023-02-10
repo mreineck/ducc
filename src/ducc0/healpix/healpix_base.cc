@@ -25,7 +25,7 @@
  */
 
 /*
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -491,7 +491,7 @@ template<typename I> template<typename I2>
     // TODO: ignore all disks with radius>=pi
 
     vector<T_Healpix_Base<I> > base(omax+1);
-    vmav<double,3> crlimit({size_t(omax)+1,nv,3});
+    vmav<double,3> crlimit({size_t(omax)+1,nv,3}, UNINITIALIZED);
     for (size_t o=0; o<=omax; ++o) // prepare data at the required orders
       {
       base[o].Set(o,NEST);
@@ -556,7 +556,7 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
     // TODO: ignore all disks with radius>=pi
 
     vector<T_Healpix_Base<I> > base(omax+1);
-    vmav<double,3> crlimit({size_t(omax+1),nv,3});
+    vmav<double,3> crlimit({size_t(omax+1),nv,3}, UNINITIALIZED);
     for (size_t o=0; o<=omax; ++o) // prepare data at the required orders
       {
       base[o].Set(o,NEST);

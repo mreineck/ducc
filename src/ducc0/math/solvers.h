@@ -23,7 +23,7 @@
 /** \file ducc0/math/solvers.h
  *  Various solvers for linear equation systems
  *
- *  \copyright Copyright (C) 2022 Max-Planck-Society
+ *  \copyright Copyright (C) 2022-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -73,21 +73,21 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   using Tfb = typename conditional<is_same<Tb,float>::value
                                  ||is_same<Tb,complex<float>>::value, float, double>::type;
   static_assert(is_same<Tfx,Tfb>::value, "mixed single/double precision detected");
-  vmav<Tb, bdim> u(b.shape());
+  vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto bnorm = fnormb(b);
   MR_assert(x.shape()==x0.shape(), "shape mismatch");
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
-  vmav<Tx, xdim> xtmp(x0.shape());
-  vmav<Tb, bdim> btmp(b.shape());
+  vmav<Tx, xdim> xtmp(x0.shape(), UNINITIALIZED);
+  vmav<Tb, bdim> btmp(b.shape(), UNINITIALIZED);
   {
   op(x,btmp);
   mav_apply([](auto &v1, const auto &v2) { v1-=v2; }, nthreads, u, btmp);
   }
   auto beta = fnormb(u);
 
-  vmav<Tx, xdim> v(x0.shape());
+  vmav<Tx, xdim> v(x0.shape(), UNINITIALIZED);
   double alpha = 0;
   if (beta>0)
     {
@@ -101,7 +101,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   if (alpha>0)
     mav_apply([xalpha=Tfx(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
 
-  vmav<Tx, xdim> w(x0.shape());
+  vmav<Tx, xdim> w(x0.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, w, v);
 
   size_t istop = 0,
@@ -299,21 +299,21 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   using Tfb = typename conditional<is_same<Tb,float>::value
                                  ||is_same<Tb,complex<float>>::value, float, double>::type;
   static_assert(is_same<Tfx,Tfb>::value, "mixed single/double precision detected");
-  vmav<Tb, bdim> u(b.shape());
+  vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto normb = fnormb(b);
   MR_assert(x.shape()==x0.shape(), "shape mismatch");
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
-  vmav<Tx, xdim> xtmp(x0.shape());
-  vmav<Tb, bdim> btmp(b.shape());
+  vmav<Tx, xdim> xtmp(x0.shape(), UNINITIALIZED);
+  vmav<Tb, bdim> btmp(b.shape(), UNINITIALIZED);
   {
   op(x,btmp);
   mav_apply([](auto &v1, const auto &v2) { v1-=v2; }, nthreads, u, btmp);
   }
   auto beta = fnormb(u);
 
-  vmav<Tx, xdim> v(x0.shape());
+  vmav<Tx, xdim> v(x0.shape(), UNINITIALIZED);
   double alpha = 0;
   if (beta>0)
     {
@@ -336,9 +336,9 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
          cbar = 1,
          sbar = 0;
 
-  vmav<Tx, xdim> h(v.shape());
+  vmav<Tx, xdim> h(v.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, h, v);
-  vmav<Tx, xdim> hbar(h.shape());
+  vmav<Tx, xdim> hbar(h.shape(), UNINITIALIZED);
   mav_apply([](auto &v1) { v1=0; }, nthreads, hbar);
 
   // Initialize variables for estimation of ||r||.
