@@ -698,7 +698,7 @@ numpy.ndarray (same shape and data type as `a`)
 
 Notes
 -----
-DEPRECATED: this function uses a nonstandard Hartley convention.
+This function uses a nonstandard Hartley convention.
 Only use if you know exactly what you are doing!
 )""";
 
@@ -736,7 +736,7 @@ numpy.ndarray (same shape and data type as `a`)
 
 Notes
 -----
-DEPRECATED: this function uses a nonstandard Hartley convention.
+This function uses a nonstandard Hartley convention.
 Only use if you know exactly what you are doing!
 )""";
 
@@ -776,7 +776,7 @@ numpy.ndarray (same shape and data type as `a`)
 const char *genuine_fht_DS = R"""(Performs a full Hartley transform.
 A full forward Fourier transform is carried out over the requested axes, and the
 real part minus the imaginary part of the result is stored in the output
-array. For a single transformed axis, this is identical to `separable_hartley`,
+array. For a single transformed axis, this is identical to `separable_fht`,
 but when transforming multiple axes, the results are different.
 
 Parameters
