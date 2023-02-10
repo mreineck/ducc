@@ -166,13 +166,8 @@ template<typename T> void complex2hartley
     {
     for(auto u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
                              grid(xu,xv).real()+grid(xu,xv).imag());
-#else
-        grid2(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
-                             grid(xu,xv).real()-grid(xu,xv).imag());
-#endif
     });
   }
 
@@ -186,13 +181,8 @@ template<typename T> void hartley2complex
     {
     for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
                                 T(.5)*(grid(xu,xv)-grid(u,v)));
-#else
-        grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
-                                T(.5)*(grid(u,v)-grid(xu,xv)));
-#endif
     });
   }
 
@@ -204,16 +194,16 @@ template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
   if (2*vlim<nv)
     {
     if (!first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+      r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
     auto flo = subarray(farr, {{}, {0,vlim}});
-    r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
+    r2r_separable_fht(flo, flo, {0}, T(1), nthreads);
     auto fhi = subarray(farr, {{}, {farr.shape(1)-vlim, MAXIDX}});
-    r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
+    r2r_separable_fht(fhi, fhi, {0}, T(1), nthreads);
     if (first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+      r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
     }
   else
-    r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
+    r2r_separable_fht(farr, farr, {0,1}, T(1), nthreads);
 
   execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
     {
@@ -1761,7 +1751,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   size_t jstep = (npix_y+nfy-1) / nfy;
   jstep += jstep%2;  // make even
 
-  vmav<complex<Tms>,2> ms2(ms.shape());
+  vmav<complex<Tms>,2> ms2(ms.shape(), UNINITIALIZED);
   mav_apply([](complex<Tms> &v){v=complex<Tms>(0);},nthreads,ms);
   for (size_t i=0; i<nfx; ++i)
     for (size_t j=0; j<nfy; ++j)
@@ -1791,7 +1781,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   bool xodd=npix_x&1, yodd=npix_y&1;
   if (xodd || yodd)  // odd image size
     {
-    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd});
+    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd}, UNINITIALIZED);
     ms2dirty_tuning<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon,
                do_wgridding, nthreads, tdirty, verbosity, negate_v, divide_by_n,
                sigma_min, sigma_max, center_x+0.5*pixsize_x*xodd, center_y+0.5*pixsize_y*yodd);
@@ -1818,13 +1808,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   else
     {
     auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
+    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)}, UNINITIALIZED);
     auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
     ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
              do_wgridding, nthreads, dirty, verbosity, negate_v, divide_by_n,
              sigma_min, sigma_max, center_x, center_y);
-    vmav<Timg,2> dirty2(dirty.shape());
+    vmav<Timg,2> dirty2(dirty.shape(), UNINITIALIZED);
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
     ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
                do_wgridding, nthreads, dirty2, verbosity, negate_v, divide_by_n,
@@ -1845,7 +1835,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   bool xodd=npix_x&1, yodd=npix_y&1;
   if (xodd || yodd)  // odd image size
     {
-    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd});
+    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd}, UNINITIALIZED);
     for (size_t i=0; i<npix_x+xodd; ++i)
       for (size_t j=0; j<npix_y+yodd; ++j)
         tdirty(i,j) = ((i<npix_x)&&(j<npix_y)) ? dirty(i,j) : Timg(0);
@@ -1866,12 +1856,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   else
     {
     auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)});
+    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)}, UNINITIALIZED);
     auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
     dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y);
     mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
-    vmav<complex<Tms>,2> tms(ms.shape());
+    vmav<complex<Tms>,2> tms(ms.shape(), UNINITIALIZED);
     dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, tms, verbosity, negate_v, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
     mav_apply([&](complex<Tms> &v1, complex<Tms> v2) {v1+=v2;}, nthreads, ms, tms);
     }

@@ -1,3 +1,15 @@
+0.29.0:
+- fft:
+    - add the functions `r2r_separable_fht` and `r2r_genuine_fht`, which perform
+      Hartley transforms using the commonly adopted convention, i.e.
+          FHT(x) = FFT(x).real - FFT(x).imag
+      instead of the unusual convention of `r2r_separable_hartley` and
+      `r2r_genuine_hartley`, which use
+          FHT(x) = FFT(x).real + FFT(x).imag
+      `r2r_separable_hartley` and `r2r_genuine_hartley` should not be used in
+      new code, but they are kept for backwards compatibility.
+
+
 0.28.0:
 - general:
     - allow control over multithreading via environment variables
@@ -201,7 +213,7 @@
 
 -sht:
   - a_lm rotation is now much more accurate, but slightly slower
-  - the improved apherical harmonic analysis capabilities are now documented
+  - the improved spherical harmonic analysis capabilities are now documented
 
 -misc:
   - two new convenience functions vdot() and l2error() were added

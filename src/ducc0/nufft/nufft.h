@@ -966,6 +966,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
       };
 
+#if 0
+// FIXME: this version of the function is actually a bit faster than the one
+// below, but it fails on some targets (aarch64 and s390x); not sure whether
+// this is caused by too liberal type punning or by compiler problems.
+// The alternative version is not much slower, but it might be worth to try
+// additional tuning.
+
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
@@ -1028,6 +1035,75 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       }
+
+#else
+
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
+      (size_t supp, const cmav<Tcoord,2> &coords,
+      const cmav<complex<Tpoints>,1> &points,
+      vmav<complex<Tcalc>,ndim> &grid) const
+      {
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
+      MR_assert(supp==SUPP, "requested support out of range");
+      bool sorted = coords_sorted.size()!=0;
+
+      vector<mutex> locks(nover[0]);
+
+      size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
+      execDynamic(coord_idx.size(), nthreads, chunksz, [&](Scheduler &sched)
+        {
+        HelperNu2u<SUPP> hlp(this, grid, locks);
+        constexpr auto jump = hlp.lineJump();
+        const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.nvec*hlp.vlen;
+        constexpr size_t NVEC2 = (2*SUPP+hlp.vlen-1)/hlp.vlen;
+        array<complex<Tacc>,SUPP> cdata;
+        array<mysimd<Tacc>,NVEC2> vdata;
+        for (size_t i=0; i<vdata.size(); ++i) vdata[i]=0;
+
+        constexpr size_t lookahead=3;
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+          {
+          if (ix+lookahead<coord_idx.size())
+            {
+            auto nextidx = coord_idx[ix+lookahead];
+            DUCC0_PREFETCH_R(&points(nextidx));
+            if (!sorted)
+              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+            }
+          size_t row = coord_idx[ix];
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
+                 : hlp.prep({coords(row,0), coords(row,1)});
+          complex<Tacc> v(points(row));
+
+          for (size_t cv=0; cv<SUPP; ++cv)
+            cdata[cv] = kv[cv]*v;
+
+          // really ugly, but attemps with type-punning via union fail on some platforms
+          memcpy(reinterpret_cast<void *>(vdata.data()),
+                 reinterpret_cast<const void *>(cdata.data()),
+                 SUPP*sizeof(complex<Tacc>));
+
+          Tacc * DUCC0_RESTRICT xpx = reinterpret_cast<Tacc *>(hlp.p0);
+          for (size_t cu=0; cu<SUPP; ++cu)
+            {
+            Tacc tmpx=ku[cu];
+            for (size_t cv=0; cv<NVEC2; ++cv)
+              {
+              auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
+              auto tval = mysimd<Tacc>(px,element_aligned_tag());
+              tval += tmpx*vdata[cv];
+              tval.copy_to(px,element_aligned_tag());
+              }
+            }
+          }
+        });
+      }
+
+#endif
 
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,

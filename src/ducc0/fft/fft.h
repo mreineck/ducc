@@ -1072,6 +1072,49 @@ struct ExecHartley
     }
   };
 
+struct ExecFHT
+  {
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
+    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
+    {
+    using T = typename Tstorage::datatype;
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        if (in.data()!=out.data())
+          copy_input(it, in, out.data());
+        plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
+        return;
+        }
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, nthreads);
+    copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
+    }
+  template <typename T0> DUCC0_NOINLINE void exec_simple (
+    const T0 *in, T0 *out, const pocketfft_fht<T0> &plan, T0 fct,
+    size_t nthreads) const
+    {
+    if (in!=out) copy_n(in, plan.length(), out);
+    plan.exec(out, fct, nthreads);
+    }
+  };
+
 struct ExecFFTW
   {
   bool forward;
@@ -1699,6 +1742,15 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &i
     ExecHartley{}, false);
   }
 
+template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+  {
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  general_nd<pocketfft_fht<T>>(in, out, axes, fct, nthreads,
+    ExecFHT{}, false);
+  }
+
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
   ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
   vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
@@ -1809,13 +1861,32 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
-    r0 = c.real()-c.imag();
-    r1 = c.real()+c.imag();
-#else
     r0 = c.real()+c.imag();
     r1 = c.real()-c.imag();
-#endif
+    }, nthreads);
+  }
+
+template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+  {
+  if (axes.size()==1)
+    return r2r_separable_fht(in, out, axes, fct, nthreads);
+  if (axes.size()==2)
+    {
+    r2r_separable_fht(in, out, axes, fct, nthreads);
+    oscarize(out, axes[0], axes[1], nthreads);
+    return;
+    }
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  shape_t tshp(in.shape());
+  tshp[axes.back()] = tshp[axes.back()]/2+1;
+  auto atmp(vfmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
+  r2c(in, atmp, axes, true, fct, nthreads);
+  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
+    {
+    r0 = c.real()-c.imag();
+    r1 = c.real()+c.imag();
     }, nthreads);
   }
 
@@ -1832,7 +1903,7 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   plan2 = std::make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
-  vmav<T,1> fkernel({kernel.shape(0)});
+  vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel(i) = kernel(i);
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
@@ -2034,6 +2105,8 @@ using detail_fft::r2r_fftpack;
 using detail_fft::r2r_fftw;
 using detail_fft::r2r_separable_hartley;
 using detail_fft::r2r_genuine_hartley;
+using detail_fft::r2r_separable_fht;
+using detail_fft::r2r_genuine_fht;
 using detail_fft::dct;
 using detail_fft::dst;
 using detail_fft::convolve_axis;

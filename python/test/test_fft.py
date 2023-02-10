@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2021 Max-Planck-Society
+# Copyright(C) 2020-2023 Max-Planck-Society
 
 
 import ducc0.fft as fft
@@ -21,8 +21,6 @@ import numpy as np
 import pytest
 from numpy.testing import assert_
 import platform
-
-proper_hartley_convention = False #True
 
 pmp = pytest.mark.parametrize
 
@@ -135,7 +133,9 @@ def test1D(len, inorm, dtype):
             is tmp)
     assert_(l2error(tmp, a) < eps)
     tmp = fftn(a.real, inorm=inorm)
-    ref = tmp.real-tmp.imag if proper_hartley_convention else tmp.real+tmp.imag
+    ref = tmp.real-tmp.imag
+    assert_(l2error(fft.separable_fht(a.real,inorm=inorm),ref) < eps)
+    ref = tmp.real+tmp.imag
     assert_(l2error(fft.separable_hartley(a.real,inorm=inorm),ref) < eps)
 
 
@@ -246,16 +246,19 @@ def test_identity_r2(shp):
 def test_genuine_hartley(shp, nthreads):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
+    ref = fftn(a.astype(np.complex128))
+    v1 = fft.genuine_fht(a, nthreads=nthreads)
+    assert_(l2error(v1, ref.real-ref.imag) < 1e-15)
     v1 = fft.genuine_hartley(a, nthreads=nthreads)
-    v2 = fftn(a.astype(np.complex128))
-    v2 = v2.real-v2.imag if proper_hartley_convention else v2.real+v2.imag
-    assert_(l2error(v1, v2) < 1e-15)
+    assert_(l2error(v1, ref.real+ref.imag) < 1e-15)
 
 
 @pmp("shp", shapes)
 def test_hartley_identity(shp):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
+    v1 = fft.separable_fht(fft.separable_fht(a))/a.size
+    assert_(l2error(a, v1) < 1e-15)
     v1 = fft.separable_hartley(fft.separable_hartley(a))/a.size
     assert_(l2error(a, v1) < 1e-15)
 
@@ -265,7 +268,13 @@ def test_hartley_identity(shp):
 def test_genuine_hartley_identity(shp, nthreads):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
+    v1 = fft.genuine_fht(fft.genuine_fht(a), nthreads=nthreads)/a.size
+    assert_(l2error(a, v1) < 1e-15)
     v1 = fft.genuine_hartley(fft.genuine_hartley(a), nthreads=nthreads)/a.size
+    assert_(l2error(a, v1) < 1e-15)
+    v1 = a.copy()
+    assert_(fft.genuine_fht(
+        fft.genuine_fht(v1, out=v1), inorm=2, out=v1, nthreads=nthreads) is v1)
     assert_(l2error(a, v1) < 1e-15)
     v1 = a.copy()
     assert_(fft.genuine_hartley(
@@ -278,6 +287,8 @@ def test_genuine_hartley_identity(shp, nthreads):
 def test_genuine_hartley_2D(shp, axes):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5
+    assert_(l2error(fft.genuine_fht(fft.genuine_fht(
+        a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
     assert_(l2error(fft.genuine_hartley(fft.genuine_hartley(
         a, axes=axes), axes=axes, inorm=2), a) < 1e-15)
 
@@ -294,10 +305,11 @@ def test_hartley_multiD():
         axes = axes[:nax]
         a = rng.random(shape)-0.5
         nthreads=rng.integers(1, 8)
-        b = fft.genuine_hartley(a,axes=axes, nthreads=nthreads)
         c = fft.c2c(a.astype(np.complex128),axes=axes, nthreads=nthreads)
-        d = c.real - c.imag if proper_hartley_convention else c.real + c.imag
-        assert_(l2error(b,d)<1e-10)
+        b = fft.genuine_fht(a,axes=axes, nthreads=nthreads)
+        assert_(l2error(b,c.real-c.imag)<1e-10)
+        b = fft.genuine_hartley(a,axes=axes, nthreads=nthreads)
+        assert_(l2error(b,c.real+c.imag)<1e-10)
 
 
 @pmp("len", len1D)

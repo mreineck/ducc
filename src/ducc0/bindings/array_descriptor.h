@@ -140,7 +140,7 @@ template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector_
 
 template<typename T, size_t ndim> cmav<T,ndim> subtract_1(const cmav<T,ndim> &inp)
   {
-  vmav<T,ndim> res(inp.shape());
+  vmav<T,ndim> res(inp.shape(), UNINITIALIZED);
   mav_apply([](T &v1, const T &v2){v1=v2-T(1);}, 1, res, inp);
   return res;
   }

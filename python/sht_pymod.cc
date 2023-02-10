@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2022 Max-Planck-Society
+ *  Copyright (C) 2017-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -100,9 +100,9 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
     "mval and mstart must be supplied together");
   if (mval_.is_none())
     {
-    vmav<size_t,1> tmv({lmax+1});
+    vmav<size_t,1> tmv({lmax+1}, UNINITIALIZED);
     mval.assign(tmv);
-    vmav<size_t,1> tms({lmax+1});
+    vmav<size_t,1> tms({lmax+1}, UNINITIALIZED);
     mstart.assign(tms);
     for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
       {
@@ -116,9 +116,9 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
     auto tmstart = to_cmav<int64_t,1>(mstart_);
     size_t nm = tmval.shape(0);
     MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
-    vmav<size_t,1> tmv({nm});
+    vmav<size_t,1> tmv({nm}, UNINITIALIZED);
     mval.assign(tmv);
-    vmav<size_t,1> tms({nm});
+    vmav<size_t,1> tms({nm}, UNINITIALIZED);
     mstart.assign(tms);
     for (size_t i=0; i<nm; ++i)
       {
@@ -133,7 +133,7 @@ cmav<size_t,1> get_mstart(size_t lmax, const py::object &mstart_)
   {
   if (mstart_.is_none())
     {
-    vmav<size_t,1> mstart({lmax+1});
+    vmav<size_t,1> mstart({lmax+1}, UNINITIALIZED);
     for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
       mstart(m) = idx;
     return mstart;
@@ -587,7 +587,7 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  vmav<size_t,1> mval(mstart.shape());
+  vmav<size_t,1> mval(mstart.shape(), UNINITIALIZED);
   for (size_t i=0; i<mval.shape(0); ++i)
     mval(i) = i;
   MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
@@ -646,7 +646,7 @@ template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  vmav<size_t,1> mval(mstart.shape());
+  vmav<size_t,1> mval(mstart.shape(), UNINITIALIZED);
   for (size_t i=0; i<mval.shape(0); ++i)
     mval(i) = i;
   MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
@@ -787,7 +787,7 @@ template<typename T> class Py_sharpjob
     string repr() const
       {
       return "<sharpjob_d: lmax=" + dataToString(lmax_) +
-        ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
+        ", mmax=" + dataToString(mmax_) + ", npix=" + dataToString(npix_) +".>";
       }
 
     void set_nthreads(size_t nthreads_)
@@ -871,8 +871,8 @@ template<typename T> class Py_sharpjob
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
@@ -911,8 +911,8 @@ template<typename T> class Py_sharpjob
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
@@ -964,8 +964,8 @@ template<typename T> class Py_sharpjob
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
