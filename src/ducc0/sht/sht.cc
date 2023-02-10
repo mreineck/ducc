@@ -17,7 +17,7 @@
 /*! \file sht.cc
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2022 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -1816,8 +1816,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
       }
     else
       {
-//FIXME noncrit?
-      vmav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED);
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
@@ -2502,14 +2501,14 @@ template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
   cmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
                 {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
   }

@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2022 Max-Planck-Society
+/* Copyright (C) 2019-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include "ducc0/wgridder/wgridder.h"
@@ -36,8 +36,8 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform({nrow,nchan}, 1));
   checkShape(mask.shape(), {nrow,nchan});
 
-  vmav<uint8_t,2> bin({nrow,nchan});
-  vmav<size_t,1> hist({nbin});
+  vmav<uint8_t,2> bin({nrow,nchan}, UNINITIALIZED);
+  vmav<size_t,1> hist({nbin}, UNINITIALIZED);
 
   double wmin=1e300;
   double wmax=-1e300;
@@ -160,7 +160,7 @@ tuple<vmav<uint8_t,2>,size_t,size_t,size_t> get_tuning_parameters(
 
   constexpr size_t nbin=50;
   auto [wmin, wmax, whist, wbin] = get_winfo(uvw, freq, mask_, nbin, nthreads);
-  vmav<size_t,1> whist_acc({nbin});
+  vmav<size_t,1> whist_acc({nbin}, UNINITIALIZED);
   for (size_t i=0; i<whist.shape(0); ++i)
     whist_acc(i) = whist(i) + ((i==0) ? 0 : whist_acc(i-1));
   vector<double> wborders(nbin+1);

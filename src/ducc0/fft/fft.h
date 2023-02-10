@@ -1845,7 +1845,7 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   plan2 = std::make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
-  vmav<T,1> fkernel({kernel.shape(0)});
+  vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel(i) = kernel(i);
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
