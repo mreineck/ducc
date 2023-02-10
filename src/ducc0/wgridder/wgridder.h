@@ -167,13 +167,8 @@ template<typename T> void complex2hartley
     {
     for(auto u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = T(0.5)*(grid( u, v).real()-grid( u, v).imag()+
                              grid(xu,xv).real()+grid(xu,xv).imag());
-#else
-        grid2(u,v) = T(0.5)*(grid( u, v).real()+grid( u, v).imag()+
-                             grid(xu,xv).real()-grid(xu,xv).imag());
-#endif
     });
   }
 
@@ -187,13 +182,8 @@ template<typename T> void hartley2complex
     {
     for(size_t u=lo, xu=(u==0) ? 0 : nu-u; u<hi; ++u, xu=nu-u)
       for (size_t v=0, xv=0; v<nv; ++v, xv=nv-v)
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
         grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
                                 T(.5)*(grid(xu,xv)-grid(u,v)));
-#else
-        grid2(u,v) = complex<T>(T(.5)*(grid(u,v)+grid(xu,xv)),
-                                T(.5)*(grid(u,v)-grid(xu,xv)));
-#endif
     });
   }
 
@@ -205,16 +195,16 @@ template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
   if (2*vlim<nv)
     {
     if (!first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+      r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
     auto flo = subarray(farr, {{}, {0,vlim}});
-    r2r_separable_hartley(flo, flo, {0}, T(1), nthreads);
+    r2r_separable_fht(flo, flo, {0}, T(1), nthreads);
     auto fhi = subarray(farr, {{}, {farr.shape(1)-vlim, MAXIDX}});
-    r2r_separable_hartley(fhi, fhi, {0}, T(1), nthreads);
+    r2r_separable_fht(fhi, fhi, {0}, T(1), nthreads);
     if (first_fast)
-      r2r_separable_hartley(farr, farr, {1}, T(1), nthreads);
+      r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
     }
   else
-    r2r_separable_hartley(farr, farr, {0,1}, T(1), nthreads);
+    r2r_separable_fht(farr, farr, {0,1}, T(1), nthreads);
 
   execParallel((nu+1)/2-1, nthreads, [&](size_t lo, size_t hi)
     {

@@ -32,8 +32,6 @@ CONVENTIONS USED FOR THIS WRAPPER:
  - if axis indices or array indices are passed, they are assumed to be one-based
 */
 
-#define DUCC0_USE_PROPER_HARTLEY_CONVENTION
-
 #include "ducc0/infra/threading.cc"
 #include "ducc0/infra/mav.cc"
 #include "ducc0/math/gl_integrator.cc"
@@ -144,7 +142,7 @@ int fft_c2r(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   DUCC0_JULIA_TRY_END
   }
 DUCC0_INTERFACE_FUNCTION
-int fft_r2r_genuine_hartley(const ArrayDescriptor *in_, ArrayDescriptor *out_,
+int fft_r2r_genuine_fht(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const ArrayDescriptor *axes_, double fct, size_t nthreads)
   {
   DUCC0_JULIA_TRY_BEGIN
@@ -157,13 +155,13 @@ int fft_r2r_genuine_hartley(const ArrayDescriptor *in_, ArrayDescriptor *out_,
     {
     auto myin(to_cfmav<true,double>(in));
     auto myout(to_vfmav<true,double>(out));
-    r2r_genuine_hartley(myin, myout, myaxes, fct, nthreads);
+    r2r_genuine_fht(myin, myout, myaxes, fct, nthreads);
     }
   else if (in.dtype==Typecode<float>::value)
     {
     auto myin(to_cfmav<true,float>(in));
     auto myout(to_vfmav<true,float>(out));
-    r2r_genuine_hartley(myin, myout, myaxes, float(fct), nthreads);
+    r2r_genuine_fht(myin, myout, myaxes, float(fct), nthreads);
     }
   else
     MR_fail("bad datatype");
