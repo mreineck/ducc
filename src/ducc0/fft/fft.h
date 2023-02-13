@@ -68,9 +68,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <complex>
 #include <algorithm>
-#ifndef DUCC0_NO_THREADING
-#include <mutex>
-#endif
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
@@ -161,11 +158,6 @@ struct util // hack to avoid duplicate symbols
         "axis length mismatch");
     }
 
-#ifdef DUCC0_NO_THREADING
-  static size_t thread_count (size_t /*nthreads*/, const fmav_info &/*info*/,
-    size_t /*axis*/, size_t /*vlen*/)
-    { return 1; }
-#else
   static size_t thread_count (size_t nthreads, const fmav_info &info,
     size_t axis, size_t vlen)
     {
@@ -177,7 +169,6 @@ struct util // hack to avoid duplicate symbols
     size_t max_threads = ducc0::adjust_nthreads(nthreads);
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
-#endif
   };
 
 
@@ -485,9 +476,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   static std::array<entry, nmax> cache{{{0,0,nullptr}}};
   static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
-#ifndef DUCC0_NO_THREADING
-  static std::mutex mut;
-#endif
+  static Mutex mut;
 
   auto find_in_cache = [&]() -> std::shared_ptr<T>
     {
@@ -509,17 +498,15 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
     };
 
   {
-#ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
-#endif
+  LockGuard lock(mut);
+
   auto p = find_in_cache();
   if (p) return p;
   }
   auto plan = std::make_shared<T>(length, vectorize);
   {
-#ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
-#endif
+  LockGuard lock(mut);
+
   auto p = find_in_cache();
   if (p) return p;
 
