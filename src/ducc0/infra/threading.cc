@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -50,17 +50,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/misc_utils.h"
+#include <atomic>
+#include <utility>
 
-#ifndef DUCC0_NO_THREADING
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>
 #include <stdexcept>
-#include <utility>
 #include <cstdlib>
-#include <mutex>
-#include <condition_variable>
 #include <thread>
 #include <queue>
-#include <atomic>
 #include <vector>
 #include <exception>
 #include <errno.h>
@@ -71,15 +71,39 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 #endif
-#include "ducc0/infra/misc_utils.h"
-#include "ducc0/infra/error_handling.h"
 #endif
 
 namespace ducc0 {
 
 namespace detail_threading {
 
-#ifndef DUCC0_NO_THREADING
+class latch
+  {
+    std::atomic<size_t> num_left_;
+    Mutex mut_;
+    CondVar completed_;
+    using lock_t = UniqueLock;
+
+  public:
+    latch(size_t n): num_left_(n) {}
+
+    void count_down()
+      {
+      lock_t lock(mut_);
+      if (--num_left_)
+        return;
+      completed_.notify_all();
+      }
+
+    void wait()
+      {
+      lock_t lock(mut_);
+      completed_.wait(lock, [this]{ return is_ready(); });
+      }
+    bool is_ready() { return num_left_ == 0; }
+  };
+
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
 static long mystrtol(const char *inp)
   {
@@ -134,48 +158,12 @@ static thread_local bool in_parallel_region = false;
 static const int pin_info = get_pin_info_from_env();
 static const int pin_offset = get_pin_offset_from_env();
 
-size_t max_threads() { return max_threads_; }
-size_t adjust_nthreads(size_t nthreads)
-  {
-  if (in_parallel_region)
-    return 1;
-  if (nthreads==0)
-    return max_threads_;
-  return std::min(max_threads_, nthreads);
-  }
-
-class latch
-  {
-    std::atomic<size_t> num_left_;
-    std::mutex mut_;
-    std::condition_variable completed_;
-    using lock_t = std::unique_lock<std::mutex>;
-
-  public:
-    latch(size_t n): num_left_(n) {}
-
-    void count_down()
-      {
-      lock_t lock(mut_);
-      if (--num_left_)
-        return;
-      completed_.notify_all();
-      }
-
-    void wait()
-      {
-      lock_t lock(mut_);
-      completed_.wait(lock, [this]{ return is_ready(); });
-      }
-    bool is_ready() { return num_left_ == 0; }
-  };
-
 template <typename T> class concurrent_queue
   {
     std::queue<T> q_;
-    std::mutex mut_;
+    Mutex mut_;
     std::atomic<size_t> size_;
-    using lock_t = std::lock_guard<std::mutex>;
+    using lock_t = LockGuard;
 
   public:
     void push(T val)
@@ -218,7 +206,7 @@ static void do_pinning(int /*ithread*/)
   { return; }
 #endif
 
-class thread_pool
+class ducc_thread_pool: public thread_pool
   {
   private:
     // A reasonable guess, probably close enough for most hardware
@@ -226,8 +214,8 @@ class thread_pool
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
-      std::condition_variable work_ready;
-      std::mutex mut;
+      CondVar work_ready;
+      Mutex mut;
       std::atomic_flag busy_flag = ATOMIC_FLAG_INIT;
       std::function<void()> work;
 
@@ -238,7 +226,7 @@ class thread_pool
         {
         in_parallel_region = true;
         do_pinning(ithread);
-        using lock_t = std::unique_lock<std::mutex>;
+        using lock_t = UniqueLock;
         bool expect_work = true;
         while (!shutdown_flag || expect_work)
           {
@@ -281,11 +269,11 @@ class thread_pool
       };
 
     concurrent_queue<std::function<void()>> overflow_work_;
-    std::mutex mut_;
+    Mutex mut_;
     std::vector<worker> workers_;
-    std::atomic<bool> shutdown_;
-    std::atomic<size_t> unscheduled_tasks_;
-    using lock_t = std::lock_guard<std::mutex>;
+    std::atomic<bool> shutdown_=false;
+    std::atomic<size_t> unscheduled_tasks_=0;
+    using lock_t = LockGuard;
 
     void create_threads()
       {
@@ -321,14 +309,28 @@ class thread_pool
       }
 
   public:
-    explicit thread_pool(size_t nthreads):
+    explicit ducc_thread_pool(size_t nthreads):
       workers_(nthreads)
       { create_threads(); }
 
-    thread_pool(): thread_pool(max_threads_) {}
+    ducc_thread_pool(): ducc_thread_pool(max_threads_) {}
 
-    ~thread_pool() { shutdown(); }
+    //virtual
+    ~ducc_thread_pool() { shutdown(); }
 
+    //virtual
+    size_t nthreads() const { return workers_.size(); }
+
+    //virtual
+    size_t adjust_nthreads(size_t nthreads_in) const
+      {
+      if (in_parallel_region)
+        return 1;
+      if (nthreads_in==0)
+        return max_threads_;
+      return std::min(max_threads_, nthreads_in);
+      }
+    //virtual
     void submit(std::function<void()> work)
       {
       lock_t lock(mut_);
@@ -367,29 +369,83 @@ class thread_pool
       }
   };
 
-inline thread_pool &get_pool()
+// return a pointer to a singleton thread_pool, which is always available
+inline ducc_thread_pool *get_master_pool()
   {
-  static thread_pool pool;
+  static auto master_pool = new ducc_thread_pool();
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
     []{
     pthread_atfork(
-      +[]{ get_pool().shutdown(); },  // prepare
-      +[]{ get_pool().restart(); },   // parent
-      +[]{ get_pool().restart(); }    // child
+      +[]{ get_master_pool()->shutdown(); },  // prepare
+      +[]{ get_master_pool()->restart(); },   // parent
+      +[]{ get_master_pool()->restart(); }    // child
       );
     });
 #endif
-
-  return pool;
+  return master_pool;
   }
+
+thread_local thread_pool *active_pool = get_master_pool();
+
+thread_pool *set_active_pool(thread_pool *new_pool)
+  { return std::exchange(active_pool, new_pool); }
+thread_pool *get_active_pool()
+  {
+  MR_assert(active_pool!=nullptr, "no thread pool active");
+  return active_pool;
+  }
+
+#endif
+
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
+
+class ducc_pseudo_thread_pool: public thread_pool
+  {
+  public:
+    ducc_pseudo_thread_pool() {}
+
+    //virtual
+    size_t nthreads() const { return 1; }
+
+    //virtual
+    size_t adjust_nthreads(size_t /*nthreads_in*/) const
+      { return 1; }
+    //virtual
+    void submit(std::function<void()> work)
+      { work(); }
+  };
+
+// return a pointer to a singleton thread_pool, which is always available
+inline ducc_pseudo_thread_pool *get_master_pool()
+  {
+  static auto master_pool = new ducc_pseudo_thread_pool();
+  return master_pool;
+  }
+
+thread_local thread_pool *active_pool = get_master_pool();
+
+thread_pool *set_active_pool(thread_pool *new_pool)
+  { return std::exchange(active_pool, new_pool); }
+thread_pool *get_active_pool()
+  {
+  MR_assert(active_pool!=nullptr, "no thread pool active");
+  return active_pool;
+  }
+
+#endif
+
+size_t max_threads()
+  { return get_active_pool()->nthreads(); }
+size_t adjust_nthreads(size_t nthreads_in)
+  { return get_active_pool()->adjust_nthreads(nthreads_in); }
 
 class Distribution
   {
   private:
     size_t nthreads_;
-    std::mutex mut_;
+    Mutex mut_;
     size_t nwork_;
     size_t cur_;
     std::atomic<size_t> cur_dynamic_;
@@ -495,7 +551,7 @@ class Distribution
           }
         case GUIDED:
           {
-          std::unique_lock<std::mutex> lck(mut_);
+          LockGuard lck(mut_);
           if (cur_>=nwork_) return Range();
           auto rem = nwork_-cur_;
           size_t tmp = size_t((fact_max_*double(rem))/double(nthreads_));
@@ -533,22 +589,30 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  auto & pool = get_pool();
   latch counter(nthreads_);
   std::exception_ptr ex;
-  std::mutex ex_mut;
+  Mutex ex_mut;
+  // we "copy" the currently active thread pool to all executing threads
+  // during the execution of f. This ensures that possible nested parallel
+  // regions are handled by the same pool and not by the one that happens
+  // to be active on the worker threads.
+  // Alternatively we could put a "no-threading" thread pool onto the executing
+  // threads, which executes everything sequentially on its own thread,
+  // automatically prohibiting nested parallelism.
+  auto pool = get_active_pool();
   for (size_t i=0; i<nthreads_; ++i)
     {
-    pool.submit(
-      [this, &f, i, &counter, &ex, &ex_mut] {
+    pool->submit(
+      [this, &f, i, &counter, &ex, &ex_mut, pool] {
       try
         {
+        ScopedUseThreadPool guard(*pool);
         MyScheduler sched(*this, i);
         f(sched);
         }
       catch (...)
         {
-        std::lock_guard<std::mutex> lock(ex_mut);
+        LockGuard lock(ex_mut);
         ex = std::current_exception();
         }
       counter.count_down();
@@ -609,64 +673,5 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
     func(tid, lo, hi);
     });
   }
-
-#else
-
-size_t max_threads() { return 1; }
-size_t adjust_nthreads(size_t /*nthreads*/) { return 1; }
-
-class MyScheduler: public Scheduler
-  {
-  private:
-    size_t nwork_;
-
-  public:
-    MyScheduler(size_t nwork) : nwork_(nwork) {}
-    virtual size_t num_threads() const { return 1; }
-    virtual size_t thread_num() const { return 0; }
-    virtual Range getNext()
-      {
-      Range res(0, nwork_);
-      nwork_=0;
-      return res;
-      }
-  };
-
-void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execStatic(size_t nwork, size_t, size_t,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execDynamic(size_t nwork, size_t, size_t,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execGuided(size_t nwork, size_t, size_t, double,
-  std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(nwork);
-  func(sched);
-  }
-void execParallel(size_t, std::function<void(Scheduler &)> func)
-  {
-  MyScheduler sched(1);
-  func(sched);
-  }
-void execParallel(size_t work_lo, size_t work_hi, size_t,
-  std::function<void(size_t, size_t)> func)
-  { func(work_lo, work_hi); }
-void execParallel(size_t work_lo, size_t work_hi, size_t,
-  std::function<void(size_t, size_t, size_t)> func)
-  { func(0, work_lo, work_hi); }
-
-#endif
 
 }}
