@@ -328,10 +328,10 @@ class Baselines
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgridder
   {
   private:
-    constexpr static int logsquare=is_same<Tacc,float>::value ? 5 : 4;
+    constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     TimerHierarchy timers;
     const cmav<complex<Tms>,2> &ms_in;
@@ -664,8 +664,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       double udum, vdum;
       int iu0, iv0, iw;
       getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-      iu0 = (iu0+nsafe)>>logsquare;
-      iv0 = (iv0+nsafe)>>logsquare;
+      iu0 = (iu0+nsafe)>>log2tile;
+      iv0 = (iv0+nsafe)>>log2tile;
       iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
       return Uvwidx(iu0, iv0, iw);
       }
@@ -696,8 +696,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 3;
-      size_t ntiles_v = (nv>>logsquare) + 3;
+      size_t ntiles_u = (nu>>log2tile) + 3;
+      size_t ntiles_v = (nv>>log2tile) + 3;
       size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
 timers.push("counting");
       vector<atomic<size_t>> buf(ntiles_u*ntiles_v*nwmin+1);
@@ -868,8 +868,8 @@ timers.pop();
       if (do_wgridding)
         {
         timers.poppush("grid regions");
-        vmav<unsigned char, 2> tmpu({nplanes,(nu>>logsquare)+1}),
-                               tmpv({nplanes,(nv>>logsquare)+1});
+        vmav<unsigned char, 2> tmpu({nplanes,(nu>>log2tile)+1}),
+                               tmpv({nplanes,(nv>>log2tile)+1});
         for (const auto &rng: blockstart)
           for (size_t i=0; i<supp; ++i)
             {
@@ -878,7 +878,7 @@ timers.pop();
             }
         uranges.resize(nplanes);
         vranges.resize(nplanes);
-        constexpr int tilesize = 1<<logsquare;
+        constexpr int tilesize = 1<<log2tile;
         for (size_t i=0; i<nplanes; ++i)
           {
           auto &rsu(uranges[i]);
@@ -928,11 +928,11 @@ timers.pop();
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<logsquare);
-        static constexpr int sv = 2*nsafe+(1<<logsquare);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
+        static constexpr int sv = 2*nsafe+(1<<log2tile);
         static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
-        const Params *parent;
+        const Wgridder *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         vmav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current visibility
@@ -978,7 +978,7 @@ timers.pop();
           };
         kbuf buf;
 
-        HelperX2g2(const Params *parent_, vmav<complex<Tcalc>,2> &grid_,
+        HelperX2g2(const Wgridder *parent_, vmav<complex<Tcalc>,2> &grid_,
           vector<Mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
@@ -1010,8 +1010,8 @@ timers.pop();
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
             dump();
-            bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             }
           auto ofs = (iu0-bu0)*svvec + iv0-bv0;
           p0r = px0r+ofs;
@@ -1028,11 +1028,11 @@ timers.pop();
 
       private:
         static constexpr int nsafe = (supp+1)/2;
-        static constexpr int su = 2*nsafe+(1<<logsquare);
-        static constexpr int sv = 2*nsafe+(1<<logsquare);
+        static constexpr int su = 2*nsafe+(1<<log2tile);
+        static constexpr int sv = 2*nsafe+(1<<log2tile);
         static constexpr int svvec = sv+vlen-1;
         static constexpr double xsupp=2./supp;
-        const Params *parent;
+        const Wgridder *parent;
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,2> &grid;
@@ -1073,7 +1073,7 @@ timers.pop();
           };
         kbuf buf;
 
-        HelperG2x2(const Params *parent_, const cmav<complex<Tcalc>,2> &grid_,
+        HelperG2x2(const Wgridder *parent_, const cmav<complex<Tcalc>,2> &grid_,
           double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
@@ -1102,8 +1102,8 @@ timers.pop();
           if ((iu0==iu0old) && (iv0==iv0old)) return;
           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
             {
-            bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-            bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+            bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+            bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
             load();
             }
           auto ofs = (iu0-bu0)*svvec + iv0-bv0;
@@ -1609,7 +1609,7 @@ timers.pop();
       }
 
   public:
-    Params(const cmav<double,2> &uvw, const cmav<double,1> &freq,
+    Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
            const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
@@ -1648,8 +1648,8 @@ timers.pop();
         return;
         }
       auto kidx = getNuNv();
-      MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
-      MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
+      MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
+      MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
       krn = selectKernel(kidx);
       supp = krn->support();
@@ -1695,7 +1695,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
@@ -1712,7 +1712,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto dirty_out(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
