@@ -1,5 +1,7 @@
 0.29.0:
 - general:
+    - rework multi-threading infrastructure to allow integration with external
+      thread pool implementations.
     - make more extensive use of uninitialized arays. This helps performance
       and scaling, especially for small SHTs.
 
@@ -13,9 +15,20 @@
       `r2r_separable_hartley` and `r2r_genuine_hartley` should not be used in
       new code, but they are kept for backwards compatibility.
 
-- nufft/wgridder:
-    - allow very small uniform grid dimensions (down to 1 for NUFFT and 2 for
-      wgridder)
+- sht:
+    - functions `synthesis`, `adjoint_synthesis`, `synthesis_deriv1`,
+      and `pseudo_analysis`: introduce an optional integer parameter `mmax`
+      and allow it to be different from `lmax` (`mmax==lmax` was implicitly
+      assumed so far)
+
+- nufft:
+    - re-write core part of the 2D Type 1 NUFFT, which was miscompiled on some
+      platforms. Unfortunately, the new implementation is slightly slower on
+      x86-64.
+    - allow very small uniform grid dimensions (down to 1)
+
+- wgridder:
+    - allow very small uniform grid dimensions (down to 2)
 
 
 0.28.0:

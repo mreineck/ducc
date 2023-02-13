@@ -167,11 +167,12 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
 @pmp('lmax', (2, 5, 32, 256))
+@pmp('mmaxhalf', (False, True))
 @pmp('nside', (2, 5, 128))
-def test_healpix_adjoint(lmax, nside, spin, nthreads):
+def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
     rng = np.random.default_rng(48)
 
-    mmax = lmax
+    mmax = lmax//2 if mmaxhalf else lmax
     ncomp = 1 if spin == 0 else 2
 
     alm0 = random_alm(lmax, mmax, spin, ncomp, rng)
@@ -181,10 +182,10 @@ def test_healpix_adjoint(lmax, nside, spin, nthreads):
     geom = base.sht_info()
 
     # test adjointness between synthesis and adjoint_synthesis
-    map1 = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, **geom)
+    map1 = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, **geom)
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
-    alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, **geom)
+    alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, **geom)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
