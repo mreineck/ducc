@@ -1895,7 +1895,7 @@ numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`)
 )""";
 
 constexpr const char *synthesis_general_DS = R"""(
-"""Evaluate a_lm at arbitrary positions on the sphere
+Evaluate a_lm at arbitrary positions on the sphere
 
 Parameters
 ----------
@@ -1933,7 +1933,7 @@ numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
     If the map parameter was specified, this is identical with map.
 )""";
 constexpr const char *adjoint_synthesis_general_DS = R"""(
-"""This is the adjoint operation of `synthesis_general`.
+This is the adjoint operation of `synthesis_general`.
 
 
 Parameters
