@@ -32,6 +32,7 @@
 
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
+#include "ducc0/nufft/nufft.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -776,6 +777,156 @@ py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
     return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta,
       nphi, mmax, nthreads, map);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
+
+template<typename T> py::array Py2_synthesis_general(const py::array &alm_,
+  size_t spin, size_t lmax, const py::array &loc_, double epsilon, size_t mmax,
+  size_t nthreads, py::object &map__)
+  {
+  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto loc = to_cmav<double,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(alm.shape(0)==ncomp, "number of components mismatch in alm");
+  auto map_ = get_optional_Pyarr<T>(map__, {alm.shape(0), loc.shape(0)});
+  auto map = to_vmav<T,2>(map_);
+
+  {
+  py::gil_scoped_release release;
+
+  auto ntheta = good_size_complex(lmax+1)+1;
+  auto nphihalf = good_size_complex(mmax+1);
+  auto nphi = 2*nphihalf;
+  auto map_dfs_c = vmav<complex<T>,2>::build_noncritical({2*ntheta-2, nphi}, UNINITIALIZED);
+  vfmav<complex<T>> map_dfs_c_f(map_dfs_c);
+  vmav<T,3> map_sht(reinterpret_cast<T *>(map_dfs_c.data()),
+                    {ncomp, ntheta, map_dfs_c.shape(1)},
+                    {1, 2*map_dfs_c.stride(0), 2*map_dfs_c.stride(1)});
+  synthesis_2d(alm, map_sht, spin, lmax, mmax, "CC", nthreads);
+
+  // extend to double Fourier sphere
+  if (spin==0)
+    for (size_t iph=0; iph<nphi; ++iph)
+      {
+      map_dfs_c(0, iph).imag(T(0));
+      map_dfs_c(ntheta-1, iph).imag(T(0));
+      }
+  T sfac = (spin&1) ? -1 : 1;
+  execParallel(1, ntheta-1, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t ith=lo, ith2=2*ntheta-2-ith; ith<hi; ++ith, --ith2)
+      for (size_t iph=0, iph2=nphihalf; iph<nphi; ++iph, iph2=(iph2+1==nphi) ? 0 : iph2+1)
+        {
+        if (spin==0)
+          map_dfs_c(ith, iph).imag(T(0));
+        map_dfs_c(ith2, iph2) = sfac*map_dfs_c(ith, iph);
+        }
+    });
+  c2c(map_dfs_c_f, map_dfs_c_f, {0,1}, true, T(1.)/map_dfs_c_f.size(), nthreads);
+  bool need_mapcopy = (spin==0) || (map.stride(0)!=1) || (map.stride(1)&1);
+  if (need_mapcopy)
+    {
+    vmav<complex<T>,1> map_c({loc.shape(0)}, UNINITIALIZED);
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, 1.1, 2.6, 2*pi, true);
+    execParallel(map_c.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        {
+        map(0,i) = map_c(i).real();
+        if (spin>0)
+          map(1,i) = map_c(i).imag();
+        }
+      });
+    }
+  else
+    {
+    vmav<complex<T>,1> map_c(reinterpret_cast<complex<T> *>(map.data()),
+      {map.shape(1)}, {map.stride(1)/2});
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, 1.1, 2.6, 2*pi, true);
+    }
+  }
+  return map_;
+  }
+py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
+  const py::array &loc, double epsilon, const py::object &mmax_,
+  size_t nthreads, py::object &map)
+  {
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
+  if (isPyarr<complex<float>>(alm))
+    return Py2_synthesis_general<float>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map);
+  else if (isPyarr<complex<double>>(alm))
+    return Py2_synthesis_general<double>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
+
+template<typename T> py::array Py2_adjoint_synthesis_general(const py::array &map_,
+  size_t spin, size_t lmax, const py::array &loc_, double epsilon, size_t mmax,
+  size_t nthreads, py::object &alm__)
+  {
+  auto map = to_cmav<T,2>(map_);
+  auto loc = to_cmav<double,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
+  auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
+  auto alm = to_vmav<complex<T>,2>(alm_);
+
+  {
+  py::gil_scoped_release release;
+
+  auto ntheta = good_size_complex(lmax+1)+1;
+  auto nphihalf = good_size_complex(mmax+1);
+  auto nphi = 2*nphihalf;
+
+  auto map_dfs_c = vmav<complex<T>,2>::build_noncritical({2*ntheta-2, nphi}, UNINITIALIZED);
+  vfmav<complex<T>> map_dfs_c_f(map_dfs_c);
+  vmav<T,3> map_sht(reinterpret_cast<T *>(map_dfs_c.data()),
+                    {ncomp, ntheta, map_dfs_c.shape(1)},
+                    {1, 2*map_dfs_c.stride(0), 2*map_dfs_c.stride(1)});
+
+  bool need_mapcopy = (spin==0) || (map.stride(0)!=1) || (map.stride(1)&1);
+  if (need_mapcopy)
+    {
+    vmav<complex<T>,1> map_c({map.shape(1)}, UNINITIALIZED);
+    execParallel(map_c.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        map_c(i) = complex<T>(map(0,i), (spin==0) ? T(0) : map(1,i));
+      });
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, 1.1, 2.6, 2*pi, true);
+    }
+  else
+    {
+    cmav<complex<T>,1> map_c(reinterpret_cast<const complex<T> *>(map.data()),
+      {map.shape(1)}, {map.stride(1)/2});
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, 1.1, 2.6, 2*pi, true);
+    }
+
+  c2c(map_dfs_c_f, map_dfs_c_f, {0,1}, false, T(1.)/map_dfs_c_f.size(), nthreads);
+  // contract from double Fourier sphere
+  T sfac = (spin&1) ? -1 : 1;
+  execParallel(1, ntheta-1, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t ith=lo, ith2=2*ntheta-2-ith; ith<hi; ++ith, --ith2)
+      for (size_t iph=0, iph2=nphihalf; iph<nphi; ++iph, iph2=(iph2+1==nphi) ? 0 : iph2+1)
+        map_dfs_c(ith, iph) += sfac*map_dfs_c(ith2, iph2);
+    });
+  adjoint_synthesis_2d(alm, map_sht, spin, lmax, mmax, "CC", nthreads);
+  }
+  return alm_;
+  }
+py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t lmax,
+  const py::array &loc, double epsilon, const py::object &mmax_,
+  size_t nthreads, py::object &alm)
+  {
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
+  if (isPyarr<float>(map))
+    return Py2_adjoint_synthesis_general<float>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm);
+  else if (isPyarr<double>(map))
+    return Py2_adjoint_synthesis_general<double>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm);
+  MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
   }
 
 
@@ -1743,6 +1894,88 @@ numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`)
     If newly allocated, the smallest possible last dimension will be chosen.
 )""";
 
+constexpr const char *synthesis_general_DS = R"""(
+"""Evaluate a_lm at arbitrary positions on the sphere
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+map: None or numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
+    the map pixel data.
+    If `None`, a new suitable array is allocated.
+
+Returns
+-------
+numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
+    the pixel values at the locations specified by `loc`.
+    If the map parameter was specified, this is identical with map.
+)""";
+constexpr const char *adjoint_synthesis_general_DS = R"""(
+"""This is the adjoint operation of `synthesis_general`.
+
+
+Parameters
+----------
+map: numpy.ndarray((ncomp, npix), dtype=numpy.float32 or numpy.float64
+    The pixel values at the locations specified by `loc`.
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If `None`, a new suitable array is allocated.
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
+)""";
+
 constexpr const char *sharpjob_d_DS = R"""(
 Interface class to some of libsharp2's functionality.
 
@@ -1777,6 +2010,9 @@ void add_sht(py::module_ &msup)
   m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
   m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
+
+  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
+  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);

@@ -16,6 +16,10 @@
       new code, but they are kept for backwards compatibility.
 
 - sht:
+    - new functions `synthesis_general` and `adjoint_synthesis_general`
+      for SHTs on maps without any constraint on pixel locations.
+      This allows, for example, using maps whose pixel positions have been
+      distorted by lensing, or QuadCube maps.
     - functions `synthesis`, `adjoint_synthesis`, `synthesis_deriv1`,
       and `pseudo_analysis`: introduce an optional integer parameter `mmax`
       and allow it to be different from `lmax` (`mmax==lmax` was implicitly
@@ -29,6 +33,10 @@
 
 - wgridder:
     - allow very small uniform grid dimensions (down to 2)
+
+- misc:
+    - new function `empty_noncritical` for building empty numpy arrays without
+      critical strides
 
 
 0.28.0:
