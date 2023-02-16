@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2021 Max-Planck-Society
+# Copyright(C) 2020-2023 Max-Planck-Society
 
 
 import ducc0
@@ -227,3 +227,47 @@ def test_healpix_inverse(nside, spin, ntrans, nthreads):
     alm1 = ducc0.sht.experimental.pseudo_analysis(map=map, lmax=lmax, spin=spin, nthreads=nthreads, epsilon=1e-8, maxiter=20, **geom)[0]
 
     assert_(ducc0.misc.l2error(alm0,alm1)<1e-6)
+
+
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('npix', (33, 200))
+@pmp('lmmax', ((10, 8), (100,100)))
+def test_adjointness_general(lmmax, npix, spin, nthreads):
+    rng = np.random.default_rng(48)
+
+    lmax, mmax = lmmax
+    epsilon = 1e-5
+    ncomp = 1 if spin == 0 else 2
+    slm1 = random_alm(lmax, mmax, spin, ncomp, rng)
+    loc = rng.uniform(0., 1., (npix,2))
+    loc[:, 0] *= np.pi
+    loc[:, 1] *= 2*np.pi
+    points1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm1, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
+    points2 = rng.uniform(-0.5, 0.5, (loc.shape[0],ncomp)).T
+    slm2 = ducc0.sht.experimental.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
+    print(slm1.shape, slm2.shape)
+    v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
+                for c in range(ncomp)])
+    v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
+    epsilon = 1e-12
+    assert_(np.abs(v1-v2) < epsilon)
+
+
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('nside', (32, ))
+@pmp('lmmax', ((10, 8), (100,100)))
+def test_synthesis_general(lmmax, nside, spin, nthreads):
+    rng = np.random.default_rng(48)
+
+    lmax, mmax = lmmax
+    epsilon = 1e-7
+    ncomp = 1 if spin == 0 else 2
+    slm = random_alm(lmax, mmax, spin, ncomp, rng)
+    base = ducc0.healpix.Healpix_Base(nside, "RING")
+    geom = base.sht_info()
+    loc = base.pix2ang(pix=np.arange(base.npix()), nthreads=nthreads)
+    v1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
+    v2 = ducc0.sht.experimental.synthesis(alm=slm, lmax=lmax, mmax=mmax, spin=spin, nthreads=nthreads, **geom)
+    assert_(ducc0.misc.l2error(v1,v2) < epsilon)

@@ -577,6 +577,7 @@ DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &coef, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t il, size_t lmax, size_t nv2)
   {
+#if 0
   for (; l+6<=lmax; il+=4, l+=8)
     {
     Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
@@ -615,6 +616,7 @@ DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
       d.lam2[i] = (a4*d.csq[i] + b4)*d.lam1[i] + d.lam2[i];
       }
     }
+#endif
   for (; l+2<=lmax; il+=2, l+=4)
     {
     Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
