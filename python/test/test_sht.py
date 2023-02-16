@@ -203,7 +203,7 @@ def test_rotation(lmax, nthreads):
     alm = alm.astype(np.complex64)
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
-    assert_(ducc0.misc.l2error(alm,alm2)<=1e-6)
+    assert_allclose(ducc0.misc.l2error(alm,alm2), 0, atol=1e-6)
 
 
 @pmp('spin', (0, 2))
@@ -226,7 +226,7 @@ def test_healpix_inverse(nside, spin, ntrans, nthreads):
     map = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, **geom)
     alm1 = ducc0.sht.experimental.pseudo_analysis(map=map, lmax=lmax, spin=spin, nthreads=nthreads, epsilon=1e-8, maxiter=20, **geom)[0]
 
-    assert_(ducc0.misc.l2error(alm0,alm1)<1e-6)
+    assert_allclose(ducc0.misc.l2error(alm0,alm1), 0, atol=1e-6)
 
 
 @pmp('spin', (0, 1, 2))
@@ -250,8 +250,7 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
     v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
                 for c in range(ncomp)])
     v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
-    epsilon = 1e-12
-    assert_(np.abs(v1-v2) < epsilon)
+    assert_allclose(v1, v2, rtol=1e-9)
 
 
 @pmp('spin', (0, 1, 2))
@@ -270,4 +269,4 @@ def test_synthesis_general(lmmax, nside, spin, nthreads):
     loc = base.pix2ang(pix=np.arange(base.npix()), nthreads=nthreads)
     v1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
     v2 = ducc0.sht.experimental.synthesis(alm=slm, lmax=lmax, mmax=mmax, spin=spin, nthreads=nthreads, **geom)
-    assert_(ducc0.misc.l2error(v1,v2) < epsilon)
+    assert_allclose(ducc0.misc.l2error(v1,v2), 0, atol=epsilon)
