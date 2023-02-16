@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2021 Max-Planck-Society
+# Copyright(C) 2020-2023 Max-Planck-Society
 
 
 import ducc0
@@ -252,3 +252,22 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
     v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
     epsilon = 1e-12
     assert_(np.abs(v1-v2) < epsilon)
+
+
+@pmp('spin', (0, 1, 2))
+@pmp('nthreads', (1, 4))
+@pmp('nside', (32, ))
+@pmp('lmmax', ((10, 8), (100,100)))
+def test_synthesis_general(lmmax, nside, spin, nthreads):
+    rng = np.random.default_rng(48)
+
+    lmax, mmax = lmmax
+    epsilon = 1e-7
+    ncomp = 1 if spin == 0 else 2
+    slm = random_alm(lmax, mmax, spin, ncomp, rng)
+    base = ducc0.healpix.Healpix_Base(nside, "RING")
+    geom = base.sht_info()
+    loc = base.pix2ang(pix=np.arange(base.npix()), nthreads=nthreads)
+    v1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
+    v2 = ducc0.sht.experimental.synthesis(alm=slm, lmax=lmax, mmax=mmax, spin=spin, nthreads=nthreads, **geom)
+    assert_(ducc0.misc.l2error(v1,v2) < epsilon)
