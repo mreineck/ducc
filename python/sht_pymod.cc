@@ -782,7 +782,7 @@ py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
 
 template<typename T> py::array Py2_synthesis_general(const py::array &alm_,
   size_t spin, size_t lmax, const py::array &loc_, double epsilon, size_t mmax,
-  size_t nthreads, py::object &map__)
+  size_t nthreads, py::object &map__, double sigma_min, double sigma_max)
   {
   auto alm = to_cmav<complex<T>,2>(alm_);
   auto loc = to_cmav<double,2>(loc_);
@@ -828,7 +828,7 @@ template<typename T> py::array Py2_synthesis_general(const py::array &alm_,
   if (need_mapcopy)
     {
     vmav<complex<T>,1> map_c({loc.shape(0)}, UNINITIALIZED);
-    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, 1.1, 2.6, 2*pi, true);
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, sigma_min, sigma_max, 2*pi, true);
     execParallel(map_c.shape(0), nthreads, [&](size_t lo, size_t hi)
       {
       for (size_t i=lo; i<hi; ++i)
@@ -843,27 +843,27 @@ template<typename T> py::array Py2_synthesis_general(const py::array &alm_,
     {
     vmav<complex<T>,1> map_c(reinterpret_cast<complex<T> *>(map.data()),
       {map.shape(1)}, {map.stride(1)/2});
-    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, 1.1, 2.6, 2*pi, true);
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, sigma_min, sigma_max, 2*pi, true);
     }
   }
   return map_;
   }
 py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
   const py::array &loc, double epsilon, const py::object &mmax_,
-  size_t nthreads, py::object &map)
+  size_t nthreads, py::object &map, double sigma_min, double sigma_max)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_general<float>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map);
+    return Py2_synthesis_general<float>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map, sigma_min, sigma_max);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_general<double>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map);
+    return Py2_synthesis_general<double>(alm, spin, lmax, loc, epsilon, mmax, nthreads, map, sigma_min, sigma_max);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
 
 template<typename T> py::array Py2_adjoint_synthesis_general(const py::array &map_,
   size_t spin, size_t lmax, const py::array &loc_, double epsilon, size_t mmax,
-  size_t nthreads, py::object &alm__)
+  size_t nthreads, py::object &alm__, double sigma_min, double sigma_max)
   {
   auto map = to_cmav<T,2>(map_);
   auto loc = to_cmav<double,2>(loc_);
@@ -895,13 +895,13 @@ template<typename T> py::array Py2_adjoint_synthesis_general(const py::array &ma
       for (size_t i=lo; i<hi; ++i)
         map_c(i) = complex<T>(map(0,i), (spin==0) ? T(0) : map(1,i));
       });
-    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, 1.1, 2.6, 2*pi, true);
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, sigma_min, sigma_max, 2*pi, true);
     }
   else
     {
     cmav<complex<T>,1> map_c(reinterpret_cast<const complex<T> *>(map.data()),
       {map.shape(1)}, {map.stride(1)/2});
-    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, 1.1, 2.6, 2*pi, true);
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, sigma_min, sigma_max, 2*pi, true);
     }
 
   c2c(map_dfs_c_f, map_dfs_c_f, {0,1}, false, T(1.)/map_dfs_c_f.size(), nthreads);
@@ -919,13 +919,13 @@ template<typename T> py::array Py2_adjoint_synthesis_general(const py::array &ma
   }
 py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t lmax,
   const py::array &loc, double epsilon, const py::object &mmax_,
-  size_t nthreads, py::object &alm)
+  size_t nthreads, py::object &alm, double sigma_min, double sigma_max)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
-    return Py2_adjoint_synthesis_general<float>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm);
+    return Py2_adjoint_synthesis_general<float>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm, sigma_min, sigma_max);
   else if (isPyarr<double>(map))
-    return Py2_adjoint_synthesis_general<double>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm);
+    return Py2_adjoint_synthesis_general<double>(map, spin, lmax, loc, epsilon, mmax, nthreads, alm, sigma_min, sigma_max);
   MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
   }
 
@@ -1925,6 +1925,9 @@ nthreads: int >= 0
 map: None or numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
     If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
 
 Returns
 -------
@@ -1968,6 +1971,9 @@ alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
     The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
     If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
 
 Returns
 -------
@@ -2011,8 +2017,8 @@ void add_sht(py::module_ &msup)
   m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
   m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
 
-  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
-  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
+  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
