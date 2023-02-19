@@ -30,6 +30,7 @@
 #include "ducc0/infra/simd.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/fft/fft1d.h"
+#include "ducc0/nufft/nufft.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -1559,11 +1560,14 @@ vector<ringdata> make_ringdata(const cmav<double,1> &theta, size_t lmax,
   size_t pos=0;
   while (pos<nrings)
     {
-    if ((pos+1<nrings) && approx(tmp[pos].cth,-tmp[pos+1].cth,1e-12))
+    if ((pos+1<nrings) && (fabs(tmp[pos].theta+tmp[pos+1].theta-pi)<=5e-15))
       {
-      double cth = (tmp[pos].theta<tmp[pos+1].theta) ? tmp[pos].cth : -tmp[pos+1].cth;
-      double sth = (tmp[pos].theta<tmp[pos+1].theta) ? tmp[pos].sth :  tmp[pos+1].sth;
-      res.push_back({get_mlim(lmax, spin, sth, cth), tmp[pos].idx, tmp[pos+1].idx, cth, sth});
+      if (tmp[pos].theta<tmp[pos+1].theta)
+        res.push_back({get_mlim(lmax, spin, tmp[pos].sth, tmp[pos].cth),
+          tmp[pos].idx, tmp[pos+1].idx, tmp[pos].cth, tmp[pos].sth});
+      else
+        res.push_back({get_mlim(lmax, spin, tmp[pos+1].sth, tmp[pos+1].cth),
+          tmp[pos+1].idx, tmp[pos].idx, tmp[pos+1].cth, tmp[pos+1].sth});
       pos += 2;
       }
     else
@@ -2732,4 +2736,129 @@ template void adjoint_analysis_2d(const cmav<complex<double>,2> &alm, vmav<doubl
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
 template void adjoint_analysis_2d(const cmav<complex<float>,2> &alm, vmav<float,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
+
+template<typename T, typename Tloc> void synthesis_general(
+  const cmav<complex<T>,2> &alm, vmav<T,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads)
+  {
+  auto ntheta = good_size_complex(lmax+1)+1;
+  auto nphihalf = good_size_complex(mmax+1);
+  auto nphi = 2*nphihalf;
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(alm.shape(0)==ncomp, "number of components mismatch in alm");
+  auto map_dfs_c = vmav<complex<T>,2>::build_noncritical({2*ntheta-2, nphi}, UNINITIALIZED);
+  vfmav<complex<T>> map_dfs_c_f(map_dfs_c);
+  vmav<T,3> map_sht(reinterpret_cast<T *>(map_dfs_c.data()),
+                    {ncomp, ntheta, map_dfs_c.shape(1)},
+                    {1, 2*map_dfs_c.stride(0), 2*map_dfs_c.stride(1)});
+  synthesis_2d(alm, map_sht, spin, lmax, mmax, "CC", nthreads);
+
+  // extend to double Fourier sphere
+  if (spin==0)
+    for (size_t iph=0; iph<nphi; ++iph)
+      {
+      map_dfs_c(0, iph).imag(T(0));
+      map_dfs_c(ntheta-1, iph).imag(T(0));
+      }
+  T sfac = (spin&1) ? -1 : 1;
+  execParallel(1, ntheta-1, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t ith=lo, ith2=2*ntheta-2-ith; ith<hi; ++ith, --ith2)
+      for (size_t iph=0, iph2=nphihalf; iph<nphi; ++iph, iph2=(iph2+1==nphi) ? 0 : iph2+1)
+        {
+        if (spin==0)
+          map_dfs_c(ith, iph).imag(T(0));
+        map_dfs_c(ith2, iph2) = sfac*map_dfs_c(ith, iph);
+        }
+    });
+  c2c(map_dfs_c_f, map_dfs_c_f, {0,1}, true, T(1.)/map_dfs_c_f.size(), nthreads);
+  bool need_mapcopy = (spin==0) || (map.stride(0)!=1) || (map.stride(1)&1);
+  if (need_mapcopy)
+    {
+    vmav<complex<T>,1> map_c({loc.shape(0)}, UNINITIALIZED);
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, sigma_min, sigma_max, 2*pi, true);
+    execParallel(map_c.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        {
+        map(0,i) = map_c(i).real();
+        if (spin>0)
+          map(1,i) = map_c(i).imag();
+        }
+      });
+    }
+  else
+    {
+    vmav<complex<T>,1> map_c(reinterpret_cast<complex<T> *>(map.data()),
+      {map.shape(1)}, {map.stride(1)/2});
+    u2nu<T,T>(loc, map_dfs_c_f, false, epsilon, nthreads, map_c, 0, sigma_min, sigma_max, 2*pi, true);
+    }
+  }
+template void synthesis_general(
+  const cmav<complex<float>,2> &alm, vmav<float,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads);
+template void synthesis_general(
+  const cmav<complex<double>,2> &alm, vmav<double,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads);
+
+template<typename T, typename Tloc> void adjoint_synthesis_general(
+  vmav<complex<T>,2> &alm, const cmav<T,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads)
+  {
+  auto ntheta = good_size_complex(lmax+1)+1;
+  auto nphihalf = good_size_complex(mmax+1);
+  auto nphi = 2*nphihalf;
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
+
+  auto map_dfs_c = vmav<complex<T>,2>::build_noncritical({2*ntheta-2, nphi}, UNINITIALIZED);
+  vfmav<complex<T>> map_dfs_c_f(map_dfs_c);
+  vmav<T,3> map_sht(reinterpret_cast<T *>(map_dfs_c.data()),
+                    {ncomp, ntheta, map_dfs_c.shape(1)},
+                    {1, 2*map_dfs_c.stride(0), 2*map_dfs_c.stride(1)});
+
+  bool need_mapcopy = (spin==0) || (map.stride(0)!=1) || (map.stride(1)&1);
+  if (need_mapcopy)
+    {
+    vmav<complex<T>,1> map_c({map.shape(1)}, UNINITIALIZED);
+    execParallel(map_c.shape(0), nthreads, [&](size_t lo, size_t hi)
+      {
+      for (size_t i=lo; i<hi; ++i)
+        map_c(i) = complex<T>(map(0,i), (spin==0) ? T(0) : map(1,i));
+      });
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, sigma_min, sigma_max, 2*pi, true);
+    }
+  else
+    {
+    cmav<complex<T>,1> map_c(reinterpret_cast<const complex<T> *>(map.data()),
+      {map.shape(1)}, {map.stride(1)/2});
+    nu2u<T,T>(loc, map_c, true, epsilon, nthreads, map_dfs_c_f, 0, sigma_min, sigma_max, 2*pi, true);
+    }
+
+  c2c(map_dfs_c_f, map_dfs_c_f, {0,1}, false, T(1.)/map_dfs_c_f.size(), nthreads);
+  // contract from double Fourier sphere
+  T sfac = (spin&1) ? -1 : 1;
+  execParallel(1, ntheta-1, nthreads, [&](size_t lo, size_t hi)
+    {
+    for (size_t ith=lo, ith2=2*ntheta-2-ith; ith<hi; ++ith, --ith2)
+      for (size_t iph=0, iph2=nphihalf; iph<nphi; ++iph, iph2=(iph2+1==nphi) ? 0 : iph2+1)
+        map_dfs_c(ith, iph) += sfac*map_dfs_c(ith2, iph2);
+    });
+  adjoint_synthesis_2d(alm, map_sht, spin, lmax, mmax, "CC", nthreads);
+  }
+template void adjoint_synthesis_general(
+  vmav<complex<float>,2> &alm, const cmav<float,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads);
+template void adjoint_synthesis_general(
+  vmav<complex<double>,2> &alm, const cmav<double,2> &map,
+  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads);
+
 }}
