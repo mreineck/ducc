@@ -2433,11 +2433,11 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
     double res=0;
     for (size_t icomp=0; icomp<xmap.shape(0); ++icomp)
       for (size_t iring=0; iring<ringstart.shape(0); ++iring)
-         for (size_t ipix=0; ipix<nphi(iring); ++ipix)
-           {
-           auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride);
-           res += tmp*tmp;
-           }
+        for (size_t ipix=0; ipix<nphi(iring); ++ipix)
+          {
+          auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride);
+          res += tmp*tmp;
+          }
     return sqrt(res);
     };
   auto almnorm = [&](const cmav<complex<T>,2> &xalm)
@@ -2445,11 +2445,11 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
     double res=0;
     for (size_t icomp=0; icomp<xalm.shape(0); ++icomp)
       for (size_t m=0; m<mstart.shape(0); ++m)
-         for (size_t l=m; l<=lmax; ++l)
-           {
-           auto tmp = xalm(icomp,mstart(m)+l*lstride);
-           res += norm(tmp) * ((m==0) ? 1 : 2);
-           }
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto tmp = xalm(icomp,mstart(m)+l*lstride);
+          res += norm(tmp) * ((m==0) ? 1 : 2);
+          }
     return sqrt(res);
     };
   auto alm0 = alm.build_uniform(alm.shape(), 0.);
@@ -2860,5 +2860,89 @@ template void adjoint_synthesis_general(
   vmav<complex<double>,2> &alm, const cmav<double,2> &map,
   size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads);
+
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  size_t mmax,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon)
+  {
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
+  for (size_t i=0, ofs=0; i<=mmax; ++i)
+    {
+    mstart(i) = ofs-i;
+    ofs += lmax+1-i;
+    }
+
+  auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
+    {
+    synthesis_general(xalm, xmap, spin, lmax, mmax, loc, 1e-1*epsilon,
+                      sigma_min, sigma_max, nthreads);
+    };
+  auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
+    {
+    adjoint_synthesis_general(xalm, xmap, spin, lmax, mmax, loc, 1e-1*epsilon,
+                              sigma_min, sigma_max, nthreads);
+    };
+  auto mapnorm = [&](const cmav<T,2> &xmap)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xmap.shape(0); ++icomp)
+      for (size_t ipix=0; ipix<xmap.shape(1); ++ipix)
+          {
+          auto tmp = xmap(icomp,ipix);
+          res += tmp*tmp;
+          }
+    return sqrt(res);
+    };
+  auto almnorm = [&](const cmav<complex<T>,2> &xalm)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xalm.shape(0); ++icomp)
+      for (size_t m=0; m<mstart.shape(0); ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto tmp = xalm(icomp,mstart(m)+l);
+          res += norm(tmp) * ((m==0) ? 1 : 2);
+          }
+    return sqrt(res);
+    };
+  auto alm0 = alm.build_uniform(alm.shape(), 0.);
+  // try to estimate ATOL according to Paige & Saunders
+  // assuming an absolute error of machine epsilon in every matrix element
+  double atol = 1e-14*sqrt(map.shape(1));
+  auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
+    = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
+           alm0, 0., atol, epsilon, 1e8, maxiter, true, nthreads);
+  return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
+  }
+template tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<float>,2> &alm, // (ncomp, *)
+  const cmav<float,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  size_t mmax,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
+template tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<double>,2> &alm, // (ncomp, *)
+  const cmav<double,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  size_t mmax,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
 
 }}

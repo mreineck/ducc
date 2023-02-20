@@ -154,6 +154,17 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads);
 
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  size_t mmax,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
 }
 
 using detail_sht::SHT_mode;
@@ -174,6 +185,7 @@ using detail_sht::analysis_2d;
 using detail_sht::adjoint_analysis_2d;
 using detail_sht::synthesis_general;
 using detail_sht::adjoint_synthesis_general;
+using detail_sht::pseudo_analysis_general;
 
 }
 

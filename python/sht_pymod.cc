@@ -862,6 +862,47 @@ py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t
 #endif
   MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
   }
+template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
+  size_t lmax,
+  const py::array &map_, const py::array &loc_, size_t spin,
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
+  size_t mmax)
+  {
+  auto map = to_cmav<T,2>(map_);
+  auto loc = to_cmav<double,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
+  auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
+  auto alm = to_vmav<complex<T>,2>(alm_);
+
+  size_t itn, istop;
+  double rnorm, sqnorm;
+  {
+  py::gil_scoped_release release;
+  auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis_general(alm, map, spin, lmax, mmax, loc, sigma_min, sigma_max, nthreads, maxiter, epsilon);
+  istop = xistop;
+  itn = xitn;
+  rnorm = xrnorm;
+  sqnorm = xsqnorm;
+  }
+  return py::make_tuple(alm_, py::cast(istop), py::cast(itn), py::cast(rnorm), py::cast(sqnorm));
+  }
+py::tuple Py_pseudo_analysis_general(
+  size_t lmax,
+  const py::array &map, const py::array &loc, size_t spin,
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
+  const py::object &mmax_, py::object &alm=None)
+  {
+  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
+  if (isPyarr<float>(map))
+    return Py2_pseudo_analysis_general<float>(alm, lmax, map, loc,
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mmax);
+  else if (isPyarr<double>(map))
+    return Py2_pseudo_analysis_general<double>(alm, lmax, map, loc,
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mmax);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
 
 
 template<typename T> class Py_sharpjob
@@ -1954,6 +1995,12 @@ void add_sht(py::module_ &msup)
   // FIXME: maybe add mstart, lstride
   m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
   m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
+  m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, /*pseudo_analysis_general_DS,*/ py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mmax"_a=None, "alm"_a=None);
+py::tuple Py_pseudo_analysis_general(
+  size_t lmax,
+  const py::array &map_, const py::array &loc, size_t spin,
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
+  const py::object &mmax, py::object &alm__);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
