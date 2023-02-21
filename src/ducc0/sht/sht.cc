@@ -2919,7 +2919,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   double atol = 1e-14*sqrt(map.shape(1));
   auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
     = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
-           alm0, 0., atol, epsilon, 1e8, maxiter, true, nthreads);
+           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 template tuple<size_t, size_t, double, double> pseudo_analysis_general(
