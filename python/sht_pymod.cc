@@ -1650,8 +1650,9 @@ Parameters
 ----------
 alm: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex64 or numpy.complex128)
     the set(s) of spherical harmonic coefficients.
+    ncomp must be 1 if spin is 0, else 2.
     The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
 map: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
     The last dimension must be large enough to accommodate all pixels, which
@@ -1704,7 +1705,7 @@ Parameters
 alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
 map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
     The last dimension must be large enough to accommodate all pixels, which
@@ -1756,7 +1757,7 @@ Parameters
 alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
 map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
     The last dimension must be large enough to accommodate all pixels, which
@@ -1828,7 +1829,7 @@ Parameters
 alm: numpy.ndarray(([ntrans,] 1, x), dtype=numpy.complex64 or numpy.complex128)
     the set(s) of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
 map: None or numpy.ndarray(([ntrans,] 2, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
     The last dimension must be large enough to accommodate all pixels, which
@@ -1913,15 +1914,10 @@ numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
 constexpr const char *adjoint_synthesis_general_DS = R"""(
 This is the adjoint operation of `synthesis_general`.
 
-
 Parameters
 ----------
 map: numpy.ndarray((ncomp, npix), dtype=numpy.float32 or numpy.float64
     The pixel values at the locations specified by `loc`.
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
-    the set(s) of spherical harmonic coefficients.
-    The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
 spin: int >= 0
     the spin to use for the transform.
     If spin==0, ncomp must be 1, otherwise 2
@@ -1955,6 +1951,68 @@ Returns
 numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
     the computed spherical harmonic coefficients
     If the `alm` parameter was specified, this is identical to `alm`.
+)""";
+
+constexpr const char *pseudo_analysis_general_DS = R"""(
+Tries to extract spherical harmonic coefficients from one or two maps
+by using the iterative LSMR algorithm.
+
+Parameters
+----------
+map: numpy.ndarray((ncomp, npix), dtype=numpy.float32 or numpy.float64
+    The pixel values at the locations specified by `loc`.
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon: float >= 0
+    the relative tolerance used as a stopping criterion
+    NOTE: for the "epsilon" paraeter of the underlyig NUFFT calls,
+    `0.1*epsilon` will be used.
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+maxiter: int >= 0
+    the maximum number of iterations before stopping the algorithm
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+int
+    the reason for stopping the iteration
+    1: approximate solution to the equation system found
+    2: approximate least-squares solution found
+    3: condition number of the equation system too large
+    7: maximum number of iterations reached
+
+int
+    the iteration count(s)
+
+float
+    the residual norm, divided by the norm of `map`
+
+float
+    the quality of the least-squares solution
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
@@ -1995,7 +2053,7 @@ void add_sht(py::module_ &msup)
   // FIXME: maybe add mstart, lstride
   m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
   m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
-  m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, /*pseudo_analysis_general_DS,*/ py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mmax"_a=None, "alm"_a=None);
+  m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mmax"_a=None, "alm"_a=None);
 py::tuple Py_pseudo_analysis_general(
   size_t lmax,
   const py::array &map_, const py::array &loc, size_t spin,
