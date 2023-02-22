@@ -566,7 +566,7 @@ void add_healpix(py::module_ &msup)
     .def("neighbors", &Pyhpbase::neighbors,"pix"_a, "nthreads"_a=1)
     .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a, "nthreads"_a=1)
     .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a, "nthreads"_a=1)
-    .def("query_disc", &Pyhpbase::query_disc, query_disc_DS, "ptg"_a,"radius"_a)
+    .def("query_disc", &Pyhpbase::query_disc, query_disc_DS, "ptg"_a, "radius"_a)
     .def("sht_info", &Pyhpbase::sht_info, sht_info_DS)
     .def("__repr__", &Pyhpbase::repr)
     ;
