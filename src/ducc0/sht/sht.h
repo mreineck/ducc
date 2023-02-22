@@ -186,7 +186,6 @@ using detail_sht::adjoint_analysis_2d;
 using detail_sht::synthesis_general;
 using detail_sht::adjoint_synthesis_general;
 using detail_sht::pseudo_analysis_general;
-
 }
 
 #endif
