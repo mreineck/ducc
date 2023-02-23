@@ -120,10 +120,6 @@ mod tests {
     fn fft_test() {
         let shape = (2, 3, 3);
 
-        // let a = type2typeid::<Complex<f64>>();
-        // println!("{}", a);
-        // print_type_of(&b);
-
         let b = Array::from_elem(shape, Complex::<f64>::new(12., 0.));
         let mut c = Array::from_elem(shape, Complex::<f64>::new(0., 0.));
         println!("{:8.4}", b);
