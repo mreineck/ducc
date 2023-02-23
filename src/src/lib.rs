@@ -61,41 +61,26 @@ pub fn c2c<A: 'static, D: ndarray::Dimension>(
     }
 }
 
-fn type2typeid<A>() -> u8 {
-     {
-        if TypeId::of::<A>() == TypeId::of::<f64>() {
-            7
-        } else if TypeId::of::<A>() == TypeId::of::<f32>() {
-            3
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
-            7 + 64
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
-            3 + 64
-        } else {
-            panic!("typeid not working");
-        }
-    } as u8
+fn type2typeid<A: 'static>() -> u8 {
+    if TypeId::of::<A>() == TypeId::of::<f64>() {
+        7
+    } else if TypeId::of::<A>() == TypeId::of::<f32>() {
+        3
+    } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
+        7 + 64
+    } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
+        3 + 64
+    } else {
+        panic!("typeid not supported");
+    }
 }
 
 fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(
     slc: ArrayViewMut<'a, A, D>,
 ) -> RustArrayDescriptor {
-    let dtype: u8 = {
-        if TypeId::of::<A>() == TypeId::of::<f64>() {
-            7
-        } else if TypeId::of::<A>() == TypeId::of::<f32>() {
-            3
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
-            7 + 64
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
-            3 + 64
-        } else {
-            panic!("typeid not working");
-        }
-    };
     RustArrayDescriptor {
         ndim: slc.shape().len() as u8,
-        dtype: dtype,
+        dtype: type2typeid::<A>(),
         shape: format_shape(slc.shape()),
         stride: format_stride(slc.strides()),
         data: slc.as_ptr() as *mut c_void,
@@ -103,22 +88,9 @@ fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(
 }
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
-    let dtype: u8 = {
-        if TypeId::of::<A>() == TypeId::of::<f64>() || TypeId::of::<A>() == TypeId::of::<f32>() {
-            (size_of::<A>() - 1) as u8
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
-            7 + 64
-        } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
-            3 + 64
-        } else if TypeId::of::<A>() == TypeId::of::<usize>() {
-            (size_of::<A>() - 1 + 32) as u8
-        } else {
-            panic!("typeid not working");
-        }
-    };
     RustArrayDescriptor {
         ndim: slc.shape().len() as u8,
-        dtype: dtype,
+        dtype: type2typeid::<A>(),
         shape: format_shape(slc.shape()),
         stride: format_stride(slc.strides()),
         data: slc.as_ptr() as *mut c_void,
@@ -128,8 +100,8 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use ndarray::{Array, Dim};
-    use ndarray::prelude::*;
+    use ndarray::Array;
+    // use ndarray::prelude::*;
 
     #[test]
     fn square_test() {
