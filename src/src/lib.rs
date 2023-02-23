@@ -1,9 +1,8 @@
-use ndarray::{ArrayView, Dimension, ArrayViewMut, Array1};
+use ndarray::{Array1, ArrayView, ArrayViewMut, Dimension};
 use num_complex::Complex;
 use std::any::TypeId;
 use std::ffi::c_void;
 use std::mem::size_of;
-
 
 // Questions:
 //
@@ -45,18 +44,26 @@ extern "C" {
     );
 }
 
-pub fn c2c<A: 'static, D: ndarray::Dimension>(inp: ArrayView<Complex<A>, D>, out: ArrayViewMut<Complex<A>, D>, axes: Vec<usize>,
-    forward: bool, fct: f64, nthreads: usize ) {
+pub fn c2c<A: 'static, D: ndarray::Dimension>(
+    inp: ArrayView<Complex<A>, D>,
+    out: ArrayViewMut<Complex<A>, D>,
+    axes: Vec<usize>,
+    forward: bool,
+    fct: f64,
+    nthreads: usize,
+) {
     let inp2 = slice2arrdesc(inp);
     let mut out2 = mutslice2arrdesc(out);
     let axes2 = Array1::from_vec(axes);
     let axes3 = slice2arrdesc(axes2.view());
-    unsafe{
-    c2c_external(&inp2, &mut out2, &axes3, forward, fct, nthreads);
+    unsafe {
+        c2c_external(&inp2, &mut out2, &axes3, forward, fct, nthreads);
     }
 }
 
-fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayViewMut<'a, A, D>) -> RustArrayDescriptor {
+fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(
+    slc: ArrayViewMut<'a, A, D>,
+) -> RustArrayDescriptor {
     let dtype: u8 = {
         if TypeId::of::<A>() == TypeId::of::<f64>() {
             7
@@ -81,8 +88,7 @@ fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayViewMut<'a, A, D>) -
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
     let dtype: u8 = {
-        if TypeId::of::<A>() == TypeId::of::<f64>() || TypeId::of::<A>() == TypeId::of::<f32>()
-        {
+        if TypeId::of::<A>() == TypeId::of::<f64>() || TypeId::of::<A>() == TypeId::of::<f32>() {
             (size_of::<A>() - 1) as u8
         } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
             7 + 64
@@ -102,7 +108,6 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
         data: slc.as_ptr() as *mut c_void,
     }
 }
-
 
 #[cfg(test)]
 mod tests {
