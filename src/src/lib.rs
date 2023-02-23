@@ -61,6 +61,22 @@ pub fn c2c<A: 'static, D: ndarray::Dimension>(
     }
 }
 
+fn type2typeid<A>() -> u8 {
+     {
+        if TypeId::of::<A>() == TypeId::of::<f64>() {
+            7
+        } else if TypeId::of::<A>() == TypeId::of::<f32>() {
+            3
+        } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
+            7 + 64
+        } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
+            3 + 64
+        } else {
+            panic!("typeid not working");
+        }
+    } as u8
+}
+
 fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(
     slc: ArrayViewMut<'a, A, D>,
 ) -> RustArrayDescriptor {
