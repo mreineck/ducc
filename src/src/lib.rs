@@ -2,6 +2,7 @@ use ndarray::{ArrayView, Dimension, ArrayViewMut, array, ArrayBase, Array1};
 use num_complex::Complex;
 use std::any::TypeId;
 use std::ffi::c_void;
+use std::mem::size_of;
 
 // TODO Error handling
 
@@ -57,20 +58,20 @@ pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
 }
 
 // TODO proper handling of fct dtype
-pub fn c2c<A: 'static, D: ndarray::Dimension>(inp: ArrayView<Complex<A>, D>, out: ArrayViewMut<Complex<A>, D>, axes: Vec<usize>,
+pub fn c2c<D: ndarray::Dimension>(inp: ArrayView<Complex<f64>, D>, out: ArrayViewMut<Complex<f64>, D>, axes: Vec<usize>,
     forward: bool, fct: f64, nthreads: usize ) {
     let inp2 = slice2arrdesc(inp);
     let mut out2 = mutslice2arrdesc(out);
     let axes2 = Array1::from_vec(axes);
     let axes3 = slice2arrdesc(axes2.view());
-    if TypeId::of::<A>() == TypeId::of::<f64>() {
+    // if TypeId::of::<A>() == TypeId::of::<f64>() {
     unsafe{
     c2c_double(&inp2, &mut out2, &axes3, forward, fct, nthreads);
     }
-    }
-    else {
-            panic!("typeid not working");
-    }
+    // }
+    // else {
+            // panic!("typeid not working");
+    // }
 
 }
 
@@ -99,14 +100,15 @@ fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayViewMut<'a, A, D>) -
 
 fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> RustArrayDescriptor {
     let dtype: u8 = {
-        if TypeId::of::<A>() == TypeId::of::<f64>() {
-            7
-        } else if TypeId::of::<A>() == TypeId::of::<f32>() {
-            3
+        if TypeId::of::<A>() == TypeId::of::<f64>() || TypeId::of::<A>() == TypeId::of::<f32>()
+        {
+            (size_of::<A>() - 1) as u8
         } else if TypeId::of::<A>() == TypeId::of::<Complex<f64>>() {
             7 + 64
         } else if TypeId::of::<A>() == TypeId::of::<Complex<f32>>() {
             3 + 64
+        } else if TypeId::of::<A>() == TypeId::of::<usize>() {
+            (size_of::<A>() - 1 + 32) as u8
         } else {
             panic!("typeid not working");
         }
@@ -161,16 +163,18 @@ mod tests {
         let shape = (2, 3, 3);
         let mut a = Array::random(shape, Uniform::new(-1., 10.));
 
-        println!("{:8.4}", a);
-        square(a.view_mut());
-        println!("{:8.4}", a);
+        // println!("{:8.4}", a);
+        // square(a.view_mut());
+        // println!("{:8.4}", a);
 
         let b = Array::ones(shape);
         let mut c = Array::ones(shape);
-        let axes =vec![0];
+        let axes = vec![0, 2];
         println!("{:8.4}", b);
         c2c(b.view(), c.view_mut(), axes, true, 1., 1);
         println!("{:8.4}", c);
+
+        panic!("asdf");
 
     }
 }
