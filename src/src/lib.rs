@@ -4,6 +4,11 @@ use std::any::TypeId;
 use std::ffi::c_void;
 use std::mem::size_of;
 
+
+// Questions:
+//
+// - How to unify mutslice2arrdesc and slice2arrdesc?
+
 #[repr(C)]
 pub struct RustArrayDescriptor {
     shape: [u64; 10], // TODO Make the "10" variable
@@ -30,7 +35,7 @@ fn format_stride(ndinp: &[isize]) -> [i64; 10] {
 }
 
 extern "C" {
-    fn c2c_double(
+    fn c2c_external(
         inp: &RustArrayDescriptor,
         out: &mut RustArrayDescriptor,
         axes: &RustArrayDescriptor,
@@ -46,15 +51,9 @@ pub fn c2c<A: 'static, D: ndarray::Dimension>(inp: ArrayView<Complex<A>, D>, out
     let mut out2 = mutslice2arrdesc(out);
     let axes2 = Array1::from_vec(axes);
     let axes3 = slice2arrdesc(axes2.view());
-    // if TypeId::of::<A>() == TypeId::of::<f64>() {
     unsafe{
-    c2c_double(&inp2, &mut out2, &axes3, forward, fct, nthreads);
+    c2c_external(&inp2, &mut out2, &axes3, forward, fct, nthreads);
     }
-    // }
-    // else {
-            // panic!("typeid not working");
-    // }
-
 }
 
 fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayViewMut<'a, A, D>) -> RustArrayDescriptor {
@@ -108,16 +107,18 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Array, Dim};
+    // use ndarray::{Array, Dim};
+    use ndarray::prelude::*;
 
     #[test]
     fn square_test() {
         let shape = (2, 3, 3);
-        let b = Array::ones(shape);
-        let mut c = Array::ones(shape);
-        let axes = vec![0, 2];
+        let b = Array::from_elem(shape, Complex::<f64>::new(12., 0.));
+        let mut c = Array::from_elem(shape, Complex::<f64>::new(0., 0.));
         println!("{:8.4}", b);
-        c2c::<f64, Dim<[usize; 3]>>(b.view(), c.view_mut(), axes, true, 1., 1);
+        let axes = vec![0, 2];
+        c2c(b.view(), c.view_mut(), axes, true, 1., 1);
         println!("{:8.4}", c);
+        panic!("asdf");
     }
 }
