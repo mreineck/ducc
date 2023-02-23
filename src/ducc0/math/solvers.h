@@ -34,6 +34,7 @@
 #include <limits>
 #include <iostream>
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/aligned_array.h"
 
 namespace ducc0 {
 
@@ -305,8 +306,12 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   MR_assert(x.shape()==x0.shape(), "shape mismatch");
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
-  vmav<Tx, xdim> xtmp(x0.shape(), UNINITIALIZED);
-  vmav<Tb, bdim> btmp(b.shape(), UNINITIALIZED);
+  // we don't need both temporary arrays at the same time, so we can overlay
+  // them in memory. Don't try this at home!
+  auto maxbytes = max(x0.size()*sizeof(Tx), b.size()*sizeof(Tb));
+  aligned_array<char> tmpstorage(maxbytes);
+  vmav<Tx, xdim> xtmp(reinterpret_cast<Tx *>(tmpstorage.data()), x0.shape());
+  vmav<Tb, bdim> btmp(reinterpret_cast<Tb *>(tmpstorage.data()), b.shape());
   {
   op(x,btmp);
   mav_apply([](auto &v1, const auto &v2) { v1-=v2; }, nthreads, u, btmp);

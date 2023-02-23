@@ -1,3 +1,9 @@
+0.30.0:
+- sht:
+    - new function `pseudo_analysis_general` for iterative least-squares analyis
+      of spherical maps on rbitrry grids
+
+
 0.29.0:
 - general:
     - rework multi-threading infrastructure to allow integration with external
