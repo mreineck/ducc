@@ -58,7 +58,7 @@ pub fn square<A: 'static, D: ndarray::Dimension>(inp: ArrayViewMut<A, D>) {
 }
 
 // TODO proper handling of fct dtype
-pub fn c2c<D: ndarray::Dimension>(inp: ArrayView<Complex<f64>, D>, out: ArrayViewMut<Complex<f64>, D>, axes: Vec<usize>,
+pub fn c2c<A: 'static, D: ndarray::Dimension>(inp: ArrayView<Complex<A>, D>, out: ArrayViewMut<Complex<A>, D>, axes: Vec<usize>,
     forward: bool, fct: f64, nthreads: usize ) {
     let inp2 = slice2arrdesc(inp);
     let mut out2 = mutslice2arrdesc(out);
