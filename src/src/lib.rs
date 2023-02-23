@@ -154,7 +154,7 @@ fn slice2arrdesc<'a, A: 'static, D: Dimension>(slc: ArrayView<'a, A, D>) -> Rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{s, Array, IxDyn, Zip};
+    use ndarray::{s, Array, IxDyn, Zip, Dim};
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
 
@@ -171,10 +171,7 @@ mod tests {
         let mut c = Array::ones(shape);
         let axes = vec![0, 2];
         println!("{:8.4}", b);
-        c2c(b.view(), c.view_mut(), axes, true, 1., 1);
+        c2c::<f64, Dim<[usize; 3]>>(b.view(), c.view_mut(), axes, true, 1., 1);
         println!("{:8.4}", c);
-
-        panic!("asdf");
-
     }
 }
