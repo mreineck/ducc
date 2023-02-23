@@ -115,6 +115,11 @@ mod tests {
     use super::*;
     use ndarray::Array;
     // use ndarray::prelude::*;
+    
+    // TODO Write tests that go through all combinations of axes for 1d-3d, do FFT of arrays that
+    // contain only ones, check if sums are consistent
+    
+    // TODO FFT back and forth with correct normalization and check that equal
 
     #[test]
     fn fft_test() {
