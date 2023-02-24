@@ -199,7 +199,7 @@ as the `wgridder` component.
   due to table lookup and reducing overall memory bandwidth
 
 ### Numerical aspects
-- uses the analytical gridding kernel presented in
+- uses a generalization of the analytical gridding kernel presented in
   <https://arxiv.org/abs/1808.06736>
 - uses the "improved W-stacking method" described in
   <https://arxiv.org/abs/2101.11172>
