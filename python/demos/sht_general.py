@@ -25,7 +25,7 @@ def fiblat(npoints):
     res[:,1] = np.mod(rng/phi,1.)*(2*np.pi)
     return res
 
-lmax = 1187
+lmax = 1187  # This seems to be almost the band limit of the lattice
 npoints = 2000000
 mmax = lmax
 spin = 2
