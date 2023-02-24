@@ -6,6 +6,7 @@ edition = "2021"
 license = "GPL-2.0-or-later"
 documentation = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
 repository = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
+readme = "../README.md"
 
 [dependencies]
 num-complex = "0.4.3"
