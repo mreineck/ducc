@@ -2,7 +2,7 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .file("ducc_rust.cc")
-        .include(".")
+        .include("../src")
         .compile("ducc0");
 
     println!("cargo:rerun-if-changed=src/lib.rs");
