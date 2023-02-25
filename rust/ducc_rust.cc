@@ -52,21 +52,37 @@ void c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
   ducc0::c2c(in_mav, out_mav, axes1, forward, T(fct), nthreads);
 }
 
-extern "C" {
-
-void c2c_external(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
-                  const ducc0::ArrayDescriptor &axes, const bool forward,
-                  const double fct, const size_t nthreads) {
-  if (in.dtype == CODE_C128)
-    c2c<double>(in, out, axes, forward, fct, nthreads);
-  else if (in.dtype == CODE_C64)
-    c2c<float>(in, out, axes, forward, fct, nthreads);
-  else
-    MR_fail("Type not supported");
+template<typename T>
+void c2c_inplace(ducc0::ArrayDescriptor &inout,
+         const ducc0::ArrayDescriptor &axes, const bool forward,
+         const double fct, const size_t nthreads) {
+  auto inout_mav = ducc0::to_vfmav<false, complex<T>>(inout);
+  auto axes1 = arraydesc2vec(axes);
+  ducc0::c2c(inout_mav, inout_mav, axes1, forward, T(fct), nthreads);
 }
 
-// void c2c_inplace_double(ducc0::ArrayDescriptor &inout, const bool axes[MAXDIM], const bool forward, const double fct, const size_t nthreads) {
-//   c2c(inout, inout, axes, forward, fct, nthreads);
-// }
+extern "C" {
+
+  void c2c_external(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
+                    const ducc0::ArrayDescriptor &axes, const bool forward,
+                    const double fct, const size_t nthreads) {
+    if (in.dtype == CODE_C128)
+      c2c<double>(in, out, axes, forward, fct, nthreads);
+    else if (in.dtype == CODE_C64)
+      c2c<float>(in, out, axes, forward, fct, nthreads);
+    else
+      MR_fail("Type not supported");
+  }
+
+  void c2c_inplace_external(ducc0::ArrayDescriptor &inout,
+                            const ducc0::ArrayDescriptor &axes, const bool forward,
+                            const double fct, const size_t nthreads) {
+    if (inout.dtype == CODE_C128)
+      c2c_inplace<double>(inout, axes, forward, fct, nthreads);
+    else if (inout.dtype == CODE_C64)
+      c2c_inplace<float>(inout, axes, forward, fct, nthreads);
+    else
+      MR_fail("Type not supported");
+  }
 
 }

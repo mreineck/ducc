@@ -90,22 +90,44 @@ extern "C" {
         fct: f64,
         nthreads: usize,
     );
+    fn c2c_inplace_external(
+        inout: &mut RustArrayDescriptor,
+        axes: &RustArrayDescriptor,
+        forward: bool,
+        fct: f64,
+        nthreads: usize,
+    );
 }
 
 pub fn c2c<A: 'static, D: ndarray::Dimension>(
     inp: ArrayView<Complex<A>, D>,
     out: ArrayViewMut<Complex<A>, D>,
-    axes: Vec<usize>,
+    axes: &Vec<usize>,
     forward: bool,
     fct: f64,
     nthreads: usize,
 ) {
     let inp2 = slice2arrdesc(inp);
     let mut out2 = mutslice2arrdesc(out);
-    let axes2 = Array1::from_vec(axes);
+    let axes2 = Array1::from_vec(axes.to_vec());
     let axes3 = slice2arrdesc(axes2.view());
     unsafe {
         c2c_external(&inp2, &mut out2, &axes3, forward, fct, nthreads);
+    }
+}
+
+pub fn c2c_inplace<A: 'static, D: ndarray::Dimension>(
+    inpout: ArrayViewMut<Complex<A>, D>,
+    axes: &Vec<usize>,
+    forward: bool,
+    fct: f64,
+    nthreads: usize,
+) {
+    let mut inpout2 = mutslice2arrdesc(inpout);
+    let axes2 = Array1::from_vec(axes.to_vec());
+    let axes3 = slice2arrdesc(axes2.view());
+    unsafe {
+        c2c_inplace_external(&mut inpout2, &axes3, forward, fct, nthreads);
     }
 }
 // /Interface
@@ -129,8 +151,9 @@ mod tests {
         let mut c = Array::from_elem(shape, Complex::<f64>::new(0., 0.));
         println!("{:8.4}", b);
         let axes = vec![0, 2];
-        c2c(b.view(), c.view_mut(), axes, true, 1., 1);
+        c2c(b.view(), c.view_mut(), &axes, true, 1., 1);
         println!("{:8.4}", c);
-        // panic!("asdf");
+
+        c2c_inplace(c.view_mut(), &axes, true, 1., 1);
     }
 }
