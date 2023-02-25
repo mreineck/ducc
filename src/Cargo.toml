@@ -7,11 +7,12 @@ license = "GPL-2.0-or-later"
 documentation = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
 repository = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
 readme = "../README.md"
+categories = ["external-ffi-bindings", "science"]
+keywords = ["fft", "fast", "fourier", "transform"]
 
 [dependencies]
 num-complex = "0.4.3"
 ndarray = "0.15.6"
-ndarray-rand = "0.14.0"
 
 [build-dependencies]
 cc = "1.0"
