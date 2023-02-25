@@ -29,7 +29,18 @@ using shape_t = vector<size_t>;
 #include "ducc0/bindings/array_descriptor.h"
 #include "ducc0/fft/fft.h"
 
-static constexpr size_t MAXDIM=10;
+static constexpr size_t CODE_F32=ducc0::Typecode<float>::value;
+static constexpr size_t CODE_F64=ducc0::Typecode<double>::value;
+static constexpr size_t CODE_C64=ducc0::Typecode<complex<float>>::value;
+static constexpr size_t CODE_C128=ducc0::Typecode<complex<double>>::value;
+
+shape_t arraydesc2vec(const ducc0::ArrayDescriptor &arrdesc) {
+  auto mav = ducc0::to_cmav<false, size_t, 1>(arrdesc);
+  shape_t res;
+  for (size_t i=0; i<mav.shape(0); i++)
+    res.push_back(mav(i));
+  return res;
+}
 
 template<typename T>
 void c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
@@ -37,14 +48,7 @@ void c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
          const double fct, const size_t nthreads) {
   auto in_mav = ducc0::to_cfmav<false, complex<T>>(in);
   auto out_mav = ducc0::to_vfmav<false, complex<T>>(out);
-
-  auto axes_mav = ducc0::to_cfmav<false, size_t>(axes);
-  // TODO Check if 1d etc.
-
-  shape_t axes1;
-  for (size_t i=0; i<axes_mav.shape(0); i++)
-    axes1.push_back(axes_mav(i));
-
+  auto axes1 = arraydesc2vec(axes);
   ducc0::c2c(in_mav, out_mav, axes1, forward, T(fct), nthreads);
 }
 
@@ -53,9 +57,9 @@ extern "C" {
 void c2c_external(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
                   const ducc0::ArrayDescriptor &axes, const bool forward,
                   const double fct, const size_t nthreads) {
-  if (in.dtype == ducc0::Typecode<complex<double>>::value)
+  if (in.dtype == CODE_C128)
     c2c<double>(in, out, axes, forward, fct, nthreads);
-  else if (in.dtype == ducc0::Typecode<complex<float>>::value)
+  else if (in.dtype == CODE_C64)
     c2c<float>(in, out, axes, forward, fct, nthreads);
   else
     MR_fail("Type not supported");
