@@ -29,10 +29,10 @@ using shape_t = vector<size_t>;
 #include "ducc0/infra/mav.cc"
 #include "ducc0/infra/threading.cc"
 
-static constexpr size_t CODE_F32 = ducc0::Typecode<float>::value;
-static constexpr size_t CODE_F64 = ducc0::Typecode<double>::value;
-static constexpr size_t CODE_C64 = ducc0::Typecode<complex<float>>::value;
-static constexpr size_t CODE_C128 = ducc0::Typecode<complex<double>>::value;
+static constexpr size_t F32 = ducc0::Typecode<float>::value;
+static constexpr size_t F64 = ducc0::Typecode<double>::value;
+static constexpr size_t C64 = ducc0::Typecode<complex<float>>::value;
+static constexpr size_t C128 = ducc0::Typecode<complex<double>>::value;
 
 shape_t arraydesc2vec(const ducc0::ArrayDescriptor &arrdesc) {
   auto mav = ducc0::to_cmav<false, size_t, 1>(arrdesc);
@@ -57,9 +57,9 @@ extern "C" {
 void fft_c2c_(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
               const ducc0::ArrayDescriptor &axes, const bool forward,
               const double fct, const size_t nthreads) {
-  if (in.dtype == CODE_C128)
+  if (in.dtype == C128)
     fft_c2c<double>(in, out, axes, forward, fct, nthreads);
-  else if (in.dtype == CODE_C64)
+  else if (in.dtype == C64)
     fft_c2c<float>(in, out, axes, forward, fct, nthreads);
   else
     MR_fail("Type not supported");
@@ -68,9 +68,9 @@ void fft_c2c_(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
 void fft_c2c_inplace_(ducc0::ArrayDescriptor &inout,
                       const ducc0::ArrayDescriptor &axes, const bool forward,
                       const double fct, const size_t nthreads) {
-  if (inout.dtype == CODE_C128)
+  if (inout.dtype == C128)
     fft_c2c<double>(inout, inout, axes, forward, fct, nthreads);
-  else if (inout.dtype == CODE_C64)
+  else if (inout.dtype == C64)
     fft_c2c<float>(inout, inout, axes, forward, fct, nthreads);
   else
     MR_fail("Type not supported");
