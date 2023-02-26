@@ -64,15 +64,4 @@ void fft_c2c_(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
   else
     MR_fail("Type not supported");
 }
-
-void fft_c2c_inplace_(ducc0::ArrayDescriptor &inout,
-                      const ducc0::ArrayDescriptor &axes, const bool forward,
-                      const double fct, const size_t nthreads) {
-  if (inout.dtype == C128)
-    fft_c2c<double>(inout, inout, axes, forward, fct, nthreads);
-  else if (inout.dtype == C64)
-    fft_c2c<float>(inout, inout, axes, forward, fct, nthreads);
-  else
-    MR_fail("Type not supported");
-}
 }

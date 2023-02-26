@@ -4,6 +4,8 @@ use std::any::TypeId;
 use std::ffi::c_void;
 use std::mem::size_of;
 
+use std::cell::UnsafeCell;
+
 // Questions:
 //
 // - How to unify mutslice2arrdesc and slice2arrdesc?
@@ -90,13 +92,6 @@ extern "C" {
         fct: f64,
         nthreads: usize,
     );
-    fn fft_c2c_inplace_(
-        inout: &mut RustArrayDescriptor,
-        axes: &RustArrayDescriptor,
-        forward: bool,
-        fct: f64,
-        nthreads: usize,
-    );
 }
 
 pub fn fft_c2c<A: 'static, D: ndarray::Dimension>(
@@ -123,11 +118,11 @@ pub fn fft_c2c_inplace<A: 'static, D: ndarray::Dimension>(
     fct: f64,
     nthreads: usize,
 ) {
-    let mut inpout2 = mutslice2arrdesc(inpout);
+    let inpout2 = UnsafeCell::new(mutslice2arrdesc(inpout));
     let axes2 = Array1::from_vec(axes.to_vec());
     let axes3 = slice2arrdesc(axes2.view());
     unsafe {
-        fft_c2c_inplace_(&mut inpout2, &axes3, forward, fct, nthreads);
+        fft_c2c_(& *inpout2.get(), &mut *inpout2.get(), &axes3, forward, fct, nthreads);
     }
 }
 // /Interface
