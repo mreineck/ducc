@@ -122,7 +122,14 @@ pub fn fft_c2c_inplace<A: 'static, D: ndarray::Dimension>(
     let axes2 = Array1::from_vec(axes.to_vec());
     let axes3 = slice2arrdesc(axes2.view());
     unsafe {
-        fft_c2c_(& *inpout2.get(), &mut *inpout2.get(), &axes3, forward, fct, nthreads);
+        fft_c2c_(
+            &*inpout2.get(),
+            &mut *inpout2.get(),
+            &axes3,
+            forward,
+            fct,
+            nthreads,
+        );
     }
 }
 // /Interface
