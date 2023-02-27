@@ -18,7 +18,7 @@ use std::cell::UnsafeCell;
 
 // Related to RustArrayDescriptor
 #[repr(C)]
-pub struct RustArrayDescriptor {
+struct RustArrayDescriptor {
     shape: [u64; 10], // TODO Make the "10" variable
     stride: [i64; 10],
     data: *mut c_void,
@@ -94,6 +94,20 @@ extern "C" {
     );
 }
 
+/// Complex-to-complex Fast Fourier Transform
+///
+/// This executes a Fast Fourier Transform on `inp` and stores the result in `out`.
+///
+/// # Arguments
+///
+/// * `inp` - View to the input array
+/// * `out` - Mutable view to the output array
+/// * `axes` - Specifies the axes over which the transform is carried out
+/// * `forward` - If `true`, a minus sign will be used in the exponent
+/// * `fct` - No normalization factors will be applied by default; if multiplication by a constant
+/// is desired, it can be supplied here.
+/// * `nthreads` - If the underlying array has more than one dimension, the computation will be
+/// distributed over `nthreads` threads.
 pub fn fft_c2c<A: 'static, D: ndarray::Dimension>(
     inp: ArrayView<Complex<A>, D>,
     out: ArrayViewMut<Complex<A>, D>,
@@ -111,6 +125,9 @@ pub fn fft_c2c<A: 'static, D: ndarray::Dimension>(
     }
 }
 
+/// Inplace complex-to-complex Fast Fourier Transform
+///
+/// Usage analogous to [`fft_c2c`].
 pub fn fft_c2c_inplace<A: 'static, D: ndarray::Dimension>(
     inpout: ArrayViewMut<Complex<A>, D>,
     axes: &Vec<usize>,
