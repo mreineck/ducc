@@ -3,12 +3,8 @@ use num_complex::Complex;
 use std::any::TypeId;
 use std::ffi::c_void;
 use std::mem::size_of;
-
 use std::cell::UnsafeCell;
 
-// Questions:
-//
-// - How to unify mutslice2arrdesc and slice2arrdesc?
 
 // Debugging
 // fn print_type_of<T>(_: &T) {
@@ -59,6 +55,7 @@ fn type2typeid<A: 'static>() -> u8 {
     }
 }
 
+// TODO unify mutslice2arrdesc and slice2arrdesc?
 fn mutslice2arrdesc<'a, A: 'static, D: Dimension>(
     slc: ArrayViewMut<'a, A, D>,
 ) -> RustArrayDescriptor {
