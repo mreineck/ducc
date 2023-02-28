@@ -1287,12 +1287,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           midx[nth] = rdata[ith].midx;
           auto lcth = rdata[ith].cth;
           cth[nth/VLEN][nth%VLEN] = lcth;
-#define NEW_CSQ
-#ifdef NEW_CSQ
           if (abs(lcth)>0.99)
             d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
           else
-#endif
             d.s.csq[nth]=lcth*lcth;
           d.s.sth[nth]=rdata[ith].sth;
           ++nth;
@@ -1431,11 +1428,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
         {
         if (rdata[ith].mlim>=gen.m)
           {
-#ifdef NEW_CSQ
           if (abs(rdata[ith].cth)>0.99)
             d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
           else
-#endif
             d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
           d.s.sth[nth]=rdata[ith].sth;
           dcmplx ph1=phase(0, rdata[ith].idx, mi);
