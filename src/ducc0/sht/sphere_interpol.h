@@ -319,7 +319,6 @@ template<typename T> class SphereInterpol
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i)); 
           if constexpr(nvec==1)
-            {
             for (size_t icomp=0; icomp<ncomp; ++icomp)
               {
               const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
@@ -328,19 +327,20 @@ template<typename T> class SphereInterpol
                 tres += hlp.wtheta[itheta]*Tsimd(ptr, element_aligned_tag());
               signal(icomp, i) = reduce(tres*hlp.wphi[0], std::plus<>());
               }
-            }
           else
-            {
             for (size_t icomp=0; icomp<ncomp; ++icomp)
               {
               const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
               Tsimd tres=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
+                {
+                Tsimd tres2=0;
                 for (size_t iphi=0; iphi<nvec; ++iphi)
-                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
+                  tres2 += hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
+                tres += tres2*hlp.wtheta[itheta];
+                }
               signal(icomp, i) = reduce(tres, std::plus<>());
               }
-            }
           }
         });
       }
