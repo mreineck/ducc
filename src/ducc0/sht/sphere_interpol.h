@@ -157,51 +157,34 @@ template<typename T> class SphereInterpol
       for (size_t j=0; j<nphi_s; ++j)
         tmp(0,j) = arr(0,j);
       for (size_t i=1, i2=2*ntheta_s-2-1; i+1<ntheta_s; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
           {
-          if (j2>=nphi_s) j2-=nphi_s;
           tmp(i,j2) = arr(i,j2);
-          tmp(i2,j) = sfct*tmp(i,j2);
+          tmp(i2,j) = sfct*arr(i,j2);
           }
       for (size_t j=0; j<nphi_s; ++j)
         tmp(ntheta_s-1,j) = arr(ntheta_s-1,j);
 
-      {
       vfmav<T> ftmp(tmp);
-      cfmav<T> ftmp0(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {}}));
-      auto kern = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
-      }
-      {
-      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
+      cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {}}));
+      convolve_axis(ftmp1, ftmp, 0, getKernel(2*ntheta_s-2, 2*ntheta_b-2), nthreads);
+      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {}}));
       vfmav<T> farr(arr);
-      auto kern = getKernel(nphi_s, nphi_b);
-      convolve_axis(ftmp2, farr, 1, kern, nthreads);
-      }
+      convolve_axis(ftmp2, farr, 1, getKernel(nphi_s, nphi_b), nthreads);
       }
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
       auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
-      cfmav<T> farr(arr);
-      vfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
-      {
-      auto kern = getKernel(nphi_b, nphi_s);
-      convolve_axis(farr, ftmp2, 1, kern, nthreads);
-      }
+      vfmav<T> ftmp1(subarray<2>(tmp, {{0, ntheta_b}, {}}));
+      convolve_axis(cfmav<T>(arr), ftmp1, 1, getKernel(nphi_b, nphi_s), nthreads);
+
       // extend to second half
       for (size_t i=1, i2=2*ntheta_b-2-1; i+1<ntheta_b; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
-          {
-          if (j2>=nphi_s) j2-=nphi_s;
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
           tmp(i2,j) = sfct*tmp(i,j2);
-          }
-      cfmav<T> ftmp(tmp);
-      vfmav<T> ftmp0(subarray<2>(tmp, {{0, 2*ntheta_s-2}, {0, nphi_s}}));
-      {
-      auto kern = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
-      }
+      vfmav<T> ftmp2(subarray<2>(tmp, {{0, 2*ntheta_s-2}, {}}));
+      convolve_axis(cfmav<T>(tmp), ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr(0,j) = T(0.5)*tmp(0,j);
       for (size_t i=1; i+1<ntheta_s; ++i)
@@ -340,10 +323,9 @@ template<typename T> class SphereInterpol
             for (size_t icomp=0; icomp<ncomp; ++icomp)
               {
               const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
-              const T * DUCC0_RESTRICT ptr2 = ptr;
               Tsimd tres=0;
-              for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
-                tres += hlp.wtheta[itheta]*Tsimd(ptr2, element_aligned_tag());
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
+                tres += hlp.wtheta[itheta]*Tsimd(ptr, element_aligned_tag());
               signal(icomp, i) = reduce(tres*hlp.wphi[0], std::plus<>());
               }
             }
@@ -352,11 +334,10 @@ template<typename T> class SphereInterpol
             for (size_t icomp=0; icomp<ncomp; ++icomp)
               {
               const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
-              const T * DUCC0_RESTRICT ptr2 = ptr;
               Tsimd tres=0;
-              for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
                 for (size_t iphi=0; iphi<nvec; ++iphi)
-                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd(ptr2+iphi*vlen,element_aligned_tag());
+                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
               signal(icomp, i) = reduce(tres, std::plus<>());
               }
             }
@@ -425,41 +406,33 @@ template<typename T> class SphereInterpol
 
             {
             if constexpr (nvec==1)
-              {
               for (size_t icomp=0; icomp<ncomp; ++icomp)
                 {
-                Tsimd tmp=signal(icomp, i);
-                tmp *= hlp.wphi[0];
+                Tsimd tmp=signal(icomp, i)*hlp.wphi[0];
                 T * DUCC0_RESTRICT ptr = &cube(icomp,hlp.itheta,hlp.iphi);
-                T * DUCC0_RESTRICT ptr2 = ptr;
-                for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
+                for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
                   {
-                  Tsimd var=Tsimd(ptr2,element_aligned_tag());
+                  Tsimd var=Tsimd(ptr,element_aligned_tag());
                   var += tmp*hlp.wtheta[itheta];
-                  var.copy_to(ptr2,element_aligned_tag());
+                  var.copy_to(ptr,element_aligned_tag());
                   }
                 }
-              }
             else
-              {
               for (size_t icomp=0; icomp<ncomp; ++icomp)
                 {
                 Tsimd tmp=signal(icomp, i);
                 T * DUCC0_RESTRICT ptr = &cube(icomp,hlp.itheta,hlp.iphi);
-                T * DUCC0_RESTRICT ptr2 = ptr;
-                for (size_t itheta=0; itheta<supp; ++itheta)
+                for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
                   {
                   auto ttmp=tmp*hlp.wtheta[itheta];
                   for (size_t iphi=0; iphi<nvec; ++iphi)
                     {
-                    Tsimd var=Tsimd(ptr2+iphi*vlen, element_aligned_tag());
+                    Tsimd var=Tsimd(ptr+iphi*vlen, element_aligned_tag());
                     var += ttmp*hlp.wphi[iphi];
-                    var.copy_to(ptr2+iphi*vlen, element_aligned_tag());
+                    var.copy_to(ptr+iphi*vlen, element_aligned_tag());
                     }
-                  ptr2 += hlp.jumptheta;
                   }
                 }
-              }
             }
           }
         if (b_theta<locks.shape(0))  // unlock

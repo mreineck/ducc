@@ -2757,7 +2757,7 @@ template<typename T, typename Tloc> void synthesis_general(
 
   SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()});
+  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()}, UNINITIALIZED);
   inter.getPlane(alm, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
@@ -2784,7 +2784,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
 
   SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()});
+  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()}, UNINITIALIZED);
   mav_apply([](auto &v){v=0;}, nthreads, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
