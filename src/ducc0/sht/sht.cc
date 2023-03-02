@@ -2789,7 +2789,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
-  inter.updateSlm(alm, planes);
+  inter.updateAlm(alm, planes);
   }
 template void adjoint_synthesis_general(
   vmav<complex<float>,2> &alm, const cmav<float,2> &map,

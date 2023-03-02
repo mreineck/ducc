@@ -152,7 +152,7 @@ template<typename T> class SphereInterpol
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
       // copy and extend to second half
       for (size_t j=0; j<nphi_s; ++j)
         tmp(0,j) = arr(0,j);
@@ -182,7 +182,7 @@ template<typename T> class SphereInterpol
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
       cfmav<T> farr(arr);
       vfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
       {
@@ -521,17 +521,17 @@ template<typename T> class SphereInterpol
       return res;
       }
 
-    void getPlane(const cmav<complex<T>,2> &vslm, vmav<T,3> &planes) const
+    void getPlane(const cmav<complex<T>,2> &valm, vmav<T,3> &planes) const
       {
       size_t nplanes=1+(spin>0);
-      auto ncomp = vslm.shape(0);
+      auto ncomp = valm.shape(0);
       MR_assert(ncomp==nplanes, "number of components mismatch");
-      Alm_Base islm(lmax, mmax);
-      MR_assert(islm.Num_Alms()==vslm.shape(1), "bad array dimension");
+      Alm_Base ialm(lmax, mmax);
+      MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
       auto subplanes=subarray<3>(planes,{{}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
-      synthesis_2d(vslm, subplanes, spin, lmax, mmax, "CC", nthreads);
+      synthesis_2d(valm, subplanes, spin, lmax, mmax, "CC", nthreads);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto m = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
@@ -563,10 +563,10 @@ template<typename T> class SphereInterpol
         }
       }
 
-    void getPlane(const cmav<complex<T>,1> &slm, vmav<T,3> &planes) const
+    void getPlane(const cmav<complex<T>,1> &alm, vmav<T,3> &planes) const
       {
-      cmav<complex<T>,2> vslm(&slm(0), {1,slm.shape(0)}, {0,slm.stride(0)});
-      getPlane(vslm, planes);
+      cmav<complex<T>,2> valm(&alm(0), {1,alm.shape(0)}, {0,alm.stride(0)});
+      getPlane(valm, planes);
       }
 
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
@@ -585,13 +585,13 @@ template<typename T> class SphereInterpol
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    void updateSlm(vmav<complex<T>,2> &vslm, vmav<T,3> &planes) const
+    void updateAlm(vmav<complex<T>,2> &valm, vmav<T,3> &planes) const
       {
       size_t nplanes=1+(spin>0);
-      auto ncomp = vslm.shape(0);
+      auto ncomp = valm.shape(0);
       MR_assert(ncomp>0, "need at least one component");
-      Alm_Base islm(lmax, mmax);
-      MR_assert(islm.Num_Alms()==vslm.shape(1), "bad array dimension");
+      Alm_Base ialm(lmax, mmax);
+      MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
       // move stuff from border regions onto the main grid
@@ -634,13 +634,13 @@ template<typename T> class SphereInterpol
         }
       auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
-      adjoint_synthesis_2d(vslm, subplanes, spin, lmax, mmax, "CC", nthreads);
+      adjoint_synthesis_2d(valm, subplanes, spin, lmax, mmax, "CC", nthreads);
       }
 
-    void updateSlm(vmav<complex<T>,1> &slm, vmav<T,3> &planes) const
+    void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes) const
       {
-      vmav<complex<T>,2> vslm(slm.data(), {1,slm.shape(0)}, {0,slm.stride(0)});
-      updateSlm(vslm, planes);
+      vmav<complex<T>,2> valm(alm.data(), {1,alm.shape(0)}, {0,alm.stride(0)});
+      updateAlm(valm, planes);
       }
   };
 
