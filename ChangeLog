@@ -2,6 +2,8 @@
 - sht:
     - new function `pseudo_analysis_general` for iterative least-squares analyis
       of spherical maps on rbitrry grids
+    - rework the general SHT routines, leading to more performance and smaller
+      memory footprint
 
 
 0.29.0:

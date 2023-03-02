@@ -48,6 +48,7 @@ include src/ducc0/nufft/nufft.h
 include src/ducc0/sht/alm.h
 include src/ducc0/sht/sht.h
 include src/ducc0/sht/sht.cc
+include src/ducc0/sht/sphere_interpol.h
 include src/ducc0/sht/totalconvolve.h
 
 include src/ducc0/healpix/healpix_base.cc
