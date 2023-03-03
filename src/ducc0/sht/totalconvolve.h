@@ -94,56 +94,39 @@ template<typename T> class ConvolverPlan
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
       // copy and extend to second half
       for (size_t j=0; j<nphi_s; ++j)
         tmp(0,j) = arr(0,j);
       for (size_t i=1, i2=2*ntheta_s-2-1; i+1<ntheta_s; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
           {
-          if (j2>=nphi_s) j2-=nphi_s;
           tmp(i,j2) = arr(i,j2);
-          tmp(i2,j) = sfct*tmp(i,j2);
+          tmp(i2,j) = sfct*arr(i,j2);
           }
       for (size_t j=0; j<nphi_s; ++j)
         tmp(ntheta_s-1,j) = arr(ntheta_s-1,j);
 
-      {
       vfmav<T> ftmp(tmp);
-      cfmav<T> ftmp0(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {}}));
-      auto kern = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
-      }
-      {
-      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
+      cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {}}));
+      convolve_axis(ftmp1, ftmp, 0, getKernel(2*ntheta_s-2, 2*ntheta_b-2), nthreads);
+      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {}}));
       vfmav<T> farr(arr);
-      auto kern = getKernel(nphi_s, nphi_b);
-      convolve_axis(ftmp2, farr, 1, kern, nthreads);
-      }
+      convolve_axis(ftmp2, farr, 1, getKernel(nphi_s, nphi_b), nthreads);
       }
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
-      cfmav<T> farr(arr);
-      vfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
-      {
-      auto kern = getKernel(nphi_b, nphi_s);
-      convolve_axis(farr, ftmp2, 1, kern, nthreads);
-      }
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
+      vfmav<T> ftmp1(subarray<2>(tmp, {{0, ntheta_b}, {}}));
+      convolve_axis(cfmav<T>(arr), ftmp1, 1, getKernel(nphi_b, nphi_s), nthreads);
+
       // extend to second half
       for (size_t i=1, i2=2*ntheta_b-2-1; i+1<ntheta_b; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
-          {
-          if (j2>=nphi_s) j2-=nphi_s;
+        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
           tmp(i2,j) = sfct*tmp(i,j2);
-          }
-      cfmav<T> ftmp(tmp);
-      vfmav<T> ftmp0(subarray<2>(tmp, {{0, 2*ntheta_s-2}, {0, nphi_s}}));
-      {
-      auto kern = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
-      }
+      vfmav<T> ftmp2(subarray<2>(tmp, {{0, 2*ntheta_s-2}, {}}));
+      convolve_axis(cfmav<T>(tmp), ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
       for (size_t j=0; j<nphi_s; ++j)
         arr(0,j) = T(0.5)*tmp(0,j);
       for (size_t i=1; i+1<ntheta_s; ++i)
