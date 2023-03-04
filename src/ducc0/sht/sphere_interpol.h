@@ -152,46 +152,101 @@ template<typename T> class SphereInterpol
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
-      // copy and extend to second half
-      for (size_t j=0; j<nphi_s; ++j)
-        tmp(0,j) = arr(0,j);
-      for (size_t i=1, i2=2*ntheta_s-2-1; i+1<ntheta_s; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
-          {
-          tmp(i,j2) = arr(i,j2);
-          tmp(i2,j) = sfct*arr(i,j2);
-          }
-      for (size_t j=0; j<nphi_s; ++j)
-        tmp(ntheta_s-1,j) = arr(ntheta_s-1,j);
 
-      vfmav<T> ftmp(tmp);
-      cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {}}));
-      convolve_axis(ftmp1, ftmp, 0, getKernel(2*ntheta_s-2, 2*ntheta_b-2), nthreads);
-      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {}}));
+      size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,2*blocksize}, UNINITIALIZED);
+      for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
+        {
+        // copy and extend to second half
+        for (size_t j=j0; j<j1; ++j)
+          {
+          tmp(0,2*(j-j0)) = arr(0,j);
+          tmp(0,2*(j-j0)+1) = arr(0,j+nphi_s/2);
+          tmp(ntheta_s-1,2*(j-j0)) = arr(ntheta_s-1,j);
+          tmp(ntheta_s-1,2*(j-j0)+1) = arr(ntheta_s-1,j+nphi_s/2);
+          }
+        execParallel(1, ntheta_s-1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo, i2=2*ntheta_s-2-lo; i<hi; ++i,--i2)
+            for (size_t j=j0,jx=(nphi_s/2+j0)%nphi_s; j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
+              {
+              tmp(i,2*(j-j0)) = arr(i,j);
+              tmp(i,2*(j-j0)+1) = arr(i,jx);
+              tmp(i2,2*(j-j0)) = sfct*arr(i,jx);
+              tmp(i2,2*(j-j0)+1) = sfct*arr(i,j);
+              }
+          });
+      
+        vfmav<T> ftmp(subarray<2>(tmp, {{}, {0,2*(j1-j0)}}));
+        cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,2*(j1-j0)}}));
+        convolve_axis(ftmp1, ftmp, 0, getKernel(2*ntheta_s-2, 2*ntheta_b-2), nthreads);
+        // copy back
+        execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            for (size_t j=j0; j<j1; ++j)
+              {
+              arr(i,j) = tmp(i,2*(j-j0));
+              arr(i,j+nphi_s/2) = tmp(i,2*(j-j0)+1);
+              }
+          });
+        }
       vfmav<T> farr(arr);
+      cfmav<T> ftmp2(subarray<2>(arr, {{}, {0, nphi_s}}));
       convolve_axis(ftmp2, farr, 1, getKernel(nphi_s, nphi_b), nthreads);
       }
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,nphi_s}, UNINITIALIZED);
-      vfmav<T> ftmp1(subarray<2>(tmp, {{0, ntheta_b}, {}}));
+
+      vfmav<T> ftmp1(subarray<2>(arr, {{0, ntheta_b}, {0, nphi_s}}));
       convolve_axis(cfmav<T>(arr), ftmp1, 1, getKernel(nphi_b, nphi_s), nthreads);
 
-      // extend to second half
-      for (size_t i=1, i2=2*ntheta_b-2-1; i+1<ntheta_b; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j, j2 = (j2+1>=nphi_s) ? 0 : j2+1)
-          tmp(i2,j) = sfct*tmp(i,j2);
-      vfmav<T> ftmp2(subarray<2>(tmp, {{0, 2*ntheta_s-2}, {}}));
-      convolve_axis(cfmav<T>(tmp), ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
-      for (size_t j=0; j<nphi_s; ++j)
-        arr(0,j) = T(0.5)*tmp(0,j);
-      for (size_t i=1; i+1<ntheta_s; ++i)
-        for (size_t j=0; j<nphi_s; ++j)
-          arr(i,j) = tmp(i,j);
-      for (size_t j=0; j<nphi_s; ++j)
-        arr(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
+      size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,2*blocksize}, UNINITIALIZED);
+      for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
+        {
+        // copy and extend to second half
+        for (size_t j=j0; j<j1; ++j)
+          {
+          tmp(0,2*(j-j0)) = arr(0,j);
+          tmp(0,2*(j-j0)+1) = arr(0,j+nphi_s/2);
+          tmp(ntheta_b-1,2*(j-j0)) = arr(ntheta_b-1,j);
+          tmp(ntheta_b-1,2*(j-j0)+1) = arr(ntheta_b-1,j+nphi_s/2);
+          }
+        execParallel(1, ntheta_b-1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo, i2=2*ntheta_b-2-lo; i<hi; ++i,--i2)
+            for (size_t j=j0,jx=((nphi_s/2+j0)%nphi_s); j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
+              {
+              tmp(i,2*(j-j0)) = arr(i,j);
+              tmp(i,2*(j-j0)+1) = arr(i,jx);
+              tmp(i2,2*(j-j0)) = sfct*arr(i,jx);
+              tmp(i2,2*(j-j0)+1) = sfct*arr(i,j);
+              }
+          });
+      
+        cfmav<T> ftmp(subarray<2>(tmp, {{}, {0,2*(j1-j0)}}));
+        vfmav<T> ftmp2(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,2*(j1-j0)}}));
+        convolve_axis(ftmp, ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
+        // copy back
+        execParallel(1,ntheta_s-1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            for (size_t j=j0; j<j1; ++j)
+              {
+              arr(i,j) = tmp(i,2*(j-j0));
+              arr(i,j+nphi_s/2) = tmp(i,2*(j-j0)+1);
+              }
+          });
+        for (size_t j=j0; j<j1; ++j)
+          {
+          arr(0,j) = T(0.5)*tmp(0,2*(j-j0));
+          arr(0,j+nphi_s/2) = T(0.5)*tmp(0,2*(j-j0)+1);
+          arr(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,2*(j-j0));
+          arr(ntheta_s-1,j+nphi_s/2) = T(0.5)*tmp(ntheta_s-1,2*(j-j0)+1);
+          }
+        }
       }
 
     template<typename Tloc>quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
@@ -317,30 +372,69 @@ template<typename T> class SphereInterpol
               }
             }
           size_t i=idx[ind];
-          hlp.prep(theta(i), phi(i)); 
-          if constexpr(nvec==1)
-            for (size_t icomp=0; icomp<ncomp; ++icomp)
+          hlp.prep(theta(i), phi(i));
+
+          if (ncomp==2)
+            {
+            if constexpr(nvec==1)
               {
-              const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
-              Tsimd tres=0;
-              for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
-                tres += hlp.wtheta[itheta]*Tsimd(ptr, element_aligned_tag());
-              signal(icomp, i) = reduce(tres*hlp.wphi[0], std::plus<>());
-              }
-          else
-            for (size_t icomp=0; icomp<ncomp; ++icomp)
-              {
-              const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
-              Tsimd tres=0;
-              for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
+              const T * DUCC0_RESTRICT ptr0 = &cube(0, hlp.itheta,hlp.iphi);
+              const T * DUCC0_RESTRICT ptr1 = &cube(1, hlp.itheta,hlp.iphi);
+              Tsimd tres0=0, tres1=0;
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
                 {
-                Tsimd tres2=0;
-                for (size_t iphi=0; iphi<nvec; ++iphi)
-                  tres2 += hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
-                tres += tres2*hlp.wtheta[itheta];
+                tres0 += hlp.wtheta[itheta]*Tsimd(ptr0, element_aligned_tag());
+                tres1 += hlp.wtheta[itheta]*Tsimd(ptr1, element_aligned_tag());
                 }
-              signal(icomp, i) = reduce(tres, std::plus<>());
+              signal(0, i) = reduce(tres0*hlp.wphi[0], std::plus<>());
+              signal(1, i) = reduce(tres1*hlp.wphi[0], std::plus<>());
               }
+            else
+              {
+              const T * DUCC0_RESTRICT ptr0 = &cube(0, hlp.itheta,hlp.iphi);
+              const T * DUCC0_RESTRICT ptr1 = &cube(1, hlp.itheta,hlp.iphi);
+              Tsimd tres0=0, tres1=0;
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
+                {
+                Tsimd ttres0=0, ttres1=0;
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  {
+                  ttres0 += hlp.wphi[iphi]*Tsimd(ptr0+iphi*vlen,element_aligned_tag());
+                  ttres1 += hlp.wphi[iphi]*Tsimd(ptr1+iphi*vlen,element_aligned_tag());
+                  }
+                tres0 += ttres0*hlp.wtheta[itheta];
+                tres1 += ttres1*hlp.wtheta[itheta];
+                }
+              signal(0, i) = reduce(tres0, std::plus<>());
+              signal(1, i) = reduce(tres1, std::plus<>());
+              }
+            }
+          else
+            {
+            if constexpr(nvec==1)
+              for (size_t icomp=0; icomp<ncomp; ++icomp)
+                {
+                const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
+                Tsimd tres=0;
+                for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
+                  tres += hlp.wtheta[itheta]*Tsimd(ptr, element_aligned_tag());
+                signal(icomp, i) = reduce(tres*hlp.wphi[0], std::plus<>());
+                }
+            else
+              for (size_t icomp=0; icomp<ncomp; ++icomp)
+                {
+                const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
+                Tsimd tres=0;
+                for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
+                  {
+                  Tsimd tres2=0;
+                  for (size_t iphi=0; iphi<nvec; ++iphi)
+                    tres2 += hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
+                  tres += tres2*hlp.wtheta[itheta];
+                  }
+                signal(icomp, i) = reduce(tres, std::plus<>());
+                }
+            }
           }
         });
       }
@@ -404,6 +498,47 @@ template<typename T> class SphereInterpol
             locks(b_theta+1,b_phi+1).lock();
             }
 
+          if (ncomp==2)
+            {
+            if constexpr (nvec==1)
+              {
+              Tsimd tmp0=signal(0, i)*hlp.wphi[0];
+              Tsimd tmp1=signal(1, i)*hlp.wphi[0];
+              T * DUCC0_RESTRICT ptr0 = &cube(0,hlp.itheta,hlp.iphi);
+              T * DUCC0_RESTRICT ptr1 = &cube(1,hlp.itheta,hlp.iphi);
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
+                {
+                Tsimd var0=Tsimd(ptr0,element_aligned_tag());
+                Tsimd var1=Tsimd(ptr1,element_aligned_tag());
+                var0 += tmp0*hlp.wtheta[itheta];
+                var1 += tmp1*hlp.wtheta[itheta];
+                var0.copy_to(ptr0,element_aligned_tag());
+                var1.copy_to(ptr1,element_aligned_tag());
+                }
+              }
+            else
+              {
+              Tsimd tmp0=signal(0, i);
+              Tsimd tmp1=signal(1, i);
+              T * DUCC0_RESTRICT ptr0 = &cube(0,hlp.itheta,hlp.iphi);
+              T * DUCC0_RESTRICT ptr1 = &cube(1,hlp.itheta,hlp.iphi);
+              for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
+                {
+                auto ttmp0=tmp0*hlp.wtheta[itheta];
+                auto ttmp1=tmp1*hlp.wtheta[itheta];
+                for (size_t iphi=0; iphi<nvec; ++iphi)
+                  {
+                  Tsimd var0=Tsimd(ptr0+iphi*vlen, element_aligned_tag());
+                  Tsimd var1=Tsimd(ptr1+iphi*vlen, element_aligned_tag());
+                  var0 += ttmp0*hlp.wphi[iphi];
+                  var1 += ttmp1*hlp.wphi[iphi];
+                  var0.copy_to(ptr0+iphi*vlen, element_aligned_tag());
+                  var1.copy_to(ptr1+iphi*vlen, element_aligned_tag());
+                  }
+                }
+              }
+            }
+          else
             {
             if constexpr (nvec==1)
               for (size_t icomp=0; icomp<ncomp; ++icomp)
