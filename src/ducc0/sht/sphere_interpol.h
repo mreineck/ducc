@@ -158,14 +158,9 @@ template<typename T> class SphereInterpol
       for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
         {
         // copy and extend to second half
-        for (size_t j=j0; j<j1; ++j)
+        execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
           {
-          tmp(0,j-j0) = arr(0,j);
-          tmp(ntheta_s-1,j-j0) = arr(ntheta_s-1,j);
-          }
-        execParallel(1, ntheta_s-1, nthreads, [&](size_t lo, size_t hi)
-          {
-          for (size_t i=lo, i2=2*ntheta_s-2-lo; i<hi; ++i,--i2)
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_s-2-lo; i<hi; ++i,i2=2*ntheta_s-2-i)
             for (size_t j=j0,jx=(nphi_s/2+j0)%nphi_s; j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
               {
               tmp(i,j-j0) = arr(i,j);
@@ -179,15 +174,12 @@ template<typename T> class SphereInterpol
         // copy back
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
-          for (size_t i=lo; i<hi; ++i)
-            {
-            size_t i2 = (i==0) ? 0 : 2*ntheta_b-2-i;
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_b-2-lo; i<hi; ++i, i2=2*ntheta_b-2-i)
             for (size_t j=j0; j<j1; ++j)
               {
               arr(i,j) = tmp(i,j-j0);
               arr(i,j+nphi_s/2) = sfct*tmp(i2,j-j0);
               }
-            }
           });
         }
       vfmav<T> farr(arr);
@@ -206,14 +198,9 @@ template<typename T> class SphereInterpol
       for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
         {
         // copy and extend to second half
-        for (size_t j=j0; j<j1; ++j)
+        execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
-          tmp(0,j-j0) = arr(0,j);
-          tmp(ntheta_b-1,j-j0) = arr(ntheta_b-1,j);
-          }
-        execParallel(1, ntheta_b-1, nthreads, [&](size_t lo, size_t hi)
-          {
-          for (size_t i=lo, i2=2*ntheta_b-2-lo; i<hi; ++i,--i2)
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_b-2-lo; i<hi; ++i,i2=2*ntheta_b-2-i)
             for (size_t j=j0,jx=((nphi_s/2+j0)%nphi_s); j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
               {
               tmp(i,j-j0) = arr(i,j);
@@ -225,25 +212,19 @@ template<typename T> class SphereInterpol
         vfmav<T> ftmp2(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,j1-j0}}));
         convolve_axis(ftmp, ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
         // copy back
-        execParallel(1,ntheta_s-1, nthreads, [&](size_t lo, size_t hi)
+        execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
           {
           for (size_t i=lo; i<hi; ++i)
             {
             size_t i2 = (i==0) ? 0 : 2*ntheta_s-2-i;
+            T mul = (i==i2) ? T(0.5) : T(1);
             for (size_t j=j0; j<j1; ++j)
               {
-              arr(i,j) = tmp(i,j-j0);
-              arr(i,j+nphi_s/2) = sfct*tmp(i2,j-j0);
+              arr(i,j) = mul*tmp(i,j-j0);
+              arr(i,j+nphi_s/2) = mul*sfct*tmp(i2,j-j0);
               }
             }
           });
-        for (size_t j=j0; j<j1; ++j)
-          {
-          arr(0,j) = T(0.5)*tmp(0,j-j0);
-          arr(0,j+nphi_s/2) = T(0.5)*sfct*tmp(0,j-j0);
-          arr(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j-j0);
-          arr(ntheta_s-1,j+nphi_s/2) = T(0.5)*sfct*tmp(ntheta_s-1,j-j0);
-          }
         }
       }
 
