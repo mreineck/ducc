@@ -152,7 +152,6 @@ template<typename T> class SphereInterpol
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-
       size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
       auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,blocksize}, UNINITIALIZED);
       for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
@@ -161,10 +160,10 @@ template<typename T> class SphereInterpol
         execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
           {
           for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_s-2-lo; i<hi; ++i,i2=2*ntheta_s-2-i)
-            for (size_t j=j0,jx=(nphi_s/2+j0)%nphi_s; j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
+            for (size_t j=j0; j<j1; ++j)
               {
               tmp(i,j-j0) = arr(i,j);
-              tmp(i2,j-j0) = sfct*arr(i,jx);
+              tmp(i2,j-j0) = sfct*arr(i,j+nphi_s/2);
               }
           });
       
@@ -189,10 +188,8 @@ template<typename T> class SphereInterpol
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-
       vfmav<T> ftmp1(subarray<2>(arr, {{0, ntheta_b}, {0, nphi_s}}));
       convolve_axis(cfmav<T>(arr), ftmp1, 1, getKernel(nphi_b, nphi_s), nthreads);
-
       size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
       auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,blocksize}, UNINITIALIZED);
       for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
@@ -201,10 +198,10 @@ template<typename T> class SphereInterpol
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_b-2-lo; i<hi; ++i,i2=2*ntheta_b-2-i)
-            for (size_t j=j0,jx=((nphi_s/2+j0)%nphi_s); j<j1; ++j, jx = (jx+1>=nphi_s) ? 0 : jx+1)
+            for (size_t j=j0; j<j1; ++j)
               {
               tmp(i,j-j0) = arr(i,j);
-              tmp(i2,j-j0) = sfct*arr(i,jx);
+              tmp(i2,j-j0) = sfct*arr(i,j+nphi_s/2);
               }
           });
       
