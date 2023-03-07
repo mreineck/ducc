@@ -1938,6 +1938,11 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads)
   {
+// FIXME: special case for
+// - phi0 = 0
+// - nphi = const, >= 2*mmax+1
+// - ringstart linear
+// - phistride = 1
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
@@ -2757,7 +2762,10 @@ template<typename T, typename Tloc> void synthesis_general(
 
   SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()}, UNINITIALIZED);
+  auto planes_ = vmav<complex<T>,3>::build_noncritical({ncomp, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
+  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
+    {ncomp, inter.Ntheta(), inter.Nphi()},
+    {2*planes_.stride(0), 2*planes_.stride(1), 1});
   inter.getPlane(alm, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
@@ -2784,7 +2792,10 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
 
   SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes = vmav<T,3>::build_noncritical({ncomp, inter.Ntheta(), inter.Nphi()}, UNINITIALIZED);
+  auto planes_ = vmav<complex<T>,3>::build_noncritical({ncomp, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
+  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
+    {ncomp, inter.Ntheta(), inter.Nphi()},
+    {2*planes_.stride(0), 2*planes_.stride(1), 1});
   mav_apply([](auto &v){v=0;}, nthreads, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
