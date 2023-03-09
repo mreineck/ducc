@@ -32,7 +32,7 @@ mmax = lmax
 
 # Number of pixels per ring. Must be >=2*lmax+1, but I'm choosing a larger
 # number for which the FFT is faster.
-nlon = 2*lmax+2
+nlon = ducc0.fft.good_size(2*lmax+1,True)
 
 # create a set of spherical harmonic coefficients to transform
 # Libsharp works exclusively on real-valued maps. The corresponding harmonic
@@ -81,7 +81,7 @@ print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
 print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would be needed,")
 print("but ducc.sht supports advanced analysis techniques which lower this limit.")
 # Number of iso-latitude rings required.
-nlat = lmax+2
+nlat = lmax+2  # ducc0.fft.good_size(lmax+1,True)+1
 
 # go from a_lm to map
 t0 = time()

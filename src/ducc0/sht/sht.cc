@@ -1635,15 +1635,15 @@ void get_gridweights(const string &type, vmav<double,1> &wgt)
   else if (type=="CC") // Clenshaw-Curtis
     {
     /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-    MR_assert(nrings>2, "too few rings for Clenshaw-Curtis grid");
+    MR_assert(nrings>1, "too few rings for Clenshaw-Curtis grid");
     size_t n=nrings-1;
     double dw=-1./(n*n-1.+(n&1));
     vector<double> xwgt(nrings);
     xwgt[0]=2.+dw;
-    for (size_t k=1; k<=(n/2-1); ++k)
+    for (size_t k=1; k<n/2; ++k)
       xwgt[2*k-1]=2./(1.-4.*k*k) + dw;
-    //FIXME if (n>1) ???
-    xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
+    if (n>1)
+      xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
     pocketfft_r<double> plan(n);
     plan.exec(xwgt.data(), 1., false);
     for (size_t m=0; m<(nrings+1)/2; ++m)
@@ -1938,37 +1938,70 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads)
   {
-// FIXME: special case for
-// - phi0 = 0
-// - nphi = const, >= 2*mmax+1
-// - ringstart linear
-// - phistride = 1
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
   MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
-  size_t nphmax=0;
-  for (size_t i=0; i<nrings; ++i)
-    nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+
+//  bool well_behaved=true;
+//  if (nrings==1) well_behaved=false;
+//  size_t dring = (nrings>1) ? ringstart(1)-ringstart(0) : ~size_t(0);
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
     {
-    ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+    nphmax=max(nphi(i),nphmax);
+//    if (nphi(i) != nphmax) well_behaved=false;
+//    if (phi0(i) != 0.) well_behaved=false;
+//    if ((i>0) && (ringstart(i)-ringstart(i-1) != dring)) well_behaved=false;
+    }
+//  if (nphmax<2*mmax+1) well_behaved=false;
+
+#if 0
+  if (well_behaved)
+    {
+    vmav<T,3> xmap(map.data(), {ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)});
+    execParallel(nrings, nthreads, [&](size_t lo, size_t hi)
       {
+      if (lo==hi) return;
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
-        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
-        helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
-        for (size_t i=0; i<nphi(ith); ++i)
-          map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
+        for (size_t iring=lo; iring<hi; ++iring)
+          {
+          xmap(icomp, iring, 0) = leg(icomp, iring, 0).real();
+          for (size_t m=1; m<=mmax; ++m)
+            {
+            xmap(icomp, iring, 2*m-1) = leg(icomp, iring, m).real();
+            xmap(icomp, iring, 2*m  ) = leg(icomp, iring, m).imag();
+            }
+          for (size_t ix=2*mmax+1; ix<nphmax; ++ix) xmap(icomp, iring, ix) = T(0);
+          }
+        vfmav<T> xmapf=subarray<2>(xmap,{{icomp},{lo,hi},{}});
+        r2r_fftpack(xmapf,xmapf,{1},false,false,T(1),1);
         }
-      }
-    }); /* end of parallel region */
+      });
+    }
+  else
+#endif
+    execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+      {
+      ringhelper helper;
+      vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+        {
+        for (size_t icomp=0; icomp<ncomp; ++icomp)
+          {
+          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+          for (size_t i=0; i<nphi(ith); ++i)
+            map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
+          }
+        }
+      }); /* end of parallel region */
   }
 
 template<typename T> void map2leg(  // FFT
@@ -1986,26 +2019,67 @@ template<typename T> void map2leg(  // FFT
   MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
-  size_t nphmax=0;
-  for (size_t i=0; i<nrings; ++i)
-    nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+
+//  bool well_behaved=true;
+//  if (nrings==1) well_behaved=false;
+//  size_t dring = (nrings>1) ? ringstart(1)-ringstart(0) : ~size_t(0);
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
     {
-    ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+    nphmax=max(nphi(i),nphmax);
+//    if (nphi(i) != nphmax) well_behaved=false;
+//    if (phi0(i) != 0.) well_behaved=false;
+//    if ((i>0) && (ringstart(i)-ringstart(i-1) != dring)) well_behaved=false;
+    }
+//  if (nphmax<2*mmax+1) well_behaved=false;
+
+#if 0
+  if (well_behaved)
+    {
+    cmav<T,3> xmap(map.data(), {ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)});
+    size_t blksz=min<size_t>(nrings,64);
+    size_t nblocks = (nrings+blksz-1)/blksz;
+    execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
       {
+      if (lo==hi) return;
+      vmav<T,2> buf({blksz, nphmax}, UNINITIALIZED);
       for (size_t icomp=0; icomp<ncomp; ++icomp)
+        for (size_t iblock=lo; iblock<hi; ++iblock)
+          {
+          size_t r0=iblock*blksz, r1=min(nrings,(iblock+1)*blksz);
+          cfmav<T> xmapf=subarray<2>(xmap,{{icomp},{r0,r1},{}});
+          vfmav<T> buff=subarray<2>(buf,{{0,r1-r0},{}});
+          r2r_fftpack(xmapf,buff,{1},true,true,T(1),1);
+          for (size_t iring=r0; iring<r1; ++iring)
+            {
+            leg(icomp, iring, 0) = buf(iring-r0, 0);
+            for (size_t m=1; m<=mmax; ++m)
+              leg(icomp, iring, m) = complex<T>(buf(iring-r0, 2*m-1),
+                                                buf(iring-r0, 2*m));
+            }
+          }
+      });
+    }
+  else
+#endif
+    execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+      {
+      ringhelper helper;
+      vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
-        for (size_t i=0; i<nphi(ith); ++i)
-          ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride);
-        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
-        helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+        for (size_t icomp=0; icomp<ncomp; ++icomp)
+          {
+          for (size_t i=0; i<nphi(ith); ++i)
+            ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride);
+          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+          }
         }
-      }
-    }); /* end of parallel region */
+      }); /* end of parallel region */
   }
 
 template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi, bool npi, bool spi,

@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -128,11 +128,11 @@ template<typename T, typename Func> void sthelper2(const T * DUCC0_RESTRICT in,
     return;
     }
   // OK, we have to do a real transpose
-  // select blockig sizes depending on critical strides
+  // select blocking sizes depending on critical strides
   bool crit0 = critical(sizeof(T)*sti0) || critical(sizeof(T)*sto0);
   bool crit1 = critical(sizeof(T)*sti1) || critical(sizeof(T)*sto1);
-  size_t bs0 = crit0 ? 8 : 8;
-  size_t bs1 = crit1 ? 8 : 8;
+  size_t bs0 = crit0 ? 4 : 16;
+  size_t bs1 = crit1 ? 4 : 16;
   // make sure that the smallest absolute stride goes in the innermost loop
   if (min(abs(sti0),abs(sto0))<min(abs(sti1),abs(sto1)))
     {
@@ -174,10 +174,8 @@ template<typename T, typename Func> void transpose(const cfmav<T> &in,
   cfmav<T> in2(in, shp, si);
   vfmav<T> out2(out, shp, so);
   if (in2.ndim()==1)  // 1D, just iterate
-    {
-    sthelper1(in2.data(), out2.data(), in2.shape(0), in2.stride(0), out2.stride(0), func);
-    return;
-    }
+    return sthelper1(in2.data(), out2.data(), in2.shape(0), in2.stride(0),
+                     out2.stride(0), func);
   iter(in2, out2, 0, 0, 0, func);
   }
 template<typename T> void transpose(const cfmav<T> &in, vfmav<T> &out)
