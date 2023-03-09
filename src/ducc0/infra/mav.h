@@ -966,6 +966,7 @@ template<typename Ttuple, typename Func>
     for (size_t i=0; i<len; ++i)
       applyHelper(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
         func, last_contiguous);
+// FIXME: think about blocking in the last two dimensions if not all strides are descending 
   else
     {
     auto locptrs(ptrs);
