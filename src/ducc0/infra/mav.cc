@@ -141,7 +141,7 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
 
   bool transpose=false;
   size_t ndim=shp.size();
-  if (ndim==1) return make_tuple(shp, str, 0, 0);
+  if (ndim<2) return make_tuple(shp, str, 0, 0);
 
   for (size_t j=0; j<narr; ++j)
     if (abs(str[j][ndim-2])<abs(str[j][ndim-1]))
