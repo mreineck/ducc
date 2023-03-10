@@ -322,6 +322,10 @@ class fmav_info
       std::iota(axpos.begin(), axpos.end(), firstaxis);
       return extend_and_broadcast(new_shape, axpos);
       }
+    fmav_info transpose() const
+      {
+      return fmav_info({shp.crend(), shp.crbegin()}, {str.crbegin(), str.crend()});
+      }
   protected:
     auto subdata(const vector<slice> &slices) const
       {
@@ -453,6 +457,17 @@ template<size_t ndim> class mav_info
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    mav_info transpose() const
+      {
+      shape_t shp2;
+      stride_t str2;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp2[i] = shp[ndim-1-i];
+        str2[i] = str[ndim-1-i];
+        }
+      return mav_info(shp2, str2);
+      }
 
   protected:
     template<size_t nd2> auto subdata(const vector<slice> &slices) const
@@ -556,6 +571,10 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
       {
       return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
+      }
+    cfmav transpose() const
+      {
+      return cfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
       }
   };
 
@@ -674,6 +693,10 @@ template<typename T> class vfmav: public cfmav<T>
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
+    vfmav transpose()
+      {
+      return vfmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      }
   };
 
 template<typename T> vfmav<T> subarray
@@ -706,6 +729,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(buf) {}
     cmav(const tinfo &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
+    cmav(const tinfo &info, const tbuf &buf)
+      : tinfo(info), tbuf(buf) {}
 
   public:
     cmav(const T *d_, const shape_t &shp_, const stride_t &str_)
@@ -745,6 +770,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
       }
+    cmav transpose() const
+      {
+      return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
   (const cmav<T, ndim> &arr, const vector<slice> &slices)  
@@ -769,6 +798,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   protected:
     vmav(const tinfo &info, T *d_, tbuf &buf)
       : parent(info, d_, buf) {}
+    vmav(const tinfo &info, tbuf &buf)
+      : parent(info, buf) {}
     vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : parent(buf, shp_, str_){}
 
@@ -842,6 +873,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
+    vmav transpose()
+      {
+      return vmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      }
   };
 
 template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
@@ -850,6 +885,8 @@ template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
 
 // various operations involving fmav objects of the same shape -- experimental
 
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, size_t>
+  multiprep(const vector<fmav_info> &info, const vector<size_t> &tsizes);
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   multiprep(const vector<fmav_info> &info);
 
@@ -955,18 +992,49 @@ template<typename Ttuple> inline void advance (Ttuple &ptrs,
   tuple_for_each_idx(ptrs, [idim,&str](auto &&ptr, size_t idx)
                      { ptr += str[idx][idim]; });
   }
+template<typename Ttuple> inline void advance_by_n (Ttuple &ptrs,
+  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t n)
+  {
+  tuple_for_each_idx(ptrs, [idim,n,&str](auto &&ptr, size_t idx)
+                     { ptr += n*str[idx][idim]; });
+  }
+
+template<typename Ttuple, typename Func>
+  DUCC0_NOINLINE void applyHelper_block(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, size_t bsi, size_t bsj,
+    const Ttuple &ptrs, Func &&func)
+  {
+  auto leni=shp[idim], lenj=shp[idim+1];
+  auto locptrs(ptrs);
+  size_t nbi = (leni+bsi-1)/bsi;
+  size_t nbj = (lenj+bsj-1)/bsj;
+  for (size_t bi=0; bi<nbi; ++bi)
+    for (size_t bj=0; bj<nbj; ++bj)
+      {
+      auto locptrs(ptrs);
+      advance_by_n(locptrs, str, idim, bi*bsi);
+      advance_by_n(locptrs, str, idim+1, bj*bsj);
+      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, str, idim))
+        {
+        auto locptrs2(locptrs);
+        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, str, idim+1))
+          call_with_tuple(func, to_ref(locptrs2));
+        }
+      }
+  }
 
 template<typename Ttuple, typename Func>
   DUCC0_NOINLINE void applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    bool last_contiguous)
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, bool last_contiguous)
   {
   auto len = shp[idim];
-  if (idim+1<shp.size())
+  if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
+    applyHelper_block(idim, shp, str, block0, block1, ptrs, func);
+  else if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      applyHelper(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
+      applyHelper(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
         func, last_contiguous);
-// FIXME: think about blocking in the last two dimensions if not all strides are descending 
   else
     {
     auto locptrs(ptrs);
@@ -980,20 +1048,20 @@ template<typename Ttuple, typename Func>
   }
 template<typename Func, typename Ttuple>
   inline void applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    size_t nthreads, bool last_contiguous)
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, size_t nthreads, bool last_contiguous)
   {
   if (shp.size()==0)
     call_with_tuple(std::forward<Func>(func), to_ref(ptrs));
   else if (nthreads==1)
-    applyHelper(0, shp, str, ptrs, std::forward<Func>(func), last_contiguous);
+    applyHelper(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous);
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       auto locptrs = update_pointers(ptrs, str, 0, lo);
       auto locshp(shp);
       locshp[0] = hi-lo;
-      applyHelper(0, locshp, str, locptrs, func, last_contiguous);
+      applyHelper(0, locshp, str, block0, block1, locptrs, func, last_contiguous);
       });
   }
 
@@ -1002,7 +1070,9 @@ template<typename Func, typename... Targs>
   {
   vector<fmav_info> infos;
   (infos.push_back(args), ...);
-  auto [shp, str] = multiprep(infos);
+  vector<size_t> tsizes;
+  (tsizes.push_back(sizeof(args.data()[0])), ...);
+  auto [shp, str, block0, block1] = multiprep(infos, tsizes);
   bool last_contiguous = true;
   if (shp.size()>0)
     for (const auto &s:str)
@@ -1010,7 +1080,7 @@ template<typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
+  applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>

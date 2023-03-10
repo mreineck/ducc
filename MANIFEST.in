@@ -16,7 +16,6 @@ include src/ducc0/infra/sycl_utils.h
 include src/ducc0/infra/threading.cc
 include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
-include src/ducc0/infra/transpose.h
 include src/ducc0/infra/useful_macros.h
 
 include src/ducc0/bindings/pybind_utils.h

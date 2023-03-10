@@ -226,31 +226,32 @@ py::array Py_GL_thetas(size_t nlat)
   return res;
   }
 
-template<typename T> py::array Py2_transpose(const py::array &in, py::array &out)
+template<typename T> py::array Py2_transpose(const py::array &in,
+  py::array &out, size_t nthreads)
   {
   auto in2 = to_cfmav<T>(in);
   auto out2 = to_vfmav<T>(out);
   {
   py::gil_scoped_release release;
-  transpose(in2, out2, [](const T &in, T &out){out=in;});
+  mav_apply([](const T &in, T &out) {out=in;}, nthreads, in2, out2);
   }
   return out;
   }
 
-py::array Py_transpose(const py::array &in, py::array &out)
+py::array Py_transpose(const py::array &in, py::array &out, size_t nthreads=1)
   {
   if (isPyarr<float>(in))
-    return Py2_transpose<float>(in, out);
+    return Py2_transpose<float>(in, out, nthreads);
   if (isPyarr<double>(in))
-    return Py2_transpose<double>(in, out);
+    return Py2_transpose<double>(in, out, nthreads);
   if (isPyarr<complex<float>>(in))
-    return Py2_transpose<complex<float>>(in, out);
+    return Py2_transpose<complex<float>>(in, out, nthreads);
   if (isPyarr<complex<double>>(in))
-    return Py2_transpose<complex<double>>(in, out);
+    return Py2_transpose<complex<double>>(in, out, nthreads);
   if (isPyarr<int>(in))
-    return Py2_transpose<int>(in, out);
+    return Py2_transpose<int>(in, out, nthreads);
   if (isPyarr<long>(in))
-    return Py2_transpose<long>(in, out);
+    return Py2_transpose<long>(in, out, nthreads);
   MR_fail("unsupported datatype");
   }
 
@@ -762,7 +763,7 @@ void add_misc(py::module_ &msup)
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
 
-  m.def("transpose", Py_transpose, "in"_a, "out"_a);
+  m.def("transpose", Py_transpose, "in"_a, "out"_a, "nthreads"_a=1);
 
   m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
   m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);

@@ -182,8 +182,7 @@ template<typename T> class SphereInterpol
       size_t nblocks = (nphi_b/2+blocksize-1)/blocksize;
       execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
         {
-        auto tmpx = vmav<T,2>::build_noncritical({blocksize, 2*ntheta_b-2}, UNINITIALIZED);
-        vmav<T,2> tmp(tmpx.data(), {tmpx.shape(1), tmpx.shape(0)}, {tmpx.stride(1), tmpx.stride(0)});
+        auto tmp = vmav<T,2>::build_noncritical({blocksize, 2*ntheta_b-2}, UNINITIALIZED).transpose();
         for (size_t iblock=lo; iblock<hi; ++iblock)
           {
           size_t j0 = iblock*blocksize;
@@ -217,8 +216,7 @@ template<typename T> class SphereInterpol
       size_t nblocks = (nphi_b/2+blocksize-1)/blocksize;
       execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
         {
-        auto tmpx = vmav<T,2>::build_noncritical({blocksize, 2*ntheta_b-2}, UNINITIALIZED);
-        vmav<T,2> tmp(tmpx.data(), {tmpx.shape(1), tmpx.shape(0)}, {tmpx.stride(1), tmpx.stride(0)});
+        auto tmp = vmav<T,2>::build_noncritical({blocksize, 2*ntheta_b-2}, UNINITIALIZED).transpose();
         for (size_t iblock=lo; iblock<hi; ++iblock)
           {
           size_t j0 = iblock*blocksize;

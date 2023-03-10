@@ -244,7 +244,7 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
     loc[:, 0] *= np.pi
     loc[:, 1] *= 2*np.pi
     points1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm1, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
-    points2 = rng.uniform(-0.5, 0.5, (loc.shape[0],ncomp)).T
+    points2 = rng.uniform(-0.5, 0.5, (ncomp, loc.shape[0]))
     slm2 = ducc0.sht.experimental.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
     print(slm1.shape, slm2.shape)
     v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
