@@ -763,7 +763,7 @@ py::array Py_get_deflected_angles(const py::array &ptg_,
     double cos_alpha = sqrt(1.-d);
     double sin_alpha_over_alpha = sqrt(1. - d/6. * (1. - d/20. * (1. - d/42.)));
     pointing n_prime(e_r*cos_alpha
-          + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
+                  + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
     res(0) = n_prime.theta;
     res(1) = n_prime.phi; 
     }, nthreads, ptg, deflect, res);
