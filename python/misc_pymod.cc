@@ -739,6 +739,37 @@ Notes
 `inp` and `out` must not overlap in memory.
 )""";
 
+py::array Py_get_deflected_angles(const py::array &ptg_,
+  const py::array &deflect_, size_t nthreads=1)
+  {
+  auto ptg=to_cmav<double,2>(ptg_);
+  auto deflect=to_cmav<double,2>(deflect_);
+  MR_assert(ptg.shape(1)==2, "second dimension of ptg must be 2");
+  MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
+  size_t nptg = ptg.shape(0);
+  MR_assert(nptg==deflect.shape(0),
+    "first dimension of ptg and deflect must match");
+
+  auto res_ = make_Pyarr<double>({nptg,2});
+  auto res = to_vmav<double,2>(res_);
+  flexible_mav_apply<1,1,1>([&](const auto &ptg, const auto &deflect, auto &res)
+    {
+    vec3 e_r(pointing(ptg(0),ptg(1)));
+    vec3 e_phi(crossprod(e_r, vec3(0,0,1)).Norm());
+    vec3 e_theta(crossprod(e_r, e_phi));
+    double alpha_theta = deflect(0),
+           alpha_phi = deflect(1);
+    double d = alpha_theta*alpha_theta + alpha_phi*alpha_phi;
+    double cos_alpha = sqrt(1.-d);
+    double sin_alpha_over_alpha = sqrt(1. - d/6. * (1. - d/20. * (1. - d/42.)));
+    pointing n_prime(e_r*cos_alpha
+          + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
+    res(0) = n_prime.theta;
+    res(1) = n_prime.phi; 
+    }, nthreads, ptg, deflect, res);
+  return res_;
+  }
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -778,6 +809,9 @@ void add_misc(py::module_ &msup)
 
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
     "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
+
+  m.def("get_deflected_angles", Py_get_deflected_angles, /*Py_get_deflected_angles_DS,*/
+    "ptg"_a, "deflect"_a, "nthreads"_a=1);
   }
 
 }
