@@ -792,23 +792,25 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         double dphi = 2*pi/nphi(iring);
-        double phi =  phi0(iring);
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); // We can work at phi=0 and push phi at the end
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
+          double phi = phi0(iring) + iphi*dphi;
           size_t i = ringstart(iring)+iphi;
           double a_theta = deflect(i,0),
                  a_phi = deflect(i,1);
           double d = a_theta*a_theta + a_phi*a_phi;
+          MR_assert(d<0.01, "deflection is too large");
           double sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.)); // This will only work for small d (ok in most applications)
           double cos_a = sqrt(1.-d*sin_aoa*sin_aoa);                // This will work except for absurdly large d
 
-          vec3 e_a(e_r.z * a_theta, a_phi , -e_r.x * a_theta); // norm of this is alpha
-          // new poiting with a rotation of axis z by angle -phi (we wouldnt need to normalize this properly):
-          pointing n_prime(e_r*cos_a + e_a*sin_aoa); 
+          vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); // norm of this is alpha
+          // new pointing with a rotation of axis z by angle -phi (we wouldn't need to normalize this properly):
+          pointing n_prime(e_r*cos_a + e_a*sin_aoa);
           res(i,0) = n_prime.theta;
-          res(i,1) = n_prime.phi + phi; // pushing back phi in. maybe need to make this in [0, 2pi) ?
-          phi += dphi; // is this a good way to do that ?
+          double phinew = n_prime.phi+phi;
+          phinew = (phinew<0.) ? (phinew+2*pi) : ((phinew>2*pi) ? (phinew-2*pi) : phinew);
+          res(i,1) = phinew;
           }
         }
     });
