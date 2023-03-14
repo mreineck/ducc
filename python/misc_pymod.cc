@@ -755,13 +755,13 @@ py::array Py_get_deflected_angles(const py::array &ptg_,
   flexible_mav_apply<1,1,1>([&](const auto &ptg, const auto &deflect, auto &res)
     {
     vec3 e_r(pointing(ptg(0),ptg(1)));
-    vec3 e_phi(crossprod(e_r, vec3(0,0,1)).Norm());
-    vec3 e_theta(crossprod(e_r, e_phi));
+    vec3 e_phi(crossprod(vec3(0,0,1), e_r).Norm()); // This will not work at the pole
+    vec3 e_theta(crossprod(e_phi, e_r));
     double alpha_theta = deflect(0),
            alpha_phi = deflect(1);
     double d = alpha_theta*alpha_theta + alpha_phi*alpha_phi;
-    double cos_alpha = sqrt(1.-d);
-    double sin_alpha_over_alpha = sqrt(1. - d/6. * (1. - d/20. * (1. - d/42.)));
+    double sin_alpha_over_alpha = 1. - d/6. * (1. - d/20. * (1. - d/42.));
+    double cos_alpha = sqrt(1.-d*sin_alpha_over_alpha*sin_alpha_over_alpha);
     pointing n_prime(e_r*cos_alpha
                   + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
     res(0) = n_prime.theta;
@@ -792,21 +792,23 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         double dphi = 2*pi/nphi(iring);
+        double phi =  phi0(iring);
+        vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); // We can work at phi=0 and push phi at the end
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
           size_t i = ringstart(iring)+iphi;
-          vec3 e_r(pointing(theta(iring),phi0(iring)+i*dphi));
-          vec3 e_phi(crossprod(e_r, vec3(0,0,1)).Norm());
-          vec3 e_theta(crossprod(e_r, e_phi));
-          double alpha_theta = deflect(i,0),
-                 alpha_phi = deflect(i,1);
-          double d = alpha_theta*alpha_theta + alpha_phi*alpha_phi;
-          double cos_alpha = sqrt(1.-d);
-          double sin_alpha_over_alpha = sqrt(1. - d/6. * (1. - d/20. * (1. - d/42.)));
-          pointing n_prime(e_r*cos_alpha
-                        + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
+          double a_theta = deflect(i,0),
+                 a_phi = deflect(i,1);
+          double d = a_theta*a_theta + a_phi*a_phi;
+          double sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.)); // This will only work for small d (ok in most applications)
+          double cos_a = sqrt(1.-d*sin_aoa*sin_aoa);                // This will work except for absurdly large d
+
+          vec3 e_a(e_r.z * a_theta, a_phi , -e_r.x * a_theta); // norm of this is alpha
+          // new poiting with a rotation of axis z by angle -phi (we wouldnt need to normalize this properly):
+          pointing n_prime(e_r*cos_a + e_a*sin_aoa); 
           res(i,0) = n_prime.theta;
-          res(i,1) = n_prime.phi; 
+          res(i,1) = n_prime.phi + phi; // pushing back phi in. maybe need to make this in [0, 2pi) ?
+          phi += dphi; // is this a good way to do that ?
           }
         }
     });
