@@ -770,6 +770,49 @@ py::array Py_get_deflected_angles(const py::array &ptg_,
   return res_;
   }
 
+py::array Py_get_deflected_angles2(const py::array &theta_,
+  const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
+  const py::array &deflect_, py::object &res__, size_t nthreads=1)
+  {
+  auto theta=to_cmav<double,1>(theta_);
+  auto phi0=to_cmav<double,1>(phi0_);
+  auto nphi=to_cmav<size_t,1>(nphi_);
+  auto ringstart=to_cmav<size_t,1>(ringstart_);
+  auto deflect=to_cmav<double,2>(deflect_);
+  size_t nrings = theta.shape(0);
+  MR_assert(phi0.shape(0)==nrings, "nrings mismatch");
+  MR_assert(nphi.shape(0)==nrings, "nrings mismatch");
+  MR_assert(ringstart.shape(0)==nrings, "nrings mismatch");
+  MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
+  auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), 2});
+  auto res = to_vmav<double,2>(res_);
+  execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for (size_t iring=rng.lo; iring<rng.hi; ++iring)
+        {
+        double dphi = 2*pi/nphi(iring);
+        for (size_t iphi=0; iphi<nphi(iring); ++iphi)
+          {
+          size_t i = ringstart(iring)+iphi;
+          vec3 e_r(pointing(theta(iring),phi0(iring)+i*dphi));
+          vec3 e_phi(crossprod(e_r, vec3(0,0,1)).Norm());
+          vec3 e_theta(crossprod(e_r, e_phi));
+          double alpha_theta = deflect(i,0),
+                 alpha_phi = deflect(i,1);
+          double d = alpha_theta*alpha_theta + alpha_phi*alpha_phi;
+          double cos_alpha = sqrt(1.-d);
+          double sin_alpha_over_alpha = sqrt(1. - d/6. * (1. - d/20. * (1. - d/42.)));
+          pointing n_prime(e_r*cos_alpha
+                        + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
+          res(i,0) = n_prime.theta;
+          res(i,1) = n_prime.phi; 
+          }
+        }
+    });
+  return res_;
+  }
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -812,6 +855,8 @@ void add_misc(py::module_ &msup)
 
   m.def("get_deflected_angles", Py_get_deflected_angles, /*Py_get_deflected_angles_DS,*/
     "ptg"_a, "deflect"_a, "nthreads"_a=1);
+  m.def("get_deflected_angles2", Py_get_deflected_angles2, /*Py_get_deflected_angles2_DS,*/
+    "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a, "res"_a=py::none(), "nthreads"_a=1);
   }
 
 }
