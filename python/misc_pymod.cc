@@ -792,9 +792,12 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
     while (auto rng=sched.getNext())
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
+        // We work with unit vectors defined for phi=0 and push phi at the end
+        vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
+        if (calc_rotation)
+          MR_assert(e_r.x > 0, "for the poles fix alpha=0 case in calc_rotation first ");
         double dphi = 2*pi/nphi(iring);
-        double cotan_theta = 1./tan(theta(iring));
-        vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); // We can work at phi=0 and push phi at the end
+        double sin_aoa, twohav_aod, cos_a;
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
           double phi = phi0(iring) + iphi*dphi;
@@ -802,20 +805,27 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
           double a_theta = deflect(i,0),
                  a_phi = deflect(i,1);
           double d = a_theta*a_theta + a_phi*a_phi;
-          MR_assert(d<0.01, "deflection is too large");
-          double sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.)); // This will only work for small d (ok in most applications)
-          double cos_a = sqrt(1.-d*sin_aoa*sin_aoa);                // This will work except for absurdly large d
-
-          vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); // norm of this is alpha
-          // new pointing with a rotation of axis z by angle -phi (we wouldn't need to normalize this properly):
+          if (d < 0.0025){ // largely covers all CMB-lensing relevant cases to double precision
+            sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));   // sin(a) / a
+            twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a), also needed for rotation      
+            cos_a = 1. + d * twohav_aod;
+          }
+          else{
+            double a = sqrt(d);
+            sin_aoa = sin(a)/a;
+            cos_a = cos(a);
+            twohav_aod = (cos_a -1.) / d;
+          }
+          vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); 
+          // new pointing, rotated by angle -phi around the z-axis. We can just add phi after the fact:
           pointing n_prime(e_r*cos_a + e_a*sin_aoa);
-          res(i,0) = n_prime.theta;
           double phinew = n_prime.phi+phi;
-          phinew = (phinew<0.) ? (phinew+2*pi) : ((phinew>2*pi) ? (phinew-2*pi) : phinew);
+          phinew = (phinew>2*pi) ? (phinew-2*pi) : phinew;
+          res(i,0) = n_prime.theta;
           res(i,1) = phinew;
-          if (calc_rotation)
-            res(i,2) = atan2(a_phi, a_theta)
-                     - atan2(a_phi, d*sin_aoa*cotan_theta+a_theta*cos_a);
+          if (calc_rotation){ // fine for vanishing deflection with the exception of the poles screened above
+            double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa; // can spare one op with cot
+            res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
           }
         }
     });
