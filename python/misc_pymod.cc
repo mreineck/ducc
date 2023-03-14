@@ -772,7 +772,7 @@ py::array Py_get_deflected_angles(const py::array &ptg_,
 
 py::array Py_get_deflected_angles2(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
-  const py::array &deflect_, py::object &res__, size_t nthreads=1)
+  const py::array &deflect_, bool calc_rotation, py::object &res__, size_t nthreads=1)
   {
   auto theta=to_cmav<double,1>(theta_);
   auto phi0=to_cmav<double,1>(phi0_);
@@ -784,7 +784,8 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
   MR_assert(nphi.shape(0)==nrings, "nrings mismatch");
   MR_assert(ringstart.shape(0)==nrings, "nrings mismatch");
   MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
-  auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), 2});
+  size_t ncomp = calc_rotation ? 3 : 2;
+  auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), ncomp});
   auto res = to_vmav<double,2>(res_);
   execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
     {
@@ -792,6 +793,7 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         double dphi = 2*pi/nphi(iring);
+        double cotan_theta = 1./tan(theta(iring));
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); // We can work at phi=0 and push phi at the end
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
@@ -811,6 +813,9 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
           double phinew = n_prime.phi+phi;
           phinew = (phinew<0.) ? (phinew+2*pi) : ((phinew>2*pi) ? (phinew-2*pi) : phinew);
           res(i,1) = phinew;
+          if (calc_rotation)
+            res(i,2) = atan2(a_phi, a_theta)
+                     - atan2(a_phi, d*sin_aoa*cotan_theta+a_theta*cos_a);
           }
         }
     });
@@ -860,7 +865,8 @@ void add_misc(py::module_ &msup)
   m.def("get_deflected_angles", Py_get_deflected_angles, /*Py_get_deflected_angles_DS,*/
     "ptg"_a, "deflect"_a, "nthreads"_a=1);
   m.def("get_deflected_angles2", Py_get_deflected_angles2, /*Py_get_deflected_angles2_DS,*/
-    "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a, "res"_a=py::none(), "nthreads"_a=1);
+    "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
+    "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
   }
 
 }
