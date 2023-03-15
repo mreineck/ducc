@@ -1108,17 +1108,15 @@ dependent on theta and m.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set of spherical harmonic coefficients.
-    ncomp must be 1 if spin is 0, else 2.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
-leg: None or numpy.ndarray((ncomp, ntheta, nm), same dtype as `alm`)
+leg: None or numpy.ndarray((nleg, ntheta, nm), same dtype as `alm`)
     output array containing the Legendre coefficients
     if `None`, a new suitable array is allocated
 spin: int >= 0
     the spin to use for the transform
-    if spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
 mval: numpy.ndarray((nm,), dtype = numpy.uint64)
@@ -1135,11 +1133,22 @@ theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nm), same dtype as `alm`)
+numpy.ndarray((nleg, ntheta, nm), same dtype as `alm`)
     the Legendre coefficients. If `leg` was supplied, this will be the same object.
+
+Notes
+-----
+nleg = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *alm2leg_deriv1_DS = R"""(
@@ -1186,16 +1195,14 @@ Transforms a set of Legendre coefficients to spherical harmonic coefficients
 
 Parameters
 ----------
-leg: numpy.ndarray((ncomp, ntheta, nm), dtype=numpy.complex64 or numpy.complex128)
-    ncomp must be 1 if spin is 0, else 2
-alm: None or numpy.ndarray((ncomp, x), same dtype as `leg`)
+leg: numpy.ndarray((nleg, ntheta, nm), dtype=numpy.complex64 or numpy.complex128)
+alm: None or numpy.ndarray((nalm, x), same dtype as `leg`)
     the set of spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
 spin: int >= 0
     the spin to use for the transform
-    if spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
 mval: numpy.ndarray((nm,), dtype = numpy.uint64)
@@ -1212,13 +1219,22 @@ theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray((ncomp, *), same dtype as `leg`)
+numpy.ndarray((nalm, *), same dtype as `leg`)
     the Legendre coefficients.
     if `alm` was supplied, this will be the same object
     If newly allocated, the smallest possible second dimensions will be chosen.
+
+Notes
+-----
+nleg = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *map2leg_DS = R"""(
@@ -1311,11 +1327,11 @@ Transforms one or two sets of spherical harmonic coefficients to 2D maps.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set of spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
-map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     storage for the output map.
     If not supplied, a new array is allocated.
 ntheta, nphi: int > 0
@@ -1324,7 +1340,6 @@ ntheta, nphi: int > 0
     If supplied, and `map` is also supplied, must match with the array dimensions
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 and <= lmax
@@ -1347,12 +1362,23 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the computed map. If the map parameter was specified, this is identical with
     map.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *synthesis_2d_deriv1_DS = R"""(
@@ -1397,7 +1423,7 @@ nthreads: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+numpy.ndarray((2, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the maps containing the derivatives with respect to theta and phi.
     If the map parameter was specified, this is identical with map.
 )""";
@@ -1408,16 +1434,15 @@ This is the adjoint operation of `synthesis_2D`.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     storage for the spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
     If not supplied, a new array is allocated.
-map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     The input map.
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 and <= lmax
@@ -1440,12 +1465,21 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the computed spherical harmonic coefficients
     If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *analysis_2d_DS = R"""(
@@ -1571,12 +1605,11 @@ Transforms (sets of) one or two sets of spherical harmonic coefficients to maps 
 
 Parameters
 ----------
-alm: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set(s) of spherical harmonic coefficients.
-    ncomp must be 1 if spin is 0, else 2.
     The last dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
-map: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float of same accuracy as `alm`
+map: None or numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
     The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
@@ -1605,18 +1638,28 @@ nthreads: int >= 0
     if 0, use as many threads as there are hardware threads available on the system
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float of same accuracy as `alm`)
+numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float of same accuracy as `alm`)
     the map pixel data.
     If `map` was supplied, this will be the same object
     If newly allocated, the smallest possible last dimension will be chosen.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *adjoint_synthesis_DS = R"""(
@@ -1625,12 +1668,12 @@ This is the adjoint operation of `synthesis`.
 
 Parameters
 ----------
-alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
+alm: None or numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
-map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
+map: numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float32 or numpy.float64
     The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, `ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1657,18 +1700,26 @@ nthreads: int >= 0
     if 0, use as many threads as there are hardware threads available on the system
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same accuracy as `map`)
+numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex of same accuracy as `map`)
     the set(s) of spherical harmonic coefficients.
     If `alm` was supplied, this will be the same object
     If newly allocated, the smallest possible last dimension will be chosen.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *pseudo_analysis_DS = R"""(
@@ -1798,13 +1849,12 @@ Evaluate a_lm at arbitrary positions on the sphere
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set(s) of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 and <= lmax
@@ -1821,29 +1871,39 @@ epsilon : float
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
-map: None or numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
+map: None or numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
     If `None`, a new suitable array is allocated.
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors for the NUFFT component
     1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, npix), dtype=numpy.float of same accuracy as `alm`
+numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
     the pixel values at the locations specified by `loc`.
     If the map parameter was specified, this is identical with map.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 constexpr const char *adjoint_synthesis_general_DS = R"""(
 This is the adjoint operation of `synthesis_general`.
 
 Parameters
 ----------
-map: numpy.ndarray((ncomp, npix), dtype=numpy.float32 or numpy.float64
+map: numpy.ndarray((nmaps, npix), dtype=numpy.float32 or numpy.float64
     The pixel values at the locations specified by `loc`.
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 and <= lmax
@@ -1860,7 +1920,7 @@ epsilon : float
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
-alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+alm: None or numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
     the set(s) of spherical harmonic coefficients.
     The last dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
@@ -1868,12 +1928,21 @@ alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors for the NUFFT component
     1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
     the computed spherical harmonic coefficients
     If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *pseudo_analysis_general_DS = R"""(

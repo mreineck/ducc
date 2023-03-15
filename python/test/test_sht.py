@@ -132,9 +132,10 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
     if spin > 0:
-        # test adjointness between synthesis and adjoint_synthesis
+        # test adjointness between synthesis and adjoint_synthesis (gradient only)
         map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0[:1], lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
         v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+        # compare grad-only alm2map with full alm2map where curl is set to zero
         almx = alm0.copy()
         almx[1] = 0
         map1b = ducc0.sht.experimental.synthesis_2d(alm=almx, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
