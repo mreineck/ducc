@@ -739,38 +739,37 @@ Notes
 `inp` and `out` must not overlap in memory.
 )""";
 
-py::array Py_get_deflected_angles(const py::array &ptg_,
-  const py::array &deflect_, size_t nthreads=1)
-  {
-  auto ptg=to_cmav<double,2>(ptg_);
-  auto deflect=to_cmav<double,2>(deflect_);
-  MR_assert(ptg.shape(1)==2, "second dimension of ptg must be 2");
-  MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
-  size_t nptg = ptg.shape(0);
-  MR_assert(nptg==deflect.shape(0),
-    "first dimension of ptg and deflect must match");
+constexpr const char *Py_get_deflected_angles_DS = R"""(
+Obtains new pointing angles on the sky according to a deflection field on a set of isolatitude rings
 
-  auto res_ = make_Pyarr<double>({nptg,2});
-  auto res = to_vmav<double,2>(res_);
-  flexible_mav_apply<1,1,1>([&](const auto &ptg, const auto &deflect, auto &res)
-    {
-    vec3 e_r(pointing(ptg(0),ptg(1)));
-    vec3 e_phi(crossprod(vec3(0,0,1), e_r).Norm()); // This will not work at the pole
-    vec3 e_theta(crossprod(e_phi, e_r));
-    double alpha_theta = deflect(0),
-           alpha_phi = deflect(1);
-    double d = alpha_theta*alpha_theta + alpha_phi*alpha_phi;
-    double sin_alpha_over_alpha = 1. - d/6. * (1. - d/20. * (1. - d/42.));
-    double cos_alpha = sqrt(1.-d*sin_alpha_over_alpha*sin_alpha_over_alpha);
-    pointing n_prime(e_r*cos_alpha
-                  + (e_theta*alpha_theta+e_phi*alpha_phi)*sin_alpha_over_alpha);
-    res(0) = n_prime.theta;
-    res(1) = n_prime.phi; 
-    }, nthreads, ptg, deflect, res);
-  return res_;
-  }
+Parameters
+----------
+theta : numpy.ndarray((nrings,), dtype=float)
+    colatitudes of the rings  (nrings any number)
+phi0 : numpy.ndarray((nrings,), dtype=float)
+    longitude of the first pixel in each ring
+ringstart : numpy.ndarray((nrings,), dtype=np.uint64)
+    index of the first pixel of each ring in output map
+deflect : numpy.ndarray((2, npix), dtype=float) 
+    Spin-1 deflection field, with real and imaginary comp in first and second entry
+    (typically, the output of a spin-1 alm2map_spin transform)
+    The array layout and npix must be consistent with the given geometry
+calc_rotation(optional) : boolean
+    If set, also returns the phase correction (gamma in astro-ph/0502469v3)
+nthreads(optional): int
+    Number of threads to use. Defaults to 1
+res(optional):  numpy.ndarray((npix, 3 if calc_rotation is set or 2), dtype=float)
+    output array, containing new co-latitudes, new longitudes, and rotation gammma if required
 
-py::array Py_get_deflected_angles2(const py::array &theta_,
+Returns
+-------
+numpy.ndarray : identical to res
+
+Notes
+-----
+No ring can be located exactly on the poles if calc_rotation is set
+)""";
+py::array Py_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
   const py::array &deflect_, bool calc_rotation, py::object &res__, size_t nthreads=1)
   {
@@ -792,7 +791,6 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
     while (auto rng=sched.getNext())
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
-        // We work with unit vectors defined for phi=0 and push phi at the end
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
         if (calc_rotation)
           MR_assert(e_r.x > 0, "for the poles fix alpha=0 case in calc_rotation first ");
@@ -806,9 +804,9 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
                  a_phi = deflect(i,1);
           double d = a_theta*a_theta + a_phi*a_phi;
           if (d < 0.0025){ // largely covers all CMB-lensing relevant cases to double precision
-            sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));   // sin(a) / a
-            twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a), also needed for rotation      
-            cos_a = 1. + d * twohav_aod;
+            sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));         // sin(a) / a
+            twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a) (also needed for rotation)      
+            cos_a = 1. + d * twohav_aod;                               // cos(a)
           }
           else{
             double a = sqrt(d);
@@ -817,14 +815,14 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
             twohav_aod = (cos_a -1.) / d;
           }
           vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); 
-          // new pointing, rotated by angle -phi around the z-axis. We can just add phi after the fact:
           pointing n_prime(e_r*cos_a + e_a*sin_aoa);
           double phinew = n_prime.phi+phi;
           phinew = (phinew>2*pi) ? (phinew-2*pi) : phinew;
           res(i,0) = n_prime.theta;
           res(i,1) = phinew;
-          if (calc_rotation){ // fine for vanishing deflection with the exception of the poles screened above
-            double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa; // can spare one op with cot
+          if (calc_rotation){ 
+            // fine for vanishing deflection with the exception of the poles, hence the screening above
+            double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
             res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
           }
         }
@@ -872,9 +870,7 @@ void add_misc(py::module_ &msup)
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
     "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
 
-  m.def("get_deflected_angles", Py_get_deflected_angles, /*Py_get_deflected_angles_DS,*/
-    "ptg"_a, "deflect"_a, "nthreads"_a=1);
-  m.def("get_deflected_angles2", Py_get_deflected_angles2, /*Py_get_deflected_angles2_DS,*/
+  m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
     "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
   }
