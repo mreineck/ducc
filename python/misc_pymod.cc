@@ -797,7 +797,6 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
         if (calc_rotation)
           MR_assert(e_r.x > 0, "for the poles fix alpha=0 case in calc_rotation first ");
         double dphi = 2*pi/nphi(iring);
-        double sin_aoa, twohav_aod, cos_a;
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
           double phi = phi0(iring) + iphi*dphi;
@@ -805,6 +804,7 @@ py::array Py_get_deflected_angles2(const py::array &theta_,
           double a_theta = deflect(i,0),
                  a_phi = deflect(i,1);
           double d = a_theta*a_theta + a_phi*a_phi;
+          double sin_aoa, twohav_aod, cos_a;
           if (d < 0.0025){ // largely covers all CMB-lensing relevant cases to double precision
             sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));   // sin(a) / a
             twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a), also needed for rotation      

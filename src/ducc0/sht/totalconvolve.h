@@ -543,7 +543,7 @@ template<typename T> class ConvolverPlan
             }
           }
       auto subplanes=subarray<3>(planes,{{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
-      synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
+      synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads, STANDARD);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto m = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
@@ -659,7 +659,7 @@ template<typename T> class ConvolverPlan
       auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
       vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()}, UNINITIALIZED);
-      adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
+      adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads, STANDARD);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           if (l>=mbeam)
