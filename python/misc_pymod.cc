@@ -817,7 +817,7 @@ py::array Py_get_deflected_angles(const py::array &theta_,
           vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); 
           pointing n_prime(e_r*cos_a + e_a*sin_aoa);
           double phinew = n_prime.phi+phi;
-          phinew = (phinew>2*pi) ? (phinew-2*pi) : phinew;
+          phinew = (phinew>=2*pi) ? (phinew-2*pi) : phinew;
           res(i,0) = n_prime.theta;
           res(i,1) = phinew;
           if (calc_rotation){ 
