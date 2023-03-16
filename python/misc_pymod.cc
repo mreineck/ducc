@@ -32,6 +32,7 @@
 #include <complex>
 
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/bindings/pybind_utils.h"
@@ -873,6 +874,8 @@ void add_misc(py::module_ &msup)
   m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
     "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
+
+  m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }
 
 }
