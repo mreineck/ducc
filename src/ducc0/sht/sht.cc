@@ -2464,7 +2464,6 @@ void sanity_checks(
   if ((mode==DERIV1) || (mode==GRAD_ONLY))
     {
     MR_assert(spin>0, "DERIV and GRAD_ONLY modes require spin>0");
-cout << alm.shape(0) <<" " << map.shape(0)<< endl;
     MR_assert((alm.shape(0)==1) && (map.shape(0)==2),
       "inconsistent number of components");
     }
