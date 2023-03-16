@@ -131,6 +131,20 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
+    if spin > 0:
+        # test adjointness between synthesis and adjoint_synthesis (gradient only)
+        map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0[:1], lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
+        v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+        # compare grad-only alm2map with full alm2map where curl is set to zero
+        almx = alm0.copy()
+        almx[1] = 0
+        map1b = ducc0.sht.experimental.synthesis_2d(alm=almx, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+        assert_(ducc0.misc.l2error(map1, map1b)<1e-10)
+        del almx, map1
+        alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
+        v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
+        assert_(np.abs((v1-v2)/v1)<1e-10)
+
     # test adjointness between analysis and adjoint_analysis
 
     # naive version
@@ -189,6 +203,14 @@ def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_(np.abs((v1-v2)/v1)<1e-10)
 
+    if spin > 0:
+        map1 = ducc0.sht.experimental.synthesis(alm=alm0[:1], lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", **geom)
+        v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+        del map1
+        alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", **geom)
+        v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
+        assert_(np.abs((v1-v2)/v1)<1e-10)
+
 
 @pmp("lmax", tuple(range(0,70,3)))
 @pmp("nthreads", (0,1,2))
@@ -243,15 +265,21 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
     loc = rng.uniform(0., 1., (npix,2))
     loc[:, 0] *= np.pi
     loc[:, 1] *= 2*np.pi
-    points1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm1, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
     points2 = rng.uniform(-0.5, 0.5, (loc.shape[0],ncomp)).T
+    points1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm1, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
     slm2 = ducc0.sht.experimental.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
-    print(slm1.shape, slm2.shape)
     v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
                 for c in range(ncomp)])
     v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
     assert_allclose(v1, v2, rtol=1e-9)
 
+    if spin > 0:
+        points1 = ducc0.sht.experimental.synthesis_general(lmax=lmax, mmax=mmax, alm=slm1[:1], loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads, mode="GRAD_ONLY")
+        slm2 = ducc0.sht.experimental.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads, mode="GRAD_ONLY")
+        v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
+                    for c in range(1)])
+        v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
+        assert_allclose(v1, v2, rtol=1e-9)
 
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
