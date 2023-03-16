@@ -641,11 +641,9 @@ template<typename T> class SphereInterpol
       return res;
       }
 
-    void getPlane(const cmav<complex<T>,2> &valm, vmav<T,3> &planes) const
+    void getPlane(const cmav<complex<T>,2> &valm, vmav<T,3> &planes, SHT_mode mode) const
       {
       size_t nplanes=1+(spin>0);
-      auto ncomp = valm.shape(0);
-      MR_assert(ncomp==nplanes, "number of components mismatch");
       Alm_Base ialm(lmax, mmax);
       MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
@@ -657,7 +655,7 @@ template<typename T> class SphereInterpol
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
       MR_assert(2*(mmax+1)<=nphi_b, "aargh");
       vmav<complex<T>,3> leg(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
-        {ncomp, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
+        {nplanes, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
@@ -670,7 +668,7 @@ template<typename T> class SphereInterpol
         mstart(i) = ofs-i;
         ofs += lmax+1-i;
         }
-      alm2leg(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads);
+      alm2leg(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
       // make halfcomplex
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         for (size_t itheta=0; itheta<ntheta_s; ++itheta)
@@ -729,11 +727,9 @@ template<typename T> class SphereInterpol
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    void updateAlm(vmav<complex<T>,2> &valm, vmav<T,3> &planes) const
+    void updateAlm(vmav<complex<T>,2> &valm, vmav<T,3> &planes, SHT_mode mode) const
       {
       size_t nplanes=1+(spin>0);
-      auto ncomp = valm.shape(0);
-      MR_assert(ncomp>0, "need at least one component");
       Alm_Base ialm(lmax, mmax);
       MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
@@ -783,7 +779,7 @@ template<typename T> class SphereInterpol
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
       MR_assert(2*(mmax+1)<=nphi_b, "aargh");
       vmav<complex<T>,3> leg(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
-        {ncomp, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
+        {nplanes, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
@@ -804,13 +800,13 @@ template<typename T> class SphereInterpol
           planes(iplane, nbtheta+itheta, nbphi-1) = planes(iplane, nbtheta+itheta, nbphi);
           planes(iplane, nbtheta+itheta, nbphi) = T(0);
           }
-      leg2alm(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads);
+      leg2alm(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
       }
 
-    void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes) const
+    void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const
       {
       vmav<complex<T>,2> valm(alm.data(), {1,alm.shape(0)}, {0,alm.stride(0)});
-      updateAlm(valm, planes);
+      updateAlm(valm, planes, mode);
       }
   };
 
