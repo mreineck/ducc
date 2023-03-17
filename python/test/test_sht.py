@@ -17,7 +17,7 @@
 import ducc0
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_
+from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
 
@@ -71,11 +71,11 @@ def test_2d_roundtrip(lmmax, geometry, spin, nthreads):
     alm = random_alm(lmax, mmax, spin, ncomp, rng)
     map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
-    assert_(ducc0.misc.l2error(alm2,alm)<1e-12)
+    assert_allclose(ducc0.misc.l2error(alm2,alm), 0, atol=1e-12)
 
     map = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     alm2 = ducc0.sht.experimental.adjoint_synthesis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
-    assert_(ducc0.misc.l2error(alm2,alm)<1e-12)
+    assert_allclose(ducc0.misc.l2error(alm2,alm), 0, atol=1e-12)
 
     job = ducc0.sht.sharpjob_d()
     job.set_triangular_alm_info(lmax, mmax)
@@ -129,7 +129,7 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_(np.abs((v1-v2)/v1)<1e-10)
+    assert_allclose(v1, v2, rtol=1e-10)
 
     if spin > 0:
         # test adjointness between synthesis and adjoint_synthesis (gradient only)
@@ -154,7 +154,7 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     # del map1
     # alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     # v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    # assert_(np.abs((v1-v2)/v1)<1e-12)
+    # assert_allclose(v1, v2, rtol=1e-12)
 
     # # create a band limited "map0"; so far the code only works for these maps
     # almx = random_alm(lmax, mmax, spin, ncomp, rng)
@@ -166,7 +166,7 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     # del map1
     # alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     # v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    # assert_(np.abs((v1-v2)/v1)<1e-10)
+    # assert_allclose(v1, v2, rtol=1e-10)
 
     # alternative version of the test taken from SSHT (test_forward_adjoint)
     map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
@@ -175,7 +175,7 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_(np.abs((v1-v2)/v1)<1e-10)
+    assert_allclose(v1, v2, rtol=1e-10)
 
 
 @pmp('spin', (0, 1, 2))
@@ -201,7 +201,7 @@ def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
     del map1
     alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, **geom)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_(np.abs((v1-v2)/v1)<1e-10)
+    assert_allclose(v1, v2, rtol=1e-10)
 
     if spin > 0:
         map1 = ducc0.sht.experimental.synthesis(alm=alm0[:1], lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", **geom)
@@ -221,7 +221,7 @@ def test_rotation(lmax, nthreads):
     alm = random_alm(lmax, lmax, 0, 1, rng)[0,:]
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
-    assert_(ducc0.misc.l2error(alm,alm2)<=1e-12)
+    assert_allclose(ducc0.misc.l2error(alm,alm2), 0, atol=1e-12)
     alm = alm.astype(np.complex64)
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
