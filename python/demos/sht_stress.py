@@ -73,8 +73,10 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     if random.randint(0,1) == 0:
         spin=0
 
-    nrings = random.randint(1, 3*lmax)
-    nphi = random.randint(1, 3*lmax)
+    nrings = random.randint(1, 3*lmax+3)
+    if geometry == "CC":
+        nrings = max(nrings, 2)
+    nphi = random.randint(1, 3*lmax+3)
     nthreads = random.randint(1, nthreads_max)
 
     print("testing adjointness: lmax={}, spin={}, nthreads={}, geometry={}, nrings={}, nphi={}".format(lmax,spin,nthreads,geometry,nrings, nphi))

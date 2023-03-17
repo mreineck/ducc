@@ -94,58 +94,77 @@ template<typename T> class ConvolverPlan
     void correct(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({nphi_b,nphi_s}, UNINITIALIZED);
-      // copy and extend to second half
-      for (size_t j=0; j<nphi_s; ++j)
-        tmp(0,j) = arr(0,j);
-      for (size_t i=1, i2=nphi_s-1; i+1<ntheta_s; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
+      size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,blocksize}, UNINITIALIZED);
+      for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
+        {
+        // copy and extend to second half
+        execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
           {
-          if (j2>=nphi_s) j2-=nphi_s;
-          tmp(i,j2) = arr(i,j2);
-          tmp(i2,j) = sfct*tmp(i,j2);
-          }
-      for (size_t j=0; j<nphi_s; ++j)
-        tmp(ntheta_s-1,j) = arr(ntheta_s-1,j);
-      auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
-      vector<T> k2(fct.size());
-      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
-      vfmav<T> ftmp(tmp);
-      cfmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
-      auto kern = getKernel(nphi_s, nphi_b);
-      convolve_axis(ftmp0, ftmp, 0, kern, nthreads);
-      cfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_s-2-lo; i<hi; ++i,i2=2*ntheta_s-2-i)
+            for (size_t j=j0; j<j1; ++j)
+              {
+              tmp(i,j-j0) = arr(i,j);
+              tmp(i2,j-j0) = sfct*arr(i,j+nphi_s/2);
+              }
+          });
+      
+        vfmav<T> ftmp(subarray<2>(tmp, {{}, {0,j1-j0}}));
+        cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,j1-j0}}));
+        convolve_axis(ftmp1, ftmp, 0, getKernel(2*ntheta_s-2, 2*ntheta_b-2), nthreads);
+        // copy back
+        execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_b-2-lo; i<hi; ++i, i2=2*ntheta_b-2-i)
+            for (size_t j=j0; j<j1; ++j)
+              {
+              arr(i,j) = tmp(i,j-j0);
+              arr(i,j+nphi_s/2) = sfct*tmp(i2,j-j0);
+              }
+          });
+        }
       vfmav<T> farr(arr);
-      convolve_axis(ftmp2, farr, 1, kern, nthreads);
+      cfmav<T> ftmp2(subarray<2>(arr, {{}, {0, nphi_s}}));
+      convolve_axis(ftmp2, farr, 1, getKernel(nphi_s, nphi_b), nthreads);
       }
     void decorrect(vmav<T,2> &arr, int spin) const
       {
       T sfct = (spin&1) ? -1 : 1;
-      vmav<T,2> tmp({nphi_b,nphi_s}, UNINITIALIZED);
-      auto fct = kernel->corfunc(nphi_s/2+1, 1./nphi_b, nthreads);
-      vector<T> k2(fct.size());
-      for (size_t i=0; i<fct.size(); ++i) k2[i] = T(fct[i]/nphi_s);
-      cfmav<T> farr(arr);
-      vfmav<T> ftmp2(subarray<2>(tmp, {{0, ntheta_b}, {0, nphi_s}}));
-      auto kern = getKernel(nphi_b, nphi_s);
-      convolve_axis(farr, ftmp2, 1, kern, nthreads);
-      // extend to second half
-      for (size_t i=1, i2=nphi_b-1; i+1<ntheta_b; ++i,--i2)
-        for (size_t j=0,j2=nphi_s/2; j<nphi_s; ++j,++j2)
+      vfmav<T> ftmp1(subarray<2>(arr, {{0, ntheta_b}, {0, nphi_s}}));
+      convolve_axis(cfmav<T>(arr), ftmp1, 1, getKernel(nphi_b, nphi_s), nthreads);
+      size_t blocksize = min(nphi_s/2, max<size_t>(100, ((nphi_s/2+9)/10)));
+      auto tmp = vmav<T,2>::build_noncritical({2*ntheta_b-2,blocksize}, UNINITIALIZED);
+      for (size_t j0=0, j1=min<size_t>(nphi_s/2, j0+blocksize); j0<nphi_s/2; j0=j1, j1=min(nphi_s/2, j0+blocksize))
+        {
+        // copy and extend to second half
+        execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
-          if (j2>=nphi_s) j2-=nphi_s;
-          tmp(i2,j) = sfct*tmp(i,j2);
-          }
-      cfmav<T> ftmp(tmp);
-      vfmav<T> ftmp0(subarray<2>(tmp, {{0, nphi_s}, {0, nphi_s}}));
-      convolve_axis(ftmp, ftmp0, 0, kern, nthreads);
-      for (size_t j=0; j<nphi_s; ++j)
-        arr(0,j) = T(0.5)*tmp(0,j);
-      for (size_t i=1; i+1<ntheta_s; ++i)
-        for (size_t j=0; j<nphi_s; ++j)
-          arr(i,j) = tmp(i,j);
-      for (size_t j=0; j<nphi_s; ++j)
-        arr(ntheta_s-1,j) = T(0.5)*tmp(ntheta_s-1,j);
+          for (size_t i=lo, i2=(i==0) ? 0 : 2*ntheta_b-2-lo; i<hi; ++i,i2=2*ntheta_b-2-i)
+            for (size_t j=j0; j<j1; ++j)
+              {
+              tmp(i,j-j0) = arr(i,j);
+              tmp(i2,j-j0) = sfct*arr(i,j+nphi_s/2);
+              }
+          });
+      
+        cfmav<T> ftmp(subarray<2>(tmp, {{}, {0,j1-j0}}));
+        vfmav<T> ftmp2(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,j1-j0}}));
+        convolve_axis(ftmp, ftmp2, 0, getKernel(2*ntheta_b-2, 2*ntheta_s-2), nthreads);
+        // copy back
+        execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            {
+            size_t i2 = (i==0) ? 0 : 2*ntheta_s-2-i;
+            T mul = (i==i2) ? T(0.5) : T(1);
+            for (size_t j=j0; j<j1; ++j)
+              {
+              arr(i,j) = mul*tmp(i,j-j0);
+              arr(i,j+nphi_s/2) = mul*sfct*tmp(i2,j-j0);
+              }
+            }
+          });
+        }
       }
 
     quick_array<uint32_t> getIdx(const cmav<T,1> &theta, const cmav<T,1> &phi, const cmav<T,1> &psi,
@@ -255,7 +274,7 @@ template<typename T> class ConvolverPlan
         if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
       if constexpr (supp>4)
         if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
-      MR_assert(supp_==supp, "requested support ou of range");
+      MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
       MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
@@ -325,7 +344,7 @@ template<typename T> class ConvolverPlan
         if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
       if constexpr (supp>4)
         if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
-      MR_assert(supp_==supp, "requested support ou of range");
+      MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
       MR_assert(phi.shape(0)==theta.shape(0), "array shape mismatch");
@@ -524,7 +543,7 @@ template<typename T> class ConvolverPlan
             }
           }
       auto subplanes=subarray<3>(planes,{{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
-      synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
+      synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads, STANDARD);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto m = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
@@ -640,7 +659,7 @@ template<typename T> class ConvolverPlan
       auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
       vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()}, UNINITIALIZED);
-      adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads);
+      adjoint_synthesis_2d(aarr, subplanes, mbeam, lmax, lmax, "CC", nthreads, STANDARD);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           if (l>=mbeam)
@@ -656,8 +675,8 @@ template<typename T> class ConvolverPlan
     void updateSlm(vmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
       size_t mbeam, vmav<T,3> &planes) const
       {
-      vmav<complex<T>,2> vslm(slm.data(), {1,slm.shape(0)}, {0,slm.stride(0)});
-      cmav<complex<T>,2> vblm(blm.data(), {1,blm.shape(0)}, {0,blm.stride(0)});
+      auto vslm(slm.prepend_1());
+      auto vblm(blm.prepend_1());
       updateSlm(vslm, vblm, mbeam, planes);
       }
 

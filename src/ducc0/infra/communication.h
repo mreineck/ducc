@@ -35,7 +35,6 @@
 
 #include "ducc0/infra/types.h"
 #include "ducc0/infra/mav.h"
-#include "ducc0/infra/transpose.h"
 
 namespace ducc0 {
 
@@ -159,7 +158,7 @@ class Communicator
       size_t axin, size_t axout) const
       {
       if (num_ranks()==1)
-        transpose(in, out);
+        mav_apply([](const T &i, T &o){ o=i; }, 1, in, out);
       else
         redistributeRawVoid(in, in.data(), out, out.data(), axin, axout, tidx<T>());
       }
