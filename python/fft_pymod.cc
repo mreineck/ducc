@@ -147,7 +147,7 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   // select proper sub-array for FFT
   auto shp_half = aout.shape();
   shp_half[axes.back()] = shp_half[axes.back()]/2+1;
-  vfmav<std::complex<T>> aout_half(aout.data(), shp_half, aout.stride());
+  vfmav<std::complex<T>> aout_half(aout, shp_half, aout.stride());
   ducc0::r2c(ain, aout_half, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace ducc0::detail_fft;

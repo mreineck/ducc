@@ -2095,8 +2095,8 @@ template<typename T> void leg2map(  // FFT
 #if 0
   if (well_behaved)
     {
-    vmav<T,3> xmap(map.data(), {ncomp, nrings, nphmax},
-      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)});
+    auto xmap(map.template reinterpret<3>({ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)}));
     execParallel(nrings, nthreads, [&](size_t lo, size_t hi)
       {
       if (lo==hi) return;
@@ -2170,8 +2170,8 @@ template<typename T> void map2leg(  // FFT
 #if 0
   if (well_behaved)
     {
-    cmav<T,3> xmap(map.data(), {ncomp, nrings, nphmax},
-      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)});
+    auto xmap(map.template reinterpret<3>({ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)}));
     size_t blksz=min<size_t>(nrings,64);
     size_t nblocks = (nrings+blksz-1)/blksz;
     execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
@@ -2573,8 +2573,8 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> 
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads,
@@ -2738,8 +2738,8 @@ template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  cmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads, mode);
@@ -2846,8 +2846,8 @@ template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  cmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
 
   analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0, ringstart, pixstride, nthreads);
   }
@@ -2952,8 +2952,8 @@ template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vma
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0,
     ringstart, pixstride, nthreads);

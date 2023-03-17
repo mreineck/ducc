@@ -675,8 +675,8 @@ template<typename T> class ConvolverPlan
     void updateSlm(vmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
       size_t mbeam, vmav<T,3> &planes) const
       {
-      vmav<complex<T>,2> vslm(slm.data(), {1,slm.shape(0)}, {0,slm.stride(0)});
-      cmav<complex<T>,2> vblm(blm.data(), {1,blm.shape(0)}, {0,blm.stride(0)});
+      auto vslm(slm.prepend_1());
+      auto vblm(blm.prepend_1());
       updateSlm(vslm, vblm, mbeam, planes);
       }
 

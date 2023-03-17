@@ -188,22 +188,46 @@ template<typename T> class SphereInterpol
           size_t j0 = iblock*blocksize;
           size_t j1 = min(nphi_b/2, j0+blocksize);
           // copy and extend to second half
+#if 0
+          {
+          auto in1=subarray<2>(arr,{{0,ntheta_s},{j0,j1}});
+          auto out1=subarray<2>(tmp,{{0,ntheta_s},{0,j1-j0}});
+          auto in2=subarray<2>(arr,{{1,ntheta_s-1},{nphi_b/2+j0,nphi_b/2+j1}});
+          auto out2=subarray<2>(tmp,{{2*ntheta_s-3,ntheta_s-1,-1},{0,j1-j0}});
+          mav_apply([](const T &in, T &out){out=in;}, 1, in1, out1);
+          mav_apply([sfct](const T &in, T &out){out=sfct*in;}, 1, in2, out2);
+          }
+#else
           for (size_t i=0, i2=0; i<ntheta_s; ++i,i2=2*ntheta_s-2-i)
             for (size_t j=j0; j<j1; ++j)
               {
               tmp(i,j-j0) = arr(i,j);
               tmp(i2,j-j0) = sfct*arr(i,j+nphi_b/2);
               }
+#endif
           vfmav<T> ftmp(subarray<2>(tmp, {{}, {0,j1-j0}}));
           cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,j1-j0}}));
           convolve_axis(ftmp1, ftmp, 0, thetakrn, 1);
           // copy back
+#if 0
+          {
+          auto in1=subarray<2>(tmp,{{0,ntheta_b},{0,j1-j0}});
+          auto out1=subarray<2>(arr,{{0,ntheta_b},{j0,j1}});
+          auto out2=subarray<2>(arr,{{1,ntheta_b},{nphi_b/2+j0,nphi_b/2+j1}});
+          auto in2=subarray<2>(tmp,{{2*ntheta_b-3,ntheta_b-2,-1},{0,j1-j0}});
+          mav_apply([](const T &in, T &out){out=in;}, 1, in1, out1);
+          mav_apply([sfct](const T &in, T &out){out=sfct*in;}, 1, in2, out2);
+          for (size_t j=j0; j<j1; ++j)
+            arr(0,j+nphi_b/2) = sfct*tmp(0,j-j0);
+          }
+#else
           for (size_t i=0, i2=0; i<ntheta_b; ++i, i2=2*ntheta_b-2-i)
             for (size_t j=j0; j<j1; ++j)
               {
               arr(i,j) = tmp(i,j-j0);
               arr(i,j+nphi_b/2) = sfct*tmp(i2,j-j0);
               }
+#endif
           }
         });
       }
@@ -805,7 +829,7 @@ template<typename T> class SphereInterpol
 
     void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const
       {
-      vmav<complex<T>,2> valm(alm.data(), {1,alm.shape(0)}, {0,alm.stride(0)});
+      auto valm(alm.prepend_1());
       updateAlm(valm, planes, mode);
       }
   };

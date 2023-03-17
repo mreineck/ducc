@@ -919,7 +919,7 @@ template<typename T> class Py_sharpjob
       auto map_=make_Pyarr<double>({size_t(npix_)});
       auto map=to_vmav<double,1>(map_);
       auto alm=to_cmav<complex<double>,1>(alm_);
-      cmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       if (geom=="HP")
         {
         auto mstart = get_mstart(lmax_, None, None);
@@ -941,13 +941,13 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        vmav<double,2> mr(map.data(), {1, size_t(npix_)}, {0, map.stride(0)});
+        auto mr(map.prepend_1());
         synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads, STANDARD);
         }
       else
         {
-        vmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
-          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
+        auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
         synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return map_;
@@ -958,7 +958,7 @@ template<typename T> class Py_sharpjob
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
-      vmav<complex<double>,2> ar(alm.data(), {1, n_alm()}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(map_);
       if (geom=="HP")
         {
@@ -981,13 +981,13 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        cmav<double,2> mr(map.data(), {1, npix_}, {0, map.stride(0)});
+        auto mr(map.prepend_1());
         adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads,STANDARD);
         }
       else
         {
-        cmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
-          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
+        auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
         adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return alm_;
@@ -998,10 +998,10 @@ template<typename T> class Py_sharpjob
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
-      vmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(map_);
-      cmav<double,3> mr(map.data(), {1, ntheta_, nphi_},
-        {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
+      auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
+        {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
       analysis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
       return alm_;
       }
@@ -1038,8 +1038,8 @@ template<typename T> class Py_sharpjob
         }
       else
         {
-        vmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
-          {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
+        auto mr(map.template reinterpret<3>({2, ntheta_, nphi_},
+          {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
         synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return map_;
@@ -1051,8 +1051,8 @@ template<typename T> class Py_sharpjob
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_vmav<complex<double>,2>(alm_);
       auto map=to_cmav<double,2>(map_);
-      cmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
-        {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
+      auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
+        {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
       analysis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
       return alm_;
       }

@@ -468,6 +468,19 @@ template<size_t ndim> class mav_info
         }
       return mav_info(shp2, str2);
       }
+    mav_info<ndim+1> prepend_1() const
+      {
+      typename mav_info<ndim+1>::shape_t newshp;
+      typename mav_info<ndim+1>::stride_t newstr;
+      newshp[0] = 1;
+      newstr[0] = 0;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        newshp[i+1] = shp[i];
+        newstr[i+1] = str[i];
+        }
+      return mav_info<ndim+1>(newshp, newstr);
+      }
 
   protected:
     template<size_t nd2> auto subdata(const vector<slice> &slices) const
@@ -774,6 +787,16 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       {
       return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
       }
+    cmav<T, ndim+1> prepend_1() const
+      {
+      return cmav<T, ndim+1>(static_cast<const tinfo *>(this)->prepend_1(), *static_cast<const tbuf *>(this));
+      }
+    template<size_t ndim2> cmav<T, ndim2> reinterpret
+      (const typename cmav<T, ndim2>::shape_t &newshp,
+       const typename cmav<T, ndim2>::stride_t &newstr) const
+      {
+      return cmav<T, ndim2>(*static_cast<const tbuf *>(this), newshp, newstr);
+      }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
   (const cmav<T, ndim> &arr, const vector<slice> &slices)  
@@ -876,6 +899,16 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     vmav transpose()
       {
       return vmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      }
+    vmav<T, ndim+1> prepend_1()
+      {
+      return vmav<T, ndim+1>(static_cast<tinfo *>(this)->prepend_1(), *static_cast<tbuf *>(this));
+      }
+    template<size_t ndim2> vmav<T, ndim2> reinterpret
+      (const typename vmav<T, ndim2>::shape_t &newshp,
+       const typename vmav<T, ndim2>::stride_t &newstr)
+      {
+      return vmav<T, ndim2>(*static_cast<tbuf *>(this), newshp, newstr);
       }
   };
 
