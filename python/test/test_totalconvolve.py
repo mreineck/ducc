@@ -16,7 +16,7 @@
 
 import numpy as np
 import pytest
-from numpy.testing import assert_
+from numpy.testing import assert_allclose
 import ducc0
 
 pmp = pytest.mark.parametrize
@@ -29,7 +29,7 @@ def _assert_close(a, b, epsilon):
         err = np.abs(a-b)/np.maximum(np.abs(a),np.abs(b))
     if (err >= epsilon):
         print("Error: {} > {}".format(err, epsilon))
-    assert_(err < epsilon)
+    assert_allclose(err, 0, atol=epsilon)
 
 
 def nalm(lmax, mmax):

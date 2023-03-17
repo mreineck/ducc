@@ -19,14 +19,7 @@ import ducc0.pointingprovider as pp
 # import pyfftw
 import numpy as np
 import pytest
-from numpy.testing import assert_
-
-
-def _assert_close(a, b, epsilon):
-    err = ducc0.misc.l2error(a, b)
-    if (err >= epsilon):
-        print("Error: {} > {}".format(err, epsilon))
-    assert_(err < epsilon)
+from numpy.testing import assert_, assert_allclose
 
 
 pmp = pytest.mark.parametrize
@@ -48,8 +41,8 @@ def testp1(size, t0, freq, nthreads):
     nquat = nquat * np.sign(nquat[:, 0]).reshape(-1, 1)
     quat2 = quat2 * np.sign(quat2[:, 0]).reshape(-1, 1)
     quat3 = quat3 * np.sign(quat3[:, 0]).reshape(-1, 1)
-    _assert_close(quat2, nquat, 1e-13)
-    _assert_close(quat3, nquat, 1e-13)
+    assert_allclose(ducc0.misc.l2error(quat2, nquat), 0, atol=1e-13)
+    assert_allclose(ducc0.misc.l2error(quat3, nquat), 0, atol=1e-13)
 
 
 def testp2():
@@ -82,8 +75,8 @@ def testp2():
     r2 = rrquat*slerp(times2)
     squat2 = r2.as_quat()
     squat2 *= np.sign(squat2[:, 0]).reshape((-1, 1))
-    _assert_close(quat2, squat2, 1e-13)
+    assert_allclose(ducc0.misc.l2error(quat2, squat2), 0, atol=1e-13)
     r3 = slerp(times2)*rrquat
     squat3 = r3.as_quat()
     squat3 *= np.sign(squat3[:, 0]).reshape((-1, 1))
-    _assert_close(quat4, squat3, 1e-13)
+    assert_allclose(ducc0.misc.l2error(quat4, squat3), 0, atol=1e-13)
