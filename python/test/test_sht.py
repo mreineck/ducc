@@ -139,11 +139,11 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
         almx = alm0.copy()
         almx[1] = 0
         map1b = ducc0.sht.experimental.synthesis_2d(alm=almx, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-        assert_(ducc0.misc.l2error(map1, map1b)<1e-10)
+        assert_allclose(ducc0.misc.l2error(map1, map1b), 0, atol=1e-10)
         del almx, map1
         alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
         v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
-        assert_(np.abs((v1-v2)/v1)<1e-10)
+        assert_allclose(np.abs((v1-v2)/v1), 0, atol=1e-10)
 
     # test adjointness between analysis and adjoint_analysis
 
@@ -209,7 +209,7 @@ def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
         del map1
         alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", **geom)
         v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
-        assert_(np.abs((v1-v2)/v1)<1e-10)
+        assert_allclose(np.abs((v1-v2)/v1), 0, atol=1e-10)
 
 
 @pmp("lmax", tuple(range(0,70,3)))
