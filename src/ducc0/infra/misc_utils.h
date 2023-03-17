@@ -54,6 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __GLIBC__
 #include <malloc.h>
 #include <string.h>
+#include <unistd.h>
 #endif
 
 namespace ducc0 {
@@ -102,6 +103,12 @@ bool preallocate_memory(double gbytes)
   void *blob = malloc(nbytes);
   if (blob==nullptr) return false;
   memset(blob, 42, nbytes);
+  // this is just to confuse the compiler sufficiently that it does not
+  // eliminate all the memory operations ...
+  double sum=0;
+  for (size_t iblock=0; iblock<nbytes; iblock+=4096)
+    sum +=((char *)blob)[iblock];
+  sleep(int(sum*1e-300));
   free(blob);
   return true;
   }
