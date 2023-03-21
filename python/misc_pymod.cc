@@ -766,9 +766,6 @@ Returns
 -------
 numpy.ndarray : identical to res
 
-Notes
------
-No ring can be located exactly on the poles if calc_rotation is set
 )""";
 py::array Py_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
@@ -793,8 +790,6 @@ py::array Py_get_deflected_angles(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
-        if (calc_rotation)
-          MR_assert(e_r.x > 0, "for the poles fix alpha=0 case in calc_rotation first ");
         double dphi = 2*pi/nphi(iring);
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
@@ -822,9 +817,12 @@ py::array Py_get_deflected_angles(const py::array &theta_,
           res(i,0) = n_prime.theta;
           res(i,1) = phinew;
           if (calc_rotation){ 
-            // fine for vanishing deflection with the exception of the poles, hence the screening above
-            double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
-            res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
+            if (d > 0.){
+              double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
+              res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
+            else{
+              res(i, 2) = 0.;
+            }} 
           }
         }
     });
