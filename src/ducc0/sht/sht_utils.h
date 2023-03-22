@@ -150,6 +150,7 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
   T fct = ((spin&1)==0) ? 1 : -1;
   pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
   MultiExp<T,complex<T>> phase(adjoint ? -shift : shift, (shift==0.) ? 1 : nrings_in+2);
+  size_t nsmall=min(nfull_in,nfull_out);
   execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
     {
     vmav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
@@ -174,22 +175,21 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
               tmp(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), !adjoint);
-//size_t nsmall=min(nfull_in,nfull_out);
+          tmp(0) *= T(kernel[0]);
           if (shift!=0)
-            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
+            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=nsmall-i); ++i,--im)
               {
               if (i!=im)
-                tmp(i) *= phase[i];
-              tmp(im) *= conj(phase[i]);
+                tmp(i) *= phase[i]*T(kernel[i]);
+              tmp(im) *= conj(phase[i])*T(kernel[i]);
               }
-//FIXME optimize by loop merging!
-tmp(0) *= T(kernel[0]);
-          for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-            {
-            if (i!=im)
-              tmp(i) *= T(kernel[i]);
-            tmp(im) *= T(kernel[i]);
-            }
+          else
+            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=nsmall-i); ++i,--im)
+              {
+              if (i!=im)
+                tmp(i) *= T(kernel[i]);
+              tmp(im) *= T(kernel[i]);
+              }
 
           // zero padding/truncation
           if (nfull_out>nfull_in) // pad
