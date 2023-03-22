@@ -281,13 +281,16 @@ template<typename T0> class T_dcst23
       size_t NS2 = (N+1)/2;
       if (type==2)
         {
-        if (!cosine)
-          for (size_t k=1; k<N; k+=2)
-            c[k] = -c[k];
         c[0] *= 2;
         if ((N&1)==0) c[N-1]*=2;
-        for (size_t k=1; k<N-1; k+=2)
-          MPINPLACE(c[k+1], c[k]);
+        if (cosine)
+          for (size_t k=1; k<N-1; k+=2)
+            MPINPLACE(c[k+1], c[k]);
+        else
+          for (size_t k=1; k<N-1; k+=2)
+            PMINPLACE(c[k+1], c[k]);
+        if ((!cosine) && ((N&1)==0))
+          c[N-1] *= -1;
         auto res = fftplan.exec(c, buf, fct, false, nthreads);
         c[0] = res[0];
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
@@ -298,7 +301,7 @@ template<typename T0> class T_dcst23
           }
         if ((N&1)==0)
           c[NS2] = res[NS2]*twiddle[NS2-1];
-        if (!cosine)
+        if (!cosine)  // swap order completely
           for (size_t k=0, kc=N-1; k<kc; ++k, --kc)
             std::swap(c[k], c[kc]);
         if (ortho) c[0]*=sqrt2*T0(0.5);
@@ -306,7 +309,7 @@ template<typename T0> class T_dcst23
       else
         {
         if (ortho) c[0]*=sqrt2;
-        if (!cosine)
+        if (!cosine)  // swap order completely
           for (size_t k=0, kc=N-1; k<NS2; ++k, --kc)
             std::swap(c[k], c[kc]);
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
@@ -320,11 +323,14 @@ template<typename T0> class T_dcst23
         auto res = fftplan.exec(c, buf, fct, true, nthreads);
         if (res != c) // FIXME: not yet optimal
           copy_n(res, N, c);
-        for (size_t k=1; k<N-1; k+=2)
-          MPINPLACE(c[k], c[k+1]);
-        if (!cosine)
-          for (size_t k=1; k<N; k+=2)
-            c[k] = -c[k];
+        if ((!cosine) && ((N&1)==0))
+          c[N-1] *= -1;
+        if (cosine)
+          for (size_t k=1; k<N-1; k+=2)
+            MPINPLACE(c[k], c[k+1]);
+        else
+          for (size_t k=1; k<N-1; k+=2)
+            PMINPLACE(c[k+1], c[k]);
         }
       return c;
       }

@@ -45,6 +45,7 @@
 #include "ducc0/fft/fft1d.h"
 #include "ducc0/fft/fft.h"
 #include "ducc0/math/math_utils.h"
+#include "ducc0/sht/sht_utils.h"
 
 namespace ducc0 {
 
@@ -163,7 +164,7 @@ template<typename T> class SphereInterpol
       vmav<T,1> phikrn2({nj});
       for (size_t j=0; j<nj; ++j)
         phikrn2(j) = T(phikrn[(j+1)/2]);
-      execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
+      execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
@@ -173,66 +174,12 @@ template<typename T> class SphereInterpol
             arr(i,j) = T(0);
           }
         });
-      vfmav<T> ftmpx = subarray<2>(arr, {{0,ntheta_s},{0,nphi_b}});
+      vfmav<T> ftmpx = subarray<2>(arr, {{0,ntheta_b},{0,nphi_b}});
       r2r_fftpack(ftmpx, ftmpx, {1}, false, false, T(1), nthreads);
-
-      T sfct = (spin&1) ? -1 : 1;
-      size_t blocksize = min<size_t>(nphi_b/2, 128);
-      auto thetakrn=getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      size_t nblocks = (nphi_b/2+blocksize-1)/blocksize;
-      execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
-        {
-        auto tmp = vmav<T,2>::build_noncritical({blocksize, 2*ntheta_b-2}, UNINITIALIZED).transpose();
-        for (size_t iblock=lo; iblock<hi; ++iblock)
-          {
-          size_t j0 = iblock*blocksize;
-          size_t j1 = min(nphi_b/2, j0+blocksize);
-          // copy and extend to second half
-#if 0
-          {
-          auto in1=subarray<2>(arr,{{0,ntheta_s},{j0,j1}});
-          auto out1=subarray<2>(tmp,{{0,ntheta_s},{0,j1-j0}});
-          auto in2=subarray<2>(arr,{{1,ntheta_s-1},{nphi_b/2+j0,nphi_b/2+j1}});
-          auto out2=subarray<2>(tmp,{{2*ntheta_s-3,ntheta_s-1,-1},{0,j1-j0}});
-          mav_apply([](const T &in, T &out){out=in;}, 1, in1, out1);
-          mav_apply([sfct](const T &in, T &out){out=sfct*in;}, 1, in2, out2);
-          }
-#else
-          for (size_t i=0, i2=0; i<ntheta_s; ++i,i2=2*ntheta_s-2-i)
-            for (size_t j=j0; j<j1; ++j)
-              {
-              tmp(i,j-j0) = arr(i,j);
-              tmp(i2,j-j0) = sfct*arr(i,j+nphi_b/2);
-              }
-#endif
-          vfmav<T> ftmp(subarray<2>(tmp, {{}, {0,j1-j0}}));
-          cfmav<T> ftmp1(subarray<2>(tmp, {{0, (2*ntheta_s-2)}, {0,j1-j0}}));
-          convolve_axis(ftmp1, ftmp, 0, thetakrn, 1);
-          // copy back
-#if 0
-          {
-          auto in1=subarray<2>(tmp,{{0,ntheta_b},{0,j1-j0}});
-          auto out1=subarray<2>(arr,{{0,ntheta_b},{j0,j1}});
-          auto out2=subarray<2>(arr,{{1,ntheta_b},{nphi_b/2+j0,nphi_b/2+j1}});
-          auto in2=subarray<2>(tmp,{{2*ntheta_b-3,ntheta_b-2,-1},{0,j1-j0}});
-          mav_apply([](const T &in, T &out){out=in;}, 1, in1, out1);
-          mav_apply([sfct](const T &in, T &out){out=sfct*in;}, 1, in2, out2);
-          for (size_t j=j0; j<j1; ++j)
-            arr(0,j+nphi_b/2) = sfct*tmp(0,j-j0);
-          }
-#else
-          for (size_t i=0, i2=0; i<ntheta_b; ++i, i2=2*ntheta_b-2-i)
-            for (size_t j=j0; j<j1; ++j)
-              {
-              arr(i,j) = tmp(i,j-j0);
-              arr(i,j+nphi_b/2) = sfct*tmp(i2,j-j0);
-              }
-#endif
-          }
-        });
       }
     void decorrect(vmav<T,2> &arr, int spin) const
       {
+#if 1
       T sfct = (spin&1) ? -1 : 1;
 
       size_t blocksize = min<size_t>(nphi_b/2, 128);
@@ -267,7 +214,8 @@ template<typename T> class SphereInterpol
             }
           }
         });
-
+#endif
+//      vfmav<T> ftmpx = subarray<2>(arr, {{0,ntheta_b},{0,nphi_b}});
       vfmav<T> ftmpx = subarray<2>(arr, {{0,ntheta_s},{0,nphi_b}});
       r2r_fftpack(ftmpx, ftmpx, {1}, true, true, T(1), nthreads);
       size_t nj=2*mmax+1;
@@ -275,6 +223,7 @@ template<typename T> class SphereInterpol
       vmav<T,1> phikrn2({nj});
       for (size_t j=0; j<nj; ++j)
         phikrn2(j) = T(phikrn[(j+1)/2]);
+//      execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
       execParallel(ntheta_s, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -678,8 +627,10 @@ template<typename T> class SphereInterpol
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
       MR_assert(2*(mmax+1)<=nphi_b, "aargh");
-      vmav<complex<T>,3> leg(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
+      vmav<complex<T>,3> leg_s(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
         {nplanes, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
+      vmav<complex<T>,3> leg_b(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
+        {nplanes, ntheta_b, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
@@ -692,14 +643,14 @@ template<typename T> class SphereInterpol
         mstart(i) = ofs-i;
         ofs += lmax+1-i;
         }
-      alm2leg(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
-      // make halfcomplex
-      for (size_t iplane=0; iplane<nplanes; ++iplane)
-        for (size_t itheta=0; itheta<ntheta_s; ++itheta)
-          planes(iplane, nbtheta+itheta, nbphi) = planes(iplane, nbtheta+itheta, nbphi-1);
-
+      alm2leg(valm, leg_s, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
+auto kernel = getKernel2(2*ntheta_s-2, 2*ntheta_b-2);
+ducc0::detail_sht::resample_and_convolve_theta<T>(leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
+ //     make halfcomplex
+        for (size_t itheta=0; itheta<ntheta_b; ++itheta)
+          planes(iplane, nbtheta+itheta, nbphi) = planes(iplane, nbtheta+itheta, nbphi-1);
         auto m = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
         correct(m,spin);
         }
@@ -802,8 +753,10 @@ template<typename T> class SphereInterpol
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
       MR_assert(2*(mmax+1)<=nphi_b, "aargh");
-      vmav<complex<T>,3> leg(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
+      vmav<complex<T>,3> leg_s(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
         {nplanes, ntheta_s, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
+      vmav<complex<T>,3> leg_b(reinterpret_cast<complex<T> *>(&planes(0,nbtheta,nbphi-1)),
+        {nplanes, ntheta_b, mmax+1}, {subplanes.stride(0)/2, subplanes.stride(1)/2, 1});
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
@@ -819,12 +772,15 @@ template<typename T> class SphereInterpol
 
       // back from halfcomplex
       for (size_t iplane=0; iplane<nplanes; ++iplane)
+//        for (size_t itheta=0; itheta<ntheta_b; ++itheta)
         for (size_t itheta=0; itheta<ntheta_s; ++itheta)
           {
           planes(iplane, nbtheta+itheta, nbphi-1) = planes(iplane, nbtheta+itheta, nbphi);
           planes(iplane, nbtheta+itheta, nbphi) = T(0);
           }
-      leg2alm(valm, leg, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
+//auto kernel = getKernel2(2*ntheta_b-2, 2*ntheta_s-2);
+//ducc0::detail_sht::resample_and_convolve_theta<T>(leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
+      leg2alm(valm, leg_s, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
       }
 
     void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const
