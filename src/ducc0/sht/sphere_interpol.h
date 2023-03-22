@@ -518,11 +518,9 @@ template<typename T> class SphereInterpol
       return res;
       }
 
-    void getPlane(const cmav<complex<T>,2> &valm, vmav<T,3> &planes, SHT_mode mode) const
+    void getPlane(const cmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode) const
       {
       size_t nplanes=1+(spin>0);
-      Alm_Base ialm(lmax, mmax);
-      MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
       auto subplanes=subarray<3>(planes,{{}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
@@ -540,14 +538,9 @@ template<typename T> class SphereInterpol
         theta(i) = (i*pi)/(ntheta_s-1);
       
       vmav<size_t,1> mval({mmax+1}, UNINITIALIZED);
-      vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
-      for (size_t i=0, ofs=0; i<=mmax; ++i)
-        {
+      for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
-        mstart(i) = ofs-i;
-        ofs += lmax+1-i;
-        }
-      alm2leg(valm, leg_s, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
+      alm2leg(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
@@ -624,11 +617,9 @@ template<typename T> class SphereInterpol
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    void updateAlm(vmav<complex<T>,2> &valm, vmav<T,3> &planes, SHT_mode mode) const
+    void updateAlm(vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode) const
       {
       size_t nplanes=1+(spin>0);
-      Alm_Base ialm(lmax, mmax);
-      MR_assert(ialm.Num_Alms()==valm.shape(1), "bad array dimension");
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
       // move stuff from border regions onto the main grid
@@ -686,13 +677,8 @@ template<typename T> class SphereInterpol
         theta(i) = (i*pi)/(ntheta_s-1);
       
       vmav<size_t,1> mval({mmax+1}, UNINITIALIZED);
-      vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
-      for (size_t i=0, ofs=0; i<=mmax; ++i)
-        {
+      for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
-        mstart(i) = ofs-i;
-        ofs += lmax+1-i;
-        }
 
       // back from halfcomplex
       for (size_t iplane=0; iplane<nplanes; ++iplane)
@@ -704,7 +690,7 @@ template<typename T> class SphereInterpol
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
-      leg2alm(valm, leg_s, spin, lmax, mval, mstart, 1, theta, nthreads, mode);
+      leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       }
 
     void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const
