@@ -698,6 +698,15 @@ template<typename T> class SphereInterpol
       auto valm(alm.prepend_1());
       updateAlm(valm, planes, mode);
       }
+
+    vmav<T,3> build_planes() const
+      {
+      size_t nplanes=1+(spin>0);
+      auto planes_ = vmav<T,4>::build_noncritical({nplanes, Ntheta(), (Nphi()+1)/2, 2}, UNINITIALIZED);
+      vmav<T,3> planes = planes_.template reinterpret<3>(
+        {nplanes, Ntheta(), Nphi()}, {planes_.stride(0), planes_.stride(1), 1});
+      return planes;
+      }
   };
 
 }

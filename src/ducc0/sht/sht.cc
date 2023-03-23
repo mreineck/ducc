@@ -2882,15 +2882,13 @@ template<typename T, typename Tloc> void synthesis_general(
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(mstart.shape(0)>0, "need at least m=0");
   size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
-  size_t nmaps = (spin==0) ? 1 : 2;
   MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
+  size_t nmaps = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
 
   SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes_ = vmav<complex<T>,3>::build_noncritical({nmaps, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
-  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
-    {nmaps, inter.Ntheta(), inter.Nphi()},
-    {2*planes_.stride(0), 2*planes_.stride(1), 1});
+  auto planes = inter.build_planes();
   inter.getPlane(alm, mstart, lstride, planes, mode);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
@@ -2912,16 +2910,15 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
   {
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
+  MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
   size_t nmaps = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
   MR_assert(mstart.shape(0)>0, "need at least m=0");
 
   SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes_ = vmav<complex<T>,3>::build_noncritical({nmaps, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
-  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
-    {nmaps, inter.Ntheta(), inter.Nphi()},
-    {2*planes_.stride(0), 2*planes_.stride(1), 1});
+  auto planes = inter.build_planes();
   mav_apply([](auto &v){v=0;}, nthreads, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
