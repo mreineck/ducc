@@ -144,21 +144,38 @@ template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm,
   const string &geometry, size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(
-  const cmav<complex<T>,2> &alm, vmav<T,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  const cmav<complex<T>,2> &alm,
+  vmav<T,2> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<Tloc,2> &loc,
+  double epsilon,
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  SHT_mode mode);
 
 template<typename T, typename Tloc> void adjoint_synthesis_general(
-  vmav<complex<T>,2> &alm, const cmav<T,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  vmav<complex<T>,2> &alm,
+  const cmav<T,2> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
+  const cmav<Tloc,2> &loc,
+  double epsilon,
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  SHT_mode mode);
 
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
   vmav<complex<T>,2> &alm, // (ncomp, *)
   const cmav<T,2> &map, // (ncomp, npix)
   size_t spin,
   size_t lmax,
-  size_t mmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
   const cmav<double,2> &loc, // (npix,2)
   double sigma_min, double sigma_max,
   size_t nthreads,

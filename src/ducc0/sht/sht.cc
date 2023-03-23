@@ -36,6 +36,7 @@
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/solvers.h"
+#include "ducc0/sht/sht_utils.h"
 
 namespace ducc0 {
 
@@ -1805,97 +1806,6 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
-template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
-  vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
-  {
-  constexpr size_t chunksize=64;
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  auto nm = legi.shape(2);
-  MR_assert(lego.shape(2)==nm, "dimension mismatch");
-  if ((npi==npo)&&(spi==spo)&&(legi.shape(1)==lego.shape(1)))  // shortcut
-    {
-    mav_apply([](complex<T> &a, complex<T> b) {a=b;}, nthreads, lego, legi);
-    return;
-    }
-  size_t nrings_in = legi.shape(1);
-  size_t nfull_in = 2*nrings_in-npi-spi;
-  size_t nrings_out = lego.shape(1);
-  size_t nfull_out = 2*nrings_out-npo-spo;
-  auto dthi = T(2*pi/nfull_in);
-  auto dtho = T(2*pi/nfull_out);
-  auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
-  size_t nfull = max(nfull_in, nfull_out);
-  T fct = ((spin&1)==0) ? 1 : -1;
-  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
-  MultiExp<T,complex<T>> phase(adjoint ? -shift : shift, (shift==0.) ? 1 : nrings_in+2);
-  execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
-    {
-    vmav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
-    vmav<complex<T>,1> buf({max(plan_in.bufsize(), plan_out.bufsize())}, UNINITIALIZED);
-    while (auto rng=sched.getNext())
-      {
-      for (size_t n=0; n<legi.shape(0); ++n)
-        {
-        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
-        for (size_t j=0; j+rng.lo<rng.hi; ++j)
-          {
-          // fill dark side
-          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-            {
-            complex<T> v1 = llegi(i,2*j);
-            complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-            tmp(i) = v1 + v2;
-            if ((im<nfull_in) && (i!=im))
-              tmp(im) = fct * (v1-v2);
-            else
-              tmp(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
-            }
-          plan_in.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), !adjoint);
-          if (shift!=0)
-            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-              {
-              if (i!=im)
-                tmp(i) *= phase[i];
-              tmp(im) *= conj(phase[i]);
-              }
-
-          // zero padding/truncation
-          if (nfull_out>nfull_in) // pad
-            {
-            size_t dist = nfull_out-nfull_in;
-            size_t nmove = nfull_in/2;
-            for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
-              tmp(i) = tmp(i-dist);
-            for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
-              tmp(i) = 0;
-            }
-          if (nfull_out<nfull_in) // truncate
-            {
-            size_t dist = nfull_in-nfull_out;
-            size_t nmove = nfull_out/2;
-            for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-              tmp(i-dist) = tmp(i);
-            }
-          plan_out.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), adjoint);
-          auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
-          for (size_t i=0; i<nrings_out; ++i)
-            {
-            size_t im = nfull_out-1+npo-i;
-            if (im==nfull_out) im=0;
-            T fct2 = (adjoint && (im==i)) ? T(0.5) : 1;
-            complex<T> v1 = fct2*tmp(i);
-            complex<T> v2 = fct2*fct*tmp(im);
-            llego(i,2*j) = norm * (v1 + v2);
-            if ((2*j+1)<llego.shape(1))
-              llego(i,2*j+1) = norm * (v1 - v2);
-            }
-          }
-        }
-      }
-    });
-  }
-
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -2965,21 +2875,21 @@ template void adjoint_analysis_2d(const cmav<complex<float>,2> &alm, vmav<float,
 
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm, vmav<T,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
+  const cmav<Tloc,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
   {
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(mstart.shape(0)>0, "need at least m=0");
   size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
-  size_t nmaps = (spin==0) ? 1 : 2;
   MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
+  size_t nmaps = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
 
-  SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
+  SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes_ = vmav<complex<T>,3>::build_noncritical({nmaps, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
-  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
-    {nmaps, inter.Ntheta(), inter.Nphi()},
-    {2*planes_.stride(0), 2*planes_.stride(1), 1});
-  inter.getPlane(alm, planes, mode);
+  auto planes = inter.build_planes();
+  inter.getPlane(alm, mstart, lstride, planes, mode);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   inter.interpol(planes, 0, 0, xtheta, xphi, map);
@@ -2987,41 +2897,41 @@ template<typename T, typename Tloc> void synthesis_general(
 
 template void synthesis_general(
   const cmav<complex<float>,2> &alm, vmav<float,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
 template void synthesis_general(
   const cmav<complex<double>,2> &alm, vmav<double,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
 
 template<typename T, typename Tloc> void adjoint_synthesis_general(
   vmav<complex<T>,2> &alm, const cmav<T,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<Tloc,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<Tloc,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
   {
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
+  MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
   size_t nmaps = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
+  MR_assert(mstart.shape(0)>0, "need at least m=0");
 
-  SphereInterpol<T> inter(lmax, mmax, spin, loc.shape(0),
+  SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
-  auto planes_ = vmav<complex<T>,3>::build_noncritical({nmaps, inter.Ntheta(), (inter.Nphi()+1)/2}, UNINITIALIZED);
-  vmav<T,3> planes(reinterpret_cast<T *>(planes_.data()),
-    {nmaps, inter.Ntheta(), inter.Nphi()},
-    {2*planes_.stride(0), 2*planes_.stride(1), 1});
+  auto planes = inter.build_planes();
   mav_apply([](auto &v){v=0;}, nthreads, planes);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
-  inter.updateAlm(alm, planes, mode);
+  inter.updateAlm(alm, mstart, lstride, planes, mode);
   }
 template void adjoint_synthesis_general(
   vmav<complex<float>,2> &alm, const cmav<float,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
 template void adjoint_synthesis_general(
   vmav<complex<double>,2> &alm, const cmav<double,2> &map,
-  size_t spin, size_t lmax, size_t mmax, const cmav<double,2> &loc,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
   double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
 
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
@@ -3029,28 +2939,22 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   const cmav<T,2> &map, // (ncomp, npix)
   size_t spin,
   size_t lmax,
-  size_t mmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
   const cmav<double,2> &loc, // (npix,2)
   double sigma_min, double sigma_max,
   size_t nthreads,
   size_t maxiter,
   double epsilon)
   {
-  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
-  for (size_t i=0, ofs=0; i<=mmax; ++i)
-    {
-    mstart(i) = ofs-i;
-    ofs += lmax+1-i;
-    }
-
   auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
     {
-    synthesis_general(xalm, xmap, spin, lmax, mmax, loc, 1e-1*epsilon,
+    synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
                       sigma_min, sigma_max, nthreads, STANDARD);
     };
   auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
     {
-    adjoint_synthesis_general(xalm, xmap, spin, lmax, mmax, loc, 1e-1*epsilon,
+    adjoint_synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
                               sigma_min, sigma_max, nthreads, STANDARD);
     };
   auto mapnorm = [&](const cmav<T,2> &xmap)
@@ -3071,7 +2975,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
       for (size_t m=0; m<mstart.shape(0); ++m)
         for (size_t l=m; l<=lmax; ++l)
           {
-          auto tmp = xalm(icomp,mstart(m)+l);
+          auto tmp = xalm(icomp,mstart(m)+l*lstride);
           res += norm(tmp) * ((m==0) ? 1 : 2);
           }
     return sqrt(res);
@@ -3090,7 +2994,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const cmav<float,2> &map, // (ncomp, npix)
   size_t spin,
   size_t lmax,
-  size_t mmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
   const cmav<double,2> &loc, // (npix,2)
   double sigma_min, double sigma_max,
   size_t nthreads,
@@ -3101,7 +3006,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const cmav<double,2> &map, // (ncomp, npix)
   size_t spin,
   size_t lmax,
-  size_t mmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
   const cmav<double,2> &loc, // (npix,2)
   double sigma_min, double sigma_max,
   size_t nthreads,
