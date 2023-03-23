@@ -170,13 +170,13 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
 funcs = (measure_duccfft_noncrit_inplace, measure_fftw)
 ttl = "duccfft/FFTW"
 ntry = 10
-nthr = 1
+nthr = 8
 nice_sizes = True
 limits = [8192, 2048, 256]
 #limits = [524288, 8192, 512]
-bench_nd(1, limits[0], nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
+#bench_nd(1, limits[0], nthr, ntry, "c16", funcs, 10, ttl, "1d.png", nice_sizes)
 bench_nd(2, limits[1], nthr, ntry, "c16", funcs, 10, ttl, "2d.png", nice_sizes)
 bench_nd(3, limits[2], nthr, ntry, "c16", funcs, 10, ttl, "3d.png", nice_sizes)
-bench_nd(1, limits[0], nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
+#bench_nd(1, limits[0], nthr, ntry, "c8", funcs, 10, ttl, "1d_single.png", nice_sizes)
 bench_nd(2, limits[1], nthr, ntry, "c8", funcs, 10, ttl, "2d_single.png", nice_sizes)
 bench_nd(3, limits[2], nthr, ntry, "c8", funcs, 10, ttl, "3d_single.png", nice_sizes)

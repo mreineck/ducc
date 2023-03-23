@@ -903,11 +903,11 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     }
   std::shared_ptr<Tplan> plan;
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  bool inplace = (out.ndim()==1)&&(out.stride(0)==1);
 
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
     size_t len=in.shape(axes[iax]);
+    bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
@@ -918,73 +918,125 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
         constexpr size_t nmax = 16;
         const auto &tin(iax==0? in : out);
         multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-        size_t nvec = 1;
-        if (it.critical_stride_trans(sizeof(T)))  // do bunches of transforms
-          nvec = nmax/vlen;
-        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), nvec, inplace);
+size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
+size_t n_simul=1;
+while(n_simul*2*working_set_size<=262144) n_simul*=2;
+n_simul = min(n_simul, vlen);
+size_t n_bunch = n_simul;
+while (n_bunch*sizeof(T)<=32) n_bunch*=2;
+n_simul = min(n_bunch, vlen);
+//bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
+if (inplace)
+  n_simul = n_bunch = 1;
+//cout << "nbunch " << n_bunch << ", nsimul "<<n_simul << endl;
+        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
 
-        if (nvec>1)
-          {
+// first, do all possible steps of size n_bunch, then n_simul
+if (n_bunch>1)
+  {
 #ifndef DUCC0_NO_SIMD
-          if constexpr (vlen>1)
-            {
-            TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-            while (it.remaining()>=vlen*nvec)
-              {
-              it.advance(vlen*nvec);
-              exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
-              }
-            }
-#endif
-          {
-          TmpStorage2<T,T,T0> storage2(storage);
-          while (it.remaining()>=nvec)
-            {
-            it.advance(nvec);
-            exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
-            }
-          }
-          }
-
-#ifndef DUCC0_NO_SIMD
-        if constexpr (vlen>1)
-          {
-          TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-          while (it.remaining()>=vlen)
-            {
-            it.advance(vlen);
-            exec(it, tin, out, storage2, *plan, fct, nth1d);
-            }
-          }
-        if constexpr (vlen>2)
-          if constexpr (simd_exists<T0,vlen/2>)
-            {
-            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/2)
-              {
-              it.advance(vlen/2);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
-              }
-            }
-        if constexpr (vlen>4)
-          if constexpr (simd_exists<T0,vlen/4>)
-            {
-            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/4)
-              {
-              it.advance(vlen/4);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
-              }
-            }
-#endif
+  if constexpr (vlen>1)
+    {
+    constexpr size_t lvlen = vlen;
+    if (n_simul>=lvlen)
+      {
+      if (it.remaining()>=n_bunch)
         {
-        TmpStorage2<T,T,T0> storage2(storage);
-        while (it.remaining()>0)
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=n_bunch)
           {
-          it.advance(1);
-          exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
+          it.advance(n_bunch);
+          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
           }
         }
+      }
+    if (n_simul==lvlen)
+      {
+      if (it.remaining()>=lvlen)
+        {
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=lvlen)
+          {
+          it.advance(lvlen);
+          exec(it, tin, out, storage2, *plan, fct, nth1d);
+          }
+        }
+      }
+    }
+  if constexpr ((vlen>2) && (simd_exists<T0,vlen/2>))
+    {
+    constexpr size_t lvlen = vlen/2;
+    if (n_simul>=lvlen)
+      {
+      if (it.remaining()>=n_bunch)
+        {
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=n_bunch)
+          {
+          it.advance(n_bunch);
+          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+          }
+        }
+      }
+    if (n_simul==lvlen)
+      {
+      if (it.remaining()>=lvlen)
+        {
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=lvlen)
+          {
+          it.advance(lvlen);
+          exec(it, tin, out, storage2, *plan, fct, nth1d);
+          }
+        }
+      }
+    }
+  if constexpr ((vlen>4) && (simd_exists<T0,vlen/4>))
+    {
+    constexpr size_t lvlen = vlen/4;
+    if (n_simul>=lvlen)
+      {
+      if (it.remaining()>=n_bunch)
+        {
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=n_bunch)
+          {
+          it.advance(n_bunch);
+          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+          }
+        }
+      }
+    if (n_simul==lvlen)
+      {
+      if (it.remaining()>=lvlen)
+        {
+        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+        while (it.remaining()>=lvlen)
+          {
+          it.advance(lvlen);
+          exec(it, tin, out, storage2, *plan, fct, nth1d);
+          }
+        }
+      }
+    }
+#endif
+  {
+  TmpStorage2<T,T,T0> storage2(storage);
+  while (it.remaining()>=n_bunch)
+    {
+    it.advance(n_bunch);
+    exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch, nth1d);
+    }
+  }
+  }
+  {
+  TmpStorage2<T,T,T0> storage2(storage);
+  while (it.remaining()>0)
+    {
+    it.advance(1);
+    exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
+    }
+  }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
@@ -1004,8 +1056,8 @@ struct ExecC2C
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
@@ -1047,8 +1099,8 @@ struct ExecHartley
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
@@ -1090,8 +1142,8 @@ struct ExecFHT
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
@@ -1135,8 +1187,8 @@ struct ExecFFTW
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
@@ -1182,8 +1234,8 @@ struct ExecDcst
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
