@@ -544,30 +544,30 @@ template<typename T> class SphereInterpol
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
+      // fix phi
+      size_t nj=2*mmax+1;
+      auto phikrn = getKernel(nphi_s, nphi_b);
+      vmav<T,1> phikrn2({nj});
+      for (size_t j=0; j<nj; ++j)
+        phikrn2(j) = T(phikrn[(j+1)/2]);
+      pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        // make halfcomplex
-        for (size_t itheta=0; itheta<ntheta_b; ++itheta)
-          planes(iplane, nbtheta+itheta, nbphi) = planes(iplane, nbtheta+itheta, nbphi-1);
         auto arr = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
-        // fix phi
-        size_t nj=2*mmax+1;
-        auto phikrn = getKernel(nphi_s, nphi_b);
-        vmav<T,1> phikrn2({nj});
-        for (size_t j=0; j<nj; ++j)
-          phikrn2(j) = T(phikrn[(j+1)/2]);
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
+          vmav<T,1> buf({rplan.bufsize()});
           for (size_t i=lo; i<hi; ++i)
             {
+            // make halfcomplex
+            planes(iplane, nbtheta+i, nbphi) = planes(iplane, nbtheta+i, nbphi-1);
             for (size_t j=0; j<nj; ++j)
               arr(i,j) *= phikrn2(j);
             for (size_t j=nj; j<nphi_b; ++j)
               arr(i,j) = T(0);
+            rplan.exec_copyback(&arr(i,0), buf.data(), T(1), false);
             }
           });
-        vfmav<T> ftmpx(arr);
-        r2r_fftpack(ftmpx, ftmpx, {1}, false, false, T(1), nthreads);
         }
 
       // fill border regions
@@ -642,23 +642,27 @@ template<typename T> class SphereInterpol
             }
         }
 
+      // fix phi
+      size_t nj=2*mmax+1;
+      auto phikrn = getKernel(nphi_b, nphi_s);
+      vmav<T,1> phikrn2({nj});
+      for (size_t j=0; j<nj; ++j)
+        phikrn2(j) = T(phikrn[(j+1)/2]);
+      pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
         auto arr = subarray<2>(planes, {{iplane}, {nbtheta, nbtheta+ntheta_b}, {nbphi,nbphi+nphi_b}});
-        // fix phi
-        vfmav<T> ftmpx(arr);
-        r2r_fftpack(ftmpx, ftmpx, {1}, true, true, T(1), nthreads);
-        size_t nj=2*mmax+1;
-        auto phikrn = getKernel(nphi_b, nphi_s);
-        vmav<T,1> phikrn2({nj});
-        for (size_t j=0; j<nj; ++j)
-          phikrn2(j) = T(phikrn[(j+1)/2]);
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
+          vmav<T,1> buf({rplan.bufsize()});
           for (size_t i=lo; i<hi; ++i)
             {
+            rplan.exec_copyback(&arr(i,0), buf.data(), T(1), true);
             for (size_t j=0; j<nj; ++j)
               arr(i,j) *= phikrn2(j);
+            // back from halfcomplex
+            planes(iplane, nbtheta+i, nbphi-1) = planes(iplane, nbtheta+i, nbphi);
+            planes(iplane, nbtheta+i, nbphi) = T(0);
             }
           });
         }
@@ -680,13 +684,6 @@ template<typename T> class SphereInterpol
       for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
 
-      // back from halfcomplex
-      for (size_t iplane=0; iplane<nplanes; ++iplane)
-        for (size_t itheta=0; itheta<ntheta_b; ++itheta)
-          {
-          planes(iplane, nbtheta+itheta, nbphi-1) = planes(iplane, nbtheta+itheta, nbphi);
-          planes(iplane, nbtheta+itheta, nbphi) = T(0);
-          }
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
