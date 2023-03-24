@@ -907,7 +907,6 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
     size_t len=in.shape(axes[iax]);
-    bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
@@ -918,17 +917,16 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
         constexpr size_t nmax = 16;
         const auto &tin(iax==0? in : out);
         multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
+//size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
+size_t working_set_size = sizeof(T)*(len+plan->bufsize());
 size_t n_simul=1;
 while(n_simul*2*working_set_size<=262144) n_simul*=2;
 n_simul = min(n_simul, vlen);
 size_t n_bunch = n_simul;
-while (n_bunch*sizeof(T)<=32) n_bunch*=2;
-n_simul = min(n_bunch, vlen);
-//bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
-if (inplace)
-  n_simul = n_bunch = 1;
-//cout << "nbunch " << n_bunch << ", nsimul "<<n_simul << endl;
+if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
+  while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32)) n_bunch*=2;
+bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
+MR_assert(n_bunch<=nmax, "must not happen");
         TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
 
 // first, do all possible steps of size n_bunch, then n_simul
