@@ -910,133 +910,134 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
-    execParallel(
-      util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
-      [&](Scheduler &sched) {
-        constexpr auto vlen = fft_simdlen<T0>;
-        constexpr size_t nmax = 16;
-        const auto &tin(iax==0? in : out);
-        multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-//size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
-size_t working_set_size = sizeof(T)*(len+plan->bufsize());
-size_t n_simul=1;
-while(n_simul*2*working_set_size<=262144) n_simul*=2;
-n_simul = min(n_simul, vlen);
-size_t n_bunch = n_simul;
-if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
-  //while ((n_bunch<nmax) && ((n_bunch*sizeof(T)<=32) || (n_bunch*2*working_set_size<=262144)))
-  while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32))
-    n_bunch*=2;
-bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
-MR_assert(n_bunch<=nmax, "must not happen");
-        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
+    execParallel(util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
+      [&](Scheduler &sched)
+      {
+      constexpr auto vlen = fft_simdlen<T0>;
+      constexpr size_t nmax = 16;
+      const auto &tin(iax==0? in : out);
+      multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 
-// first, do all possible steps of size n_bunch, then n_simul
-if (n_bunch>1)
-  {
+      //size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
+      size_t working_set_size = sizeof(T)*(len+plan->bufsize());
+      size_t n_simul=1;
+      while(n_simul*2*working_set_size<=262144) n_simul*=2;
+      n_simul = min(n_simul, vlen);
+      size_t n_bunch = n_simul;
+      if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
+        //while ((n_bunch<nmax) && ((n_bunch*sizeof(T)<=32) || (n_bunch*2*working_set_size<=262144)))
+        while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32))
+          n_bunch*=2;
+      bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
+      MR_assert(n_bunch<=nmax, "must not happen");
+      TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
+
+      // first, do all possible steps of size n_bunch, then n_simul
+      if (n_bunch>1)
+        {
 #ifndef DUCC0_NO_SIMD
-  if constexpr (vlen>1)
-    {
-    constexpr size_t lvlen = vlen;
-    if (n_simul>=lvlen)
-      {
-      if (it.remaining()>=n_bunch)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=n_bunch)
+        if constexpr (vlen>1)
           {
-          it.advance(n_bunch);
-          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+          constexpr size_t lvlen = vlen;
+          if (n_simul>=lvlen)
+            {
+            if (it.remaining()>=n_bunch)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
+              }
+            }
+          if (n_simul==lvlen)
+            {
+            if (it.remaining()>=lvlen)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
+            }
           }
-        }
-      }
-    if (n_simul==lvlen)
-      {
-      if (it.remaining()>=lvlen)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=lvlen)
+        if constexpr ((vlen>2) && (simd_exists<T0,vlen/2>))
           {
-          it.advance(lvlen);
-          exec(it, tin, out, storage2, *plan, fct, nth1d);
+          constexpr size_t lvlen = vlen/2;
+          if (n_simul>=lvlen)
+            {
+            if (it.remaining()>=n_bunch)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
+              }
+            }
+          if (n_simul==lvlen)
+            {
+            if (it.remaining()>=lvlen)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
+            }
           }
-        }
-      }
-    }
-  if constexpr ((vlen>2) && (simd_exists<T0,vlen/2>))
-    {
-    constexpr size_t lvlen = vlen/2;
-    if (n_simul>=lvlen)
-      {
-      if (it.remaining()>=n_bunch)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=n_bunch)
+        if constexpr ((vlen>4) && (simd_exists<T0,vlen/4>))
           {
-          it.advance(n_bunch);
-          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+          constexpr size_t lvlen = vlen/4;
+          if (n_simul>=lvlen)
+            {
+            if (it.remaining()>=n_bunch)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
+              }
+            }
+          if (n_simul==lvlen)
+            {
+            if (it.remaining()>=lvlen)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
+            }
           }
-        }
-      }
-    if (n_simul==lvlen)
-      {
-      if (it.remaining()>=lvlen)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=lvlen)
-          {
-          it.advance(lvlen);
-          exec(it, tin, out, storage2, *plan, fct, nth1d);
-          }
-        }
-      }
-    }
-  if constexpr ((vlen>4) && (simd_exists<T0,vlen/4>))
-    {
-    constexpr size_t lvlen = vlen/4;
-    if (n_simul>=lvlen)
-      {
-      if (it.remaining()>=n_bunch)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=n_bunch)
-          {
-          it.advance(n_bunch);
-          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
-          }
-        }
-      }
-    if (n_simul==lvlen)
-      {
-      if (it.remaining()>=lvlen)
-        {
-        TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
-        while (it.remaining()>=lvlen)
-          {
-          it.advance(lvlen);
-          exec(it, tin, out, storage2, *plan, fct, nth1d);
-          }
-        }
-      }
-    }
 #endif
-  {
-  TmpStorage2<T,T,T0> storage2(storage);
-  while (it.remaining()>=n_bunch)
-    {
-    it.advance(n_bunch);
-    exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch, nth1d);
-    }
-  }
-  }
-  {
-  TmpStorage2<T,T,T0> storage2(storage);
-  while (it.remaining()>0)
-    {
-    it.advance(1);
-    exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
-    }
-  }
+        {
+        TmpStorage2<T,T,T0> storage2(storage);
+        while (it.remaining()>=n_bunch)
+          {
+          it.advance(n_bunch);
+          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch, nth1d);
+          }
+        }
+        }
+        {
+        TmpStorage2<T,T,T0> storage2(storage);
+        while (it.remaining()>0)
+          {
+          it.advance(1);
+          exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
+          }
+        }
       });  // end of parallel region
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
