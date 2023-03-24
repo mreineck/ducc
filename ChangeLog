@@ -1,4 +1,8 @@
 0.30.0:
+- fft:
+    - transforms along contiguous axes should now be faster and scale better
+      with the number of threads
+
 - sht:
     - new function `pseudo_analysis_general` for iterative least-squares analyis
       of spherical maps on arbitrary grids

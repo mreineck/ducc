@@ -27,7 +27,8 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
     f2 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr, planning_timelimit=10)
+    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr,
+                       planning_timelimit=10)
     f1[()] = a
     times = []
     for i in range(nrepeat):
@@ -40,7 +41,8 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
 def measure_fftw_inplace(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    fftw = pyfftw.FFTW(f1, f1, flags=flags, axes=range(a.ndim), threads=nthr, planning_timelimit=10)
+    fftw = pyfftw.FFTW(f1, f1, flags=flags, axes=range(a.ndim), threads=nthr,
+                       planning_timelimit=10)
     times = []
     for i in range(nrepeat):
         f1[()] = a
