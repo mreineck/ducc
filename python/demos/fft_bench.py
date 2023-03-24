@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2019-2021 Max-Planck-Society
+# Copyright(C) 2019-2023 Max-Planck-Society
 
 
 import numpy as np
@@ -27,7 +27,7 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
     f2 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr)
+    fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr, planning_timelimit=10)
     f1[()] = a
     times = []
     for i in range(nrepeat):
@@ -36,6 +36,19 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
         t1 = time()
         times.append(t1-t0)
     return times, f2
+
+def measure_fftw_inplace(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
+    import pyfftw
+    f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
+    fftw = pyfftw.FFTW(f1, f1, flags=flags, axes=range(a.ndim), threads=nthr, planning_timelimit=10)
+    times = []
+    for i in range(nrepeat):
+        f1[()] = a
+        t0 = time()
+        fftw()
+        t1 = time()
+        times.append(t1-t0)
+    return times, f1
 
 
 def measure_fftw_est(a, nrepeat, nthr):
@@ -63,6 +76,17 @@ def measure_duccfft(a, nrepeat, nthr):
     for i in range(nrepeat):
         t0 = time()
         b = ducc0.fft.c2c(a, out=b, forward=True, nthreads=nthr)
+        t1 = time()
+        times.append(t1-t0)
+    return times, b
+
+
+def measure_duccfft_inplace(a, nrepeat, nthr):
+    times = []
+    for i in range(nrepeat):
+        b = a.copy()
+        t0 = time()
+        b = ducc0.fft.c2c(b, out=b, forward=True, nthreads=nthr)
         t1 = time()
         times.append(t1-t0)
     return times, b
@@ -167,10 +191,10 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.close()
 
 
-funcs = (measure_duccfft_noncrit_inplace, measure_fftw)
+funcs = (measure_duccfft_noncrit_inplace, measure_fftw_inplace)
 ttl = "duccfft/FFTW"
 ntry = 10
-nthr = 8
+nthr = 1
 nice_sizes = True
 limits = [8192, 2048, 256]
 #limits = [524288, 8192, 512]

@@ -924,7 +924,9 @@ while(n_simul*2*working_set_size<=262144) n_simul*=2;
 n_simul = min(n_simul, vlen);
 size_t n_bunch = n_simul;
 if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
-  while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32)) n_bunch*=2;
+  //while ((n_bunch<nmax) && ((n_bunch*sizeof(T)<=32) || (n_bunch*2*working_set_size<=262144)))
+  while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32))
+    n_bunch*=2;
 bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
 MR_assert(n_bunch<=nmax, "must not happen");
         TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
