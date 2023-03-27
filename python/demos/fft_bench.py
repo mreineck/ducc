@@ -165,6 +165,21 @@ def measure_mkl_fft(a, nrepeat, nthr):
     return times, b
 
 
+def measure_mkl_fft_inplace(a, nrepeat, nthr):
+    import os
+    os.environ['OMP_NUM_THREADS'] = str(nthr)
+    import mkl_fft
+    times = []
+    b = None
+    for i in range(nrepeat):
+        b=a.copy()
+        t0 = time()
+        c = mkl_fft.fftn(b, overwrite_x=True)
+        t1 = time()
+        times.append(t1-t0)
+    return times, c
+
+
 def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
              nice_sizes=True):
     print("{}D, type {}, max extent is {}:".format(ndim, tp, nmax))
