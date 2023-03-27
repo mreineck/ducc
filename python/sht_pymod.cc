@@ -712,7 +712,7 @@ py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
 
 template<typename T, typename Tloc> py::array Py2_synthesis_general(const py::array &alm_,
   size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &map__, double sigma_min, double sigma_max, const string &mode_)
+  size_t nthreads, py::object &map__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
@@ -724,28 +724,28 @@ template<typename T, typename Tloc> py::array Py2_synthesis_general(const py::ar
   auto map = to_vmav<T,2>(map_);
   {
   py::gil_scoped_release release;
-  synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode);
+  synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
   }
   return map_;
   }
 py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
   const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &map, double sigma_min, double sigma_max, const string &mode)
+  size_t nthreads, py::object &map, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
   {
   if (isPyarr<double>(loc))
     {
     if (isPyarr<complex<float>>(alm))
-      return Py2_synthesis_general<float,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode);
+      return Py2_synthesis_general<float,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
     else if (isPyarr<complex<double>>(alm))
-      return Py2_synthesis_general<double,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode);
+      return Py2_synthesis_general<double,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
    }
 #if 0
   else if (isPyarr<float>(loc))
     {
     if (isPyarr<complex<float>>(alm))
-      return Py2_synthesis_general<float,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max);
+      return Py2_synthesis_general<float,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
     else if (isPyarr<complex<double>>(alm))
-      return Py2_synthesis_general<double,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max);
+      return Py2_synthesis_general<double,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
    }
 #endif
   MR_fail("unsupported combination of data types");
@@ -754,7 +754,7 @@ py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
 
 template<typename T, typename Tloc> py::array Py2_adjoint_synthesis_general(const py::array &map_,
   size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &alm__, double sigma_min, double sigma_max, const string &mode_)
+  size_t nthreads, py::object &alm__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
@@ -767,28 +767,28 @@ template<typename T, typename Tloc> py::array Py2_adjoint_synthesis_general(cons
 
   {
   py::gil_scoped_release release;
-  adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode);
+  adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
   }
   return alm_;
   }
 py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t lmax,
   const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &alm, double sigma_min, double sigma_max, const string &mode)
+  size_t nthreads, py::object &alm, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
   {
   if (isPyarr<double>(loc))
     {
     if (isPyarr<float>(map))
-      return Py2_adjoint_synthesis_general<float,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode);
+      return Py2_adjoint_synthesis_general<float,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
     else if (isPyarr<double>(map))
-      return Py2_adjoint_synthesis_general<double,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode);
+      return Py2_adjoint_synthesis_general<double,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
     }
 #if 0
   else if (isPyarr<float>(loc))
     {
     if (isPyarr<float>(map))
-      return Py2_adjoint_synthesis_general<float,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max);
+      return Py2_adjoint_synthesis_general<float,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
     else if (isPyarr<double>(map))
-      return Py2_adjoint_synthesis_general<double,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max);
+      return Py2_adjoint_synthesis_general<double,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
     }
 #endif
   MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
@@ -2075,8 +2075,8 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
 
   // FIXME: maybe add mstart, lstride
-  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD");
-  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD");
+  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
+  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None);
 
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);

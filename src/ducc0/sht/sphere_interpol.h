@@ -46,6 +46,7 @@
 #include "ducc0/fft/fft.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/sht/sht_utils.h"
+#include "ducc0/infra/timers.h"
 
 namespace ducc0 {
 
@@ -518,8 +519,9 @@ template<typename T> class SphereInterpol
       return res;
       }
 
-    void getPlane(const cmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode) const
+    void getPlane(const cmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
       {
+      timers.push("alm2leg");
       size_t nplanes=1+(spin>0);
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
@@ -541,9 +543,11 @@ template<typename T> class SphereInterpol
       for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
       alm2leg(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
+      timers.poppush("theta resampling and deconvolution");
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
+      timers.poppush("phi FFT and dconvolution");
       // fix phi
       size_t nj=2*mmax+1;
       auto phikrn = getKernel(nphi_s, nphi_b);
@@ -570,6 +574,7 @@ template<typename T> class SphereInterpol
           });
         }
 
+      timers.poppush("dealing with borders");
       // fill border regions
       T fct = (spin&1) ? -1 : 1;
       for (size_t iplane=0; iplane<nplanes; ++iplane)
@@ -593,6 +598,7 @@ template<typename T> class SphereInterpol
             planes(iplane, i, nphi-vlen+j) = T(0);
           }
         }
+      timers.pop();
       }
 
     void getPlane(const cmav<complex<T>,1> &alm, vmav<T,3> &planes) const
@@ -617,11 +623,12 @@ template<typename T> class SphereInterpol
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    void updateAlm(vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode) const
+    void updateAlm(vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
       {
       size_t nplanes=1+(spin>0);
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
+      timers.push("dealing with borders");
       // move stuff from border regions onto the main grid
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
@@ -641,6 +648,8 @@ template<typename T> class SphereInterpol
             planes(iplane,nbtheta+ntheta_b-2-i, j+nbphi) += fct*planes(iplane,nbtheta+ntheta_b+i,j2+nbphi);
             }
         }
+
+      timers.poppush("phi FFT and deconvolution");
 
       // fix phi
       size_t nj=2*mmax+1;
@@ -666,6 +675,7 @@ template<typename T> class SphereInterpol
             }
           });
         }
+      timers.poppush("theta resampling and deconvolution");
       auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
 
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
@@ -687,7 +697,9 @@ template<typename T> class SphereInterpol
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
+      timers.poppush("leg2alm");
       leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
+      timers.pop();
       }
 
     void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const

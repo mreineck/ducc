@@ -154,7 +154,8 @@ template<typename T, typename Tloc> void synthesis_general(
   double epsilon,
   double sigma_min, double sigma_max,
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool verbose=false);
 
 template<typename T, typename Tloc> void adjoint_synthesis_general(
   vmav<complex<T>,2> &alm,
@@ -167,7 +168,8 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   double epsilon,
   double sigma_min, double sigma_max,
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool verbose=false);
 
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
   vmav<complex<T>,2> &alm, // (ncomp, *)

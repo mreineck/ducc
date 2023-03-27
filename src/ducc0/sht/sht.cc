@@ -37,6 +37,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/solvers.h"
 #include "ducc0/sht/sht_utils.h"
+#include "ducc0/infra/timers.h"
 
 namespace ducc0 {
 
@@ -2877,8 +2878,10 @@ template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm, vmav<T,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
   const cmav<Tloc,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose)
   {
+  TimerHierarchy timers("synthesis_general");
+  timers.push("setup");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(mstart.shape(0)>0, "need at least m=0");
   size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
@@ -2886,29 +2889,37 @@ template<typename T, typename Tloc> void synthesis_general(
   size_t nmaps = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
 
+  timers.poppush("SphereInterpol setup");
   SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
+  timers.poppush("build_planes");
   auto planes = inter.build_planes();
-  inter.getPlane(alm, mstart, lstride, planes, mode);
+  timers.poppush("getPlane");
+  inter.getPlane(alm, mstart, lstride, planes, mode, timers);
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
+  timers.poppush("interpol (u2nu)");
   inter.interpol(planes, 0, 0, xtheta, xphi, map);
+  timers.pop();
+  if (verbose) timers.report(cout);
   }
 
 template void synthesis_general(
   const cmav<complex<float>,2> &alm, vmav<float,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose);
 template void synthesis_general(
   const cmav<complex<double>,2> &alm, vmav<double,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose);
 
 template<typename T, typename Tloc> void adjoint_synthesis_general(
   vmav<complex<T>,2> &alm, const cmav<T,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<Tloc,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose)
   {
+  TimerHierarchy timers("adjoint_synthesis_general");
+  timers.push("setup");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
   MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
@@ -2916,23 +2927,29 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
   MR_assert(mstart.shape(0)>0, "need at least m=0");
 
+  timers.poppush("SphereInterpol setup");
   SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
     sigma_min, sigma_max, epsilon, nthreads);
+  timers.poppush("build_planes");
   auto planes = inter.build_planes();
   mav_apply([](auto &v){v=0;}, nthreads, planes);
+  timers.poppush("deinterpol (nu2u)");
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
-  inter.updateAlm(alm, mstart, lstride, planes, mode);
+  timers.poppush("updateAlm");
+  inter.updateAlm(alm, mstart, lstride, planes, mode, timers);
+  timers.pop();
+  if (verbose) timers.report(cout);
   }
 template void adjoint_synthesis_general(
   vmav<complex<float>,2> &alm, const cmav<float,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose);
 template void adjoint_synthesis_general(
   vmav<complex<double>,2> &alm, const cmav<double,2> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
-  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode, bool verbose);
 
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
   vmav<complex<T>,2> &alm, // (ncomp, *)
