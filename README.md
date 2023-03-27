@@ -124,6 +124,17 @@ The central algorithms are derived from Paul Swarztrauber's
 - multi-D transforms in double precision perform fairly similar to FFTW with
   FFTW_MEASURE; in single precision `ducc.fft` can be significantly faster.
 
+
+ducc.nufft
+----------
+
+Library for non-uniform FFTs in 1D/2D/3D
+(currently only supports transform types 1 and 2).
+The goal is to provide similar or better performance and accuracy than
+[FINUFFT](https://github.com/flatironinstitute/finufft), making use of lessons
+learned during the implementation of the `wgridder` module (see below).
+
+
 ducc.sht
 --------
 
@@ -132,14 +143,19 @@ is derived from [libsharp](https://arxiv.org/abs/1303.4945), but has been
 significantly enhanced.
 
 ### Noteworthy features
-- support for any grid based on iso-latitude rings with equidistant pixels in
-  each of the rings
+- very efficient support for spherical harmonic synthesis ("alm2map") operations
+  and their adjoint for any grid based on iso-latitude rings with equidistant
+  pixels in each of the rings.
+- support for the same operations on *entirely arbitrary* spherical grids,
+  i.e. without constraints on pixel locations. This is implemented via
+  intermediate iso-latitude grids and non-uniform FFTs.
 - support for accurate spherical harmonic analyis on certain sub-classes of
   grids (Clenshaw-Curtis, Fejer-1 and McEwen-Wiaux) at band limits beyond those
   for which quadrature weights exist. For details see
   [this note](https://wwwmpa.mpa-garching.mpg.de/~martin/shtnote.pdf).
+- iterative approximate spherical harmonic analysis on aritrary grids.
 - substantially improved transformation speed (up to a factor of 2) on the
-  above mentioned grid geometries for high band limits
+  above mentioned grid geometries for high band limits.
 - accelerated recurrences as presented in
   [Ishioka (2018)](https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf)
 - vector instruction support
@@ -206,16 +222,6 @@ as the `wgridder` component.
 - in combination these two aspects allow extremely accurate gridding/degridding
   operations (L2 error compared to explicit DFTs can go below 1e-12) with
   reasonable resource consumption
-
-
-ducc.nufft
-----------
-
-Library for non-uniform FFTs in 1D/2D/3D
-(currently only supports transform types 1 and 2).
-The goal is to provide similar or better performance and accuracy than
-[FINUFFT](https://github.com/flatironinstitute/finufft), making use of lessons
-learned during the implementation of the `wgridder` module.
 
 
 ducc.misc
