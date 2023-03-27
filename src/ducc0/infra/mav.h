@@ -1038,7 +1038,6 @@ template<typename Ttuple, typename Func>
     const Ttuple &ptrs, Func &&func)
   {
   auto leni=shp[idim], lenj=shp[idim+1];
-  auto locptrs(ptrs);
   size_t nbi = (leni+bsi-1)/bsi;
   size_t nbj = (lenj+bsj-1)/bsj;
   for (size_t bi=0; bi<nbi; ++bi)

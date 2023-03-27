@@ -1205,7 +1205,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
-          // NOTE: removed "static" here, because it leads to touble with gcc 7
+          // NOTE: removed "static" here, because it leads to trouble with gcc 7
           // static const type_index ticv = tidx<Tcv *>();
           const type_index ticv = tidx<Tcv *>();
 
