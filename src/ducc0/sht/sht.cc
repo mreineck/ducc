@@ -2901,7 +2901,7 @@ template<typename T, typename Tloc> void synthesis_general(
   timers.poppush("interpol (u2nu)");
   inter.interpol(planes, 0, 0, xtheta, xphi, map);
   timers.pop();
-  if (verbose) timers.report(cout);
+  if (verbose) timers.report(cerr);
   }
 
 template void synthesis_general(
@@ -2940,7 +2940,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   timers.poppush("updateAlm");
   inter.updateAlm(alm, mstart, lstride, planes, mode, timers);
   timers.pop();
-  if (verbose) timers.report(cout);
+  if (verbose) timers.report(cerr);
   }
 template void adjoint_synthesis_general(
   vmav<complex<float>,2> &alm, const cmav<float,2> &map,
