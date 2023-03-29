@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -131,7 +131,7 @@ template<typename T> class Py_Interpolator
     Py_Interpolator(const py::array &slm_, const py::array &blm_,
       bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
       : conv(lmax, kmax, ofactor, epsilon, nthreads),
-        cube({(separate ? size_t(slm_.shape(0)) : 1u), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
+        cube(conv.buildCube(separate ? size_t(slm_.shape(0)) : 1u))
       {
       auto vslm = to_cmav<complex<T>,2>(slm_);
       auto vblm = to_cmav<complex<T>,2>(blm_);
