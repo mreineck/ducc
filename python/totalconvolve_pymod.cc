@@ -129,8 +129,8 @@ template<typename T> class Py_Interpolator
 
   public:
     Py_Interpolator(const py::array &slm_, const py::array &blm_,
-      bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
-      : conv(lmax, kmax, ofactor, epsilon, nthreads),
+      bool separate, size_t lmax, size_t kmax, size_t npoints, double sigma_min, double sigma_max, double epsilon, int nthreads)
+      : conv(lmax, kmax, npoints, sigma_min, sigma_max, epsilon, nthreads),
         cube(conv.buildCube(separate ? size_t(slm_.shape(0)) : 1u))
       {
       auto vslm = to_cmav<complex<T>,2>(slm_);
@@ -167,8 +167,8 @@ template<typename T> class Py_Interpolator
         }
       }
       }
-    Py_Interpolator(size_t lmax, size_t kmax, size_t ncomp_, T epsilon, T ofactor, int nthreads)
-      : conv(lmax, kmax, ofactor, epsilon, nthreads),
+    Py_Interpolator(size_t lmax, size_t kmax, size_t ncomp_, size_t npoints, double sigma_min, double sigma_max, double epsilon, int nthreads)
+      : conv(lmax, kmax, npoints, sigma_min, sigma_max, epsilon, nthreads),
         cube({size_t(ncomp_), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
       {}
 
@@ -296,10 +296,12 @@ lmax : int, 0 <= lmax
     In other words, the band limit of the involved functions
 kmax : int, 0 <= kmax <= lmax
     maximum m (or azimuthal moment) for the beam coefficients
-sigma : float, 1.2 <= sigma <= 2.5
-    the (approximate) oversampling factor to use for the calculation.
-    Lower sigma lead to smaller data cubes, but slower interpolation, and only
-    work for relatively low accuracies.
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
 epsilon : float, 1e-12 <= epsilon <= 1e-1
     the desired relative accuracy of the interpolation
     NOTE: epsilons near the accuracy limit can only be reached by choosing
@@ -320,10 +322,12 @@ lmax : int, 0 <= lmax
     In other words, the band limit of the involved functions
 kmax : int, 0 <= kmax <= lmax
     maximum m (or azimuthal moment) for the beam coefficients
-sigma : float, 1.2 <= sigma <= 2.5
-    the (approximate) oversampling factor to use for the calculation.
-    Lower sigma lead to smaller data cubes, but slower interpolation, and only
-    work for relatively low accuracies.
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
 epsilon : float, 3e-5 <= epsilon <= 1e-1
     the desired relative accuracy of the interpolation
     NOTE: epsilons near the accuracy limit can only be reached by choosing
@@ -634,13 +638,14 @@ lmax : int
     maximum l in the coefficient arays
 kmax : int
     maximum azimuthal moment in the beam coefficients
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
 epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
-ofactor : float
-    oversampling factor to be used for the interpolation grids.
-    Should be in the range [1.2; 2], a typical value is 1.5
-    Increasing this factor makes (adjoint) convolution slower and
-    increases memory consumption, but speeds up interpolation/deinterpolation.
 nthreads : the number of threads to use for computation
 )""";
 
@@ -656,13 +661,14 @@ kmax : int
 ncomp : int
     the number of components which are going to input to `deinterpol`.
     Can be 1 or 3.
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
 epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
-ofactor : float
-    oversampling factor to be used for the interpolation grids.
-    Should be in the range [1.2; 2], a typical value is 1.5
-    Increasing this factor makes (adjoint) convolution slower and
-    increases memory consumption, but speeds up interpolation/deinterpolation.
 nthreads : the number of threads to use for computation
 )""";
 
@@ -745,8 +751,8 @@ void add_totalconvolve(py::module_ &msup)
 
   using conv_d = Py_ConvolverPlan<double>;
   py::class_<conv_d> (m, "ConvolverPlan", py::module_local(), Py_ConvolverPlan_DS)
-    .def(py::init<size_t, size_t, double, double, size_t>(), Py_ConvolverPlan_init_DS,
-      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_init_DS,
+      "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_d::Ntheta, Py_ConvolverPlan_Ntheta_DS)
     .def("Nphi", &conv_d::Nphi, Py_ConvolverPlan_Nphi_DS)
     .def("Npsi", &conv_d::Npsi, Py_ConvolverPlan_Npsi_DS)
@@ -764,8 +770,8 @@ void add_totalconvolve(py::module_ &msup)
       "slm"_a, "blm"_a, "mbeam"_a, "planes"_a);
   using conv_f = Py_ConvolverPlan<float>;
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local(), Py_ConvolverPlan_f_DS)
-    .def(py::init<size_t, size_t, double, double, size_t>(), Py_ConvolverPlan_f_init_DS,
-      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_f_init_DS,
+      "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta, Py_ConvolverPlan_Ntheta_DS)
     .def("Nphi", &conv_f::Nphi, Py_ConvolverPlan_Nphi_DS)
     .def("Npsi", &conv_f::Npsi, Py_ConvolverPlan_Npsi_DS)
@@ -784,21 +790,19 @@ void add_totalconvolve(py::module_ &msup)
 
   using inter_d = Py_Interpolator<double>;
   py::class_<inter_d> (m, "Interpolator", py::module_local(), Py_Interpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, double, double, int>(),
-      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
-      "nthreads"_a=0)
-    .def(py::init<size_t, size_t, size_t, double, double, int>(), initadjoint_DS,
-      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5, "nthreads"_a=0)
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, size_t, double, double, double, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
     .def ("interpol", &inter_d::Py_Interpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_d::Py_deinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_d::Py_getSlm, getSlm_DS, "beam"_a);
   using inter_f = Py_Interpolator<float>;
   py::class_<inter_f> (m, "Interpolator_f", py::module_local(), Py_Interpolator_DS)
-    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, float, float, int>(),
-      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5f,
-      "nthreads"_a=0)
-    .def(py::init<size_t, size_t, size_t, float, float, int>(), initadjoint_DS,
-      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5f, "nthreads"_a=0)
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, size_t, double, double, double, int>(),
+      initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
+      "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
     .def ("interpol", &inter_f::Py_Interpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_f::Py_deinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::Py_getSlm, getSlm_DS, "beam"_a);

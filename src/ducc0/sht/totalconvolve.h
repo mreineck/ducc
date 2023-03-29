@@ -45,6 +45,7 @@
 #include "ducc0/fft/fft1d.h"
 #include "ducc0/fft/fft.h"
 #include "ducc0/math/math_utils.h"
+#include "ducc0/nufft/nufft.h"
 
 namespace ducc0 {
 
@@ -63,10 +64,11 @@ template<typename T> class ConvolverPlan
     // _s: small grid
     // _b: oversampled grid
     // no suffix: grid with borders
-    size_t nphi_s, ntheta_s, npsi_s, nphi_b, ntheta_b, npsi_b;
-    double dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
-
+    size_t nphi_s, ntheta_s, npsi_s;
+    size_t kernel_index;
     shared_ptr<PolynomialKernel> kernel;
+    size_t nphi_b, ntheta_b, npsi_b;
+    double dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
     size_t nbphi, nbtheta;
     size_t nphi, ntheta;
     double phi0, theta0;
@@ -361,34 +363,31 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    double realsigma() const
-      {
-      return min(double(npsi_b)/(2*kmax+1),
-                 min(double(nphi_b)/(2*lmax+1), double(ntheta_b)/(lmax+1)));
-      }
 
   public:
-    ConvolverPlan(size_t lmax_, size_t kmax_, double sigma, double epsilon,
-      size_t nthreads_)
+    ConvolverPlan(size_t lmax_, size_t kmax_, size_t npoints, double sigma_min,
+      double sigma_max, double epsilon, size_t nthreads_)
       : nthreads(adjust_nthreads(nthreads_)),
         lmax(lmax_),
         kmax(kmax_),
         nphi_s(2*good_size_real(lmax+1)),
         ntheta_s(nphi_s/2+1),
         npsi_s(kmax*2+1),
-        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*sigma/2.)))),
-        ntheta_b(nphi_b/2+1),
-        npsi_b(size_t(npsi_s*sigma+0.99999)),
+        kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
+          {(2*ntheta_s-2), nphi_s, npsi_s}, npoints, true, nthreads)),
+        kernel(selectKernel(kernel_index)),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
+        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),
+        npsi_b(size_t(npsi_s*ducc0::getKernel(kernel_index).ofactor+0.99999)),
         dphi(2*pi/nphi_b),
         dtheta(pi/(ntheta_b-1)),
         dpsi(2*pi/npsi_b),
         xdphi(1./dphi),
         xdtheta(1./dtheta),
         xdpsi(1./dpsi),
-        kernel(selectKernel<T>(realsigma(), 3, epsilon)),
         nbphi((kernel->support()+1)/2),
         nbtheta((kernel->support()+1)/2),
-        nphi((nphi_b+2*nbphi+vlen)+((nphi_b+2*nbphi+vlen)&1)),
+        nphi((nphi_b+2*nbphi+vlen)+((nphi_b+2*nbphi+vlen)&1)), // we need this to be even
         ntheta(ntheta_b+2*nbtheta),
         phi0(nbphi*(-dphi)),
         theta0(nbtheta*(-dtheta))
