@@ -9,6 +9,12 @@
     - rework the general SHT routines, leading to more performance and smaller
       memory footprint
 
+- totalconvolve:
+    - API CHANGE!
+      bring interface more in line with SHT functions.
+      This basically means replacing `ofactor` parameters with `sigma_min`,
+      `sigma_max` and `npoints`.
+
 
 0.29.0:
 - general:
