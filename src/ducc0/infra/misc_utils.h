@@ -95,7 +95,7 @@ template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
   }
 
 #ifdef __GLIBC__
-bool preallocate_memory(double gbytes)
+inline bool preallocate_memory(double gbytes)
   {
   mallopt(M_MMAP_MAX, 0);  // never do mmap() for memory allocation
   mallopt(M_TRIM_THRESHOLD, -1);  // never give memory back to OS

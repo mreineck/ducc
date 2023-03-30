@@ -1867,6 +1867,18 @@ template<typename T> void alm2leg(  // associated Legendre transform
     return;
     }
 
+if ((nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
+  {
+  auto ntheta_tmp = good_size_complex(lmax+1)+1;
+  vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+  for (size_t i=0; i<ntheta_tmp; ++i)
+    theta_tmp(i) = i*pi/(ntheta_tmp-1);
+  vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
+  alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+  resample_CC_leg_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
+  return;
+  } 
+
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);

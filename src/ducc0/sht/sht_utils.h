@@ -29,6 +29,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/fft/fft1d.h"
+#include "ducc0/nufft/nufft.h"
 
 namespace ducc0 {
 
@@ -226,7 +227,90 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
       }
     });
   }
+#if 1
+template<typename T> void resample_CC_leg_to_irregular(const cmav<complex<T>,3> &legi, vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
+  {
+SimpleTimer t0;
+  auto nplanes = legi.shape(0);
+  MR_assert(lego.shape(0)==nplanes, "number of components mismatch");
+  MR_assert(lego.shape(1)==theta.shape(0), "ntheta mismatch");
+  MR_assert(nplanes == 1+(spin>0), "number of components mismatch");
+  auto ntheta_s = legi.shape(1);
+  size_t lmax = ntheta_s-2;
+  auto nm = mval.shape(0);
+  MR_assert(lego.shape(2)==nm, "nm mismatch");
+  double epsilon = is_same<T,float>::value ? 1e-7 : 2e-13;
+  auto kernel_index = findNufftKernel<T,T>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
+                                           1000000000, true, nthreads);
+  auto kernel = ducc0::getKernel(kernel_index);
+  auto poly = selectKernel(kernel_index);
+  auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
+  const size_t nborder = kernel.W/2+2;
+  auto legtmp = vmav<complex<T>,3>::build_noncritical({nplanes, ntheta_b+2*nborder, nm}, UNINITIALIZED);
+  auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
+  auto kernfunc = poly->corfunc((2*ntheta_s-2)/2+1, 1./(2*ntheta_b-2), nthreads);
+cout << "setup: " << t0() << endl;
 
+  resample_and_convolve_theta(legi, true, true, legsub, true, true, kernfunc, spin, nthreads, false);
+cout << "resample_theta: " << t0() << endl;
+
+  // fill borders
+  T fct = (spin&1) ? -1 : 1;
+  for (size_t iplane=0; iplane<nplanes; ++iplane)
+    for (size_t mi=0; mi<nm; ++mi)
+      {
+      T fct2 = fct * ((mval(mi)&1) ? -T(1) : T(1));
+      for (size_t i=0; i<nborder; ++i)
+        {
+        legtmp(iplane,nborder-1-i,mi) = fct2*legtmp(iplane,nborder+1+i,mi);
+        legtmp(iplane,nborder+ntheta_b+i,mi) = fct2*legtmp(iplane,nborder+ntheta_b-2-i,mi);
+        }
+      }
+cout << "borders: " << t0() << endl;
+
+  double dtheta_b = pi/(ntheta_b-1);
+  vmav<double,2> buf({theta.shape(0),poly->support()}, UNINITIALIZED);
+  vmav<size_t,1> idx0({theta.shape(0)}, UNINITIALIZED);
+  for (size_t itheta=0; itheta<theta.shape(0); ++itheta)
+    {
+    double fidx0 = nborder + theta(itheta)/dtheta_b - kernel.W*0.5;
+    idx0(itheta) = size_t(fidx0+1);
+    for (size_t i=0; i<kernel.W; ++i)
+      buf(itheta,i) = poly->eval((2./kernel.W)*(nborder + theta(itheta)/dtheta_b - (idx0(itheta)+i)));
+    }
+cout << "wgtpre: " << t0() << endl;
+  constexpr size_t blksz=64;
+  size_t nthetablock = (theta.shape(0)+blksz-1)/blksz;
+  execDynamic(nthetablock, nthreads, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      {
+      for (size_t ithetablk=rng.lo; ithetablk<rng.hi; ++ithetablk)
+        {
+        for (size_t bmi=0; bmi<nm; bmi+=blksz)
+          {
+          size_t bmie=min(nm, bmi+blksz);
+          for (size_t itheta=ithetablk*blksz; itheta<min(theta.shape(0), (ithetablk+1)*blksz); ++itheta)
+            {
+            size_t idx00 = idx0(itheta);
+            double lbuf[20];
+            for (size_t i=0; i<kernel.W; ++i) lbuf[i] = buf(itheta,i);
+            for (size_t iplane=0; iplane<nplanes; ++iplane)
+              for (size_t mi=bmi; mi<bmie; ++mi)
+                {
+                complex<double> v=0;
+                for (size_t i=0; i<kernel.W; ++i)
+                  v += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
+                lego(iplane, itheta, mi) = complex<T>(v);
+                }
+            }
+          }
+        }
+      }
+    });
+cout << "weight: " << t0() << endl;
+  }
+#endif
 }
 
 }
