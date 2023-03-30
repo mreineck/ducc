@@ -50,7 +50,6 @@ ncomp = 1
 separate = True
 nptg = 50000000
 epsilon = 1e-4
-ofactor = 1.6
 nthreads = 0  # use as many threads as available
 
 ncomp2 = ncomp if separate else 1
@@ -66,13 +65,12 @@ blm = random_alm(lmax, kmax, ncomp)
 t0 = time.time()
 # build interpolator object for slm and blm
 foo = ducc0.totalconvolve.Interpolator(slm, blm, separate, lmax, kmax,
-                                       epsilon=epsilon, ofactor=ofactor,
+                                       epsilon=epsilon, npoints=nptg,
                                        nthreads=nthreads)
 t1 = time.time()-t0
 
 print("Convolving sky and beam with lmax=mmax={}, kmax={}".format(lmax, kmax))
-print("Interpolation taking place with a maximum error of {}\n"
-      "and an oversampling factor of {}".format(epsilon, ofactor))
+print("Interpolation taking place with a maximum error of {}".format(epsilon))
 # supp = foo.support()
 # print("(resulting in a kernel support size of {}x{})".format(supp, supp))
 if ncomp == 1:
@@ -97,7 +95,7 @@ del foo
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
 t0 = time.time()
 fake = rng.uniform(0., 1., (ncomp2, ptg.shape[0]))
-foo2 = ducc0.totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2 = ducc0.totalconvolve.Interpolator(lmax, kmax, ncomp2, epsilon=epsilon, npoints=nptg, nthreads=nthreads)
 t0 = time.time()
 foo2.deinterpol(ptg.reshape((-1, 3)), fake)
 print("Adjoint interpolation: {}s".format(time.time()-t0))
@@ -111,7 +109,7 @@ print("Adjointness error: {}".format(v1/v2-1.))
 
 # build interpolator object for slm and blm
 t0 = time.time()
-foo_f = ducc0.totalconvolve.Interpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo_f = ducc0.totalconvolve.Interpolator_f(slm.astype(np.complex64), blm.astype(np.complex64), separate, lmax, kmax, epsilon=epsilon, npoints=nptg, nthreads=nthreads)
 print("\nSingle precision convolution/interpolation:")
 print("preparation of interpolation grid: {}s".format(time.time()-t0))
 
@@ -123,7 +121,7 @@ t0 = time.time()
 bar_f = foo_f.interpol(ptgf)
 del foo_f
 print("Interpolating {} random angle triplets: {}s".format(nptg, time.time()-t0))
-foo2_f = ducc0.totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, ofactor=ofactor, nthreads=nthreads)
+foo2_f = ducc0.totalconvolve.Interpolator_f(lmax, kmax, ncomp2, epsilon=epsilon, npoints=nptg, nthreads=nthreads)
 t0 = time.time()
 foo2_f.deinterpol(ptgf.reshape((-1, 3)), fake_f)
 print("Adjoint interpolation: {}s".format(time.time()-t0))

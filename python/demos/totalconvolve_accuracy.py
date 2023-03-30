@@ -63,7 +63,7 @@ blm = random_alm(lmax, kmax, ncomp)
 
 t0 = time.time()
 
-plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, sigma=1.5, epsilon=1e-4, nthreads=nthr)
+plan = totalconvolve.ConvolverPlan(lmax=lmax, kmax=kmax, epsilon=1e-4, nthreads=nthr)
 cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
 cube[()] = 0
 plan.getPlane(slm[0, :], blm[0, :], 0, cube[0:1])
