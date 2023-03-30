@@ -50,6 +50,11 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
     using ConvolverPlan<T>::Ntheta;
     using ConvolverPlan<T>::Nphi;
     using ConvolverPlan<T>::Npsi;
+    // for backwards compatibility
+    Py_ConvolverPlan(size_t lmax_, size_t kmax_, double sigma,
+      double epsilon, size_t nthreads_)
+      : Py_ConvolverPlan(lmax_, kmax_, 1000000000,
+                         sigma-0.05, sigma+0.05, epsilon, nthreads_) {}
     vector<size_t> Py_getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
       { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
     void Py_getPlane(const py::array &slm_, const py::array &blm_,
@@ -171,6 +176,14 @@ template<typename T> class Py_Interpolator
       : conv(lmax, kmax, npoints, sigma_min, sigma_max, epsilon, nthreads),
         cube({size_t(ncomp_), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
       {}
+    //for backwards compatibility
+    Py_Interpolator(const py::array &slm_, const py::array &blm_,
+      bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
+      : Py_Interpolator(slm_, blm_,separate, lmax, kmax, 1000000000,
+                        ofactor-0.05, ofactor+0.05, epsilon, nthreads) {}
+    Py_Interpolator(size_t lmax, size_t kmax, size_t ncomp_, T epsilon, T ofactor, int nthreads)
+      : Py_Interpolator(lmax, kmax, ncomp_, 1000000000,
+                        ofactor-0.05, ofactor+0.05, epsilon, nthreads) {}
 
     py::array Py_Interpol(const py::array &ptg) const
       {
@@ -753,6 +766,9 @@ void add_totalconvolve(py::module_ &msup)
   py::class_<conv_d> (m, "ConvolverPlan", py::module_local(), Py_ConvolverPlan_DS)
     .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_init_DS,
       "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
+// for backwards compatibility
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_d::Ntheta, Py_ConvolverPlan_Ntheta_DS)
     .def("Nphi", &conv_d::Nphi, Py_ConvolverPlan_Nphi_DS)
     .def("Npsi", &conv_d::Npsi, Py_ConvolverPlan_Npsi_DS)
@@ -772,6 +788,9 @@ void add_totalconvolve(py::module_ &msup)
   py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local(), Py_ConvolverPlan_f_DS)
     .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_f_init_DS,
       "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
+// for backwards compatibility
+    .def(py::init<size_t, size_t, double, double, size_t>(),
+      "lmax"_a, "kmax"_a, "sigma"_a, "epsilon"_a, "nthreads"_a=0)
     .def("Ntheta", &conv_f::Ntheta, Py_ConvolverPlan_Ntheta_DS)
     .def("Nphi", &conv_f::Nphi, Py_ConvolverPlan_Nphi_DS)
     .def("Npsi", &conv_f::Npsi, Py_ConvolverPlan_Npsi_DS)
@@ -794,6 +813,12 @@ void add_totalconvolve(py::module_ &msup)
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
+// for backwards compatibility
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, double, double, int>(),
+      "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
+      "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, double, double, int>(),
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5, "nthreads"_a=0)
     .def ("interpol", &inter_d::Py_Interpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_d::Py_deinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_d::Py_getSlm, getSlm_DS, "beam"_a);
@@ -803,6 +828,12 @@ void add_totalconvolve(py::module_ &msup)
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
+// for backwards compatibility
+    .def(py::init<const py::array &, const py::array &, bool, size_t, size_t, float, float, int>(),
+      "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
+      "nthreads"_a=0)
+    .def(py::init<size_t, size_t, size_t, float, float, int>(),
+      "lmax"_a, "kmax"_a, "ncomp"_a, "epsilon"_a, "ofactor"_a=1.5, "nthreads"_a=0)
     .def ("interpol", &inter_f::Py_Interpol, interpol_DS, "ptg"_a)
     .def ("deinterpol", &inter_f::Py_deinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_f::Py_getSlm, getSlm_DS, "beam"_a);
