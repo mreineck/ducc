@@ -280,30 +280,26 @@ cout << "borders: " << t0() << endl;
     }
 cout << "wgtpre: " << t0() << endl;
   constexpr size_t blksz=64;
-  size_t nthetablock = (theta.shape(0)+blksz-1)/blksz;
-  execDynamic(nthetablock, nthreads, 1, [&](Scheduler &sched)
+  execParallel(theta.shape(0), nthreads, [&](size_t lo, size_t hi)
     {
-    while (auto rng=sched.getNext())
+    complex<double> vbuf[blksz];
+    for (size_t bmi=0; bmi<nm; bmi+=blksz)
       {
-      for (size_t ithetablk=rng.lo; ithetablk<rng.hi; ++ithetablk)
+      size_t bmie=min(nm, bmi+blksz);
+      for (size_t itheta=lo; itheta<hi; ++itheta)
         {
-        for (size_t bmi=0; bmi<nm; bmi+=blksz)
+        size_t idx00 = idx0(itheta);
+        double lbuf[20];
+        for (size_t i=0; i<kernel.W; ++i) lbuf[i] = buf(itheta,i);
+        for (size_t iplane=0; iplane<nplanes; ++iplane)
           {
-          size_t bmie=min(nm, bmi+blksz);
-          for (size_t itheta=ithetablk*blksz; itheta<min(theta.shape(0), (ithetablk+1)*blksz); ++itheta)
-            {
-            size_t idx00 = idx0(itheta);
-            double lbuf[20];
-            for (size_t i=0; i<kernel.W; ++i) lbuf[i] = buf(itheta,i);
-            for (size_t iplane=0; iplane<nplanes; ++iplane)
-              for (size_t mi=bmi; mi<bmie; ++mi)
-                {
-                complex<double> v=0;
-                for (size_t i=0; i<kernel.W; ++i)
-                  v += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
-                lego(iplane, itheta, mi) = complex<T>(v);
-                }
-            }
+          for (size_t mi=bmi; mi<bmie; ++mi)
+            vbuf[mi-bmi]=0;
+          for (size_t i=0; i<kernel.W; ++i)
+            for (size_t mi=bmi; mi<bmie; ++mi)
+              vbuf[mi-bmi] += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
+          for (size_t mi=bmi; mi<bmie; ++mi)
+            lego(iplane, itheta, mi) = complex<T>(vbuf[mi-bmi]);
           }
         }
       }
