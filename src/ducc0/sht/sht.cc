@@ -1806,6 +1806,8 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
+#define DUCC0_SHT_THETA_NUFFT
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1867,17 +1869,19 @@ template<typename T> void alm2leg(  // associated Legendre transform
     return;
     }
 
-if ((nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
-  {
-  auto ntheta_tmp = good_size_complex(lmax+1)+1;
-  vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-  for (size_t i=0; i<ntheta_tmp; ++i)
-    theta_tmp(i) = i*pi/(ntheta_tmp-1);
-  vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
-  alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-  resample_CC_leg_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
-  return;
-  } 
+#ifdef DUCC0_SHT_THETA_NUFFT // 1D theta NUFFT for large isolatitude grids with irregular spacing
+  if ((nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
+    {
+    auto ntheta_tmp = good_size_complex(lmax+1)+1;
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp(i) = i*pi/(ntheta_tmp-1);
+    vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
+    alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+    resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
+    return;
+    } 
+#endif
 
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
@@ -1954,6 +1958,20 @@ template<typename T> void leg2alm(  // associated Legendre transform
     leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
     return;
     }
+
+#ifdef DUCC0_SHT_THETA_NUFFT  // 1D theta NUFFT for large isolatitude grids with irregular spacing
+  if ((nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
+    {
+    auto ntheta_tmp = good_size_complex(lmax+1)+1;
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+    for (size_t i=0; i<ntheta_tmp; ++i)
+      theta_tmp(i) = i*pi/(ntheta_tmp-1);
+    vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
+    resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
+    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+    return;
+    } 
+#endif
 
   auto norm_l = Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
