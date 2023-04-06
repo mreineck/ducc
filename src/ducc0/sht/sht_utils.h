@@ -279,7 +279,7 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
   constexpr size_t blksz=16;
   execParallel(nm, nthreads, [&](size_t lo, size_t hi)
     {
-    complex<double> vbuf[blksz];
+    vmav<complex<double>,1> vbuf({blksz});
     for (size_t bti=0; bti<theta.shape(0); bti+=blksz)
       {
       size_t btie=min(theta.shape(0), bti+blksz);
@@ -294,12 +294,12 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
           for (size_t iplane=0; iplane<nplanes; ++iplane)
             {
             for (size_t mi=bmi; mi<bmie; ++mi)
-              vbuf[mi-bmi]=0;
+              vbuf(mi-bmi)=0;
             for (size_t i=0; i<kernel.W; ++i)
               for (size_t mi=bmi; mi<bmie; ++mi)
-                vbuf[mi-bmi] += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
+                vbuf(mi-bmi) += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
             for (size_t mi=bmi; mi<bmie; ++mi)
-              lego(iplane, itheta, mi) = complex<T>(vbuf[mi-bmi]);
+              lego(iplane, itheta, mi) = complex<T>(vbuf(mi-bmi));
             }
           }
         }
