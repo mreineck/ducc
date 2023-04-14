@@ -451,6 +451,7 @@ class Distribution
     std::atomic<size_t> cur_dynamic_;
     size_t chunksize_;
     double fact_max_;
+// FIXME: put some space between nextstart's entries to avoid false sharing?
     std::vector<size_t> nextstart;
     enum SchedMode { SINGLE, STATIC, DYNAMIC, GUIDED };
     SchedMode mode;
@@ -474,13 +475,13 @@ class Distribution
       {
       mode = STATIC;
       nthreads_ = adjust_nthreads(nthreads);
-      if (nthreads_ == 1)
-        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? (nwork_+nthreads_-1)/nthreads_
                                  : chunksize;
       if (chunksize_>=nwork_)
         return execSingle(nwork_, std::move(f));
+// if there are fewer chunks than threads, reduce nthreads
+      nthreads_ = std::min(nthreads_, (nwork_+chunksize_-1)/chunksize_);
       nextstart.resize(nthreads_);
       for (size_t i=0; i<nextstart.size(); ++i)
         nextstart[i] = i*chunksize_;
@@ -491,14 +492,12 @@ class Distribution
       {
       mode = DYNAMIC;
       nthreads_ = adjust_nthreads(nthreads);
-      if (nthreads_ == 1)
-        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize<1) ? 1 : chunksize;
       if (chunksize_ >= nwork)
         return execSingle(nwork, std::move(f));
       if (chunksize_*nthreads_>=nwork_)
-        return execStatic(nwork, nthreads, 0, std::move(f));
+        return execStatic(nwork, nthreads, chunksize_, std::move(f));
       cur_dynamic_ = 0;
       thread_map(std::move(f));
       }
@@ -507,12 +506,10 @@ class Distribution
       {
       mode = GUIDED;
       nthreads_ = adjust_nthreads(nthreads);
-      if (nthreads_ == 1)
-        return execSingle(nwork, std::move(f));
       nwork_ = nwork;
       chunksize_ = (chunksize_min<1) ? 1 : chunksize_min;
       if (chunksize_*nthreads_>=nwork_)
-        return execStatic(nwork, nthreads, 0, std::move(f));
+        return execStatic(nwork, nthreads, chunksize_, std::move(f));
       fact_max_ = fact_max;
       cur_ = 0;
       thread_map(std::move(f));

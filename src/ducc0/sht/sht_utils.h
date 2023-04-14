@@ -254,27 +254,10 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
   const size_t nborder = kernel.W/2+2;
-  auto legtmp = vmav<complex<T>,3>::build_noncritical({nplanes, ntheta_b+2*nborder, nm}, UNINITIALIZED);
-  auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
   auto kernfunc = poly->corfunc((2*ntheta_s-2)/2+1, 1./(2*ntheta_b-2), nthreads);
 
-  resample_and_convolve_theta(legi, true, true, legsub, true, true, kernfunc, spin, nthreads, false);
-
-  // fill borders
-  T fct = (spin&1) ? -1 : 1;
-  for (size_t iplane=0; iplane<nplanes; ++iplane)
-    for (size_t mi=0; mi<nm; ++mi)
-      {
-      T fct2 = fct * ((mval(mi)&1) ? -T(1) : T(1));
-      for (size_t i=0; i<nborder; ++i)
-        {
-        legtmp(iplane,nborder-1-i,mi) = fct2*legtmp(iplane,nborder+1+i,mi);
-        legtmp(iplane,nborder+ntheta_b+i,mi) = fct2*legtmp(iplane,nborder+ntheta_b-2-i,mi);
-        }
-      }
-
   double dtheta_b = pi/(ntheta_b-1);
-  vmav<double,2> buf({theta.shape(0),poly->support()}, UNINITIALIZED);
+  vmav<double,2> buf({theta.shape(0), poly->support()}, UNINITIALIZED);
   vmav<size_t,1> idx0({theta.shape(0)}, UNINITIALIZED);
   for (size_t itheta=0; itheta<theta.shape(0); ++itheta)
     {
@@ -284,16 +267,34 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
       buf(itheta,i) = poly->eval((2./kernel.W)*(nborder + theta(itheta)/dtheta_b - (idx0(itheta)+i)));
     }
 
-  constexpr size_t blksz=16;
-  execParallel(nm, nthreads, [&](size_t lo, size_t hi)
+  constexpr size_t blksz=16;  // must be an even number!
+  execDynamic(nm, nthreads, blksz, [&](Scheduler &sched)
     {
-    vmav<complex<double>,1> vbuf({blksz});
-    for (size_t bti=0; bti<theta.shape(0); bti+=blksz)
+    auto tbuf = vmav<complex<T>,3>::build_noncritical({nplanes, ntheta_b+2*nborder, blksz}, UNINITIALIZED);
+    vmav<complex<double>,1> vbuf({blksz}, UNINITIALIZED);
+    while (auto rng=sched.getNext())
       {
-      size_t btie=min(theta.shape(0), bti+blksz);
-      for (size_t bmi=lo; bmi<hi; bmi+=blksz)
+      auto legitmp = subarray<3>(legi, {{}, {}, {rng.lo, rng.hi}});
+      auto legtmp = subarray<3>(tbuf, {{}, {}, {0, rng.hi-rng.lo}});
+      auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
+      resample_and_convolve_theta(legitmp, true, true, legsub, true, true, kernfunc, spin, 1, false);
+
+      // fill borders
+      T fct = (spin&1) ? -1 : 1;
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
+        for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+          {
+          T fct2 = fct * ((mval(mi)&1) ? -T(1) : T(1));
+          for (size_t i=0; i<nborder; ++i)
+            {
+            legtmp(iplane,nborder-1-i,mi-rng.lo) = fct2*legtmp(iplane,nborder+1+i,mi-rng.lo);
+            legtmp(iplane,nborder+ntheta_b+i,mi-rng.lo) = fct2*legtmp(iplane,nborder+ntheta_b-2-i,mi-rng.lo);
+            }
+          }
+  
+      for (size_t bti=0; bti<theta.shape(0); bti+=blksz)
         {
-        size_t bmie=min(hi, bmi+blksz);
+        size_t btie=min(theta.shape(0), bti+blksz);
         for (size_t itheta=bti; itheta<btie; ++itheta)
           {
           size_t idx00 = idx0(itheta);
@@ -301,13 +302,13 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
           for (size_t i=0; i<kernel.W; ++i) lbuf[i] = buf(itheta,i);
           for (size_t iplane=0; iplane<nplanes; ++iplane)
             {
-            for (size_t mi=bmi; mi<bmie; ++mi)
-              vbuf(mi-bmi)=0;
+            for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+              vbuf(mi-rng.lo)=0;
             for (size_t i=0; i<kernel.W; ++i)
-              for (size_t mi=bmi; mi<bmie; ++mi)
-                vbuf(mi-bmi) += complex<double>(legtmp(iplane, idx00+i, mi))*lbuf[i];
-            for (size_t mi=bmi; mi<bmie; ++mi)
-              lego(iplane, itheta, mi) = complex<T>(vbuf(mi-bmi));
+              for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+                vbuf(mi-rng.lo) += complex<double>(legtmp(iplane, idx00+i, mi-rng.lo))*lbuf[i];
+            for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+              lego(iplane, itheta, mi) = complex<T>(vbuf(mi-rng.lo));
             }
           }
         }
@@ -339,7 +340,7 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
   auto kernfunc = poly->corfunc((2*ntheta_s-2)/2+1, 1./(2*ntheta_b-2), nthreads);
 
   double dtheta_b = pi/(ntheta_b-1);
-  vmav<double,2> buf({theta.shape(0),poly->support()}, UNINITIALIZED);
+  vmav<double,2> buf({theta.shape(0), poly->support()}, UNINITIALIZED);
   vmav<size_t,1> idx0({theta.shape(0)}, UNINITIALIZED);
   for (size_t itheta=0; itheta<theta.shape(0); ++itheta)
     {
@@ -349,17 +350,21 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
       buf(itheta,i) = poly->eval((2./kernel.W)*(nborder + theta(itheta)/dtheta_b - (idx0(itheta)+i)));
     }
 
-  constexpr size_t blksz=16;
-  mav_apply([](auto &v){v=0;}, nthreads, legtmp);
-
-  execParallel(nm, nthreads, [&](size_t lo, size_t hi)
+  constexpr size_t blksz=16;  // must be an even number!
+  execDynamic(nm, nthreads, blksz, [&](Scheduler &sched)
     {
-    for (size_t bti=0; bti<theta.shape(0); bti+=blksz)
+    auto tbuf = vmav<complex<T>,3>::build_noncritical({nplanes, ntheta_b+2*nborder, blksz}, UNINITIALIZED);
+    vmav<complex<double>,1> vbuf({blksz}, UNINITIALIZED);
+    while (auto rng=sched.getNext())
       {
-      size_t btie=min(theta.shape(0), bti+blksz);
-      for (size_t bmi=lo; bmi<hi; bmi+=blksz)
+      auto legtmp = subarray<3>(tbuf, {{}, {}, {0, rng.hi-rng.lo}});
+      auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
+
+      mav_apply([](auto &v){v=0;}, 1, legtmp);
+
+      for (size_t bti=0; bti<theta.shape(0); bti+=blksz)
         {
-        size_t bmie=min(hi, bmi+blksz);
+        size_t btie=min(theta.shape(0), bti+blksz);
         for (size_t itheta=bti; itheta<btie; ++itheta)
           {
           size_t idx00 = idx0(itheta);
@@ -367,27 +372,28 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
           for (size_t i=0; i<kernel.W; ++i) lbuf[i] = buf(itheta,i);
           for (size_t iplane=0; iplane<nplanes; ++iplane)
             for (size_t i=0; i<kernel.W; ++i)
-              for (size_t mi=bmi; mi<bmie; ++mi)
-                legtmp(iplane, idx00+i, mi) += legi(iplane, itheta, mi)*T(lbuf[i]);
+              for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+                legtmp(iplane, idx00+i, mi-rng.lo) += legi(iplane, itheta, mi)*T(lbuf[i]);
           }
         }
+
+      // borders
+      T fct = (spin&1) ? -1 : 1;
+      for (size_t iplane=0; iplane<nplanes; ++iplane)
+        for (size_t mi=rng.lo; mi<rng.hi; ++mi)
+          {
+          T fct2 = fct * ((mval(mi)&1) ? -T(1) : T(1));
+          for (size_t i=0; i<nborder; ++i)
+            {
+            legtmp(iplane,nborder+1+i,mi-rng.lo) += fct2*legtmp(iplane,nborder-1-i,mi-rng.lo);
+            legtmp(iplane,nborder+ntheta_b-2-i,mi-rng.lo) += fct2*legtmp(iplane,nborder+ntheta_b+i,mi-rng.lo);
+            }
+          }
+
+      auto legotmp = subarray<3>(lego, {{}, {}, {rng.lo, rng.hi}});
+      resample_and_convolve_theta(legsub, true, true, legotmp, true, true, kernfunc, spin, 1, true);
       }
     });
-
-  // borders
-  T fct = (spin&1) ? -1 : 1;
-  for (size_t iplane=0; iplane<nplanes; ++iplane)
-    for (size_t mi=0; mi<nm; ++mi)
-      {
-      T fct2 = fct * ((mval(mi)&1) ? -T(1) : T(1));
-      for (size_t i=0; i<nborder; ++i)
-        {
-        legtmp(iplane,nborder+1+i,mi) += fct2*legtmp(iplane,nborder-1-i,mi);
-        legtmp(iplane,nborder+ntheta_b-2-i,mi) += fct2*legtmp(iplane,nborder+ntheta_b+i,mi);
-        }
-      }
-
-  resample_and_convolve_theta(legsub, true, true, lego, true, true, kernfunc, spin, nthreads, true);
   }
 
 }
