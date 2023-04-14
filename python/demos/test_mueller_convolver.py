@@ -30,7 +30,6 @@ def test_trivial_mueller_matrix(fct, lkmax, ncomp):
     lmax, kmax = lkmax
     nptg = 100
     epsilon = 1e-4
-    ofactor = 1.5
     nthreads = 0
 
     slm = random_alm(lmax, lmax, ncomp, rng)
@@ -44,12 +43,13 @@ def test_trivial_mueller_matrix(fct, lkmax, ncomp):
 
     mueller = np.identity(4)*fct
 
-    fullconv = MuellerConvolver(lmax, kmax, slm, blm, mueller,
+    fullconv = MuellerConvolver(lmax=lmax, kmax=kmax, slm=slm, blm=blm,
+                                mueller=mueller,
                                 single_precision=False, epsilon=epsilon,
-                                ofactor=ofactor, nthreads=nthreads)
-    sig = fullconv.signal(ptg, alpha)
+                                nthreads=nthreads)
+    sig = fullconv.signal(ptg=ptg, alpha=alpha)
     ref_conv = ducc0.totalconvolve.Interpolator(slm, blm, False, lmax, kmax,
-                                                epsilon=epsilon, ofactor=ofactor,
+                                                epsilon=epsilon,
                                                 nthreads=nthreads)
     ref_sig = ref_conv.interpol(ptg)[0]*fct
     np.testing.assert_allclose(sig,ref_sig,atol=1e-3)
