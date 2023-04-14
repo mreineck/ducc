@@ -1,7 +1,7 @@
 /** \file ducc0/math/cmplx.h
  *  Minimalistic complex number class
  *
- *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -61,6 +61,7 @@ template<typename T> struct Cmplx {
   T r, i;
   Cmplx() {}
   constexpr Cmplx(T r_, T i_) : r(r_), i(i_) {}
+  constexpr Cmplx(T r_) : r(r_), i(T(0)) {}
   void Set(T r_, T i_) { r=r_; i=i_; }
   void Set(T r_) { r=r_; i=T(0); }
   void Split(T &r_, T &i_) const { r_=r; i_=i; }

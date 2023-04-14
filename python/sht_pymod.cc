@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2021 Max-Planck-Society
+ *  Copyright (C) 2017-2023 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -47,6 +47,20 @@ namespace py = pybind11;
 
 auto None = py::none();
 
+SHT_mode get_mode(const string &smode)
+  {
+  if (smode=="STANDARD") return STANDARD;
+  if (smode=="GRAD_ONLY") return GRAD_ONLY;
+  if (smode=="DERIV1") return DERIV1;
+  MR_fail("unknown SHT mode");
+  }
+
+size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
+  { return 1+(spin>0); }
+
+size_t get_nalm(size_t spin, SHT_mode mode)
+  { return (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1); }
+
 py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
@@ -55,7 +69,7 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
-  return move(res);
+  return res;
   }
 
 py::array Py_GL_thetas(size_t nlat)
@@ -66,11 +80,11 @@ py::array Py_GL_thetas(size_t nlat)
   auto x = integ.coords();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = acos(-x[i]);
-  return move(res);
+  return res;
   }
 
-template<typename T> py::array Py2_rotate_alm(const py::array &alm_, size_t lmax,
-  double psi, double theta, double phi, size_t nthreads)
+template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
+  size_t lmax, double psi, double theta, double phi, size_t nthreads)
   {
   auto a1 = to_cmav<complex<T>,1>(alm_);
   auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
@@ -81,7 +95,7 @@ template<typename T> py::array Py2_rotate_alm(const py::array &alm_, size_t lmax
   Alm_Base base(lmax,lmax);
   rotate_alm(base, a2, psi, theta, phi, nthreads);
   }
-  return move(alm);
+  return alm;
   }
 py::array Py_rotate_alm(const py::array &alm, size_t lmax,
   double psi, double theta, double phi, size_t nthreads)
@@ -96,12 +110,13 @@ py::array Py_rotate_alm(const py::array &alm, size_t lmax,
 void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
   vmav<size_t,1> &mval, vmav<size_t,1> &mstart)
   {
-  MR_assert(mval_.is_none()==mstart_.is_none(), "mval and mstart must be supplied together");
+  MR_assert(mval_.is_none()==mstart_.is_none(),
+    "mval and mstart must be supplied together");
   if (mval_.is_none())
     {
-    vmav<size_t,1> tmv({lmax+1});
+    vmav<size_t,1> tmv({lmax+1}, UNINITIALIZED);
     mval.assign(tmv);
-    vmav<size_t,1> tms({lmax+1});
+    vmav<size_t,1> tms({lmax+1}, UNINITIALIZED);
     mstart.assign(tms);
     for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
       {
@@ -115,9 +130,9 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
     auto tmstart = to_cmav<int64_t,1>(mstart_);
     size_t nm = tmval.shape(0);
     MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
-    vmav<size_t,1> tmv({nm});
+    vmav<size_t,1> tmv({nm}, UNINITIALIZED);
     mval.assign(tmv);
-    vmav<size_t,1> tms({nm});
+    vmav<size_t,1> tms({nm}, UNINITIALIZED);
     mstart.assign(tms);
     for (size_t i=0; i<nm; ++i)
       {
@@ -128,17 +143,21 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
       }
     }
   }
-cmav<size_t,1> get_mstart(size_t lmax, const py::object &mstart_)
+cmav<size_t,1> get_mstart(size_t lmax, const py::object &mmax_, const py::object &mstart_)
   {
   if (mstart_.is_none())
     {
-    vmav<size_t,1> mstart({lmax+1});
-    for (size_t m=0, idx=0; m<=lmax; ++m, idx+=lmax+1-m)
+    size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
+    MR_assert(mmax<=lmax, "mmax>lmax");
+    vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
+    for (size_t m=0, idx=0; m<=mmax; ++m, idx+=lmax+1-m)
       mstart(m) = idx;
     return mstart;
     }
   auto mstart = to_cmav<size_t,1>(mstart_);
-  MR_assert(mstart.shape(0)==lmax+1, "bad mstart size");
+  MR_assert(mmax_.is_none() || ((mmax_.cast<size_t>()+1)==mstart.shape(0)),
+    "mmax and mstart size mismatch");
+  MR_assert(mstart.shape(0)<=lmax+1, "mmax>lmax");
   return mstart;
   }
 
@@ -150,7 +169,8 @@ py::array Py_get_gridweights(const string &type, size_t ntheta)
   return wgt_;
   }
 
-size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval, const cmav<size_t,1> &mstart, ptrdiff_t lstride)
+size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
+  const cmav<size_t,1> &mstart, ptrdiff_t lstride)
   {
   size_t res=0;
   for (size_t i=0; i<mval.shape(0); ++i)
@@ -163,7 +183,22 @@ size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval, const cmav<size_t,1> 
     }
   return res+1;
   }
-size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart, ptrdiff_t pixstride)
+// same as above, but assuming mval(i)==i
+size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride)
+  {
+  size_t res=0;
+  for (size_t i=0; i<mstart.shape(0); ++i)
+    {
+    auto ifirst = ptrdiff_t(mstart(i)) + ptrdiff_t(i)*lstride;
+    MR_assert(ifirst>=0, "impossible a_lm memory layout");
+    auto ilast = ptrdiff_t(mstart(i)) + ptrdiff_t(lmax)*lstride;
+    MR_assert(ilast>=0, "impossible a_lm memory layout");
+    res = max(res, size_t(max(ifirst, ilast)));
+    }
+  return res+1;
+  }
+size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart,
+  ptrdiff_t pixstride)
   {
   size_t res=0;
   for (size_t i=0; i<nphi.shape(0); ++i)
@@ -175,85 +210,91 @@ size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart, p
   return res+1;
   }
 
-template<typename T> py::array Py2_alm2leg(const py::array &alm_, size_t spin, size_t lmax, const py::object &mval_, const py::object &mstart_, ptrdiff_t lstride, const py::array &theta_, size_t nthreads, py::object &leg__)
+template<typename T> py::array Py2_alm2leg(const py::array &alm_, size_t spin,
+  size_t lmax, const py::object &mval_, const py::object &mstart_,
+  ptrdiff_t lstride, const py::array &theta_, size_t nthreads,
+  py::object &leg__, const string &mode_)
   {
+  auto mode = get_mode(mode_);
   auto alm = to_cmav<complex<T>,2>(alm_);
   auto theta = to_cmav<double,1>(theta_);
   vmav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
-  MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride), "bad a_lm array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {alm.shape(0),theta.shape(0),mval.shape(0)});
+  MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride),
+    "bad a_lm array size");
+  auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
+    {get_nmaps(spin,mode),theta.shape(0),mval.shape(0)});
   auto leg = to_vmav<complex<T>,3>(leg_);
   {
   py::gil_scoped_release release;
-  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+  alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
   }
   return leg_;
   }
-py::array Py_alm2leg(const py::array &alm, size_t lmax, const py::array &theta, size_t spin, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &leg)
+py::array Py_alm2leg(const py::array &alm, size_t lmax, const py::array &theta,
+  size_t spin, const py::object &mval, const py::object &mstart,
+  ptrdiff_t lstride, size_t nthreads, py::object &leg, const string &mode)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_alm2leg<float>(alm, spin, lmax, mval, mstart, lstride, theta, nthreads, leg);
+    return Py2_alm2leg<float>(alm, spin, lmax, mval, mstart, lstride, theta,
+      nthreads, leg, mode);
   if (isPyarr<complex<double>>(alm))
-    return Py2_alm2leg<double>(alm, spin, lmax, mval, mstart, lstride, theta, nthreads, leg);
+    return Py2_alm2leg<double>(alm, spin, lmax, mval, mstart, lstride, theta,
+      nthreads, leg, mode);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-template<typename T> py::array Py2_alm2leg_deriv1(const py::array &alm_, size_t lmax, const py::object &mval_, const py::object &mstart_, ptrdiff_t lstride, const py::array &theta_, size_t nthreads, py::object &leg__)
+py::array Py_alm2leg_deriv1(const py::array &alm, size_t lmax,
+  const py::array &theta, const py::object &mval, const py::object &mstart,
+  ptrdiff_t lstride, size_t nthreads, py::object &leg)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto theta = to_cmav<double,1>(theta_);
-  vmav<size_t,1> mval, mstart;
-  getmstuff(lmax, mval_, mstart_, mval, mstart);
-  MR_assert(alm.shape(0)==1, "need exactly 1 a_lm component");
-  MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride), "bad a_lm array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {2,theta.shape(0),mval.shape(0)});
-  auto leg = to_vmav<complex<T>,3>(leg_);
-  {
-  py::gil_scoped_release release;
-  alm2leg(alm, leg, 0, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP_DERIV1);
+  return Py_alm2leg(alm, lmax, theta, 1, mval, mstart, lstride, nthreads, leg, "DERIV1");
   }
-  return leg_;
-  }
-py::array Py_alm2leg_deriv1(const py::array &alm, size_t lmax, const py::array &theta, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &leg)
+template<typename T> py::array Py2_leg2alm(const py::array &leg_,
+  const py::array &theta_, size_t spin, size_t lmax, const py::object &mval_,
+  const py::object &mstart_, ptrdiff_t lstride, size_t nthreads,
+  py::object &alm__,const string &mode_)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_alm2leg_deriv1<float>(alm, lmax, mval, mstart, lstride, theta, nthreads, leg);
-  if (isPyarr<complex<double>>(alm))
-    return Py2_alm2leg_deriv1<double>(alm, lmax, mval, mstart, lstride, theta, nthreads, leg);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
-  }
-template<typename T> py::array Py2_leg2alm(const py::array &leg_, const py::array &theta_, size_t spin, size_t lmax, const py::object &mval_, const py::object &mstart_, ptrdiff_t lstride, size_t nthreads, py::object &alm__)
-  {
+  auto mode = get_mode(mode_);
   auto leg = to_cmav<complex<T>,3>(leg_);
   auto theta = to_cmav<double,1>(theta_);
   MR_assert(leg.shape(1)==theta.shape(0), "bad leg array size");
   vmav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {leg.shape(0),min_almdim(lmax, mval, mstart, lstride)});
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__,
+    {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)});
   auto alm = to_vmav<complex<T>,2>(alm_);
-  MR_assert(alm.shape(0)==leg.shape(0), "bad number of components in a_lm array");
+  MR_assert(alm.shape(0)==leg.shape(0),
+    "bad number of components in a_lm array");
   {
   py::gil_scoped_release release;
-  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+  leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
   }
   return alm_;
   }
-py::array Py_leg2alm(const py::array &leg, size_t lmax, const py::array &theta, size_t spin, const py::object &mval, const py::object &mstart, ptrdiff_t lstride, size_t nthreads, py::object &alm)
+py::array Py_leg2alm(const py::array &leg, size_t lmax, const py::array &theta,
+  size_t spin, const py::object &mval, const py::object &mstart,
+  ptrdiff_t lstride, size_t nthreads, py::object &alm, const string &mode)
   {
   if (isPyarr<complex<float>>(leg))
-    return Py2_leg2alm<float>(leg, theta, spin, lmax, mval, mstart, lstride, nthreads, alm);
+    return Py2_leg2alm<float>(leg, theta, spin, lmax, mval, mstart, lstride,
+      nthreads, alm, mode);
   if (isPyarr<complex<double>>(leg))
-    return Py2_leg2alm<double>(leg, theta, spin, lmax, mval, mstart, lstride, nthreads, alm);
+    return Py2_leg2alm<double>(leg, theta, spin, lmax, mval, mstart, lstride,
+      nthreads, alm, mode);
   MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
   }
-template<typename T> py::array Py2_map2leg(const py::array &map_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg__)
+template<typename T> py::array Py2_map2leg(const py::array &map_,
+  const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_,
+  size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg__)
   {
   auto map = to_cmav<T,2>(map_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride), "bad map array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(leg__, {map.shape(0),nphi.shape(0),mmax+1});
+  MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride),
+    "bad map array size");
+  auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
+    {map.shape(0),nphi.shape(0),mmax+1});
   auto leg = to_vmav<complex<T>,3>(leg_);
   {
   py::gil_scoped_release release;
@@ -261,30 +302,40 @@ template<typename T> py::array Py2_map2leg(const py::array &map_, const py::arra
   }
   return leg_;
   }
-py::array Py_map2leg(const py::array &map, const py::array &nphi, const py::array &phi0, const py::array &ringstart, size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg)
+py::array Py_map2leg(const py::array &map, const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, size_t mmax,
+  ptrdiff_t pixstride, size_t nthreads, py::object &leg)
   {
   if (isPyarr<float>(map))
-    return Py2_map2leg<float>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, leg);
+    return Py2_map2leg<float>(map, nphi, phi0, ringstart, mmax, pixstride,
+      nthreads, leg);
   if (isPyarr<double>(map))
-    return Py2_map2leg<double>(map, nphi, phi0, ringstart, mmax, pixstride, nthreads, leg);
+    return Py2_map2leg<double>(map, nphi, phi0, ringstart, mmax, pixstride,
+      nthreads, leg);
   MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
   }
-template<typename T> py::array Py2_leg2map(const py::array &leg_, const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_, ptrdiff_t pixstride, size_t nthreads, py::object &map__)
+template<typename T> py::array Py2_leg2map(const py::array &leg_,
+  const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_,
+  ptrdiff_t pixstride, size_t nthreads, py::object &map__)
   {
   auto leg = to_cmav<complex<T>,3>(leg_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
+  auto map_ = get_optional_Pyarr_minshape<T>(map__,
+    {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
   auto map = to_vmav<T,2>(map_);
-  MR_assert(map.shape(0)==leg.shape(0), "bad number of components in map array");
+  MR_assert(map.shape(0)==leg.shape(0),
+    "bad number of components in map array");
   {
   py::gil_scoped_release release;
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
   return map_;
   }
-py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride, size_t nthreads, py::object &map)
+py::array Py_leg2map(const py::array &leg, const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride,
+  size_t nthreads, py::object &map)
   {
   if (isPyarr<complex<float>>(leg))
     return Py2_leg2map<float>(leg, nphi, phi0, ringstart, pixstride, nthreads, map);
@@ -299,81 +350,75 @@ py::array Py_leg2map(const py::array &leg, const py::array &nphi, const py::arra
 // - accept scalar nphi, phi0?
 template<typename T> py::array Py2_synthesis(const py::array &alm_,
   py::object &map__, size_t spin, size_t lmax,
-  const py::object &mstart_, ptrdiff_t lstride, 
-  const py::array &theta_, 
+  const py::object &mstart_, ptrdiff_t lstride,
+  const py::array &theta_,
   const py::array &nphi_,
   const py::array &phi0_, const py::array &ringstart_,
-  ptrdiff_t pixstride, size_t nthreads)
+  ptrdiff_t pixstride, size_t nthreads, const py::object &mmax_,
+  const string &mode_)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto mstart = get_mstart(lmax, mstart_);
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto theta = to_cmav<double,1>(theta_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
-  auto map = to_vmav<T,2>(map_);
+  MR_assert((alm_.ndim()>=2)&&(alm_.ndim()<=3), "alm must be a 2D or 3D array");
+  auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  vector<size_t> mapshp(alm_.ndim());
+  for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
+  mapshp[mapshp.size()-1] = min_mapdim(nphi, ringstart, pixstride);
+  mapshp[mapshp.size()-2] = get_nmaps(spin, mode);
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp);
+  auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  size_t nthreads_outer=1;
+  if (alm.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
   {
   py::gil_scoped_release release;
-  synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP);
+  execDynamic(alm.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        synthesis(subalm, submap, spin, lmax, mstart, lstride, theta, nphi,
+          phi0, ringstart, pixstride, nthreads, mode);
+        }
+    });
   }
   return map_;
   }
 py::array Py_synthesis(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart, 
+  size_t lmax, const py::object &mstart,
   const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
-  size_t nthreads, py::object &map)
+  const py::array &phi0, const py::array &ringstart, size_t spin,
+  ptrdiff_t lstride, ptrdiff_t pixstride, size_t nthreads, py::object &map,
+  const py::object &mmax_, const string &mode)
   {
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta, 
-      nphi, phi0, ringstart, pixstride, nthreads);
+    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta,
+      nphi, phi0, ringstart, pixstride, nthreads, mmax_, mode);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta, 
-      nphi, phi0, ringstart, pixstride, nthreads);
+    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta,
+      nphi, phi0, ringstart, pixstride, nthreads, mmax_, mode);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
-  }
-template<typename T> py::array Py2_synthesis_deriv1(const py::array &alm_,
-  py::object &map__, size_t lmax,
-  const py::object &mstart_, ptrdiff_t lstride, 
-  const py::array &theta_, 
-  const py::array &nphi_,
-  const py::array &phi0_, const py::array &ringstart_,
-  ptrdiff_t pixstride, size_t nthreads)
-  {
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto mstart = get_mstart(lmax, mstart_);
-  auto theta = to_cmav<double,1>(theta_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, {alm.shape(0), min_mapdim(nphi, ringstart, pixstride)});
-  auto map = to_vmav<T,2>(map_);
-  MR_assert(map.shape(0)==2, "bad number of components in map array");
-  {
-  py::gil_scoped_release release;
-  synthesis(alm, map, 1, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads, ALM2MAP_DERIV1);
-  }
-  return map_;
   }
 py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart, 
+  size_t lmax, const py::object &mstart,
   const py::array &nphi,
   const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
-  size_t nthreads, py::object &map)
+  size_t nthreads, py::object &map, const py::object &mmax_)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_deriv1<float>(alm, map, lmax, mstart, lstride, theta, 
-      nphi, phi0, ringstart, pixstride, nthreads);
-  else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_deriv1<double>(alm, map, lmax, mstart, lstride, theta, 
-      nphi, phi0, ringstart, pixstride, nthreads);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  return Py_synthesis(alm, theta, lmax, mstart, nphi, phi0, ringstart, 1, lstride,
+    pixstride, nthreads, map, mmax_, "DERIV1");
   }
 
 
-template<typename T> py::array_t<T> check_build_map(const py::object &map, size_t ncomp, const py::object &ntheta, const py::object &nphi)
+template<typename T> py::array_t<T> check_build_map(const py::object &map,
+  size_t ncomp, const py::object &ntheta, const py::object &nphi)
   {
   if (map.is_none())
     {
@@ -384,7 +429,8 @@ template<typename T> py::array_t<T> check_build_map(const py::object &map, size_
   else
     {
     py::array_t<T> tmap = map;
-    MR_assert((size_t(tmap.ndim())==3) && (size_t(tmap.shape(0))==ncomp), "map size mismatch");
+    MR_assert((size_t(tmap.ndim())==3) && (size_t(tmap.shape(0))==ncomp),
+      "map size mismatch");
     if (!ntheta.is_none())
       MR_assert(size_t(tmap.shape(1))==ntheta.cast<size_t>(), "ntheta mismatch");
     if (!nphi.is_none())
@@ -392,7 +438,8 @@ template<typename T> py::array_t<T> check_build_map(const py::object &map, size_
     return tmap;
     }
   }
-template<typename T> py::array_t<complex<T>> check_build_alm(const py::object &alm, size_t ncomp, size_t lmax, size_t mmax)
+template<typename T> py::array_t<complex<T>> check_build_alm
+  (const py::object &alm, size_t ncomp, size_t lmax, size_t mmax)
   {
   size_t nalm = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
   if (alm.is_none())
@@ -411,117 +458,206 @@ template<typename T> py::array_t<complex<T>> check_build_alm(const py::object &a
 
 template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__)
+  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__, const string &mode_)
   {
+  auto mode = get_mode(mode_);
   auto alm = to_cmav<complex<T>,2>(alm_);
-  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
+  auto map_ = check_build_map<T>(map__, get_nmaps(spin,mode), ntheta, nphi);
   auto map = to_vmav<T,3>(map_);
-  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads, mode);
   }
   return map_;
   }
-py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
+py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax,
+  const string &geometry, const py::object &ntheta, const py::object &nphi,
+  const py::object &mmax_, size_t nthreads, py::object &map, const string &mode)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+    return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi,
+      mmax, nthreads, map, mode);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+    return Py2_synthesis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi,
+      mmax, nthreads, map, mode);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_adjoint_synthesis_2d(
-  const py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t mmax, size_t nthreads, py::object &alm__)
+  const py::array &map_, size_t spin, size_t lmax, const string &geometry,
+  size_t mmax, size_t nthreads, py::object &alm__, const string &mode_)
   {
+  auto mode = get_mode(mode_);
   auto map = to_cmav<T,3>(map_);
-  auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
+  auto alm_ = check_build_alm<T>(alm__, get_nalm(spin,mode), lmax, mmax);
   auto alm = to_vmav<complex<T>,2>(alm_);
-  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads, mode);
   }
   return alm_;
   }
 py::array Py_adjoint_synthesis_2d(
-  const py::array &map, size_t spin, size_t lmax, const string &geometry, const py::object &mmax_, size_t nthreads, py::object &alm)
+  const py::array &map, size_t spin, size_t lmax, const string &geometry,
+  const py::object &mmax_, size_t nthreads, py::object &alm, const string &mode)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
-    return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm);
+    return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax,
+      nthreads, alm,mode);
   else if (isPyarr<double>(map))
-    return Py2_adjoint_synthesis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm);
+    return Py2_adjoint_synthesis_2d<double>(map, spin, lmax, geometry, mmax,
+      nthreads, alm, mode);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-template<typename T> py::array Py2_synthesis_2d_deriv1(const py::array &alm_,
-  size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__)
+py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax,
+  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto map_ = check_build_map<T>(map__, 2, ntheta, nphi);
-  auto map = to_vmav<T,3>(map_);
-  MR_assert((map.shape(0)==2) && (alm.shape(0)==1), "incorrect number of components");
-  {
-  py::gil_scoped_release release;
-  synthesis_2d(alm, map, 1, lmax, mmax, geometry, nthreads, ALM2MAP_DERIV1);
-  }
-  return map_;
-  }
-py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
-  {
-  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
-  if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_2d_deriv1<float>(alm, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
-  else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_2d_deriv1<double>(alm, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax_, nthreads, map, "DERIV1");
   }
 
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
-  size_t lmax, const py::object &mstart_, ptrdiff_t lstride, 
+  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
   const py::array &map_, const py::array &theta_, const py::array &phi0_,
-  const py::array &nphi_, const py::array &ringstart_, size_t spin, ptrdiff_t pixstride,
-  size_t nthreads)
+  const py::array &nphi_, const py::array &ringstart_, size_t spin,
+  ptrdiff_t pixstride, size_t nthreads, const py::object &mmax_, const string &mode_)
   {
-  auto mstart = get_mstart(lmax, mstart_);
-  auto map = to_cmav<T,2>(map_);
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto theta = to_cmav<double,1>(theta_);
   auto phi0 = to_cmav<double,1>(phi0_);
   auto nphi = to_cmav<size_t,1>(nphi_);
   auto ringstart = to_cmav<size_t,1>(ringstart_);
-  vmav<size_t,1> mval(mstart.shape());
-  for (size_t i=0; i<mval.shape(0); ++i)
-    mval(i) = i;
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {map.shape(0),min_almdim(lmax, mval, mstart, lstride)});
-  auto alm = to_vmav<complex<T>,2>(alm_);
-  MR_assert(alm.shape(0)==map.shape(0), "bad number of components in a_lm array");
+  MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
+  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
+  vector<size_t> almshp(map_.ndim());
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
+  almshp[almshp.size()-2] = get_nalm(spin, mode);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
+  size_t nthreads_outer=1;
+  if (map.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
   {
   py::gil_scoped_release release;
-  adjoint_synthesis(alm, map, spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  execDynamic(map.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        adjoint_synthesis(subalm, submap, spin, lmax, mstart, lstride, theta,
+          nphi, phi0, ringstart, pixstride, nthreads, mode);
+        }
+    });
   }
   return alm_;
   }
 py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
- size_t lmax,
+  size_t lmax,
   const py::object &mstart,
   const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t spin, ptrdiff_t lstride, ptrdiff_t pixstride,
+  const py::array &phi0, const py::array &ringstart, size_t spin,
+  ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads,
-  py::object &alm)
+  py::object &alm, const py::object &mmax_,
+  const string &mode)
   {
   if (isPyarr<float>(map))
     return Py2_adjoint_synthesis<float>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads);
+      phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode);
   else if (isPyarr<double>(map))
     return Py2_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads);
+      phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
+  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
+  const py::array &map_, const py::array &theta_, const py::array &phi0_,
+  const py::array &nphi_, const py::array &ringstart_, size_t spin,
+  ptrdiff_t pixstride, size_t nthreads, size_t maxiter, double epsilon,
+  const py::object &mmax_)
+  {
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto theta = to_cmav<double,1>(theta_);
+  auto phi0 = to_cmav<double,1>(phi0_);
+  auto nphi = to_cmav<size_t,1>(nphi_);
+  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
+  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
+  vector<size_t> almshp(map_.ndim());
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
+  MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
+  size_t nthreads_outer=1;
+  if (map.shape(0)>nthreads)  // parallelize over entire transforms
+    { nthreads_outer=nthreads; nthreads=1; }
+  vector<size_t> itn(map.shape(0)), istop(map.shape(0));
+  vector<double> rnorm(map.shape(0)), sqnorm(map.shape(0));
+  {
+  py::gil_scoped_release release;
+  execDynamic(map.shape(0), nthreads_outer, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
+        {
+        auto submap = subarray<2>(map, {{itrans},{},{}});
+        auto subalm = subarray<2>(alm, {{itrans},{},{}});
+        auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(subalm, submap,
+          spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride,
+          nthreads, maxiter, epsilon);
+        itn[itrans] = xitn;
+        istop[itrans] = xistop;
+        rnorm[itrans] = xrnorm;
+        sqnorm[itrans] = xsqnorm;
+        }
+    });
+  }
+  py::list res;
+  res.append(alm_);
+  if (map_.ndim()<=2) // just a single transform
+    {
+    res.append(py::cast(istop[0]));
+    res.append(py::cast(itn[0]));
+    res.append(py::cast(rnorm[0]));
+    res.append(py::cast(sqnorm[0]));
+    }
+  else
+    {
+    res.append(py::cast(istop));
+    res.append(py::cast(itn));
+    res.append(py::cast(rnorm));
+    res.append(py::cast(sqnorm));
+    }
+  return res;
+  }
+py::object Py_pseudo_analysis(const py::array &map, const py::array &theta,
+ size_t lmax,
+  const py::object &mstart,
+  const py::array &nphi,
+  const py::array &phi0, const py::array &ringstart, size_t spin,
+  ptrdiff_t lstride, ptrdiff_t pixstride,
+  size_t nthreads,
+  py::object &alm, size_t maxiter, double epsilon, const py::object &mmax_)
+  {
+  if (isPyarr<float>(map))
+    return Py2_pseudo_analysis<float>(alm, lmax, mstart, lstride, map, theta,
+      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon, mmax_);
+  else if (isPyarr<double>(map))
+    return Py2_pseudo_analysis<double>(alm, lmax, mstart, lstride, map, theta,
+      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon, mmax_);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
 template<typename T> py::array Py2_analysis_2d(
-  const py::array &map_, size_t spin, size_t lmax, const string &geometry, size_t mmax, size_t nthreads, py::object &alm__)
+  const py::array &map_, size_t spin, size_t lmax, const string &geometry,
+  size_t mmax, size_t nthreads, py::object &alm__)
   {
   auto map = to_cmav<T,3>(map_);
   auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
@@ -534,7 +670,8 @@ template<typename T> py::array Py2_analysis_2d(
   return alm_;
   }
 py::array Py_analysis_2d(
-  const py::array &map, size_t spin, size_t lmax, const string &geometry, py::object &mmax_, size_t nthreads, py::object &alm)
+  const py::array &map, size_t spin, size_t lmax, const string &geometry,
+  py::object &mmax_, size_t nthreads, py::object &alm)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
@@ -558,13 +695,143 @@ template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   }
   return map_;
   }
-py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax, const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
+py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
+  const string &geometry, const py::object &ntheta, const py::object &nphi,
+  const py::object &mmax_, size_t nthreads, py::object &map)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
-    return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+    return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta,
+      nphi, mmax, nthreads, map);
   else if (isPyarr<complex<double>>(alm))
-    return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi, mmax, nthreads, map);
+    return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta,
+      nphi, mmax, nthreads, map);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
+
+template<typename T, typename Tloc> py::array Py2_synthesis_general(const py::array &alm_,
+  size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
+  size_t nthreads, py::object &map__, double sigma_min, double sigma_max, const string &mode_)
+  {
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto loc = to_cmav<Tloc,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(alm.shape(0)==get_nalm(spin,mode), "number of components mismatch in alm");
+  auto map_ = get_optional_Pyarr<T>(map__, {get_nmaps(spin,mode), loc.shape(0)});
+  auto map = to_vmav<T,2>(map_);
+  {
+  py::gil_scoped_release release;
+  synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode);
+  }
+  return map_;
+  }
+py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
+  const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
+  size_t nthreads, py::object &map, double sigma_min, double sigma_max, const string &mode)
+  {
+  if (isPyarr<double>(loc))
+    {
+    if (isPyarr<complex<float>>(alm))
+      return Py2_synthesis_general<float,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode);
+    else if (isPyarr<complex<double>>(alm))
+      return Py2_synthesis_general<double,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode);
+   }
+#if 0
+  else if (isPyarr<float>(loc))
+    {
+    if (isPyarr<complex<float>>(alm))
+      return Py2_synthesis_general<float,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max);
+    else if (isPyarr<complex<double>>(alm))
+      return Py2_synthesis_general<double,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max);
+   }
+#endif
+  MR_fail("unsupported combination of data types");
+  }
+
+
+template<typename T, typename Tloc> py::array Py2_adjoint_synthesis_general(const py::array &map_,
+  size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
+  size_t nthreads, py::object &alm__, double sigma_min, double sigma_max, const string &mode_)
+  {
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto map = to_cmav<T,2>(map_);
+  auto loc = to_cmav<Tloc,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(map.shape(0)==get_nmaps(spin,mode), "number of components mismatch in map");
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, mode), min_almdim(lmax, mstart, lstride)});
+  auto alm = to_vmav<complex<T>,2>(alm_);
+
+  {
+  py::gil_scoped_release release;
+  adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode);
+  }
+  return alm_;
+  }
+py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t lmax,
+  const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
+  size_t nthreads, py::object &alm, double sigma_min, double sigma_max, const string &mode)
+  {
+  if (isPyarr<double>(loc))
+    {
+    if (isPyarr<float>(map))
+      return Py2_adjoint_synthesis_general<float,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode);
+    else if (isPyarr<double>(map))
+      return Py2_adjoint_synthesis_general<double,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode);
+    }
+#if 0
+  else if (isPyarr<float>(loc))
+    {
+    if (isPyarr<float>(map))
+      return Py2_adjoint_synthesis_general<float,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max);
+    else if (isPyarr<double>(map))
+      return Py2_adjoint_synthesis_general<double,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max);
+    }
+#endif
+  MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
+  }
+template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
+  size_t lmax,
+  const py::array &map_, const py::array &loc_, size_t spin,
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
+  const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_)
+  {
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto map = to_cmav<T,2>(map_);
+  auto loc = to_cmav<double,2>(loc_);
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t ncomp = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)});
+  auto alm = to_vmav<complex<T>,2>(alm_);
+
+  size_t itn, istop;
+  double rnorm, sqnorm;
+  {
+  py::gil_scoped_release release;
+  auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis_general(alm, map, spin, lmax, mstart, lstride, loc, sigma_min, sigma_max, nthreads, maxiter, epsilon);
+  istop = xistop;
+  itn = xitn;
+  rnorm = xrnorm;
+  sqnorm = xsqnorm;
+  }
+  return py::make_tuple(alm_, py::cast(istop), py::cast(itn), py::cast(rnorm), py::cast(sqnorm));
+  }
+py::tuple Py_pseudo_analysis_general(
+  size_t lmax,
+  const py::array &map, const py::array &loc, size_t spin,
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
+  const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_, py::object &alm=None)
+  {
+  if (isPyarr<float>(map))
+    return Py2_pseudo_analysis_general<float>(alm, lmax, map, loc,
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_);
+  else if (isPyarr<double>(map))
+    return Py2_pseudo_analysis_general<double>(alm, lmax, map, loc,
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -583,7 +850,7 @@ template<typename T> class Py_sharpjob
     string repr() const
       {
       return "<sharpjob_d: lmax=" + dataToString(lmax_) +
-        ", mmax=" + dataToString(mmax_) + ", npix=", dataToString(npix_) +".>";
+        ", mmax=" + dataToString(mmax_) + ", npix=" + dataToString(npix_) +".>";
       }
 
     void set_nthreads(size_t nthreads_)
@@ -660,15 +927,15 @@ template<typename T> class Py_sharpjob
       auto map_=make_Pyarr<double>({size_t(npix_)});
       auto map=to_vmav<double,1>(map_);
       auto alm=to_cmav<complex<double>,1>(alm_);
-      cmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None);
+        auto mstart = get_mstart(lmax_, None, None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
@@ -682,14 +949,14 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        vmav<double,2> mr(map.data(), {1, size_t(npix_)}, {0, map.stride(0)});
-        synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        auto mr(map.prepend_1());
+        synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads, STANDARD);
         }
       else
         {
-        vmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
-          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
-        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+        auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
+        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return map_;
       }
@@ -699,16 +966,16 @@ template<typename T> class Py_sharpjob
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
-      vmav<complex<double>,2> ar(alm.data(), {1, n_alm()}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(map_);
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None);
+        auto mstart = get_mstart(lmax_, None, None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
@@ -722,14 +989,14 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        cmav<double,2> mr(map.data(), {1, npix_}, {0, map.stride(0)});
-        adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        auto mr(map.prepend_1());
+        adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads,STANDARD);
         }
       else
         {
-        cmav<double,3> mr(map.data(), {1, size_t(ntheta_), size_t(nphi_)},
-          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
-        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+        auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
+          {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
+        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return alm_;
       }
@@ -739,10 +1006,10 @@ template<typename T> class Py_sharpjob
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
-      vmav<complex<double>,2> ar(alm.data(), {1, size_t(n_alm())}, {0, alm.stride(0)});
+      auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(map_);
-      cmav<double,3> mr(map.data(), {1, ntheta_, nphi_},
-        {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)});
+      auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
+        {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
       analysis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
       return alm_;
       }
@@ -756,12 +1023,12 @@ template<typename T> class Py_sharpjob
         "incorrect size of a_lm array");
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None);
+        auto mstart = get_mstart(lmax_, None, None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
-        vmav<double,1> theta({nrings}), phi0({nrings});
-        vmav<size_t,1> nphi({nrings}), ringstart({nrings});
+        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
           {
           int64_t startpix, ringpix;
@@ -775,13 +1042,13 @@ template<typename T> class Py_sharpjob
           ringstart(r) = size_t(startpix);
           ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
           }
-        synthesis(alm, map, spin, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads);
+        synthesis(alm, map, spin, lmax_, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads, STANDARD);
         }
       else
         {
-        vmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
-          {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
-        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
+        auto mr(map.template reinterpret<3>({2, ntheta_, nphi_},
+          {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
+        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads, STANDARD);
         }
       return map_;
       }
@@ -792,8 +1059,8 @@ template<typename T> class Py_sharpjob
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_vmav<complex<double>,2>(alm_);
       auto map=to_cmav<double,2>(map_);
-      cmav<double,3> mr(map.data(), {2, ntheta_, nphi_},
-        {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)});
+      auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
+        {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
       analysis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
       return alm_;
       }
@@ -849,17 +1116,15 @@ dependent on theta and m.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set of spherical harmonic coefficients.
-    ncomp must be 1 if spin is 0, else 2.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
-leg: None or numpy.ndarray((ncomp, ntheta, nm), same dtype as `alm`)
+leg: None or numpy.ndarray((nleg, ntheta, nm), same dtype as `alm`)
     output array containing the Legendre coefficients
     if `None`, a new suitable array is allocated
 spin: int >= 0
     the spin to use for the transform
-    if spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
 mval: numpy.ndarray((nm,), dtype = numpy.uint64)
@@ -876,11 +1141,22 @@ theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nm), same dtype as `alm`)
+numpy.ndarray((nleg, ntheta, nm), same dtype as `alm`)
     the Legendre coefficients. If `leg` was supplied, this will be the same object.
+
+Notes
+-----
+nleg = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *alm2leg_deriv1_DS = R"""(
@@ -927,16 +1203,14 @@ Transforms a set of Legendre coefficients to spherical harmonic coefficients
 
 Parameters
 ----------
-leg: numpy.ndarray((ncomp, ntheta, nm), dtype=numpy.complex64 or numpy.complex128)
-    ncomp must be 1 if spin is 0, else 2
-alm: None or numpy.ndarray((ncomp, x), same dtype as `leg`)
+leg: numpy.ndarray((nleg, ntheta, nm), dtype=numpy.complex64 or numpy.complex128)
+alm: None or numpy.ndarray((nalm, x), same dtype as `leg`)
     the set of spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the parameters `lmax`, 'mval`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
 spin: int >= 0
     the spin to use for the transform
-    if spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
 mval: numpy.ndarray((nm,), dtype = numpy.uint64)
@@ -953,13 +1227,22 @@ theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray((ncomp, *), same dtype as `leg`)
+numpy.ndarray((nalm, *), same dtype as `leg`)
     the Legendre coefficients.
     if `alm` was supplied, this will be the same object
     If newly allocated, the smallest possible second dimensions will be chosen.
+
+Notes
+-----
+nleg = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *map2leg_DS = R"""(
@@ -975,6 +1258,8 @@ map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64)
 leg: None or numpy.ndarray((ncomp, ntheta, mmax+1), dtype=numpy.complex of same accuracy as `map`)
     output array containing the Legendre coefficients
     if `None`, a new suitable array is allocated
+    The entries in leg[:,:,m] correspond to quantum number m, i.e. the m values
+    will be stored in ascending order.
 nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1001,7 +1286,7 @@ numpy.ndarray((ncomp, ntheta, nm), dtype=numpy.complex of same accuracy as `map`
 Notes
 -----
 In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
-range from 0 to mmax, inclusively. 
+range from 0 to mmax, inclusively.
 )""";
 
 constexpr const char *leg2map_DS = R"""(
@@ -1010,7 +1295,9 @@ Transforms one or more sets of Legendre coefficients to maps.
 Parameters
 ----------
 leg: numpy.ndarray((ncomp, ntheta, mmax+1), numppy.complex64 or numpy.complex128)
-    input array containing the Legendre coefficients
+    input array containing the Legendre coefficients.
+    The entries in leg[:,:,m] correspond to quantum number m, i.e. the m values
+    must be stored in ascending order, and complete.
 map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`
     the map pixel data.
     The second dimension must be large enough to accommodate all pixels, which
@@ -1040,7 +1327,7 @@ numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `leg`)
 Notes
 -----
 In contrast to `leg2alm` and `alm2leg` the `m` values are assumed to form a
-range from 0 to mmax, inclusively. 
+range from 0 to mmax, inclusively.
 )""";
 
 constexpr const char *synthesis_2d_DS = R"""(
@@ -1048,11 +1335,11 @@ Transforms one or two sets of spherical harmonic coefficients to 2D maps.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the set of spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
-map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     storage for the output map.
     If not supplied, a new array is allocated.
 ntheta, nphi: int > 0
@@ -1061,7 +1348,6 @@ ntheta, nphi: int > 0
     If supplied, and `map` is also supplied, must match with the array dimensions
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 and <= lmax
@@ -1084,12 +1370,23 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the computed map. If the map parameter was specified, this is identical with
     map.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *synthesis_2d_deriv1_DS = R"""(
@@ -1134,7 +1431,7 @@ nthreads: int >= 0
 
 Returns
 -------
-numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+numpy.ndarray((2, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the maps containing the derivatives with respect to theta and phi.
     If the map parameter was specified, this is identical with map.
 )""";
@@ -1145,16 +1442,15 @@ This is the adjoint operation of `synthesis_2D`.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     storage for the spherical harmonic coefficients.
     The second dimension must be large enough to accommodate all entries, which
     are stored according to the healpy convention.
     If not supplied, a new array is allocated.
-map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     The input map.
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 and <= lmax
@@ -1177,12 +1473,21 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
     the computed spherical harmonic coefficients
     If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *analysis_2d_DS = R"""(
@@ -1304,17 +1609,17 @@ For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
 )""";
 
 constexpr const char *synthesis_DS = R"""(
-Transforms one or two sets of spherical harmonic coefficients to maps on the sphere.
+Transforms (sets of) one or two sets of spherical harmonic coefficients to maps on the sphere.
 
 Parameters
 ----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`
+alm: numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
+map: None or numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
-    The second dimension must be large enough to accommodate all pixels, which
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1324,48 +1629,120 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
 spin: int >= 0
     the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `alm`)
+numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float of same accuracy as `alm`)
     the map pixel data.
     If `map` was supplied, this will be the same object
-    If newly allocated, the smallest possible second dimensions will be chosen.
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 constexpr const char *adjoint_synthesis_DS = R"""(
-Transforms one or two maps to spherical harmonic coefficients.
+Transforms (sets of) one or two maps to spherical harmonic coefficients.
 This is the adjoint operation of `synthesis`.
 
 Parameters
 ----------
-alm: None or numpy.ndarray((ncomp, x), dtype=numpy.complex of same precision as `map`)
+alm: None or numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex of same precision as `map`)
     the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
     if `None`, a new suitable array is allocated
-map: numpy.ndarray((ncomp, x), dtype=numpy.float32 or numpy.float64
-    The second dimension must be large enough to accommodate all pixels, which
+map: numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float32 or numpy.float64
+    The last dimension must be large enough to accommodate all pixels, which
+    are stored according to the parameters `nphi`, `ringstart`, and `pixstride`.
+theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    the colatitudes of the map rings
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    number of pixels in every ring
+phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    azimuth (in radians) of the first pixel in every ring
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+    the index in the last dimension of `map` at which the first pixel of every
+    ring is stored
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+pixstride: int
+    the index stride in the last dimension of `map` between two subsequent
+    pixels in a ring
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+
+Returns
+-------
+numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex of same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    If `alm` was supplied, this will be the same object
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
+)""";
+
+constexpr const char *pseudo_analysis_DS = R"""(
+Tries to extract spherical harmonic coefficients from (sets of) one or two maps
+by using the iterative LSMR algorithm.
+
+Parameters
+----------
+alm: None or numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same precision as `map`)
+    the set of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
+    if `None`, a new suitable array is allocated
+map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
@@ -1374,17 +1751,17 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
@@ -1394,29 +1771,50 @@ spin: int >= 0
     If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
+maxiter: int >= 0
+    the maximum number of iterations before stopping the algorithm
+epsilon: float >= 0
+    the relative tolerance used as a stopping criterion
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
 
 Returns
 -------
-numpy.ndarray((ncomp, x), dtype=numpy.complex of same accuracy as `map`)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-    If newly allocated, the smallest possible second dimensions will be chosen.
+numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.complex of same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    If `alm` was supplied, this will be the same object
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+int or list(int)
+    the reason for stopping the iteration
+    1: approximate solution to the equation system found
+    2: approximate least-squares solution found
+    3: condition number of the equation system too large
+    7: maximum number of iterations reached
+
+int or list(int):
+    the iteration count(s)
+
+float or list(float):
+    the residual norm, divided by the norm of `map`
+
+float or list(float):
+    the quality of the least-squares solution
 )""";
 
 constexpr const char *synthesis_deriv1_DS = R"""(
-Transforms a set of spherical harmonic coefficients to two maps containing
-the derivatives with respect to theta and phi.
+Transforms a set (or sets) of spherical harmonic coefficients to two maps
+containing the derivatives with respect to theta and phi.
 
 Parameters
 ----------
-alm: numpy.ndarray((1, x), dtype=numpy.complex64 or numpy.complex128)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-map: None or numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`
+alm: numpy.ndarray(([ntrans,] 1, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the parameters `lmax`, 'mmax`, `mstart`, and `lstride`.
+map: None or numpy.ndarray(([ntrans,] 2, x), dtype=numpy.float of same accuracy as `alm`
     the map pixel data.
-    The second dimension must be large enough to accommodate all pixels, which
+    The last dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1426,30 +1824,219 @@ nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
 mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the second dimension of `alm` on which the
+    the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
-    the index in the second dimension of `map` at which the first pixel of every
+    the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 lstride: int
-    the index stride in the second dimension of `alm` between the entries for
+    the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
 pixstride: int
-    the index stride in the second dimension of `map` between two subsequent
+    the index stride in the last dimension of `map` between two subsequent
     pixels in a ring
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
 
 Returns
 -------
 numpy.ndarray((2, x), dtype=numpy.float of same accuracy as `alm`)
     the map pixel data.
     If `map` was supplied, this will be the same object
-    If newly allocated, the smallest possible second dimensions will be chosen.
+    If newly allocated, the smallest possible last dimension will be chosen.
+)""";
+
+constexpr const char *synthesis_general_DS = R"""(
+Evaluate a_lm at arbitrary positions on the sphere
+
+Parameters
+----------
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is derived from `mstart`; if that is not supplied
+    either, it is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+map: None or numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
+    the map pixel data.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        muliplied by sqrt(l*(l+1))
+
+Returns
+-------
+numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
+    the pixel values at the locations specified by `loc`.
+    If the map parameter was specified, this is identical with map.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
+)""";
+constexpr const char *adjoint_synthesis_general_DS = R"""(
+This is the adjoint operation of `synthesis_general`.
+
+Parameters
+----------
+map: numpy.ndarray((nmaps, npix), dtype=numpy.float32 or numpy.float64
+    The pixel values at the locations specified by `loc`.
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is derived from `mstart`; if that is not supplied
+    either, it is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+alm: None or numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+
+Returns
+-------
+numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
+)""";
+
+constexpr const char *pseudo_analysis_general_DS = R"""(
+Tries to extract spherical harmonic coefficients from one or two maps
+by using the iterative LSMR algorithm.
+
+Parameters
+----------
+map: numpy.ndarray((ncomp, npix), dtype=numpy.float32 or numpy.float64
+    The pixel values at the locations specified by `loc`.
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is derived from `mstart`; if that is not supplied
+    either, it is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon: float >= 0
+    the relative tolerance used as a stopping criterion
+    NOTE: for the "epsilon" paraeter of the underlyig NUFFT calls,
+    `0.1*epsilon` will be used.
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+alm: None or numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+maxiter: int >= 0
+    the maximum number of iterations before stopping the algorithm
+
+Returns
+-------
+numpy.ndarray((ncomp, x), dtype=complex, same accuracy as `map`)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
+    If newly allocated, the smallest possible last dimension will be chosen.
+
+int
+    the reason for stopping the iteration
+    1: approximate solution to the equation system found
+    2: approximate least-squares solution found
+    3: condition number of the equation system too large
+    7: maximum number of iterations reached
+
+int
+    the iteration count(s)
+
+float
+    the residual norm, divided by the norm of `map`
+
+float
+    the quality of the least-squares solution
 )""";
 
 constexpr const char *sharpjob_d_DS = R"""(
@@ -1470,26 +2057,34 @@ void add_sht(py::module_ &msup)
 
   m2.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
-    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None, "mode"_a="STANDARD");
   m2.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS, py::kw_only(), "map"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
-    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "mmax"_a=None, "mode"_a="STANDARD");
+  m2.def("pseudo_analysis", &Py_pseudo_analysis, pseudo_analysis_DS, py::kw_only(), "map"_a, "theta"_a,
+    "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a, "mmax"_a=None);
   m2.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS, py::kw_only(), "alm"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
-    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
+    "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None);
 
-  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
-  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
+  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD");
+  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD");
   m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
   m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
   m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
 
+  // FIXME: maybe add mstart, lstride
+  m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD");
+  m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD");
+  m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None);
+
   m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
   m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "ntheta"_a);
-  m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
+  m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None, "mode"_a="STANDARD");
   m2.def("alm2leg_deriv1", &Py_alm2leg_deriv1, alm2leg_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None);
-  m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None);
+  m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD");
   m2.def("map2leg", &Py_map2leg, map2leg_DS, py::kw_only(), "map"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "mmax"_a, "pixstride"_a=1, "nthreads"_a=1, "leg"_a=None);
   m2.def("leg2map", &Py_leg2map, leg2map_DS, py::kw_only(), "leg"_a, "nphi"_a, "phi0"_a, "ringstart"_a, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None);
   m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,

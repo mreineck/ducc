@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2019-2020 Max-Planck-Society
+# Copyright(C) 2019-2023 Max-Planck-Society
 
 
 import numpy as np
@@ -86,22 +86,22 @@ def test(err):
     b = irfftn(rfftn(a.real.astype(np.float32), axes=axes, nthreads=nthreads),
                axes=axes, inorm=2, lastsize=lastsize, nthreads=nthreads)
     err = update_err(err, "rmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
-    b = fft.separable_hartley(
-        fft.separable_hartley(a.real, axes=axes, nthreads=nthreads),
+    b = fft.separable_fht(
+        fft.separable_fht(a.real, axes=axes, nthreads=nthreads),
         axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmax", _l2error(a.real, b, axes), shape)
-    b = fft.genuine_hartley(
-        fft.genuine_hartley(a.real, axes=axes, nthreads=nthreads),
+    b = fft.genuine_fht(
+        fft.genuine_fht(a.real, axes=axes, nthreads=nthreads),
         axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmax", _l2error(a.real, b, axes), shape)
-    b = fft.separable_hartley(
-            fft.separable_hartley(
+    b = fft.separable_fht(
+            fft.separable_fht(
                 a.real.astype(np.float32), axes=axes, nthreads=nthreads),
             axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
-    b = fft.genuine_hartley(
-            fft.genuine_hartley(a.real.astype(np.float32), axes=axes,
-                                nthreads=nthreads),
+    b = fft.genuine_fht(
+            fft.genuine_fht(a.real.astype(np.float32), axes=axes,
+                            nthreads=nthreads),
             axes=axes, inorm=2, nthreads=nthreads)
     err = update_err(err, "hmaxf", _l2error(a.real.astype(np.float32), b, axes), shape)
     if all(a.shape[i] > 1 for i in axes):

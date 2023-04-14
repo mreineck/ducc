@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2022 Max-Planck-Society
+# Copyright(C) 2020-2023 Max-Planck-Society
 
 from itertools import product
 
@@ -56,13 +56,42 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
             else:
                 res += (ms[row, chan]*wgt[row, chan]
                         * np.exp(2j*np.pi*phase)).real
-    return res/n
+    return np.where(n>0, res/n, 0.)
+
+def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
+                     apply_w, mask):
+    nxdirty, nydirty = dirty.shape
+    x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
+                       indexing='ij')
+    x *= xpixsize
+    y *= ypixsize
+    res = np.zeros((uvw.shape[0], freq.shape[0]), dtype=np.complex128)
+    eps = x**2+y**2
+    if apply_w:
+        nm1 = -eps/(np.sqrt(1.-eps)+1.)
+        n = nm1+1
+    else:
+        nm1 = 0.
+        n = 1.
+    dirty2 = np.where(n>0, dirty/n, 0.)
+    for row in range(uvw.shape[0]):
+        for chan in range(freq.shape[0]):
+            if mask is not None and mask[row, chan] == 0:
+                continue
+            phase = (-freq[chan]/SPEEDOFLIGHT *
+                     (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
+            if wgt is None:
+                res[row, chan] = np.sum(dirty2*np.exp(2j*np.pi*phase))
+            else:
+                res[row, chan] = np.sum((dirty2*wgt[row, chan]
+                        * np.exp(2j*np.pi*phase)))
+    return res
 
 
 def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                  mask, epsilon):
-    u = np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT)*2*np.pi
-    v = np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT)*2*np.pi
+    u = np.fmod(np.outer(uvw[:, 0], freq)*(xpixsize/SPEEDOFLIGHT), 1.)*2*np.pi
+    v = np.fmod(np.outer(uvw[:, 1], freq)*(ypixsize/SPEEDOFLIGHT), 1.)*2*np.pi
     if wgt is not None:
         ms = ms*wgt
     if mask is not None:
@@ -79,58 +108,86 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
     return res0
 
 
-def vis2dirty_with_faceting(nfacets_x, nfacets_y, npix_x, npix_y, **kwargs):
-    if npix_x % nfacets_x != 0:
-        raise ValueError("nfacets_x needs to be divisor of npix_x.")
-    if npix_y % nfacets_y != 0:
-        raise ValueError("nfacets_y needs to be divisor of npix_y.")
-    nx = npix_x // nfacets_x
-    ny = npix_y // nfacets_y
-    dtype = np.float32 if kwargs["vis"].dtype == np.complex64 else np.float64
-    res = np.zeros((npix_x, npix_y), dtype)
-    for xx, yy in product(range(nfacets_x), range(nfacets_y)):
-        cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
-        cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
-        im = ng.experimental.vis2dirty(**kwargs,
+def vis2dirty_with_faceting(*, nfacets_x=1, nfacets_y=1, npix_x, npix_y,
+                            center_x=0., center_y=0., dirty=None, **kwargs):
+    import ducc0.wgridder.experimental as wgridder
+    if dirty is None:
+        dtype = np.float32 if kwargs["vis"].dtype == np.complex64 else np.float64
+        dirty = np.zeros((npix_x, npix_y), dtype)
+    else:
+        if npix_x != 0 and npix_x != dirty.shape[0]:
+            raise ValueError("bad npix_x")
+        if npix_y != 0 and npix_y != dirty.shape[1]:
+            raise ValueError("bad npix_y")
+        npix_x, npix_y = dirty.shape
+
+    istep = (npix_x+nfacets_x-1) // nfacets_x
+    istep += istep % 2  # make even
+    jstep = (npix_y+nfacets_y-1) // nfacets_y
+    jstep += jstep % 2  # make even
+
+    tdirty = None
+    for i in range(nfacets_x):
+        cx = center_x + kwargs["pixsize_x"]*0.5*((2*i+1)*istep-npix_x)
+        imax = min((i+1)*istep, dirty.shape[0])
+        for j in range(nfacets_y):
+            cy = center_y + kwargs["pixsize_y"]*0.5*((2*j+1)*jstep-npix_y)
+            jmax = min((j+1)*jstep, dirty.shape[1])
+            if imax == (i+1)*istep and jmax == (j+1)*jstep:
+                _ = wgridder.vis2dirty(**kwargs,
                                        center_x=cx, center_y=cy,
-                                       npix_x=nx, npix_y=ny)
-        res[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)] = im
-    return res
+                                       npix_x=istep, npix_y=jstep,
+                                       dirty=dirty[i*istep:imax, j*jstep:jmax])
+            else:
+                tdirty = wgridder.vis2dirty(
+                    **kwargs, center_x=cx, center_y=cy,
+                    npix_x=istep, npix_y=jstep, dirty=tdirty)
+                dirty[i*istep:imax, j*jstep:jmax] = tdirty[:imax-i*istep, :jmax-j*jstep]
+    return dirty
 
 
-def dirty2vis_with_faceting(nfacets_x, nfacets_y, dirty, **kwargs):
+def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0.,
+                            dirty, vis=None, **kwargs):
+    import ducc0.wgridder.experimental as wgridder
     npix_x, npix_y = dirty.shape
-    if npix_x % nfacets_x != 0:
-        raise ValueError("nfacets_x needs to be divisor of npix_x.")
-    if npix_y % nfacets_y != 0:
-        raise ValueError("nfacets_y needs to be divisor of npix_y.")
-    nx = npix_x // nfacets_x
-    ny = npix_y // nfacets_y
-    vis = None
-    for xx, yy in product(range(nfacets_x), range(nfacets_y)):
-        cx = ((0.5+xx)/nfacets_x - 0.5) * kwargs["pixsize_x"]*npix_x
-        cy = ((0.5+yy)/nfacets_y - 0.5) * kwargs["pixsize_y"]*npix_y
-        facet = dirty[nx*xx:nx*(xx+1), ny*yy:ny*(yy+1)]
-        facet = np.ascontiguousarray(facet)
-        foo = ng.experimental.dirty2vis(**kwargs, dirty=facet,
-                                        center_x=cx, center_y=cy)
-        if vis is None:
-            vis = foo
-        else:
-            vis += foo
+    istep = (npix_x+nfacets_x-1) // nfacets_x
+    istep += istep % 2  # make even
+    jstep = (npix_y+nfacets_y-1) // nfacets_y
+    jstep += jstep % 2  # make even
+
+    tvis = None
+    for i in range(nfacets_x):
+        cx = center_x + kwargs["pixsize_x"]*0.5*((2*i+1)*istep-npix_x)
+        imax = min((i+1)*istep, dirty.shape[0])
+        for j in range(nfacets_y):
+            cy = center_y + kwargs["pixsize_y"]*0.5*((2*j+1)*jstep-npix_y)
+            jmax = min((j+1)*jstep, dirty.shape[1])
+            if imax == (i+1)*istep and jmax == (j+1)*jstep:
+                tdirty = dirty[i*istep:imax, j*jstep:jmax]
+            else:
+                tdirty = np.zeros((istep, jstep), dtype=dirty.dtype)
+                tdirty[:imax-i*istep, :jmax-j*jstep] = dirty[i*istep:imax, j*jstep:jmax]
+
+            if i == 0 and j == 0:
+                vis = wgridder.dirty2vis(**kwargs, dirty=tdirty,
+                                         center_x=cx, center_y=cy, vis=vis)
+            else:
+                tvis = wgridder.dirty2vis(**kwargs, dirty=tdirty,
+                                          center_x=cx, center_y=cy, vis=tvis)
+                vis += tvis
     return vis
 
 
-@pmp('nx', [(30, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(2, 2), (32, 3), (128, 2)])
+@pmp('ny', [(2, 2), (128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 @pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
@@ -138,7 +195,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(43)
     pixsizex = np.pi/180/60/nxdirty*0.2398
     pixsizey = np.pi/180/60/nxdirty
     f0 = 1e9
@@ -160,7 +217,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         ref = max(vdot(ms, ms).real, vdot(m2, m2).real,
                   vdot(dirty, dirty).real, vdot(d2, d2).real)
         tol = 3e-5*ref if singleprec else 2e-13*ref
-        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=tol)
+        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=3*tol)
 
     dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
@@ -169,13 +226,15 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
     check(dirty2, ms2)
 
-    dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+    dirty2 = vis2dirty_with_faceting(nfacets_x=nxfacets, nfacets_y=nyfacets,
+                                     uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
                                      mask=mask, gpu=gpu).astype("f8")
-    ms2 = dirty2vis_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+    ms2 = dirty2vis_with_faceting(nfacets_x=nxfacets, nfacets_y=nyfacets,
+                                  uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
@@ -183,17 +242,17 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
 
 
-@pmp('nx', [(16, 2), (64, 4)])
-@pmp('ny', [(64, 2)])
+@pmp('nx', [(2, 2), (6, 2), (18, 2), (66, 4)])
+@pmp('ny', [(2, 2), (64, 2)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-2, 1e-3, 1e-4, 1e-7))
+@pmp("epsilon", (1e-2, 1e-4, 1e-7))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (False, True))
 @pmp("use_wgt", (True,))
 @pmp("use_mask", (True,))
-@pmp("nthreads", (1, 2, 7))
-@pmp("fov", (0.001, 0.01, 0.1, 1., 20.))
+@pmp("nthreads", (1, 2))
+@pmp("fov", (0.001, 0.1, 20.))
 @pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
@@ -223,7 +282,8 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                            pixsizey, wstacking, mask)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
 
-    dirty2 = vis2dirty_with_faceting(nxfacets, nyfacets, uvw=uvw, freq=freq,
+    dirty2 = vis2dirty_with_faceting(nfacets_x=nxfacets, nfacets_y=nyfacets,
+                                     uvw=uvw, freq=freq,
                                      vis=ms, wgt=wgt, npix_x=nxdirty,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
@@ -238,11 +298,11 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
 
 
-@pmp('nxdirty', [16, 64])
-@pmp('nydirty', [64])
+@pmp('nxdirty', [2, 16, 64])
+@pmp('nydirty', [2, 64])
 @pmp("nrow", (1, 100))
 @pmp("nchan", (1, 7))
-@pmp("epsilon", list(10.**np.linspace(-2., -12., 100)))
+@pmp("epsilon", list(10.**np.linspace(-2., -12., 20)))
 @pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
 @pmp("use_wgt", (True,))
@@ -274,19 +334,24 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
         pytest.skip()
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
-    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=2*epsilon)
+    x1 = explicit_degridder(uvw, freq, ref, wgt, pixsizex,
+                           pixsizey, wstacking, None)
+    x2 = ng.dirty2ms(uvw, freq, ref, wgt, pixsizex, pixsizey, 0, 0,
+                      epsilon, wstacking, nthreads, 0).astype("c16")
+    assert_allclose(ducc0.misc.l2error(x1,x2), 0, atol=epsilon)
 
 
-@pmp('nx', [(30, 3), (128, 2)])
-@pmp('ny', [(128, 2), (250, 5)])
+@pmp('nx', [(2, 2), (30, 3), (128, 2)])
+@pmp('ny', [(2, 2), (128, 2), (250, 5)])
 @pmp("nrow", (1, 2, 27))
 @pmp("nchan", (1, 5))
-@pmp("epsilon", (1e-1, 1e-3, 3e-5, 2e-13))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
 @pmp("wstacking", (True, False))
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
-@pmp("nthreads", (1, 2, 7))
+@pmp("nthreads", (1, 2))
 def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask):

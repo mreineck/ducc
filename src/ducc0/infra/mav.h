@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2022 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
@@ -95,8 +95,14 @@ template<typename T> class cmembuf
       : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
     cmembuf(size_t sz)
       : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
+#if 1
     cmembuf(size_t sz, uninitialized_dummy)
       : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
+# else // "poison" the array with a fixed value; use for debugging
+    cmembuf(size_t sz, uninitialized_dummy)
+      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
+      { for (size_t i=0; i<sz; ++i) (*rawptr)[i]=T(42000000); }
+#endif
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
 
@@ -158,7 +164,9 @@ class fmav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       auto ndim = shp.size();
-      stride_t res(ndim);
+      // MR using the static_cast just to avoid a GCC warning.
+//      stride_t res(ndim);
+      stride_t res(static_cast<int>(ndim));
       if (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
@@ -217,7 +225,8 @@ class fmav_info
       ptrdiff_t stride=1;
       for (size_t i=0; i<ndim; ++i)
         {
-        if (str[ndim-1-i]!=stride) return false;
+        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
+          return false;
         stride *= ptrdiff_t(shp[ndim-1-i]);
         }
       return true;
@@ -312,6 +321,10 @@ class fmav_info
       shape_t axpos(ndim());
       std::iota(axpos.begin(), axpos.end(), firstaxis);
       return extend_and_broadcast(new_shape, axpos);
+      }
+    fmav_info transpose() const
+      {
+      return fmav_info({shp.crend(), shp.crbegin()}, {str.crbegin(), str.crend()});
       }
   protected:
     auto subdata(const vector<slice> &slices) const
@@ -425,7 +438,8 @@ template<size_t ndim> class mav_info
       ptrdiff_t stride=1;
       for (size_t i=0; i<ndim; ++i)
         {
-        if (str[ndim-1-i]!=stride) return false;
+        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
+          return false;
         stride *= ptrdiff_t(shp[ndim-1-i]);
         }
       return true;
@@ -442,6 +456,30 @@ template<size_t ndim> class mav_info
       {
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
+      }
+    mav_info transpose() const
+      {
+      shape_t shp2;
+      stride_t str2;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shp2[i] = shp[ndim-1-i];
+        str2[i] = str[ndim-1-i];
+        }
+      return mav_info(shp2, str2);
+      }
+    mav_info<ndim+1> prepend_1() const
+      {
+      typename mav_info<ndim+1>::shape_t newshp;
+      typename mav_info<ndim+1>::stride_t newstr;
+      newshp[0] = 1;
+      newstr[0] = 0;
+      for (size_t i=0; i<ndim; ++i)
+        {
+        newshp[i+1] = shp[i];
+        newstr[i+1] = str[i];
+        }
+      return mav_info<ndim+1>(newshp, newstr);
       }
 
   protected:
@@ -546,6 +584,10 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
       {
       return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
+      }
+    cfmav transpose() const
+      {
+      return cfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
       }
   };
 
@@ -664,6 +706,10 @@ template<typename T> class vfmav: public cfmav<T>
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
+    vfmav transpose()
+      {
+      return vfmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      }
   };
 
 template<typename T> vfmav<T> subarray
@@ -696,6 +742,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(buf) {}
     cmav(const tinfo &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
+    cmav(const tinfo &info, const tbuf &buf)
+      : tinfo(info), tbuf(buf) {}
 
   public:
     cmav(const T *d_, const shape_t &shp_, const stride_t &str_)
@@ -735,6 +783,20 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
       }
+    cmav transpose() const
+      {
+      return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      }
+    cmav<T, ndim+1> prepend_1() const
+      {
+      return cmav<T, ndim+1>(static_cast<const tinfo *>(this)->prepend_1(), *static_cast<const tbuf *>(this));
+      }
+    template<size_t ndim2> cmav<T, ndim2> reinterpret
+      (const typename cmav<T, ndim2>::shape_t &newshp,
+       const typename cmav<T, ndim2>::stride_t &newstr) const
+      {
+      return cmav<T, ndim2>(*static_cast<const tbuf *>(this), newshp, newstr);
+      }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
   (const cmav<T, ndim> &arr, const vector<slice> &slices)  
@@ -759,6 +821,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   protected:
     vmav(const tinfo &info, T *d_, tbuf &buf)
       : parent(info, d_, buf) {}
+    vmav(const tinfo &info, tbuf &buf)
+      : parent(info, buf) {}
     vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : parent(buf, shp_, str_){}
 
@@ -832,6 +896,20 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
+    vmav transpose()
+      {
+      return vmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      }
+    vmav<T, ndim+1> prepend_1()
+      {
+      return vmav<T, ndim+1>(static_cast<tinfo *>(this)->prepend_1(), *static_cast<tbuf *>(this));
+      }
+    template<size_t ndim2> vmav<T, ndim2> reinterpret
+      (const typename vmav<T, ndim2>::shape_t &newshp,
+       const typename vmav<T, ndim2>::stride_t &newstr)
+      {
+      return vmav<T, ndim2>(*static_cast<tbuf *>(this), newshp, newstr);
+      }
   };
 
 template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
@@ -840,65 +918,10 @@ template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
 
 // various operations involving fmav objects of the same shape -- experimental
 
-DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::stride_t> &str)
-  {
-  if (shp.size()>1)
-    {
-    // sort dimensions in order of descending stride, as far as possible
-    vector<size_t> strcrit(shp.size(),~size_t(0));
-    for (const auto &curstr: str)
-      for (size_t i=0; i<curstr.size(); ++i)
-        strcrit[i] = min(strcrit[i],size_t(abs(curstr[i])));
-
-    for (size_t lastdim=shp.size(); lastdim>1; --lastdim)
-      {
-      auto dim = size_t(min_element(strcrit.begin(),strcrit.begin()+lastdim)
-                        -strcrit.begin());
-      if ((dim+1!=lastdim) && (strcrit[dim]<strcrit[lastdim-1]))
-        {
-        swap(strcrit[dim], strcrit[lastdim-1]);
-        swap(shp[dim], shp[lastdim-1]);
-        for (auto &curstr: str)
-          swap(curstr[dim], curstr[lastdim-1]);
-        }
-      }
-    // try merging dimensions
-    size_t ndim = shp.size();
-    if (ndim>1)
-      for (size_t d0=ndim-2; d0+1>0; --d0)
-        {
-        bool can_merge = true;
-        for (const auto &curstr: str)
-          can_merge &= curstr[d0] == ptrdiff_t(shp[d0+1])*curstr[d0+1];
-        if (can_merge)
-          {
-          for (auto &curstr: str)
-            curstr.erase(curstr.begin()+d0);
-          shp[d0+1] *= shp[d0];
-          shp.erase(shp.begin()+d0);
-          }
-        }
-    }
-  }
-
-DUCC0_NOINLINE auto multiprep(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    if (info[0].shape(i)!=1) // remove axes of length 1
-      {
-      shp.push_back(info[0].shape(i));
-      for (size_t j=0; j<narr; ++j)
-        str[j].push_back(info[j].stride(i));
-      }
-  opt_shp_str(shp, str);
-  return make_tuple(shp, str);
-  }
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, size_t>
+  multiprep(const vector<fmav_info> &info, const vector<size_t> &tsizes);
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep(const vector<fmav_info> &info);
 
 template<typename Ttuple> constexpr inline size_t tuplelike_size()
   { return tuple_size_v<remove_reference_t<Ttuple>>; }
@@ -906,11 +929,11 @@ template<typename Ttuple> constexpr inline size_t tuplelike_size()
 template <typename Func, typename Ttuple, size_t... I>
 inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
   index_sequence<I...>)
-  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
+  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
 template<typename Func, typename Ttuple> inline void call_with_tuple
   (Func &&func, Ttuple &&tuple)
   {
-  call_with_tuple_impl(forward<Func>(func), tuple,
+  call_with_tuple_impl(std::forward<Func>(func), tuple,
                        make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template <typename Func, typename Ttuple, size_t... I>
@@ -920,7 +943,7 @@ inline void call_with_tuple2_impl(Func &&func, const Ttuple& tuple,
 template<typename Func, typename Ttuple> inline void call_with_tuple2
   (Func &&func, Ttuple &&tuple)
   {
-  call_with_tuple2_impl(forward<Func>(func), tuple,
+  call_with_tuple2_impl(std::forward<Func>(func), tuple,
                         make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 
@@ -931,7 +954,7 @@ inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Func &&func,
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
-  return tuple_transform_impl(inputs, forward<Func>(func),
+  return tuple_transform_impl(inputs, std::forward<Func>(func),
                               make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
@@ -941,7 +964,7 @@ inline void tuple_for_each_impl(tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
 inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Func &&func,
@@ -950,7 +973,7 @@ inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each(const tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename...Ts, typename Func, size_t... Is>
@@ -964,7 +987,7 @@ inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
 template<typename... Ts, typename Func>
 inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Func &&func)
   {
-  return tuple_transform_idx_impl(inputs, forward<Func>(func),
+  return tuple_transform_idx_impl(inputs, std::forward<Func>(func),
                                   make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename...Ts, typename Func, size_t... Is>
@@ -974,7 +997,7 @@ inline void tuple_for_each_idx_impl(tuple<Ts...> &tpl, Func &&func,
 template<typename... Ts, typename Func>
 inline void tuple_for_each_idx(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_idx_impl(tpl, forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  tuple_for_each_idx_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
@@ -1002,16 +1025,47 @@ template<typename Ttuple> inline void advance (Ttuple &ptrs,
   tuple_for_each_idx(ptrs, [idim,&str](auto &&ptr, size_t idx)
                      { ptr += str[idx][idim]; });
   }
+template<typename Ttuple> inline void advance_by_n (Ttuple &ptrs,
+  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t n)
+  {
+  tuple_for_each_idx(ptrs, [idim,n,&str](auto &&ptr, size_t idx)
+                     { ptr += n*str[idx][idim]; });
+  }
+
+template<typename Ttuple, typename Func>
+  DUCC0_NOINLINE void applyHelper_block(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, size_t bsi, size_t bsj,
+    const Ttuple &ptrs, Func &&func)
+  {
+  auto leni=shp[idim], lenj=shp[idim+1];
+  size_t nbi = (leni+bsi-1)/bsi;
+  size_t nbj = (lenj+bsj-1)/bsj;
+  for (size_t bi=0; bi<nbi; ++bi)
+    for (size_t bj=0; bj<nbj; ++bj)
+      {
+      auto locptrs(ptrs);
+      advance_by_n(locptrs, str, idim, bi*bsi);
+      advance_by_n(locptrs, str, idim+1, bj*bsj);
+      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, str, idim))
+        {
+        auto locptrs2(locptrs);
+        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, str, idim+1))
+          call_with_tuple(func, to_ref(locptrs2));
+        }
+      }
+  }
 
 template<typename Ttuple, typename Func>
   DUCC0_NOINLINE void applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    bool last_contiguous)
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, bool last_contiguous)
   {
   auto len = shp[idim];
-  if (idim+1<shp.size())
+  if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
+    applyHelper_block(idim, shp, str, block0, block1, ptrs, func);
+  else if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      applyHelper(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
+      applyHelper(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
         func, last_contiguous);
   else
     {
@@ -1026,20 +1080,20 @@ template<typename Ttuple, typename Func>
   }
 template<typename Func, typename Ttuple>
   inline void applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    size_t nthreads, bool last_contiguous)
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, size_t nthreads, bool last_contiguous)
   {
   if (shp.size()==0)
-    call_with_tuple(forward<Func>(func), to_ref(ptrs));
+    call_with_tuple(std::forward<Func>(func), to_ref(ptrs));
   else if (nthreads==1)
-    applyHelper(0, shp, str, ptrs, forward<Func>(func), last_contiguous);
+    applyHelper(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous);
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
       auto locptrs = update_pointers(ptrs, str, 0, lo);
       auto locshp(shp);
       locshp[0] = hi-lo;
-      applyHelper(0, locshp, str, locptrs, func, last_contiguous);
+      applyHelper(0, locshp, str, block0, block1, locptrs, func, last_contiguous);
       });
   }
 
@@ -1048,7 +1102,9 @@ template<typename Func, typename... Targs>
   {
   vector<fmav_info> infos;
   (infos.push_back(args), ...);
-  auto [shp, str] = multiprep(infos);
+  vector<size_t> tsizes;
+  (tsizes.push_back(sizeof(args.data()[0])), ...);
+  auto [shp, str, block0, block1] = multiprep(infos, tsizes);
   bool last_contiguous = true;
   if (shp.size()>0)
     for (const auto &s:str)
@@ -1056,34 +1112,20 @@ template<typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, ptrs, forward<Func>(func), nthreads, last_contiguous);
+  applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
-DUCC0_NOINLINE auto multiprep_noopt(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    {
-    shp.push_back(info[0].shape(i));
-    for (size_t j=0; j<narr; ++j)
-      str[j].push_back(info[j].stride(i));
-    }
-  return make_tuple(shp, str);
-  }
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep_noopt(const vector<fmav_info> &info);
 
 template <typename Func, typename Arg, typename Ttuple, size_t... I>
 inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
   index_sequence<I...>)
-  { func(forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
+  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
 template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
   (Func &&func, Arg &&arg, Ttuple &&tuple)
   {
-  call_with_tuple_arg_impl(forward<Func>(func), arg, tuple,
+  call_with_tuple_arg_impl(std::forward<Func>(func), arg, tuple,
                        make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template<typename Ttuple, typename Func>
@@ -1115,9 +1157,9 @@ template<typename Func, typename Ttuple>
     size_t nthreads, vector<size_t> &index)
   {
   if (shp.size()==0)
-    call_with_tuple_arg(forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
+    call_with_tuple_arg(std::forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
   else if (nthreads==1)
-    applyHelper_with_index(0, shp, str, ptrs, forward<Func>(func), index);
+    applyHelper_with_index(0, shp, str, ptrs, std::forward<Func>(func), index);
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1139,7 +1181,7 @@ template<typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  applyHelper_with_index(shp, str, ptrs, forward<Func>(func), nthreads, index);
+  applyHelper_with_index(shp, str, ptrs, std::forward<Func>(func), nthreads, index);
   }
 
 
@@ -1191,7 +1233,7 @@ template<typename... Ts, typename ...Qs, typename Func>
 inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
   Func &&func)
   {
-  return tuple_transform2_impl(i1, i2, forward<Func>(func),
+  return tuple_transform2_impl(i1, i2, std::forward<Func>(func),
                                make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename Tptrs, typename Tinfos>
@@ -1243,7 +1285,7 @@ template<typename Tptrs, typename Tinfos, typename Func>
   if (shp.size()==0)
     call_with_tuple2(func, make_mavrefs(ptrs, infos));
   else if (nthreads==1)
-    flexible_mav_applyHelper(0, shp, str, ptrs, infos, forward<Func>(func));
+    flexible_mav_applyHelper(0, shp, str, ptrs, infos, std::forward<Func>(func));
   else
     execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
       {
@@ -1268,7 +1310,7 @@ template<typename Ttuple, typename Tdim, typename Func>
   auto infos2 = tuple_transform(fullinfos, [](const auto &arg)
                                 { return get<1>(arg); });
   auto ptrs = tuple_transform(tuple, [](auto &&arg){return arg.data();});
-  flexible_mav_applyHelper(shp, str, ptrs, infos2, forward<Func>(func), nthreads);
+  flexible_mav_applyHelper(shp, str, ptrs, infos2, std::forward<Func>(func), nthreads);
   }
 
 template<size_t nd0, typename T0, typename Func>
@@ -1276,7 +1318,7 @@ template<size_t nd0, typename T0, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0),
                       forward_as_tuple(Xdim<nd0>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
@@ -1284,7 +1326,7 @@ template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 template<size_t nd0, size_t nd1, size_t nd2,
@@ -1293,7 +1335,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1, m2),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>(), Xdim<nd2>()),
-                      forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads); 
   }
 
 }

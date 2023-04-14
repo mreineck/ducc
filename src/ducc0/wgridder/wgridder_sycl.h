@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022 Max-Planck-Society
+/* Copyright (C) 2022-2023 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
 #ifndef DUCC0_WGRIDDER_SYCL_H
@@ -169,10 +169,10 @@ class Baselines
     const vector<double> &get_f_over_c() const { return f_over_c; }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Params
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgridder
   {
   private:
-    constexpr static int logsquare=5;
+    constexpr static int log2tile=5;
     bool gridding;
     TimerHierarchy timers;
     const cmav<complex<Tms>,2> &ms_in;
@@ -208,7 +208,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
     size_t nu, nv;
     double ofactor;
 
-    shared_ptr<HornerKernel> krn;
+    shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     double ushift, vshift;
@@ -236,8 +236,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       double udum, vdum;
       int iu0, iv0, iw;
       getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
-      iu0 = (iu0+nsafe)>>logsquare;
-      iv0 = (iv0+nsafe)>>logsquare;
+      iu0 = (iu0+nsafe)>>log2tile;
+      iv0 = (iv0+nsafe)>>log2tile;
       iw = do_wgridding ? max(0,int((uvw.w+wshift)*xdw)) : 0;
       return Uvwidx(iu0, iv0, iw);
       }
@@ -266,8 +266,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Param
       checkShape(ms_in.shape(), {nrow,nchan});
       checkShape(mask.shape(), {nrow,nchan});
 
-      size_t ntiles_u = (nu>>logsquare) + 3;
-      size_t ntiles_v = (nv>>logsquare) + 3;
+      size_t ntiles_u = (nu>>log2tile) + 3;
+      size_t ntiles_v = (nv>>log2tile) + 3;
       size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
 timers.push("counting");
       vector<atomic<uint32_t>> buf(ntiles_u*ntiles_v*nwmin+1);
@@ -444,7 +444,7 @@ timers.pop();
            << "grid=(" << nu << "x" << nv;
       if (do_wgridding) cout << "x" << nplanes;
       cout << "), supp=" << supp
-           << ", eps=" << (epsilon * (do_wgridding ? 3 : 2))
+           << ", eps=" << epsilon
            << endl;
       cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
@@ -492,14 +492,14 @@ timers.pop();
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, sigma_min, sigma_max);
+      auto idx = getAvailableKernels_new<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
-      size_t minnu=0, minnv=0, minidx=KernelDB.size();
+      size_t minnu=0, minnv=0, minidx=~(size_t(0));
       for (size_t i=0; i<idx.size(); ++i)
         {
-        const auto &krn(KernelDB[idx[i]]);
+        const auto &krn(getKernel(idx[i]));
         auto supp = krn.W;
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
@@ -542,7 +542,7 @@ timers.pop();
       nvis=0;
       wmin_d=1e300;
       wmax_d=-1e300;
-      mutex mut;
+      Mutex mut;
       execParallel(nrow, nthreads, [&](size_t lo, size_t hi)
         {
         double lwmin_d=1e300, lwmax_d=-1e300;
@@ -559,7 +559,7 @@ timers.pop();
               lwmax_d = max(lwmax_d, w);
               }
         {
-        lock_guard<mutex> lock(mut);
+        LockGuard lock(mut);
         wmin_d = min(wmin_d, lwmin_d);
         wmax_d = max(wmax_d, lwmax_d);
         nvis += lnvis;
@@ -625,7 +625,7 @@ class IndexComputer
 class GlobalCorrector
   {
   private:
-    const Params &par;
+    const Wgridder &par;
     vector<double> cfu, cfv;
     sycl::buffer<double,1> bufcfu, bufcfv;
 
@@ -673,7 +673,7 @@ class GlobalCorrector
       }
 
   public:
-    GlobalCorrector(const Params &par_)
+    GlobalCorrector(const Wgridder &par_)
       : par(par_),
         cfu(par.krn->corfunc(par.nxdirty/2+1, 1./par.nu, par.nthreads)),
         cfv(par.krn->corfunc(par.nydirty/2+1, 1./par.nv, par.nthreads)),
@@ -1292,7 +1292,7 @@ q.wait();timers.poppush("gridding proper");
               sycl::range<2> global(min(blksz,blidx.size()-ofs), n_workitems);
               sycl::range<2> local(1, n_workitems);
               int nsafe = (supp+1)/2;
-              uint32_t sidelen = 2*nsafe+(1<<logsquare);
+              uint32_t sidelen = 2*nsafe+(1<<log2tile);
               my_local_accessor<Tacc,3> tile({sidelen,sidelen,2}, cgh);
 
               cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,nshift=nshift,rccomp,blloc,ccalc,kcomp,pl,sidelen,nsafe,tile,w,dw=dw,ofs,accblidx,accwgt,do_weights](sycl::nd_item<2> item)
@@ -1336,8 +1336,8 @@ q.wait();timers.poppush("gridding proper");
                     do_shift(val, coord, lshift, mshift, nshift, imflip);
                   val.imag(val.imag()*imflip);
 
-                  int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                  int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                  int bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+                  int bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
 
                   for (uint32_t ix=0, iposx=iu0-bu0; ix<supp; ++ix, ++iposx)
                     {
@@ -1363,8 +1363,8 @@ q.wait();timers.poppush("gridding proper");
                 for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                   {
                   size_t iu = i/sidelen, iv = i%sidelen;
-                  size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
-                  size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+                  size_t igu = (iu+u_tile*(1<<log2tile)+nu-nsafe)%nu;
+                  size_t igv = (iv+v_tile*(1<<log2tile)+nv-nsafe)%nv;
 
                   my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
                   rr.fetch_add(Tcalc(tile[iu][iv][0]));
@@ -1413,7 +1413,7 @@ q.wait();timers.poppush("gridding proper");
             sycl::range<2> global(min(blksz,nblock-ofs), n_workitems);
             sycl::range<2> local(1, n_workitems);
             int nsafe = (supp+1)/2;
-            size_t sidelen = 2*nsafe+(1<<logsquare);
+            size_t sidelen = 2*nsafe+(1<<log2tile);
             my_local_accessor<Tacc,3> tile({sidelen,sidelen,2}, cgh);
 
             cgh.parallel_for(sycl::nd_range(global,local), [accgridr,accvis,tile,nu=nu,nv=nv,supp=supp,shifting=shifting,lshift=lshift,mshift=mshift,rccomp,blloc,ccalc,kcomp,nsafe,sidelen,ofs,accwgt,do_weights](sycl::nd_item<2> item)
@@ -1455,8 +1455,8 @@ q.wait();timers.poppush("gridding proper");
                   do_shift(val, coord, lshift, mshift, 0., imflip);
                 val.imag(val.imag()*imflip);
 
-                int bu0=((((iu0+nsafe)>>logsquare)<<logsquare))-nsafe;
-                int bv0=((((iv0+nsafe)>>logsquare)<<logsquare))-nsafe;
+                int bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+                int bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
                 for (uint32_t ix=0, iposx=iu0-bu0; ix<supp; ++ix, ++iposx)
                   {
                   auto i = ix+myid;
@@ -1481,8 +1481,8 @@ q.wait();timers.poppush("gridding proper");
               for (size_t i=item.get_global_id(1); i<sidelen*sidelen; i+=item.get_global_range(1))
                 {
                 size_t iu = i/sidelen, iv = i%sidelen;
-                size_t igu = (iu+u_tile*(1<<logsquare)+nu-nsafe)%nu;
-                size_t igv = (iv+v_tile*(1<<logsquare)+nv-nsafe)%nv;
+                size_t igu = (iu+u_tile*(1<<log2tile)+nu-nsafe)%nu;
+                size_t igv = (iv+v_tile*(1<<log2tile)+nv-nsafe)%nv;
                 my_atomic_ref<Tcalc> rr(accgridr[igu][igv][0]);
                 rr.fetch_add(Tcalc(tile[iu][iv][0]));
                 my_atomic_ref<Tcalc> ri(accgridr[igu][igv][1]);
@@ -1506,7 +1506,7 @@ timers.pop();
       }
 
   public:
-    Params(const cmav<double,2> &uvw, const cmav<double,1> &freq,
+    Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
            const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
            const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
@@ -1525,7 +1525,7 @@ timers.pop();
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
         epsilon(epsilon_),
         do_wgridding(do_wgridding_),
-        nthreads((nthreads_==0) ? get_default_nthreads() : nthreads_),
+        nthreads(adjust_nthreads(nthreads_)),
         verbosity(verbosity_),
         negate_v(negate_v_), divide_by_n(divide_by_n_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
@@ -1538,8 +1538,6 @@ timers.pop();
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
-      // adjust for increased error when gridding in 2 or 3 dimensions
-      epsilon /= do_wgridding ? 3 : 2;
       scanData();
       if (nvis==0)
         {
@@ -1547,10 +1545,10 @@ timers.pop();
         return;
         }
       auto kidx = getNuNv();
-      MR_assert((nu>>logsquare)<(size_t(1)<<16), "nu too large");
-      MR_assert((nv>>logsquare)<(size_t(1)<<16), "nv too large");
+      MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
+      MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(ofactor, epsilon, kidx);
+      krn = selectKernel<Tcalc>(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
@@ -1584,7 +1582,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
@@ -1601,7 +1599,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto dirty_out(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Params<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }

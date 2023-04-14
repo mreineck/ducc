@@ -17,7 +17,7 @@
 /*! \file sht.cc
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -29,10 +29,14 @@
 #endif
 #include "ducc0/infra/simd.h"
 #include "ducc0/sht/sht.h"
+#include "ducc0/sht/sphere_interpol.h"
 #include "ducc0/fft/fft1d.h"
+#include "ducc0/nufft/nufft.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
+#include "ducc0/math/solvers.h"
+#include "ducc0/sht/sht_utils.h"
 
 namespace ducc0 {
 
@@ -576,6 +580,7 @@ DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &coef, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t il, size_t lmax, size_t nv2)
   {
+#if 0
   for (; l+6<=lmax; il+=4, l+=8)
     {
     Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
@@ -614,6 +619,7 @@ DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
       d.lam2[i] = (a4*d.csq[i] + b4)*d.lam1[i] + d.lam2[i];
       }
     }
+#endif
   for (; l+2<=lmax; il+=2, l+=4)
     {
     Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
@@ -801,6 +807,7 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
   bool below_limit=true;
   for (size_t i=0; i<nv2; ++i)
     {
+// FIXME: can we do this better?
     Tv cth2=max(Tv(1e-15),sqrt((1.+d.cth[i])*0.5));
     Tv sth2=max(Tv(1e-15),sqrt((1.-d.cth[i])*0.5));
     auto mask=d.sth[i]<0;
@@ -853,7 +860,9 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
       d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol) |
+      // The bitwise or operator is deliberate!
+      // Silencing clang compiler warning by casting to int...
+      if (int(rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol)) |
           rescale(d.l1m[i],d.l2m[i],d.scm[i],sharp_ftol))
         below_limit &= all_of(d.scp[i]<1) &&
                        all_of(d.scm[i]<1);
@@ -1125,7 +1134,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
   }
 
 
-DUCC0_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & DUCC0_RESTRICT d,
+DUCC0_NOINLINE static void alm2map_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
@@ -1169,7 +1178,7 @@ DUCC0_NOINLINE static void alm2map_deriv1_kernel(sxdata_v & DUCC0_RESTRICT d,
     }
   }
 
-DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm,
+DUCC0_NOINLINE static void calc_alm2map_spin_gradonly(const dcmplx * DUCC0_RESTRICT alm,
   const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
   {
   size_t l,lmax=gen.lmax;
@@ -1232,7 +1241,7 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm
     d.l1m[i] *= d.cfm[i];
     d.l2m[i] *= d.cfm[i];
     }
-  alm2map_deriv1_kernel(d, fx, alm, l, lmax, nv2);
+  alm2map_spin_gradonly_kernel(d, fx, alm, l, lmax, nv2);
 
   for (size_t i=0; i<nv2; ++i)
     {
@@ -1244,6 +1253,117 @@ DUCC0_NOINLINE static void calc_alm2map_deriv1(const dcmplx * DUCC0_RESTRICT alm
     }
   }
 
+DUCC0_NOINLINE static void map2alm_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRICT d,
+  const vector<Ylmgen::dbl2> &fx, dcmplx * DUCC0_RESTRICT alm,
+  size_t l, size_t lmax, size_t nv2)
+  {
+  size_t lsave=l;
+  while (l<=lmax)
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv agr1=0, agi1=0;
+    Tv agr2=0, agi2=0;
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
+      agr1 += d.p2mi[i]*d.l2p[i];
+      agi1 -= d.p2mr[i]*d.l2p[i];
+      agr2 += d.p2pr[i]*d.l1p[i];
+      agi2 += d.p2pi[i]*d.l1p[i];
+      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
+      }
+    vhsum_cmplx_special (agr1,agi1,agr2,agi2,&alm[l]);
+    l+=2;
+    }
+  l=lsave;
+  while (l<=lmax)
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv agr1=0, agi1=0;
+    Tv agr2=0, agi2=0;
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+      agr1 += d.p1pr[i]*d.l2m[i];
+      agi1 += d.p1pi[i]*d.l2m[i];
+      agr2 -= d.p1mi[i]*d.l1m[i];
+      agi2 += d.p1mr[i]*d.l1m[i];
+      d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
+      }
+    vhsum_cmplx_special (agr1,agi1,agr2,agi2,&alm[l]);
+    l+=2;
+    }
+  }
+
+DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT alm,
+  const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
+  {
+  size_t l,lmax=gen.lmax;
+  size_t nv2 = (nth+VLEN-1)/VLEN;
+  iter_to_ieee_spin(gen, d, l, nv2);
+  if (l>lmax) return;
+
+  const auto &fx = gen.coef;
+  bool full_ieee=true;
+  for (size_t i=0; i<nv2; ++i)
+    {
+    getCorfac(d.scp[i], d.cfp[i]);
+    getCorfac(d.scm[i], d.cfm[i]);
+    full_ieee &= all_of(d.scp[i]>=0) &&
+                 all_of(d.scm[i]>=0);
+    }
+  for (size_t i=0; i<nv2; ++i)
+    {
+    Tv tmp;
+    tmp = d.p1pr[i]; d.p1pr[i] -= d.p2mi[i]; d.p2mi[i] += tmp;
+    tmp = d.p1pi[i]; d.p1pi[i] += d.p2mr[i]; d.p2mr[i] -= tmp;
+    tmp = d.p1mr[i]; d.p1mr[i] += d.p2pi[i]; d.p2pi[i] -= tmp;
+    tmp = d.p1mi[i]; d.p1mi[i] -= d.p2pr[i]; d.p2pr[i] += tmp;
+    }
+
+  while((!full_ieee) && (l<=lmax))
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv agr1=0, agi1=0;
+    Tv agr2=0, agi2=0;
+    full_ieee=1;
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
+      d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+      Tv l2p = d.l2p[i]*d.cfp[i], l2m = d.l2m[i]*d.cfm[i];
+      Tv l1p = d.l1p[i]*d.cfp[i], l1m = d.l1m[i]*d.cfm[i];
+      agr1 += d.p1pr[i]*l2m + d.p2mi[i]*l2p;
+      agi1 += d.p1pi[i]*l2m - d.p2mr[i]*l2p;
+      agr2 += d.p2pr[i]*l1p - d.p1mi[i]*l1m;
+      agi2 += d.p2pi[i]*l1p + d.p1mr[i]*l1m;
+
+      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
+      d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
+      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
+        getCorfac(d.scp[i], d.cfp[i]);
+      full_ieee &= all_of(d.scp[i]>=0);
+      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
+        getCorfac(d.scm[i], d.cfm[i]);
+      full_ieee &= all_of(d.scm[i]>=0);
+      }
+    vhsum_cmplx_special (agr1,agi1,agr2,agi2,&alm[l]);
+    l+=2;
+    }
+  if (l>lmax) return;
+
+  for (size_t i=0; i<nv2; ++i)
+    {
+    d.l1p[i] *= d.cfp[i];
+    d.l2p[i] *= d.cfp[i];
+    d.l1m[i] *= d.cfm[i];
+    d.l2m[i] *= d.cfm[i];
+    }
+  map2alm_spin_gradonly_kernel(d, fx, alm, l, lmax, nv2);
+  }
 
 template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
   vmav<complex<double>,2> &almtmp,
@@ -1280,7 +1400,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           midx[nth] = rdata[ith].midx;
           auto lcth = rdata[ith].cth;
           cth[nth/VLEN][nth%VLEN] = lcth;
-          d.s.csq[nth]=lcth*lcth;
+          if (abs(lcth)>0.99)
+            d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
+          else
+            d.s.csq[nth]=lcth*lcth;
           d.s.sth[nth]=rdata[ith].sth;
           ++nth;
           }
@@ -1363,9 +1486,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         for (size_t i=0; i<nvec; ++i)
           d.v.p1pr[i] = d.v.p1pi[i] = d.v.p2pr[i] = d.v.p2pi[i] =
           d.v.p1mr[i] = d.v.p1mi[i] = d.v.p2mr[i] = d.v.p2mi[i] = 0;
-        (mode==ALM2MAP) ?
-          calc_alm2map_spin  (almtmp.data(), gen, d.v, nth) :
-          calc_alm2map_deriv1(almtmp.data(), gen, d.v, nth);
+        if (mode==STANDARD)
+          calc_alm2map_spin(almtmp.data(), gen, d.v, nth);
+        else // GRAD_ONLY or DERIV1
+          calc_alm2map_spin_gradonly(almtmp.data(), gen, d.v, nth);
         double fct = ((gen.mhi-gen.m+gen.s)&1) ? -1.: 1.;
         for (size_t i=0; i<nvec; ++i)
           {
@@ -1401,7 +1525,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
     }
   }
 
-template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
+template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   vmav<complex<double>,2> &almtmp,
   const cmav<complex<T>,3> &phase, const vector<ringdata> &rdata,
   Ylmgen &gen, size_t mi)
@@ -1418,7 +1542,11 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
         {
         if (rdata[ith].mlim>=gen.m)
           {
-          d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+          if (abs(rdata[ith].cth)>0.99)
+            d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
+          else
+            d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
+          d.s.sth[nth]=rdata[ith].sth;
           dcmplx ph1=phase(0, rdata[ith].idx, mi);
           dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi);
           d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
@@ -1493,15 +1621,16 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(
           d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
           d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
           }
-        calc_map2alm_spin(almtmp.data(), gen, d.v, nth);
+        if (mode==STANDARD)
+          calc_map2alm_spin(almtmp.data(), gen, d.v, nth);
+        else
+          calc_map2alm_spin_gradonly(almtmp.data(), gen, d.v, nth);
         }
       }
     //adjust the a_lm for the new algorithm
     for (size_t l=gen.mhi; l<=gen.lmax; ++l)
-      {
-      almtmp(l,0)*=gen.alpha[l];
-      almtmp(l,1)*=gen.alpha[l];
-      }
+      for (size_t i=0; i<almtmp.shape(1); ++i)
+        almtmp(l,i)*=gen.alpha[l];
     }
   }
 
@@ -1554,11 +1683,14 @@ vector<ringdata> make_ringdata(const cmav<double,1> &theta, size_t lmax,
   size_t pos=0;
   while (pos<nrings)
     {
-    if ((pos+1<nrings) && approx(tmp[pos].cth,-tmp[pos+1].cth,1e-12))
+    if ((pos+1<nrings) && (fabs(tmp[pos].theta+tmp[pos+1].theta-pi)<=5e-15))
       {
-      double cth = (tmp[pos].theta<tmp[pos+1].theta) ? tmp[pos].cth : -tmp[pos+1].cth;
-      double sth = (tmp[pos].theta<tmp[pos+1].theta) ? tmp[pos].sth :  tmp[pos+1].sth;
-      res.push_back({get_mlim(lmax, spin, sth, cth), tmp[pos].idx, tmp[pos+1].idx, cth, sth});
+      if (tmp[pos].theta<tmp[pos+1].theta)
+        res.push_back({get_mlim(lmax, spin, tmp[pos].sth, tmp[pos].cth),
+          tmp[pos].idx, tmp[pos+1].idx, tmp[pos].cth, tmp[pos].sth});
+      else
+        res.push_back({get_mlim(lmax, spin, tmp[pos+1].sth, tmp[pos+1].cth),
+          tmp[pos+1].idx, tmp[pos].idx, tmp[pos+1].cth, tmp[pos+1].sth});
       pos += 2;
       }
     else
@@ -1617,15 +1749,15 @@ void get_gridweights(const string &type, vmav<double,1> &wgt)
   else if (type=="CC") // Clenshaw-Curtis
     {
     /* Weights from Waldvogel 2006: BIT Numerical Mathematics 46, p. 195 */
-    MR_assert(nrings>2, "too few rings for Clenshaw-Curtis grid");
+    MR_assert(nrings>1, "too few rings for Clenshaw-Curtis grid");
     size_t n=nrings-1;
     double dw=-1./(n*n-1.+(n&1));
     vector<double> xwgt(nrings);
     xwgt[0]=2.+dw;
-    for (size_t k=1; k<=(n/2-1); ++k)
+    for (size_t k=1; k<n/2; ++k)
       xwgt[2*k-1]=2./(1.-4.*k*k) + dw;
-    //FIXME if (n>1) ???
-    xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
+    if (n>1)
+      xwgt[2*(n/2)-1]=(n-3.)/(2*(n/2)-1) -1. -dw*((2-(n&1))*n-1);
     pocketfft_r<double> plan(n);
     plan.exec(xwgt.data(), 1., false);
     for (size_t m=0; m<(nrings+1)/2; ++m)
@@ -1649,7 +1781,7 @@ void get_gridweights(const string &type, vmav<double,1> &wgt)
 
 vmav<double,1> get_gridweights(const string &type, size_t nrings)
   {
-  vmav<double,1> wgt({nrings});
+  vmav<double,1> wgt({nrings}, UNINITIALIZED);
   get_gridweights(type, wgt);
   return wgt;
   }
@@ -1674,97 +1806,6 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
-template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
-  vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
-  {
-  constexpr size_t chunksize=64;
-  MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
-  auto nm = legi.shape(2);
-  MR_assert(lego.shape(2)==nm, "dimension mismatch");
-  if ((npi==npo)&&(spi==spo)&&(legi.shape(1)==lego.shape(1)))  // shortcut
-    {
-    mav_apply([](complex<T> &a, complex<T> b) {a=b;}, nthreads, lego, legi);
-    return;
-    }
-  size_t nrings_in = legi.shape(1);
-  size_t nfull_in = 2*nrings_in-npi-spi;
-  size_t nrings_out = lego.shape(1);
-  size_t nfull_out = 2*nrings_out-npo-spo;
-  auto dthi = T(2*pi/nfull_in);
-  auto dtho = T(2*pi/nfull_out);
-  auto shift = T(0.5*(dtho*(1-npo)-dthi*(1-npi)));
-  size_t nfull = max(nfull_in, nfull_out);
-  T fct = ((spin&1)==0) ? 1 : -1;
-  pocketfft_c<T> plan_in(nfull_in), plan_out(nfull_out);
-  MultiExp<T,complex<T>> phase(adjoint ? -shift : shift, (shift==0.) ? 1 : nrings_in+2);
-  execDynamic((nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
-    {
-    vmav<complex<T>,1> tmp({nfull}, UNINITIALIZED);
-    vmav<complex<T>,1> buf({max(plan_in.bufsize(), plan_out.bufsize())}, UNINITIALIZED);
-    while (auto rng=sched.getNext())
-      {
-      for (size_t n=0; n<legi.shape(0); ++n)
-        {
-        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
-        for (size_t j=0; j+rng.lo<rng.hi; ++j)
-          {
-          // fill dark side
-          for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
-            {
-            complex<T> v1 = llegi(i,2*j);
-            complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-            tmp(i) = v1 + v2;
-            if ((im<nfull_in) && (i!=im))
-              tmp(im) = fct * (v1-v2);
-            else
-              tmp(i) = (adjoint ? T(1) : T(0.5)) * (tmp(i) + fct*(v1-v2)); // sic!
-            }
-          plan_in.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), !adjoint);
-          if (shift!=0)
-            for (size_t i=1, im=nfull_in-1; (i<nrings_in+1)&&(i<=im); ++i,--im)
-              {
-              if (i!=im)
-                tmp(i) *= phase[i];
-              tmp(im) *= conj(phase[i]);
-              }
-
-          // zero padding/truncation
-          if (nfull_out>nfull_in) // pad
-            {
-            size_t dist = nfull_out-nfull_in;
-            size_t nmove = nfull_in/2;
-            for (size_t i=nfull_out-1; i>nfull_out-1-nmove; --i)
-              tmp(i) = tmp(i-dist);
-            for (size_t i=nfull_out-nmove-dist; i<nfull_out-nmove; ++i)
-              tmp(i) = 0;
-            }
-          if (nfull_out<nfull_in) // truncate
-            {
-            size_t dist = nfull_in-nfull_out;
-            size_t nmove = nfull_out/2;
-            for (size_t i=nfull_in-nmove; i<nfull_in; ++i)
-              tmp(i-dist) = tmp(i);
-            }
-          plan_out.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), adjoint);
-          auto norm = T(1./(2*(adjoint ? nfull_out : nfull_in)));
-          for (size_t i=0; i<nrings_out; ++i)
-            {
-            size_t im = nfull_out-1+npo-i;
-            if (im==nfull_out) im=0;
-            T fct2 = (adjoint && (im==i)) ? T(0.5) : 1;
-            complex<T> v1 = fct2*tmp(i);
-            complex<T> v2 = fct2*fct*tmp(im);
-            llego(i,2*j) = norm * (v1 + v2);
-            if ((2*j+1)<llego.shape(1))
-              llego(i,2*j+1) = norm * (v1 - v2);
-            }
-          }
-        }
-      }
-    });
-  }
-
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1785,9 +1826,15 @@ template<typename T> void alm2leg(  // associated Legendre transform
   MR_assert(nm==leg.shape(2), "nm mismatch");
   auto nalm=alm.shape(0);
   auto mmax = get_mmax(mval, lmax);
-  if (mode==ALM2MAP_DERIV1)
+  if (mode==DERIV1)
     {
     spin=1;
+    MR_assert(nalm==1, "need one a_lm component");
+    MR_assert(leg.shape(0)==2, "need two Legendre components");
+    }
+  else if (mode==GRAD_ONLY)
+    {
+    MR_assert(spin>0, "spin must be positive for grad-only SHTs");
     MR_assert(nalm==1, "need one a_lm component");
     MR_assert(leg.shape(0)==2, "need two Legendre components");
     }
@@ -1802,7 +1849,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
     if (ntheta_tmp<=nrings)
@@ -1813,23 +1860,22 @@ template<typename T> void alm2leg(  // associated Legendre transform
       }
     else
       {
-//FIXME noncrit?
-      vmav<complex<T>,3> leg_tmp({leg.shape(0),ntheta_tmp,leg.shape(2)});
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       }
     return;
     }
 
-  auto norm_l = (mode==ALM2MAP_DERIV1) ? Ylmgen::get_d1norm (lmax) :
-                                         Ylmgen::get_norm (lmax, spin);
+  auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
+                                 Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,nalm});
+    vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
 
     while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
       {
@@ -1858,7 +1904,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
   const cmav<size_t,1> &mstart, // (nm)
   ptrdiff_t lstride,
   const cmav<double,1> &theta, // (nrings)
-  size_t nthreads)
+  size_t nthreads,
+  SHT_mode mode)
   {
   // sanity checks
   auto nrings=theta.shape(0);
@@ -1867,20 +1914,32 @@ template<typename T> void leg2alm(  // associated Legendre transform
   MR_assert(nm==mstart.shape(0), "nm mismatch");
   MR_assert(nm==leg.shape(2), "nm mismatch");
   auto mmax = get_mmax(mval, lmax);
-  size_t ncomp = (spin==0) ? 1 : 2;
-  MR_assert(alm.shape(0)==ncomp, "incorrect number of a_lm components");
-  MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
+  auto nalm = alm.shape(0);
+  if (mode==DERIV1)
+    MR_fail("DERIV1 mode not supported in map->alm direction");
+  else if (mode==GRAD_ONLY)
+    {
+    MR_assert(spin>0, "spin must be positive for grad-only SHTs");
+    MR_assert(nalm==1, "need one a_lm component");
+    MR_assert(leg.shape(0)==2, "need two Legendre components");
+    }
+  else
+    {
+    size_t ncomp = (spin==0) ? 1 : 2;
+    MR_assert(nalm==ncomp, "incorrect number of a_lm components");
+    MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
+    }
 
   bool npi, spi;
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}));
+    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
     resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
-    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
     return;
     }
 
@@ -1891,22 +1950,22 @@ template<typename T> void leg2alm(  // associated Legendre transform
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,ncomp});
+    vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
 
     while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
       {
       auto m=mval(mi);
       gen.prepare(m);
       for (size_t l=m; l<almtmp.shape(0); ++l)
-        for (size_t ialm=0; ialm<ncomp; ++ialm)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
           almtmp(l,ialm) = 0.;
-      inner_loop_m2a (almtmp, leg, rdata, gen, mi);
+      inner_loop_m2a (mode, almtmp, leg, rdata, gen, mi);
       auto lmin=max(spin,m);
       for (size_t l=m; l<lmin; ++l)
-        for (size_t ialm=0; ialm<ncomp; ++ialm)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
           alm(ialm,mstart(mi)+l*lstride) = 0;
       for (size_t l=lmin; l<=lmax; ++l)
-        for (size_t ialm=0; ialm<ncomp; ++ialm)
+        for (size_t ialm=0; ialm<nalm; ++ialm)
           alm(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(l,ialm)*norm_l[l]);
       }
     }); /* end of parallel region */
@@ -1927,26 +1986,64 @@ template<typename T> void leg2map(  // FFT
   MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
-  size_t nphmax=0;
-  for (size_t i=0; i<nrings; ++i)
-    nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
+
+//  bool well_behaved=true;
+//  if (nrings==1) well_behaved=false;
+//  size_t dring = (nrings>1) ? ringstart(1)-ringstart(0) : ~size_t(0);
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
     {
-    ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2});
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+    nphmax=max(nphi(i),nphmax);
+//    if (nphi(i) != nphmax) well_behaved=false;
+//    if (phi0(i) != 0.) well_behaved=false;
+//    if ((i>0) && (ringstart(i)-ringstart(i-1) != dring)) well_behaved=false;
+    }
+//  if (nphmax<2*mmax+1) well_behaved=false;
+
+#if 0
+  if (well_behaved)
+    {
+    auto xmap(map.template reinterpret<3>({ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)}));
+    execParallel(nrings, nthreads, [&](size_t lo, size_t hi)
       {
+      if (lo==hi) return;
       for (size_t icomp=0; icomp<ncomp; ++icomp)
         {
-        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
-        helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
-        for (size_t i=0; i<nphi(ith); ++i)
-          map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
+        for (size_t iring=lo; iring<hi; ++iring)
+          {
+          xmap(icomp, iring, 0) = leg(icomp, iring, 0).real();
+          for (size_t m=1; m<=mmax; ++m)
+            {
+            xmap(icomp, iring, 2*m-1) = leg(icomp, iring, m).real();
+            xmap(icomp, iring, 2*m  ) = leg(icomp, iring, m).imag();
+            }
+          for (size_t ix=2*mmax+1; ix<nphmax; ++ix) xmap(icomp, iring, ix) = T(0);
+          }
+        vfmav<T> xmapf=subarray<2>(xmap,{{icomp},{lo,hi},{}});
+        r2r_fftpack(xmapf,xmapf,{1},false,false,T(1),1);
         }
-      }
-    }); /* end of parallel region */
+      });
+    }
+  else
+#endif
+    execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+      {
+      ringhelper helper;
+      vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+        {
+        for (size_t icomp=0; icomp<ncomp; ++icomp)
+          {
+          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+          for (size_t i=0; i<nphi(ith); ++i)
+            map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
+          }
+        }
+      }); /* end of parallel region */
   }
 
 template<typename T> void map2leg(  // FFT
@@ -1964,26 +2061,67 @@ template<typename T> void map2leg(  // FFT
   MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
-  size_t nphmax=0;
-  for (size_t i=0; i<nrings; ++i)
-    nphmax=max(nphi(i),nphmax);
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-  execDynamic(nrings, nthreads, 64, [&](Scheduler &sched)
+
+//  bool well_behaved=true;
+//  if (nrings==1) well_behaved=false;
+//  size_t dring = (nrings>1) ? ringstart(1)-ringstart(0) : ~size_t(0);
+  size_t nphmax=0;
+  for (size_t i=0; i<nrings; ++i)
     {
-    ringhelper helper;
-    vmav<double,1> ringtmp({nphmax+2});
-    while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+    nphmax=max(nphi(i),nphmax);
+//    if (nphi(i) != nphmax) well_behaved=false;
+//    if (phi0(i) != 0.) well_behaved=false;
+//    if ((i>0) && (ringstart(i)-ringstart(i-1) != dring)) well_behaved=false;
+    }
+//  if (nphmax<2*mmax+1) well_behaved=false;
+
+#if 0
+  if (well_behaved)
+    {
+    auto xmap(map.template reinterpret<3>({ncomp, nrings, nphmax},
+      {map.stride(0), ptrdiff_t(dring*map.stride(1)), pixstride*map.stride(1)}));
+    size_t blksz=min<size_t>(nrings,64);
+    size_t nblocks = (nrings+blksz-1)/blksz;
+    execParallel(nblocks, nthreads, [&](size_t lo, size_t hi)
       {
+      if (lo==hi) return;
+      vmav<T,2> buf({blksz, nphmax}, UNINITIALIZED);
       for (size_t icomp=0; icomp<ncomp; ++icomp)
+        for (size_t iblock=lo; iblock<hi; ++iblock)
+          {
+          size_t r0=iblock*blksz, r1=min(nrings,(iblock+1)*blksz);
+          cfmav<T> xmapf=subarray<2>(xmap,{{icomp},{r0,r1},{}});
+          vfmav<T> buff=subarray<2>(buf,{{0,r1-r0},{}});
+          r2r_fftpack(xmapf,buff,{1},true,true,T(1),1);
+          for (size_t iring=r0; iring<r1; ++iring)
+            {
+            leg(icomp, iring, 0) = buf(iring-r0, 0);
+            for (size_t m=1; m<=mmax; ++m)
+              leg(icomp, iring, m) = complex<T>(buf(iring-r0, 2*m-1),
+                                                buf(iring-r0, 2*m));
+            }
+          }
+      });
+    }
+  else
+#endif
+    execDynamic(nrings, nthreads, 4, [&](Scheduler &sched)
+      {
+      ringhelper helper;
+      vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
-        for (size_t i=0; i<nphi(ith); ++i)
-          ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride);
-        auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
-        helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+        for (size_t icomp=0; icomp<ncomp; ++icomp)
+          {
+          for (size_t i=0; i<nphi(ith); ++i)
+            ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride);
+          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
+          }
         }
-      }
-    }); /* end of parallel region */
+      }); /* end of parallel region */
   }
 
 template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi, bool npi, bool spi,
@@ -2233,13 +2371,18 @@ void sanity_checks(
             (nphi.shape(0)==nrings) &&
             (ringstart.shape(0)==nrings),
     "inconsistency in the number of rings");
-  size_t ncomp = 1+(spin>0);
-  if (mode==ALM2MAP_DERIV1)
+  if ((mode==DERIV1) || (mode==GRAD_ONLY))
+    {
+    MR_assert(spin>0, "DERIV and GRAD_ONLY modes require spin>0");
     MR_assert((alm.shape(0)==1) && (map.shape(0)==2),
       "inconsistent number of components");
+    }
   else
+    {
+    size_t ncomp = 1+(spin>0);
     MR_assert((alm.shape(0)==ncomp) && (map.shape(0)==ncomp),
       "inconsistent number of components");
+    }
   }
 
 template<typename T> void synthesis(
@@ -2258,7 +2401,7 @@ template<typename T> void synthesis(
   SHT_mode mode)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
 
@@ -2266,10 +2409,10 @@ template<typename T> void synthesis(
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
@@ -2278,7 +2421,7 @@ template<typename T> void synthesis(
     }
   else
     {
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
@@ -2304,7 +2447,7 @@ void get_ringtheta_2d(const string &type, vmav<double, 1> &theta)
   else if (type=="CC") // Clenshaw-Curtis
     for (size_t m=0; m<(nrings+1)/2; ++m)
       {
-      theta(m)=max(1e-15,pi*m/(nrings-1.));
+      theta(m)=pi*m/(nrings-1.);
       theta(nrings-1-m)=pi-theta(m);
       }
   else if (type=="F2") // Fejer 2
@@ -2329,20 +2472,20 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> 
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
   synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads,
   mode);
@@ -2366,10 +2509,11 @@ template<typename T> void adjoint_synthesis(
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
-  size_t nthreads)
+  size_t nthreads,
+  SHT_mode mode)
   {
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
-  vmav<size_t,1> mval({mstart.shape(0)});
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
 
@@ -2377,53 +2521,145 @@ template<typename T> void adjoint_synthesis(
   size_t ntheta_tmp;
   if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp});
+    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
-    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,mode);
     }
   else
     {
-    auto leg(vmav<complex<T>,3>::build_noncritical({alm.shape(0),theta.shape(0),mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
     }
   }
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon)
+  {
+  auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
+    {
+    synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi, phi0,
+              ringstart, pixstride, nthreads, STANDARD);
+    };
+  auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
+    {
+    adjoint_synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi,
+                      phi0, ringstart, pixstride, nthreads, STANDARD);
+    };
+  auto mapnorm = [&](const cmav<T,2> &xmap)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xmap.shape(0); ++icomp)
+      for (size_t iring=0; iring<ringstart.shape(0); ++iring)
+        for (size_t ipix=0; ipix<nphi(iring); ++ipix)
+          {
+          auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride);
+          res += tmp*tmp;
+          }
+    return sqrt(res);
+    };
+  auto almnorm = [&](const cmav<complex<T>,2> &xalm)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xalm.shape(0); ++icomp)
+      for (size_t m=0; m<mstart.shape(0); ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto tmp = xalm(icomp,mstart(m)+l*lstride);
+          res += norm(tmp) * ((m==0) ? 1 : 2);
+          }
+    return sqrt(res);
+    };
+  auto alm0 = alm.build_uniform(alm.shape(), 0.);
+  // try to estimate ATOL according to Paige & Saunders
+  // assuming an absolute error of machine epsilon in every matrix element
+  // and a sum of squares of 1 along every row/column
+  size_t npix=0;
+  mav_apply([&npix](size_t v){npix+=v;}, 1, nphi);
+  double atol = 1e-14*sqrt(npix);
+  auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
+    = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
+           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
+  return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
+  }
+template tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<double>,2> &alm, // (ncomp, *)
+  const cmav<double,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
+template tuple<size_t, size_t, double, double> pseudo_analysis(
+  vmav<complex<float>,2> &alm, // (ncomp, *)
+  const cmav<float,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
 
 template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads)
+  const string &geometry, size_t nthreads, SHT_mode mode)
   {
-  auto nphi = vmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = vmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  cmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads);
+  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads, mode);
   }
 template void adjoint_synthesis_2d(vmav<complex<double>,2> &alm,
   const cmav<double,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads);
+  const string &geometry, size_t nthreads, SHT_mode mode);
 template void adjoint_synthesis_2d(vmav<complex<float>,2> &alm,
   const cmav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads);
+  const string &geometry, size_t nthreads, SHT_mode mode);
 
 template<typename T> void analysis_2d(
   vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -2449,12 +2685,12 @@ template<typename T> void analysis_2d(
   MR_assert(map.shape(1)>=nrings_min,
     "too few rings for analysis up to requested lmax");
 
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
-  vmav<double,1> theta({nphi.shape(0)});
+  vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, STANDARD);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
     {
     bool npi, spi;
@@ -2468,7 +2704,7 @@ template<typename T> void analysis_2d(
       { npi=true; spi=false; }
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
@@ -2481,16 +2717,16 @@ template<typename T> void analysis_2d(
         }
 
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
-    vmav<double,1> newtheta({ntheta_leg});
+    vmav<double,1> newtheta({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       newtheta(i) = (pi*i)/(ntheta_leg-1);
-    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads);
+    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads, STANDARD);
     return;
     }
   else
     {
     auto wgt = get_gridweights(geometry, theta.shape(0));
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}, UNINITIALIZED));
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     for (size_t i=0; i<leg.shape(0); ++i)
       for (size_t j=0; j<leg.shape(1); ++j)
@@ -2499,7 +2735,7 @@ template<typename T> void analysis_2d(
         for (size_t k=0; k<leg.shape(2); ++k)
           leg(i,j,k) *= wgt1;
         }
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
   }
 
@@ -2509,19 +2745,19 @@ template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  cmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
 
   analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0, ringstart, pixstride, nthreads);
   }
@@ -2556,12 +2792,12 @@ template<typename T> void adjoint_analysis_2d(
   MR_assert(map.shape(1)>=nrings_min,
     "too few rings for adjoint analysis up to requested lmax");
 
-  vmav<size_t,1> mval({mstart.shape(0)});
+  vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
-  vmav<double,1> theta({nphi.shape(0)});
+  vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, MAP2ALM);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, STANDARD);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
     {
     bool npo, spo;
@@ -2575,14 +2811,14 @@ template<typename T> void adjoint_analysis_2d(
       { npo=true; spo=false; }
 
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}));
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
 
-    vmav<double,1> theta_tmp({ntheta_leg});
+    vmav<double,1> theta_tmp({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       theta_tmp(i) = (pi*i)/(ntheta_leg-1);
-    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads);
+    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, STANDARD);
     resample_from_prepared_CC(legi, lego, npo, spo, spin, lmax, nthreads);
     for (size_t i=0; i<lego.shape(0); ++i)
       for (size_t j=0; j<lego.shape(1); ++j)
@@ -2597,8 +2833,8 @@ template<typename T> void adjoint_analysis_2d(
   else
     {
     auto wgt = get_gridweights(geometry, theta.shape(0));
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}));
-    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}, UNINITIALIZED));
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     for (size_t i=0; i<leg.shape(0); ++i)
       for (size_t j=0; j<leg.shape(1); ++j)
         {
@@ -2613,22 +2849,22 @@ template<typename T> void adjoint_analysis_2d(
 template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads)
   {
-  auto nphi = vmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = vmav<double,1>::build_uniform({map.shape(1)}, 0.);
-  vmav<size_t,1> mstart({mmax+1});
+  auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
+  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
     mstart(i) = ofs-i;
     ofs += lmax+1-i;
     }
-  vmav<size_t,1> ringstart({map.shape(1)});
+  vmav<size_t,1> ringstart({map.shape(1)}, UNINITIALIZED);
   auto ringstride = map.stride(1);
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  vmav<T,2> map2(map.data(), {map.shape(0), map.shape(1)*map.shape(2)},
-                {map.stride(0), 1});
-  vmav<double,1> theta({map.shape(1)});
+  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+                                        {map.stride(0), 1}));
+  vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0,
     ringstart, pixstride, nthreads);
   }
@@ -2636,4 +2872,146 @@ template void adjoint_analysis_2d(const cmav<complex<double>,2> &alm, vmav<doubl
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
 template void adjoint_analysis_2d(const cmav<complex<float>,2> &alm, vmav<float,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
+
+template<typename T, typename Tloc> void synthesis_general(
+  const cmav<complex<T>,2> &alm, vmav<T,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
+  const cmav<Tloc,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
+  {
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(mstart.shape(0)>0, "need at least m=0");
+  size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
+  MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
+  size_t nmaps = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
+
+  SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
+    sigma_min, sigma_max, epsilon, nthreads);
+  auto planes = inter.build_planes();
+  inter.getPlane(alm, mstart, lstride, planes, mode);
+  auto xtheta = subarray<1>(loc, {{},{0}});
+  auto xphi = subarray<1>(loc, {{},{1}});
+  inter.interpol(planes, 0, 0, xtheta, xphi, map);
+  }
+
+template void synthesis_general(
+  const cmav<complex<float>,2> &alm, vmav<float,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+template void synthesis_general(
+  const cmav<complex<double>,2> &alm, vmav<double,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+
+template<typename T, typename Tloc> void adjoint_synthesis_general(
+  vmav<complex<T>,2> &alm, const cmav<T,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<Tloc,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode)
+  {
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  size_t nalm = (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1);
+  MR_assert(alm.shape(0)==nalm, "number of components mismatch in alm");
+  size_t nmaps = (spin==0) ? 1 : 2;
+  MR_assert(map.shape(0)==nmaps, "number of components mismatch in map");
+  MR_assert(mstart.shape(0)>0, "need at least m=0");
+
+  SphereInterpol<T> inter(lmax, mstart.shape(0)-1, spin, loc.shape(0),
+    sigma_min, sigma_max, epsilon, nthreads);
+  auto planes = inter.build_planes();
+  mav_apply([](auto &v){v=0;}, nthreads, planes);
+  auto xtheta = subarray<1>(loc, {{},{0}});
+  auto xphi = subarray<1>(loc, {{},{1}});
+  inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
+  inter.updateAlm(alm, mstart, lstride, planes, mode);
+  }
+template void adjoint_synthesis_general(
+  vmav<complex<float>,2> &alm, const cmav<float,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+template void adjoint_synthesis_general(
+  vmav<complex<double>,2> &alm, const cmav<double,2> &map,
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const cmav<double,2> &loc,
+  double epsilon, double sigma_min, double sigma_max, size_t nthreads, SHT_mode mode);
+
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon)
+  {
+  auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
+    {
+    synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
+                      sigma_min, sigma_max, nthreads, STANDARD);
+    };
+  auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
+    {
+    adjoint_synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
+                              sigma_min, sigma_max, nthreads, STANDARD);
+    };
+  auto mapnorm = [&](const cmav<T,2> &xmap)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xmap.shape(0); ++icomp)
+      for (size_t ipix=0; ipix<xmap.shape(1); ++ipix)
+          {
+          auto tmp = xmap(icomp,ipix);
+          res += tmp*tmp;
+          }
+    return sqrt(res);
+    };
+  auto almnorm = [&](const cmav<complex<T>,2> &xalm)
+    {
+    double res=0;
+    for (size_t icomp=0; icomp<xalm.shape(0); ++icomp)
+      for (size_t m=0; m<mstart.shape(0); ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto tmp = xalm(icomp,mstart(m)+l*lstride);
+          res += norm(tmp) * ((m==0) ? 1 : 2);
+          }
+    return sqrt(res);
+    };
+  auto alm0 = alm.build_uniform(alm.shape(), 0.);
+  // try to estimate ATOL according to Paige & Saunders
+  // assuming an absolute error of machine epsilon in every matrix element
+  double atol = 1e-14*sqrt(map.shape(1));
+  auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
+    = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
+           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
+  return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
+  }
+template tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<float>,2> &alm, // (ncomp, *)
+  const cmav<float,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
+template tuple<size_t, size_t, double, double> pseudo_analysis_general(
+  vmav<complex<double>,2> &alm, // (ncomp, *)
+  const cmav<double,2> &map, // (ncomp, npix)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart,
+  ptrdiff_t lstride,
+  const cmav<double,2> &loc, // (npix,2)
+  double sigma_min, double sigma_max,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon);
+
 }}

@@ -8,6 +8,7 @@ Welcome to ducc's documentation!
    sht
    totalconvolve
    wgridder
+   nufft
    healpix
    misc
    pointingprovider

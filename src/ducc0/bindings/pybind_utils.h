@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020-2021 Max-Planck-Society
+/* Copyright (C) 2020-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
 
@@ -38,6 +38,12 @@ using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
 
 namespace py = pybind11;
+
+py::object normalizeDtype(const py::object &dtype)
+  {
+  static py::object converter = py::module_::import("numpy").attr("dtype");
+  return converter(dtype);
+  }
 
 bool isPyarr(const py::object &obj)
   { return py::isinstance<py::array>(obj); }
@@ -100,10 +106,86 @@ template<typename T, size_t ndim>
   return res;
   }
 
-template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims)
-  { return py::array_t<T>(dims); }
-template<typename T, size_t ndim> py::array_t<T> make_Pyarr(const std::array<size_t,ndim> &dims)
-  { return py::array_t<T>(shape_t(dims.begin(), dims.end())); }
+template<typename T> cfmav<T> to_cfmav(const py::object &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
+    copy_shape(arr), copy_strides<T>(arr, false));
+  }
+template<typename T> vfmav<T> to_vfmav(const py::object &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_shape(arr), copy_strides<T>(arr, true));
+  }
+
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
+    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
+  }
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const py::array &obj)
+  {
+  auto tmp = to_cfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename cmav<T,ndim>::shape_t newshape;
+  typename cmav<T,ndim>::stride_t newstride;
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return cmav<T,ndim>(tmp.data(), newshape, newstride);
+  }
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
+  {
+  auto arr = toPyarr<T>(obj);
+  return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
+    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true));
+  }
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::array &obj)
+  {
+  auto tmp = to_vfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename vmav<T,ndim>::shape_t newshape;
+  typename vmav<T,ndim>::stride_t newstride;
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return vmav<T,ndim>(tmp.data(), newshape, newstride);
+  }
+
+template<typename T, size_t len> array<T,len> to_array(const py::object &obj)
+  {
+  auto vec = py::cast<vector<T>>(obj);
+  MR_assert(vec.size()==len, "unexpected number of elements");
+  array<T,len> res;
+  for (size_t i=0;i<len; ++i) res[i] = vec[i];
+  return res;
+  }
+
+template<typename T> void zero_Pyarr(py::array_t<T> &arr, size_t nthreads=1)
+  {
+  auto arr2 = to_vfmav<T>(arr);
+  mav_apply([](T &v){ v=T(0); }, nthreads, arr2);
+  }
+
+template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims, bool zero=false)
+  {
+  auto res=py::array_t<T>(dims);
+  if (zero) zero_Pyarr(res);
+  return res;
+  }
+template<typename T, size_t ndim> py::array_t<T> make_Pyarr
+  (const std::array<size_t,ndim> &dims, bool zero=false)
+  {
+  auto res=py::array_t<T>(shape_t(dims.begin(), dims.end()));
+  if (zero) zero_Pyarr(res);
+  return res;
+  }
 
 template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   {
@@ -114,7 +196,7 @@ template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array sub(tarr[py::tuple(slices)]);
+  py::array_t<T> sub(tarr[py::tuple(slices)]);
   return sub;
   }
 
@@ -127,9 +209,9 @@ template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims)
   }
 
 template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
-  const shape_t &dims)
+  const shape_t &dims, bool zero_if_new=false)
   {
-  if (arr_.is_none()) return make_Pyarr<T>(dims);
+  if (arr_.is_none()) return make_Pyarr<T>(dims, zero_if_new);
   MR_assert(isPyarr<T>(arr_), "incorrect data type");
   auto tmp = toPyarr<T>(arr_);
   MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
@@ -162,30 +244,10 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
   return tmp;
   }
 
-template<typename T> cfmav<T> to_cfmav(const py::object &obj)
+template<typename T> bool isDtype(const py::object &dtype)
   {
-  auto arr = toPyarr<T>(obj);
-  return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
-    copy_shape(arr), copy_strides<T>(arr, false));
-  }
-template<typename T> vfmav<T> to_vfmav(const py::object &obj)
-  {
-  auto arr = toPyarr<T>(obj);
-  return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_shape(arr), copy_strides<T>(arr, true));
-  }
-
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj)
-  {
-  auto arr = toPyarr<T>(obj);
-  return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
-    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
-  }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
-  {
-  auto arr = toPyarr<T>(obj);
-  return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true));
+  static const auto tmp = make_Pyarr<T>({}).dtype();
+  return tmp.is(dtype);
   }
 
 }
@@ -200,7 +262,12 @@ using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
 using detail_pybind::to_cmav;
+using detail_pybind::to_cmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
+using detail_pybind::to_vmav_with_optional_leading_dimensions;
+using detail_pybind::to_array;
+using detail_pybind::normalizeDtype;
+using detail_pybind::isDtype;
 
 }
 

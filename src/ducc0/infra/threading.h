@@ -1,7 +1,7 @@
 /** \file ducc0/infra/threading.h
  *  Mulithreading support, similar to functionality provided by OpenMP
  *
- * \copyright Copyright (C) 2019-2022 Peter Bell, Max-Planck-Society
+ * \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
  * \authors Peter Bell, Martin Reinecke
  */
 
@@ -53,19 +53,119 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_THREADING_H
 #define DUCC0_THREADING_H
 
+// Low level threading support can be influenced by the following macros:
+// - DUCC0_NO_LOWLEVEL_THREADING: if defined, multithreading is disabled
+//   and all parallel regions will be executed sequentially
+//   on the invoking thread.
+// - DUCC0_CUSTOM_LOWLEVEL_THREADING: if defined, external definitions of
+//   Mutex, UniqueLock, LockGuard, CondVar, set_active_pool(),
+//   and get active_pool() must be supplied in "ducc0_custom_lowlevel_threading.h"
+//   and the code will use those.
+// Both macros must not be defined at the same time.
+// If neither macro is defined, standard ducc0 multihreading will be active.
+
+#if (defined(DUCC0_NO_LOWLEVEL_THREADING) && defined(DUCC0_CUSTOM_LOWLEVEL_THREADING))
+static_assert(false, "DUCC0_NO_LOWLEVEL_THREADING and DUCC0_CUSTOMLOWLEVEL_THREADING must not be both defined");
+#endif
+
+#if defined(DUCC0_STDCXX_LOWLEVEL_THREADING)
+static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined externally");
+#endif
+
+#if ((!defined(DUCC0_NO_LOWLEVEL_THREADING)) && (!defined(DUCC0_CUSTOM_LOWLEVEL_THREADING)))
+#define DUCC0_STDCXX_LOWLEVEL_THREADING
+#endif
+
 #include <cstddef>
 #include <functional>
+#include <optional>
+
+// threading-specific headers
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <mutex>
 #include <condition_variable>
-#include <optional>
+#endif
+
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
+// no headers needed
+#endif
+
+namespace ducc0 {
+namespace detail_threading {
+
+using std::size_t;
+
+/// Abstract base class for minimalistic thread pool functionality
+class thread_pool
+  {
+  public:
+    virtual ~thread_pool() {}
+    /// Returns the total number of threads managed by the pool
+    virtual size_t nthreads() const = 0;
+    /** "Normalizes" a requested number of threads. A useful convention could be
+        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
+    virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
+    virtual void submit(std::function<void()> work) = 0;
+  };
+
+}}
+
+#ifdef DUCC0_CUSTOM_LOWLEVEL_THREADING
+#include "ducc0_custom_lowlevel_threading.h"
+#endif
 
 namespace ducc0 {
 
 namespace detail_threading {
 
+thread_pool *set_active_pool(thread_pool *new_pool);
+thread_pool *get_active_pool();
+
+// define threading related types dependent on the underlying implementation
+#ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
+using Mutex = std::mutex;
+using UniqueLock = std::unique_lock<std::mutex>;
+using LockGuard = std::lock_guard<std::mutex>;
+using CondVar = std::condition_variable;
+#endif
+
+#ifdef DUCC0_NO_LOWLEVEL_THREADING
+struct Mutex
+  {
+  void lock(){}
+  void unlock(){}
+  };
+struct LockGuard
+  {
+  LockGuard(const Mutex &){}
+  };
+struct UniqueLock
+  {
+  UniqueLock(const Mutex &){}
+  };
+struct CondVar
+  {
+  template<class Predicate>
+    void wait(UniqueLock &, Predicate) {}
+  void notify_one() noexcept {}
+  void notify_all() noexcept {}
+  };
+#endif
+
 using std::size_t;
 
-/// Index range describing a chunk of work inside a parallellized loop
+class ScopedUseThreadPool
+  {
+  private:
+    thread_pool *old_pool_;
+  public:
+    ScopedUseThreadPool(thread_pool &pool)
+      { old_pool_ = set_active_pool(&pool); }
+    ~ScopedUseThreadPool()
+      { set_active_pool(old_pool_); }
+  };
+
+/// Index range describing a chunk of work inside a parallelized loop
 struct Range
   {
   size_t lo, //< first index of the chunk
@@ -91,11 +191,10 @@ class Scheduler
     virtual Range getNext() = 0;
   };
 
-/// Returns the maximum number of threads that are supported by the hardware.
-/** More threads can be used, but this will probably hurt performance. */
+/** Returns the maximum number of threads that are supported by currently
+    active thread pool. */
 size_t max_threads();
-void set_default_nthreads(size_t new_default_nthreads);
-size_t get_default_nthreads();
+size_t adjust_nthreads(size_t nthreads);
 
 /// Execute \a func over \a nwork work items, on a single thread.
 void execSingle(size_t nwork,
@@ -103,14 +202,14 @@ void execSingle(size_t nwork,
 /// Execute \a func over \a nwork work items, on \a nthreads threads.
 /** Chunks will have the size \a chunksize, except for the last one which
  *  may be smaller.
- * 
+ *
  *  Chunks are statically assigned to threads at startup. */
 void execStatic(size_t nwork, size_t nthreads, size_t chunksize,
   std::function<void(Scheduler &)> func);
 /// Execute \a func over \a nwork work items, on \a nthreads threads.
 /** Chunks will have the size \a chunksize, except for the last one which
  *  may be smaller.
- * 
+ *
  *  Chunks are assigned dynamically to threads;whenever a thread is finished
  *  with its current chunk, it will obtain the next one from the list of
  *  remaining chunks. */
@@ -147,8 +246,8 @@ inline void execParallel(size_t nwork, size_t nthreads,
 template<typename T> class Worklist
   {
   private:
-    std::mutex mtx;
-    std::condition_variable cv;
+    Mutex mtx;
+    CondVar cv;
     size_t nworking{0};
     std::vector<T> items;
 
@@ -158,7 +257,7 @@ template<typename T> class Worklist
 
     std::optional<T> get_item()
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      UniqueLock lck(mtx);
       if ((--nworking==0) && items.empty()) cv.notify_all();
       cv.wait(lck,[&](){return (!items.empty()) || (nworking==0);});
       if (!items.empty())
@@ -169,21 +268,21 @@ template<typename T> class Worklist
         return res;
         }
       else
-        return {};      
+        return {};
       }
     void startup()
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      LockGuard lck(mtx);
       ++nworking;
       }
     void put_item(const T &item)
       {
-      std::unique_lock<std::mutex> lck(mtx);
+      LockGuard lck(mtx);
       items.push_back(item);
       cv.notify_one();
       }
   };
-
+  
 /// Execute \a func on work items in \a items over \a nthreads threads.
 /** While processing a work item, \a func may submit further items to the list
  *  of work items. For this purpose, \a func must take a const T &
@@ -203,9 +302,12 @@ template<typename T, typename Func> auto execWorklist
 
 } // end of namespace detail_threading
 
+using detail_threading::Mutex;
+using detail_threading::LockGuard;
+using detail_threading::thread_pool;
+using detail_threading::ScopedUseThreadPool;
 using detail_threading::max_threads;
-using detail_threading::get_default_nthreads;
-using detail_threading::set_default_nthreads;
+using detail_threading::adjust_nthreads;
 using detail_threading::Scheduler;
 using detail_threading::execSingle;
 using detail_threading::execStatic;

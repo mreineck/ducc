@@ -72,8 +72,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/unity_roots.h"
 
-//#define DUCC0_USE_PROPER_HARTLEY_CONVENTION
-
 namespace ducc0 {
 
 namespace detail_fft {
@@ -488,7 +486,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
     size_t l1, ido;
     static constexpr size_t ip=4;
     quick_array<Tcs> wa;
- 
+
     auto WA(size_t x, size_t i) const
       { return wa[x+(i-1)*(ip-1)]; }
 
@@ -1182,7 +1180,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     size_t rfct;
     Troots<Tfs> myroots;
 
-// FIXME split into sub-functions. This is too long! 
+// FIXME split into sub-functions. This is too long!
     template<bool fwd, typename T> Cmplx<T> *exec_(Cmplx<T> *cc, Cmplx<T> *ch,
       Cmplx<T> *buf, size_t nthreads) const
       {
@@ -1207,7 +1205,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
-          static const auto ticv = tidx<Tcv *>();
+          // NOTE: removed "static" here, because it leads to trouble with gcc 7
+          // static const type_index ticv = tidx<Tcv *>();
+          const type_index ticv = tidx<Tcv *>();
 
           if (ido==1)
             {
@@ -1539,7 +1539,7 @@ MR_fail("must not get here");
 
   public:
     cfft_multipass(size_t l1_, size_t ido_, size_t ip_,
-      const Troots<Tfs> &roots, bool vectorize=false)
+      const Troots<Tfs> &roots, bool /*vectorize*/=false)
       : l1(l1_), ido(ido_), ip(ip_), bufsz(0), need_cpy(false),
         myroots(roots)
       {
@@ -1549,7 +1549,7 @@ MR_fail("must not get here");
 
       // FIXME TBD
 // do we need the vectorize flag at all?
-      size_t lim = vectorize ? 10000 : 10000;
+      size_t lim = 10000; //vectorize ? 10000 : 10000;
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
@@ -1654,7 +1654,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const
       {
-      static const auto tics = tidx<Tcs *>(); 
+      static const auto tics = tidx<Tcs *>();
       MR_assert(ti==tics, "bad input type");
       auto in1 = static_cast<Tcs *>(in);
       auto copy1 = static_cast<Tcs *>(copy);
@@ -2714,7 +2714,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           auto res = static_cast<Tcd *>(cplan->exec(ticd, cc2, ch2,
             subbuf, fwd, nthreads));
           // copy out
-          CH(0,0,k) = res[0].r; 
+          CH(0,0,k) = res[0].r;
           for (size_t m=1; m<=ip/2; ++m)
             {
             CH(ido-1,2*m-1,k)=res[m].r;
@@ -2735,8 +2735,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
               }
             auto res = static_cast<Tcd *>(cplan->exec(ticd, cc2, ch2,
               subbuf, fwd, nthreads));
-            CH(i-1,0,k) = res[0].r; 
-            CH(i,0,k) = res[0].i; 
+            CH(i-1,0,k) = res[0].r;
+            CH(i,0,k) = res[0].i;
             for (size_t m=1; m<ipph; ++m)
               {
               CH(i-1,2*m,k) = res[m].r;
@@ -2771,7 +2771,7 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
           for (size_t i=2, ic=ido-2; i<ido; i+=2, ic-=2)
             {
             // copy in
-            cc2[0] = {CC(i-1,0,k),CC(i,0,k)}; 
+            cc2[0] = {CC(i-1,0,k),CC(i,0,k)};
             for (size_t m=1; m<=ip/2; ++m)
               {
               cc2[m] = {CC(i-1,2*m,k),CC(i,2*m,k)};
@@ -3073,13 +3073,53 @@ template<typename Tfs> class pocketfft_hartley
       size_t i=1, i1=1, i2=N-1;
       for (i=1; i<N-1; i+=2, ++i1, --i2)
         {
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
-        res2[i1] = fct*(res[i]-res[i+1]);
-        res2[i2] = fct*(res[i]+res[i+1]);
-#else
         res2[i1] = fct*(res[i]+res[i+1]);
         res2[i2] = fct*(res[i]-res[i+1]);
-#endif
+        }
+      if (i<N)
+        res2[i1] = fct*res[i];
+
+      return res2;
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec_copyback(Tfd *in, Tfd *buf,
+      Tfs fct, size_t nthreads=1) const
+      {
+      auto res = exec(in, buf, fct, nthreads);
+      if (res!=in)
+        copy_n(res, N, in);
+      }
+    template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
+      size_t nthreads=1) const
+      {
+      quick_array<Tfd> buf(N+plan->bufsize());
+      exec_copyback(in, buf.data(), fct, nthreads);
+      }
+  };
+
+template<typename Tfs> class pocketfft_fht
+  {
+  private:
+    size_t N;
+    Trpass<Tfs> plan;
+
+  public:
+    pocketfft_fht(size_t n, bool vectorize=false)
+      : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
+    size_t length() const { return N; }
+    size_t bufsize() const { return N+plan->bufsize(); }
+    template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
+      size_t nthreads=1) const
+      {
+      static const auto tifd = tidx<Tfd *>();
+      auto res = static_cast<Tfd *>(plan->exec(tifd,
+        in, buf, buf+N, true, nthreads));
+      auto res2 = (res==buf) ? in : buf;
+      res2[0] = fct*res[0];
+      size_t i=1, i1=1, i2=N-1;
+      for (i=1; i<N-1; i+=2, ++i1, --i2)
+        {
+        res2[i1] = fct*(res[i]-res[i+1]);
+        res2[i2] = fct*(res[i]+res[i+1]);
         }
       if (i<N)
         res2[i1] = fct*res[i];
@@ -3170,6 +3210,7 @@ template<typename Tfs> class pocketfft_fftw
 using detail_fft::pocketfft_c;
 using detail_fft::pocketfft_r;
 using detail_fft::pocketfft_hartley;
+using detail_fft::pocketfft_fht;
 using detail_fft::pocketfft_fftw;
 inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }

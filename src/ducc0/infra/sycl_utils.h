@@ -278,7 +278,7 @@ using detail_sycl_utils::ensure_device_copy;
 
 #endif
 
-bool sycl_active()
+inline bool sycl_active()
   {
 #if defined(DUCC0_USE_SYCL)
   return true;

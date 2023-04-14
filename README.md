@@ -45,39 +45,40 @@ and that it should not be considered stable.
 
 ### Installation
 
-DUCC can be installed using a simple `pip` invocation:
-
-    pip3 install --user ducc0
-
-In most cases this will download and install a binary wheel.
-However, the performance of the installed package may not be optimal, since
-the wheel has to work on all CPUs of a given architecture (e.g. x86_64) and
-will therefore probably not use all features present in your local CPU.
-
-It is therefore recommended to install from source if possible, using the
-command
+For best performance, it is recommended to compile DUCC from source, optimizing
+for the specific CPU on the system. This can be done using the command
 
     pip3 install --no-binary ducc0 --user ducc0
 
-NOTE: compilation can take a significant amount of time (several minutes).
+NOTE: compilation requires the appropriate compilers to be installed (see above)
+and can take a significant amount of time (several minutes).
 
-DUCC0 has been packaged for Alpine linux and can be installed with
+Alternatively, a simple
 
-    apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing py3-ducc0
+    pip3 install --user ducc0
 
-on the Alpine edge distribution.
+will install a pre-compiled binary package, which makes the installation process
+much quicker and does not require any compilers to be installed on the system.
+However, the code will most likely perform significantly worse (by a factor of
+two to three for some functions) than a custom built version.
+
+Additionally, pre-compiled binaries are distributed for the following systems.
+
+<a href="https://repology.org/project/python:ducc0/versions">
+<img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
+</a>
 
 
-Installing multiple versions simultaneously
--------------------------------------------
+Installing multiple major versions simultaneously
+-------------------------------------------------
 
 The interfaces of the DUCC components are expected to evolve over time; whenever
 an interface changes in a manner that is not backwards compatible, the DUCC
-version number will increase. As a consequence it might happen that one part of
-a Python code may use an older version of DUCC while at the same time another
-part requires a newer version. Since DUCC's version number is included in the
-module name itself (the module is not called `ducc`, but rather `ducc<X>`),
-this is not a problem, as multiple DUCC versions can be installed
+major version number will increase. As a consequence it might happen that one
+part of a Python code may use an older version of DUCC while at the same time
+another part requires a newer version. Since DUCC's major version number is
+included in the module name itself (the module is not called `ducc`, but rather
+`ducc<X>`), this is not a problem, as multiple DUCC versions can be installed
 simultaneously.
 The latest patch levels of a given DUCC version will always be available at the
 HEAD of the git branch with the respective name. In other words, if you need
@@ -123,22 +124,38 @@ The central algorithms are derived from Paul Swarztrauber's
 - multi-D transforms in double precision perform fairly similar to FFTW with
   FFTW_MEASURE; in single precision `ducc.fft` can be significantly faster.
 
+
+ducc.nufft
+----------
+
+Library for non-uniform FFTs in 1D/2D/3D
+(currently only supports transform types 1 and 2).
+The goal is to provide similar or better performance and accuracy than
+[FINUFFT](https://github.com/flatironinstitute/finufft), making use of lessons
+learned during the implementation of the `wgridder` module (see below).
+
+
 ducc.sht
 --------
 
-This package provides efficient spherical harmonic trasforms (SHTs). Its code
+This package provides efficient spherical harmonic transforms (SHTs). Its code
 is derived from [libsharp](https://arxiv.org/abs/1303.4945), but has been
 significantly enhanced.
 
 ### Noteworthy features
-- support for any grid based on iso-latitude rings with equidistant pixels in
-  each of the rings
+- very efficient support for spherical harmonic synthesis ("alm2map") operations
+  and their adjoint for any grid based on iso-latitude rings with equidistant
+  pixels in each of the rings.
+- support for the same operations on *entirely arbitrary* spherical grids,
+  i.e. without constraints on pixel locations. This is implemented via
+  intermediate iso-latitude grids and non-uniform FFTs.
 - support for accurate spherical harmonic analyis on certain sub-classes of
   grids (Clenshaw-Curtis, Fejer-1 and McEwen-Wiaux) at band limits beyond those
   for which quadrature weights exist. For details see
   [this note](https://wwwmpa.mpa-garching.mpg.de/~martin/shtnote.pdf).
+- iterative approximate spherical harmonic analysis on aritrary grids.
 - substantially improved transformation speed (up to a factor of 2) on the
-  above mentioned grid geometries for high band limits
+  above mentioned grid geometries for high band limits.
 - accelerated recurrences as presented in
   [Ishioka (2018)](https://www.jstage.jst.go.jp/article/jmsj/96/2/96_2018-019/_pdf)
 - vector instruction support
@@ -198,7 +215,7 @@ as the `wgridder` component.
   due to table lookup and reducing overall memory bandwidth
 
 ### Numerical aspects
-- uses the analytical gridding kernel presented in
+- uses a generalization of the analytical gridding kernel presented in
   <https://arxiv.org/abs/1808.06736>
 - uses the "improved W-stacking method" described in
   <https://arxiv.org/abs/2101.11172>

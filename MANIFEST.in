@@ -7,6 +7,7 @@ include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/bucket_sort.h
 include src/ducc0/infra/error_handling.h
 include src/ducc0/infra/mav.h
+include src/ducc0/infra/mav.cc
 include src/ducc0/infra/misc_utils.h
 include src/ducc0/infra/simd.h
 include src/ducc0/infra/string_utils.cc
@@ -15,7 +16,6 @@ include src/ducc0/infra/sycl_utils.h
 include src/ducc0/infra/threading.cc
 include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
-include src/ducc0/infra/transpose.h
 include src/ducc0/infra/useful_macros.h
 
 include src/ducc0/bindings/pybind_utils.h
@@ -25,12 +25,15 @@ include src/ducc0/math/constants.h
 include src/ducc0/math/geom_utils.cc
 include src/ducc0/math/geom_utils.h
 include src/ducc0/math/gl_integrator.h
+include src/ducc0/math/gl_integrator.cc
 include src/ducc0/math/gridding_kernel.h
+include src/ducc0/math/gridding_kernel.cc
 include src/ducc0/math/math_utils.h
 include src/ducc0/math/pointing.cc
 include src/ducc0/math/pointing.h
 include src/ducc0/math/quaternion.h
 include src/ducc0/math/rangeset.h
+include src/ducc0/math/solvers.h
 include src/ducc0/math/space_filling.cc
 include src/ducc0/math/space_filling.h
 include src/ducc0/math/unity_roots.h
@@ -39,9 +42,13 @@ include src/ducc0/math/vec3.h
 include src/ducc0/fft/fft1d.h
 include src/ducc0/fft/fft.h
 
+include src/ducc0/nufft/nufft.h
+
 include src/ducc0/sht/alm.h
 include src/ducc0/sht/sht.h
 include src/ducc0/sht/sht.cc
+include src/ducc0/sht/sphere_interpol.h
+include src/ducc0/sht/sht_utils.h
 include src/ducc0/sht/totalconvolve.h
 
 include src/ducc0/healpix/healpix_base.cc
@@ -51,8 +58,10 @@ include src/ducc0/healpix/healpix_tables.h
 
 include src/ducc0/wgridder/wgridder.h
 include src/ducc0/wgridder/wgridder_sycl.h
+include src/ducc0/wgridder/wgridder.cc
 
 include python/fft_pymod.cc
+include python/nufft_pymod.cc
 include python/sht_pymod.cc
 include python/healpix_pymod.cc
 include python/wgridder_pymod.cc
@@ -66,6 +75,7 @@ include python/test/test_pointing.py
 include python/test/test_sht.py
 include python/test/test_totalconvolve.py
 include python/test/test_wgridder.py
+include python/test/test_nufft.py
 
 include python/demos/fft_bench.py
 include python/demos/fft_stress.py
@@ -73,3 +83,4 @@ include python/demos/healpix_perftest.py
 include python/demos/totalconvolve_demo.py
 include python/demos/totalconvolve_usage.py
 include python/demos/sht_analysis_demo.py
+include python/demos/nufft_benchmark.py

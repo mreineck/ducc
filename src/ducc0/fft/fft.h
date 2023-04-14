@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2022 Max-Planck-Society
+Copyright (C) 2010-2023 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 For the odd-sized DCT-IV transforms:
@@ -68,9 +68,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <complex>
 #include <algorithm>
-#ifndef DUCC0_NO_THREADING
-#include <mutex>
-#endif
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/threading.h"
@@ -86,7 +83,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Implementation of multi-dimensional Fast Fourier and related transforms
  *  \copyright Copyright (C) 2010-2021 Max-Planck-Society
  *  \copyright Copyright (C) 2019 Peter Bell
- *  \copyright  
+ *  \copyright
  *  \copyright For the odd-sized DCT-IV transforms:
  *  \copyright   Copyright (C) 2003, 2007-14 Matteo Frigo
  *  \copyright   Copyright (C) 2003, 2007-14 Massachusetts Institute of Technology
@@ -161,11 +158,6 @@ struct util // hack to avoid duplicate symbols
         "axis length mismatch");
     }
 
-#ifdef DUCC0_NO_THREADING
-  static size_t thread_count (size_t /*nthreads*/, const fmav_info &/*info*/,
-    size_t /*axis*/, size_t /*vlen*/)
-    { return 1; }
-#else
   static size_t thread_count (size_t nthreads, const fmav_info &info,
     size_t axis, size_t vlen)
     {
@@ -174,10 +166,9 @@ struct util // hack to avoid duplicate symbols
     size_t parallel = size / (info.shape(axis) * vlen);
     if (info.shape(axis) < 1000)
       parallel /= 4;
-    size_t max_threads = (nthreads==0) ? ducc0::get_default_nthreads() : nthreads;
+    size_t max_threads = ducc0::adjust_nthreads(nthreads);
     return std::max(size_t(1), std::min(parallel, max_threads));
     }
-#endif
   };
 
 
@@ -290,13 +281,16 @@ template<typename T0> class T_dcst23
       size_t NS2 = (N+1)/2;
       if (type==2)
         {
-        if (!cosine)
-          for (size_t k=1; k<N; k+=2)
-            c[k] = -c[k];
         c[0] *= 2;
         if ((N&1)==0) c[N-1]*=2;
-        for (size_t k=1; k<N-1; k+=2)
-          MPINPLACE(c[k+1], c[k]);
+        if (cosine)
+          for (size_t k=1; k<N-1; k+=2)
+            MPINPLACE(c[k+1], c[k]);
+        else
+          for (size_t k=1; k<N-1; k+=2)
+            PMINPLACE(c[k+1], c[k]);
+        if ((!cosine) && ((N&1)==0))
+          c[N-1] *= -1;
         auto res = fftplan.exec(c, buf, fct, false, nthreads);
         c[0] = res[0];
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
@@ -307,7 +301,7 @@ template<typename T0> class T_dcst23
           }
         if ((N&1)==0)
           c[NS2] = res[NS2]*twiddle[NS2-1];
-        if (!cosine)
+        if (!cosine)  // swap order completely
           for (size_t k=0, kc=N-1; k<kc; ++k, --kc)
             std::swap(c[k], c[kc]);
         if (ortho) c[0]*=sqrt2*T0(0.5);
@@ -315,7 +309,7 @@ template<typename T0> class T_dcst23
       else
         {
         if (ortho) c[0]*=sqrt2;
-        if (!cosine)
+        if (!cosine)  // swap order completely
           for (size_t k=0, kc=N-1; k<NS2; ++k, --kc)
             std::swap(c[k], c[kc]);
         for (size_t k=1, kc=N-1; k<NS2; ++k, --kc)
@@ -329,11 +323,14 @@ template<typename T0> class T_dcst23
         auto res = fftplan.exec(c, buf, fct, true, nthreads);
         if (res != c) // FIXME: not yet optimal
           copy_n(res, N, c);
-        for (size_t k=1; k<N-1; k+=2)
-          MPINPLACE(c[k], c[k+1]);
-        if (!cosine)
-          for (size_t k=1; k<N; k+=2)
-            c[k] = -c[k];
+        if ((!cosine) && ((N&1)==0))
+          c[N-1] *= -1;
+        if (cosine)
+          for (size_t k=1; k<N-1; k+=2)
+            MPINPLACE(c[k], c[k+1]);
+        else
+          for (size_t k=1; k<N-1; k+=2)
+            PMINPLACE(c[k+1], c[k]);
         }
       return c;
       }
@@ -485,9 +482,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   static std::array<entry, nmax> cache{{{0,0,nullptr}}};
   static std::array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
-#ifndef DUCC0_NO_THREADING
-  static std::mutex mut;
-#endif
+  static Mutex mut;
 
   auto find_in_cache = [&]() -> std::shared_ptr<T>
     {
@@ -509,17 +504,15 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
     };
 
   {
-#ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
-#endif
+  LockGuard lock(mut);
+
   auto p = find_in_cache();
   if (p) return p;
   }
   auto plan = std::make_shared<T>(length, vectorize);
   {
-#ifndef DUCC0_NO_THREADING
-  std::lock_guard<std::mutex> lock(mut);
-#endif
+  LockGuard lock(mut);
+
   auto p = find_in_cache();
   if (p) return p;
 
@@ -652,10 +645,10 @@ template<size_t N> class multi_iter
     ptrdiff_t oofs(size_t i) const { return p_o[0] + ptrdiff_t(i)*cstr_o; }
     ptrdiff_t oofs(size_t j, size_t i) const { return p_o[j] + ptrdiff_t(i)*cstr_o; }
     ptrdiff_t oofs_uni(size_t j, size_t i) const { return p_o[0] + ptrdiff_t(j)*sstr_o + ptrdiff_t(i)*cstr_o; }
-    bool uniform_i() const { return uni_i; } 
-    ptrdiff_t unistride_i() const { return sstr_i; } 
-    bool uniform_o() const { return uni_o; } 
-    ptrdiff_t unistride_o() const { return sstr_o; } 
+    bool uniform_i() const { return uni_i; }
+    ptrdiff_t unistride_i() const { return sstr_i; }
+    bool uniform_o() const { return uni_o; }
+    ptrdiff_t unistride_o() const { return sstr_o; }
     size_t length_in() const { return cshp_i; }
     size_t length_out() const { return cshp_o; }
     ptrdiff_t stride_in() const { return cstr_i; }
@@ -910,7 +903,6 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     }
   std::shared_ptr<Tplan> plan;
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  bool inplace = (out.ndim()==1)&&(out.stride(0)==1);
 
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
@@ -918,72 +910,126 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       plan = get_plan<Tplan>(len, in.ndim()==1);
 
-    execParallel(
-      util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
-      [&](Scheduler &sched) {
-        constexpr auto vlen = fft_simdlen<T0>;
-        constexpr size_t nmax = 16;
-        const auto &tin(iax==0? in : out);
-        multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
-        size_t nvec = 1;
-        if (it.critical_stride_trans(sizeof(T)))  // do bunches of transforms
-          nvec = nmax/vlen;
-        TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), nvec, inplace);
+    execParallel(util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
+      [&](Scheduler &sched)
+      {
+      constexpr auto vlen = fft_simdlen<T0>;
+      constexpr size_t nmax = 16;
+      const auto &tin(iax==0? in : out);
+      multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 
-        if (nvec>1)
-          {
-#ifndef DUCC0_NO_SIMD
-          if constexpr (vlen>1)
-            {
-            TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-            while (it.remaining()>=vlen*nvec)
-              {
-              it.advance(vlen*nvec);
-              exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
-              }
-            }
-#endif
-          {
-          TmpStorage2<T,T,T0> storage2(storage);
-          while (it.remaining()>=nvec)
-            {
-            it.advance(nvec);
-            exec.exec_n(it, tin, out, storage2, *plan, fct, nvec, nth1d);
-            }
-          }
-          }
+      //size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
+      size_t working_set_size = sizeof(T)*(len+plan->bufsize());
+      size_t n_simul=1;
+      while(n_simul*2*working_set_size<=262144) n_simul*=2;
+      n_simul = min(n_simul, vlen);
+      size_t n_bunch = n_simul;
+      if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
+        //while ((n_bunch<nmax) && ((n_bunch*sizeof(T)<=32) || (n_bunch*2*working_set_size<=262144)))
+        while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32))
+          n_bunch*=2;
+      bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
+      MR_assert(n_bunch<=nmax, "must not happen");
+      TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
 
+      // first, do all possible steps of size n_bunch, then n_simul
+      if (n_bunch>1)
+        {
 #ifndef DUCC0_NO_SIMD
         if constexpr (vlen>1)
           {
-          TmpStorage2<add_vec_t<T, vlen>,T,T0> storage2(storage);
-          while (it.remaining()>=vlen)
+          constexpr size_t lvlen = vlen;
+          if (n_simul>=lvlen)
             {
-            it.advance(vlen);
-            exec(it, tin, out, storage2, *plan, fct, nth1d);
+            if (it.remaining()>=n_bunch)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
+              }
+            }
+          if (n_simul==lvlen)
+            {
+            if (it.remaining()>=lvlen)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
             }
           }
-        if constexpr (vlen>2)
-          if constexpr (simd_exists<T0,vlen/2>)
+        if constexpr ((vlen>2) && (simd_exists<T0,vlen/2>))
+          {
+          constexpr size_t lvlen = vlen/2;
+          if (n_simul>=lvlen)
             {
-            TmpStorage2<add_vec_t<T, vlen/2>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/2)
+            if (it.remaining()>=n_bunch)
               {
-              it.advance(vlen/2);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
               }
             }
-        if constexpr (vlen>4)
-          if constexpr (simd_exists<T0,vlen/4>)
+          if (n_simul==lvlen)
             {
-            TmpStorage2<add_vec_t<T, vlen/4>,T,T0> storage2(storage);
-            if (it.remaining()>=vlen/4)
+            if (it.remaining()>=lvlen)
               {
-              it.advance(vlen/4);
-              exec(it, tin, out, storage2, *plan, fct, nth1d);
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
               }
             }
+          }
+        if constexpr ((vlen>4) && (simd_exists<T0,vlen/4>))
+          {
+          constexpr size_t lvlen = vlen/4;
+          if (n_simul>=lvlen)
+            {
+            if (it.remaining()>=n_bunch)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=n_bunch)
+                {
+                it.advance(n_bunch);
+                exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch/lvlen, nth1d);
+                }
+              }
+            }
+          if (n_simul==lvlen)
+            {
+            if (it.remaining()>=lvlen)
+              {
+              TmpStorage2<add_vec_t<T, lvlen>,T,T0> storage2(storage);
+              while (it.remaining()>=lvlen)
+                {
+                it.advance(lvlen);
+                exec(it, tin, out, storage2, *plan, fct, nth1d);
+                }
+              }
+            }
+          }
 #endif
+        {
+        TmpStorage2<T,T,T0> storage2(storage);
+        while (it.remaining()>=n_bunch)
+          {
+          it.advance(n_bunch);
+          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch, nth1d);
+          }
+        }
+        }
         {
         TmpStorage2<T,T,T0> storage2(storage);
         while (it.remaining()>0)
@@ -1011,8 +1057,8 @@ struct ExecC2C
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
     T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
@@ -1054,11 +1100,11 @@ struct ExecHartley
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, nthreads);
     copy_output(it, res, out);
@@ -1085,6 +1131,49 @@ struct ExecHartley
     }
   };
 
+struct ExecFHT
+  {
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
+    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nthreads,
+    bool inplace=false) const
+    {
+    using T = typename Tstorage::datatype;
+    if constexpr(is_same<T0, T>::value)
+      if (inplace)
+        {
+        if (in.data()!=out.data())
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, nthreads);
+        return;
+        }
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, nthreads);
+    copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<T0> &in,
+    vfmav<T0> &out, Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, nthreads);
+    copy_output(it, buf2, out, nvec, dstr);
+    }
+  template <typename T0> DUCC0_NOINLINE void exec_simple (
+    const T0 *in, T0 *out, const pocketfft_fht<T0> &plan, T0 fct,
+    size_t nthreads) const
+    {
+    if (in!=out) copy_n(in, plan.length(), out);
+    plan.exec(out, fct, nthreads);
+    }
+  };
+
 struct ExecFFTW
   {
   bool forward;
@@ -1099,11 +1188,11 @@ struct ExecFFTW
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, forward, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, forward, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
     copy_output(it, res, out);
@@ -1146,11 +1235,11 @@ struct ExecDcst
       if (inplace)
         {
         if (in.data()!=out.data())
-          copy_input(it, in, out.data());
-        plan.exec_copyback(out.data(), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
+          copy_input(it, in, out.data()+it.oofs(0));
+        plan.exec_copyback(out.data()+it.oofs(0), storage.transformBuf(), fct, ortho, type, cosine, nthreads);
         return;
         }
-    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf(); 
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
     copy_input(it, in, buf2);
     auto res = plan.exec(buf2, buf1, fct, ortho, type, cosine, nthreads);
     copy_output(it, res, out);
@@ -1523,12 +1612,12 @@ struct ExecR2R
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a minus sign will be used in the exponent.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1559,17 +1648,17 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a DCT is computed, otherwise an inverse DCT.
  *
  *  \a type specifies the desired type (1-4) of the transform.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If \a ortho is true, the first and last array entries are corrected (if
  *  necessary) to allow an orthonormalized transform.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1595,17 +1684,17 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
  *  memory; in this case their strides must also be identical.
  *
  *  \a axes specifies the axes over which the transform is carried out.
- * 
+ *
  *  If \a forward is true, a DST is computed, otherwise an inverse DST.
  *
  *  \a type specifies the desired type (1-4) of the transform.
- * 
+ *
  *  No normalization factors will be applied by default; if multiplication by
  *  a constant is desired, it can be supplied in \a fct.
  *
  *  If \a ortho is true, the first and last array entries are corrected (if
  *  necessary) to allow an orthonormalized transform.
- * 
+ *
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -1670,6 +1759,19 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
+template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
+  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+  size_t nthreads=1)
+  {
+  if (axes.size()==1)
+    return c2r(in, out, axes[0], forward, fct, nthreads);
+  util::sanity_check_cr(in, out, axes);
+  if (in.size()==0) return;
+  auto newaxes = shape_t{axes.begin(), --axes.end()};
+  c2c(in, in, newaxes, forward, T(1), nthreads);
+  c2r(in, out, axes.back(), forward, fct, nthreads);
+  }
+
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
   vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1)
@@ -1699,6 +1801,15 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &i
     ExecHartley{}, false);
   }
 
+template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+  {
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  general_nd<pocketfft_fht<T>>(in, out, axes, fct, nthreads,
+    ExecFHT{}, false);
+  }
+
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
   ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
   vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
@@ -1709,19 +1820,11 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
   if (idim+1==c.ndim())  // last dimension, not much gain in parallelizing
     {
     if (idim==axes.back())  // halfcomplex axis
-      for (size_t i=0; i<len/2+1; ++i)
-        {
-        size_t j = (i==0) ? 0 : len-i;
-        size_t io0=iout0+i*str, io1=iout1+j*str;
-        func (c.raw(iin+i*cstr), r.raw(io0), r.raw(io1));
-        }
+      for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
     else if (find(axes.begin(), axes.end(), idim) != axes.end())  // FFT axis
-      for (size_t i=0; i<len; ++i)
-        {
-        size_t j = (i==0) ? 0 : len-i;
-        size_t io0=iout0+i*str, io1=iout1+j*str;
-        func (c.raw(iin+i*cstr), r.raw(io0), r.raw(io1));
-        }
+      for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
     else  // non-FFT axis
       for (size_t i=0; i<len; ++i)
         func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+i*str));
@@ -1731,42 +1834,29 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     if (idim==axes.back())
       {
       if (nthreads==1)
-        for (size_t i=0; i<len/2+1; ++i)
-          {
-          size_t j = (i==0) ? 0 : len-i;
-          size_t io0=iout0+i*str, io1=iout1+j*str;
-          hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-          }
+        for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
       else
         execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
           {
-          for (size_t i=lo; i<hi; ++i)
-            {
-            size_t j = (i==0) ? 0 : len-i;
-            size_t io0=iout0+i*str, io1=iout1+j*str;
-            hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-            }
+          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
+            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
           });
       }
     else if (find(axes.begin(), axes.end(), idim) != axes.end())
       {
       if (nthreads==1)
-        for (size_t i=0; i<len; ++i)
-          {
-          size_t j = (i==0) ? 0 : len-i;
-          size_t io0=iout0+i*str, io1=iout1+j*str;
-          hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-          }
+        for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
       else
         execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
           {
-          for (size_t i=lo; i<hi; ++i)
+          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
             {
-            size_t j = (i==0) ? 0 : len-i;
-            size_t io0=iout0+i*str, io1=iout1+j*str;
+            size_t io0=iout0+i*str, io1=iout1+ic*str;
             hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-            if (i!=j)
-              hermiteHelper(idim+1, iin+j*cstr, io1, io0, c, r, axes, func, 1);
+            if (i!=ic)
+              hermiteHelper(idim+1, iin+ic*cstr, io1, io0, c, r, axes, func, 1);
             }
           });
       }
@@ -1830,13 +1920,32 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
-#ifdef DUCC0_USE_PROPER_HARTLEY_CONVENTION
-    r0 = c.real()-c.imag();
-    r1 = c.real()+c.imag();
-#else
     r0 = c.real()+c.imag();
     r1 = c.real()-c.imag();
-#endif
+    }, nthreads);
+  }
+
+template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
+  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1)
+  {
+  if (axes.size()==1)
+    return r2r_separable_fht(in, out, axes, fct, nthreads);
+  if (axes.size()==2)
+    {
+    r2r_separable_fht(in, out, axes, fct, nthreads);
+    oscarize(out, axes[0], axes[1], nthreads);
+    return;
+    }
+  util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
+  if (in.size()==0) return;
+  shape_t tshp(in.shape());
+  tshp[axes.back()] = tshp[axes.back()]/2+1;
+  auto atmp(vfmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
+  r2c(in, atmp, axes, true, fct, nthreads);
+  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
+    {
+    r0 = c.real()-c.imag();
+    r1 = c.real()+c.imag();
     }, nthreads);
   }
 
@@ -1853,7 +1962,7 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
   plan2 = std::make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
-  vmav<T,1> fkernel({kernel.shape(0)});
+  vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<kernel.shape(0); ++i)
     fkernel(i) = kernel(i);
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
@@ -1997,7 +2106,7 @@ struct ExecConv1C
  *  The main purpose of this routine is efficiency: the combination of the above
  *  operations can be carried out more quickly than running the individual
  *  operations in succession.
- * 
+ *
  *  \a in and \a out must have identical shapes, with the possible exception
  *  of the axis \a axis; they may point to the same memory; in this case all
  *  of their strides must be identical.
@@ -2006,7 +2115,7 @@ struct ExecConv1C
  *
  *  \a kernel must have the same length as \a in.shape(axis); it must be
  *  provided in the same domain as \a in (i.e. not pre-transformed).
- * 
+ *
  *  If \a in has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
@@ -2049,11 +2158,14 @@ using detail_fft::FORWARD;
 using detail_fft::BACKWARD;
 using detail_fft::c2c;
 using detail_fft::c2r;
+using detail_fft::c2r_mut;
 using detail_fft::r2c;
 using detail_fft::r2r_fftpack;
 using detail_fft::r2r_fftw;
 using detail_fft::r2r_separable_hartley;
 using detail_fft::r2r_genuine_hartley;
+using detail_fft::r2r_separable_fht;
+using detail_fft::r2r_genuine_fht;
 using detail_fft::dct;
 using detail_fft::dst;
 using detail_fft::convolve_axis;

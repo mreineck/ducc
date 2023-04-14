@@ -1,3 +1,156 @@
+0.30.0:
+- fft:
+    - transforming over a long, contiguous axis in a multi-D array should now
+      be faster and scale better with the number of threads.
+
+- sht:
+    - new function `pseudo_analysis_general` for iterative least-squares analyis
+      of spherical maps on arbitrary grids
+    - rework the general SHT routines, leading to more performance and smaller
+      memory footprint
+
+- totalconvolve:
+    - API CHANGE!
+      bring interface more in line with SHT functions.
+      This basically means replacing the `ofactor` parameter with `sigma_min`,
+      `sigma_max` and `npoints`.
+      (The old syntax is still supported, but should not be unsed any longer in
+      new projects.)
+
+
+0.29.0:
+- general:
+    - rework multi-threading infrastructure to allow integration with external
+      thread pool implementations.
+    - make more extensive use of uninitialized arays. This helps performance
+      and scaling, especially for small SHTs.
+
+- fft:
+    - add the functions `r2r_separable_fht` and `r2r_genuine_fht`, which perform
+      Hartley transforms using the commonly adopted convention, i.e.
+          FHT(x) = FFT(x).real - FFT(x).imag
+      instead of the unusual convention of `r2r_separable_hartley` and
+      `r2r_genuine_hartley`, which use
+          FHT(x) = FFT(x).real + FFT(x).imag
+      `r2r_separable_hartley` and `r2r_genuine_hartley` should not be used in
+      new code, but they are kept for backwards compatibility.
+
+- sht:
+    - new functions `synthesis_general` and `adjoint_synthesis_general`
+      for SHTs on maps without any constraint on pixel locations.
+      This allows, for example, using maps whose pixel positions have been
+      distorted by lensing, or QuadCube maps.
+    - functions `synthesis`, `adjoint_synthesis`, `synthesis_deriv1`,
+      and `pseudo_analysis`: introduce an optional integer parameter `mmax`
+      and allow it to be different from `lmax` (`mmax==lmax` was implicitly
+      assumed so far)
+
+- nufft:
+    - re-write core part of the 2D Type 1 NUFFT, which was miscompiled on some
+      platforms. Unfortunately, the new implementation is slightly slower on
+      x86-64.
+    - allow very small uniform grid dimensions (down to 1)
+
+- wgridder:
+    - allow very small uniform grid dimensions (down to 2)
+
+- misc:
+    - new function `empty_noncritical` for building empty numpy arrays without
+      critical strides
+
+
+0.28.0:
+- general:
+    - allow control over multithreading via environment variables
+      DUCC0_NUM_THREADS, DUCC0_PIN_DISTANCE, and DUCC0_PIN_OFFSET.
+      This is still experimental and may change in the future.
+
+- fft:
+    - introduce a flag `allow_overwriting_input` to `c2r`, which can speed up
+      execution by avoiding temporary arrays
+
+- nufft/wgridder:
+    - changed kernel database to hold optimized kernels depending on
+      dimensionality and floating point accuracy. This allows for slightly
+      better tuning and improves maximum attainable accuracy in 2D and 3D.
+
+- julia:
+    - start of a Julia wrapper, currently focused on FFT, NUFFT and SHT support
+
+- math:
+    - computations involving Peano-Hilbert indices are now much faster 
+
+- misc:
+    - new function `roll_resize_roll`, which allows efficient combined
+      rolling/padding/truncation of arrays.
+
+
+0.27.0:
+- general:
+  - modernize CI and build machinery
+  - some code was moved from header files into .cc files to avoid duplicate
+    symbols in some situations.
+
+- nufft:
+  - added a "plan" class, which allows efficient repeated execution of a
+    transform with fixed grid geometry and nonuniform point positions.
+    (For transforms that are only executed once, the traditional interface
+    should be preferred.)
+  - added new parameters for data periodicity (formerly hardwired to 2pi) and
+    data ordering on the regular grids (formerly starting with the most negative
+    frequency, now also allows "standard" FFT ordering starting with the zero
+    mode).
+  - added a benchmark demo script for easier comparison to FINUFFT and NFFT.jl.
+
+
+0.26.0:
+- general:
+  - clarify that the preferred installation method is compilation from source
+
+- wgridder:
+  - add "self-tuning" versions of `vis2dirty` and `dirty2vis` which attempt to
+    save time by
+     - splitting visibilities into a small-w and large-w part and processing
+       them separately, and/or
+     - subdividing the field of view into facets.
+    This can be advantageous when FFT cost would dominate using the naive
+    approach and the number of w-planes is large (roughly 50 and higher).
+
+- sht:
+  - the methods synthesis, adjoint_synthesis, and synthesis_deriv1 now accept
+    an optional leading dimension in the alm/map arrays, to allow "batched"
+    transforms. If the batch size is large enough, parallelization will not
+    be done within a single transforms, but rather over different transforms,
+    which can be beneficial, especially if the transforms are small.
+  - a new method "pseudo_analysis" was added, which performs iterative,
+    approximate map analysis using the LSMR algorithm.
+
+
+0.25.0:
+- general:
+  - try to fix the package on 32bit platforms
+
+- nufft:
+  - significant performance and accuracy improvements
+
+- wgridder:
+  - recalculated kernels, improved error model
+  - small performance tweaks
+
+
+0.24.0:
+- general:
+  - work around a compilation problem with gcc 7
+
+- nufft:
+  - beginnings of a non-uniform FFT module
+    Conventions are closely following the FINUFFT library.
+    The interface is not finalized yet.
+
+- wgridder:
+  - improved pre-sorting of visibilities
+
+
 0.23.0:
 - general:
   - improved template code for multi-array operations (internal detail)
@@ -109,7 +262,7 @@
 
 -sht:
   - a_lm rotation is now much more accurate, but slightly slower
-  - the improved apherical harmonic analysis capabilities are now documented
+  - the improved spherical harmonic analysis capabilities are now documented
 
 -misc:
   - two new convenience functions vdot() and l2error() were added
@@ -162,7 +315,7 @@
 - sht:
   - bug fixes
   - tweaks to the experimental interface for extracting moments up to lmax
-    from maps with only lmax+1 or lmax+2 equidistant rings. 
+    from maps with only lmax+1 or lmax+2 equidistant rings.
 
 
 0.12.0:

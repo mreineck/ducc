@@ -51,6 +51,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstddef>
 #include <tuple>
+#ifdef __GLIBC__
+#include <malloc.h>
+#include <string.h>
+#include <unistd.h>
+#endif
 
 namespace ducc0 {
 
@@ -89,10 +94,34 @@ template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
   return res;
   }
 
+#ifdef __GLIBC__
+bool preallocate_memory(double gbytes)
+  {
+  mallopt(M_MMAP_MAX, 0);  // never do mmap() for memory allocation
+  mallopt(M_TRIM_THRESHOLD, -1);  // never give memory back to OS
+  auto nbytes = size_t(1e9*gbytes);
+  void *blob = malloc(nbytes);
+  if (blob==nullptr) return false;
+  memset(blob, 42, nbytes);
+  // this is just to confuse the compiler sufficiently that it does not
+  // eliminate all the memory operations ...
+  double sum=0;
+  for (size_t iblock=0; iblock<nbytes; iblock+=4096)
+    sum +=((char *)blob)[iblock];
+  sleep(int(sum*1e-300));
+  free(blob);
+  return true;
+  }
+#else
+bool preallocate_memory(double /*gbytes*/)
+  { return false; }
+#endif
+
 }
 
 using detail_misc_utils::calcShare;
 using detail_misc_utils::noncritical_shape;
+using detail_misc_utils::preallocate_memory;
 
 }
 

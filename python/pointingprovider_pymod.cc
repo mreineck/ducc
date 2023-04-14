@@ -171,7 +171,7 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       py::gil_scoped_release release;
       get_rotated_quaternions(t0, freq, quat2, res2, rot_left);
       }
-      return move(out);
+      return out;
       }
     py::array pyget_rotated_quaternions(double t0, double freq,
       const py::array &quat, size_t nval, bool rot_left)
