@@ -1806,8 +1806,6 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
-#define DUCC0_SHT_THETA_NUFFT
-
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1848,39 +1846,42 @@ template<typename T> void alm2leg(  // associated Legendre transform
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
 
-  bool npi, spi;
-  size_t ntheta_tmp;
-  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+  if (even_odd_m(mval))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    if (ntheta_tmp<=nrings)
+    bool npi, spi;
+    size_t ntheta_tmp;
+    if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
       {
-      auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
-      alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      if (ntheta_tmp<=nrings)
+        {
+        auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
+        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+        }
+      else
+        {
+        auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
+        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+        }
+      return;
       }
-    else
+  
+    if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
       {
-      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
+      auto ntheta_tmp = good_size_complex(lmax+1)+1;
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
-      }
-    return;
+      resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
+      return;
+      } 
     }
-
-  if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
-    {
-    auto ntheta_tmp = good_size_complex(lmax+1)+1;
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
-    alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
-    return;
-    } 
 
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
@@ -1946,30 +1947,33 @@ template<typename T> void leg2alm(  // associated Legendre transform
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
 
-  bool npi, spi;
-  size_t ntheta_tmp;
-  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+  if (even_odd_m(mval))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
-    resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
-    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    return;
+    bool npi, spi;
+    size_t ntheta_tmp;
+    if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+      {
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
+      resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
+      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      return;
+      }
+  
+    if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
+      {
+      auto ntheta_tmp = good_size_complex(lmax+1)+1;
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
+      resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
+      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      return;
+      }
     }
-
-  if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
-    {
-    auto ntheta_tmp = good_size_complex(lmax+1)+1;
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
-    resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
-    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    return;
-    } 
 
   auto norm_l = Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);

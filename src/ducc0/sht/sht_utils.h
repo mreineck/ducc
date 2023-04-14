@@ -37,6 +37,13 @@ namespace detail_sht {
 
 using namespace std;
 
+inline bool even_odd_m(const cmav<size_t,1> &mval)
+  {
+  for (size_t im=0; im<mval.shape(0); ++im)
+    if ((mval(im)+im)&1) return false;  // both mval and im must be even or odd
+  return true;
+  }
+
 template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
   vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
   {
@@ -230,6 +237,7 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
 
 template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> &legi, vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
+  MR_assert(even_odd_m(mval), "bad set of m values");
   auto nplanes = legi.shape(0);
   MR_assert(lego.shape(0)==nplanes, "number of components mismatch");
   MR_assert(lego.shape(1)==theta.shape(0), "ntheta mismatch");
@@ -309,6 +317,7 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
 
 template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> &legi, vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
+  MR_assert(even_odd_m(mval), "bad set of m values");
   auto nplanes = legi.shape(0);
   MR_assert(lego.shape(0)==nplanes, "number of components mismatch");
   MR_assert(legi.shape(1)==theta.shape(0), "ntheta mismatch");
