@@ -6,7 +6,7 @@ __all__ = ["MuellerConvolver"]
 
 
 def nalm(lmax, mmax):
-    return ((mmax+1) * (mmax+2)) // 2 + (mmax+1) * (lmax-mmax)
+    return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
 
 
 # Adri 2020 A25/A35
@@ -25,11 +25,11 @@ def truncate_blm(inp, lmax, kmax, epsilon=1e-10):
     for i in range(len(inp)):
         maxk = -1
         idx = 0
-        for k in range(kmax + 1):
+        for k in range(kmax+1):
             if np.max(np.abs(inp[i, :, idx:idx+lmax+1-k])) > limit:
                 maxk = k
             idx += lmax+1-k
-        #        print("component",i,"maxk=",maxk)
+#        print("component",i,"maxk=",maxk)
         if maxk == -1:
             out.append(None)
         else:
@@ -66,11 +66,12 @@ class MuellerConvolver:
         if True, store internal data in single precision, else double precision
     epsilon : float
         desired accuracy for the interpolation; a typical value is 1e-4
-    ofactor : float
-        oversampling factor to be used for the interpolation grids.
-        Should be in the range [1.2; 2], a typical value is 1.5
-        Increasing this factor makes (adjoint) convolution slower and
-        increases memory consumption, but speeds up interpolation/deinterpolation.
+    npoints : int
+        total number of irregularly spaced points you want to use this object for
+        (only used for performance fine-tuning)
+    sigma_min, sigma_max: float
+        minimum and maximum allowed oversampling factors
+        1.2 <= sigma_min < sigma_max <= 2.5
     nthreads : int
         the number of threads to use for computation
     """
@@ -97,7 +98,7 @@ class MuellerConvolver:
             # if we are asked for elements outside our m range, return 0
             if m < -self._mmax or m > self._mmax:
                 return 0.0 + 0j
-            return self._data[m + self._mmax, l]
+            return self._data[m+self._mmax, l]
 
         def __setitem__(self, lm, val):
             l, m = lm
@@ -117,7 +118,7 @@ class MuellerConvolver:
         # convert input blm to T/P/P*/V blm
         blm2 = [self.AlmPM(lmax, mmax+4) for _ in range(4)]
         idx = 0
-        for m in range(mmax + 1):
+        for m in range(mmax+1):
             sign = (-1)**m
             lrange = slice(m, lmax+1)
             idxrange = slice(idx, idx+lmax+1-m)
@@ -151,12 +152,12 @@ class MuellerConvolver:
         blm_eff = [self.AlmPM(lmax, mmax+4) for _ in range(4)]
 
         for ibeam in range(nbeam):
-            alpha = ibeam * np.pi / nbeam
+            alpha = ibeam*np.pi/nbeam
             e2ia = np.exp(2j*alpha)
             e2iac = np.exp(-2j*alpha)
             e4ia = np.exp(4j*alpha)
             e4iac = np.exp(-4j*alpha)
-            # FIXME: do I need to calculate anything for negative m?
+# FIXME: do I need to calculate anything for negative m?
             for m in range(-mmax-4, mmax+4+1):
                 lrange = slice(abs(m), lmax+1)
                 # T component, Marta notes [4a]
@@ -251,7 +252,8 @@ class MuellerConvolver:
         return out
 
     def __init__(self, *, lmax, kmax, slm, blm, mueller, single_precision=True,
-                 epsilon=1e-4, ofactor=1.5, nthreads=1):
+                 epsilon=1e-4, npoints=1000000000,sigma_min=1.2, sigma_max=2.5,
+                 nthreads=1):
         self._ftype = np.float32 if single_precision else np.float64
         self._ctype = np.complex64 if single_precision else np.complex128
         self._slm = slm.astype(self._ctype)
@@ -273,7 +275,8 @@ class MuellerConvolver:
             if tmp[i] is not None:  # component is not zero
                 self._inter.append(
                     intertype(self._slm, tmp[i][0], False, self._lmax,
-                              tmp[i][1], epsilon=epsilon, ofactor=ofactor,
+                              tmp[i][1], epsilon=epsilon, npoints=npoints,
+                              sigma_min=sigma_min, sigma_max=sigma_max,
                               nthreads=nthreads))
             else:  # we can ignore this component entirely
                 self._inter.append(None)
