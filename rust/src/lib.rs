@@ -5,6 +5,15 @@ use std::ffi::c_void;
 use std::mem::size_of;
 use std::cell::UnsafeCell;
 
+// Support -march=native
+// Support -ffast-math (only for building ducc)
+
+// 1) c2c, genuine_hartley
+// 2a) c2r, r2c, seperable_hartley, dct, dst
+// 2b) nfft
+// n-1) sht
+// n) radio response
+
 
 // Debugging
 // fn print_type_of<T>(_: &T) {
