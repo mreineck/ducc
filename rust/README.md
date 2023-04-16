@@ -2,6 +2,7 @@
 - Detailed README on [gitlab](...)
 - Rust wrapper currently supports
   - FFT: c2c, genuine_hartley
+- TODO Note on inplace
 
 - Rust wrapper currently *does not* support
   - FFT: c2r, r2c, ...
