@@ -211,6 +211,7 @@ class ducc_thread_pool: public thread_pool
   private:
     // A reasonable guess, probably close enough for most hardware
     static constexpr size_t cache_line_size = 64;
+    // align members with cache lines
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
@@ -451,8 +452,8 @@ class Distribution
     std::atomic<size_t> cur_dynamic_;
     size_t chunksize_;
     double fact_max_;
-// FIXME: put some space between nextstart's entries to avoid false sharing?
-    std::vector<size_t> nextstart;
+    struct alignas(64) spaced_size_t { size_t v; }; 
+    std::vector<spaced_size_t> nextstart;
     enum SchedMode { SINGLE, STATIC, DYNAMIC, GUIDED };
     SchedMode mode;
     bool single_done;
@@ -484,7 +485,7 @@ class Distribution
       nthreads_ = std::min(nthreads_, (nwork_+chunksize_-1)/chunksize_);
       nextstart.resize(nthreads_);
       for (size_t i=0; i<nextstart.size(); ++i)
-        nextstart[i] = i*chunksize_;
+        nextstart[i].v = i*chunksize_;
       thread_map(std::move(f));
       }
     void execDynamic(size_t nwork, size_t nthreads, size_t chunksize,
@@ -534,10 +535,10 @@ class Distribution
           }
         case STATIC:
           {
-          if (nextstart[thread_id]>=nwork_) return Range();
-          size_t lo=nextstart[thread_id];
+          if (nextstart[thread_id].v>=nwork_) return Range();
+          size_t lo=nextstart[thread_id].v;
           size_t hi=std::min(lo+chunksize_,nwork_);
-          nextstart[thread_id] += nthreads_*chunksize_;
+          nextstart[thread_id].v += nthreads_*chunksize_;
           return Range(lo, hi);
           }
         case DYNAMIC:

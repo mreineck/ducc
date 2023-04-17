@@ -700,7 +700,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       size_t ntiles_v = (nv>>log2tile) + 3;
       size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
 timers.push("counting");
-      vector<atomic<size_t>> buf(ntiles_u*ntiles_v*nwmin+1);
+      // align members with cache lines
+      struct alignas(64) spaced_size_t { atomic<size_t> v; }; 
+      vector<spaced_size_t> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
@@ -719,7 +721,7 @@ timers.push("counting");
             // now [ch0;ch1[ contains an active range or we are at end
             auto inc0 = [&](Uvwidx idx)
               {
-              ++buf[idx.tile_u*ntiles_v*nwmin + idx.tile_v*nwmin + idx.minplane];
+              ++buf[idx.tile_u*ntiles_v*nwmin + idx.tile_v*nwmin + idx.minplane].v;
               };
             auto inc = [&](Uvwidx idx, uint32_t ch)
               {
@@ -766,15 +768,15 @@ timers.poppush("allocation");
           for (size_t mp=0; mp<nwmin; ++mp)
             {
             size_t i = tu*ntiles_v*nwmin + tv*nwmin + mp;
-            size_t tmp = buf[i];
+            size_t tmp = buf[i].v;
             if (tmp>0) blockstart.push_back({Uvwidx(tu,tv,mp),acc});
-            buf[i] = acc;
+            buf[i].v = acc;
             acc += tmp;
             }
-      buf.back()=acc;
+      buf.back().v=acc;
       }
 timers.poppush("filling");
-      ranges.resize(buf.back());
+      ranges.resize(buf.back().v);
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
         {
         vector<pair<uint16_t, uint16_t>> interbuf;
@@ -789,7 +791,7 @@ timers.poppush("filling");
             {
             if (interbuf.empty()) return;
             auto bufidx = uvwlast.tile_u*ntiles_v*nwmin + uvwlast.tile_v*nwmin + uvwlast.minplane;
-            auto bufpos = (buf[bufidx]+=interbuf.size()) - interbuf.size();
+            auto bufpos = (buf[bufidx].v+=interbuf.size()) - interbuf.size();
             for (size_t i=0; i<interbuf.size(); ++i)
               ranges[bufpos+i] = RowchanRange(irow,interbuf[i].first,interbuf[i].second);
             interbuf.clear();
