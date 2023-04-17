@@ -60,6 +60,9 @@ class GriddingKernel
     /* Computes the correction function values at a coordinates
        [0, dx, 2*dx, ..., (n-1)*dx]  */
     virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const = 0;
+
+    /* Returns the kernel's value at x */
+    virtual double eval(double x) const = 0;
   };
 
 class KernelCorrection
@@ -155,6 +158,19 @@ class PolynomialKernel: public GriddingKernel
     size_t degree() const { return D; }
 
     const KernelCorrection &Corr() const { return corr; }
+
+    double eval(double x) const
+      {
+      if (abs(x)>=1) return 0.;
+      double xrel = W*0.5*(x+1.);
+      size_t nth = size_t(xrel);
+      nth = min<size_t>(nth, W-1);
+      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
+      double res = coeff[nth];
+      for (size_t i=1; i<=D; ++i)
+        res = res*locx+coeff[i*W+nth];
+      return res;
+      }
   };
 
 /*! This class is initialized with a \a PolynomialKernel object and provides
@@ -197,6 +213,19 @@ template<size_t W, typename Tsimd> class TemplateKernel
       }
 
     constexpr size_t support() const { return W; }
+
+    double eval(double x) const
+      {
+      if (abs(x)>=1) return 0.;
+      double xrel = W*0.5*(x+1.);
+      size_t nth = size_t(xrel);
+      nth = min<size_t>(nth, W-1);
+      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
+      double res = scoeff[nth];
+      for (size_t i=1; i<=D; ++i)
+        res = res*locx+scoeff[i*sstride+nth];
+      return res;
+      }
 
     [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {

@@ -1816,7 +1816,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
   ptrdiff_t lstride,
   const cmav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode)
+  SHT_mode mode,
+  bool theta_interpol)
   {
   // sanity checks
   auto nrings=theta.shape(0);
@@ -1845,26 +1846,41 @@ template<typename T> void alm2leg(  // associated Legendre transform
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
 
-  bool npi, spi;
-  size_t ntheta_tmp;
-  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+  if (even_odd_m(mval))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    if (ntheta_tmp<=nrings)
+    bool npi, spi;
+    size_t ntheta_tmp;
+    if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
       {
-      auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
-      alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      if (ntheta_tmp<=nrings)
+        {
+        auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
+        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+        }
+      else
+        {
+        auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
+        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
+        }
+      return;
       }
-    else
+  
+    if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
       {
-      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0),ntheta_tmp,leg.shape(2)}, UNINITIALIZED));
+      auto ntheta_tmp = good_size_complex(lmax+1)+1;
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
-      }
-    return;
+      resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
+      return;
+      } 
     }
 
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
@@ -1905,7 +1921,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
   ptrdiff_t lstride,
   const cmav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode)
+  SHT_mode mode,
+  bool theta_interpol)
   {
   // sanity checks
   auto nrings=theta.shape(0);
@@ -1930,17 +1947,32 @@ template<typename T> void leg2alm(  // associated Legendre transform
     MR_assert(leg.shape(0)==ncomp, "incorrect number of Legendre components");
     }
 
-  bool npi, spi;
-  size_t ntheta_tmp;
-  if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+  if (even_odd_m(mval))
     {
-    vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
-    for (size_t i=0; i<ntheta_tmp; ++i)
-      theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
-    resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
-    leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-    return;
+    bool npi, spi;
+    size_t ntheta_tmp;
+    if (downsampling_ok(theta, lmax, npi, spi, ntheta_tmp))
+      {
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)}, UNINITIALIZED));
+      resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
+      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      return;
+      }
+  
+    if (theta_interpol && (nrings>500) && (nrings>1.5*lmax)) // irregular and worth resampling
+      {
+      auto ntheta_tmp = good_size_complex(lmax+1)+1;
+      vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
+      for (size_t i=0; i<ntheta_tmp; ++i)
+        theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},UNINITIALIZED);
+      resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
+      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      return;
+      }
     }
 
   auto norm_l = Ylmgen::get_norm (lmax, spin);
@@ -2398,7 +2430,8 @@ template<typename T> void synthesis(
   const cmav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
-  SHT_mode mode)
+  SHT_mode mode,
+  bool theta_interpol)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
@@ -2415,14 +2448,14 @@ template<typename T> void synthesis(
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, UNINITIALIZED));
     auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
-    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+    alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, theta_interpol);
     resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
     leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
     }
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
-    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
   }
@@ -2510,7 +2543,8 @@ template<typename T> void adjoint_synthesis(
   const cmav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
-  SHT_mode mode)
+  SHT_mode mode,
+  bool theta_interpol)
   {
   sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
@@ -2529,13 +2563,13 @@ template<typename T> void adjoint_synthesis(
     auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
-    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,mode);
+    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,mode,theta_interpol);
     }
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, UNINITIALIZED));
     map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
     }
   }
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
@@ -2552,17 +2586,18 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
-  double epsilon)
+  double epsilon,
+  bool theta_interpol)
   {
   auto op = [&](const cmav<complex<T>,2> &xalm, vmav<T,2> &xmap)
     {
     synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi, phi0,
-              ringstart, pixstride, nthreads, STANDARD);
+              ringstart, pixstride, nthreads, STANDARD, theta_interpol);
     };
   auto op_adj = [&](const cmav<T,2> &xmap, vmav<complex<T>,2> &xalm)
     {
     adjoint_synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi,
-                      phi0, ringstart, pixstride, nthreads, STANDARD);
+                      phi0, ringstart, pixstride, nthreads, STANDARD, theta_interpol);
     };
   auto mapnorm = [&](const cmav<T,2> &xmap)
     {
@@ -2614,7 +2649,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool theta_interpol);
 template tuple<size_t, size_t, double, double> pseudo_analysis(
   vmav<complex<float>,2> &alm, // (ncomp, *)
   const cmav<float,2> &map, // (ncomp, *)
@@ -2629,7 +2665,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool theta_interpol);
 
 template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,

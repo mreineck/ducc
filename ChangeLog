@@ -6,16 +6,30 @@
 - sht:
     - new function `pseudo_analysis_general` for iterative least-squares analyis
       of spherical maps on arbitrary grids
-    - rework the general SHT routines, leading to more performance and smaller
-      memory footprint
+    - rework of the general SHT routines, leading to more performance and
+      smaller memory footprint
+    - SHTs with spin>0 now have a gradient-only mode, which ignores the
+      curl a_lm component.
+    - new argument `theta_interpol`, which may accelerate SHTs on isolatitude
+      grids with irregular theta spacing (most notably Healpix). This is off
+      by default, because it only improves performance for fairly large `lmax`,
+      and for `nrings>=1.5*lmax`. Only use this after benchmarking your
+      particular application!
 
 - totalconvolve:
     - API CHANGE!
       bring interface more in line with SHT functions.
       This basically means replacing the `ofactor` parameter with `sigma_min`,
       `sigma_max` and `npoints`.
-      (The old syntax is still supported, but should not be unsed any longer in
+      (The old syntax is still supported, but should not be used any longer in
       new projects.)
+
+- misc:
+    - new function `get_deflected_angles` for computing deflections in CMB
+      lensing simulations
+    - new function `preallocate_memory` for benchmarking use, which minimizes
+      the amount of time spent passing memory between application and OS.
+      Currently only works on Linux.
 
 
 0.29.0:
