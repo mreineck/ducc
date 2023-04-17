@@ -183,7 +183,8 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
 @pmp('lmax', (2, 5, 32, 256))
 @pmp('mmaxhalf', (False, True))
 @pmp('nside', (2, 5, 128))
-def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
+@pmp('theta_interpol', (False, True))
+def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, theta_interpol, nthreads):
     rng = np.random.default_rng(48)
 
     mmax = lmax//2 if mmaxhalf else lmax
@@ -196,18 +197,18 @@ def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, nthreads):
     geom = base.sht_info()
 
     # test adjointness between synthesis and adjoint_synthesis
-    map1 = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, theta_interpol=True, **geom)
+    map1 = ducc0.sht.experimental.synthesis(alm=alm0, lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, theta_interpol=theta_interpol, **geom)
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     del map1
-    alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, theta_interpol=True, **geom)
+    alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, theta_interpol=theta_interpol, **geom)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_allclose(v1, v2, rtol=1e-10)
 
     if spin > 0:
-        map1 = ducc0.sht.experimental.synthesis(alm=alm0[:1], lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", theta_interpol=True, **geom)
+        map1 = ducc0.sht.experimental.synthesis(alm=alm0[:1], lmax=lmax, spin=spin, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", theta_interpol=theta_interpol, **geom)
         v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
         del map1
-        alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", theta_interpol=True, **geom)
+        alm1 = ducc0.sht.experimental.adjoint_synthesis(lmax=lmax, spin=spin, map=map0, nthreads=nthreads, mmax=mmax, mode="GRAD_ONLY", theta_interpol=theta_interpol, **geom)
         v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
         assert_allclose(np.abs((v1-v2)/v1), 0, atol=1e-10)
 
