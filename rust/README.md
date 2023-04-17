@@ -1,17 +1,18 @@
-- First Rust interface to C++ 
-- Detailed README on [gitlab](...)
-- Rust wrapper currently supports
-  - FFT: c2c, genuine_hartley
-- TODO Note on inplace
+- This provides an initial Rust interface to the C++ ducc code
+- The detailed README on ducc can be found [here](https://gitlab.mpcdf.mpg.de/mtr/ducc)
+- The Rust wrapper currently supports
+  - FFT: c2c
+- For the functions that support inplace operations (e.g., the `c2c´ FFT), two rust functions are available: `ducc0::fft_c2c` (not inplace) and `ducc0::fft_c2c_inplace` (inplace).
 
 - Rust wrapper currently *does not* support
-  - FFT: c2r, r2c, ...
+  - FFT: c2r, r2c, hartley transforms, ...
   - NuFFT
   - Healpix
   - SHTs
   - Radio response
+  - etc.
 
-This is experimental. If you encounter problems or need currently unsupported
-components, please reach out to `c@philipp-arras.de`.
+This wrapper is currently highly experimental. If you encounter problems or need
+not yet supported components, please reach out to `c@philipp-arras.de`.
 
 This is my first C++ wrapper for Rust. Feel free to give advice and feedback.
