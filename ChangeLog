@@ -1,4 +1,7 @@
 0.30.0:
+- general:
+    - beginnings of a Rust wrapper
+
 - fft:
     - transforming over a long, contiguous axis in a multi-D array should now
       be faster and scale better with the number of threads.
@@ -25,8 +28,7 @@
       new projects.)
 
 - misc:
-    - new function `get_deflected_angles` for computing deflections in CMB
-      lensing simulations
+    - new helper functions for CMB lensing simulations
     - new function `preallocate_memory` for benchmarking use, which minimizes
       the amount of time spent passing memory between application and OS.
       Currently only works on Linux.
