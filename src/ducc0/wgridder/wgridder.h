@@ -996,7 +996,8 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in,
+          [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
@@ -1089,7 +1090,8 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in, size_t nth=0)
+        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in,
+          [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
           auto iu0old = iu0;
