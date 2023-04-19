@@ -7,8 +7,8 @@
       be faster and scale better with the number of threads.
 
 - sht:
-    - new function `pseudo_analysis_general` for iterative least-squares analyis
-      of spherical maps on arbitrary grids
+    - new function `pseudo_analysis_general` for iterative least-squares
+      analysis of spherical maps on arbitrary grids
     - rework of the general SHT routines, leading to more performance and
       smaller memory footprint
     - SHTs with spin>0 now have a gradient-only mode, which ignores the

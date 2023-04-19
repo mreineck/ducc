@@ -248,8 +248,8 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
   MR_assert(legi.shape(2)==nm, "nm mismatch");
   MR_assert(lego.shape(2)==nm, "nm mismatch");
   double epsilon = is_same<T,float>::value ? 1e-7 : 2e-13;
-  auto kernel_index = findNufftKernel<T,T>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
-                                           1000000000, true, nthreads);
+  auto kernel_index = findNufftKernel<double,double>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
+                                           theta.shape(0), true, nthreads);
   auto kernel = ducc0::getKernel(kernel_index);
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
@@ -329,8 +329,8 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
   MR_assert(legi.shape(2)==nm, "nm mismatch");
   MR_assert(lego.shape(2)==nm, "nm mismatch");
   double epsilon = is_same<T,float>::value ? 1e-7 : 2e-13;
-  auto kernel_index = findNufftKernel<T,T>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
-                                           1000000000, true, nthreads);
+  auto kernel_index = findNufftKernel<double,double>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
+                                           theta.shape(0), true, nthreads);
   auto kernel = ducc0::getKernel(kernel_index);
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
