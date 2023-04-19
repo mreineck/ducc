@@ -47,68 +47,13 @@
 #include "ducc0/math/math_utils.h"
 #include "ducc0/sht/sht_utils.h"
 #include "ducc0/infra/timers.h"
+#include "ducc0/nufft/nufft.h"
 
 namespace ducc0 {
 
 namespace detail_sphereinterpol {
 
 using namespace std;
-
-/*! Selects the most efficient combination of gridding kernel and oversampled
-    grid size for the provided problem parameters. */
-template<typename Tcalc> auto findNufftParameters(double epsilon,
-  double sigma_min, double sigma_max, const vector<size_t> &dims,
-  size_t npoints, size_t nthreads)
-  {
-  constexpr static auto vlen = min<size_t>(8, native_simd<Tcalc>::size());
-  auto ndim = dims.size();
-  auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
-  double mincost = 1e300;
-  constexpr double nref_fft=2048;
-  constexpr double costref_fft=0.0693;
-  vector<size_t> bigdims(ndim, 0);
-  size_t minidx=~(size_t(0));
-  for (size_t i=0; i<idx.size(); ++i)
-    {
-    const auto &krn(getKernel(idx[i]));
-    auto supp = krn.W;
-    auto nvec = (supp+vlen-1)/vlen;
-    auto ofactor = krn.ofactor;
-    vector<size_t> lbigdims(ndim,0);
-    double gridsize=1;
-    for (size_t idim=0; idim<ndim; ++idim)
-      {
-      lbigdims[idim] = 2*good_size_complex(size_t(dims[idim]*ofactor*0.5)+1);
-      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
-      gridsize *= lbigdims[idim];
-      }
-    double logterm = log(gridsize)/log(nref_fft*nref_fft);
-    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
-    size_t kernelpoints = nvec*vlen;
-    for (size_t idim=0; idim+1<ndim; ++idim)
-      kernelpoints*=supp;
-    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
-    // FIXME: heuristics could be improved
-    gridcost /= nthreads;  // assume perfect scaling for now
-    constexpr double max_fft_scaling = 6;
-    constexpr double scaling_power=2;
-    auto sigmoid = [](double x, double m, double s)
-      {
-      auto x2 = x-1;
-      auto m2 = m-1;
-      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-      };
-    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
-    double cost = fftcost+gridcost;
-    if (cost<mincost)
-      {
-      mincost=cost;
-      bigdims=lbigdims;
-      minidx = idx[i];
-      }
-    }
-  return minidx;
-  }
 
 template<typename T> class SphereInterpol
   {
@@ -479,8 +424,8 @@ template<typename T> class SphereInterpol
         spin(spin_),
         nphi_s(2*good_size_real(mmax+1)),
         ntheta_s(good_size_real(lmax+1)+1),
-        kernel_index(findNufftParameters<T>(epsilon, sigma_min, sigma_max,
-          {(2*ntheta_s-2), nphi_s}, npoints, nthreads)),
+        kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
+          {(2*ntheta_s-2), nphi_s}, npoints, true, nthreads)),
         kernel(selectKernel(kernel_index)),
         nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*mmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
         ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),

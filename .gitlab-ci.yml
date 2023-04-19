@@ -31,6 +31,12 @@ test_clang:
     - 'tar xvzf dist/ducc0*.tar.gz'
     - 'cd ducc0-* && CC=clang CXX=clang++ python3 setup.py install --user && python3 -m pytest -q python/test'
 
+test_rust:
+  stage: testing
+  image: rust:latest
+  script:
+    - cd rust && cargo build
+
 #wgridding_demo:
 #  stage: demos
 #  script:

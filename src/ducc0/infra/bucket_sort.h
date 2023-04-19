@@ -104,11 +104,8 @@ template<typename RAidx, typename RAkey> void bucket_sort
   nthreads = min(nthreads, max_threads());
   using Tidx = typename remove_reference<decltype(*res)>::type;
   using Tkey = typename remove_reference<decltype(*keys)>::type;
-  struct vbuf
-    {
-    vector<Tidx> v;
-    array<uint64_t,8> dummy;
-    };
+  // align members with cache lines
+  struct alignas(64) vbuf { vector<Tidx> v; };
   vector<vbuf> numbers(nthreads);
   auto keybits = ilog2(max_key)+1;
   size_t keyshift = (keybits<=8) ? 0 : keybits-8;
@@ -178,11 +175,8 @@ template<typename Tidx, typename Tkey> void bucket_sort2
   idx.resize(nval);
   nthreads = min(nthreads, max_threads());
   auto sizelimit = max<Tidx>(1, nval/nthreads);
-  struct vbuf
-    {
-    vector<Tidx> v;
-    array<uint64_t,8> dummy;
-    };
+  // align members with cache lines
+  struct alignas(64) vbuf { vector<Tidx> v; };
   vector<vbuf> numbers(nthreads);
   auto keybits = ilog2(max_key)+1;
   bool last_level = keybits<=8;

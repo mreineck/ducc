@@ -766,10 +766,8 @@ Returns
 -------
 numpy.ndarray : identical to res
 
-Notes
------
-No ring can be located exactly on the poles if calc_rotation is set
 )""";
+
 py::array Py_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
   const py::array &deflect_, bool calc_rotation, py::object &res__, size_t nthreads=1)
@@ -793,8 +791,6 @@ py::array Py_get_deflected_angles(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
-        if (calc_rotation)
-          MR_assert(e_r.x > 0, "for the poles fix alpha=0 case in calc_rotation first ");
         double dphi = 2*pi/nphi(iring);
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
@@ -822,14 +818,49 @@ py::array Py_get_deflected_angles(const py::array &theta_,
           res(i,0) = n_prime.theta;
           res(i,1) = phinew;
           if (calc_rotation){ 
-            // fine for vanishing deflection with the exception of the poles, hence the screening above
-            double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
-            res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
+            if (d > 0.){
+              double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
+              res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
+            else{
+              res(i, 2) = 0.;
+            }} 
           }
         }
     });
   return res_;
   }
+
+template<typename T> void Py2_lensing_rotate(py::array &values_,
+  const py::array &gamma_, int spin, size_t nthreads)
+  {
+  auto values = to_vfmav<complex<T>>(values_);
+  auto gamma = to_cfmav<T>(gamma_);
+  mav_apply([&](auto &v, const auto &g) { v*=polar(T(1), spin*g); }, nthreads, values, gamma);
+  }
+void Py_lensing_rotate(py::array &values,
+  const py::array &gamma, int spin, size_t nthreads=1)
+  {
+  if (isPyarr<complex<float>>(values))
+    return Py2_lensing_rotate<float>(values, gamma, spin, nthreads);
+  else if (isPyarr<complex<double>>(values))
+    return Py2_lensing_rotate<double>(values, gamma, spin, nthreads);
+  MR_fail("type matching failed: 'values' has neither type 'c8' nor 'c16'");
+  }
+
+constexpr const char *Py_lensing_rotate_DS = R"""(
+Rotates complex values depending on given angles and spin
+
+Parameters
+----------
+values : numpy.ndarray(<any shape>, dtype=complex)
+    values to rotate; operation is applied in place
+gamma : numpy.ndarray(same shape as `values`, dtype=float with same prcision as `values`)
+    rotation angles
+spin : int
+    will be multiplied to `gamma` before rotation
+nthreads(optional): int
+    Number of threads to use. Defaults to 1
+)""";
 
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
@@ -874,6 +905,8 @@ void add_misc(py::module_ &msup)
   m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
     "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
+  m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
+    "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }

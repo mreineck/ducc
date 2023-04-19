@@ -52,7 +52,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
   ptrdiff_t lstride,
   const cmav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool theta_interpol=false);
 template<typename T> void leg2alm(  // associated Legendre transform
   vmav<complex<T>,2> &alm, // (ncomp, lmidx)
   const cmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -63,7 +64,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
   ptrdiff_t lstride,
   const cmav<double,1> &theta, // (nrings)
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool theta_interpol=false);
 
 template<typename T> void map2leg(  // FFT
   const cmav<T,2> &map, // (ncomp, pix)
@@ -95,7 +97,8 @@ template<typename T> void synthesis(
   const cmav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool theta_interpol=false);
 
 template<typename T> void adjoint_synthesis(
   vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -110,7 +113,8 @@ template<typename T> void adjoint_synthesis(
   const cmav<size_t,1> &ringstart, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
-  SHT_mode mode);
+  SHT_mode mode,
+  bool theta_interpol=false);
 
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -126,7 +130,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool theta_interpol=false);
 
 template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
   size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads, SHT_mode mode);
