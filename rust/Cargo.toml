@@ -1,6 +1,6 @@
 [package]
 name = "ducc0"
-description = "Wrapper around ducc0"
+description = "Wrapping ducc, the Distinctly Useful Code Collection"
 version = "0.30.0"
 edition = "2021"
 license = "GPL-2.0-or-later"
@@ -9,6 +9,7 @@ repository = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
 readme = "README.md"
 categories = ["external-ffi-bindings", "science"]
 keywords = ["fft", "fast", "fourier", "transform"]
+include_bytes = ["cpp_src"]
 
 [dependencies]
 num-complex = "0.4.3"

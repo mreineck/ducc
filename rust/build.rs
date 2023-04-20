@@ -3,7 +3,7 @@ fn main() {
         .cpp(true)
         .file("ducc_rust.cc")
         .flag_if_supported("-std=c++17")
-        .include("../src")
+        .include("cpp_src")
         .compile("ducc0");
 
     println!("cargo:rerun-if-changed=src/lib.rs");
