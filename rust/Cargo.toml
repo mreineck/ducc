@@ -1,7 +1,8 @@
 [package]
 name = "ducc0"
 description = "Wrapping ducc, the Distinctly Useful Code Collection"
-version = "0.30.0"
+# The patch version number might deviate from the cpp patch version number
+version = "0.30.1"
 edition = "2021"
 license = "GPL-2.0-or-later"
 documentation = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
