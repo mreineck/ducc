@@ -69,10 +69,10 @@ Additionally, pre-compiled binaries are distributed for the following systems.
 </a>
 
 
-Installing multiple major versions simultaneously
--------------------------------------------------
+[//]: # Installing multiple major versions simultaneously
+[//]: # -------------------------------------------------
 
-The interfaces of the DUCC components are expected to evolve over time; whenever
+[//]: # The interfaces of the DUCC components are expected to evolve over time; whenever
 an interface changes in a manner that is not backwards compatible, the DUCC
 major version number will increase. As a consequence it might happen that one
 part of a Python code may use an older version of DUCC while at the same time
