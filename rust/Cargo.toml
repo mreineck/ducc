@@ -1,8 +1,8 @@
 [package]
 name = "ducc0"
 description = "Wrapper around ducc0"
-version = "0.28.0"
-edition = "2021"
+version = "0.30.0"
+edition = "2023"
 license = "GPL-2.0-or-later"
 documentation = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
 repository = "https://gitlab.mpcdf.mpg.de/mtr/ducc"

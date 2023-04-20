@@ -62,7 +62,7 @@ much quicker and does not require any compilers to be installed on the system.
 However, the code will most likely perform significantly worse (by a factor of
 two to three for some functions) than a custom built version.
 
-Additionally, pre-compiled binaries are distributed for the following systems.
+Additionally, pre-compiled binaries are distributed for the following systems:
 
 <a href="https://repology.org/project/python:ducc0/versions">
 <img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
