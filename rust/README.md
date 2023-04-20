@@ -2,7 +2,7 @@
 - The detailed README on ducc can be found [here](https://gitlab.mpcdf.mpg.de/mtr/ducc)
 - The Rust wrapper currently supports
   - FFT: c2c
-- For the functions that support inplace operations (e.g., the `c2c´ FFT), two rust functions are available: `ducc0::fft_c2c` (not inplace) and `ducc0::fft_c2c_inplace` (inplace).
+- For the C++ functions that support inplace operations (e.g., the `c2c` FFT), two rust functions are exposed: `ducc0::fft_c2c` and `ducc0::fft_c2c_inplace`.
 
 - Rust wrapper currently *does not* support
   - FFT: c2r, r2c, hartley transforms, ...
