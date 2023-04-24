@@ -335,8 +335,6 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
   const size_t nborder = kernel.W/2+2;
-  auto legtmp = vmav<complex<T>,3>::build_noncritical({nplanes, ntheta_b+2*nborder, nm}, UNINITIALIZED);
-  auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
   auto kernfunc = poly->corfunc((2*ntheta_s-2)/2+1, 1./(2*ntheta_b-2), nthreads);
 
   double dtheta_b = pi/(ntheta_b-1);
