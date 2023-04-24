@@ -263,8 +263,8 @@ template<typename T> py::array Py2_leg2alm(const py::array &leg_,
   auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__,
     {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)});
   auto alm = to_vmav<complex<T>,2>(alm_);
-  MR_assert(alm.shape(0)==leg.shape(0),
-    "bad number of components in a_lm array");
+  MR_assert(leg.shape(0)==1+(spin>0),
+    "bad number of components in leg array");
   {
   py::gil_scoped_release release;
   leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
@@ -1147,7 +1147,7 @@ mode: str
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
       | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        muliplied by sqrt(l*(l+1))
+        multiplied by sqrt(l*(l+1))
 theta_interpol: bool
     if the input grid is irregularly spaced in theta, try to accelerate the
     transform by using an intermediate equidistant theta grid and a 1D NUFFT.
@@ -1385,7 +1385,7 @@ mode: str
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
       | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        muliplied by sqrt(l*(l+1))
+        multiplied by sqrt(l*(l+1))
 
 Returns
 -------
@@ -1665,7 +1665,7 @@ mode: str
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
       | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        muliplied by sqrt(l*(l+1))
+        multiplied by sqrt(l*(l+1))
 theta_interpol: bool
     if the input grid is irregularly spaced in theta, try to accelerate the
     transform by using an intermediate equidistant theta grid and a 1D NUFFT.
@@ -1920,7 +1920,7 @@ mode: str
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
       | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        muliplied by sqrt(l*(l+1))
+        multiplied by sqrt(l*(l+1))
 
 Returns
 -------
