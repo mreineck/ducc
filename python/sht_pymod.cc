@@ -458,7 +458,8 @@ template<typename T> py::array_t<complex<T>> check_build_alm
 
 template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__, const string &mode_)
+  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__,
+  const string &mode_, double phi0)
   {
   auto mode = get_mode(mode_);
   auto alm = to_cmav<complex<T>,2>(alm_);
@@ -466,26 +467,27 @@ template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   auto map = to_vmav<T,3>(map_);
   {
   py::gil_scoped_release release;
-  synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads, mode);
+  synthesis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads, mode);
   }
   return map_;
   }
 py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax_, size_t nthreads, py::object &map, const string &mode)
+  const py::object &mmax_, size_t nthreads, py::object &map, const string &mode,
+  double phi0)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode);
+      mmax, nthreads, map, mode, phi0);
   else if (isPyarr<complex<double>>(alm))
     return Py2_synthesis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode);
+      mmax, nthreads, map, mode, phi0);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_adjoint_synthesis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  size_t mmax, size_t nthreads, py::object &alm__, const string &mode_)
+  size_t mmax, size_t nthreads, py::object &alm__, const string &mode_, double phi0)
   {
   auto mode = get_mode(mode_);
   auto map = to_cmav<T,3>(map_);
@@ -493,27 +495,27 @@ template<typename T> py::array Py2_adjoint_synthesis_2d(
   auto alm = to_vmav<complex<T>,2>(alm_);
   {
   py::gil_scoped_release release;
-  adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, nthreads, mode);
+  adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads, mode);
   }
   return alm_;
   }
 py::array Py_adjoint_synthesis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  const py::object &mmax_, size_t nthreads, py::object &alm, const string &mode)
+  const py::object &mmax_, size_t nthreads, py::object &alm, const string &mode, double phi0)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
     return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode);
+      nthreads, alm, mode, phi0);
   else if (isPyarr<double>(map))
     return Py2_adjoint_synthesis_2d<double>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode);
+      nthreads, alm, mode, phi0);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax,
-  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map)
+  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map, double phi0)
   {
-  return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax_, nthreads, map, "DERIV1");
+  return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax_, nthreads, map, "DERIV1", phi0);
   }
 
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
@@ -658,7 +660,7 @@ py::object Py_pseudo_analysis(const py::array &map, const py::array &theta,
 
 template<typename T> py::array Py2_analysis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  size_t mmax, size_t nthreads, py::object &alm__)
+  size_t mmax, size_t nthreads, py::object &alm__, double phi0)
   {
   auto map = to_cmav<T,3>(map_);
   auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
@@ -666,25 +668,25 @@ template<typename T> py::array Py2_analysis_2d(
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  analysis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  analysis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads);
   }
   return alm_;
   }
 py::array Py_analysis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  py::object &mmax_, size_t nthreads, py::object &alm)
+  py::object &mmax_, size_t nthreads, py::object &alm, double phi0)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
-    return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm);
+    return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0);
   else if (isPyarr<double>(map))
-    return Py2_analysis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm);
+    return Py2_analysis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
 template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__)
+  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__, double phi0)
   {
   auto alm = to_cmav<complex<T>,2>(alm_);
   auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
@@ -692,21 +694,21 @@ template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  adjoint_analysis_2d(alm, map, spin, lmax, mmax, geometry, nthreads);
+  adjoint_analysis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads);
   }
   return map_;
   }
 py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax_, size_t nthreads, py::object &map)
+  const py::object &mmax_, size_t nthreads, py::object &map, double phi0)
   {
   size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map);
+      nphi, mmax, nthreads, map, phi0);
   else if (isPyarr<complex<double>>(alm))
     return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map);
+      nphi, mmax, nthreads, map, phi0);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -957,7 +959,7 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
+        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
@@ -997,7 +999,7 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads, STANDARD);
+        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads, STANDARD);
         }
       return alm_;
       }
@@ -1011,7 +1013,7 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(map_);
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
         {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-      analysis_2d(ar, mr, 0, lmax_, mmax_, geom, nthreads);
+      analysis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads);
       return alm_;
       }
     py::array alm2map_spin (const py::array_t<complex<double>> &alm_, size_t spin) const
@@ -1049,7 +1051,7 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({2, ntheta_, nphi_},
           {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads, STANDARD);
+        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
@@ -1062,7 +1064,7 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,2>(map_);
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-      analysis_2d(alm, mr, spin, lmax_, mmax_, geom, nthreads);
+      analysis_2d(alm, mr, spin, lmax_, mmax_, geom, 0., nthreads);
       return alm_;
       }
   };
@@ -1377,6 +1379,8 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           ring width from the south pole
         - F2: Fejer's second rule, equidistant, first and last ring one ring width
           from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1435,6 +1439,8 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           ring width from the south pole
         - F2: Fejer's second rule, equidistant, first and last ring one ring width
           from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1480,6 +1486,8 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           ring width from the south pole
         - F2: Fejer's second rule, equidistant, first and last ring one ring width
           from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1535,6 +1543,8 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           ring width from the south pole
         - F2: Fejer's second rule, equidistant, first and last ring one ring width
           from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1603,6 +1613,8 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           ring width from the south pole
         - F2: Fejer's second rule, equidistant, first and last ring one ring width
           from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -2090,11 +2102,11 @@ void add_sht(py::module_ &msup)
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None,"theta_interpol"_a=false);
 
-  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD");
-  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD");
-  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
-  m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None);
-  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None);
+  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD", "phi_0"_a=0.);
+  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD", "phi_0"_a=0.);
+  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi_0"_a=0.);
+  m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "phi_0"_a=0.);
+  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi_0"_a=0.);
 
   m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
