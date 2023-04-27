@@ -1,3 +1,8 @@
+0.31.0:
+- sht:
+    - new `phi0` parameter for the `*_2d` SHT routines
+
+
 0.30.0:
 - general:
     - beginnings of a Rust wrapper
