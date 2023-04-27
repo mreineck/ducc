@@ -2501,11 +2501,11 @@ void get_ringtheta_2d(const string &type, vmav<double, 1> &theta)
   }
 
 template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
-  SHT_mode mode)
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0,
+  size_t nthreads, SHT_mode mode)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
   vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
@@ -2521,15 +2521,15 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> 
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads,
+  synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0_, ringstart, pixstride, nthreads,
   mode);
   }
 template void synthesis_2d(const cmav<complex<double>,2> &alm, vmav<double,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
-  SHT_mode mode);
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0,
+  size_t nthreads, SHT_mode mode);
 template void synthesis_2d(const cmav<complex<float>,2> &alm, vmav<float,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads,
-  SHT_mode mode);
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0,
+  size_t nthreads, SHT_mode mode);
 
 template<typename T> void adjoint_synthesis(
   vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -2671,10 +2671,10 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
 
 template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads, SHT_mode mode)
+  const string &geometry, double phi0, size_t nthreads, SHT_mode mode)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
   vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
@@ -2690,14 +2690,14 @@ template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, pixstride, nthreads, mode);
+  adjoint_synthesis(alm, map2, spin, lmax, mstart, 1, theta, nphi, phi0_, ringstart, pixstride, nthreads, mode);
   }
 template void adjoint_synthesis_2d(vmav<complex<double>,2> &alm,
   const cmav<double,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
 template void adjoint_synthesis_2d(vmav<complex<float>,2> &alm,
   const cmav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
 
 template<typename T> void analysis_2d(
   vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -2779,10 +2779,10 @@ template<typename T> void analysis_2d(
 
 template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads)
+  const string &geometry, double phi0, size_t nthreads)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
   vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
@@ -2797,14 +2797,14 @@ template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
                                         {map.stride(0), 1}));
 
-  analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0, ringstart, pixstride, nthreads);
+  analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0_, ringstart, pixstride, nthreads);
   }
 template void analysis_2d(vmav<complex<double>,2> &alm,
   const cmav<double,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads);
+  const string &geometry, double phi0, size_t nthreads);
 template void analysis_2d(vmav<complex<float>,2> &alm,
   const cmav<float,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, size_t nthreads);
+  const string &geometry, double phi0, size_t nthreads);
 
 template<typename T> void adjoint_analysis_2d(
   const cmav<complex<T>,2> &alm, // (ncomp, *)
@@ -2885,10 +2885,10 @@ template<typename T> void adjoint_analysis_2d(
   }
 
 template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads)
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0, size_t nthreads)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
-  auto phi0 = cmav<double,1>::build_uniform({map.shape(1)}, 0.);
+  auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
   vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
   for (size_t i=0, ofs=0; i<=mmax; ++i)
     {
@@ -2903,13 +2903,13 @@ template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vma
   auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
-  adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0,
+  adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0_,
     ringstart, pixstride, nthreads);
   }
 template void adjoint_analysis_2d(const cmav<complex<double>,2> &alm, vmav<double,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0_, size_t nthreads);
 template void adjoint_analysis_2d(const cmav<complex<float>,2> &alm, vmav<float,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, size_t nthreads);
+  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0, size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm, vmav<T,2> &map,
