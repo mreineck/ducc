@@ -54,7 +54,8 @@ def myalmdot(a1, a2, lmax):
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
 @pmp('lmmax', ((2, 0), (2, 2), (5, 5), (11, 10), (11, 11), (32, 32), (200, 200)))
-def test_2d_roundtrip(lmmax, geometry, spin, nthreads):
+@pmp('phi0', (0, 0.03))
+def test_2d_roundtrip(lmmax, geometry, spin, nthreads, phi0):
     rng = np.random.default_rng(np.random.SeedSequence(42))
     ncomp = 1 if spin == 0 else 2
     lmax, mmax = lmmax
@@ -69,13 +70,15 @@ def test_2d_roundtrip(lmmax, geometry, spin, nthreads):
     nphi=2*mmax+2
 
     alm = random_alm(lmax, mmax, spin, ncomp, rng)
-    map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry, phi0=phi0)
+    alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, phi0=phi0, nthreads=nthreads)
     assert_allclose(ducc0.misc.l2error(alm2,alm), 0, atol=1e-12)
 
-    map = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    alm2 = ducc0.sht.experimental.adjoint_synthesis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    map = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry, phi0=phi0)
+    alm2 = ducc0.sht.experimental.adjoint_synthesis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, phi0=phi0, nthreads=nthreads)
     assert_allclose(ducc0.misc.l2error(alm2,alm), 0, atol=1e-12)
+
+    if phi0 != 0: return
 
     job = ducc0.sht.sharpjob_d()
     job.set_triangular_alm_info(lmax, mmax)
