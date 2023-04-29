@@ -2517,7 +2517,7 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> 
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+  auto map2(map.template reinterpret<2>({map.shape(0), 1/*placeholder*/},
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
@@ -2686,7 +2686,7 @@ template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+  auto map2(map.template reinterpret<2>({map.shape(0), 1/*placeholder*/},
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
@@ -2720,7 +2720,7 @@ template<typename T> void analysis_2d(
     nrings_min = 2*lmax+2;
   else if (geometry=="F2")
     nrings_min = 2*lmax+1;
-  MR_assert(map.shape(1)>=nrings_min,
+  MR_assert(ringstart.shape(0)>=nrings_min,
     "too few rings for analysis up to requested lmax");
 
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
@@ -2794,7 +2794,7 @@ template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+  auto map2(map.template reinterpret<2>({map.shape(0), 1/*placeholder*/},
                                         {map.stride(0), 1}));
 
   analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0_, ringstart, pixstride, nthreads);
@@ -2827,7 +2827,7 @@ template<typename T> void adjoint_analysis_2d(
     nrings_min = 2*lmax+2;
   else if (geometry=="F2")
     nrings_min = 2*lmax+1;
-  MR_assert(map.shape(1)>=nrings_min,
+  MR_assert(ringstart.shape(0)>=nrings_min,
     "too few rings for adjoint analysis up to requested lmax");
 
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
@@ -2900,7 +2900,7 @@ template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, vma
   auto pixstride = map.stride(2);
   for (size_t i=0; i<map.shape(1); ++i)
     ringstart(i) = i*ringstride;
-  auto map2(map.template reinterpret<2>({map.shape(0), map.shape(1)*map.shape(2)},
+  auto map2(map.template reinterpret<2>({map.shape(0), 1/*placeholder*/},
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   adjoint_analysis_2d(alm, map2, spin, lmax, mstart, 1, geometry, nphi, phi0_,
