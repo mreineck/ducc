@@ -910,7 +910,8 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       {
       plan = get_plan<Tplan>(len, in.ndim()==1);
-      vplan = (in.ndim()==1) ? plan : get_plan<Tplan>(len, true);
+      vplan = ((in.ndim()==1)||(len<300)||((len&3)!=0)||(len>32768)) ?
+        plan : get_plan<Tplan>(len, true);
       }
 
     execParallel(util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),

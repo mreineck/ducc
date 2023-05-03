@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library
 
-Copyright (C) 2010-2022 Max-Planck-Society
+Copyright (C) 2010-2023 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -1606,9 +1606,7 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
     size_t ip;
     Tcpass<Tfs> spass;
     Tcpass<Tfs> vpass;
-
-    static bool sufficiently_aligned(const Tcs *ptr)
-      { return (reinterpret_cast<size_t>(ptr)&(sizeof(Tfv)-1)) == 0; }
+    size_t bufsz;
 
     template<bool fwd> Tcs *exec_ (Tcs *cc,
       Tcs * /*ch*/, Tcs * sbuf, size_t nthreads) const
@@ -1617,9 +1615,8 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       size_t misalign = reinterpret_cast<size_t>(xbuf)&(sizeof(Tfv)-1);
       if (misalign != 0)
         xbuf += sizeof(Tfv)-misalign;
-//cout << "misalign: " << misalign << endl;
       Tcv *buf = reinterpret_cast<Tcv *>(xbuf);
-      auto * cc2 = /*sufficiently_aligned(cc) ? reinterpret_cast<Tcv *>(cc) :*/ buf;
+      auto * cc2 = buf;
       auto * ch2 = buf+ip;
       auto * buf2 = buf+2*ip;
       static const auto tics = tidx<Tcs *>();
@@ -1628,7 +1625,6 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
         reinterpret_cast<Tcs *>(ch2), reinterpret_cast<Tcs *>(buf2),
         fwd, nthreads));
 // arrange input in SIMD-friendly way, must be done out-of-place
-// FIXME: swap loops?
       for (size_t i=0; i<ip/vlen; ++i)
         {
         Tcv tmp;
@@ -1657,19 +1653,15 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
   public:
     cfftp_vecpass(size_t ip_, const Troots<Tfs> &roots)
       : ip(ip_), spass(cfftpass<Tfs>::make_pass(1, ip/vlen, vlen, roots)),
-        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots))
+        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots)), bufsz(0)
       {
-//std::cerr<<"vecpass "<< ip << " " << vlen << std::endl;
       MR_assert((ip/vlen)*vlen==ip, "cannot vectorize this size");
+      bufsz = 2*ip;
+      bufsz += max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen); // buffers for subpasses
+      bufsz *= vlen; // since we specify in terms of Tcs
+      bufsz += vlen; // wiggle room for alignment shifts
       }
-    virtual size_t bufsize() const
-      {
-      size_t res = 2*ip;  // worst case: copy of input + additional copy 
-      res += max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen); // buffers for subpasses
-      res *= vlen; // since we specify in terms of Tcs
-      res += vlen; // wiggle room for alignment shifts
-      return res;
-      }
+    virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return false; }
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const
@@ -1689,8 +1681,9 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
-#if 0
-  if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
+#if 1
+  // do we have an 1D vectorizable FFT?
+  if (vectorize && (ip>300) && (ip<=32768) && (l1==1) && (ido==1))
     {
 //    constexpr auto vlen = native_simd<Tfs>::size();
 //    if constexpr(vlen>=4)
