@@ -901,14 +901,17 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
     exec.exec_simple(in.data(), out.data(), *plan, fct, nthreads);
     return;
     }
-  std::shared_ptr<Tplan> plan;
+  std::shared_ptr<Tplan> plan, vplan;
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
 
   for (size_t iax=0; iax<axes.size(); ++iax)
     {
     size_t len=in.shape(axes[iax]);
     if ((!plan) || (len!=plan->length()))
+      {
       plan = get_plan<Tplan>(len, in.ndim()==1);
+      vplan = (in.ndim()==1) ? plan : get_plan<Tplan>(len, true);
+      }
 
     execParallel(util::thread_count(nthreads, in, axes[iax], fft_simdlen<T0>),
       [&](Scheduler &sched)
@@ -930,7 +933,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
           n_bunch*=2;
       bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
       MR_assert(n_bunch<=nmax, "must not happen");
-      TmpStorage<T,T0> storage(in.size()/len, len, plan->bufsize(), (n_bunch+vlen-1)/vlen, inplace);
+      TmpStorage<T,T0> storage(in.size()/len, len, max(plan->bufsize(),vplan->bufsize()), (n_bunch+vlen-1)/vlen, inplace);
 
       // first, do all possible steps of size n_bunch, then n_simul
       if (n_bunch>1)
@@ -1026,7 +1029,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
         while (it.remaining()>=n_bunch)
           {
           it.advance(n_bunch);
-          exec.exec_n(it, tin, out, storage2, *plan, fct, n_bunch, nth1d);
+          exec.exec_n(it, tin, out, storage2, *vplan, fct, n_bunch, nth1d);
           }
         }
         }
@@ -1035,7 +1038,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
         while (it.remaining()>0)
           {
           it.advance(1);
-          exec(it, tin, out, storage2, *plan, fct, nth1d, inplace);
+          exec(it, tin, out, storage2, *vplan, fct, nth1d, inplace);
           }
         }
       });  // end of parallel region

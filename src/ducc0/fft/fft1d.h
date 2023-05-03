@@ -1594,7 +1594,7 @@ MR_fail("must not get here");
 
 #undef POCKETFFT_EXEC_DISPATCH
 
-#if 0  // leaving in for potential future use; but doesn't seem beneficial
+#if 1  // leaving in for potential future use; but doesn't seem beneficial
 template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
   {
   private:
@@ -1606,50 +1606,70 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
     size_t ip;
     Tcpass<Tfs> spass;
     Tcpass<Tfs> vpass;
-    size_t bufsz;
+
+    static bool sufficiently_aligned(const Tcs *ptr)
+      { return (reinterpret_cast<size_t>(ptr)&(sizeof(Tfv)-1)) == 0; }
 
     template<bool fwd> Tcs *exec_ (Tcs *cc,
-      Tcs * /*ch*/, Tcs * /*buf*/, size_t nthreads) const
+      Tcs * /*ch*/, Tcs * sbuf, size_t nthreads) const
       {
-      quick_array<Tcv> buf(2*ip+bufsz);
-      auto * cc2 = buf.data();
-      auto * ch2 = buf.data()+ip;
-      auto * buf2 = buf.data()+2*ip;
+      char *xbuf = reinterpret_cast<char *>(sbuf);
+      size_t misalign = reinterpret_cast<size_t>(xbuf)&(sizeof(Tfv)-1);
+      if (misalign != 0)
+        xbuf += sizeof(Tfv)-misalign;
+//cout << "misalign: " << misalign << endl;
+      Tcv *buf = reinterpret_cast<Tcv *>(xbuf);
+      auto * cc2 = /*sufficiently_aligned(cc) ? reinterpret_cast<Tcv *>(cc) :*/ buf;
+      auto * ch2 = buf+ip;
+      auto * buf2 = buf+2*ip;
       static const auto tics = tidx<Tcs *>();
 // run scalar pass
       auto res = static_cast<Tcs *>(spass->exec(tics, cc,
         reinterpret_cast<Tcs *>(ch2), reinterpret_cast<Tcs *>(buf2),
         fwd, nthreads));
-// arrange input in SIMD-friendly way
+// arrange input in SIMD-friendly way, must be done out-of-place
 // FIXME: swap loops?
       for (size_t i=0; i<ip/vlen; ++i)
+        {
+        Tcv tmp;
         for (size_t j=0; j<vlen; ++j)
           {
           size_t idx = j*(ip/vlen) + i;
-          cc2[i].r[j] = res[idx].r;
-          cc2[i].i[j] = res[idx].i;
+          tmp.r[j] = res[idx].r;
+          tmp.i[j] = res[idx].i;
           }
+        cc2[i] = tmp;
+        }
 // run vector pass
       static const auto ticv = tidx<Tcv *>();
       auto res2 = static_cast<Tcv *>(vpass->exec(ticv,
         cc2, ch2, buf2, fwd, nthreads));
-// de-SIMDify
+// de-SIMDify, can be done pseudo-inplace
       for (size_t i=0; i<ip/vlen; ++i)
+        {
+        Tcv tmp = res2[i];
         for (size_t j=0; j<vlen; ++j)
-          cc[i*vlen+j] = Tcs(res2[i].r[j], res2[i].i[j]);
-
+          cc[i*vlen+j] = Tcs(tmp.r[j], tmp.i[j]);
+        }
       return cc;
       }
 
   public:
     cfftp_vecpass(size_t ip_, const Troots<Tfs> &roots)
       : ip(ip_), spass(cfftpass<Tfs>::make_pass(1, ip/vlen, vlen, roots)),
-        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots)), bufsz(0)
+        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots))
       {
+//std::cerr<<"vecpass "<< ip << " " << vlen << std::endl;
       MR_assert((ip/vlen)*vlen==ip, "cannot vectorize this size");
-      bufsz=2*ip+max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen);
       }
-    virtual size_t bufsize() const { return 0; }
+    virtual size_t bufsize() const
+      {
+      size_t res = 2*ip;  // worst case: copy of input + additional copy 
+      res += max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen); // buffers for subpasses
+      res *= vlen; // since we specify in terms of Tcs
+      res += vlen; // wiggle room for alignment shifts
+      return res;
+      }
     virtual bool needs_copy() const { return false; }
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const
@@ -1672,8 +1692,10 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
 #if 0
   if (vectorize && (ip>300) && (ip<32768) && (l1==1) && (ido==1))
     {
-    constexpr auto vlen = native_simd<Tfs>::size();
-    if constexpr(vlen>1)
+//    constexpr auto vlen = native_simd<Tfs>::size();
+//    if constexpr(vlen>=4)
+    constexpr auto vlen = 4;
+    if constexpr(simd_exists<Tfs,vlen>)
       if ((ip&(vlen-1))==0)
         return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
     }
