@@ -769,7 +769,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
     }
   }
 
-template<typename Tsimd, typename Titer> void copy_output(const Titer &it,
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd *DUCC0_RESTRICT src, vfmav<typename Tsimd::value_type> &dst)
   {
   constexpr auto vlen=Tsimd::size();
@@ -971,7 +971,8 @@ n_simul=nostride ? ((wss(vlen)<=l2cache) ? vlen:1) : vlen;
     {
 //cout <<"bb" << endl;
     n_bunch=n_simul;
-    while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
+if (n_simul==1)
+  while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
     }
   }
 #if 0
