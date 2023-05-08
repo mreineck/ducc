@@ -924,83 +924,55 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
       const auto &tin(iax==0? in : out);
       multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 
-size_t n_simul=1, n_bunch=1;
-bool critstride = (((in.stride(axes[iax])*sizeof(T))&4095)==0)
-              || (((out.stride(axes[iax])*sizeof(T))&4095)==0);
-bool nostride = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
-constexpr size_t l2cache=262144*2;
-constexpr size_t cacheline=64;
-auto wss = [&](size_t vl) { return sizeof(T)*(2*len*vl + plan->bufsize()); };
-// is the FFT small enough to fit into L2 vectorized?
-if (wss(1)>l2cache) // "long" FFT, don't execute more than one at the same time
-  {
-//cout <<"a" << endl;
-  n_simul=1;
-  if (critstride)
-    {
-//cout <<"aa" << endl;
-    n_bunch=n_simul;
-    while ((n_bunch<nmax) && (sizeof(T)*n_bunch<2*cacheline)) n_bunch*=2;
-    }
-  else if (nostride)
-    n_bunch=1;
-  else
-    {
-//cout <<"ac" << endl;
-    n_bunch=n_simul;
-    while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
-    }
-  }
-else
-  {
-//cout <<"b" << endl;
-//  n_simul=1;
-//if (wss(vlen)<=l2cache) n_simul=vlen;
-n_simul=nostride ? ((wss(vlen)<=l2cache) ? vlen:1) : vlen;
-//  while ((n_simul<vlen) && (wss(n_simul)<=l2cache/2))
-//    n_simul*=2;
-  if (critstride)
-    {
-//cout <<"ba" << endl;
-    n_bunch=n_simul;
-    while ((n_bunch<nmax) && (sizeof(T)*n_bunch<2*cacheline)) n_bunch*=2;
-    }
-  else if (nostride)
-    n_bunch=n_simul;
-  else
-    {
-//cout <<"bb" << endl;
-    n_bunch=n_simul;
-if (n_simul==1)
-  while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
-    }
-  }
-#if 0
-      //size_t working_set_size = (2-(tin.data()==out.data()))*len*sizeof(T)+plan->bufsize()*sizeof(T);
-      size_t working_set_size = sizeof(T)*(len+plan->bufsize());
-      size_t n_simul=1;
-      while(n_simul*2*working_set_size<=262144) n_simul*=2;
-      n_simul = min(n_simul, vlen);
-cout <<"wss: " << working_set_size << endl;
-cout <<"n_simul: " << n_simul << endl;
-if (n_simul>1) n_simul=vlen;
-// FIXME: only bunch if strides are bad?
-      size_t n_bunch = n_simul;
-//      if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
-#if 1
-      if ((((in.stride(axes[iax])*sizeof(T))&4095)==0) || (((out.stride(axes[iax])*sizeof(T))&4095)==0))  // might make sense to bunch
-  n_bunch=nmax;
-        //while ((n_bunch<nmax) && ((n_bunch*sizeof(T)<=32) || (n_bunch*2*working_set_size<=262144)))
-//        while ((n_bunch<nmax) && (n_bunch*sizeof(T)<=32))
-//          n_bunch*=2;
-if ((n_simul==1)&&((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1)))
-  n_bunch=16;
-//n_simul=n_bunch=4;
-//      if ((in.stride(axes[iax])!=1) || (out.stride(axes[iax])!=1))  // might make sense to bunch
-//n_bunch=nmax;
-#endif
-#endif
-//cout << wss(1) << " " << critstride << " " << nostride << " " << n_simul << " " << n_bunch << endl;
+      // n_simul: vector size
+      // n_bunch: total size of bunch (multiple of n_simul)
+      size_t n_simul=1, n_bunch=1;
+      bool critstride = (((in.stride(axes[iax])*sizeof(T))&4095)==0)
+                     || (((out.stride(axes[iax])*sizeof(T))&4095)==0);
+      bool nostride = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
+
+      constexpr size_t l2cache=262144*2;
+      constexpr size_t cacheline=64;
+
+      // working set size
+      auto wss = [&](size_t vl) { return sizeof(T)*(2*len*vl + plan->bufsize()); };
+      // is the FFT small enough to fit into L2 vectorized?
+      if (wss(1)>l2cache) // "long" FFT, don't execute more than one at the same time
+        {
+        n_simul=1;
+        if (critstride)  // make bunch large to reduce overall copy cost
+          {
+          n_bunch=n_simul;
+          while ((n_bunch<nmax) && (sizeof(T)*n_bunch<2*cacheline)) n_bunch*=2;
+          }
+        else if (nostride)  // simple scalar "in-place" transform
+          n_bunch=n_simul;
+        else  // we have some strides, use a medium-sized bunch
+          {
+          n_bunch=n_simul;
+          while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
+          }
+        }
+      else  // fairly small individual FFT, vectorizing probably beneficial
+        {
+        // if no stride, only vectorize if vectorized FFT fits into cache
+        // if strided, always vectorize (TBC)
+        n_simul = nostride ? ((wss(vlen)<=l2cache) ? vlen:1) : vlen;
+        if (critstride)  // make bunch large to reduce overall copy cost
+          {
+          n_bunch=n_simul;
+          while ((n_bunch<nmax) && (sizeof(T)*n_bunch<2*cacheline)) n_bunch*=2;
+          }
+        else if (nostride)
+          n_bunch=n_simul;
+        else
+          {
+          n_bunch=n_simul;
+          if (n_simul==1)
+            while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
+          }
+        }
+
       bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
       MR_assert(n_bunch<=nmax, "must not happen");
       TmpStorage<T,T0> storage(in.size()/len, len, max(plan->bufsize(),vplan->bufsize()), (n_bunch+vlen-1)/vlen, inplace);
