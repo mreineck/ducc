@@ -772,7 +772,6 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-#if 1
 template <typename Tfs> class cfftp8: public cfftpass<Tfs>
   {
   private:
@@ -959,7 +958,6 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
 
     POCKETFFT_EXEC_DISPATCH
   };
-#endif
 
 template <typename Tfs> class cfftp11: public cfftpass<Tfs>
   {
@@ -1785,7 +1783,6 @@ MR_fail("must not get here");
 
 #undef POCKETFFT_EXEC_DISPATCH
 
-#if 1
 template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
   {
   private:
@@ -1818,8 +1815,6 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       auto res = static_cast<Tcs *>(spass->exec(tics, cc,
         reinterpret_cast<Tcs *>(ch2), reinterpret_cast<Tcs *>(buf2),
         fwd, nthreads));
-//Tcv *p1 = reinterpret_cast<Tcv *>(res);
-//Tcv *p2 = (p1==ch2) ? cc2 : ch2; 
 // arrange input in SIMD-friendly way, must be done out-of-place
       for (size_t i=0; i<ip/vlen; ++i)
         {
@@ -1871,13 +1866,11 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
                  : exec_<false>(in1, copy1, buf1, nthreads);
       }
   };
-#endif
 
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
-#if 1
   // do we have an 1D vectorizable FFT?
   if (vectorize && (ip>300)&& (ip<=100000) && (l1==1) && (ido==1))
     {
@@ -1888,7 +1881,6 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
       if ((ip&(vlen-1))==0)
         return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
     }
-#endif
 
   if (ip==1) return make_shared<cfftp1<Tfs>>();
   auto factors=cfftpass<Tfs>::factorize(ip);
