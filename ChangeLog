@@ -1,4 +1,7 @@
 0.31.0:
+- fft:
+    - significantly faster 1D FFTs; tuning of multi-D transforms
+
 - sht:
     - new `phi0` parameter for the `*_2d` SHT routines
 
