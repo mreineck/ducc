@@ -961,7 +961,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
         if (critstride)  // make bunch large to reduce overall copy cost
           {
           n_bunch=n_simul;
-          while ((n_bunch<nmax) && (sizeof(T)*n_bunch<2*cacheline)) n_bunch*=2;
+          while ((n_bunch<nmax) /*&& (sizeof(T)*n_bunch<2*cacheline)*/) n_bunch*=2;
           }
         else if (nostride)
           n_bunch=n_simul;

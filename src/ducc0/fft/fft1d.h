@@ -208,8 +208,8 @@ template <typename Tfs> class cfftpass
       MR_assert(N>0, "need a positive number");
       vector<size_t> factors;
       factors.reserve(15);
-//      while ((N&7)==0)
-//        { factors.push_back(8); N>>=3; }
+      while ((N&7)==0)
+        { factors.push_back(8); N>>=3; }
       while ((N&3)==0)
         { factors.push_back(4); N>>=2; }
       if ((N&1)==0)
@@ -772,7 +772,7 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
-#if 0
+#if 1
 template <typename Tfs> class cfftp8: public cfftpass<Tfs>
   {
   private:
@@ -1879,7 +1879,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   MR_assert(ip>=1, "no zero-sized FFTs");
 #if 1
   // do we have an 1D vectorizable FFT?
-  if (vectorize && (ip>300) && (l1==1) && (ido==1))
+  if (vectorize && (ip>300)&& (ip<=100000) && (l1==1) && (ido==1))
     {
 //    constexpr auto vlen = native_simd<Tfs>::size();
 //    if constexpr(vlen>=4)
@@ -1906,8 +1906,8 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
         return make_shared<cfftp5<Tfs>>(l1, ido, roots);
       case 7:
         return make_shared<cfftp7<Tfs>>(l1, ido, roots);
-//      case 8:
-//        return make_shared<cfftp8<Tfs>>(l1, ido, roots);
+      case 8:
+        return make_shared<cfftp8<Tfs>>(l1, ido, roots);
       case 11:
         return make_shared<cfftp11<Tfs>>(l1, ido, roots);
       default:
@@ -3192,11 +3192,13 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   if (ip==1) return make_shared<rfftp1<Tfs>>();
   if ((ip>1000) && ((ip&1)==0))  // use complex transform
     {
-    bool doit = vectorize&&((ip&7)==0);
+    bool doit = vectorize&&((ip&7)==0);  // vecpass might be beneficial
+    doit |= ip>10000;  // complex multipass might be beneficial
     if (!doit)
       {
       auto factors = rfftpass<Tfs>::factorize(ip);
       for (auto factor: factors)
+        // complex Bluestein or larger prime factor functions might be beneficial
         if (factor>5) { doit=true; break; }
       }
     if (doit)
