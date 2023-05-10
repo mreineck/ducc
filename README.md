@@ -109,10 +109,9 @@ The central algorithms are derived from Paul Swarztrauber's
 - achieves very high accuracy for all transforms
 - supports multidimensional arrays and selection of the axes to be transformed
 - supports single, double, and long double precision
-- makes use of CPU vector instructions when performing 2D and higher-dimensional
-  transforms
+- makes use of CPU vector instructions, except for short 1D transforms 
 - supports prime-length transforms without degrading to O(N**2) performance
-- has optional multi-threading support for multidimensional transforms
+- has optional multi-threading support for all transforms except short 1D ones.
 
 ### Design decisions and performance characteristics
 - there is no explicit plan management to be done by the user, making the
@@ -120,7 +119,7 @@ The central algorithms are derived from Paul Swarztrauber's
   A small number of plans is cached internally, which does not consume much
   memory, since the storage requirement for a plan only scales with the square
   root of the FFT length for large lengths.
-- 1D transforms are significantly slower than those provided by FFTW (if FFTW's
+- 1D transforms are somewhat slower than those provided by FFTW (if FFTW's
   plan generation overhead is ignored)
 - multi-D transforms in double precision perform fairly similar to FFTW with
   FFTW_MEASURE; in single precision `ducc.fft` can be significantly faster.
