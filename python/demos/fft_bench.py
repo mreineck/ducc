@@ -23,12 +23,12 @@ import matplotlib.pyplot as plt
 rng = np.random.default_rng(42)
 
 
-def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
+def measure_fftw(a, nrepeat, nthr,  inplace=False, flags=('FFTW_MEASURE',), timelimit=None):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    f2 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
+    f2 = f1 if inplace else pyfftw.empty_aligned(a.shape, dtype=a.dtype)
     fftw = pyfftw.FFTW(f1, f2, flags=flags, axes=range(a.ndim), threads=nthr,
-                       planning_timelimit=10)
+                       planning_timelimit=timelimit)
     f1[()] = a
     times = []
     for i in range(nrepeat):
@@ -37,25 +37,6 @@ def measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
         t1 = time()
         times.append(t1-t0)
     return times, f2
-
-def measure_fftw_inplace(a, nrepeat, nthr, flags=('FFTW_MEASURE',)):
-    import pyfftw
-    f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
-    fftw = pyfftw.FFTW(f1, f1, flags=flags, axes=range(a.ndim), threads=nthr,
-                       planning_timelimit=10)
-    times = []
-    for i in range(nrepeat):
-        f1[()] = a
-        t0 = time()
-        fftw()
-        t1 = time()
-        times.append(t1-t0)
-    return times, f1
-
-
-def measure_fftw_est(a, nrepeat, nthr):
-    return measure_fftw(a, nrepeat, nthr, flags=('FFTW_ESTIMATE',))
-
 
 def measure_fftw_np_interface(a, nrepeat, nthr):
     import pyfftw
@@ -72,55 +53,18 @@ def measure_fftw_np_interface(a, nrepeat, nthr):
     return times, b
 
 
-def measure_duccfft(a, nrepeat, nthr):
+def measure_duccfft(a, nrepeat, nthr, inplace=False, noncritical=False):
     times = []
-    b = a.copy()
+    work = ducc0.misc.make_noncritical(a.copy()) if noncritical else a.copy()
     for i in range(nrepeat):
+        if inplace:
+            work[()] = a
+        inp = work if inplace else a
         t0 = time()
-        b = ducc0.fft.c2c(a, out=b, forward=True, nthreads=nthr)
-        t1 = time()
-        times.append(t1-t0)
-    return times, b
-
-
-def measure_duccfft_inplace(a, nrepeat, nthr):
-    times = []
-    for i in range(nrepeat):
-        b = a.copy()
-        t0 = time()
-        b = ducc0.fft.c2c(b, out=b, forward=True, nthreads=nthr)
-        t1 = time()
-        times.append(t1-t0)
-    return times, b
-
-
-# ducc0.fft, avoiding critical array strides and using in-place transforms.
-# This is probably the most performant mode for ducc0 with multi-D transforms.
-def measure_duccfft_noncrit_inplace(a, nrepeat, nthr):
-    times = []
-    work = ducc0.misc.make_noncritical(a.copy())
-    for i in range(nrepeat):
-        work[()] = a
-        t0 = time()
-        work = ducc0.fft.c2c(work, out=work, forward=True, nthreads=nthr)
+        b = ducc0.fft.c2c(inp, out=work, forward=True, nthreads=nthr)
         t1 = time()
         times.append(t1-t0)
     return times, work
-
-
-def measure_scipy_fftpack(a, nrepeat, nthr):
-    import scipy.fftpack
-    times = []
-    if nthr != 1:
-        raise NotImplementedError("scipy.fftpack does not support multiple threads")
-    b = None
-    for i in range(nrepeat):
-        del b
-        t0 = time()
-        b = scipy.fftpack.fftn(a)
-        t1 = time()
-        times.append (t1-t0)
-    return times, b
 
 
 def measure_scipy_fft(a, nrepeat, nthr):
@@ -195,6 +139,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
             tmp = func(a, nrepeat, nthr)
             res.append(np.average(tmp[0]))
             output.append(tmp[1])
+            #sleep(1)  # to wait for potential busy-waiting threads
         print("{0:5.2e}/{1:5.2e} = {2:5.2f}  L2 error={3}".format(results[0][n], results[1][n], results[0][n]/results[1][n], ducc0.misc.l2error(output[0], output[1])))
     results = np.array(results)
     plt.title("{}: {}D, {}, max_extent={}".format(
@@ -207,8 +152,9 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.show()
     plt.close()
 
-
-funcs = (measure_duccfft_noncrit_inplace, measure_fftw_inplace)
+f1 = lambda a, nrepeat, nthr: measure_duccfft(a, nrepeat, nthr, inplace=True, noncritical=True)
+f2 = lambda a, nrepeat, nthr: measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',), timelimit=20)
+funcs = (f1, f2)
 ttl = "duccfft/FFTW"
 ntry = 10
 nthr = 1

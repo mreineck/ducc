@@ -21,7 +21,6 @@ import ducc0
 import numpy as np
 from time import time
 
-
 # just run on one thread
 nthreads = 1
 
@@ -29,6 +28,7 @@ nthreads = 1
 lmax = 2047
 # maximum m.
 mmax = lmax
+print(f"Map analysis demo for lmax={lmax}")
 
 # Number of pixels per ring. Must be >=2*lmax+1, but I'm choosing a larger
 # number for which the FFT is faster.
@@ -54,46 +54,57 @@ alm[0:lmax+1].imag = 0.
 # transforms with spin!=0 two a_lm sets are required instead of one.
 alm = alm.reshape((1,-1))
 
-print("testing Gauss-Legendre grid with lmax+1 rings")
+print(f"testing Gauss-Legendre grid with {lmax+1} rings")
 
 # Number of iso-latitude rings required for Gauss-Legendre grid
 nlat = lmax+1
-
 # go from a_lm to map
+map = ducc0.misc.empty_noncritical((1,nlat,nlon), dtype=np.float64)
+map[()]=1
 t0 = time()
 map = ducc0.sht.experimental.synthesis_2d(
     alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
-    geometry="GL", nthreads=nthreads)
+    geometry="GL", nthreads=nthreads,map=map)
 print("time for map synthesis: {}s".format(time()-t0))
 
 # transform back to a_lm
-
+alm2=alm.copy()*7
 t0 = time()
 alm2 = ducc0.sht.experimental.analysis_2d(
-    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="GL", nthreads=nthreads)
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="GL", nthreads=nthreads, alm=alm2)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
 print("L2 error: ", ducc0.misc.l2error(alm, alm2))
+map2 = ducc0.sht.experimental.synthesis_2d(
+    alm=alm2, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
+    geometry="GL", nthreads=nthreads)
+print("map L2 error: ", ducc0.misc.l2error(map, map2))
 
 
-print("testing synthesis/analysis on a Clenshaw-Curtis grid with lmax+2 rings")
-print("For 'standard' Clenshaw-Curtis quadrature 2*lmax+2 rings would be needed,")
-print("but ducc.sht supports advanced analysis techniques which lower this limit.")
 # Number of iso-latitude rings required.
-nlat = lmax+2  # ducc0.fft.good_size(lmax+1,True)+1
+nlat = ducc0.fft.good_size(lmax+1,True)+1
+print(f"testing synthesis/analysis on a Clenshaw-Curtis grid with {nlat} rings")
+print(f"For 'standard' Clenshaw-Curtis quadrature {2*lmax+2} rings would be needed,")
+print("but ducc.sht supports advanced analysis techniques which lower this limit.")
 
 # go from a_lm to map
+map = ducc0.misc.empty_noncritical((1,nlat,nlon), dtype=np.float64)
+map[()]=1
 t0 = time()
 map = ducc0.sht.experimental.synthesis_2d(
     alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
-    geometry="CC", nthreads=nthreads)
+    geometry="CC", nthreads=nthreads, map=map)
 print("time for map synthesis: {}s".format(time()-t0))
 
 t0 = time()
 alm2 = ducc0.sht.experimental.analysis_2d(
-    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="CC", nthreads=nthreads)
+    map=map, lmax=lmax, mmax=mmax, spin=0, geometry="CC", nthreads=nthreads, alm=alm2)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
 print("L2 error: ", ducc0.misc.l2error(alm, alm2))
+map2 = ducc0.sht.experimental.synthesis_2d(
+    alm=alm2, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
+    geometry="CC", nthreads=nthreads)
+print("map L2 error: ", ducc0.misc.l2error(map, map2))
