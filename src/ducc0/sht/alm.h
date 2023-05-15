@@ -493,39 +493,27 @@ template<typename T> void rotate_alm (const Alm_Base &base, vmav<complex<T>,1> &
   MR_assert (base.complete(), "rotate_alm: need complete A_lm set");
   MR_assert (alm.shape(0)==base.Num_Alms(), "bad size of a_lm array");
 
+  auto rot_azimuth = [&](double ang)
+    {
+    if (ang!=0)
+      for (size_t m=0; m<=lmax; ++m)
+        {
+        auto expang = complex<T>(polar(1.,-ang*m));
+        for (size_t l=m; l<=lmax; ++l)
+          alm(base.index(l,m))*=expang;
+        }
+    };
+
   if (theta!=0)
     {
-    if (psi!=0)
-      for (size_t m=0; m<=lmax; ++m)
-        {
-        auto exppsi = complex<T>(polar(1.,-psi*m));
-        for (size_t l=m; l<=lmax; ++l)
-          alm(base.index(l,m))*=exppsi;
-        }
+    rot_azimuth(psi);
     xchg_yz(base, alm, nthreads);
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      auto exptheta = complex<T>(polar(1.,-theta*m));
-      for (size_t l=m; l<=lmax; ++l)
-        alm(base.index(l,m))*=exptheta;
-      }
+    rot_azimuth(theta);
     xchg_yz(base, alm, nthreads);
-    if (phi!=0)
-      for (size_t m=0; m<=lmax; ++m)
-        {
-        auto expphi = complex<T>(polar(1.,-phi*m));
-        for (size_t l=m; l<=lmax; ++l)
-          alm(base.index(l,m))*=expphi;
-        }
+    rot_azimuth(phi);
     }
   else
-    if (phi+psi!=0)
-      for (size_t m=0; m<=lmax; ++m)
-        {
-        auto expang = complex<T>(polar(1.,-(psi+phi)*m));
-        for (size_t l=m; l<=lmax; ++l)
-          alm(base.index(l,m)) *= expang;
-        }
+    rot_azimuth(phi+psi);
   }
 }
 
