@@ -19,7 +19,7 @@
 /** \file ducc0/math/gl_integrator.h
  *  Functionality for Gauss-Legendre quadrature
  *
- *  \copyright Copyright (C) 2019-2022 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -40,12 +40,12 @@ namespace detail_gl_integrator {
 
 using namespace std;
 
-/// Class for computing Gauss-Lgendre abscissas, weights and intgrals
+/// Class for computing Gauss-Legendre abscissas, weights and integrals
 class GL_Integrator
   {
   private:
     size_t n_;
-    vector<double> x, w;
+    vector<double> x, w, th;
 
   public:
     /// Creates an integrator for \a n abscissas
@@ -110,6 +110,17 @@ class GL_Integrator
       auto res = w;
       if (n_&1) res[0]*=0.5;
       for (auto &v:res) v*=2;
+      return res;
+      }
+
+    vector<double> thetas() const
+      {
+      vector<double> res(n_);
+      for (size_t i=0; i<th.size(); ++i)
+        {
+        res[i]= pi-th[th.size()-1-i];
+        res[n_-1-i] = th[th.size()-1-i];
+        }
       return res;
       }
   };

@@ -19,10 +19,11 @@
 /** \file ducc0/math/gl_integrator.cc
  *  Functionality for Gauss-Legendre quadrature
  *
- *  \copyright Copyright (C) 2019-2022 Max-Planck-Society, Ignace Bogaert
+ *  \copyright Copyright (C) 2019-2023 Max-Planck-Society, Ignace Bogaert
  *  \author Martin Reinecke
  */
 
+#include <tuple>
 #include "ducc0/math/gl_integrator.h"
 
 namespace ducc0 {
@@ -34,7 +35,7 @@ using namespace std;
 template<typename T> inline T one_minus_x2 (T x)
   { if (x<0) x=-x; return (x>T(0.1)) ? (T(1)+x)*(T(1)-x) : T(1)-x*x; }
 
-pair<double, double> calc_gl_iterative(size_t n, size_t i)
+tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
   {
   using Tfloat = long double;
   constexpr Tfloat eps=Tfloat(3e-14L);
@@ -71,7 +72,8 @@ pair<double, double> calc_gl_iterative(size_t n, size_t i)
     MR_assert(++j<100, "convergence problem");
     }
 
-  return make_pair(double(x0), double(2./(one_minus_x2(x0)*dpdx*dpdx)));
+  return make_tuple(double(x0), double(2./(one_minus_x2(x0)*dpdx*dpdx)),
+                    acos(x0));
   }
 
 
@@ -145,7 +147,7 @@ double besselj1squared(int k)
   }
 
 // Compute a node-weight pair, with k limited to half the range
-pair<double,double> calc_gl_bogaert(size_t n, size_t k0)
+tuple<double,double,double> calc_gl_bogaert(size_t n, size_t k0)
   {
   size_t k = ((2*k0-1)<=n) ? k0 : n-k0+1;
   // First get the Bessel zero
@@ -220,10 +222,11 @@ pair<double,double> calc_gl_bogaert(size_t n, size_t k0)
   theta = w*(nu + theta * WInvSinc * (SF1T + WIS2*(SF2T + WIS2*SF3T)));
   double Deno = BNuoSin + BNuoSin * WIS2*(WSF1T + WIS2*(WSF2T + WIS2*WSF3T));
   double weight = (2.0*w)/Deno;
-  return make_pair((k==k0) ? cos(theta) : -cos(theta), weight);
+  return make_tuple((k==k0) ? cos(theta) : -cos(theta), weight,
+                    (k==k0) ? theta : pi-theta);
   }
 
-pair<double, double> calc_gl(size_t n, size_t k)
+tuple<double, double, double> calc_gl(size_t n, size_t k)
   {
   MR_assert(n>=k, "k must not be greater than n");
   MR_assert(k>0, "k must be positive");
@@ -237,11 +240,13 @@ GL_Integrator::GL_Integrator(size_t n, size_t /*nthreads*/)
   size_t m = (n+1)>>1;
   x.resize(m);
   w.resize(m);
+  th.resize(m);
   for (size_t i=0; i<m; ++i)
     {
     auto tmp = calc_gl(n, m-i);
-    x[i] = tmp.first;
-    w[i] = tmp.second;
+    x[i] = get<0>(tmp);
+    w[i] = get<1>(tmp);
+    th[i] = get<2>(tmp);
     }
   }
 
