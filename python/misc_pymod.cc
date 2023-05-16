@@ -219,9 +219,9 @@ py::array Py_GL_thetas(size_t nlat)
   py::gil_scoped_release release;
 
   GL_Integrator integ(nlat);
-  auto x = integ.coords();
-  for (size_t i=0; i<res2.shape(0); ++i)
-    res2(i) = acos(-x[i]);
+  auto th = integ.thetas();
+  for (size_t i=0; i<nlat; ++i)
+    res2(i) = th[nlat-1-i];
   }
   return res;
   }

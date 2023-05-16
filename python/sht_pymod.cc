@@ -61,28 +61,6 @@ size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
 size_t get_nalm(size_t spin, SHT_mode mode)
   { return (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1); }
 
-py::array Py_GL_weights(size_t nlat, size_t nlon)
-  {
-  auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_vmav<double,1>(res);
-  GL_Integrator integ(nlat);
-  auto wgt = integ.weights();
-  for (size_t i=0; i<res2.shape(0); ++i)
-    res2(i) = wgt[i]*twopi/nlon;
-  return res;
-  }
-
-py::array Py_GL_thetas(size_t nlat)
-  {
-  auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_vmav<double,1>(res);
-  GL_Integrator integ(nlat);
-  auto x = integ.coords();
-  for (size_t i=0; i<res2.shape(0); ++i)
-    res2(i) = acos(-x[i]);
-  return res;
-  }
-
 template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
   size_t lmax, double psi, double theta, double phi, size_t nthreads)
   {
@@ -2112,8 +2090,6 @@ void add_sht(py::module_ &msup)
   m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None);
 
-  m2.def("GL_weights",&Py_GL_weights, "nlat"_a, "nlon"_a);
-  m2.def("GL_thetas",&Py_GL_thetas, "nlat"_a);
   m2.def("get_gridweights", &Py_get_gridweights, "type"_a, "ntheta"_a);
   m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);
   m2.def("alm2leg_deriv1", &Py_alm2leg_deriv1, alm2leg_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None,"theta_interpol"_a=false);

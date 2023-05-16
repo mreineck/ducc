@@ -2468,9 +2468,9 @@ void get_ringtheta_2d(const string &type, vmav<double, 1> &theta)
   if (type=="GL") // Gauss-Legendre
     {
     ducc0::GL_Integrator integ(nrings);
-    auto cth = integ.coords();
+    auto th = integ.thetas();
     for (size_t m=0; m<nrings; ++m)
-      theta(m) = acos(-cth[m]);
+      theta(m) = th[nrings-1-m];
     }
   else if (type=="F1") // Fejer 1
     for (size_t m=0; m<(nrings+1)/2; ++m)
