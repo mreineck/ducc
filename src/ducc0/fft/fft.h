@@ -1589,7 +1589,7 @@ struct ExecR2R
     if constexpr(is_same<T0, T>::value)
       if (inplace)
         {
-        T *buf1=storage.transformBuf(), *buf2=out.data();
+        T *buf1=storage.transformBuf(), *buf2=out.data()+it.oofs(0);
         if (in.data()!=buf2)
           copy_input(it, in, buf2);
         if ((!r2c) && forward)
