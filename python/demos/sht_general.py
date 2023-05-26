@@ -50,7 +50,7 @@ print(f"Analysis needed {dt:.2f} seconds on {nthreads} threads to do {res[2]} it
 if res[1] == 7:
     print("Maximum number of iterations reached")
 elif res[1] == 1:
-    print("Approximate solution fond")
+    print("Approximate solution found")
 elif res[1] == 2:
     print("Least-squares approximation found")
 elif res[1] == 3:
