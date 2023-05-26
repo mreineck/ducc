@@ -266,10 +266,26 @@ class TimerHierarchy
       { ostringstream oss; root.report(oss); return oss.str(); }
   };
 
+map<string,double> combine_timings(const map<string, double> &m1,
+                                   const map<string, double> &m2)
+  {
+  map<string, double> res = m1;
+  for (const auto &[k, v] : m2)
+    {
+    auto iter = res.find(k);
+    if (iter==res.end())
+      res[k] = v;
+    else
+      iter->second += v;
+    }
+  return res;
+  }
+
 }
 
 using detail_timers::SimpleTimer;
 using detail_timers::TimerHierarchy;
+using detail_timers::combine_timings;
 
 }
 
