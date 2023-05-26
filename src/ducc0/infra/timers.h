@@ -226,10 +226,10 @@ class TimerHierarchy
       push_internal(name);
       }
 
-    void reset(const string &name="<root>")
+    void reset(string name="")
       {
       last_time=clock::now();
-      root = tstack_node(name, nullptr);
+      root = tstack_node(name=="" ? root.name : name, nullptr);
       curnode=&root;
       }
 
@@ -255,7 +255,7 @@ class TimerHierarchy
       {
       adjust_time();
       map<string, double> res;
-      root.add_timings("root", res);
+      root.add_timings(root.name, res);
       return res;
       }
     /// Writes a fancy timing report to \a os.
