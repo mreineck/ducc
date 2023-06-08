@@ -142,7 +142,7 @@ template <typename Job> class Scheduler {
 
     bool getJob(PrivateQueue<Job>& my_queue, Job& j)
       {
-      // Jobry to get local job.
+      // Try to get local job.
       if (!my_queue.empty())
         {
         j = my_queue.popBack();
@@ -373,66 +373,69 @@ class StdThreadPool {
     static int maxNumThreads() { return std::thread::hardware_concurrency(); }
 
  private:
-    struct Impl {
-        Sync sync_;
-        detail::Barrier pool_barrier_;
-        std::vector<std::thread> threads_;
-        std::function<void(int, int)> func_;
-        int num_threads_;
-        bool done_ = false;
-
-        Impl(int num_threads)
-          : sync_(std::max(1, num_threads))
-          , pool_barrier_(std::max(1, num_threads))
-          , num_threads_(num_threads)
+    struct Impl
       {
-          num_threads = std::max(1, num_threads);
-          threads_.reserve(num_threads - 1);
-          for (int i = 1; i < num_threads; ++i)
-              threads_.emplace_back(&Impl::main, this, i);
-      }
-        ~Impl() {
-          done_ = true;
-          pool_barrier_.barrier();
-          for (auto& t : threads_)
-              t.join();
-      }
+      Sync sync_;
+      detail::Barrier pool_barrier_;
+      std::vector<std::thread> threads_;
+      std::function<void(int, int)> func_;
+      int num_threads_;
+      bool done_ = false;
 
-        template <typename F>
-        void run(F&& func, const int num_threads) {
-          func_ = func;
-          num_threads_ = num_threads;
-          sync_.setNumThreads(num_threads);
-      
-          pool_barrier_.barrier();
-          func_(0, num_threads);
-          pool_barrier_.barrier();
-      }
+      Impl(int num_threads)
+        : sync_(std::max(1, num_threads))
+        , pool_barrier_(std::max(1, num_threads))
+        , num_threads_(num_threads)
+        {
+        num_threads = std::max(1, num_threads);
+        threads_.reserve(num_threads - 1);
+        for (int i = 1; i < num_threads; ++i)
+            threads_.emplace_back(&Impl::main, this, i);
+        }
+      ~Impl()
+        {
+        done_ = true;
+        pool_barrier_.barrier();
+        for (auto& t : threads_)
+            t.join();
+        }
 
+      template <typename F>
+      void run(F&& func, const int num_threads)
+        {
+        func_ = func;
+        num_threads_ = num_threads;
+        sync_.setNumThreads(num_threads);
+    
+        pool_barrier_.barrier();
+        func_(0, num_threads);
+        pool_barrier_.barrier();
+        }
 
-        void main(const int my_id) {
-          for (;;) {
-              pool_barrier_.barrier();
-              if (done_) break;
-              if (my_id < num_threads_)
-                  func_(my_id, num_threads_);
-              pool_barrier_.barrier();
+      void main(const int my_id)
+        {
+        for (;;)
+          {
+          pool_barrier_.barrier();
+          if (done_) break;
+          if (my_id < num_threads_)
+            func_(my_id, num_threads_);
+          pool_barrier_.barrier();
           }
-      }
-
+        }
     };
 
     std::unique_ptr<Impl> impl_;
 };
 
 /** A thread pool to which external threads can join. */
-class ThreadJoiningThreadPool {
- public:
+class ThreadJoiningThreadPool
+  {
+  public:
     using Sync = detail::Sync;
 
-    explicit ThreadJoiningThreadPool(int num_threads) : impl_(new Impl(num_threads)) {
-        assert(num_threads >= 2);
-    }
+    explicit ThreadJoiningThreadPool(int num_threads) : impl_(new Impl(num_threads))
+      { assert(num_threads >= 2); }
 
     void join(int my_id) { impl_->join(my_id); }
 
@@ -451,54 +454,54 @@ class ThreadJoiningThreadPool {
 
     int numThreads() const { return impl_.get()->num_threads_; }
 
- private:
-    struct Impl {
-        Sync sync_;
-        detail::Barrier pool_barrier_;
-        std::function<void(int, int)> func_;
-        int num_threads_;
-        bool done_ = false;
+  private:
+    struct Impl
+      {
+      Sync sync_;
+      detail::Barrier pool_barrier_;
+      std::function<void(int, int)> func_;
+      int num_threads_;
+      bool done_ = false;
 
-        Impl(int num_threads)
-          : sync_(num_threads), pool_barrier_(num_threads), num_threads_(num_threads) {}
-        ~Impl()
-          { assert(done_ == true); }
+      Impl(int num_threads)
+        : sync_(num_threads), pool_barrier_(num_threads), num_threads_(num_threads) {}
+      ~Impl()
+        { assert(done_ == true); }
 
-        template <typename F>
-        inline void run(F&& func, const int num_threads)
-{
-    func_ = func;
-    num_threads_ = num_threads;
-    sync_.setNumThreads(num_threads);
-
-    pool_barrier_.barrier();
-    func_(0, num_threads);
-    pool_barrier_.barrier();
-}
-
-        inline void join(int my_id)
-          { main(my_id); }
-        inline void release_threads()
-{
-    done_ = true;
-    pool_barrier_.barrier();
-}
-
-        inline void main(const int my_id)
-{
-    for (;;) {
+      template <typename F> inline void run(F&& func, const int num_threads)
+        {
+        func_ = func;
+        num_threads_ = num_threads;
+        sync_.setNumThreads(num_threads);
+    
         pool_barrier_.barrier();
-        if (done_) break;
-        if (my_id < num_threads_)
-            func_(my_id, num_threads_);
+        func_(0, num_threads);
         pool_barrier_.barrier();
-    }
-}
+        }
 
-    };
+      inline void join(int my_id)
+        { main(my_id); }
+      inline void release_threads()
+        {
+        done_ = true;
+        pool_barrier_.barrier();
+        }
+
+      inline void main(const int my_id)
+        {
+        for (;;)
+          {
+          pool_barrier_.barrier();
+          if (done_) break;
+          if (my_id < num_threads_)
+              func_(my_id, num_threads_);
+          pool_barrier_.barrier();
+          }
+        }
+      };
 
     std::unique_ptr<Impl> impl_;
-};
+  };
 
 using DefaultThreadPool = StdThreadPool;
 
@@ -552,7 +555,7 @@ template <bool AllowEqualBuckets_     = IPS4OML_ALLOW_EQUAL_BUCKETS
         , std::ptrdiff_t BaseCase_    = IPS4OML_BASE_CASE_SIZE
         , std::ptrdiff_t BaseCaseM_   = IPS4OML_BASE_CASE_MULTIPLIER
         , std::ptrdiff_t BlockSize_   = IPS4OML_BLOCK_SIZE
-        , typename BucketT_              = IPS4OML_BUCKET_TYPE
+        , typename BucketT_           = IPS4OML_BUCKET_TYPE
         , std::size_t DataAlign_      = IPS4OML_DATA_ALIGNMENT
         , std::ptrdiff_t EqualBuckTh_ = IPS4OML_EQUAL_BUCKETS_THRESHOLD
         , int LogBuckets_             = IPS4OML_LOG_BUCKETS
@@ -668,7 +671,7 @@ struct ExtendedConfig : public Cfg {
 
     /** Dummy thread pool. */
     class SubThreadPool {
-     public:
+      public:
         explicit SubThreadPool(int) {}
 
         void join(int) {}
@@ -682,7 +685,7 @@ struct ExtendedConfig : public Cfg {
 
         int numThreads() const { return 1; }
 
-     private:
+      private:
         Sync sync_;
     };
 
@@ -842,130 +845,124 @@ template <typename Cfg> class Sorter {
     explicit Sorter(LocalData& local) : local_(local) {}
 
     void sequential(iterator begin, iterator end)
-{
-    // Check for base case
-    const auto n = end - begin;
-    if (n <= 2 * Cfg::kBaseCaseSize) {
-
+      {
+      // Check for base case
+      const auto n = end - begin;
+      if (n <= 2 * Cfg::kBaseCaseSize)
+        {
         detail::baseCaseSort(begin, end, local_.classifier.getComparator());
         return;
-    }
-
-    sequential_rec(begin, end);
-}
+        }
+      sequential_rec(begin, end);
+      }
 
     void sequential(const iterator begin, const Task& task, PrivateQueue<Task>& queue)
-{
-    // Check for base case
-    const auto n = task.end - task.begin;
-    IPS4OML_IS_NOT(n <= 2 * Cfg::kBaseCaseSize);
+      {
+      // Check for base case
+      const auto n = task.end - task.begin;
+      IPS4OML_IS_NOT(n <= 2 * Cfg::kBaseCaseSize);
 
-    diff_t bucket_start[Cfg::kMaxBuckets + 1];
+      diff_t bucket_start[Cfg::kMaxBuckets + 1];
 
-    // Do the partitioning
-    const auto res =
+      // Do the partitioning
+      const auto res =
             partition<false>(begin + task.begin, begin + task.end, bucket_start, 0, 1);
-    const int num_buckets = std::get<0>(res);
-    const bool equal_buckets = std::get<1>(res);
+      const int num_buckets = std::get<0>(res);
+      const bool equal_buckets = std::get<1>(res);
 
-    // Final base case is executed in cleanup step, so we're done here
-    if (n <= Cfg::kSingleLevelThreshold) {
+      // Final base case is executed in cleanup step, so we're done here
+      if (n <= Cfg::kSingleLevelThreshold)
         return;
-    }
 
-    // Recurse
-    if (equal_buckets) {
+      // Recurse
+      if (equal_buckets)
+        {
         const auto start = bucket_start[num_buckets - 1];
         const auto stop = bucket_start[num_buckets];
-        if (stop - start > 2 * Cfg::kBaseCaseSize) {
-            queue.emplace(task.begin + start, task.begin + stop);
+        if (stop - start > 2 * Cfg::kBaseCaseSize)
+          queue.emplace(task.begin + start, task.begin + stop);
         }
-    }
-    for (int i = num_buckets - 1 - equal_buckets; i >= 0; i -= 1 + equal_buckets) {
+      for (int i = num_buckets - 1 - equal_buckets; i >= 0; i -= 1 + equal_buckets)
+        {
         const auto start = bucket_start[i];
         const auto stop = bucket_start[i + 1];
-        if (stop - start > 2 * Cfg::kBaseCaseSize) {
-            queue.emplace(task.begin + start, task.begin + stop);
+        if (stop - start > 2 * Cfg::kBaseCaseSize)
+          queue.emplace(task.begin + start, task.begin + stop);
         }
-    }
-}
-
+      }
 
     void sequential_rec(iterator begin, iterator end)
-{
-    // Check for base case
-    const auto n = end - begin;
-    IPS4OML_IS_NOT(n <= 2 * Cfg::kBaseCaseSize);
+      {
+      // Check for base case
+      const auto n = end - begin;
+      IPS4OML_IS_NOT(n <= 2 * Cfg::kBaseCaseSize);
 
-    diff_t bucket_start[Cfg::kMaxBuckets + 1];
+      diff_t bucket_start[Cfg::kMaxBuckets + 1];
 
-    // Do the partitioning
-    const auto res = partition<false>(begin, end, bucket_start, 0, 1);
-    const int num_buckets = std::get<0>(res);
-    const bool equal_buckets = std::get<1>(res);
+      // Do the partitioning
+      const auto res = partition<false>(begin, end, bucket_start, 0, 1);
+      const int num_buckets = std::get<0>(res);
+      const bool equal_buckets = std::get<1>(res);
 
-    // Final base case is executed in cleanup step, so we're done here
-    if (n <= Cfg::kSingleLevelThreshold) {
+      // Final base case is executed in cleanup step, so we're done here
+      if (n <= Cfg::kSingleLevelThreshold)
         return;
-    }
 
-    // Recurse
-    for (int i = 0; i < num_buckets; i += 1 + equal_buckets) {
+      // Recurse
+      for (int i = 0; i < num_buckets; i += 1 + equal_buckets)
+        {
         const auto start = bucket_start[i];
         const auto stop = bucket_start[i + 1];
         if (stop - start > 2 * Cfg::kBaseCaseSize)
             sequential(begin + start, begin + stop);
-    }
-    if (equal_buckets) {
+        }
+      if (equal_buckets)
+        {
         const auto start = bucket_start[num_buckets - 1];
         const auto stop = bucket_start[num_buckets];
         if (stop - start > 2 * Cfg::kBaseCaseSize)
-            sequential(begin + start, begin + stop);
-    }
-
-}
-
+          sequential(begin + start, begin + stop);
+        }
+      }
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
     void parallelSortPrimary(iterator begin, iterator end, int num_threads,
                              BufferStorage& buffer_storage,
                              std::vector<std::shared_ptr<SubThreadPool>>& tp_trash)
-{
-    const auto res = partition<true>(begin, end, shared_->bucket_start, 0, num_threads);
+      {
+      const auto res = partition<true>(begin, end, shared_->bucket_start, 0, num_threads);
+      const bool is_last_level = end - begin <= Cfg::kSingleLevelThreshold;
+      const auto stripe = ((end - begin) + num_threads - 1) / num_threads;
 
-    const bool is_last_level = end - begin <= Cfg::kSingleLevelThreshold;
-    const auto stripe = ((end - begin) + num_threads - 1) / num_threads;
-
-    if (!is_last_level) {
+      if (!is_last_level)
+        {
         const int num_buckets = std::get<0>(res);
         const bool equal_buckets = std::get<1>(res);
 
         queueTasks(stripe, 0, num_threads, end - begin, begin - begin,
                    shared_->bucket_start, num_buckets, equal_buckets);
-    }
+        }
 
-    shared_->reset();
-    shared_->sync.barrier();
+      shared_->reset();
+      shared_->sync.barrier();
 
-    processBigTasks(begin, stripe, 0, buffer_storage, tp_trash);
-    processSmallTasks(begin);
-}
-
+      processBigTasks(begin, stripe, 0, buffer_storage, tp_trash);
+      processSmallTasks(begin);
+      }
 
     void parallelSortSecondary(iterator begin, iterator end, int id, int num_threads,
                                BufferStorage& buffer_storage,
                                std::vector<std::shared_ptr<SubThreadPool>>& tp_trash)
-{
-    shared_->local[id] = &local_;
+      {
+      shared_->local[id] = &local_;
 
-    partition<true>(begin, end, shared_->bucket_start, id, num_threads);
-    shared_->sync.barrier();
+      partition<true>(begin, end, shared_->bucket_start, id, num_threads);
+      shared_->sync.barrier();
 
-    const auto stripe = ((end - begin) + num_threads - 1) / num_threads;
-    processBigTasks(begin, stripe, id, buffer_storage, tp_trash);
-    processSmallTasks(begin);
-}
-
+      const auto stripe = ((end - begin) + num_threads - 1) / num_threads;
+      processBigTasks(begin, stripe, id, buffer_storage, tp_trash);
+      processSmallTasks(begin);
+      }
 
     std::pair<std::vector<diff_t>, bool> parallelPartitionPrimary(iterator begin,
                                                                   iterator end,
@@ -986,12 +983,11 @@ template <typename Cfg> class Sorter {
 
     void parallelPartitionSecondary(iterator begin, iterator end, int id,
                                     int num_threads)
-{
-    shared_->local[id] = &local_;
-    partition<true>(begin, end, shared_->bucket_start, id, num_threads);
-    shared_->sync.barrier();
-}
-
+      {
+      shared_->local[id] = &local_;
+      partition<true>(begin, end, shared_->bucket_start, id, num_threads);
+      shared_->sync.barrier();
+      }
 
     void setShared(SharedData* shared)
       { shared_ = shared; }
@@ -1016,143 +1012,148 @@ template <typename Cfg> class Sorter {
 
     std::pair<int, bool> buildClassifier(iterator begin, iterator end,
                                          Classifier& classifier)
-{
-    const auto n = end - begin;
-    int log_buckets = Cfg::logBuckets(n);
-    int num_buckets = 1 << log_buckets;
-    const auto step = std::max<diff_t>(1, Cfg::oversamplingFactor(n));
-    const auto num_samples = std::min(step * num_buckets - 1, n / 2);
-
-    // Select the sample
-    detail::selectSample(begin, end, num_samples, local_.random_generator);
-
-    // Sort the sample
-    sequential(begin, begin + num_samples);
-    auto splitter = begin + step - 1;
-    auto sorted_splitters = classifier.getSortedSplitters();
-    const auto comp = classifier.getComparator();
-
-    // Choose the splitters
-    IPS4OML_ASSUME_NOT(sorted_splitters == nullptr);
-    new (sorted_splitters) typename Cfg::value_type(*splitter);
-    for (int i = 2; i < num_buckets; ++i) {
+      {
+      const auto n = end - begin;
+      int log_buckets = Cfg::logBuckets(n);
+      int num_buckets = 1 << log_buckets;
+      const auto step = std::max<diff_t>(1, Cfg::oversamplingFactor(n));
+      const auto num_samples = std::min(step * num_buckets - 1, n / 2);
+  
+      // Select the sample
+      detail::selectSample(begin, end, num_samples, local_.random_generator);
+  
+      // Sort the sample
+      sequential(begin, begin + num_samples);
+      auto splitter = begin + step - 1;
+      auto sorted_splitters = classifier.getSortedSplitters();
+      const auto comp = classifier.getComparator();
+  
+      // Choose the splitters
+      IPS4OML_ASSUME_NOT(sorted_splitters == nullptr);
+      new (sorted_splitters) typename Cfg::value_type(*splitter);
+      for (int i = 2; i < num_buckets; ++i)
+        {
         splitter += step;
         // Skip duplicates
-        if (comp(*sorted_splitters, *splitter)) {
-            IPS4OML_ASSUME_NOT(sorted_splitters + 1 == nullptr);
-            new (++sorted_splitters) typename Cfg::value_type(*splitter);
+        if (comp(*sorted_splitters, *splitter))
+          {
+          IPS4OML_ASSUME_NOT(sorted_splitters + 1 == nullptr);
+          new (++sorted_splitters) typename Cfg::value_type(*splitter);
+          }
         }
-    }
-
-    // Check for duplicate splitters
-    const auto diff_splitters = sorted_splitters - classifier.getSortedSplitters() + 1;
-    const bool use_equal_buckets = Cfg::kAllowEqualBuckets
-            && num_buckets - 1 - diff_splitters >= Cfg::kEqualBucketsThreshold;
-
-    // Fill the array to the next power of two
-    log_buckets = log2(diff_splitters) + 1;
-    num_buckets = 1 << log_buckets;
-    for (int i = diff_splitters + 1; i < num_buckets; ++i) {
+  
+      // Check for duplicate splitters
+      const auto diff_splitters = sorted_splitters - classifier.getSortedSplitters() + 1;
+      const bool use_equal_buckets = Cfg::kAllowEqualBuckets
+              && num_buckets - 1 - diff_splitters >= Cfg::kEqualBucketsThreshold;
+  
+      // Fill the array to the next power of two
+      log_buckets = log2(diff_splitters) + 1;
+      num_buckets = 1 << log_buckets;
+      for (int i = diff_splitters + 1; i < num_buckets; ++i)
+        {
         IPS4OML_ASSUME_NOT(sorted_splitters + 1 == nullptr);
         new (++sorted_splitters) typename Cfg::value_type(*splitter);
-    }
-
-    // Build the tree
-    classifier.build(log_buckets);
-    this->classifier_ = &classifier;
-
-    const int used_buckets = num_buckets * (1 + use_equal_buckets);
-    return {used_buckets, use_equal_buckets};
-}
-
+        }
+  
+      // Build the tree
+      classifier.build(log_buckets);
+      this->classifier_ = &classifier;
+  
+      const int used_buckets = num_buckets * (1 + use_equal_buckets);
+      return {used_buckets, use_equal_buckets};
+      }
 
     template <bool kEqualBuckets>
     __attribute__((flatten)) diff_t classifyLocally(iterator my_begin, iterator my_end)
-{
-    auto write = my_begin;
-    auto& buffers = local_.buffers;
+      {
+      auto write = my_begin;
+      auto& buffers = local_.buffers;
 
-    // Do the classification
-    classifier_->template classify<kEqualBuckets>(
-            my_begin, my_end, [&](typename Cfg::bucket_type bucket, iterator it) {
-                // Only flush buffers on overflow
-                if (buffers.isFull(bucket)) {
-                    buffers.writeTo(bucket, write);
-                    write += Cfg::kBlockSize;
-                    local_.bucket_size[bucket] += Cfg::kBlockSize;
-                }
-                buffers.push(bucket, std::move(*it));
-            });
+      // Do the classification
+      classifier_->template classify<kEqualBuckets>(
+            my_begin, my_end, [&](typename Cfg::bucket_type bucket, iterator it)
+        {
+        // Only flush buffers on overflow
+        if (buffers.isFull(bucket))
+          {
+          buffers.writeTo(bucket, write);
+          write += Cfg::kBlockSize;
+          local_.bucket_size[bucket] += Cfg::kBlockSize;
+          }
+        buffers.push(bucket, std::move(*it));
+        });
 
-    // Update bucket sizes to account for partially filled buckets
-    for (int i = 0, end = num_buckets_; i < end; ++i)
+      // Update bucket sizes to account for partially filled buckets
+      for (int i = 0, end = num_buckets_; i < end; ++i)
         local_.bucket_size[i] += local_.buffers.size(i);
 
-    return write - begin_;
-}
-
+      return write - begin_;
+      }
 
     inline void parallelClassification(bool use_equal_buckets)
-{
-    // Compute stripe for each thread
-    const auto elements_per_thread = static_cast<double>(end_ - begin_) / num_threads_;
-    const auto my_begin =
-            begin_ + Cfg::alignToNextBlock(my_id_ * elements_per_thread + 0.5);
-    const auto my_end = [&] {
-        auto e = begin_ + Cfg::alignToNextBlock((my_id_ + 1) * elements_per_thread + 0.5);
-        e = end_ < e ? end_ : e;
-        return e;
-    }();
-
-    local_.first_block = my_begin - begin_;
-
-    // Do classification
-    if (my_begin >= my_end) {
+      {
+      // Compute stripe for each thread
+      const auto elements_per_thread = static_cast<double>(end_ - begin_) / num_threads_;
+      const auto my_begin =
+              begin_ + Cfg::alignToNextBlock(my_id_ * elements_per_thread + 0.5);
+      const auto my_end = [&] {
+          auto e = begin_ + Cfg::alignToNextBlock((my_id_ + 1) * elements_per_thread + 0.5);
+          e = end_ < e ? end_ : e;
+          return e;
+      }();
+  
+      local_.first_block = my_begin - begin_;
+  
+      // Do classification
+      if (my_begin >= my_end) {
         // Small input (less than two blocks per thread), wait for other threads to finish
         local_.first_empty_block = my_begin - begin_;
         shared_->sync.barrier();
         shared_->sync.barrier();
-    } else {
+      } else {
         const auto my_first_empty_block =
-                use_equal_buckets ? classifyLocally<true>(my_begin, my_end)
-                                  : classifyLocally<false>(my_begin, my_end);
-
+                  use_equal_buckets ? classifyLocally<true>(my_begin, my_end)
+                                    : classifyLocally<false>(my_begin, my_end);
+  
         // Find bucket boundaries
         diff_t sum = 0;
-        for (int i = 0, end = num_buckets_; i < end; ++i) {
-            sum += local_.bucket_size[i];
-            __atomic_fetch_add(&bucket_start_[i + 1], sum, __ATOMIC_RELAXED);
-        }
-
+        for (int i = 0, end = num_buckets_; i < end; ++i)
+          {
+          sum += local_.bucket_size[i];
+          __atomic_fetch_add(&bucket_start_[i + 1], sum, __ATOMIC_RELAXED);
+          }
+  
         local_.first_empty_block = my_first_empty_block;
-
+  
         shared_->sync.barrier();
-
+  
         // Move empty blocks and set bucket write/read pointers
         moveEmptyBlocks(my_begin - begin_, my_end - begin_, my_first_empty_block);
-
+  
         shared_->sync.barrier();
-    }
-}
-
+        }
+      }
 
     inline void sequentialClassification(bool use_equal_buckets)
-{
-    const auto my_first_empty_block = use_equal_buckets
+      {
+      const auto my_first_empty_block = use_equal_buckets
                                               ? classifyLocally<true>(begin_, end_)
                                               : classifyLocally<false>(begin_, end_);
 
-    // Find bucket boundaries
-    diff_t sum = 0;
-    bucket_start_[0] = 0;
-    for (int i = 0, end = num_buckets_; i < end; ++i) {
+      // Find bucket boundaries
+      diff_t sum = 0;
+      bucket_start_[0] = 0;
+      for (int i = 0, end = num_buckets_; i < end; ++i)
+        {
         sum += local_.bucket_size[i];
         bucket_start_[i + 1] = sum;
-    }
-    IPS4OML_ASSUME_NOT(bucket_start_[num_buckets_] != end_ - begin_);
+        }
+      IPS4OML_ASSUME_NOT(bucket_start_[num_buckets_] != end_ - begin_);
 
-    // Set write/read pointers for all buckets
-    for (int bucket = 0, end = num_buckets_; bucket < end; ++bucket) {
+      // Set write/read pointers for all buckets
+      for (int bucket = 0, end = num_buckets_; bucket < end; ++bucket)
+        {
         const auto start = Cfg::alignToNextBlock(bucket_start_[bucket]);
         const auto stop = Cfg::alignToNextBlock(bucket_start_[bucket + 1]);
         bucket_pointers_[bucket].set(
@@ -1161,9 +1162,8 @@ template <typename Cfg> class Sorter {
                          ? start
                          : (stop <= my_first_empty_block ? stop : my_first_empty_block))
                         - Cfg::kBlockSize);
-    }
-}
-
+        }
+      }
 
     void moveEmptyBlocks(diff_t my_begin, diff_t my_end, diff_t my_first_empty_block)
 {
@@ -1309,35 +1309,35 @@ template <typename Cfg> class Sorter {
 }
 
     inline int computeOverflowBucket()
-{
-    int bucket = num_buckets_ - 1;
-    while (bucket >= 0
-           && (bucket_start_[bucket + 1] - bucket_start_[bucket]) <= Cfg::kBlockSize)
-        --bucket;
-    return bucket;
-}
+      {
+      int bucket = num_buckets_ - 1;
+      while (bucket >= 0
+             && (bucket_start_[bucket + 1] - bucket_start_[bucket]) <= Cfg::kBlockSize)
+          --bucket;
+      return bucket;
+      }
 
     template <bool kEqualBuckets, bool kIsParallel>
     inline int classifyAndReadBlock(int read_bucket)
-{
-    auto& bp = bucket_pointers_[read_bucket];
+      {
+      auto& bp = bucket_pointers_[read_bucket];
 
-    diff_t write, read;
-    std::tie(write, read) = bp.template decRead<kIsParallel>();
+      diff_t write, read;
+      std::tie(write, read) = bp.template decRead<kIsParallel>();
 
-    if (read < write) {
+      if (read < write)
+        {
         // No more blocks in this bucket
         if (kIsParallel) bp.stopRead();
         return -1;
-    }
+        }
 
-    // Read block
-    local_.swap[0].readFrom(begin_ + read);
-    if (kIsParallel) bp.stopRead();
+      // Read block
+      local_.swap[0].readFrom(begin_ + read);
+      if (kIsParallel) bp.stopRead();
 
-    return classifier_->template classify<kEqualBuckets>(local_.swap[0].head());
-}
-
+      return classifier_->template classify<kEqualBuckets>(local_.swap[0].head());
+      }
 
     template <bool kEqualBuckets, bool kIsParallel>
     inline int swapBlock(diff_t max_off, int dest_bucket, bool current_swap)
@@ -1373,67 +1373,66 @@ template <typename Cfg> class Sorter {
 }
 
 
-    template <bool kEqualBuckets, bool kIsParallel>
-    void permuteBlocks()
-{
-    const auto num_buckets = num_buckets_;
-    // Distribute starting points of threads
-    int read_bucket = (my_id_ * num_buckets / num_threads_) % num_buckets;
-    // Not allowed to write to this offset, to avoid overflow
-    const diff_t max_off = Cfg::alignToNextBlock(end_ - begin_ + 1) - Cfg::kBlockSize;
-
-    // Go through all buckets
-    for (int count = num_buckets; count; --count) {
+    template <bool kEqualBuckets, bool kIsParallel> void permuteBlocks()
+      {
+      const auto num_buckets = num_buckets_;
+      // Distribute starting points of threads
+      int read_bucket = (my_id_ * num_buckets / num_threads_) % num_buckets;
+      // Not allowed to write to this offset, to avoid overflow
+      const diff_t max_off = Cfg::alignToNextBlock(end_ - begin_ + 1) - Cfg::kBlockSize;
+  
+      // Go through all buckets
+      for (int count = num_buckets; count; --count)
+        {
         int dest_bucket;
         // Try to read a block ...
         while ((dest_bucket =
-                        classifyAndReadBlock<kEqualBuckets, kIsParallel>(read_bucket))
-               != -1) {
-            bool current_swap = 0;
-            // ... then write it to the correct bucket
-            while ((dest_bucket = swapBlock<kEqualBuckets, kIsParallel>(
-                            max_off, dest_bucket, current_swap))
-                   != -1) {
-                // Read another block, keep going
-                current_swap = !current_swap;
-            }
+                          classifyAndReadBlock<kEqualBuckets, kIsParallel>(read_bucket))
+                 != -1)
+          {
+          bool current_swap = false;
+          // ... then write it to the correct bucket
+          while ((dest_bucket = swapBlock<kEqualBuckets, kIsParallel>(
+                  max_off, dest_bucket, current_swap))
+                     != -1)
+            current_swap = !current_swap; // Read another block, keep going
+          }
+          read_bucket = (read_bucket + 1) % num_buckets;
         }
-        read_bucket = (read_bucket + 1) % num_buckets;
-    }
-}
+      }
 
 
     inline std::pair<int, diff_t> saveMargins(int last_bucket)
-{
-    // Find last bucket boundary in this thread's area
-    diff_t tail = bucket_start_[last_bucket];
-    const diff_t end = Cfg::alignToNextBlock(tail);
+      {
+      // Find last bucket boundary in this thread's area
+      diff_t tail = bucket_start_[last_bucket];
+      const diff_t end = Cfg::alignToNextBlock(tail);
 
-    // Don't need to do anything if there is no overlap, or we are in the overflow case
-    if (tail == end || end > (end_ - begin_))
+      // Don't need to do anything if there is no overlap, or we are in the overflow case
+      if (tail == end || end > (end_ - begin_))
         return {-1, 0};
 
-    // Find bucket this last block belongs to
-    {
-        const auto start_of_last_block = end - Cfg::kBlockSize;
-        diff_t last_start;
-        do {
-            --last_bucket;
-            last_start = bucket_start_[last_bucket];
+      // Find bucket this last block belongs to
+      {
+      const auto start_of_last_block = end - Cfg::kBlockSize;
+      diff_t last_start;
+      do {
+        --last_bucket;
+        last_start = bucket_start_[last_bucket];
         } while (last_start > start_of_last_block);
-    }
+      }
 
-    // Check if the last block has been written
-    const auto write = shared_->bucket_pointers[last_bucket].getWrite();
-    if (write < end)
+      // Check if the last block has been written
+      const auto write = shared_->bucket_pointers[last_bucket].getWrite();
+      if (write < end)
         return {-1, 0};
 
-    // Read excess elements, if necessary
-    tail = bucket_start_[last_bucket + 1];
-    local_.swap[0].readFrom(begin_ + tail, end - tail);
+      // Read excess elements, if necessary
+      tail = bucket_start_[last_bucket + 1];
+      local_.swap[0].readFrom(begin_ + tail, end - tail);
 
-    return {last_bucket, end - tail};
-}
+      return {last_bucket, end - tail};
+      }
 
     template <bool kIsParallel>
     void writeMargins(int first_bucket, int last_bucket, int overflow_bucket,
@@ -1567,22 +1566,18 @@ template <typename Cfg> class Sorter {
     this->num_threads_ = num_threads;
 
     // Local Classification
-    if (kIsParallel)
-        parallelClassification(use_equal_buckets);
-    else
-        sequentialClassification(use_equal_buckets);
+    kIsParallel ? parallelClassification(use_equal_buckets)
+                : sequentialClassification(use_equal_buckets);
 
     // Compute which bucket can cause overflow
     const int overflow_bucket = computeOverflowBucket();
 
     // Block Permutation
-    if (use_equal_buckets)
-        permuteBlocks<true, kIsParallel>();
-    else
-        permuteBlocks<false, kIsParallel>();
+    use_equal_buckets ? permuteBlocks<true, kIsParallel>()
+                      : permuteBlocks<false, kIsParallel>();
 
     if (kIsParallel && overflow_)
-        shared_->overflow = &local_.overflow;
+      shared_->overflow = &local_.overflow;
 
     if (kIsParallel) shared_->sync.barrier();
 
@@ -1616,41 +1611,37 @@ template <typename Cfg> class Sorter {
 }
 
     void processSmallTasks(iterator begin)
-{
-    auto& scheduler = shared_->scheduler;
-    auto& my_queue = local_.seq_task_queue;
-    Task task;
-    auto comp = local_.classifier.getComparator();
+      {
+      auto& scheduler = shared_->scheduler;
+      auto& my_queue = local_.seq_task_queue;
+      Task task;
+      auto comp = local_.classifier.getComparator();
 
-    while (scheduler.getJob(my_queue, task)) {
+      while (scheduler.getJob(my_queue, task))
+        {
         scheduler.offerJob(my_queue);
-        if (task.end - task.begin <= 2 * Cfg::kBaseCaseSize) {
-
-            detail::baseCaseSort(begin + task.begin, begin + task.end, comp);
-
-        } else {
-            sequential(begin, task, my_queue);
+        if (task.end - task.begin <= 2 * Cfg::kBaseCaseSize)
+          detail::baseCaseSort(begin + task.begin, begin + task.end, comp);
+        else
+          sequential(begin, task, my_queue);
         }
-    }
-}
+      }
 
     void processBigTasks(const iterator begin, const diff_t stripe, const int id,
                          BufferStorage& buffer_storage,
                          std::vector<std::shared_ptr<SubThreadPool>>& tp_trash)
-{
-    BigTask& task = shared_->big_tasks[id];
+      {
+      BigTask& task = shared_->big_tasks[id];
 
-    while (task.has_task) {
-        if (task.root_thread == id) {
-            // Only thread 0 passes a task sorter (the one stored in this
-            // object). The other threads have to create a task sorter if
-            // required.
-            processBigTaskPrimary(begin, stripe, id, buffer_storage, tp_trash);
-        } else {
-            processBigTasksSecondary(id);
-        }
-    }
-}
+      while (task.has_task)
+        if (task.root_thread == id)
+          // Only thread 0 passes a task sorter (the one stored in this
+          // object). The other threads have to create a task sorter if
+          // required.
+          processBigTaskPrimary(begin, stripe, id, buffer_storage, tp_trash);
+        else
+          processBigTasksSecondary(id);
+      }
 
     void processBigTaskPrimary(const iterator begin, const diff_t stripe, const int id,
                                BufferStorage& buffer_storage,
@@ -1722,12 +1713,11 @@ template <typename Cfg> class Sorter {
 }
 
     void processBigTasksSecondary(const int id)
-{
-    BigTask& task = shared_->big_tasks[id];
-    auto partial_thread_pool = shared_->thread_pools[task.root_thread];
-
-    partial_thread_pool->join(task.task_thread_id);
-}
+      {
+      BigTask& task = shared_->big_tasks[id];
+      auto partial_thread_pool = shared_->thread_pools[task.root_thread];
+      partial_thread_pool->join(task.task_thread_id);
+      }
 
     void queueTasks(const diff_t stripe, const int id, const int task_num_threads,
                     const diff_t parent_task_size, const diff_t offset,
@@ -1767,9 +1757,8 @@ template <typename Cfg> class Sorter {
         }
     };
 
-    for (auto t = id; t != id + task_num_threads; ++t) {
-        shared_->big_tasks[t].has_task = false;
-    }
+    for (auto t = id; t != id + task_num_threads; ++t)
+      shared_->big_tasks[t].has_task = false;
 
     // Queue subtasks if we didn't reach the last level yet
     const bool is_last_level = parent_task_size <= Cfg::kSingleLevelThreshold;
@@ -1793,29 +1782,26 @@ template <typename Cfg> class Sorter {
 
 
 /** Branch-free classifier. */
-template <typename Cfg>
-class Sorter<Cfg>::Classifier {
+template <typename Cfg> class Sorter<Cfg>::Classifier
+  {
     using iterator = typename Cfg::iterator;
     using value_type = typename Cfg::value_type;
     using bucket_type = typename Cfg::bucket_type;
     using less = typename Cfg::less;
 
- public:
+  public:
     Classifier(less comp) : comp_(std::move(comp)) {}
 
-    ~Classifier() {
-        if (log_buckets_) cleanup();
-    }
+    ~Classifier()
+      { if (log_buckets_) cleanup(); }
 
     /** Calls destructors on splitter elements. */
-    void reset() {
-        if (log_buckets_) cleanup();
-    }
+    void reset()
+      { if (log_buckets_) cleanup(); }
 
     /** The sorted array of splitters, to be filled externally. */
-    value_type* getSortedSplitters() {
-        return static_cast<value_type*>(static_cast<void*>(sorted_storage_));
-    }
+    value_type* getSortedSplitters()
+      { return static_cast<value_type*>(static_cast<void*>(sorted_storage_)); }
 
     /** The comparison operator. */
     less getComparator() const { return comp_; }
@@ -1903,7 +1889,7 @@ class Sorter<Cfg>::Classifier {
 	return true;
     }
 
- private:
+  private:
     const value_type& splitter(bucket_type i) const {
         return static_cast<const value_type*>(static_cast<const void*>(storage_))[i];
     }
@@ -1913,9 +1899,8 @@ class Sorter<Cfg>::Classifier {
                 static_cast<const void*>(sorted_storage_))[i];
     }
 
-    value_type* data() {
-        return static_cast<value_type*>(static_cast<void*>(storage_));
-    }
+    value_type* data()
+      { return static_cast<value_type*>(static_cast<void*>(storage_)); }
 
     /** Recursively builds the tree. */
     void build(const value_type* const left, const value_type* const right,
@@ -1953,13 +1938,12 @@ class Sorter<Cfg>::Classifier {
 };
 
 /** A single buffer block. */
-template <typename Cfg>
-class Sorter<Cfg>::Block {
+template <typename Cfg> class Sorter<Cfg>::Block {
     using iterator = typename Cfg::iterator;
     using diff_t = typename Cfg::difference_type;
     using value_type = typename Cfg::value_type;
 
- public:
+  public:
     static constexpr const bool kInitializedStorage =
             std::is_trivially_default_constructible<value_type>::value;
     static constexpr const bool kDestruct =
@@ -1986,62 +1970,65 @@ class Sorter<Cfg>::Block {
     }
 
     /** Reads a partial block from input. */
-    void readFrom(iterator src, const diff_t n) {
-        if (kInitializedStorage) {
-            std::move(src, src + n, data());
-        } else {
-            for (auto p = data(), end = p + n; p < end; ++p) {
-                IPS4OML_ASSUME_NOT(p == nullptr);
-                new (p) value_type(std::move(*src++));
-            }
-        }
-    }
+    void readFrom(iterator src, const diff_t n)
+      {
+      if (kInitializedStorage)
+        std::move(src, src + n, data());
+      else
+        for (auto p = data(), end = p + n; p < end; ++p)
+          {
+          IPS4OML_ASSUME_NOT(p == nullptr);
+          new (p) value_type(std::move(*src++));
+          }
+      }
 
     /** Resets a partial block. */
-    void reset(const diff_t n) {
-        if (kDestruct)
-            for (auto p = data(), end = p + n; p < end; ++p)
-                p->~value_type();
-    }
+    void reset(const diff_t n)
+      {
+      if (kDestruct)
+        for (auto p = data(), end = p + n; p < end; ++p)
+          p->~value_type();
+      }
 
     /** Writes a full block to other block. */
-    void writeTo(Block& block) {
-        if (kInitializedStorage) {
-            std::move(data(), data() + Cfg::kBlockSize, block.data());
-        } else {
-            for (auto src = data(), dst = block.data(), end = src + Cfg::kBlockSize;
-                 src < end; ++src, ++dst) {
-                IPS4OML_ASSUME_NOT(dst == nullptr);
-                new (dst) value_type(std::move(*src));
-            }
-        }
-        if (kDestruct)
-            for (auto p = data(), end = p + Cfg::kBlockSize; p < end; ++p)
-                p->~value_type();
-    }
+    void writeTo(Block& block)
+      {
+      if (kInitializedStorage)
+        std::move(data(), data() + Cfg::kBlockSize, block.data());
+      else
+        for (auto src = data(), dst = block.data(), end = src + Cfg::kBlockSize;
+                 src < end; ++src, ++dst)
+          {
+          IPS4OML_ASSUME_NOT(dst == nullptr);
+          new (dst) value_type(std::move(*src));
+          }
+      if (kDestruct)
+        for (auto p = data(), end = p + Cfg::kBlockSize; p < end; ++p)
+          p->~value_type();
+      }
 
     /** Writes a full block to input. */
-    void writeTo(iterator dest) {
-        std::move(data(), data() + Cfg::kBlockSize, std::move(dest));
-        if (kDestruct)
-            for (auto p = data(), end = p + Cfg::kBlockSize; p < end; ++p)
-                p->~value_type();
-    }
+    void writeTo(iterator dest)
+      {
+      std::move(data(), data() + Cfg::kBlockSize, std::move(dest));
+      if (kDestruct)
+        for (auto p = data(), end = p + Cfg::kBlockSize; p < end; ++p)
+          p->~value_type();
+      }
 
- private:
+  private:
     using storage_type = std::conditional_t<
             kInitializedStorage, value_type,
             std::aligned_storage_t<sizeof(value_type), alignof(value_type)>>;
     storage_type storage_[Cfg::kBlockSize];
-};
+  };
 
 /** Per-thread buffers for each bucket. */
-template <typename Cfg>
-class Sorter<Cfg>::Buffers {
+template <typename Cfg> class Sorter<Cfg>::Buffers {
     using diff_t = typename Cfg::difference_type;
     using value_type = typename Cfg::value_type;
 
- public:
+  public:
     Buffers(char* storage) : storage_(static_cast<Block*>(static_cast<void*>(storage))) {
         for (diff_t i = 0; i < Cfg::kMaxBuckets; ++i) {
             resetBuffer(i);
@@ -2050,9 +2037,8 @@ class Sorter<Cfg>::Buffers {
     }
 
     /** Checks if buffer is full. */
-    bool isFull(const int i) const {
-        return buffer_[i].ptr == buffer_[i].end;
-    }
+    bool isFull(const int i) const
+      { return buffer_[i].ptr == buffer_[i].end; }
 
     /** Pointer to buffer data. */
     value_type* data(const int i) {
@@ -2061,9 +2047,8 @@ class Sorter<Cfg>::Buffers {
     }
 
     /** Number of elements in buffer. */
-    diff_t size(const int i) const {
-        return Cfg::kBlockSize - (buffer_[i].end - buffer_[i].ptr);
-    }
+    diff_t size(const int i) const
+      { return Cfg::kBlockSize - (buffer_[i].end - buffer_[i].ptr); }
 
     /** Resets buffer. */
     void reset(const int i) {
@@ -2074,14 +2059,16 @@ class Sorter<Cfg>::Buffers {
     }
 
     /** Pushes new element to buffer. */
-    void push(const int i, value_type&& value) {
-        if (Block::kInitializedStorage) {
-            *buffer_[i].ptr++ = std::move(value);
-        } else {
-            IPS4OML_ASSUME_NOT(buffer_[i].ptr == nullptr);
-            new (buffer_[i].ptr++) value_type(std::move(value));
+    void push(const int i, value_type&& value)
+      {
+      if (Block::kInitializedStorage)
+        *buffer_[i].ptr++ = std::move(value);
+      else
+        {
+        IPS4OML_ASSUME_NOT(buffer_[i].ptr == nullptr);
+        new (buffer_[i].ptr++) value_type(std::move(value));
         }
-    }
+      }
 
     /** Flushes buffer to input. */
     void writeTo(const int i, typename Cfg::iterator dest) {
@@ -2094,7 +2081,7 @@ class Sorter<Cfg>::Buffers {
                 ptr->~value_type();
     }
 
- private:
+  private:
     struct Info {
         value_type* ptr;
         const value_type* end;
@@ -2114,10 +2101,10 @@ class Sorter<Cfg>::Buffers {
                   "Block must be trivially default constructible.");
     static_assert(std::is_trivially_destructible<Block>::value,
                   "Block must be trivially destructible.");
-};
+  };
 
-template <typename Cfg>
-class Sorter<Cfg>::BucketPointers {
+template <typename Cfg> class Sorter<Cfg>::BucketPointers
+  {
     using diff_t = typename Cfg::difference_type;
 
     class Uint128 {
@@ -2157,12 +2144,12 @@ class Sorter<Cfg>::BucketPointers {
             }
         }
 
-     private:
+      private:
         diff_t m_, l_;
         std::mutex mtx_;
     };
 
- public:
+  public:
     /** Sets write/read pointers. */
     void set(diff_t w, diff_t r) {
         ptr_.set(w, r);
@@ -2210,15 +2197,15 @@ class Sorter<Cfg>::BucketPointers {
         return num_reading_.load(std::memory_order_acquire) != 0;
     }
 
- private:
+  private:
     Uint128 ptr_;
     std::atomic_int num_reading_;
-};
+  };
 
 /** Aligned storage for use in buffers. */
-template <typename Cfg>
-class Sorter<Cfg>::BufferStorage : public AlignedPtr<void> {
- public:
+template <typename Cfg> class Sorter<Cfg>::BufferStorage : public AlignedPtr<void>
+  {
+  public:
     static constexpr const auto kPerThread =
             Cfg::kBlockSizeInBytes * Cfg::kMaxBuckets * (1 + Cfg::kAllowEqualBuckets);
 
@@ -2228,110 +2215,111 @@ class Sorter<Cfg>::BufferStorage : public AlignedPtr<void> {
         : AlignedPtr<void>(Cfg::kDataAlignment, num_threads * kPerThread) {}
 
     char* forThread(int id) { return this->get() + id * kPerThread; }
-};
+  };
 
 /** Data local to each thread. */
-template <typename Cfg>
-struct Sorter<Cfg>::LocalData {
-    using diff_t = typename Cfg::difference_type;
-    // Buffers
-    diff_t bucket_size[Cfg::kMaxBuckets];
-    Buffers buffers;
-    Block swap[2];
-    Block overflow;
+template <typename Cfg> struct Sorter<Cfg>::LocalData
+  {
+  using diff_t = typename Cfg::difference_type;
+  // Buffers
+  diff_t bucket_size[Cfg::kMaxBuckets];
+  Buffers buffers;
+  Block swap[2];
+  Block overflow;
 
-    PrivateQueue<Task> seq_task_queue;
+  PrivateQueue<Task> seq_task_queue;
 
-    // Bucket information
-    BucketPointers bucket_pointers[Cfg::kMaxBuckets];
+  // Bucket information
+  BucketPointers bucket_pointers[Cfg::kMaxBuckets];
 
-    // Classifier
-    Classifier classifier;
+  // Classifier
+  Classifier classifier;
 
-    // Information used during empty block movement
-    diff_t first_block;
-    diff_t first_empty_block;
+  // Information used during empty block movement
+  diff_t first_block;
+  diff_t first_empty_block;
 
-    // Random bit generator for sampling
-    // LCG using constants by Knuth (for 64 bit) or Numerical Recipes (for 32 bit)
-    std::linear_congruential_engine<
-            std::uintptr_t, Cfg::kIs64Bit ? 6364136223846793005u : 1664525u,
-            Cfg::kIs64Bit ? 1442695040888963407u : 1013904223u, 0u>
-            random_generator;
+  // Random bit generator for sampling
+  // LCG using constants by Knuth (for 64 bit) or Numerical Recipes (for 32 bit)
+  std::linear_congruential_engine<
+          std::uintptr_t, Cfg::kIs64Bit ? 6364136223846793005u : 1664525u,
+          Cfg::kIs64Bit ? 1442695040888963407u : 1013904223u, 0u>
+          random_generator;
 
-    LocalData(typename Cfg::less comp, char* buffer_storage)
-        : buffers(buffer_storage), classifier(std::move(comp)) {
-        std::random_device rdev;
-        std::ptrdiff_t seed = rdev();
-        if (Cfg::kIs64Bit) seed = (seed << (Cfg::kIs64Bit * 32)) | rdev();
-        random_generator.seed(seed);
-        reset();
+  LocalData(typename Cfg::less comp, char* buffer_storage)
+    : buffers(buffer_storage), classifier(std::move(comp))
+    {
+    std::random_device rdev;
+    std::ptrdiff_t seed = rdev();
+    if (Cfg::kIs64Bit) seed = (seed << (Cfg::kIs64Bit * 32)) | rdev();
+    random_generator.seed(seed);
+    reset();
     }
 
-    /** Resets local data after partitioning is done. */
-    void reset() {
-        classifier.reset();
-        std::fill_n(bucket_size, Cfg::kMaxBuckets, 0);
+  /** Resets local data after partitioning is done. */
+  void reset()
+    {
+    classifier.reset();
+    std::fill_n(bucket_size, Cfg::kMaxBuckets, 0);
     }
-};
+  };
 
 /** Data shared between all threads. */
-template <typename Cfg>
-struct Sorter<Cfg>::SharedData {
-    // Bucket information
-    typename Cfg::difference_type bucket_start[Cfg::kMaxBuckets + 1];
-    BucketPointers bucket_pointers[Cfg::kMaxBuckets];
-    Block* overflow;
-    int num_buckets;
-    bool use_equal_buckets;
+template <typename Cfg> struct Sorter<Cfg>::SharedData
+  {
+  // Bucket information
+  typename Cfg::difference_type bucket_start[Cfg::kMaxBuckets + 1];
+  BucketPointers bucket_pointers[Cfg::kMaxBuckets];
+  Block* overflow;
+  int num_buckets;
+  bool use_equal_buckets;
 
-    // Classifier for parallel partitioning
-    Classifier classifier;
+  // Classifier for parallel partitioning
+  Classifier classifier;
 
-    // Synchronisation support
-    typename Cfg::Sync sync;
+  // Synchronisation support
+  typename Cfg::Sync sync;
 
-    // Local thread data
-    std::vector<LocalData*> local;
+  // Local thread data
+  std::vector<LocalData*> local;
 
-    // Thread pools for bigtasks. One entry for each thread.
-    std::vector<std::shared_ptr<SubThreadPool>> thread_pools;
+  // Thread pools for bigtasks. One entry for each thread.
+  std::vector<std::shared_ptr<SubThreadPool>> thread_pools;
 
-    // Bigtasks. One entry per thread.
-    std::vector<BigTask> big_tasks;
+  // Bigtasks. One entry per thread.
+  std::vector<BigTask> big_tasks;
 
-    // Scheduler of small tasks.
-    Scheduler<Task> scheduler;
+  // Scheduler of small tasks.
+  Scheduler<Task> scheduler;
 
-    SharedData(typename Cfg::less comp, typename Cfg::Sync sync, int num_threads)
-        : classifier(std::move(comp))
-        , sync(std::forward<typename Cfg::Sync>(sync))
-        , local(num_threads)
-        , thread_pools(num_threads)
-        , big_tasks(num_threads)
-        , scheduler(num_threads)
+  SharedData(typename Cfg::less comp, typename Cfg::Sync sync, int num_threads)
+      : classifier(std::move(comp))
+      , sync(std::forward<typename Cfg::Sync>(sync))
+      , local(num_threads)
+      , thread_pools(num_threads)
+      , big_tasks(num_threads)
+      , scheduler(num_threads)
+    { reset(); }
+
+  /** Resets shared data after partitioning is done. */
+  void reset()
     {
-        reset();
+    classifier.reset();
+    std::fill_n(bucket_start, Cfg::kMaxBuckets + 1, 0);
+    overflow = nullptr;
+    scheduler.reset();
     }
-
-    /** Resets shared data after partitioning is done. */
-    void reset() {
-        classifier.reset();
-        std::fill_n(bucket_start, Cfg::kMaxBuckets + 1, 0);
-        overflow = nullptr;
-        scheduler.reset();
-    }
-};
+  };
 
 }  // namespace detail
 
 /** Reusable sequential sorter. */
-template <typename Cfg>
-class SequentialSorter {
-    using Sorter = detail::Sorter<Cfg>;
-    using iterator = typename Cfg::iterator;
+template <typename Cfg> class SequentialSorter
+  {
+  using Sorter = detail::Sorter<Cfg>;
+  using iterator = typename Cfg::iterator;
 
- public:
+  public:
     explicit SequentialSorter(bool check_sorted, typename Cfg::less comp)
         : check_sorted_(check_sorted)
         , buffer_storage_(1)
@@ -2352,11 +2340,11 @@ class SequentialSorter {
         Sorter(local_ptr_.get()).sequential(std::move(begin), std::move(end));
     }
 
- private:
+  private:
     const bool check_sorted_;
     typename Sorter::BufferStorage buffer_storage_;
     detail::AlignedPtr<typename Sorter::LocalData> local_ptr_;
-};
+  };
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
 
