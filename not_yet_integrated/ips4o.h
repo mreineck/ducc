@@ -54,6 +54,7 @@ namespace ducc0 {
 namespace detail_sort {
 namespace ips4o {
 namespace detail {
+
 template<typename T> class concurrent_queue
   {
   private:
@@ -91,10 +92,10 @@ template <typename T> class PrivateQueue
       m_v.reserve(init_size);
       }
 
-    template <class Iterator> void push(Iterator begin, Iterator end)
+    template <typename Iterator> void push(Iterator begin, Iterator end)
       { m_v.insert(m_v.end(), begin, end); }
 
-    template <class T1> void push(const T1&& e)
+    template <typename T1> void push(const T1&& e)
       { m_v.emplace_back(std::forward(e)); }
 
     template <typename... Args> void emplace(Args... args)
@@ -135,7 +136,7 @@ template <typename T> class PrivateQueue
     size_t m_off;
   };
 
-template <class Job> class Scheduler {
+template <typename Job> class Scheduler {
   public:
     Scheduler(size_t num_threads) : m_num_idle_threads(0), m_num_threads(num_threads) {}
 
@@ -155,8 +156,9 @@ template <class Job> class Scheduler {
       // Signal idle.
       m_num_idle_threads.fetch_add(1, std::memory_order_relaxed);
 
-      while (m_num_idle_threads.load(std::memory_order_relaxed) != m_num_threads) {
-        if (!m_glob_queue.empty()) {
+      while (m_num_idle_threads.load(std::memory_order_relaxed) != m_num_threads)
+        if (!m_glob_queue.empty())
+          {
           m_num_idle_threads.fetch_sub(1, std::memory_order_relaxed);
 
           const bool succ = m_glob_queue.try_pop(j);
@@ -164,17 +166,16 @@ template <class Job> class Scheduler {
 
           m_num_idle_threads.fetch_add(1, std::memory_order_relaxed);
           }
-        }
 
       return false;
       }
 
-    void offerJob(PrivateQueue<Job>& my_queue) {
-        if (my_queue.size() > 1 && m_num_idle_threads.load(std::memory_order_relaxed) > 0
-            && m_glob_queue.empty()) {
-            addJob(my_queue.popFront());
-        }
-    }
+    void offerJob(PrivateQueue<Job>& my_queue)
+      {
+      if (my_queue.size() > 1 && m_num_idle_threads.load(std::memory_order_relaxed) > 0
+        && m_glob_queue.empty())
+        addJob(my_queue.popFront());
+      }
 
     void addJob(const Job& j) { m_glob_queue.push(j); }
 
@@ -192,10 +193,8 @@ inline constexpr unsigned long log2(unsigned long n)
   {
   return (std::numeric_limits<unsigned long>::digits - 1 - __builtin_clzl(n));
   }
-/**
- * A subtask in the parallel algorithm.
- * Uses indices instead of iterators to avoid unnecessary template instantiations.
- */
+/** A subtask in the parallel algorithm.
+    Uses indices instead of iterators to avoid unnecessary template instantiations. */
 struct Task
   {
   Task() {}
@@ -205,74 +204,69 @@ struct Task
   std::ptrdiff_t end;
   };
 
-/**
- * Thread barrier, also supports single() execution.
- */
+/** Thread barrier, also supports single() execution. */
 class Barrier {
   public:
     explicit Barrier(int num_threads)
         : init_count_(num_threads), hit_count_(num_threads), flag_(false) {}
 
-    void barrier() {
-    std::unique_lock<std::mutex> lk(mutex_);
-    if (--hit_count_ == 0) {
+    void barrier()
+      {
+      std::unique_lock<std::mutex> lk(mutex_);
+      if (--hit_count_ == 0)
         notify_all(lk);
-    } else
+      else
         cv_.wait(lk, [this, f = flag_] { return f != flag_; });
-}
+      }
 
-    template <class F>
-    void single(F&& func) {
-    std::unique_lock<std::mutex> lk(mutex_);
-    if (hit_count_-- == init_count_) {
+    template <typename F> void single(F&& func)
+      {
+      std::unique_lock<std::mutex> lk(mutex_);
+      if (hit_count_-- == init_count_)
+        {
         lk.unlock();
         func();
         lk.lock();
         --hit_count_;
-    }
-    if (hit_count_ < 0)
+        }
+      if (hit_count_ < 0)
         notify_all(lk);
-    else
+      else
         cv_.wait(lk, [this, f = flag_] { return f != flag_; });
-}
+      }
 
-    /**
-     * Reset the number of threads.
-     * No thread must currently be waiting at this barrier.
-     */
-    void setNumThreads(int num_threads) {
-        hit_count_ = init_count_ = num_threads;
-    }
+    /** Reset the number of threads.
+        No thread must currently be waiting at this barrier. */
+    void setNumThreads(int num_threads)
+      { hit_count_ = init_count_ = num_threads; }
 
- private:
+  private:
     std::mutex mutex_;
     std::condition_variable cv_;
     int init_count_;
     int hit_count_;
     bool flag_;
 
-    void notify_all(std::unique_lock<std::mutex>& lk) {
-    hit_count_ = init_count_;
-    flag_ = !flag_;
-    lk.unlock();
-    cv_.notify_all();
-}
-};
+    void notify_all(std::unique_lock<std::mutex>& lk)
+      {
+      hit_count_ = init_count_;
+      flag_ = !flag_;
+      lk.unlock();
+      cv_.notify_all();
+      }
+  };
 
-/**
- * General synchronization support.
- */
-class Sync : public Barrier {
- public:
+/** General synchronization support. */
+class Sync: public Barrier
+  {
+  public:
     explicit Sync(int num_threads) : Barrier(num_threads) {}
-};
+  };
 
 //base case
 
-/**
- * Insertion sort.
- */
-template <class It, class Comp>
+/** Insertion sort. */
+template <typename It, typename Comp>
 void insertionSort(const It begin, const It end, Comp comp) {
   IPS4OML_ASSUME_NOT(begin >= end);
 
@@ -292,16 +286,14 @@ void insertionSort(const It begin, const It end, Comp comp) {
   }
 }
 
-/**
- * Wrapper for base case sorter, for easier swapping.
- */
-template <class It, class Comp>
+/** Wrapper for base case sorter, for easier swapping. */
+template <typename It, typename Comp>
 inline void baseCaseSort(It begin, It end, Comp&& comp) {
   if (begin == end) return;
   detail::insertionSort(std::move(begin), std::move(end), std::forward<Comp>(comp));
 }
 
-template <class It, class Comp, class ThreadPool>
+template <typename It, typename Comp, typename ThreadPool>
 inline bool isSorted(It begin, It end, Comp&& comp, ThreadPool& thread_pool) {
     // Do nothing if input is already sorted.
     std::vector<bool> is_sorted(thread_pool.numThreads());
@@ -318,7 +310,7 @@ inline bool isSorted(It begin, It end, Comp&& comp, ThreadPool& thread_pool) {
     return std::all_of(is_sorted.begin(), is_sorted.end(), [](bool res) { return res; });
 }
 
-template <class It, class Comp>
+template <typename It, typename Comp>
 inline bool sortSimpleCases(It begin, It end, Comp&& comp) {
   if (begin == end) return true;
 
@@ -337,10 +329,8 @@ inline bool sortSimpleCases(It begin, It end, Comp&& comp) {
   return false;
 }
 
-/**
- * Selects a random sample in-place.
- */
-template <class It, class RandomGen>
+/** Selects a random sample in-place. */
+template <typename It, typename RandomGen>
 void selectSample(It begin, const It end,
                   typename std::iterator_traits<It>::difference_type num_samples,
                   RandomGen&& gen) {
@@ -359,9 +349,7 @@ void selectSample(It begin, const It end,
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
 
-/**
- * A thread pool using std::thread.
- */
+/** A thread pool using std::thread. */
 class StdThreadPool {
  public:
     using Sync = detail::Sync;
@@ -369,7 +357,7 @@ class StdThreadPool {
     explicit StdThreadPool(int num_threads = StdThreadPool::maxNumThreads())
         : impl_(new Impl(num_threads)) {}
 
-    template <class F>
+    template <typename F>
     void operator()(F&& func, int num_threads = std::numeric_limits<int>::max()) {
         num_threads = std::min(num_threads, numThreads());
         if (num_threads > 1)
@@ -410,7 +398,7 @@ class StdThreadPool {
               t.join();
       }
 
-        template <class F>
+        template <typename F>
         void run(F&& func, const int num_threads) {
           func_ = func;
           num_threads_ = num_threads;
@@ -437,9 +425,7 @@ class StdThreadPool {
     std::unique_ptr<Impl> impl_;
 };
 
-/**
- * A thread pool to which external threads can join.
- */
+/** A thread pool to which external threads can join. */
 class ThreadJoiningThreadPool {
  public:
     using Sync = detail::Sync;
@@ -452,7 +438,7 @@ class ThreadJoiningThreadPool {
 
     void release_threads() { impl_->release_threads(); }
 
-    template <class F>
+    template <typename F>
     void operator()(F&& func, int num_threads = std::numeric_limits<int>::max()) {
         num_threads = std::min(num_threads, numThreads());
         if (num_threads > 1)
@@ -478,7 +464,7 @@ class ThreadJoiningThreadPool {
         ~Impl()
           { assert(done_ == true); }
 
-        template <class F>
+        template <typename F>
         inline void run(F&& func, const int num_threads)
 {
     func_ = func;
@@ -566,7 +552,7 @@ template <bool AllowEqualBuckets_     = IPS4OML_ALLOW_EQUAL_BUCKETS
         , std::ptrdiff_t BaseCase_    = IPS4OML_BASE_CASE_SIZE
         , std::ptrdiff_t BaseCaseM_   = IPS4OML_BASE_CASE_MULTIPLIER
         , std::ptrdiff_t BlockSize_   = IPS4OML_BLOCK_SIZE
-        , class BucketT_              = IPS4OML_BUCKET_TYPE
+        , typename BucketT_              = IPS4OML_BUCKET_TYPE
         , std::size_t DataAlign_      = IPS4OML_DATA_ALIGNMENT
         , std::ptrdiff_t EqualBuckTh_ = IPS4OML_EQUAL_BUCKETS_THRESHOLD
         , int LogBuckets_             = IPS4OML_LOG_BUCKETS
@@ -575,55 +561,33 @@ template <bool AllowEqualBuckets_     = IPS4OML_ALLOW_EQUAL_BUCKETS
         , int UnrollClass_            = IPS4OML_UNROLL_CLASSIFIER
         >
 struct Config {
-    /**
-     * The type used for bucket indices in the classifier.
-     */
+    /** The type used for bucket indices in the classifier. */
     using bucket_type = BucketT_;
 
-    /**
-     * Whether we are on 64 bit or 32 bit.
-     */
+    /** Whether we are on 64 bit or 32 bit. */
     static constexpr const bool kIs64Bit = sizeof(std::uintptr_t) == 8;
     static_assert(kIs64Bit || sizeof(std::uintptr_t) == 4,
                   "Architecture must be 32 or 64 bit");
 
-    /**
-     * Whether equal buckets can be used.
-     */
+    /** Whether equal buckets can be used. */
     static constexpr const bool kAllowEqualBuckets = AllowEqualBuckets_;
-    /**
-     * Desired base case size.
-     */
+    /** Desired base case size. */
     static constexpr const std::ptrdiff_t kBaseCaseSize = BaseCase_;
-    /**
-     * Multiplier for base case threshold.
-     */
+    /** Multiplier for base case threshold. */
     static constexpr const int kBaseCaseMultiplier = BaseCaseM_;
-    /**
-     * Number of bytes in one block.
-     */
+    /** Number of bytes in one block. */
     static constexpr const std::ptrdiff_t kBlockSizeInBytes = BlockSize_;
-    /**
-     * Alignment for shared and thread-local data.
-     */
+    /** Alignment for shared and thread-local data. */
     static constexpr const std::size_t kDataAlignment = DataAlign_;
-    /**
-     * Number of splitters that must be equal before equality buckets are enabled.
-     */
+    /** Number of splitters that must be equal before equality buckets are enabled. */
     static constexpr const std::ptrdiff_t kEqualBucketsThreshold = EqualBuckTh_;
-    /**
-     * Logarithm of the maximum number of buckets (excluding equality buckets).
-     */
+    /** Logarithm of the maximum number of buckets (excluding equality buckets). */
     static constexpr const int kLogBuckets = LogBuckets_;
-    /**
-     * Minimum number of blocks per thread for which parallelism is used.
-     */
+    /** Minimum number of blocks per thread for which parallelism is used. */
     static constexpr const std::ptrdiff_t kMinParallelBlocksPerThread = MinParBlks_;
     static_assert(kMinParallelBlocksPerThread > 0,
                   "Min. blocks per thread must be at least 1.");
-    /**
-     * How many times the classification loop is unrolled.
-     */
+    /** How many times the classification loop is unrolled. */
     static constexpr const int kUnrollClassifier = UnrollClass_;
 
     static constexpr const std::ptrdiff_t kSingleLevelThreshold =
@@ -631,17 +595,13 @@ struct Config {
     static constexpr const std::ptrdiff_t kTwoLevelThreshold =
             kSingleLevelThreshold * (1ul << kLogBuckets);
 
-    /**
-     * The oversampling factor to be used for input of size n.
-     */
+    /** The oversampling factor to be used for input of size n. */
     static constexpr double oversamplingFactor(std::ptrdiff_t n) {
         const double f = OversampleF_ / 100.0 * detail::log2(n);
         return f < 1.0 ? 1.0 : f;
     }
 
-    /**
-    * Computes the logarithm of the number of buckets to use for input size n.
-    */
+    /** Computes the logarithm of the number of buckets to use for input size n. */
     static int logBuckets(const std::ptrdiff_t n) {
         if (n <= kSingleLevelThreshold) {
             // Only one more level until  the base case, reduce the number of buckets
@@ -658,7 +618,7 @@ struct Config {
     /**
      * Returns the number of threads that should be used for the given input range.
      */
-    template <class It>
+    template <typename It>
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
     static constexpr int numThreadsFor(const It& begin, const It& end, int max_threads) {
         const std::ptrdiff_t blocks =
@@ -671,58 +631,42 @@ struct Config {
     }
 };
 
-template <class It_, class Comp_, class Cfg = Config<>
+template <typename It_, typename Comp_, typename Cfg = Config<>
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
-          , class ThreadPool_ = DefaultThreadPool
+          , typename ThreadPool_ = DefaultThreadPool
 #endif
         >
 struct ExtendedConfig : public Cfg {
-    /**
-     * Base config containing user-specified parameters.
-     */
+    /** Base config containing user-specified parameters. */
     using BaseConfig = Cfg;
-    /**
-     * The iterator type for the input data.
-     */
+    /** The iterator type for the input data. */
     using iterator = It_;
-    /**
-     * The difference type for the iterator.
-     */
+    /** The difference type for the iterator. */
     using difference_type = typename std::iterator_traits<iterator>::difference_type;
-    /**
-     * The value type of the input data.
-     */
+    /** The value type of the input data. */
     using value_type = typename std::iterator_traits<iterator>::value_type;
-    /**
-     * The comparison operator.
-     */
+    /** The comparison operator. */
     using less = Comp_;
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
 
-    /**
-     * Thread pool for parallel algorithm.
-     */
+    /** Thread pool for parallel algorithm. */
     using ThreadPool = ThreadPool_;
 
     using SubThreadPool = ThreadJoiningThreadPool;
 
-    /**
-     * Synchronization support for parallel algorithm.
-     */
+    /** Synchronization support for parallel algorithm. */
     using Sync = decltype(std::declval<ThreadPool&>().sync());
 
 #else
 
     struct Sync {
         constexpr void barrier() const {}
-        template <class F>
+        template <typename F>
         constexpr void single(F&&) const {}
     };
 
-    /**
-     * Dummy thread pool.
-     */
+    /** Dummy thread pool. */
     class SubThreadPool {
      public:
         explicit SubThreadPool(int) {}
@@ -731,7 +675,7 @@ struct ExtendedConfig : public Cfg {
 
         void release_threads() {}
 
-        template <class F>
+        template <typename F>
         void operator()(F&&, int) {}
 
         Sync& sync() { return sync_; }
@@ -744,15 +688,11 @@ struct ExtendedConfig : public Cfg {
 
 #endif
 
-    /**
-     * Maximum number of buckets (including equality buckets).
-     */
+    /** Maximum number of buckets (including equality buckets). */
     static constexpr const int kMaxBuckets =
             1ul << (Cfg::kLogBuckets + Cfg::kAllowEqualBuckets);
 
-    /**
-     * Number of elements in one block.
-     */
+    /** Number of elements in one block. */
     static constexpr const difference_type kBlockSize =
             1ul << (detail::log2(
                     Cfg::kBlockSizeInBytes < sizeof(value_type)
@@ -777,9 +717,7 @@ struct ExtendedConfig : public Cfg {
     static_assert(Cfg::kUnrollClassifier <= kBaseCaseSize,
                   "Base case size must be larger than unroll factor.");
 
-    /**
-     * Aligns an offset to the next block boundary, upwards.
-     */
+    /** Aligns an offset to the next block boundary, upwards. */
     static constexpr difference_type alignToNextBlock(difference_type p) {
         return (p + kBlockSize - 1) & ~(kBlockSize - 1);
     }
@@ -799,9 +737,7 @@ struct ExtendedConfig : public Cfg {
 
 namespace detail {
 
-/**
- * Data describing a parallel task and the corresponding threads.
- */
+/** Data describing a parallel task and the corresponding threads. */
 struct BigTask {
     BigTask() : has_task{false} {}
     // TODO or Cfg::iterator???
@@ -814,25 +750,20 @@ struct BigTask {
     // Indicates whether this is a task or not
     bool has_task;
 };
-/**
- * Aligns a pointer.
- */
-template <class T>
-static T* alignPointer(T* ptr, std::size_t alignment) {
-    uintptr_t v = reinterpret_cast<std::uintptr_t>(ptr);
-    v = (v - 1 + alignment) & ~(alignment - 1);
-    return reinterpret_cast<T*>(v);
-}
+/** Aligns a pointer. */
+template <typename T> static T* alignPointer(T* ptr, std::size_t alignment) {
+  uintptr_t v = reinterpret_cast<std::uintptr_t>(ptr);
+  v = (v - 1 + alignment) & ~(alignment - 1);
+  return reinterpret_cast<T*>(v);
+  }
 
-/**
- * Constructs an object at the specified alignment.
- */
-template <class T>
-class AlignedPtr {
- public:
+/** Constructs an object at the specified alignment. */
+template <typename T> class AlignedPtr
+  {
+  public:
     AlignedPtr() {}
 
-    template <class... Args>
+    template <typename... Args>
     explicit AlignedPtr(std::size_t alignment, Args&&... args)
         : alloc_(new char[sizeof(T) + alignment])
         , value_(new (alignPointer(alloc_, alignment)) T(std::forward<Args>(args)...)) {}
@@ -840,9 +771,8 @@ class AlignedPtr {
     AlignedPtr(const AlignedPtr&) = delete;
     AlignedPtr& operator=(const AlignedPtr&) = delete;
 
-    AlignedPtr(AlignedPtr&& rhs) : alloc_(rhs.alloc_), value_(rhs.value_) {
-        rhs.alloc_ = nullptr;
-    }
+    AlignedPtr(AlignedPtr&& rhs) : alloc_(rhs.alloc_), value_(rhs.value_)
+      { rhs.alloc_ = nullptr; }
     AlignedPtr& operator=(AlignedPtr&& rhs) {
         std::swap(alloc_, rhs.alloc_);
         std::swap(value_, rhs.value_);
@@ -858,51 +788,45 @@ class AlignedPtr {
 
     T& get() { return *value_; }
 
- private:
+  private:
     char* alloc_ = nullptr;
     T* value_;
-};
+  };
 
-/**
- * Provides aligned storage without constructing an object.
- */
-template <>
-class AlignedPtr<void> {
- public:
+/** Provides aligned storage without constructing an object. */
+template <> class AlignedPtr<void>
+  {
+  public:
     AlignedPtr() {}
 
-    template <class... Args>
+    template <typename... Args>
     explicit AlignedPtr(std::size_t alignment, std::size_t size)
-        : alloc_(new char[size + alignment]), value_(alignPointer(alloc_, alignment)) {}
+      : alloc_(new char[size + alignment]), value_(alignPointer(alloc_, alignment)) {}
 
     AlignedPtr(const AlignedPtr&) = delete;
     AlignedPtr& operator=(const AlignedPtr&) = delete;
 
-    AlignedPtr(AlignedPtr&& rhs) : alloc_(rhs.alloc_), value_(rhs.value_) {
-        rhs.alloc_ = nullptr;
-    }
-    AlignedPtr& operator=(AlignedPtr&& rhs) {
-        std::swap(alloc_, rhs.alloc_);
-        std::swap(value_, rhs.value_);
-        return *this;
-    }
+    AlignedPtr(AlignedPtr&& rhs) : alloc_(rhs.alloc_), value_(rhs.value_)
+      { rhs.alloc_ = nullptr; }
+    AlignedPtr& operator=(AlignedPtr&& rhs)
+      {
+      std::swap(alloc_, rhs.alloc_);
+      std::swap(value_, rhs.value_);
+      return *this;
+      }
 
-    ~AlignedPtr() {
-        if (alloc_) {
-            delete[] alloc_;
-        }
-    }
+    ~AlignedPtr()
+      { if (alloc_) delete[] alloc_; }
 
     char* get() { return value_; }
 
- private:
+  private:
     char* alloc_ = nullptr;
     char* value_;
-};
+  };
 
-template <class Cfg>
-class Sorter {
- public:
+template <typename Cfg> class Sorter {
+  public:
     using iterator = typename Cfg::iterator;
     using diff_t = typename Cfg::difference_type;
     using value_type = typename Cfg::value_type;
@@ -1691,7 +1615,6 @@ class Sorter {
     return {this->num_buckets_, use_equal_buckets};
 }
 
-
     void processSmallTasks(iterator begin)
 {
     auto& scheduler = shared_->scheduler;
@@ -1729,7 +1652,6 @@ class Sorter {
     }
 }
 
-
     void processBigTaskPrimary(const iterator begin, const diff_t stripe, const int id,
                                BufferStorage& buffer_storage,
                                std::vector<std::shared_ptr<SubThreadPool>>& tp_trash)
@@ -1741,7 +1663,11 @@ class Sorter {
 
     using Sorter =
             Sorter<ExtendedConfig<iterator, decltype(shared_->classifier.getComparator()),
-                                  Config<>, SubThreadPool>>;
+                                  Config<>
+#if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
+                                , SubThreadPool
+#endif
+>>;
 
     // Create shared data.
     detail::AlignedPtr<typename Sorter::SharedData> partial_shared_ptr(
@@ -1802,7 +1728,6 @@ class Sorter {
 
     partial_thread_pool->join(task.task_thread_id);
 }
-
 
     void queueTasks(const diff_t stripe, const int id, const int task_num_threads,
                     const diff_t parent_task_size, const diff_t offset,
@@ -1867,10 +1792,8 @@ class Sorter {
 };
 
 
-/**
- * Branch-free classifier.
- */
-template <class Cfg>
+/** Branch-free classifier. */
+template <typename Cfg>
 class Sorter<Cfg>::Classifier {
     using iterator = typename Cfg::iterator;
     using value_type = typename Cfg::value_type;
@@ -1884,28 +1807,20 @@ class Sorter<Cfg>::Classifier {
         if (log_buckets_) cleanup();
     }
 
-    /**
-     * Calls destructors on splitter elements.
-     */
+    /** Calls destructors on splitter elements. */
     void reset() {
         if (log_buckets_) cleanup();
     }
 
-    /**
-     * The sorted array of splitters, to be filled externally.
-     */
+    /** The sorted array of splitters, to be filled externally. */
     value_type* getSortedSplitters() {
         return static_cast<value_type*>(static_cast<void*>(sorted_storage_));
     }
 
-    /**
-     * The comparison operator.
-     */
+    /** The comparison operator. */
     less getComparator() const { return comp_; }
 
-    /**
-     * Builds the tree from the sorted splitters.
-     */
+    /** Builds the tree from the sorted splitters. */
     void build(int log_buckets) {
         log_buckets_ = log_buckets;
         num_buckets_ = 1 << log_buckets;
@@ -1916,9 +1831,7 @@ class Sorter<Cfg>::Classifier {
         build(getSortedSplitters(), getSortedSplitters() + num_splitters, 1);
     }
 
-    /**
-     * Classifies a single element.
-     */
+    /** Classifies a single element. */
     template <bool kEqualBuckets>
     bucket_type classify(const value_type& value) const {
         const int log_buckets = log_buckets_;
@@ -1934,19 +1847,15 @@ class Sorter<Cfg>::Classifier {
         return b - (kEqualBuckets ? 2 * num_buckets : num_buckets);
     }
 
-    /**
-     * Classifies all elements using a callback.
-     */
-    template <bool kEqualBuckets, class Yield> 
+    /** Classifies all elements using a callback. */
+    template <bool kEqualBuckets, typename Yield> 
     void classify(iterator begin, iterator end, Yield&& yield) const {
       classifySwitch<kEqualBuckets>(begin, end, std::forward<Yield>(yield),
 	std::make_integer_sequence<int, Cfg::kLogBuckets + 1>{});
     }
 
-    /**
-     * Classifies all elements using a callback.
-     */
-  template <bool kEqualBuckets, class Yield, int...Args>
+    /** Classifies all elements using a callback. */
+  template <bool kEqualBuckets, typename Yield, int...Args>
   void classifySwitch(iterator begin, iterator end, Yield&& yield,
 		      std::integer_sequence<int, Args...>) const {
     IPS4OML_ASSUME_NOT(log_buckets_ <= 0 && log_buckets_ >= static_cast<int>(sizeof...(Args)));
@@ -1955,10 +1864,8 @@ class Sorter<Cfg>::Classifier {
      || ...);
     }
 
-    /**
-     * Classifies all elements using a callback.
-     */
-    template <bool kEqualBuckets, int kLogBuckets, class Yield>
+    /** Classifies all elements using a callback. */
+    template <bool kEqualBuckets, int kLogBuckets, typename Yield>
     bool classifyUnrolled(iterator begin, const iterator end, Yield&& yield) const {
 
         constexpr const bucket_type kNumBuckets = 1l << (kLogBuckets + kEqualBuckets);
@@ -2010,9 +1917,7 @@ class Sorter<Cfg>::Classifier {
         return static_cast<value_type*>(static_cast<void*>(storage_));
     }
 
-    /**
-     * Recursively builds the tree.
-     */
+    /** Recursively builds the tree. */
     void build(const value_type* const left, const value_type* const right,
                const bucket_type pos) {
         const auto mid = left + (right - left) / 2;
@@ -2024,9 +1929,7 @@ class Sorter<Cfg>::Classifier {
         }
     }
 
-    /**
-     * Destructs splitters.
-     */
+    /** Destructs splitters. */
     void cleanup() {
         auto p = data() + 1;
         auto q = getSortedSplitters();
@@ -2049,10 +1952,8 @@ class Sorter<Cfg>::Classifier {
     less comp_;
 };
 
-/**
- * A single buffer block.
- */
-template <class Cfg>
+/** A single buffer block. */
+template <typename Cfg>
 class Sorter<Cfg>::Block {
     using iterator = typename Cfg::iterator;
     using diff_t = typename Cfg::difference_type;
@@ -2064,21 +1965,15 @@ class Sorter<Cfg>::Block {
     static constexpr const bool kDestruct =
             !kInitializedStorage && !std::is_trivially_destructible<value_type>::value;
 
-    /**
-     * Pointer to data.
-     */
+    /** Pointer to data. */
     value_type* data() {
         return static_cast<value_type*>(static_cast<void*>(storage_));
     }
 
-    /**
-     * First element.
-     */
+    /** First element. */
     const value_type& head() { return *data(); }
 
-    /**
-     * Reads a full block from input.
-     */
+    /** Reads a full block from input. */
     void readFrom(iterator src) {
         if (kInitializedStorage) {
             std::move(src, src + Cfg::kBlockSize, data());
@@ -2090,9 +1985,7 @@ class Sorter<Cfg>::Block {
         }
     }
 
-    /**
-     * Reads a partial block from input.
-     */
+    /** Reads a partial block from input. */
     void readFrom(iterator src, const diff_t n) {
         if (kInitializedStorage) {
             std::move(src, src + n, data());
@@ -2104,18 +1997,14 @@ class Sorter<Cfg>::Block {
         }
     }
 
-    /**
-     * Resets a partial block.
-     */
+    /** Resets a partial block. */
     void reset(const diff_t n) {
         if (kDestruct)
             for (auto p = data(), end = p + n; p < end; ++p)
                 p->~value_type();
     }
 
-    /**
-     * Writes a full block to other block.
-     */
+    /** Writes a full block to other block. */
     void writeTo(Block& block) {
         if (kInitializedStorage) {
             std::move(data(), data() + Cfg::kBlockSize, block.data());
@@ -2131,9 +2020,7 @@ class Sorter<Cfg>::Block {
                 p->~value_type();
     }
 
-    /**
-     * Writes a full block to input.
-     */
+    /** Writes a full block to input. */
     void writeTo(iterator dest) {
         std::move(data(), data() + Cfg::kBlockSize, std::move(dest));
         if (kDestruct)
@@ -2148,10 +2035,8 @@ class Sorter<Cfg>::Block {
     storage_type storage_[Cfg::kBlockSize];
 };
 
-/**
- * Per-thread buffers for each bucket.
- */
-template <class Cfg>
+/** Per-thread buffers for each bucket. */
+template <typename Cfg>
 class Sorter<Cfg>::Buffers {
     using diff_t = typename Cfg::difference_type;
     using value_type = typename Cfg::value_type;
@@ -2164,31 +2049,23 @@ class Sorter<Cfg>::Buffers {
         }
     }
 
-    /**
-     * Checks if buffer is full.
-     */
+    /** Checks if buffer is full. */
     bool isFull(const int i) const {
         return buffer_[i].ptr == buffer_[i].end;
     }
 
-    /**
-     * Pointer to buffer data.
-     */
+    /** Pointer to buffer data. */
     value_type* data(const int i) {
         return static_cast<value_type*>(static_cast<void*>(storage_))
                + i * Cfg::kBlockSize;
     }
 
-    /**
-     * Number of elements in buffer.
-     */
+    /** Number of elements in buffer. */
     diff_t size(const int i) const {
         return Cfg::kBlockSize - (buffer_[i].end - buffer_[i].ptr);
     }
 
-    /**
-     * Resets buffer.
-     */
+    /** Resets buffer. */
     void reset(const int i) {
         if (Block::kDestruct)
             for (auto p = data(i), end = p + size(i); p < end; ++p)
@@ -2196,9 +2073,7 @@ class Sorter<Cfg>::Buffers {
         resetBuffer(i);
     }
 
-    /**
-     * Pushes new element to buffer.
-     */
+    /** Pushes new element to buffer. */
     void push(const int i, value_type&& value) {
         if (Block::kInitializedStorage) {
             *buffer_[i].ptr++ = std::move(value);
@@ -2208,9 +2083,7 @@ class Sorter<Cfg>::Buffers {
         }
     }
 
-    /**
-     * Flushes buffer to input.
-     */
+    /** Flushes buffer to input. */
     void writeTo(const int i, typename Cfg::iterator dest) {
         resetBuffer(i);
         auto ptr = buffer_[i].ptr;
@@ -2243,7 +2116,7 @@ class Sorter<Cfg>::Buffers {
                   "Block must be trivially destructible.");
 };
 
-template <class Cfg>
+template <typename Cfg>
 class Sorter<Cfg>::BucketPointers {
     using diff_t = typename Cfg::difference_type;
 
@@ -2290,24 +2163,18 @@ class Sorter<Cfg>::BucketPointers {
     };
 
  public:
-    /**
-     * Sets write/read pointers.
-     */
+    /** Sets write/read pointers. */
     void set(diff_t w, diff_t r) {
         ptr_.set(w, r);
         num_reading_.store(0, std::memory_order_relaxed);
     }
 
-    /**
-     * Gets the write pointer.
-     */
+    /** Gets the write pointer. */
     diff_t getWrite() const {
         return ptr_.getLeastSignificant();
     }
 
-    /**
-     * Gets write/read pointers and increases the write pointer.
-     */
+    /** Gets write/read pointers and increases the write pointer. */
     template <bool kAtomic>
     std::pair<diff_t, diff_t> incWrite() {
         return ptr_.template fetchAddLeastSignificant<kAtomic>(Cfg::kBlockSize);
@@ -2331,17 +2198,13 @@ class Sorter<Cfg>::BucketPointers {
         }
     }
 
-    /**
-     * Decreases the read counter.
-     */
+    /** Decreases the read counter. */
     void stopRead() {
         // Synchronizes with threads wanting to write to this bucket
         num_reading_.fetch_sub(1, std::memory_order_release);
     }
 
-    /**
-     * Returns true if any thread is currently reading from here.
-     */
+    /** Returns true if any thread is currently reading from here. */
     bool isReading() {
         // Synchronizes with threads currently reading from this bucket
         return num_reading_.load(std::memory_order_acquire) != 0;
@@ -2352,10 +2215,8 @@ class Sorter<Cfg>::BucketPointers {
     std::atomic_int num_reading_;
 };
 
-/**
- * Aligned storage for use in buffers.
- */
-template <class Cfg>
+/** Aligned storage for use in buffers. */
+template <typename Cfg>
 class Sorter<Cfg>::BufferStorage : public AlignedPtr<void> {
  public:
     static constexpr const auto kPerThread =
@@ -2369,10 +2230,8 @@ class Sorter<Cfg>::BufferStorage : public AlignedPtr<void> {
     char* forThread(int id) { return this->get() + id * kPerThread; }
 };
 
-/**
- * Data local to each thread.
- */
-template <class Cfg>
+/** Data local to each thread. */
+template <typename Cfg>
 struct Sorter<Cfg>::LocalData {
     using diff_t = typename Cfg::difference_type;
     // Buffers
@@ -2409,19 +2268,15 @@ struct Sorter<Cfg>::LocalData {
         reset();
     }
 
-    /**
-     * Resets local data after partitioning is done.
-     */
+    /** Resets local data after partitioning is done. */
     void reset() {
         classifier.reset();
         std::fill_n(bucket_size, Cfg::kMaxBuckets, 0);
     }
 };
 
-/**
- * Data shared between all threads.
- */
-template <class Cfg>
+/** Data shared between all threads. */
+template <typename Cfg>
 struct Sorter<Cfg>::SharedData {
     // Bucket information
     typename Cfg::difference_type bucket_start[Cfg::kMaxBuckets + 1];
@@ -2459,9 +2314,7 @@ struct Sorter<Cfg>::SharedData {
         reset();
     }
 
-    /**
-     * Resets shared data after partitioning is done.
-     */
+    /** Resets shared data after partitioning is done. */
     void reset() {
         classifier.reset();
         std::fill_n(bucket_start, Cfg::kMaxBuckets + 1, 0);
@@ -2472,10 +2325,8 @@ struct Sorter<Cfg>::SharedData {
 
 }  // namespace detail
 
-/**
- * Reusable sequential sorter.
- */
-template <class Cfg>
+/** Reusable sequential sorter. */
+template <typename Cfg>
 class SequentialSorter {
     using Sorter = detail::Sorter<Cfg>;
     using iterator = typename Cfg::iterator;
@@ -2509,18 +2360,14 @@ class SequentialSorter {
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
 
-/**
- * Reusable parallel sorter.
- */
-template <class Cfg>
+/** Reusable parallel sorter. */
+template <typename Cfg>
 class ParallelSorter {
     using Sorter = detail::Sorter<Cfg>;
     using iterator = typename Cfg::iterator;
 
  public:
-    /**
-     * Construct the sorter. Thread pool may be passed by reference.
-     */
+    /** Construct the sorter. Thread pool may be passed by reference. */
     ParallelSorter(typename Cfg::less comp, typename Cfg::ThreadPool thread_pool,
                    bool check_sorted)
         : check_sorted_(check_sorted)
@@ -2541,9 +2388,7 @@ class ParallelSorter {
         });
     }
 
-    /**
-     * Sort in parallel.
-     */
+    /** Sort in parallel. */
     void operator()(iterator begin, iterator end) {
         // Sort small input sequentially
         const int num_threads = Cfg::numThreadsFor(begin, end, thread_pool_.numThreads());
@@ -2588,18 +2433,14 @@ class ParallelSorter {
 };
 #endif  // threading
 
-/**
- * Helper function for creating a reusable sequential sorter.
- */
-template <class It, class Cfg = Config<>, class Comp = std::less<>>
+/** Helper function for creating a reusable sequential sorter. */
+template <typename It, typename Cfg = Config<>, typename Comp = std::less<>>
 SequentialSorter<ExtendedConfig<It, Comp, Cfg>> make_sorter(Comp comp = Comp()) {
   return SequentialSorter<ExtendedConfig<It, Comp, Cfg>>{true, std::move(comp)};
 }
 
-/**
- * Configurable interface.
- */
-template <class Cfg, class It, class Comp = std::less<>>
+/** Configurable interface. */
+template <typename Cfg, typename It, typename Comp = std::less<>>
 void sort(It begin, It end, Comp comp = Comp()) {
 
   if (detail::sortSimpleCases(begin, end, comp)) return;
@@ -2613,15 +2454,13 @@ void sort(It begin, It end, Comp comp = Comp()) {
   }
 }
 
-/**
- * Standard interface.
- */
-template <class It, class Comp>
+/** Standard interface. */
+template <typename It, typename Comp>
 void sort(It begin, It end, Comp comp) {
     ips4o::sort<Config<>>(std::move(begin), std::move(end), std::move(comp));
 }
 
-template <class It>
+template <typename It>
 void sort(It begin, It end) {
   ips4o::sort<Config<>>(std::move(begin), std::move(end), std::less<>());
 }
@@ -2630,10 +2469,8 @@ void sort(It begin, It end) {
 
 namespace parallel {
 
-/**
- * Helper functions for creating a reusable parallel sorter.
- */
-template <class It, class Cfg = Config<>, class ThreadPool, class Comp = std::less<>>
+/** Helper functions for creating a reusable parallel sorter. */
+template <typename It, typename Cfg = Config<>, typename ThreadPool, typename Comp = std::less<>>
 std::enable_if_t<std::is_class<std::remove_reference_t<ThreadPool>>::value,
                  ParallelSorter<ExtendedConfig<It, Comp, Cfg, ThreadPool>>>
 make_sorter(ThreadPool&& thread_pool, Comp comp = Comp(), bool check_sorted = true) {
@@ -2641,7 +2478,7 @@ make_sorter(ThreadPool&& thread_pool, Comp comp = Comp(), bool check_sorted = tr
             std::move(comp), std::forward<ThreadPool>(thread_pool), check_sorted);
 }
 
-template <class It, class Cfg = Config<>, class Comp = std::less<>>
+template <typename It, typename Cfg = Config<>, typename Comp = std::less<>>
 ParallelSorter<ExtendedConfig<It, Comp, Cfg>> make_sorter(
         int num_threads = DefaultThreadPool::maxNumThreads(), Comp comp = Comp(),
         bool check_sorted = true) {
@@ -2649,10 +2486,8 @@ ParallelSorter<ExtendedConfig<It, Comp, Cfg>> make_sorter(
                                 check_sorted);
 }
 
-/**
- * Configurable interface.
- */
-template <class Cfg = Config<>, class It, class Comp, class ThreadPool>
+/** Configurable interface. */
+template <typename Cfg = Config<>, typename It, typename Comp, typename ThreadPool>
 std::enable_if_t<std::is_class<std::remove_reference_t<ThreadPool>>::value> sort(
         It begin, It end, Comp comp, ThreadPool&& thread_pool) {
 
@@ -2666,23 +2501,21 @@ std::enable_if_t<std::is_class<std::remove_reference_t<ThreadPool>>::value> sort
 
 }
 
-template <class Cfg = Config<>, class It, class Comp>
+template <typename Cfg = Config<>, typename It, typename Comp>
 void sort(It begin, It end, Comp comp, int num_threads) {
   num_threads = Cfg::numThreadsFor(begin, end, num_threads);
   (num_threads<2) ? ips4o::sort<Cfg>(std::move(begin), std::move(end), std::move(comp))
                   : ips4o::parallel::sort<Cfg>(begin, end, comp, DefaultThreadPool(num_threads));
 }
 
-/**
- * Standard interface.
- */
-template <class It, class Comp>
+/** Standard interface. */
+template <typename It, typename Comp>
 void sort(It begin, It end, Comp comp) {
   ips4o::parallel::sort<Config<>>(std::move(begin), std::move(end), std::move(comp),
                                   DefaultThreadPool::maxNumThreads());
 }
 
-template <class It>
+template <typename It>
 void sort(It begin, It end) {
   ips4o::parallel::sort(std::move(begin), std::move(end), std::less<>());
 }
@@ -2691,7 +2524,7 @@ void sort(It begin, It end) {
 #endif  // threading
 }  // namespace ips4o
 
-template <class It, class Comp>
+template <typename It, typename Comp>
 void duccsort(It begin, It end, Comp comp, size_t num_threads) {
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
   ips4o::parallel::sort(std::move(begin), std::move(end), comp, int(num_threads));
@@ -2700,7 +2533,7 @@ void duccsort(It begin, It end, Comp comp, size_t num_threads) {
 #endif
 }
 
-template <class It>
+template <typename It>
 void duccsort(It begin, It end, size_t nthreads) {
   duccsort(std::move(begin), std::move(end), std::less<>(), nthreads);
 }
