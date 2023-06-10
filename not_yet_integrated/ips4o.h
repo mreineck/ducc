@@ -84,6 +84,10 @@ template<typename T> class concurrent_queue
 
 template <typename T> class PrivateQueue
   {
+  protected:
+    std::vector<T> m_v;
+    size_t m_off;
+
   public:
     PrivateQueue(size_t init_size = ((1ul<<12)+sizeof(T)-1)/sizeof(T))
       : m_v(), m_off(0)
@@ -130,13 +134,14 @@ template <typename T> class PrivateQueue
       m_off = 0;
       m_v.clear();
       }
-
-  protected:
-    std::vector<T> m_v;
-    size_t m_off;
   };
 
 template <typename Job> class Scheduler {
+  protected:
+    concurrent_queue<Job> m_glob_queue;
+    std::atomic_uint64_t m_num_idle_threads;
+    const size_t m_num_threads;
+
   public:
     Scheduler(size_t num_threads) : m_num_idle_threads(0), m_num_threads(num_threads) {}
 
@@ -178,15 +183,9 @@ template <typename Job> class Scheduler {
       }
 
     void addJob(const Job& j) { m_glob_queue.push(j); }
-
     void addJob(const Job&& j) { m_glob_queue.push(j); }
 
     void reset() { m_num_idle_threads.store(0, std::memory_order_relaxed); }
-
-  protected:
-    concurrent_queue<Job> m_glob_queue;
-    std::atomic_uint64_t m_num_idle_threads;
-    const size_t m_num_threads;
   };
 
 inline constexpr unsigned long log2(unsigned long n)
@@ -197,15 +196,29 @@ inline constexpr unsigned long log2(unsigned long n)
     Uses indices instead of iterators to avoid unnecessary template instantiations. */
 struct Task
   {
+  std::ptrdiff_t begin, end;
+
   Task() {}
   Task(std::ptrdiff_t begin, std::ptrdiff_t end) : begin(begin), end(end) {}
-
-  std::ptrdiff_t begin;
-  std::ptrdiff_t end;
   };
 
 /** Thread barrier, also supports single() execution. */
 class Barrier {
+  private:
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    int init_count_;
+    int hit_count_;
+    bool flag_;
+
+    void notify_all(std::unique_lock<std::mutex>& lk)
+      {
+      hit_count_ = init_count_;
+      flag_ = !flag_;
+      lk.unlock();
+      cv_.notify_all();
+      }
+
   public:
     explicit Barrier(int num_threads)
       : init_count_(num_threads), hit_count_(num_threads), flag_(false) {}
@@ -239,21 +252,6 @@ class Barrier {
         No thread must currently be waiting at this barrier. */
     void setNumThreads(int num_threads)
       { hit_count_ = init_count_ = num_threads; }
-
-  private:
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    int init_count_;
-    int hit_count_;
-    bool flag_;
-
-    void notify_all(std::unique_lock<std::mutex>& lk)
-      {
-      hit_count_ = init_count_;
-      flag_ = !flag_;
-      lk.unlock();
-      cv_.notify_all();
-      }
   };
 
 /** General synchronization support. */
@@ -294,24 +292,25 @@ inline void baseCaseSort(It begin, It end, Comp&& comp) {
 }
 
 template <typename It, typename Comp, typename ThreadPool>
-inline bool isSorted(It begin, It end, Comp&& comp, ThreadPool& thread_pool) {
-    // Do nothing if input is already sorted.
-    std::vector<bool> is_sorted(thread_pool.numThreads());
-    thread_pool(
-            [begin, end, &is_sorted, &comp](int my_id, int num_threads) {
-                const auto size = end - begin;
-                const auto stripe = (size + num_threads - 1) / num_threads;
-                const auto my_begin = begin + std::min(stripe * my_id, size);
-                const auto my_end = begin + std::min(stripe * (my_id + 1) + 1, size);
-                is_sorted[my_id] = std::is_sorted(my_begin, my_end, comp);
-            },
-            thread_pool.numThreads());
+inline bool isSorted(It begin, It end, Comp&& comp, ThreadPool& thread_pool)
+  {
+  // Do nothing if input is already sorted.
+  std::vector<bool> is_sorted(thread_pool.numThreads());
+// FIXME: execParallel?
+  thread_pool([begin, end, &is_sorted, &comp](int my_id, int num_threads)
+    {
+    const auto size = end - begin;
+    const auto stripe = (size + num_threads - 1) / num_threads;
+    const auto my_begin = begin + std::min(stripe * my_id, size);
+    const auto my_end = begin + std::min(stripe * (my_id + 1) + 1, size);
+    is_sorted[my_id] = std::is_sorted(my_begin, my_end, comp);
+    }, thread_pool.numThreads());
 
-    return std::all_of(is_sorted.begin(), is_sorted.end(), [](bool res) { return res; });
-}
+  return std::all_of(is_sorted.begin(), is_sorted.end(), [](bool res) { return res; });
+  }
 
-template <typename It, typename Comp>
-inline bool sortSimpleCases(It begin, It end, Comp&& comp) {
+template <typename It, typename Comp> inline bool sortSimpleCases(It begin, It end, Comp&& comp)
+  {
   if (begin == end) return true;
 
   // If last element is not smaller than first element,
@@ -327,7 +326,7 @@ inline bool sortSimpleCases(It begin, It end, Comp&& comp) {
   }
 
   return false;
-}
+  }
 
 /** Selects a random sample in-place. */
 template <typename It, typename RandomGen>
@@ -335,15 +334,15 @@ void selectSample(It begin, const It end,
                   typename std::iterator_traits<It>::difference_type num_samples,
                   RandomGen&& gen)
   {
-    using std::swap;
+  using std::swap;
 
   auto n = end - begin;
   while (num_samples--)
     {
     const auto i = std::uniform_int_distribution<
                 typename std::iterator_traits<It>::difference_type>(0, --n)(gen);
-      swap(*begin, begin[i]);
-      ++begin;
+    swap(*begin, begin[i]);
+    ++begin;
     }
   }
 
@@ -354,27 +353,8 @@ void selectSample(It begin, const It end,
 /** A thread pool using std::thread. */
 class StdThreadPool
   {
-  public:
+  private:
     using Sync = detail::Sync;
-
-    explicit StdThreadPool(int num_threads = StdThreadPool::maxNumThreads())
-        : impl_(new Impl(num_threads)) {}
-
-    template <typename F>
-    void operator()(F&& func, int num_threads = std::numeric_limits<int>::max())
-      {
-      num_threads = std::min(num_threads, numThreads());
-      (num_threads > 1) ? impl_.get()->run(std::forward<F>(func), num_threads)
-                        : func(0, 1);
-      }
-
-    Sync& sync() { return impl_.get()->sync_; }
-
-    int numThreads() const { return impl_.get()->threads_.size() + 1; }
-
-    static int maxNumThreads() { return std::thread::hardware_concurrency(); }
-
- private:
     struct Impl
       {
       Sync sync_;
@@ -428,34 +408,31 @@ class StdThreadPool
     };
 
     std::unique_ptr<Impl> impl_;
-  };
 
-/** A thread pool to which external threads can join. */
-class ThreadJoiningThreadPool
-  {
   public:
-    using Sync = detail::Sync;
-
-    explicit ThreadJoiningThreadPool(int num_threads) : impl_(new Impl(num_threads))
-      { assert(num_threads >= 2); }
-
-    void join(int my_id) { impl_->join(my_id); }
-
-    void release_threads() { impl_->release_threads(); }
+    explicit StdThreadPool(int num_threads = StdThreadPool::maxNumThreads())
+      : impl_(new Impl(num_threads)) {}
 
     template <typename F>
     void operator()(F&& func, int num_threads = std::numeric_limits<int>::max())
       {
       num_threads = std::min(num_threads, numThreads());
-      (num_threads > 1) ? impl_->run(std::forward<F>(func), num_threads)
+      (num_threads > 1) ? impl_.get()->run(std::forward<F>(func), num_threads)
                         : func(0, 1);
       }
 
     Sync& sync() { return impl_.get()->sync_; }
 
-    int numThreads() const { return impl_.get()->num_threads_; }
+    int numThreads() const { return impl_.get()->threads_.size() + 1; }
 
+    static int maxNumThreads() { return std::thread::hardware_concurrency(); }
+  };
+
+/** A thread pool to which external threads can join. */
+class ThreadJoiningThreadPool
+  {
   private:
+    using Sync = detail::Sync;
     struct Impl
       {
       Sync sync_;
@@ -502,67 +479,43 @@ class ThreadJoiningThreadPool
       };
 
     std::unique_ptr<Impl> impl_;
+
+  public:
+    explicit ThreadJoiningThreadPool(int num_threads) : impl_(new Impl(num_threads))
+      { assert(num_threads >= 2); }
+
+    void join(int my_id) { impl_->join(my_id); }
+
+    void release_threads() { impl_->release_threads(); }
+
+    template <typename F>
+    void operator()(F&& func, int num_threads = std::numeric_limits<int>::max())
+      {
+      num_threads = std::min(num_threads, numThreads());
+      (num_threads > 1) ? impl_->run(std::forward<F>(func), num_threads)
+                        : func(0, 1);
+      }
+
+    Sync& sync() { return impl_.get()->sync_; }
+
+    int numThreads() const { return impl_.get()->num_threads_; }
   };
 
 using DefaultThreadPool = StdThreadPool;
 
 #endif  // threading
 
-#ifndef IPS4OML_ALLOW_EQUAL_BUCKETS
-#define IPS4OML_ALLOW_EQUAL_BUCKETS true
-#endif
-
-#ifndef IPS4OML_BASE_CASE_SIZE
-#define IPS4OML_BASE_CASE_SIZE 16
-#endif
-
-#ifndef IPS4OML_BASE_CASE_MULTIPLIER
-#define IPS4OML_BASE_CASE_MULTIPLIER 16
-#endif
-
-#ifndef IPS4OML_BLOCK_SIZE
-#define IPS4OML_BLOCK_SIZE (2 << 10)
-#endif
-
-#ifndef IPS4OML_BUCKET_TYPE
-#define IPS4OML_BUCKET_TYPE std::ptrdiff_t
-#endif
-
-#ifndef IPS4OML_DATA_ALIGNMENT
-#define IPS4OML_DATA_ALIGNMENT (4 << 10)
-#endif
-
-#ifndef IPS4OML_EQUAL_BUCKETS_THRESHOLD
-#define IPS4OML_EQUAL_BUCKETS_THRESHOLD 5
-#endif
-
-#ifndef IPS4OML_LOG_BUCKETS
-#define IPS4OML_LOG_BUCKETS 8
-#endif
-
-#ifndef IPS4OML_MIN_PARALLEL_BLOCKS_PER_THREAD
-#define IPS4OML_MIN_PARALLEL_BLOCKS_PER_THREAD 4
-#endif
-
-#ifndef IPS4OML_OVERSAMPLING_FACTOR_PERCENT
-#define IPS4OML_OVERSAMPLING_FACTOR_PERCENT 20
-#endif
-
-#ifndef IPS4OML_UNROLL_CLASSIFIER
-#define IPS4OML_UNROLL_CLASSIFIER 7
-#endif
-
-template <bool AllowEqualBuckets_     = IPS4OML_ALLOW_EQUAL_BUCKETS
-        , std::ptrdiff_t BaseCase_    = IPS4OML_BASE_CASE_SIZE
-        , std::ptrdiff_t BaseCaseM_   = IPS4OML_BASE_CASE_MULTIPLIER
-        , std::ptrdiff_t BlockSize_   = IPS4OML_BLOCK_SIZE
-        , typename BucketT_           = IPS4OML_BUCKET_TYPE
-        , std::size_t DataAlign_      = IPS4OML_DATA_ALIGNMENT
-        , std::ptrdiff_t EqualBuckTh_ = IPS4OML_EQUAL_BUCKETS_THRESHOLD
-        , int LogBuckets_             = IPS4OML_LOG_BUCKETS
-        , std::ptrdiff_t MinParBlks_  = IPS4OML_MIN_PARALLEL_BLOCKS_PER_THREAD
-        , int OversampleF_            = IPS4OML_OVERSAMPLING_FACTOR_PERCENT
-        , int UnrollClass_            = IPS4OML_UNROLL_CLASSIFIER
+template <bool AllowEqualBuckets_     = true
+        , std::ptrdiff_t BaseCase_    = 16
+        , std::ptrdiff_t BaseCaseM_   = 16
+        , std::ptrdiff_t BlockSize_   = (2 << 10)
+        , typename BucketT_           = std::ptrdiff_t
+        , std::size_t DataAlign_      = (4 << 10)
+        , std::ptrdiff_t EqualBuckTh_ = 5
+        , int LogBuckets_             = 8
+        , std::ptrdiff_t MinParBlks_  = 4
+        , int OversampleF_            = 20
+        , int UnrollClass_            = 7
         >
 struct Config {
     /** The type used for bucket indices in the classifier. */
@@ -664,31 +617,27 @@ struct ExtendedConfig : public Cfg {
 
 #else
 
-    struct Sync {
-        constexpr void barrier() const {}
-        template <typename F>
-        constexpr void single(F&&) const {}
-    };
+    struct Sync
+      {
+      constexpr void barrier() const {}
+      template <typename F> constexpr void single(F&&) const {}
+      };
 
     /** Dummy thread pool. */
-    class SubThreadPool {
-      public:
-        explicit SubThreadPool(int) {}
-
-        void join(int) {}
-
-        void release_threads() {}
-
-        template <typename F>
-        void operator()(F&&, int) {}
-
-        Sync& sync() { return sync_; }
-
-        int numThreads() const { return 1; }
-
+    class SubThreadPool
+      {
       private:
         Sync sync_;
-    };
+
+      public:
+        explicit SubThreadPool(int) {}
+        void join(int) {}
+        void release_threads() {}
+
+        template <typename F> void operator()(F&&, int) {}
+        Sync& sync() { return sync_; }
+        int numThreads() const { return 1; }
+      };
 
 #endif
 
@@ -727,33 +676,22 @@ struct ExtendedConfig : public Cfg {
     }
 };
 
-#undef IPS4OML_ALLOW_EQUAL_BUCKETS
-#undef IPS4OML_BASE_CASE_SIZE
-#undef IPS4OML_BASE_CASE_MULTIPLIER
-#undef IPS4OML_BLOCK_SIZE
-#undef IPS4OML_BUCKET_TYPE
-#undef IPS4OML_DATA_ALIGNMENT
-#undef IPS4OML_EQUAL_BUCKETS_THRESHOLD
-#undef IPS4OML_LOG_BUCKETS
-#undef IPS4OML_MIN_PARALLEL_BLOCKS_PER_THREAD
-#undef IPS4OML_OVERSAMPLING_FACTOR_PERCENT
-#undef IPS4OML_UNROLL_CLASSIFIER
-
 namespace detail {
 
 /** Data describing a parallel task and the corresponding threads. */
 struct BigTask {
-    BigTask() : has_task{false} {}
-    // TODO or Cfg::iterator???
-    std::ptrdiff_t begin;
-    std::ptrdiff_t end;
-    // My thread id of this task.
-    int task_thread_id;
-    // Index of the thread owning the thread pool used by this task.
-    int root_thread;
-    // Indicates whether this is a task or not
-    bool has_task;
-};
+  // TODO or Cfg::iterator???
+  std::ptrdiff_t begin, end;
+  // My thread id of this task.
+  int task_thread_id;
+  // Index of the thread owning the thread pool used by this task.
+  int root_thread;
+  // Indicates whether this is a task or not
+  bool has_task;
+
+  BigTask() : has_task{false} {}
+  };
+
 /** Aligns a pointer. */
 template <typename T> static T* alignPointer(T* ptr, std::size_t alignment) {
   uintptr_t v = reinterpret_cast<std::uintptr_t>(ptr);
@@ -764,42 +702,45 @@ template <typename T> static T* alignPointer(T* ptr, std::size_t alignment) {
 /** Constructs an object at the specified alignment. */
 template <typename T> class AlignedPtr
   {
+  private:
+    char* alloc_ = nullptr;
+    T* value_;
+
   public:
     AlignedPtr() {}
 
-    template <typename... Args>
-    explicit AlignedPtr(std::size_t alignment, Args&&... args)
-        : alloc_(new char[sizeof(T) + alignment])
-        , value_(new (alignPointer(alloc_, alignment)) T(std::forward<Args>(args)...)) {}
+    template <typename... Args> explicit AlignedPtr(std::size_t alignment, Args&&... args)
+      : alloc_(new char[sizeof(T) + alignment]),
+        value_(new (alignPointer(alloc_, alignment)) T(std::forward<Args>(args)...)) {}
 
     AlignedPtr(const AlignedPtr&) = delete;
     AlignedPtr& operator=(const AlignedPtr&) = delete;
 
     AlignedPtr(AlignedPtr&& rhs) : alloc_(rhs.alloc_), value_(rhs.value_)
       { rhs.alloc_ = nullptr; }
-    AlignedPtr& operator=(AlignedPtr&& rhs) {
-        std::swap(alloc_, rhs.alloc_);
-        std::swap(value_, rhs.value_);
-        return *this;
-    }
+    AlignedPtr& operator=(AlignedPtr&& rhs)
+      {
+      std::swap(alloc_, rhs.alloc_);
+      std::swap(value_, rhs.value_);
+      return *this;
+      }
 
-    ~AlignedPtr() {
-        if (alloc_) {
-            value_->~T();
-            delete[] alloc_;
+    ~AlignedPtr()
+        {
+        if (alloc_)
+          { value_->~T(); delete[] alloc_; }
         }
-    }
 
     T& get() { return *value_; }
-
-  private:
-    char* alloc_ = nullptr;
-    T* value_;
   };
 
 /** Provides aligned storage without constructing an object. */
 template <> class AlignedPtr<void>
   {
+  private:
+    char* alloc_ = nullptr;
+    char* value_;
+
   public:
     AlignedPtr() {}
 
@@ -823,10 +764,6 @@ template <> class AlignedPtr<void>
       { if (alloc_) delete[] alloc_; }
 
     char* get() { return value_; }
-
-  private:
-    char* alloc_ = nullptr;
-    char* value_;
   };
 
 template <typename Cfg> class Sorter {
@@ -1325,13 +1262,13 @@ template <typename Cfg> class Sorter {
       if (read < write)
         {
         // No more blocks in this bucket
-        if (kIsParallel) bp.stopRead();
+        if constexpr (kIsParallel) bp.stopRead();
         return -1;
         }
 
       // Read block
       local_.swap[0].readFrom(begin_ + read);
-      if (kIsParallel) bp.stopRead();
+      if constexpr (kIsParallel) bp.stopRead();
 
       return classifier_->template classify<kEqualBuckets>(local_.swap[0].head());
       }
@@ -1536,7 +1473,6 @@ template <typename Cfg> class Sorter {
         }
       }
 
-
     template <bool kIsParallel>
     std::pair<int, bool> partition(iterator begin, iterator end, diff_t* bucket_start,
                                    int my_id, int num_threads)
@@ -1544,7 +1480,7 @@ template <typename Cfg> class Sorter {
       // Sampling
       bool use_equal_buckets = false;
         {
-        if (!kIsParallel)
+        if constexpr (!kIsParallel)
           std::tie(this->num_buckets_, use_equal_buckets) =
                   buildClassifier(begin, end, local_.classifier);
         else
@@ -1587,11 +1523,11 @@ template <typename Cfg> class Sorter {
       if (kIsParallel && overflow_)
         shared_->overflow = &local_.overflow;
 
-      if (kIsParallel) shared_->sync.barrier();
+      if constexpr (kIsParallel) shared_->sync.barrier();
 
       // Cleanup
       {
-      if (kIsParallel) overflow_ = shared_->overflow;
+      if constexpr (kIsParallel) overflow_ = shared_->overflow;
 
       // Distribute buckets among threads
       const int num_buckets = num_buckets_;
@@ -1605,14 +1541,14 @@ template <typename Cfg> class Sorter {
       const auto in_swap_buffer = !kIsParallel
                                           ? std::pair<int, diff_t>(-1, 0)
                                           : saveMargins(my_last_bucket);
-      if (kIsParallel) shared_->sync.barrier();
+      if constexpr (kIsParallel) shared_->sync.barrier();
 
       // Write remaining elements
       writeMargins<kIsParallel>(my_first_bucket, my_last_bucket, overflow_bucket,
                                 in_swap_buffer.first, in_swap_buffer.second);
       }
 
-      if (kIsParallel) shared_->sync.barrier();
+      if constexpr (kIsParallel) shared_->sync.barrier();
       local_.reset();
 
       return {this->num_buckets_, use_equal_buckets};
@@ -1726,8 +1662,7 @@ template <typename Cfg> class Sorter {
     void processBigTasksSecondary(const int id)
       {
       BigTask& task = shared_->big_tasks[id];
-      auto partial_thread_pool = shared_->thread_pools[task.root_thread];
-      partial_thread_pool->join(task.task_thread_id);
+      shared_->thread_pools[task.root_thread]->join(task.task_thread_id);
       }
 
     void queueTasks(const diff_t stripe, const int id, const int task_num_threads,
@@ -1807,7 +1742,6 @@ template <typename Cfg> class Sorter<Cfg>::Classifier
 
   public:
     Classifier(less comp) : comp_(std::move(comp)) {}
-
     ~Classifier()
       { if (log_buckets_) cleanup(); }
 
@@ -2134,7 +2068,7 @@ template <typename Cfg> class Sorter<Cfg>::BucketPointers
 
         template <bool kAtomic>
         std::pair<diff_t, diff_t> fetchSubMostSignificant(diff_t m) {
-            if (kAtomic) {
+            if constexpr (kAtomic) {
                 std::lock_guard<std::mutex> lock(mtx_);
                 std::pair<diff_t, diff_t> p{l_, m_};
                 m_ -= m;
@@ -2148,7 +2082,7 @@ template <typename Cfg> class Sorter<Cfg>::BucketPointers
 
         template <bool kAtomic>
         std::pair<diff_t, diff_t> fetchAddLeastSignificant(diff_t l) {
-            if (kAtomic) {
+            if constexpr (kAtomic) {
                 std::lock_guard<std::mutex> lock(mtx_);
                 std::pair<diff_t, diff_t> p{l_, m_};
                 l_ += l;
@@ -2223,10 +2157,9 @@ template <typename Cfg> class Sorter<Cfg>::BufferStorage : public AlignedPtr<voi
   {
   public:
     static constexpr const auto kPerThread =
-            Cfg::kBlockSizeInBytes * Cfg::kMaxBuckets * (1 + Cfg::kAllowEqualBuckets);
+      Cfg::kBlockSizeInBytes * Cfg::kMaxBuckets * (1 + Cfg::kAllowEqualBuckets);
 
     BufferStorage() {}
-
     explicit BufferStorage(int num_threads)
         : AlignedPtr<void>(Cfg::kDataAlignment, num_threads * kPerThread) {}
 
