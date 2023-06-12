@@ -43,10 +43,9 @@
 #include <cstddef>
 #include <limits>
 #include <cassert>
-#include <mutex>
 #include <queue>
-#include <condition_variable>
-#include <thread>
+#include <memory>
+#include "ducc0/infra/threading.h"
 
 #define IPS4OML_ASSUME_NOT(c) if (c) __builtin_unreachable()
 #define IPS4OML_IS_NOT(c) assert(!(c))
@@ -59,17 +58,17 @@ template<typename T> class concurrent_queue
   {
   private:
     std::queue<T> q;
-    mutable std::mutex mut;
+    mutable ducc0::Mutex mut;
 
   public:
     bool empty() const
       {
-      std::lock_guard<std::mutex> lock(mut);
+      ducc0::LockGuard lock(mut);
       return q.empty();
       }
     bool try_pop(T &res)
       {
-      std::lock_guard<std::mutex> lock(mut);
+      ducc0::LockGuard lock(mut);
       if (q.empty()) return false;
       res = q.front();
       q.pop();
@@ -77,7 +76,7 @@ template<typename T> class concurrent_queue
       }
     void push(const T &val)
       {
-      std::lock_guard<std::mutex> lock(mut);
+      ducc0::LockGuard lock(mut);
       q.push(val);
       }
   };
@@ -205,13 +204,13 @@ struct Task
 /** Thread barrier, also supports single() execution. */
 class Barrier {
   private:
-    std::mutex mutex_;
-    std::condition_variable cv_;
+    ducc0::Mutex mutex_;
+    ducc0::CondVar cv_;
     int init_count_;
     int hit_count_;
     bool flag_;
 
-    void notify_all(std::unique_lock<std::mutex>& lk)
+    void notify_all(ducc0::UniqueLock& lk)
       {
       hit_count_ = init_count_;
       flag_ = !flag_;
@@ -225,7 +224,7 @@ class Barrier {
 
     void barrier()
       {
-      std::unique_lock<std::mutex> lk(mutex_);
+      ducc0::UniqueLock lk(mutex_);
       if (--hit_count_ == 0)
         notify_all(lk);
       else
@@ -234,7 +233,7 @@ class Barrier {
 
     template <typename F> void single(F&& func)
       {
-      std::unique_lock<std::mutex> lk(mutex_);
+      ducc0::UniqueLock lk(mutex_);
       if (hit_count_-- == init_count_)
         {
         lk.unlock();
@@ -350,67 +349,37 @@ void selectSample(It begin, const It end,
 
 #if (!defined(DUCC0_NO_LOWLEVEL_THREADING))
 
-/** A thread pool using std::thread. */
-class StdThreadPool
+class DuccPool
   {
   private:
     using Sync = detail::Sync;
     struct Impl
       {
       Sync sync_;
-      detail::Barrier pool_barrier_;
-      std::vector<std::thread> threads_;
-      std::function<void(int, int)> func_;
       int num_threads_;
-      bool done_ = false;
 
       Impl(int num_threads)
         : sync_(std::max(1, num_threads))
-        , pool_barrier_(std::max(1, num_threads))
         , num_threads_(num_threads)
         {
         num_threads = std::max(1, num_threads);
-        threads_.reserve(num_threads - 1);
-        for (int i = 1; i < num_threads; ++i)
-            threads_.emplace_back(&Impl::main, this, i);
-        }
-      ~Impl()
-        {
-        done_ = true;
-        pool_barrier_.barrier();
-        for (auto& t : threads_)
-          t.join();
         }
 
       template <typename F>
       void run(F&& func, const int num_threads)
         {
-        func_ = func;
         num_threads_ = num_threads;
         sync_.setNumThreads(num_threads);
     
-        pool_barrier_.barrier();
-        func_(0, num_threads);
-        pool_barrier_.barrier();
+        ducc0::execParallel(size_t(num_threads), [this,num_threads,func](int my_id) {func(my_id, num_threads);});
         }
-
-      void main(const int my_id)
-        {
-        for (;;)
-          {
-          pool_barrier_.barrier();
-          if (done_) break;
-          if (my_id < num_threads_)
-            func_(my_id, num_threads_);
-          pool_barrier_.barrier();
-          }
-        }
+      int nthreads() const { return num_threads_; }
     };
 
     std::unique_ptr<Impl> impl_;
 
   public:
-    explicit StdThreadPool(int num_threads = StdThreadPool::maxNumThreads())
+    explicit DuccPool(int num_threads = DuccPool::maxNumThreads())
       : impl_(new Impl(num_threads)) {}
 
     template <typename F>
@@ -423,9 +392,9 @@ class StdThreadPool
 
     Sync& sync() { return impl_.get()->sync_; }
 
-    int numThreads() const { return impl_.get()->threads_.size() + 1; }
+    int numThreads() const { return impl_->nthreads(); }
 
-    static int maxNumThreads() { return std::thread::hardware_concurrency(); }
+    static int maxNumThreads() { return ducc0::max_threads(); }
   };
 
 /** A thread pool to which external threads can join. */
@@ -501,7 +470,7 @@ class ThreadJoiningThreadPool
     int numThreads() const { return impl_.get()->num_threads_; }
   };
 
-using DefaultThreadPool = StdThreadPool;
+using DefaultThreadPool = DuccPool;
 
 #endif  // threading
 
@@ -2069,7 +2038,7 @@ template <typename Cfg> class Sorter<Cfg>::BucketPointers
         template <bool kAtomic>
         std::pair<diff_t, diff_t> fetchSubMostSignificant(diff_t m) {
             if constexpr (kAtomic) {
-                std::lock_guard<std::mutex> lock(mtx_);
+                ducc0::LockGuard lock(mtx_);
                 std::pair<diff_t, diff_t> p{l_, m_};
                 m_ -= m;
                 return p;
@@ -2083,7 +2052,7 @@ template <typename Cfg> class Sorter<Cfg>::BucketPointers
         template <bool kAtomic>
         std::pair<diff_t, diff_t> fetchAddLeastSignificant(diff_t l) {
             if constexpr (kAtomic) {
-                std::lock_guard<std::mutex> lock(mtx_);
+                ducc0::LockGuard lock(mtx_);
                 std::pair<diff_t, diff_t> p{l_, m_};
                 l_ += l;
                 return p;
@@ -2096,7 +2065,7 @@ template <typename Cfg> class Sorter<Cfg>::BucketPointers
 
       private:
         diff_t m_, l_;
-        std::mutex mtx_;
+        ducc0::Mutex mtx_;
     };
 
   public:

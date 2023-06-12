@@ -649,6 +649,12 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
   Distribution dist;
   dist.execParallel(nthreads, std::move(func));
   }
+void execParallel(size_t nthreads, std::function<void(size_t)> func)
+  {
+  Distribution dist;
+  dist.execParallel(nthreads, [&](Scheduler &sched)
+    { func(sched.thread_num()); });
+  }
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t)> func)
   {

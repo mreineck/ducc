@@ -142,6 +142,8 @@ struct LockGuard
 struct UniqueLock
   {
   UniqueLock(const Mutex &){}
+  void lock() {}
+  void unlock() {}
   };
 struct CondVar
   {
@@ -220,6 +222,9 @@ void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
 /// Execute \a func on \a nthreads threads.
 /** Work subdivision must be organized within \a func. */
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func);
+/// Execute \a func on \a nthreads threads, passing only the thread number.
+/** Work subdivision must be organized within \a func. */
+void execParallel(size_t nthreads, std::function<void(size_t)> func);
 /// Execute \a func on work items [\a lo; \a hi[ over \a nthreads threads.
 /** Work items are subdivided fairly among threads. */
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
@@ -304,6 +309,8 @@ template<typename T, typename Func> auto execWorklist
 
 using detail_threading::Mutex;
 using detail_threading::LockGuard;
+using detail_threading::UniqueLock;
+using detail_threading::CondVar;
 using detail_threading::thread_pool;
 using detail_threading::ScopedUseThreadPool;
 using detail_threading::max_threads;
