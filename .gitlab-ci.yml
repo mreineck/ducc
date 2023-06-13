@@ -54,7 +54,7 @@ release:
 pages:
   stage: release
   script:
-    - DUCC0_OPTIMIZATION=none python3 -m pip install --user .
+    - DUCC0_OPTIMIZATION=none python3 -m pip install --break-system-packages --user .
     - make -C doc html
     - 'cd src/doc && doxygen Doxyfile && cd ../..'
     - mv doc/build/html public
