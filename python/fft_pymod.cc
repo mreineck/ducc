@@ -880,9 +880,9 @@ inorm : int
     Type 1
       nothing
     Type 2
-      divide first output value by sqrt(2)
+      divide last output value by sqrt(2)
     Type 3
-      multiply first input value by sqrt(2)
+      multiply last input value by sqrt(2)
     Type 4
       nothing
 
