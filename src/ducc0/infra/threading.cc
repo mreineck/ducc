@@ -115,60 +115,57 @@ static long mystrtol(const char *inp)
   return res;
   }
 
-static size_t get_max_threads_from_env()
+size_t ducc0_max_threads()
   {
+  static const size_t max_threads_ = []()
+    {
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  pthread_getaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-  size_t res=0;
-  for (size_t i=0; i<CPU_SETSIZE; ++i)
-    if (CPU_ISSET(i, &cpuset)) ++res;
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    pthread_getaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+    size_t res=0;
+    for (size_t i=0; i<CPU_SETSIZE; ++i)
+      if (CPU_ISSET(i, &cpuset)) ++res;
 #else
-  size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
+    size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
 #endif
-  auto evar=getenv("DUCC0_NUM_THREADS");
-  if (!evar)
-    return res;
-  auto res2 = mystrtol(evar);
-  MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS");
-  if (res2==0)
-    return res;
-  return std::min<size_t>(res, res2);
-  }
-static int get_pin_info_from_env()
-  {
-  auto evar=getenv("DUCC0_PIN_DISTANCE");
-  if (!evar)
-    return -1; // do nothing at all
-  auto res = mystrtol(evar);
-  return res;
-  }
-static int get_pin_offset_from_env()
-  {
-  auto evar=getenv("DUCC0_PIN_OFFSET");
-  if (!evar)
-    return 0;
-  auto res = mystrtol(evar);
-  return res;
-  }
-
-size_t ducc_max_threads()
-  {
-  static const size_t max_threads_ = get_max_threads_from_env();
+    auto evar=getenv("DUCC0_NUM_THREADS");
+    if (!evar)
+      return res;
+    auto res2 = mystrtol(evar);
+    MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS");
+    if (res2==0)
+      return res;
+    return std::min<size_t>(res, res2);
+    }();
   return max_threads_;
   }
+ 
+static thread_local bool in_parallel_region = false;
 int pin_info()
   {
-  static const int pin_info_ = get_pin_info_from_env();
+  static const int pin_info_ = []()
+    {
+    auto evar=getenv("DUCC0_PIN_DISTANCE");
+    if (!evar)
+      return -1; // do nothing at all
+    auto res = mystrtol(evar);
+    return int(res);
+    }();
   return pin_info_;
   }
 int pin_offset()
   {
-  static const int pin_offset_ = get_pin_offset_from_env();
+  static const int pin_offset_ = []()
+    {
+    auto evar=getenv("DUCC0_PIN_OFFSET");
+    if (!evar)
+      return 0;
+    auto res = mystrtol(evar);
+    return int(res);
+    }();
   return pin_offset_;
   }
-static thread_local bool in_parallel_region = false;
 
 template <typename T> class concurrent_queue
   {
@@ -326,7 +323,7 @@ class ducc_thread_pool: public thread_pool
       workers_(nthreads)
       { create_threads(); }
 
-    ducc_thread_pool(): ducc_thread_pool(ducc_max_threads()) {}
+    ducc_thread_pool(): ducc_thread_pool(ducc0_max_threads()) {}
 
     //virtual
     ~ducc_thread_pool() { shutdown(); }
@@ -340,8 +337,8 @@ class ducc_thread_pool: public thread_pool
       if (in_parallel_region)
         return 1;
       if (nthreads_in==0)
-        return ducc_max_threads();
-      return std::min(ducc_max_threads(), nthreads_in);
+        return ducc0_max_threads();
+      return std::min(ducc0_max_threads(), nthreads_in);
       }
     //virtual
     void submit(std::function<void()> work)
