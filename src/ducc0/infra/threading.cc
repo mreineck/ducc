@@ -153,10 +153,22 @@ static int get_pin_offset_from_env()
   return res;
   }
 
-static const size_t max_threads_ = get_max_threads_from_env();
+size_t ducc_max_threads()
+  {
+  static const size_t max_threads_ = get_max_threads_from_env();
+  return max_threads_;
+  }
+int pin_info()
+  {
+  static const int pin_info_ = get_pin_info_from_env();
+  return pin_info_;
+  }
+int pin_offset()
+  {
+  static const int pin_offset_ = get_pin_offset_from_env();
+  return pin_offset_;
+  }
 static thread_local bool in_parallel_region = false;
-static const int pin_info = get_pin_info_from_env();
-static const int pin_offset = get_pin_offset_from_env();
 
 template <typename T> class concurrent_queue
   {
@@ -192,11 +204,11 @@ template <typename T> class concurrent_queue
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
 static void do_pinning(int ithread)
   {
-  if (pin_info==-1) return;
+  if (pin_info()==-1) return;
   int num_proc = sysconf(_SC_NPROCESSORS_ONLN);
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  int cpu_wanted = pin_offset + ithread*pin_info;
+  int cpu_wanted = pin_offset() + ithread*pin_info();
   MR_assert((cpu_wanted>=0)&&(cpu_wanted<num_proc), "bad CPU number requested");
   CPU_SET(cpu_wanted, &cpuset);
   pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
@@ -314,7 +326,7 @@ class ducc_thread_pool: public thread_pool
       workers_(nthreads)
       { create_threads(); }
 
-    ducc_thread_pool(): ducc_thread_pool(max_threads_) {}
+    ducc_thread_pool(): ducc_thread_pool(ducc_max_threads()) {}
 
     //virtual
     ~ducc_thread_pool() { shutdown(); }
@@ -328,8 +340,8 @@ class ducc_thread_pool: public thread_pool
       if (in_parallel_region)
         return 1;
       if (nthreads_in==0)
-        return max_threads_;
-      return std::min(max_threads_, nthreads_in);
+        return ducc_max_threads();
+      return std::min(ducc_max_threads(), nthreads_in);
       }
     //virtual
     void submit(std::function<void()> work)
