@@ -382,7 +382,7 @@ class ducc_thread_pool: public thread_pool
 // return a pointer to a singleton thread_pool, which is always available
 inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new ducc_thread_pool();
+  static auto master_pool = new ducc_thread_pool(ducc0_max_threads()-1);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -596,7 +596,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  latch counter(nthreads_);
+  latch counter(nthreads_-1);
   std::exception_ptr ex;
   Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
@@ -607,7 +607,8 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // threads, which executes everything sequentially on its own thread,
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
-  for (size_t i=0; i<nthreads_; ++i)
+  // distribute work to helper threads, keep back some work for myself
+  for (size_t i=1; i<nthreads_; ++i)
     {
     pool->submit(
       [this, &f, i, &counter, &ex, &ex_mut, pool] {
@@ -625,6 +626,11 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
       counter.count_down();
       });
     }
+  {
+  // do remaining work directly on this thread
+  MyScheduler sched(*this, 0);
+  f(sched);
+  }
   counter.wait();
   if (ex)
     std::rethrow_exception(ex);
