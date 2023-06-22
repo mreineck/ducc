@@ -266,7 +266,7 @@ class TimerHierarchy
       { ostringstream oss; root.report(oss); return oss.str(); }
   };
 
-map<string,double> combine_timings(const map<string, double> &m1,
+inline map<string,double> combine_timings(const map<string, double> &m1,
                                    const map<string, double> &m2)
   {
   map<string, double> res = m1;
