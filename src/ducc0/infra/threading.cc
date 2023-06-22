@@ -596,7 +596,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  latch counter(nthreads_-1);
+  latch counter(nthreads_);
   std::exception_ptr ex;
   Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
@@ -608,29 +608,30 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
   // distribute work to helper threads, keep back some work for myself
-  for (size_t i=1; i<nthreads_; ++i)
-    {
-    pool->submit(
-      [this, &f, i, &counter, &ex, &ex_mut, pool] {
-      try
-        {
-        ScopedUseThreadPool guard(*pool);
-        MyScheduler sched(*this, i);
-        f(sched);
-        }
-      catch (...)
-        {
-        LockGuard lock(ex_mut);
-        ex = std::current_exception();
-        }
-      counter.count_down();
-      });
-    }
-  {
-  // do remaining work directly on this thread
-  MyScheduler sched(*this, 0);
-  f(sched);
-  }
+
+  std::function<void(size_t, size_t)> new_f = [this, &f, &new_f, &counter, &ex, &ex_mut, pool](size_t istart, size_t step) {
+    try
+      {
+      ScopedUseThreadPool guard(*pool);
+      for(; step>0; step>>=1)
+        if(istart+step<nthreads_)
+          pool->submit([this, &f, &new_f, &counter, &ex, &ex_mut, pool, istart, step]()
+            {new_f(istart+step, step>>1);});
+      MyScheduler sched(*this, istart);
+      f(sched);
+      }
+    catch (...)
+      {
+      LockGuard lock(ex_mut);
+      ex = std::current_exception();
+      }
+    counter.count_down();
+    };
+
+  size_t biggest_step=1;
+  while (biggest_step*2<nthreads_) biggest_step<<=1;
+  new_f(0, biggest_step);
+
   counter.wait();
   if (ex)
     std::rethrow_exception(ex);
