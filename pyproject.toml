@@ -1,7 +1,11 @@
 [project]
 requires-python = ">=3.7"
 name = "ducc0"
-version = "0.30.0"
+readme = "README.md"
+authors = [
+  {name = "Martin Reinecke", email = "martin@mpa-garching.mpg.de"},
+]
+dynamic = ["license", "description", "version", "urls", "classifiers"]
 
 [build-system]
 requires = ["setuptools >= 40.6.0", "pybind11 >= 2.6.0", "numpy >= 1.17.0"]

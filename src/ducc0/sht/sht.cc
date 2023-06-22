@@ -323,7 +323,7 @@ struct ringhelper
       data(0)=phase(0).real();
       fill(&data(1),&data(nph+2),0.);
 
-      for (size_t m=1, idx1=1, idx2=nph-1; m<=mmax; ++m,
+      for (size_t m=1, idx1=(nph==1) ? 0 : 1, idx2=nph-1; m<=mmax; ++m,
            idx1=(idx1+1==nph) ? 0 : idx1+1, idx2=(idx2==0) ? nph-1 : idx2-1)
         {
         dcmplx tmp = phase(m);
