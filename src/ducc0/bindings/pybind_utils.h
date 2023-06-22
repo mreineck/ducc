@@ -73,7 +73,8 @@ template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
   for (size_t i=0; i<res.size(); ++i)
     {
     auto tmp = arr.strides(int(i));
-    MR_assert((!rw) || (tmp!=0), "detected zero stride in writable array");
+    MR_assert((!rw) || (arr.shape(int(i))==1) || (tmp!=0),
+      "detected zero stride in writable array");
     MR_assert((tmp/st)*st==tmp, "bad stride");
     res[i] = tmp/st;
     }
@@ -99,7 +100,8 @@ template<typename T, size_t ndim>
   for (size_t i=0; i<ndim; ++i)
     {
     auto tmp = arr.strides(int(i));
-    MR_assert((!rw) || (tmp!=0), "detected zero stride in writable array");
+    MR_assert((!rw) || (arr.shape(int(i))==1) || (tmp!=0),
+      "detected zero stride in writable array");
     MR_assert((tmp/st)*st==tmp, "bad stride");
     res[i] = tmp/st;
     }
