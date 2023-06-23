@@ -587,6 +587,19 @@ class MyScheduler: public Scheduler
     virtual Range getNext() { return dist_.getNext(ithread_); }
   };
 
+template<typename T> class ScopedValueChanger
+  {
+  private:
+    T &object;
+    T original_value;
+
+  public:
+    ScopedValueChanger(T &object_, T new_value)
+      : object(object_), original_value(object_) { object=new_value; }
+    ~ScopedValueChanger()
+      { object=original_value; }
+  };
+
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
   if (nthreads_ == 1)
@@ -596,7 +609,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  latch counter(nthreads_);
   std::exception_ptr ex;
   Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
@@ -607,11 +619,15 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // threads, which executes everything sequentially on its own thread,
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
-  // distribute work to helper threads, keep back some work for myself
 
+#if 1  // Hierarchical submission
+
+  latch counter(nthreads_);
+  // distribute work to helper threads, in a recursive fashion
   std::function<void(size_t, size_t)> new_f = [this, &f, &new_f, &counter, &ex, &ex_mut, pool](size_t istart, size_t step) {
     try
       {
+      ScopedValueChanger changer(in_parallel_region, true);
       ScopedUseThreadPool guard(*pool);
       for(; step>0; step>>=1)
         if(istart+step<nthreads_)
@@ -631,6 +647,36 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   size_t biggest_step=1;
   while (biggest_step*2<nthreads_) biggest_step<<=1;
   new_f(0, biggest_step);
+
+#else  // sequential submission
+
+  latch counter(nthreads_-1);
+  for (size_t i=1; i<nthreads_; ++i)
+    {
+    pool->submit(
+      [this, &f, i, &counter, &ex, &ex_mut, pool] {
+      try
+        {
+        ScopedUseThreadPool guard(*pool);
+        MyScheduler sched(*this, i);
+        f(sched);
+        }
+      catch (...)
+        {
+        LockGuard lock(ex_mut);
+        ex = std::current_exception();
+        }
+      counter.count_down();
+      });
+    }
+  {
+  // do remaining work directly on this thread
+  ScopedValueChanger changer(in_parallel_region, true);
+  MyScheduler sched(*this, 0);
+  f(sched);
+  }
+
+#endif
 
   counter.wait();
   if (ex)
