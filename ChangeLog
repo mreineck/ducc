@@ -1,8 +1,13 @@
 0.31.0:
+- general:
+    - updated pyproject.toml to be compatible with new Python versions
+
 - fft:
+    - bug fix in orthonormalization of type II and III DSTs
     - significantly faster 1D FFTs; tuning of multi-D transforms
 
 - sht:
+    - bug fix for alm->map SHTs with nphi=1 and mmax>0
     - new `phi0` parameter for the `*_2d` SHT routines
 
 
