@@ -382,7 +382,7 @@ class ducc_thread_pool: public thread_pool
 // return a pointer to a singleton thread_pool, which is always available
 inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new ducc_thread_pool();
+  static auto master_pool = new ducc_thread_pool(ducc0_max_threads()-1);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -587,6 +587,19 @@ class MyScheduler: public Scheduler
     virtual Range getNext() { return dist_.getNext(ithread_); }
   };
 
+template<typename T> class ScopedValueChanger
+  {
+  private:
+    T &object;
+    T original_value;
+
+  public:
+    ScopedValueChanger(T &object_, T new_value)
+      : object(object_), original_value(object_) { object=new_value; }
+    ~ScopedValueChanger()
+      { object=original_value; }
+  };
+
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
   if (nthreads_ == 1)
@@ -596,7 +609,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     return;
     }
 
-  latch counter(nthreads_);
   std::exception_ptr ex;
   Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
@@ -607,7 +619,39 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // threads, which executes everything sequentially on its own thread,
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
-  for (size_t i=0; i<nthreads_; ++i)
+
+#if 1  // Hierarchical submission
+
+  latch counter(nthreads_);
+  // distribute work to helper threads, in a recursive fashion
+  std::function<void(size_t, size_t)> new_f = [this, &f, &new_f, &counter, &ex, &ex_mut, pool](size_t istart, size_t step) {
+    try
+      {
+      ScopedValueChanger changer(in_parallel_region, true);
+      ScopedUseThreadPool guard(*pool);
+      for(; step>0; step>>=1)
+        if(istart+step<nthreads_)
+          pool->submit([this, &f, &new_f, &counter, &ex, &ex_mut, pool, istart, step]()
+            {new_f(istart+step, step>>1);});
+      MyScheduler sched(*this, istart);
+      f(sched);
+      }
+    catch (...)
+      {
+      LockGuard lock(ex_mut);
+      ex = std::current_exception();
+      }
+    counter.count_down();
+    };
+
+  size_t biggest_step=1;
+  while (biggest_step*2<nthreads_) biggest_step<<=1;
+  new_f(0, biggest_step);
+
+#else  // sequential submission
+
+  latch counter(nthreads_-1);
+  for (size_t i=1; i<nthreads_; ++i)
     {
     pool->submit(
       [this, &f, i, &counter, &ex, &ex_mut, pool] {
@@ -625,6 +669,15 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
       counter.count_down();
       });
     }
+  {
+  // do remaining work directly on this thread
+  ScopedValueChanger changer(in_parallel_region, true);
+  MyScheduler sched(*this, 0);
+  f(sched);
+  }
+
+#endif
+
   counter.wait();
   if (ex)
     std::rethrow_exception(ex);
