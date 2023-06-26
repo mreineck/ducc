@@ -1,5 +1,6 @@
 0.31.0:
 - general:
+    - potentially more efficient handling of parallel regions 
     - updated pyproject.toml to be compatible with new Python versions
 
 - fft:
