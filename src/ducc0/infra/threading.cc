@@ -600,6 +600,27 @@ template<typename T> class ScopedValueChanger
       { object=original_value; }
   };
 
+#define DUCC0_HIERARCHICAL_SUBMISSION
+#ifdef DUCC0_HIERARCHICAL_SUBMISSION
+
+// The next two definitions are taken from TensorFlow sources.
+// Copyright 2015 The TensorFlow Authors.
+
+// Basic y-combinator implementation.
+template <class Func> struct YCombinatorImpl {
+  Func func;
+  template <class... Args>
+  decltype(auto) operator()(Args&&... args) const {
+    return func(*this, std::forward<Args>(args)...);
+  }
+};
+
+template <class Func> YCombinatorImpl<std::decay_t<Func>> YCombinator(Func&& func) {
+  return YCombinatorImpl<std::decay_t<Func>>{std::forward<Func>(func)};
+}
+
+#endif
+
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
   if (nthreads_ == 1)
@@ -620,11 +641,11 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
 
-#if 1  // Hierarchical submission
+#ifdef DUCC0_HIERARCHICAL_SUBMISSION
 
   latch counter(nthreads_);
   // distribute work to helper threads, in a recursive fashion
-  std::function<void(size_t, size_t)> new_f = [this, &f, &new_f, &counter, &ex, &ex_mut, pool](size_t istart, size_t step) {
+  auto new_f = YCombinator([this, &f, &counter, &ex, &ex_mut, pool](auto &new_f, size_t istart, size_t step) -> void {
     try
       {
       ScopedValueChanger changer(in_parallel_region, true);
@@ -642,7 +663,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
       ex = std::current_exception();
       }
     counter.count_down();
-    };
+    });
 
   size_t biggest_step=1;
   while (biggest_step*2<nthreads_) biggest_step<<=1;
@@ -677,6 +698,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   }
 
 #endif
+#undef DUCC0_HIERARCHICAL_SUBMISSION
 
   counter.wait();
   if (ex)
