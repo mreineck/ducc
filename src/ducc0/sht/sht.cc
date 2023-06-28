@@ -1934,7 +1934,11 @@ template<typename T> void leg2alm(  // associated Legendre transform
   auto mmax = get_mmax(mval, lmax);
   auto nalm = alm.shape(0);
   if (mode==DERIV1)
-    MR_fail("DERIV1 mode not supported in map->alm direction");
+    {
+    spin=1;
+    MR_assert(nalm==1, "need one a_lm component");
+    MR_assert(leg.shape(0)==2, "need two Legendre components");
+    }
   else if (mode==GRAD_ONLY)
     {
     MR_assert(spin>0, "spin must be positive for grad-only SHTs");
@@ -1976,7 +1980,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
       }
     }
 
-  auto norm_l = Ylmgen::get_norm (lmax, spin);
+  auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
+                                 Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 

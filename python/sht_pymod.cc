@@ -1218,6 +1218,8 @@ mode: str
     the transform mode
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
 theta_interpol: bool
     if the input grid is irregularly spaced in theta, try to accelerate the
     transform by using an intermediate equidistant theta grid and a 1D NUFFT.
@@ -1473,6 +1475,8 @@ mode: str
     the transform mode
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
 
 Returns
 -------
@@ -1719,6 +1723,8 @@ mode: str
     the transform mode
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
 theta_interpol: bool
     if the input grid is irregularly spaced in theta, try to accelerate the
     transform by using an intermediate equidistant theta grid and a 1D NUFFT.
@@ -1968,6 +1974,8 @@ mode: str
     the transform mode
       | "STANDARD": standard transform
       | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
 
 Returns
 -------
