@@ -163,9 +163,11 @@ struct util // hack to avoid duplicate symbols
     {
     if (nthreads==1) return 1;
     size_t size = info.size();
+    if (size<4096) return 1;
     size_t parallel = size / (info.shape(axis) * vlen);
     if (info.shape(axis) < 1000)
       parallel /= 4;
+    parallel = min(parallel, size/4096);
     size_t max_threads = ducc0::adjust_nthreads(nthreads);
     return std::max(size_t(1), std::min(parallel, max_threads));
     }

@@ -1407,10 +1407,10 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
             execStatic(nvtrans, nthreads, 0, [&](auto &sched)
               {
-              aligned_array<Tcv> tbuf(2*ip+bufsize());
+              aligned_array<Tcv> tbuf(2*ip+32+bufsize());
               auto cc2 = &tbuf[0];
-              auto ch2 = &tbuf[ip];
-              auto buf2 = &tbuf[2*ip];
+              auto ch2 = &tbuf[ip+16];
+              auto buf2 = &tbuf[2*ip+32];
 
               while (auto rng=sched.getNext())
                 for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
@@ -1449,10 +1449,10 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
 
             execStatic(nvtrans, nthreads, 0, [&](auto &sched)
               {
-              aligned_array<Tcv> tbuf(2*ip+bufsize());
+              aligned_array<Tcv> tbuf(2*ip+32+bufsize());
               auto cc2 = &tbuf[0];
-              auto ch2 = &tbuf[ip];
-              auto buf2 = &tbuf[2*ip];
+              auto ch2 = &tbuf[ip+16];
+              auto buf2 = &tbuf[2*ip+32];
 
               while (auto rng=sched.getNext())
                 for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
