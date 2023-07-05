@@ -447,7 +447,7 @@ thread_pool *get_active_pool()
 #endif
 
 size_t max_threads()
-  { return get_active_pool()->nthreads(); }
+  { return get_active_pool()->nthreads()+1; }
 size_t adjust_nthreads(size_t nthreads_in)
   { return get_active_pool()->adjust_nthreads(nthreads_in); }
 
