@@ -138,7 +138,7 @@ std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
 
 #else
 
-inline uint64_t spread_bits_2D_64 (uint64_t v)
+uint64_t spread_bits_2D_64 (uint64_t v)
   {
   v&=0xffffffffu;
   v = (v|(v<<16)) & 0x0000ffff0000ffffu;
@@ -148,7 +148,7 @@ inline uint64_t spread_bits_2D_64 (uint64_t v)
   v = (v|(v<< 1)) & 0x5555555555555555u;
   return v;
   }
-inline uint32_t spread_bits_2D_32 (uint32_t v)
+uint32_t spread_bits_2D_32 (uint32_t v)
   {
   v&=0xffffu;
   v = (v|(v<< 8)) & 0x00ff00ff00ff00ffu;

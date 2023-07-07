@@ -30,8 +30,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef HEALPIX_BASE_H
-#define HEALPIX_BASE_H
+#ifndef DUCC0_HEALPIX_BASE_H
+#define DUCC0_HEALPIX_BASE_H
 
 #include <array>
 #include <cmath>

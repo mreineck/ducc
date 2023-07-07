@@ -30,8 +30,8 @@
  *  \author Martin Reinecke
  */
 
-#ifndef HEALPIX_TABLES_H
-#define HEALPIX_TABLES_H
+#ifndef DUCC0_HEALPIX_TABLES_H
+#define DUCC0_HEALPIX_TABLES_H
 
 #include <cstddef>
 #include <cstdint>
