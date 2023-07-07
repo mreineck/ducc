@@ -30,7 +30,7 @@
 #include "ducc0/infra/simd.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/sphere_interpol.h"
-#include "ducc0/fft/fft1d.h"
+#include "ducc0/fft/fft.h"
 #include "ducc0/nufft/nufft.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/gl_integrator.h"

@@ -28,7 +28,7 @@
 #include <vector>
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
-#include "ducc0/fft/fft1d.h"
+#include "ducc0/fft/fft.h"
 #include "ducc0/nufft/nufft.h"
 
 namespace ducc0 {

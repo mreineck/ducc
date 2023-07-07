@@ -42,6 +42,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <complex>
 
 #include "ducc0/fft/fft.h"
+#include "ducc0/fft/fft1d_impl.h"
+#include "ducc0/fft/fftnd_impl.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {
