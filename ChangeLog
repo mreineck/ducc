@@ -10,6 +10,7 @@
 - sht:
     - bug fix for alm->map SHTs with nphi=1 and mmax>0
     - new `phi0` parameter for the `*_2d` SHT routines
+    - optional `mstart` and `lstride` parameters for the `*_2d` SHT routines
 
 
 0.30.0:
