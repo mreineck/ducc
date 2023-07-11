@@ -133,21 +133,51 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   double epsilon,
   bool theta_interpol=false);
 
-template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0,
-  size_t nthreads, SHT_mode mode);
+template<typename T> void synthesis_2d(
+  const cmav<complex<T>,2> &alm,
+  vmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads,
+  SHT_mode mode);
 
-template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+template<typename T> void adjoint_synthesis_2d(
+  vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads,
+  SHT_mode mode);
 
-template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads);
+template<typename T> void analysis_2d(
+  vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads);
 
-template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm,
-  vmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads);
+template<typename T> void adjoint_analysis_2d(
+  const cmav<complex<T>,2> &alm,
+  vmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm,
