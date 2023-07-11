@@ -1719,6 +1719,31 @@ static vector<double> get_dh_weights(size_t nrings)
   return weight;
   }
 
+size_t maximum_safe_l(const string &geometry, size_t ntheta)
+  {
+  if ((geometry=="GL")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
+    {
+    MR_assert(ntheta>0, "need at least one ring");
+    return ntheta-1;
+    }
+  else if (geometry=="CC")
+    {
+    MR_assert(ntheta>1, "need at least two rings");
+    return ntheta-2;
+    }
+  else if (geometry=="DH")
+    {
+    MR_assert(ntheta>1, "need at least two rings");
+    return (ntheta-2)/2;
+    }
+  else if (geometry=="F2")
+    {
+    MR_assert(ntheta>0, "need at least one ring");
+    return (ntheta-1)/2;
+    }
+  MR_fail("unsupported grid type");
+  }
+
 void get_gridweights(const string &type, vmav<double,1> &wgt)
   {
   size_t nrings=wgt.shape(0);

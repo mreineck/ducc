@@ -42,6 +42,11 @@ enum SHT_mode { STANDARD, GRAD_ONLY, DERIV1 };
 void get_gridweights(const string &type, vmav<double,1> &wgt);
 vmav<double,1> get_gridweights(const string &type, size_t nrings);
 
+// returns the maximum l moment that can be safely stored (i.e. is guaranteed
+// to be recoverable using analysis_2d) in a map with the specified geometry
+// and number of rings.
+size_t maximum_safe_l(const string &geometry, size_t ntheta);
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -226,6 +231,7 @@ using detail_sht::STANDARD;
 using detail_sht::GRAD_ONLY;
 using detail_sht::DERIV1;
 using detail_sht::get_gridweights;
+using detail_sht::maximum_safe_l;
 using detail_sht::alm2leg;
 using detail_sht::leg2alm;
 using detail_sht::map2leg;
