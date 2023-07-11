@@ -436,64 +436,67 @@ template<typename T> py::array_t<complex<T>> check_build_alm
 
 template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
   size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__,
-  const string &mode_, double phi0)
+  const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map__,
+  const string &mode_, double phi0, const py::object &mstart_, ptrdiff_t lstride)
   {
   auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto alm = to_cmav<complex<T>,2>(alm_);
   auto map_ = check_build_map<T>(map__, get_nmaps(spin,mode), ntheta, nphi);
   auto map = to_vmav<T,3>(map_);
   {
   py::gil_scoped_release release;
-  synthesis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads, mode);
+  synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
   return map_;
   }
 py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax_, size_t nthreads, py::object &map, const string &mode,
-  double phi0)
+  const py::object &mmax, size_t nthreads, py::object &map, const string &mode,
+  double phi0, const py::object &mstart, ptrdiff_t lstride)
   {
-  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode, phi0);
+      mmax, nthreads, map, mode, phi0, mstart, lstride);
   else if (isPyarr<complex<double>>(alm))
     return Py2_synthesis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode, phi0);
+      mmax, nthreads, map, mode, phi0, mstart, lstride);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 template<typename T> py::array Py2_adjoint_synthesis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  size_t mmax, size_t nthreads, py::object &alm__, const string &mode_, double phi0)
+  const py::object &mmax_, size_t nthreads, py::object &alm__, const string &mode_,
+  double phi0, const py::object &mstart_, ptrdiff_t lstride)
   {
   auto mode = get_mode(mode_);
   auto map = to_cmav<T,3>(map_);
-  auto alm_ = check_build_alm<T>(alm__, get_nalm(spin,mode), lmax, mmax);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  vector<size_t> almshp{get_nalm(spin,mode), min_almdim(lmax, mstart, lstride)};
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
   auto alm = to_vmav<complex<T>,2>(alm_);
   {
   py::gil_scoped_release release;
-  adjoint_synthesis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads, mode);
+  adjoint_synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
   return alm_;
   }
 py::array Py_adjoint_synthesis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  const py::object &mmax_, size_t nthreads, py::object &alm, const string &mode, double phi0)
+  const py::object &mmax, size_t nthreads, py::object &alm, const string &mode, double phi0,
+  const py::object &mstart, ptrdiff_t lstride)
   {
-  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
     return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode, phi0);
+      nthreads, alm, mode, phi0, mstart, lstride);
   else if (isPyarr<double>(map))
     return Py2_adjoint_synthesis_2d<double>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode, phi0);
+      nthreads, alm, mode, phi0, mstart, lstride);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax,
-  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map, double phi0)
+  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax, size_t nthreads, py::object &map, double phi0, const py::object &mstart, ptrdiff_t lstride)
   {
-  return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax_, nthreads, map, "DERIV1", phi0);
+  return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax, nthreads, map, "DERIV1", phi0, mstart, lstride);
   }
 
 template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
@@ -638,55 +641,60 @@ py::object Py_pseudo_analysis(const py::array &map, const py::array &theta,
 
 template<typename T> py::array Py2_analysis_2d(
   const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  size_t mmax, size_t nthreads, py::object &alm__, double phi0)
+  const py::object &mmax_, size_t nthreads, py::object &alm__, double phi0,
+  const py::object &mstart_, ptrdiff_t lstride)
   {
   auto map = to_cmav<T,3>(map_);
-  auto alm_ = check_build_alm<T>(alm__, map.shape(0), lmax, mmax);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  vector<size_t> almshp{map.shape(0), min_almdim(lmax, mstart, lstride)};
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
   auto alm = to_vmav<complex<T>,2>(alm_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  analysis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads);
+  analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads);
   }
   return alm_;
   }
 py::array Py_analysis_2d(
   const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  py::object &mmax_, size_t nthreads, py::object &alm, double phi0)
+  py::object &mmax, size_t nthreads, py::object &alm, double phi0,
+  const py::object &mstart, ptrdiff_t lstride)
   {
-  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<float>(map))
-    return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0);
+    return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0, mstart,lstride);
   else if (isPyarr<double>(map))
-    return Py2_analysis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0);
+    return Py2_analysis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0, mstart, lstride);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
 template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, size_t mmax, size_t nthreads, py::object &map__, double phi0)
+  const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map__, double phi0,
+  const py::object &mstart_, ptrdiff_t lstride)
   {
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto alm = to_cmav<complex<T>,2>(alm_);
   auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
   auto map = to_vmav<T,3>(map_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
-  adjoint_analysis_2d(alm, map, spin, lmax, mmax, geometry, phi0, nthreads);
+  adjoint_analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads);
   }
   return map_;
   }
 py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax_, size_t nthreads, py::object &map, double phi0)
+  const py::object &mmax, size_t nthreads, py::object &map, double phi0,
+  const py::object &mstart, ptrdiff_t lstride)
   {
-  size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
   if (isPyarr<complex<float>>(alm))
     return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map, phi0);
+      nphi, mmax, nthreads, map, phi0, mstart, lstride);
   else if (isPyarr<complex<double>>(alm))
     return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map, phi0);
+      nphi, mmax, nthreads, map, phi0, mstart, lstride);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -911,7 +919,7 @@ template<typename T> class Py_sharpjob
       auto ar(alm.prepend_1());
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None, None);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -937,7 +945,8 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads, STANDARD);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
@@ -951,7 +960,7 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(map_);
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None, None);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -977,7 +986,8 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        adjoint_synthesis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads, STANDARD);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        adjoint_synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return alm_;
       }
@@ -991,7 +1001,8 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(map_);
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
         {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-      analysis_2d(ar, mr, 0, lmax_, mmax_, geom, 0., nthreads);
+      auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+      analysis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads);
       return alm_;
       }
     py::array alm2map_spin (const py::array_t<complex<double>> &alm_, size_t spin) const
@@ -1004,7 +1015,7 @@ template<typename T> class Py_sharpjob
         "incorrect size of a_lm array");
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, None, None);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -1029,7 +1040,8 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({2, ntheta_, nphi_},
           {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-        synthesis_2d(alm, mr, spin, lmax_, mmax_, geom, 0., nthreads, STANDARD);
+        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        synthesis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
@@ -1042,7 +1054,8 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,2>(map_);
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-      analysis_2d(alm, mr, spin, lmax_, mmax_, geom, 0., nthreads);
+      auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+      analysis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads);
       return alm_;
       }
   };
@@ -1342,9 +1355,15 @@ spin: int >= 0
     the spin to use for the transform.
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
-mmax: int >= 0 and <= lmax
+mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is assumed to be equal to lmax
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
 geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
     the distribution of rings over the theta range
         - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
@@ -1402,9 +1421,15 @@ ntheta, nphi: int > 0
     If supplied, and `map` is also supplied, must match with the array dimensions
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
-mmax: int >= 0 and <= lmax
+mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is assumed to be equal to lmax
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
 geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
     the distribution of rings over the theta range
         - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
@@ -1449,9 +1474,15 @@ spin: int >= 0
     the spin to use for the transform.
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
-mmax: int >= 0 and <= lmax
+mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is assumed to be equal to lmax
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
 geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
     the distribution of rings over the theta range
         - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
@@ -1508,9 +1539,15 @@ spin: int >= 0
     If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
-mmax: int >= 0 and <= lmax
+mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is assumed to be equal to lmax
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
 geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
     the distribution of rings over the theta range
         - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
@@ -1578,9 +1615,15 @@ spin: int >= 0
     If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
-mmax: int >= 0 and <= lmax
+mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is assumed to be equal to lmax
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
 geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
     the distribution of rings over the theta range
         - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
@@ -2097,6 +2140,36 @@ numpy.ndarray((ntheta,), dtype=numpy.float64)
     per ring to obtain the actual quadrature weights for a particular map.
 )""";
 
+constexpr const char *maximum_safe_l_DS = R"""(
+Returns the maximum l moment that can be safely stored (i.e. is guaranteed
+to be recoverable using `analysis_2d`) in a map with the specified geometry
+and number of rings.
+
+Parameters
+----------
+geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
+    the distribution of rings over the theta range
+        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
+        - F1: Fejer's first rule, equidistant, first and last ring half a ring
+          width from the poles
+        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
+          the north pole, last ring on the south pole
+        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
+          north pole, last ring half a ring width from the south pole
+        - GL: Gauss-Legendre, non-equidistant
+        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
+          ring width from the south pole
+        - F2: Fejer's second rule, equidistant, first and last ring one ring width
+          from the poles.
+ntheta: int > 0 (> 1 for geometries CC, DH, and F1)
+    number of rings in the grid.
+
+Returns
+-------
+lmax : int>=0
+    The maximum l moment that can be safely stored on the specified grid.
+)""";
+
 void add_sht(py::module_ &msup)
   {
   using namespace pybind11::literals;
@@ -2118,17 +2191,20 @@ void add_sht(py::module_ &msup)
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
     "lstride"_a=1, "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None,"theta_interpol"_a=false);
 
-  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD", "phi0"_a=0.);
-  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD", "phi0"_a=0.);
-  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.);
-  m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "phi0"_a=0.);
-  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.);
+  m2.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD", "phi0"_a=0., "mstart"_a=None, "lstride"_a=1);
+  m2.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD", "phi0"_a=0., "mstart"_a=None, "lstride"_a=1);
+  m2.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0., "mstart"_a=None, "lstride"_a=1);
+  m2.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "phi0"_a=0., "mstart"_a=None, "lstride"_a=1);
+  m2.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0., "mstart"_a=None, "lstride"_a=1);
 
   m2.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m2.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m2.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None);
 
-  m2.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "type"_a, "ntheta"_a);
+  m2.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "geometry"_a, "ntheta"_a);
+
+  m2.def("maxium_safe_l", &maximum_safe_l, maximum_safe_l_DS, "geometry"_a, "ntheta"_a);
+
   m2.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);
   m2.def("alm2leg_deriv1", &Py_alm2leg_deriv1, alm2leg_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None,"theta_interpol"_a=false);
   m2.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);

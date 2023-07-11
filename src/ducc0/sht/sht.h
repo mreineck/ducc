@@ -42,6 +42,11 @@ enum SHT_mode { STANDARD, GRAD_ONLY, DERIV1 };
 void get_gridweights(const string &type, vmav<double,1> &wgt);
 vmav<double,1> get_gridweights(const string &type, size_t nrings);
 
+// returns the maximum l moment that can be safely stored (i.e. is guaranteed
+// to be recoverable using analysis_2d) in a map with the specified geometry
+// and number of rings.
+size_t maximum_safe_l(const string &geometry, size_t ntheta);
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -133,21 +138,51 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   double epsilon,
   bool theta_interpol=false);
 
-template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, vmav<T,3> &map,
-  size_t spin, size_t lmax, size_t mmax, const string &geometry, double phi0,
-  size_t nthreads, SHT_mode mode);
+template<typename T> void synthesis_2d(
+  const cmav<complex<T>,2> &alm,
+  vmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads,
+  SHT_mode mode);
 
-template<typename T> void adjoint_synthesis_2d(vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+template<typename T> void adjoint_synthesis_2d(
+  vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads,
+  SHT_mode mode);
 
-template<typename T> void analysis_2d(vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads);
+template<typename T> void analysis_2d(
+  vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads);
 
-template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm,
-  vmav<T,3> &map, size_t spin, size_t lmax, size_t mmax,
-  const string &geometry, double phi0, size_t nthreads);
+template<typename T> void adjoint_analysis_2d(
+  const cmav<complex<T>,2> &alm,
+  vmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm,
@@ -196,6 +231,7 @@ using detail_sht::STANDARD;
 using detail_sht::GRAD_ONLY;
 using detail_sht::DERIV1;
 using detail_sht::get_gridweights;
+using detail_sht::maximum_safe_l;
 using detail_sht::alm2leg;
 using detail_sht::leg2alm;
 using detail_sht::map2leg;
