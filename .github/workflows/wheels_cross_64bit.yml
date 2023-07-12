@@ -10,12 +10,12 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
       - run: python -m pip install --user --upgrade cibuildwheel
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS_MACOS: arm64
-          CIBW_SKIP: cp36-* pp*
+          CIBW_SKIP: cp36-* cp37-* pp*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_I686_IMAGE: manylinux2014

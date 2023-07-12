@@ -26,6 +26,8 @@ using shape_t = vector<size_t>;
 #include "ducc0/bindings/array_descriptor.h"
 #include "ducc0/bindings/typecode.h"
 #include "ducc0/fft/fft.h"
+#include "ducc0/fft/fft1d_impl.h"
+#include "ducc0/fft/fftnd_impl.h"
 #include "ducc0/infra/mav.cc"
 #include "ducc0/infra/threading.cc"
 

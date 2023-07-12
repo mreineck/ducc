@@ -39,7 +39,8 @@ include src/ducc0/math/space_filling.h
 include src/ducc0/math/unity_roots.h
 include src/ducc0/math/vec3.h
 
-include src/ducc0/fft/fft1d.h
+include src/ducc0/fft/fft1d_impl.h
+include src/ducc0/fft/fftnd_impl.h
 include src/ducc0/fft/fft.h
 
 include src/ducc0/nufft/nufft.h

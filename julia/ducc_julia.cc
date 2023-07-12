@@ -36,6 +36,9 @@ CONVENTIONS USED FOR THIS WRAPPER:
 #include "ducc0/infra/mav.cc"
 #include "ducc0/math/gl_integrator.cc"
 #include "ducc0/math/gridding_kernel.cc"
+#include "ducc0/fft/fft.h"
+#include "ducc0/fft/fft1d_impl.h"
+#include "ducc0/fft/fftnd_impl.h"
 #include "ducc0/nufft/nufft.h"
 #include "ducc0/bindings/typecode.h"
 #include "ducc0/bindings/array_descriptor.h"
@@ -532,13 +535,13 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
     {
     auto alm(to_cmav<true,complex<double>,2>(*alm_));
     auto leg(to_vmav<true,complex<double>,3>(*leg_));
-    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
   else if (alm_->dtype==Typecode<complex<float>>::value)
     {
     auto alm(to_cmav<true,complex<float>,2>(*alm_));
     auto leg(to_vmav<true,complex<float>,3>(*leg_));
-    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, ALM2MAP);
+    alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
   else
     MR_fail("unsupported data type");
@@ -559,13 +562,13 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
     {
     auto leg(to_cmav<true,complex<double>,3>(*leg_));
     auto alm(to_vmav<true,complex<double>,2>(*alm_));
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
   else if (leg_->dtype==Typecode<complex<float>>::value)
     {
     auto leg(to_cmav<true,complex<float>,3>(*leg_));
     auto alm(to_vmav<true,complex<float>,2>(*alm_));
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads);
+    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
   else
     MR_fail("unsupported data type");
