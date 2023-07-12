@@ -53,6 +53,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/misc_utils.h"
 #include <atomic>
+#include <exception>
 #include <utility>
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
@@ -62,7 +63,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <thread>
 #include <queue>
 #include <vector>
-#include <exception>
 #include <errno.h>
 #include <string.h>
 #if __has_include(<pthread.h>)
