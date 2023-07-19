@@ -648,7 +648,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   auto new_f = YCombinator([this, &f, &counter, &ex, &ex_mut, pool](auto &new_f, size_t istart, size_t step) -> void {
     try
       {
-      ScopedValueChanger changer(in_parallel_region, true);
+      ScopedValueChanger<bool> changer(in_parallel_region, true);
       ScopedUseThreadPool guard(*pool);
       for(; step>0; step>>=1)
         if(istart+step<nthreads_)
@@ -692,7 +692,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     }
   {
   // do remaining work directly on this thread
-  ScopedValueChanger changer(in_parallel_region, true);
+  ScopedValueChanger<bool> changer(in_parallel_region, true);
   MyScheduler sched(*this, 0);
   f(sched);
   }
