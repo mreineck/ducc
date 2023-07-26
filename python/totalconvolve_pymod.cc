@@ -698,7 +698,7 @@ ptg : numpy.ndarray((N, 3), dtype=numpy.float64)
 
 Returns
 -------
-numpy.array((N, n2), dtype=numpy.float64)
+numpy.array((n2, N), dtype=numpy.float64)
     the interpolated values
     n2 is either 1 (if separate=True was used in the constructor) or the
     second dimension of the input slm and blm arrays (otherwise)
@@ -721,7 +721,7 @@ ptg : numpy.ndarray((N,3), dtype=numpy.float64)
     theta must be in the range [0; pi]
     phi must be in the range [0; 2pi]
     psi should be in the range [-2pi; 2pi]
-data : numpy.ndarray((N, n2), dtype=numpy.float64)
+data : numpy.ndarray((n2, N), dtype=numpy.float64)
     the interpolated values
     n2 must match the `ncomp` value specified in the constructor.
 
