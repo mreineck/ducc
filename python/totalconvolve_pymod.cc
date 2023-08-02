@@ -634,6 +634,52 @@ Class encapsulating the convolution/interpolation functionality
 
 The class can be configured for interpolation or for adjoint interpolation, by
 means of two different constructors.
+
+Constructor for interpolation mode
+
+Parameters
+----------
+sky : numpy.ndarray((ncomp, nalm_sky), dtype=numpy.complex)
+    spherical harmonic coefficients of the sky. ncomp can be 1 or 3.
+beam : numpy.ndarray((ncomp, nalm_beam), dtype=numpy.complex)
+    spherical harmonic coefficients of the beam. ncomp can be 1 or 3
+separate : bool
+    whether contributions of individual components should be added together.
+lmax : int
+    maximum l in the coefficient arays
+kmax : int
+    maximum azimuthal moment in the beam coefficients
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+epsilon : float
+    desired accuracy for the interpolation; a typical value is 1e-5
+nthreads : the number of threads to use for computation
+
+Constructor for adjoint interpolation mode
+
+Parameters
+----------
+lmax : int
+    maximum l in the coefficient arays
+kmax : int
+    maximum azimuthal moment in the beam coefficients
+ncomp : int
+    the number of components which are going to input to `deinterpol`.
+    Can be 1 or 3.
+npoints : int
+    total number of irregularly spaced points you want to use this object for
+    (only used for performance fine-tuning)
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+epsilon : float
+    desired accuracy for the interpolation; a typical value is 1e-5
+nthreads : the number of threads to use for computation
+
 )""";
 
 constexpr const char *initnormal_DS = R"""(
