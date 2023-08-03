@@ -1,3 +1,8 @@
+0.32.0:
+- general:
+    - minimum required Python version is now 3.8
+
+
 0.31.0:
 - general:
     - potentially more efficient handling of parallel regions 
