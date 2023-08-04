@@ -1101,7 +1101,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      vector<mutex> locks(nover[0]);
+      vector<Mutex> locks(nover[0]);
 
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(coord_idx.size(), nthreads, chunksz, [&](Scheduler &sched)
