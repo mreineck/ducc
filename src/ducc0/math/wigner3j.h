@@ -1,0 +1,52 @@
+/*
+ *  This file is part of ducc0.
+ *
+ *  This code is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This code is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this code; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+/** \file ducc0/math/wigner3j.h
+ *  Computation of Wigner-3j symbols
+ *  Algorithm implemented according to Schulten & Gordon:
+ *  J. Math. Phys. 16, p. 10 (1975)
+ *
+ *  Copyright (C) 2009-2023 Max-Planck-Society
+ *  \author Martin Reinecke
+ */
+
+#ifndef DUCC0_WIGNER3J_H
+#define DUCC0_WIGNER3J_H
+
+#include <vector>
+
+namespace ducc0 {
+
+namespace detail_wigner3j {
+
+using namespace std;
+
+/**
+  Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
+  following the algorithm in the SLATEC algorithm DRC3JJ.
+  The results are returned in \a res, which is resized appropriately.
+ */
+void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
+
+}
+
+using detail_wigner3j::wigner3j;
+
+}
+
+#endif
