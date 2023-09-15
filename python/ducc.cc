@@ -6,6 +6,7 @@
 #include "ducc0/math/space_filling.cc"
 #include "ducc0/math/gl_integrator.cc"
 #include "ducc0/math/gridding_kernel.cc"
+#include "ducc0/math/wigner3j.cc"
 #include "ducc0/sht/sht.cc"
 #include "ducc0/healpix/healpix_tables.cc"
 #include "ducc0/healpix/healpix_base.cc"
