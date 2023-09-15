@@ -34,6 +34,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
+#include "ducc0/math/wigner3j.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/bindings/pybind_utils.h"
 
@@ -862,6 +863,33 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
+py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
+  {
+  size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
+  auto res_ = make_Pyarr<double>({ncoef});
+  auto res = to_vmav<double,1>(res_);
+  int l1min;
+  wigner3j_int (l2, l3, m2, m3, l1min, res);
+  return py::make_tuple(py::cast(l1min), res_);
+  }
+
+constexpr const char *Py_wigner3j_int_DS = R"""(
+Computes Wigner 3j symbols according to the algorithm of
+Schulten & Gordon: J. Math. Phys. 16, p. 10 (1975)
+
+This special case only takes integer quantum numbers.
+
+Parameters
+----------
+l2, l3, m2, m3 : integer
+    fixed quantum numbers
+
+Returns
+-------
+int : the l1 quantum number of the first value in the returned array
+numpy.ndarray(dtype=numpy.float64) : 3j symbols in order of increasing l1
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -907,6 +935,8 @@ void add_misc(py::module_ &msup)
     "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
+
+  m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }

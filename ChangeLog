@@ -2,6 +2,9 @@
 - general:
     - minimum required Python version is now 3.8
 
+- math:
+    - new code for calculating Wigner 3j symbols
+
 
 0.31.0:
 - general:
