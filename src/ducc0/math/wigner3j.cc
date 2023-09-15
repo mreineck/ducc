@@ -86,9 +86,8 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
                         vmav<double,1> &res)
   {
-  constexpr int expo=250;
-  constexpr double srhuge=ldexp(1.,expo),
-                   tiny=ldexp(1.,-2*expo), srtiny=ldexp(1.,-expo);
+  constexpr double srhuge=0x1p+250,
+                   tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
