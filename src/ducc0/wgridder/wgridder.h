@@ -379,11 +379,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
 
-    static double phase(double x, double y, double w, bool adjoint, double nshift)
+    static double phase(double xsq, double ysq, double w, bool adjoint, double nshift)
       {
-      double tmp = 1.-x-y;
+      double tmp = 1.-xsq-ysq;
       if (tmp<=0) return 0; // no phase factor beyond the horizon
-      double nm1 = (-x-y)/(sqrt(tmp)+1); // more accurate form of sqrt(1-x-y)-1
+      double nm1 = (-xsq-ysq)/(sqrt(tmp)+1); // more accurate form of sqrt(1-xsq-ysq)-1
       double phs = w*(nm1+nshift);
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
@@ -427,11 +427,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for (auto i=lo; i<hi; ++i)
           {
-          double fx = sqr(x0+i*pixsize_x);
+          double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, true, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
@@ -571,11 +571,11 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for(auto i=lo; i<hi; ++i)
           {
-          double fx = sqr(x0+i*pixsize_x);
+          double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(fx, sqr(y0+i*pixsize_y), w, false, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
@@ -1351,21 +1351,22 @@ timers.pop();
         {
         for(auto i=lo; i<hi; ++i)
           {
-          double fx = sqr(x0+i*pixsize_x);
+          double xsq = sqr(x0+i*pixsize_x);
           for (size_t j=0; j<nyd; ++j)
             {
-            double fy = sqr(y0+j*pixsize_y);
+            double ysq = sqr(y0+j*pixsize_y);
             double fct = 0;
-            auto tmp = 1-fx-fy;
+            auto tmp = 1-xsq-ysq;
             if (tmp>=0)
               {
-              auto nm1 = (-fx-fy)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+              auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
               fct = krn->corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+//              fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
+              fct = divide_by_n ? 0 : krn->corfunc((-sqrt(-tmp)-1+nshift)*dw);
             if (lmshift)
               {
               auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
