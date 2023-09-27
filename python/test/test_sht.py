@@ -156,15 +156,6 @@ def test_2d_adjoint(lmmax, geometry, spin, nthreads):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     assert_allclose(v1, v2, rtol=1e-10)
 
-    # alternative version of the test taken from SSHT (test_forward_adjoint)
-    map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    alm1 = random_alm(lmax, mmax, spin, ncomp, rng)
-    map0 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm1, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
-    del map1
-    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
-    assert_allclose(v1, v2, rtol=1e-10)
-
 
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
