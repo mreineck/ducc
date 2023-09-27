@@ -2213,13 +2213,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
   pocketfft_c<T> plan_in(need_first_resample ? nfull_in : 1),
                  plan_out(nfull_out), plan_full(nfull);
 
-  // We try to process two m values (one even, one odd) simultaneously.
-  // In the case of even nfull_in this does not work, since the Nyquist modes
-  // will be mixed somehow (perhaps this can be fixed at some point), so we
-  // process every m separately in this case.
-  bool slow_method = (nfull_in&1)==0;
-
-  execDynamic(slow_method ? nm : (nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
+  execDynamic(nm, nthreads, chunksize, [&](Scheduler &sched)
     {
     vmav<complex<T>,1> tmp({max(nfull,nfull_in)}, UNINITIALIZED);
     vmav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
@@ -2227,33 +2221,20 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{slow_method ? rng.lo : 2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{slow_method ? rng.lo : 2*rng.lo,MAXIDX}}));
+        auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
+        auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
           T fct2 = fct * (((j+rng.lo)&1)? T(-1) : T(1));
           for (size_t i=0, im=nfull_in-1+npi; (i<nrings_in)&&(i<=im); ++i,--im)
             {
-            if (slow_method)
-              {
-              complex<T> v1 = llegi(i,j);
-              tmp(i) = v1;
-              if ((im<nfull_in) && (i!=im))
-                tmp(im) = fct2 * v1;
-              else
-                tmp(i) = T(0.5)*(tmp(i)+fct2*v1);
-              }
+            complex<T> v1 = llegi(i,j);
+            tmp(i) = v1;
+            if ((im<nfull_in) && (i!=im))
+              tmp(im) = fct2 * v1;
             else
-              {
-              complex<T> v1 = llegi(i,2*j);
-              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-              tmp(i) = v1 + v2;
-              if ((im<nfull_in) && (i!=im))
-                tmp(im) = fct * (v1-v2);
-              else
-                tmp(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
-              }
+              tmp(i) = T(0.5)*(tmp(i)+fct2*v1);
             }
           if (need_first_resample)
             {
@@ -2309,14 +2290,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
             size_t im = nfull_out-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-            if (slow_method)
-              llego(i,j  ) = norm2 * (tmp(i) + fct2*tmp(im));
-            else
-              {
-              llego(i,2*j  ) = norm2 * (tmp(i) + fct*tmp(im));
-              if ((2*j+1)<llego.shape(1))
-                llego(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
-              }
+            llego(i,j  ) = norm2 * (tmp(i) + fct2*tmp(im));
             }
           }
         }
@@ -2349,13 +2323,7 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
   pocketfft_c<T> plan_in(nfull_in),
                  plan_out(need_second_resample ? nfull_out : 1), plan_full(nfull);
 
-  // We try to process two m values (one even, one odd) simultaneously.
-  // In the case of even nfull_out this does not work, since the Nyquist modes
-  // will be mixed somehow (perhaps this can be fixed at some point), so we
-  // process every m separately in this case.
-  bool slow_method = (nfull_out&1)==0;
-
-  execDynamic(slow_method ? nm : (nm+1)/2, nthreads, chunksize, [&](Scheduler &sched)
+  execDynamic(nm, nthreads, chunksize, [&](Scheduler &sched)
     {
     vmav<complex<T>,1> tmp({max(nfull,nfull_out)}, UNINITIALIZED);
     vmav<complex<T>,1> buf({max(plan_in.bufsize(), max(plan_out.bufsize(), plan_full.bufsize()))}, UNINITIALIZED);
@@ -2363,33 +2331,20 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{slow_method ? rng.lo : 2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{slow_method ? rng.lo : 2*rng.lo,MAXIDX}}));
+        auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
+        auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
           T fct2 = fct * (((j+rng.lo)&1)? T(-1) : T(1));
           for (size_t i=0, im=nfull_in; (i<nrings_in)&&(i<=im); ++i,--im)
             {
-            if (slow_method)
-              {
-              complex<T> v1 = llegi(i,j);
-              tmp(i) = v1;
-              if ((im<nfull_in) && (i!=im))
-                tmp(im) = fct2 * v1;
-              else
-                tmp(i) = T(0.5)*(tmp(i)+fct2*v1);
-              }
+            complex<T> v1 = llegi(i,j);
+            tmp(i) = v1;
+            if ((im<nfull_in) && (i!=im))
+              tmp(im) = fct2 * v1;
             else
-              {
-              complex<T> v1 = llegi(i,2*j);
-              complex<T> v2 = ((2*j+1)<llegi.shape(1)) ? llegi(i,2*j+1) : 0;
-              tmp(i) = v1 + v2;
-              if ((im<nfull_in) && (i!=im))
-                tmp(im) = fct * (v1-v2);
-              else
-                tmp(i) = T(0.5)*(tmp(i)+fct*(v1-v2));
-              }
+              tmp(i) = T(0.5)*(tmp(i)+fct2*v1);
             }
           plan_in.exec_copyback((Cmplx<T> *)tmp.data(), (Cmplx<T> *)buf.data(), T(1), false);
           // zero padding to full-resolution CC grid
@@ -2447,14 +2402,7 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
             size_t im = nfull_out-1+npo-i;
             if (im==nfull_out) im=0;
             auto norm2 = norm * (T(1)-T(0.5)*(i==im));
-            if (slow_method)
-              llego(i,j) = norm2 * (tmp(i) + fct2*tmp(im));
-            else
-              {
-              llego(i,2*j) = norm2 * (tmp(i) + fct*tmp(im));
-              if ((2*j+1)<llego.shape(1))
-                llego(i,2*j+1) = norm2 * (tmp(i) - fct*tmp(im));
-              }
+            llego(i,j) = norm2 * (tmp(i) + fct2*tmp(im));
             }
           }
         }

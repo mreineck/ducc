@@ -65,6 +65,42 @@ def test_random_analysis_2d(lmax_max, nthreads_max):
         raise RuntimeError
 
 
+def test_random_analysis_adjointness_2d(lmax_max, nthreads_max):
+    geometries = ["CC", "F1", "MW", "MWflip", "GL", "DH", "F2"]
+    geometry = random.choice(geometries)
+    lmax = random.randint(0,lmax_max)
+    mmax = random.randint(0,lmax)
+    spin = random.randint(0,lmax)
+    if random.randint(0,1) == 0:
+        spin=0
+
+    nrings = lmax+1
+    if geometry=="CC":
+        nrings = lmax+2
+    elif geometry=="DH":
+        nrings = 2*lmax+2
+    elif geometry=="F2":
+        nrings = 2*lmax+1
+    nrings += random.randint(0,2*nrings)
+    nphi = 2*lmax+1
+    nphi += random.randint(0,nphi)
+    nthreads = random.randint(1, nthreads_max)
+
+    print("testing analysis adjointness: lmax={}, mmax={}, spin={}, nthreads={}, geometry={}, nrings={}, nphi={}".format(lmax,mmax,spin,nthreads,geometry,nrings, nphi))
+    ncomp = 1 if spin == 0 else 2
+    alm0 = random_alm(lmax, mmax, spin, ncomp)
+    map0 = np.random.uniform(0., 1., (alm0.shape[0], nrings, nphi))
+    map1 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
+    #del map1
+    alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
+    err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
+    if err>1e-11:
+        print("AAAAARGH: analysis adjointness error:", err)
+        raise RuntimeError
+
+
 def test_random_adjointness_2d(lmax_max, nthreads_max):
     geometries = ["CC", "F1", "MW", "MWflip", "GL", "DH", "F2"]
     geometry = random.choice(geometries)
@@ -93,6 +129,8 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
         print("AAAAARGH: adjointness error:", err)
         raise RuntimeError
 
+
 while True:
     test_random_analysis_2d(2047, 8)
     test_random_adjointness_2d(2047, 8)
+    test_random_analysis_adjointness_2d(2047, 8)
