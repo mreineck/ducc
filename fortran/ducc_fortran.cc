@@ -32,6 +32,7 @@ CONVENTIONS USED FOR THIS WRAPPER:
  - if axis indices or array indices are passed, they are assumed to be one-based
 */
 
+#include <ISO_Fortran_binding.h>
 #include "ducc0/infra/threading.cc"
 #include "ducc0/infra/mav.cc"
 //#include "ducc0/math/gl_integrator.cc"
@@ -105,21 +106,28 @@ void fft_c2c_inplace(ArrayDescriptor *inout_,
   }
 
 DUCC0_INTERFACE_FUNCTION
-void print_array(const ducc0::ArrayDescriptor *desc)
+void arraytodesc_c(const CFI_cdesc_t *arr, ducc0::ArrayDescriptor *desc)
   {
-  cout << "ndim: " << int(desc->ndim) << endl;
-  cout << "type: " << int(desc->dtype) << endl;
-  for (size_t i=0;i<desc->ndim; ++i)
+  MR_assert((arr!=nullptr) && (desc!=nullptr), "Null pointer found");
+cout << int(arr->type) << endl;
+  switch (arr->type)
     {
-    cout << desc->shape[i] << " " << int(desc->stride[i]) << endl;
+    case CFI_type_int32_t: desc->dtype=19; break;
+    case CFI_type_int64_t: desc->dtype=23; break;
+    case CFI_type_float: desc->dtype=3; break;
+    case CFI_type_double: desc->dtype=7; break;
+    case CFI_type_float_Complex: desc->dtype=67; break;
+    case CFI_type_double_Complex: desc->dtype=71; break;
+    default: MR_fail("unsupported data type");
     }
-  }
-
-DUCC0_INTERFACE_FUNCTION
-ptrdiff_t get_stride (const char *p1, const char *p2, uint8_t dtype)
-  {
-  size_t nbytes = ((dtype&15)+1)*((dtype>>6)+1);
-  ptrdiff_t res = ptrdiff_t(p2-p1)/ptrdiff_t(nbytes);
-  MR_assert(res*nbytes==p2-p1, "bad stride");
-  return res;
+  desc->ndim = arr->rank;
+  MR_assert(desc->ndim<=10, "array rank too large");
+  desc->data = arr->base_addr; // FIXME: perhaps needs correction!
+  size_t nbytes = typeSize(desc->dtype);
+  for (size_t i=0; i<size_t(desc->ndim); ++i)
+    {
+    desc->shape[i] = arr->dim[i].extent;
+    desc->stride[i] = arr->dim[i].sm/nbytes; //??
+    MR_assert(desc->stride[i]*nbytes==arr->dim[i].sm, "bad stride");
+    }
   }
