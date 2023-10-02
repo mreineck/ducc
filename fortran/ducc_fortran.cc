@@ -56,60 +56,9 @@ using namespace std;
 #define DUCC0_INTERFACE_FUNCTION extern "C" [[gnu::visibility("default")]]
 #endif
 
-// FFT
-
-DUCC0_INTERFACE_FUNCTION
-void fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
-  const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
-  {
-  const auto &in(*in_);
-  auto &out(*out_);
-  const auto &axes(*axes_);
-  auto myaxes(to_vector_subtract_1<false, uint64_t, size_t>(axes));
-  for (auto &a: myaxes) a = in.ndim-1-a;
-  if (in.dtype==Typecode<complex<double>>::value)
-    {
-    auto myin(to_cfmav<true,complex<double>>(in));
-    auto myout(to_vfmav<true,complex<double>>(out));
-    c2c(myin, myout, myaxes, forward, fct, nthreads);
-    }
-  else if (in.dtype==Typecode<complex<float>>::value)
-    {
-    auto myin(to_cfmav<true,complex<float>>(in));
-    auto myout(to_vfmav<true,complex<float>>(out));
-    c2c(myin, myout, myaxes, forward, float(fct), nthreads);
-    }
-  else
-    MR_fail("bad datatype");
-  }
-
-DUCC0_INTERFACE_FUNCTION
-void fft_c2c_inplace(ArrayDescriptor *inout_,
-  const ArrayDescriptor *axes_, int forward, double fct, size_t nthreads)
-  {
-  auto &inout(*inout_);
-  const auto &axes(*axes_);
-  auto myaxes(to_vector_subtract_1<false, uint64_t, size_t>(axes));
-  for (auto &a: myaxes) a = inout.ndim-1-a;
-  if (isDtype<complex<double>>(inout.dtype))
-    {
-    auto myinout(to_vfmav<true,complex<double>>(inout));
-    c2c(cfmav(myinout), myinout, myaxes, forward, fct, nthreads);
-    }
-  else if (isDtype<complex<float>>(inout.dtype))
-    {
-    auto myinout(to_vfmav<true,complex<float>>(inout));
-    c2c(cfmav(myinout), myinout, myaxes, forward, float(fct), nthreads);
-    }
-  else
-    MR_fail("bad datatype");
-  }
-
-DUCC0_INTERFACE_FUNCTION
 void arraytodesc_c(const CFI_cdesc_t *arr, ducc0::ArrayDescriptor *desc)
   {
   MR_assert((arr!=nullptr) && (desc!=nullptr), "Null pointer found");
-cout << int(arr->type) << endl;
   switch (arr->type)
     {
     case CFI_type_int32_t: desc->dtype=19; break;
@@ -128,6 +77,38 @@ cout << int(arr->type) << endl;
     {
     desc->shape[i] = arr->dim[i].extent;
     desc->stride[i] = arr->dim[i].sm/nbytes; //??
-    MR_assert(desc->stride[i]*nbytes==arr->dim[i].sm, "bad stride");
+    MR_assert(desc->stride[i]*ptrdiff_t(nbytes)==arr->dim[i].sm, "bad stride");
     }
   }
+
+// FFT
+
+DUCC0_INTERFACE_FUNCTION
+void fft_c2c_c(const CFI_cdesc_t *in__, CFI_cdesc_t *out__,
+  const CFI_cdesc_t *axes__, int forward, double fct, size_t nthreads)
+  {
+  ArrayDescriptor in_, out_, axes_;
+  arraytodesc_c(in__, &in_);
+  arraytodesc_c(out__, &out_);
+  arraytodesc_c(axes__, &axes_);
+  auto &in(in_);
+  auto &out(out_);
+  const auto &axes(axes_);
+  auto myaxes(to_vector_subtract_1<false, size_t>(axes));
+  for (auto &a: myaxes) a = in.ndim-1-a;
+  if (isDtype<complex<double>>(in.dtype))
+    {
+    auto myin(to_cfmav<true,complex<double>>(in));
+    auto myout(to_vfmav<true,complex<double>>(out));
+    c2c(myin, myout, myaxes, bool(forward), fct, nthreads);
+    }
+  else if (isDtype<complex<float>>(in.dtype))
+    {
+    auto myin(to_cfmav<true,complex<float>>(in));
+    auto myout(to_vfmav<true,complex<float>>(out));
+    c2c(myin, myout, myaxes, bool(forward), float(fct), nthreads);
+    }
+  else
+    MR_fail("bad datatype");
+  }
+
