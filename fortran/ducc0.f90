@@ -6,7 +6,7 @@ module ducc0
   public :: fft_c2c_inplace
 
   interface
-    subroutine fft_c2c_ll(in, out, axes, forward, fct, nthreads) bind(c, name="fft_c2c_c")
+    subroutine fft_c2c_c(in, out, axes, forward, fct, nthreads) bind(c, name="fft_c2c_c")
       use iso_c_binding
       type(*), intent(in) :: in(..)
       type(*), intent(inout) :: out(..)
@@ -35,30 +35,25 @@ contains
   end function
 
   subroutine fft_c2c_inplace(inout, axes, fwd, fct, nthreads)
-    type(*), intent(inout) :: inout(:)
+    type(*), intent(inout) :: inout(..)
     integer, intent(in) :: axes(:)
     logical, intent(in) :: fwd
     real(C_DOUBLE), intent(in) :: fct
     integer,intent(in) :: nthreads
 
-    call fft_c2c_ll(inout, inout, caxes(axes), cbool(fwd), fct, csizet(nthreads))
+    call fft_c2c_c(inout, inout, caxes(axes), cbool(fwd), fct, csizet(nthreads))
   end subroutine
 end module
 
 program blah
 use ducc0
 implicit none
-complex(8) :: arr, arr2(10)
+complex(8) :: arr(100,100,100)
 integer i
-arr2(:)=0
-arr2(1) = 1
-call fft_c2c_inplace(arr2, (/1/), .true., 1.D0, 1)
-do i = 1,10
-  print *,arr2(i)
-end do
-call fft_c2c_inplace(arr2, (/1/), .false., 1.D0, 1)
-do i = 1,10
-  print *,arr2(i)
-end do
+arr=1
+call fft_c2c_inplace(arr, (/1/), .true., 1.D0, 8)
+print *,arr(1,1,1)
+call fft_c2c_inplace(arr, (/1/), .false., 1.D0, 8)
+print *,arr(1,1,1)
 !call fft_c2c_inplace(arr, (/1/),.false., 1.D0, 1)
 end program
