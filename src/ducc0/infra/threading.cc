@@ -171,7 +171,7 @@ template <typename T> class concurrent_queue
   {
     std::queue<T> q_;
     Mutex mut_;
-    std::atomic<size_t> size_;
+    std::atomic<size_t> size_=0;
     using lock_t = LockGuard;
 
   public:
