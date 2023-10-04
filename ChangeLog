@@ -5,6 +5,10 @@
 - math:
     - new code for calculating Wigner 3j symbols
 
+- sht:
+    - fix for non-adjointness between analysis and adjoint_analysis in cases
+      where the input map is not band limited
+
 
 0.31.0:
 - general:
