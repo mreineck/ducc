@@ -15,7 +15,7 @@
  */
 
 /* Copyright (C) 2023 Max-Planck-Society
-   Authors: Martin Reinecke */
+   Author: Martin Reinecke */
 
 /*
 Compilation: (the -I path must point to the src/ directory in the ducc0 checkout)
@@ -49,7 +49,9 @@ CONVENTIONS USED FOR THIS WRAPPER:
 
 using namespace ducc0;
 using namespace std;
+
 //using namespace Fortran::ISO;  // for flang in the future?
+
 #if defined _WIN32 || defined __CYGWIN__
 #define DUCC0_INTERFACE_FUNCTION extern "C" [[gnu::dllexport]]
 #else

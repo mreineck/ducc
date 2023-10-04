@@ -1,3 +1,20 @@
+! This code is free software; you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation; either version 2 of the License, or
+! (at your option) any later version.
+!
+! This code is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with this code; if not, write to the Free Software
+! Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+! Copyright (C) 2023 Max-Planck-Society
+! Author: Martin Reinecke
+
 module ducc0
   use iso_c_binding
   implicit none
@@ -44,16 +61,3 @@ contains
     call fft_c2c_c(inout, inout, caxes(axes), cbool(fwd), fct, csizet(nthreads))
   end subroutine
 end module
-
-program blah
-use ducc0
-implicit none
-complex(8) :: arr(100,100,100)
-integer i
-arr=1
-call fft_c2c_inplace(arr, (/1/), .true., 1.D0, 8)
-print *,arr(1,1,1)
-call fft_c2c_inplace(arr, (/1/), .false., 1.D0, 8)
-print *,arr(1,1,1)
-!call fft_c2c_inplace(arr, (/1/),.false., 1.D0, 1)
-end program

@@ -9,6 +9,9 @@
     - fix for non-adjointness between analysis and adjoint_analysis in cases
       where the input map is not band limited
 
+- fortran:
+    - outline of an interface for calls from Fortran. Requires Fortran 2018.
+
 
 0.31.0:
 - general:
