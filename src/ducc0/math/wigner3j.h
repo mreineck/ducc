@@ -43,6 +43,7 @@ using namespace std;
   The results are returned in \a res, which is resized appropriately.
  */
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
+void wigner3j_tweaked (double l2, double l3, double m2, double m3, vector<double> &res);
 void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res);
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
@@ -52,14 +53,17 @@ void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res);
  */
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vector<double> &res);
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vmav<double,1> &res);
+void wigner3j_namaster (double l2, double l3, double m2, double m3, vector<double> &res);
 
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
 }
 
 using detail_wigner3j::wigner3j;
+using detail_wigner3j::wigner3j_tweaked;
 using detail_wigner3j::wigner3j_int;
 using detail_wigner3j::wigner3j_ncoef_int;
+using detail_wigner3j::wigner3j_namaster;
 
 }
 
