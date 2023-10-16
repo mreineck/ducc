@@ -137,6 +137,19 @@ template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector_
     }
   return res;
   }
+template<bool swap_content, typename Tout> vector<Tout> to_vector_subtract_1
+  (const ArrayDescriptor &desc)
+  {
+  if (isDtype<int32_t>(desc.dtype))
+    return to_vector_subtract_1<swap_content, int32_t, Tout>(desc);
+  if (isDtype<int64_t>(desc.dtype))
+    return to_vector_subtract_1<swap_content, int64_t, Tout>(desc);
+  if (isDtype<uint32_t>(desc.dtype))
+    return to_vector_subtract_1<swap_content, uint32_t, Tout>(desc);
+  if (isDtype<uint64_t>(desc.dtype))
+    return to_vector_subtract_1<swap_content, uint64_t, Tout>(desc);
+  MR_fail("no suitable type found");
+  }
 
 template<typename T, size_t ndim> cmav<T,ndim> subtract_1(const cmav<T,ndim> &inp)
   {
