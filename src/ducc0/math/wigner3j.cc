@@ -85,13 +85,65 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   return make_tuple(m1, l1min, l1max, ncoef);
   }
 
+void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
+                           int ncoef, vmav<double,1> &res)
+  {
+  constexpr double srhuge=0x1p+450,
+                   tiny=0x1p-900, srtiny=0x1p-450;
+
+  const double l2ml3sq = (l2-l3)*(l2-l3),
+               pre1 = (l2+l3+1.)*(l2+l3+1.);
+
+  MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
+
+  res(0) = srtiny;
+  double sumfor = (2.*l1min+1.) * res(0)*res(0);
+
+  for (int i=0; i+2<ncoef; i+=2)
+    {
+    double l1 = l1min+i+1,
+           l1sq = l1*l1;
+
+    res(i+1) = 0.;
+
+    double l1p1 = l1+1;
+    double l1p1sq = l1p1*l1p1;
+
+    const double tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
+                             /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
+    res(i+2) = -res(i)*tmp1;
+
+    sumfor += (2.*l1p1+1.)*res(i+2)*res(i+2);
+    if (abs(res(i+2))>=srhuge)
+      {
+      for (int k=0; k<=i+2; k+=2)
+        res(k)*=srtiny;
+      sumfor*=tiny;
+      }
+    }
+
+  bool last_coeff_is_negative = res(ncoef-1)<0.;
+
+  double cnorm=1./sqrt(sumfor);
+  // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
+  bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
+  if (last_coeff_is_negative != last_coeff_should_be_negative)
+    cnorm = -cnorm;
+
+  for (int k=0; k<ncoef; k+=2)
+    res(k)*=cnorm;
+  }
+
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
                         vmav<double,1> &res)
   {
-  constexpr double srhuge=0x1p+250,
-                   tiny=0x1p-500, srtiny=0x1p-250;
+  if ((m2==0.) && (m3==0.))
+    return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
+
+  constexpr double srhuge=0x1p+450,
+                   tiny=0x1p-900, srtiny=0x1p-450;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -100,7 +152,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
                m3mm2 = m3-m2;
 
   int i=0;
-  double c1=1e300;
+  double c1=0x1p+1000;
   double oldfac=0.;
 
   MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
@@ -144,10 +196,14 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     }
 
   double sumbac=0.;
+  bool last_coeff_is_negative=false;
+  double fct_fwd=1., fct_bwd=1.;
+  int nstep2=ncoef;
+
   if (i+1<ncoef) /* we have to iterate from the other side */
     {
     const double x1=res(i-2), x2=res(i-1), x3=res(i);
-    const int nstep2 = i-2;
+    nstep2 = i-2;
 
     i=ncoef-1;
     res(i) = srtiny;
@@ -171,8 +227,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
 
       oldfac=newfac;
 
-      if (i>nstep2+2)
-        sumbac += (2.*l1+1.)*res(i)*res(i);
+      sumbac += (2.*l1+1.)*res(i)*res(i);
       if (abs(res(i))>=srhuge)
         {
         for (int k=i; k<ncoef; ++k)
@@ -182,30 +237,46 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
       }
     while (i>nstep2);
 
+    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+      {
+      auto l1=l1min+i;
+      sumbac -= (2.*l1+1.)*res(i)*res(i);
+      }
+
     const double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
                          /(x1*x1+x2*x2+x3*x3);
-    for (int k=0; k<nstep2; ++k)
-      res(k)*=ratio;
-    sumfor*=ratio*ratio;
+    if (abs(ratio)>1.)
+      { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_coeff_is_negative=ratio<0; }
+    else
+      { fct_fwd = ratio; sumfor*=ratio*ratio; }
+    }
+  else
+    {
+    last_coeff_is_negative = res(ncoef-1)<0.;
     }
 
   double cnorm=1./sqrt(sumfor+sumbac);
-  // FIXME: this is a very shoddy fix! Try to come up with something better!
-  double dtest = (res(ncoef-1)>=0) ? 1 : -1;
-  if (xpow(nearest_int(l2-l3-m1),dtest)<0.)
+  // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
+  bool last_coeff_should_be_negative = nearest_int(abs(l2-l3+m2+m3))&1;
+  if (last_coeff_is_negative != last_coeff_should_be_negative)
     cnorm = -cnorm;
 
-  for (int k=0; k<ncoef; ++k)
-    res(k)*=cnorm;
+  for (int k=0; k<nstep2; ++k)
+    res(k)*=cnorm*fct_fwd;
+  for (int k=nstep2; k<ncoef; ++k)
+    res(k)*=cnorm*fct_bwd;
   }
 
 void wigner3j_internal_tweaked (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
                         vmav<double,1> &res)
   {
+  if ((m2==0.) && (m3==0.))
+    return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
+
   MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
 
-  constexpr double srhuge=0x1p+250, tiny=0x1p-500, srtiny=0x1p-250;
+  constexpr double srhuge=0x1p+450, tiny=0x1p-900, srtiny=0x1p-450;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -289,7 +360,7 @@ void wigner3j_internal_tweaked (double l2, double l3, double m2, double m3,
 
   double sumbac=0.;
 bool last_negative;
-  int nstep2=0;
+  int nstep2=ncoef;
   if (i+1<ncoef) /* we have to iterate from the other side */
     {
     last_negative = false;
@@ -853,6 +924,7 @@ MR_assert(nfin<=size, "aargh2");
 	sumuni=sum1;
       
       cnorm=1./sqrt(sumuni);
+//      sign1 = copysign(1., thrcof[nfin-1]);
       if(thrcof[nfin-1]<0) sign1=-1;
       else sign1=1;
       
