@@ -130,6 +130,8 @@ size_t ducc0_max_threads()
     size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
 #endif
     auto evar=getenv("DUCC0_NUM_THREADS");
+    // fallback
+    if (!evar) evar=getenv("OMP_NUM_THREADS");
     if (!evar)
       return res;
     auto res2 = mystrtol(evar);
@@ -323,8 +325,6 @@ class ducc_thread_pool: public thread_pool
       workers_(nthreads)
       { create_threads(); }
 
-    ducc_thread_pool(): ducc_thread_pool(ducc0_max_threads()) {}
-
     //virtual
     ~ducc_thread_pool() { shutdown(); }
 
@@ -380,7 +380,7 @@ class ducc_thread_pool: public thread_pool
   };
 
 // return a pointer to a singleton thread_pool, which is always available
-inline ducc_thread_pool *get_master_pool()
+ducc_thread_pool *get_master_pool()
   {
   static auto master_pool = new ducc_thread_pool(ducc0_max_threads()-1);
 #if __has_include(<pthread.h>)
@@ -403,7 +403,8 @@ thread_pool *set_active_pool(thread_pool *new_pool)
   { return std::exchange(active_pool, new_pool); }
 thread_pool *get_active_pool()
   {
-  MR_assert(active_pool!=nullptr, "no thread pool active");
+  if (!active_pool) active_pool = get_master_pool();
+  MR_assert(active_pool, "no thread pool active");
   return active_pool;
   }
 
