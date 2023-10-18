@@ -85,6 +85,7 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   return make_tuple(m1, l1min, l1max, ncoef);
   }
 
+// version for m2==m3==0
 void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
                            int ncoef, vmav<double,1> &res)
   {
@@ -134,6 +135,134 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
     res(k)*=cnorm;
   }
 
+// version for m2==-m3
+void wigner3j_symm_m2m3_internal (double l2, double l3, double m2,
+                        double l1min, double l1max, int ncoef,
+                        vmav<double,1> &res)
+  {
+  constexpr double srhuge=0x1p+450,
+                   tiny=0x1p-900, srtiny=0x1p-450;
+
+  const double l2ml3sq = (l2-l3)*(l2-l3),
+               pre1 = (l2+l3+1.)*(l2+l3+1.),
+               m3mm2 = -2*m2;
+
+  int i=0;
+  double c1=0x1p+1000;
+  double oldfac=0.;
+
+  MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
+
+  res(i) = srtiny;
+  double sumfor = (2.*l1min+1.) * res(i)*res(i);
+
+  while(true)
+    {
+    if (i+1==ncoef) break; /* all done */
+    ++i;
+
+    const double l1 = l1min+i,
+                 l1sq = l1*l1,
+                 c1old = abs(c1),
+                 newfac = sqrt((l1sq-l2ml3sq)*(pre1-l1sq)*l1sq);
+
+    if (i>1)
+      {
+      const double tmp1 = 1./((l1-1.)*newfac);
+      c1 = (2.*l1-1.)*(-(l1sq-l1)*m3mm2) * tmp1;
+      res(i) = res(i-1)*c1 - res(i-2)*l1*oldfac*tmp1;
+      }
+    else
+      {
+      c1 = (l1>1.000001) ? (2.*l1-1.)*(-(l1sq-l1)*m3mm2)/((l1-1.)*newfac)
+                         : -(2.*l1-1.)*l1*m3mm2/newfac;
+      res(i) = res(i-1)*c1;
+      }
+
+    oldfac=newfac;
+
+    sumfor += (2.*l1+1.)*res(i)*res(i);
+    if (abs(res(i))>=srhuge)
+      {
+      for (int k=0; k<=i; ++k)
+        res(k)*=srtiny;
+      sumfor*=tiny;
+      }
+    if (c1old<=abs(c1)) break;
+    }
+
+  double sumbac=0.;
+  bool last_coeff_is_negative=false;
+  double fct_fwd=1., fct_bwd=1.;
+  int nstep2=ncoef;
+
+  if (i+1<ncoef) /* we have to iterate from the other side */
+    {
+    const double x1=res(i-2), x2=res(i-1), x3=res(i);
+    nstep2 = i-2;
+
+    i=ncoef-1;
+    res(i) = srtiny;
+    sumbac = (2.*l1max+1.) * res(i)*res(i);
+
+    do
+      {
+      --i;
+
+      const double l1 = l1min+i,
+                   l1p1sq = (l1+1.)*(l1+1.),
+                   newfac = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*l1p1sq);
+
+      if (i<ncoef-2)
+        res(i) = (res(i+1) * (2.*l1+3.)*(-(l1p1sq+l1+1.)*m3mm2)
+                 -res(i+2) * (l1+1.)*oldfac)
+                 / ((l1+2.)*newfac);
+      else
+        res(i) = res(i+1)*(2.*l1+3.)*(-(l1p1sq+l1+1.)*m3mm2)
+                 /((l1+2.)*newfac);
+
+      oldfac=newfac;
+
+      sumbac += (2.*l1+1.)*res(i)*res(i);
+      if (abs(res(i))>=srhuge)
+        {
+        for (int k=i; k<ncoef; ++k)
+          res(k)*=srtiny;
+        sumbac*=tiny;
+        }
+      }
+    while (i>nstep2);
+
+    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+      {
+      auto l1=l1min+i;
+      sumbac -= (2.*l1+1.)*res(i)*res(i);
+      }
+
+    const double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
+                         /(x1*x1+x2*x2+x3*x3);
+    if (abs(ratio)>1.)
+      { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_coeff_is_negative=ratio<0; }
+    else
+      { fct_fwd = ratio; sumfor*=ratio*ratio; }
+    }
+  else
+    {
+    last_coeff_is_negative = res(ncoef-1)<0.;
+    }
+
+  double cnorm=1./sqrt(sumfor+sumbac);
+  // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
+  bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
+  if (last_coeff_is_negative != last_coeff_should_be_negative)
+    cnorm = -cnorm;
+
+  for (int k=0; k<nstep2; ++k)
+    res(k)*=cnorm*fct_fwd;
+  for (int k=nstep2; k<ncoef; ++k)
+    res(k)*=cnorm*fct_bwd;
+  }
+
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
@@ -141,6 +270,8 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
   {
   if ((m2==0.) && (m3==0.))
     return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
+  if (m2==-m3)
+    return wigner3j_symm_m2m3_internal (l2, l3, m2, l1min, l1max, ncoef, res);
 
   constexpr double srhuge=0x1p+450,
                    tiny=0x1p-900, srtiny=0x1p-450;
