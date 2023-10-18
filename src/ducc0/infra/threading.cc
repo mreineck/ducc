@@ -49,6 +49,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+// temporary
+#include <iostream>
+
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/misc_utils.h"
@@ -149,7 +152,7 @@ std::cout << "trying to read OMP_NUM_THREADS" << std::endl;
     if (!evar)
       return res;
     auto res2 = mystrtol(evar);
-    MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS");
+    MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS/OMP_NUM_THREADS");
     if (res2==0)
       return res;
     return std::min<size_t>(res, res2);
