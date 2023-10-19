@@ -310,7 +310,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     else
       {
       c1 = (l1>1.000001) ? (2.*l1-1.)*(pre2-(l1sq-l1)*m3mm2)/((l1-1.)*newfac)
-                         : -(2.*l1-1.)*l1*(m3mm2)/newfac;
+                         : -(2.*l1-1.)*l1*m3mm2/newfac;
       res(i) = res(i-1)*c1;
       }
 
