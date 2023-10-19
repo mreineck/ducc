@@ -89,8 +89,8 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
 void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
                            int ncoef, vmav<double,1> &res)
   {
-  constexpr double srhuge=0x1p+450,
-                   tiny=0x1p-900, srtiny=0x1p-450;
+  constexpr double srhuge=0x1p+250,
+                   tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.);
@@ -123,8 +123,7 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
       }
     }
 
-  bool last_coeff_is_negative = res(ncoef-1)<0.;
-
+  bool last_coeff_is_negative = (((ncoef+1)/2)&1) == 0;
   double cnorm=1./sqrt(sumfor);
   // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
   bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
@@ -140,8 +139,8 @@ void wigner3j_symm_m2m3_internal (double l2, double l3, double m2,
                         double l1min, double l1max, int ncoef,
                         vmav<double,1> &res)
   {
-  constexpr double srhuge=0x1p+450,
-                   tiny=0x1p-900, srtiny=0x1p-450;
+  constexpr double srhuge=0x1p+250,
+                   tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -241,7 +240,7 @@ void wigner3j_symm_m2m3_internal (double l2, double l3, double m2,
 
     const double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
                          /(x1*x1+x2*x2+x3*x3);
-    if (abs(ratio)>1.)
+    if (abs(ratio)<1.)
       { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_coeff_is_negative=ratio<0; }
     else
       { fct_fwd = ratio; sumfor*=ratio*ratio; }
@@ -250,7 +249,22 @@ void wigner3j_symm_m2m3_internal (double l2, double l3, double m2,
     {
     last_coeff_is_negative = res(ncoef-1)<0.;
     }
-
+#if 0
+xxxx
+	if(fabs(ratio)<1) {
+	  nlim++;
+	  ratio=1./ratio;
+	  for(ii=nlim-1;ii<nfin;ii++) //is the index ok??
+	    thrcof[ii]*=ratio;
+	  sumuni=ratio*ratio*sumbac+sumfor;
+	}
+	else {
+	  for(ii=0;ii<nlim;ii++)
+	    thrcof[ii]*=ratio;
+	  sumuni=ratio*ratio*sumfor+sumbac;
+	}
+xxxx
+#endif
   double cnorm=1./sqrt(sumfor+sumbac);
   // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
   bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
@@ -273,8 +287,8 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
   if (m2==-m3)
     return wigner3j_symm_m2m3_internal (l2, l3, m2, l1min, l1max, ncoef, res);
 
-  constexpr double srhuge=0x1p+450,
-                   tiny=0x1p-900, srtiny=0x1p-450;
+  constexpr double srhuge=0x1p+250,
+                   tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -376,7 +390,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
 
     const double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
                          /(x1*x1+x2*x2+x3*x3);
-    if (abs(ratio)>1.)
+    if (abs(ratio)<1.)
       { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_coeff_is_negative=ratio<0; }
     else
       { fct_fwd = ratio; sumfor*=ratio*ratio; }
@@ -489,21 +503,15 @@ while(i+1<ilim)
     oldfac=newfacv.s[vidx];
 
     sumfor += (2.*l1+1.)*res(i)*res(i);
-    //if (abs(res(i))>=srhuge)
-      //{
-      //for (int k=0; k<=i; ++k)
-        //res(k)*=srtiny;
-      //sumfor*=tiny;
-      //}
-    if (c1old<=abs(c1)) goto bailout_fwd;
-    ++vidx;
-  }
     if (abs(res(i))>=srhuge)
       {
       for (int k=0; k<=i; ++k)
         res(k)*=srtiny;
       sumfor*=tiny;
       }
+    if (c1old<=abs(c1)) goto bailout_fwd;
+    ++vidx;
+  }
 if (i+1>=ncoef) goto bailout_fwd;
   }
 bailout_fwd:
@@ -576,20 +584,14 @@ bailout_fwd:
     oldfac=newfacv.s[vidx];
 
     sumbac += (2.*l1+1.)*res(i)*res(i);
-    //if (abs(res(i))>=srhuge)
-      //{
-      //for (int k=i; k<ncoef; ++k)
-        //res(k)*=srtiny;
-      //sumbac*=tiny;
-      //}
-    ++vidx;
-    }
     if (abs(res(i))>=srhuge)
       {
       for (int k=i; k<ncoef; ++k)
         res(k)*=srtiny;
       sumbac*=tiny;
       }
+    ++vidx;
+    }
   if (i<=nstep2) goto bailout_bwd;
   }
 bailout_bwd:
@@ -627,7 +629,7 @@ bailout_bwd:
 
     const double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
                          /(x1*x1+x2*x2+x3*x3);
-    if (abs(ratio)>1.)
+    if (abs(ratio)<1.)
       { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_coeff_is_negative=ratio<0; }
     else
       { fct_fwd = ratio; sumfor*=ratio*ratio; }
@@ -658,7 +660,7 @@ void wigner3j_internal_tweaked (double l2, double l3, double m2, double m3,
 
   MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
 
-  constexpr double srhuge=0x1p+450, tiny=0x1p-900, srtiny=0x1p-450;
+  constexpr double srhuge=0x1p+250, tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -803,7 +805,7 @@ bool last_negative;
 
     double ratio = (x1*res(i)+x2*res(i+1)+x3*res(i+2))
                          /(x1*x1+x2*x2+x3*x3);
-    if (abs(ratio)>1.)
+    if (abs(ratio)<1.)
       { fct_bwd = 1./ratio; sumbac/=ratio*ratio; last_negative=ratio<0; }
     else
       { fct_fwd = ratio; sumfor*=ratio*ratio; }
@@ -1007,9 +1009,9 @@ MR_assert(nfin<=size, "aargh2");
 	sumuni=sum1;
       
       cnorm=1./sqrt(sumuni);
-//      sign1 = copysign(1., thrcof[nfin-1]);
-      if(thrcof[nfin-1]<0) sign1=-1;
-      else sign1=1;
+      sign1 = copysign(1., thrcof[nfin-1]);
+//      if(thrcof[nfin-1]<0) sign1=-1;
+//      else sign1=1;
       
       if(sign1*sign2<=0)
 	cnorm=-cnorm;
@@ -1057,7 +1059,7 @@ void wigner3j_tweaked (double l2, double l3, double m2, double m3, vector<double
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
   res.resize(ncoef);
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
-  wigner3j_internal_block<32> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
+  wigner3j_internal_block<16> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
 
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
