@@ -31,7 +31,6 @@
  *  \author Martin Reinecke
  */
 
-#include <iostream>
 #include <cmath>
 #include <cstdlib>
 #include <vector>
@@ -39,7 +38,6 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/wigner3j.h"
-#include "ducc0/infra/timers.h"
 
 namespace ducc0 {
 
@@ -475,216 +473,6 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     res(k)*=cnorm*fct_bwd;
   }
 
-//Returns all non-zero wigner-3j symbols
-// il2 (in) : l2
-// il3 (in) : l3
-// im2 (in) : m2
-// im3 (in) : m3
-// l1min_out (out) : min value for l1
-// l1max_out (out) : max value for l1
-// thrcof (out) : array with the values of the wigner-3j
-// size (in) : size allocated for thrcof
-int drc3jj(int il2,int il3,int im2, int im3,int *l1min_out,
-	   int *l1max_out,double *thrcof,int size)
-{
-  int sign1,sign2,nfin,im1,l1max,l1min,ii,lstep;
-  int converging,nstep2,nfinp1,index,nlim;
-  double newfac,c1,c2,sum1,sum2,a1,a2,a1s,a2s,dv,denom,c1old,oldfac,l1,l2,l3,m1,m2,m3;
-  double x,x1,x2,x3,y,y1,y2,y3,sumfor,sumbac,sumuni,cnorm,thresh,ratio;
-  double huge=sqrt(1.79E308/20.0);
-  double srhuge=sqrt(huge);
-  double tiny=1./huge;
-  double srtiny=1./srhuge;
-
-  im1=-im2-im3;
-  l2=(double)il2; l3=(double)il3;
-  m1=(double)im1; m2=(double)im2; m3=(double)im3;
-  
-  if((abs(il2+im2-il3+im3))%2==0)
-    sign2=1;
-  else
-    sign2=-1;
-  
-  //l1 bounds
-  l1max=il2+il3;
-  l1min=max((abs(il2-il3)),(abs(im1)));
-  *l1max_out=l1max;
-  *l1min_out=l1min;
-
-  if((il2-abs(im2)<0)||(il3-abs(im3)<0)) {
-    for(ii=0;ii<=l1max-l1min;ii++)
-      thrcof[ii]=0;
-    return 0;
-  }
-MR_assert(l1max-l1min>=0, "aargh1");
-  
-  if(l1max==l1min) { //If it's only one value:
-    thrcof[0]=sign2/sqrt(l1min+l2+l3+1);
-    return 0;
-  }
-  else {
-    nfin=l1max-l1min+1;
-MR_assert(nfin<=size, "aargh2");
-      {
-      l1=l1min;
-      newfac=0.;
-      c1=0.;
-      sum1=(l1+l1+1)*tiny;
-      thrcof[0]=srtiny;
-      
-      lstep=0;
-      converging=1;
-      while((lstep<nfin-1)&&(converging)) { //Forward series
-	lstep++;
-	l1++; //order
-	
-	oldfac=newfac;
-	a1=(l1+l2+l3+1)*(l1-l2+l3)*(l1+l2-l3)*(-l1+l2+l3+1);
-	a2=(l1+m1)*(l1-m1);
-	newfac=sqrt(a1*a2);
-	
-	if(l1>1) {
-	  dv=-l2*(l2+1)*m1+l3*(l3+1)*m1+l1*(l1-1)*(m3-m2);
-	  denom=(l1-1)*newfac;
-	  if(lstep>1)
-	    c1old=fabs(c1);
-	  c1=-(l1+l1-1)*dv/denom;
-	}
-	else {
-	  c1=-(l1+l1-1)*l1*(m3-m2)/newfac;
-	}
-	
-	if(lstep<=1) {
-	  x=srtiny*c1;
-	  thrcof[1]=x;
-	  sum1+=tiny*(l1+l1+1)*c1*c1;
-	}
-	else {
-	  c2=-l1*oldfac/denom;
-	  x=c1*thrcof[lstep-1]+c2*thrcof[lstep-2];
-	  thrcof[lstep]=x;
-	  sumfor=sum1;
-	  sum1+=(l1+l1+1)*x*x;
-	  if(lstep<nfin-1) {
-	    if(fabs(x)>=srhuge) {
-	      for(ii=0;ii<=lstep;ii++) {
-		if(fabs(thrcof[ii])<srtiny)
-		  thrcof[ii]=0;
-		thrcof[ii]/=srhuge;
-	      }
-	      sum1/=huge;
-	      sumfor/=huge;
-	      x/=srhuge;
-	    }
-	    
-	    if(c1old<=fabs(c1))
-	      converging=0;
-	  }
-	}
-      }
-      
-      if(nfin>2) {
-	x1=x;
-	x2=thrcof[lstep-1];
-	x3=thrcof[lstep-2];
-	nstep2=nfin-lstep-1+3;
-	
-	nfinp1=nfin+1;
-	l1=l1max;
-	thrcof[nfin-1]=srtiny;
-	sum2=tiny*(l1+l1+1);
-	
-	l1+=2;
-	lstep=0;
-	while(lstep<nstep2-1) { //Backward series
-	  lstep++;
-	  l1--;
-	  
-	  oldfac=newfac;
-	  a1s=(l1+l2+l3)*(l1-l2+l3-1)*(l1+l2-l3-1)*(-l1+l2+l3+2);
-	  a2s=(l1+m1-1)*(l1-m1-1);
-	  newfac=sqrt(a1s*a2s);
-	  
-	  dv=-l2*(l2+1)*m1+l3*(l3+1)*m1+l1*(l1-1)*(m3-m2);
-	  denom=l1*newfac;
-	  c1=-(l1+l1-1)*dv/denom;
-	  if(lstep<=1) {
-	    y=srtiny*c1;
-	    thrcof[nfin-2]=y;
-	    sumbac=sum2;
-	    sum2+=tiny*(l1+l1-3)*c1*c1;
-	  }
-	  else {
-	    c2=-(l1-1)*oldfac/denom;
-	    y=c1*thrcof[nfin-lstep]+c2*thrcof[nfinp1-lstep]; //is the index ok??
-	    if(lstep!=nstep2-1) {
-	      thrcof[nfin-lstep-1]=y; //is the index ok??
-	      sumbac=sum2;
-	      sum2+=(l1+l1-3)*y*y;
-	      if(fabs(y)>=srhuge) {
-		for(ii=0;ii<=lstep;ii++) {
-		  index=nfin-ii-1; //is the index ok??
-		  if(fabs(thrcof[index])<srtiny)
-		    thrcof[index]=0;
-		  thrcof[index]=thrcof[index]/srhuge;
-		}
-		sum2/=huge;
-		sumbac/=huge;
-	      }
-	    }
-	  }
-	}
-	
-	y3=y;
-	y2=thrcof[nfin-lstep]; //is the index ok??
-	y1=thrcof[nfinp1-lstep]; //is the index ok??
-	
-	ratio=(x1*y1+x2*y2+x3*y3)/(x1*x1+x2*x2+x3*x3);
-	nlim=nfin-nstep2+1;
-	
-	if(fabs(ratio)<1) {
-	  nlim++;
-	  ratio=1./ratio;
-	  for(ii=nlim-1;ii<nfin;ii++) //is the index ok??
-	    thrcof[ii]*=ratio;
-	  sumuni=ratio*ratio*sumbac+sumfor;
-	}
-	else {
-	  for(ii=0;ii<nlim;ii++)
-	    thrcof[ii]*=ratio;
-	  sumuni=ratio*ratio*sumfor+sumbac;
-	}
-      }
-      else
-	sumuni=sum1;
-      
-      cnorm=1./sqrt(sumuni);
-      sign1 = copysign(1., thrcof[nfin-1]);
-//      if(thrcof[nfin-1]<0) sign1=-1;
-//      else sign1=1;
-      
-      if(sign1*sign2<=0)
-	cnorm=-cnorm;
-      if(fabs(cnorm)>=1) {
-	for(ii=0;ii<nfin;ii++)
-	  thrcof[ii]*=cnorm;
-	return 0;
-      }
-      else {
-	thresh=tiny/fabs(cnorm);
-	for(ii=0;ii<nfin;ii++) {
-	  if(fabs(thrcof[ii])<thresh)
-	    thrcof[ii]=0;
-	  thrcof[ii]*=cnorm;
-	}
-	return 0;
-      }
-    } //Size is good
-  } //Doing for many l1s
-  
-  return 2;
-}
-
 void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
@@ -696,13 +484,6 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   res.resize(ncoef);
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
-  }
-void wigner3j_namaster (double l2, double l3, double m2, double m3, vector<double> &res)
-  {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
-  res.resize(ncoef);
-  int l1min2, l1max2;
-  drc3jj (l2, l3, m2, m3, &l1min2, &l1max2, res.data(), ncoef);
   }
 
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
