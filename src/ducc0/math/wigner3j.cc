@@ -405,8 +405,8 @@ template<size_t bufsize> void wigner3j_internal_block
   {
   if ((m2==0.) && (m3==0.))
     return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
-  if (m2==-m3)
-    return wigner3j_symm_m2m3_internal (l2, l3, m2, l1min, l1max, ncoef, res);
+//  if (m2==-m3)
+//    return wigner3j_symm_m2m3_internal (l2, l3, m2, l1min, l1max, ncoef, res);
 
   constexpr double srhuge=0x1p+450,
                    tiny=0x1p-900, srtiny=0x1p-450;
@@ -427,7 +427,7 @@ template<size_t bufsize> void wigner3j_internal_block
     array<Tv, nvec> v;
     };
   Tbuf l1ladder, c1v, c2v, newfacv;
-cout << "beep" << endl;
+
   double c1=0x1p+1000;
   double oldfac=0.;
   for (size_t m=0; m<bufsize; ++m)
@@ -477,7 +477,6 @@ cout << "beep" << endl;
       }
 int ilim = min(ncoef, i+1+int(bufsize));
 int vidx=0;
-cout << i+1 << endl;
 while(i+1<ilim)
   {
 //    if (i+1==ncoef) break; /* all done */
@@ -496,10 +495,10 @@ while(i+1<ilim)
         res(k)*=srtiny;
       sumfor*=tiny;
       }
-    if (c1old<=abs(c1)) {cout<< "bla1" << endl; goto bailout_fwd;}
+    if (c1old<=abs(c1)) goto bailout_fwd;
     ++vidx;
   }
-if (i+1>=ncoef) {cout<< "bla2" << endl; goto bailout_fwd; }
+if (i+1>=ncoef) goto bailout_fwd;
   }
 bailout_fwd:
 //exit(1);
@@ -517,6 +516,72 @@ bailout_fwd:
     res(i) = srtiny;
     sumbac = (2.*l1max+1.) * res(i)*res(i);
 
+    {
+    --i;
+
+    const double l1 = l1min+i,
+                 l1p1sq = (l1+1.)*(l1+1.),
+                 newfac = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*(l1p1sq-m1sq));
+
+    res(i) = res(i+1)*(2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
+             /((l1+2.)*newfac);
+
+    oldfac=newfac;
+
+    sumbac += (2.*l1+1.)*res(i)*res(i);
+    if (abs(res(i))>=srhuge)
+      {
+      for (int k=i; k<ncoef; ++k)
+        res(k)*=srtiny;
+      sumbac*=tiny;
+      }
+    }
+
+#if 1
+  for (size_t m=0; m<bufsize; ++m)
+    l1ladder.s[m] = -int(m);
+
+  while(true)
+    {
+        //auto l1p1 = l1min+i+l1ofs+1.;
+        //auto l1p1sq = l1p1*l1p1;
+        //newfacv = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*(l1p1sq-m1sq));
+        //auto tmp1 = native_simd<double>(1.)/((l1p1+1.)*newfacv);
+        //c1v = (2.*l1p1+1.)*(pre2-(l1p1sq+l1p1)*m3mm2) * tmp1;
+        //c2v = l1p1*tmp1;
+// prepare buffers
+    for (size_t m=0; m<nvec; ++m)
+      {
+      auto l1p1v = double(l1min+i)+l1ladder.v[m];
+      auto l1p1sq = l1p1v*l1p1v;
+      newfacv.v[m] = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*(l1p1sq-m1sq));
+      auto tmp1 = native_simd<double>(1.)/((l1p1v+1.)*newfacv.v[m]);
+      c1v.v[m] = (2.*l1p1v+1.)*(pre2-(l1p1sq+l1p1v)*m3mm2) * tmp1;
+      c2v.v[m] = l1p1v*tmp1;
+      }
+
+  int ilim = max(nstep2, i-int(bufsize));
+  int vidx=0;
+  while(i>ilim)
+    {
+    --i;
+    const double l1 = l1min+i;
+    res(i) = res(i+1)*c1v.s[vidx] - res(i+2)*c2v.s[vidx]*oldfac;
+    oldfac=newfacv.s[vidx];
+
+    sumbac += (2.*l1+1.)*res(i)*res(i);
+    if (abs(res(i))>=srhuge)
+      {
+      for (int k=i; k<ncoef; ++k)
+        res(k)*=srtiny;
+      sumbac*=tiny;
+      }
+    ++vidx;
+    }
+  if (i<=nstep2) goto bailout_bwd;
+  }
+bailout_bwd:
+#else
     do
       {
       --i;
@@ -525,13 +590,9 @@ bailout_fwd:
                    l1p1sq = (l1+1.)*(l1+1.),
                    newfac = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*(l1p1sq-m1sq));
 
-      if (i<ncoef-2)
-        res(i) = (res(i+1) * (2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
-                 -res(i+2) * (l1+1.)*oldfac)
-                 / ((l1+2.)*newfac);
-      else
-        res(i) = res(i+1)*(2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
-                 /((l1+2.)*newfac);
+      res(i) = (res(i+1) * (2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
+               -res(i+2) * (l1+1.)*oldfac)
+               / ((l1+2.)*newfac);
 
       oldfac=newfac;
 
@@ -544,6 +605,7 @@ bailout_fwd:
         }
       }
     while (i>nstep2);
+#endif
 
     for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
       {
@@ -969,7 +1031,7 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
   res.resize(ncoef);
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
-  wigner3j_internal_block<16> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
+  wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
 void wigner3j_namaster (double l2, double l3, double m2, double m3, vector<double> &res)
   {
@@ -983,7 +1045,7 @@ void wigner3j_tweaked (double l2, double l3, double m2, double m3, vector<double
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
   res.resize(ncoef);
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
-  wigner3j_internal_tweaked (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
+  wigner3j_internal_block<32> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
 
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
