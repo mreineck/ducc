@@ -238,7 +238,7 @@ template<size_t bufsize> void wigner3j_internal_block
 
   while(true)
     {
-// prepare buffers
+    // prepare buffers
     for (size_t m=0; m<nvec; ++m)
       {
       auto l1v = double(l1min+i+1)+l1ladder.v[m];
