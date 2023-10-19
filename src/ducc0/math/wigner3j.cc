@@ -408,8 +408,8 @@ template<size_t bufsize> void wigner3j_internal_block
 //  if (m2==-m3)
 //    return wigner3j_symm_m2m3_internal (l2, l3, m2, l1min, l1max, ncoef, res);
 
-  constexpr double srhuge=0x1p+450,
-                   tiny=0x1p-900, srtiny=0x1p-450;
+  constexpr double srhuge=0x1p+250,
+                   tiny=0x1p-500, srtiny=0x1p-250;
 
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -489,15 +489,21 @@ while(i+1<ilim)
     oldfac=newfacv.s[vidx];
 
     sumfor += (2.*l1+1.)*res(i)*res(i);
+    //if (abs(res(i))>=srhuge)
+      //{
+      //for (int k=0; k<=i; ++k)
+        //res(k)*=srtiny;
+      //sumfor*=tiny;
+      //}
+    if (c1old<=abs(c1)) goto bailout_fwd;
+    ++vidx;
+  }
     if (abs(res(i))>=srhuge)
       {
       for (int k=0; k<=i; ++k)
         res(k)*=srtiny;
       sumfor*=tiny;
       }
-    if (c1old<=abs(c1)) goto bailout_fwd;
-    ++vidx;
-  }
 if (i+1>=ncoef) goto bailout_fwd;
   }
 bailout_fwd:
@@ -570,14 +576,20 @@ bailout_fwd:
     oldfac=newfacv.s[vidx];
 
     sumbac += (2.*l1+1.)*res(i)*res(i);
+    //if (abs(res(i))>=srhuge)
+      //{
+      //for (int k=i; k<ncoef; ++k)
+        //res(k)*=srtiny;
+      //sumbac*=tiny;
+      //}
+    ++vidx;
+    }
     if (abs(res(i))>=srhuge)
       {
       for (int k=i; k<ncoef; ++k)
         res(k)*=srtiny;
       sumbac*=tiny;
       }
-    ++vidx;
-    }
   if (i<=nstep2) goto bailout_bwd;
   }
 bailout_bwd:
