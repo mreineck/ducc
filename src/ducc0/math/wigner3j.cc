@@ -84,55 +84,6 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   }
 
 // version for m2==m3==0
-#if 0
-void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
-                           int ncoef, vmav<double,1> &res)
-  {
-  constexpr double srhuge=0x1p+250,
-                   tiny=0x1p-500, srtiny=0x1p-250;
-
-  const double l2ml3sq = (l2-l3)*(l2-l3),
-               pre1 = (l2+l3+1.)*(l2+l3+1.);
-
-  MR_assert(res.shape(0)==size_t(ncoef), "bad size of result array");
-
-  res(0) = srtiny;
-  double sumfor = (2.*l1min+1.) * res(0)*res(0);
-
-  for (int i=0; i+2<ncoef; i+=2)
-    {
-    double l1 = l1min+i+1,
-           l1sq = l1*l1;
-
-    res(i+1) = 0.;
-
-    double l1p1 = l1+1;
-    double l1p1sq = l1p1*l1p1;
-
-    const double tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
-                             /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
-    res(i+2) = -res(i)*tmp1;
-
-    sumfor += (2.*l1p1+1.)*res(i+2)*res(i+2);
-    if (abs(res(i+2))>=srhuge)
-      {
-      for (int k=0; k<=i+2; k+=2)
-        res(k)*=srtiny;
-      sumfor*=tiny;
-      }
-    }
-
-  bool last_coeff_is_negative = (((ncoef+1)/2)&1) == 0;
-  double cnorm=1./sqrt(sumfor);
-  // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
-  bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
-  if (last_coeff_is_negative != last_coeff_should_be_negative)
-    cnorm = -cnorm;
-
-  for (int k=0; k<ncoef; k+=2)
-    res(k)*=cnorm;
-  }
-#else
 void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
                            int ncoef, vmav<double,1> &res)
   {
@@ -169,7 +120,6 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
       const auto tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                                /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
 
-#if 1
       Tv resx;
       resx[0] = -res(i)*tmp1[0];
       for (size_t m=1; m<vlen; ++m)
@@ -189,28 +139,6 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
         sumfor*=tiny;
         }
       }
-#else
-double resold = res(i);
-      for (size_t m=0; m<vlen; ++m)
-        {
-        res(i+2*m+1) = 0;
-double resnew = -resold*tmp1[m];
-//        res(i+2*m+2) = -res(i+2*m)*tmp1[m];
-//        sumfor += (2.*l1p1[m]+1.)*res(i+2*m+2)*res(i+2*m+2);
-        res(i+2*m+2) = resnew;
-        resold=resnew;
-        sumfor += (2.*l1p1[m]+1.)*resnew*resnew;
-//        if (abs(res(i+2*m+2))>=srhuge)
-        if (abs(resnew)>=srhuge)
-          {
-          for (int k=0; k<=i+2*m+2; k+=2)
-            res(k)*=srtiny;
-          sumfor*=tiny;
-          resold*=srtiny;
-          }
-        }
-      }
-#endif
     }
 
   for (; i+2<ncoef; i+=2)
@@ -246,7 +174,7 @@ double resnew = -resold*tmp1[m];
   for (int k=0; k<ncoef; k+=2)
     res(k)*=cnorm;
   }
-#endif
+
 
 template<size_t bufsize> void wigner3j_internal_block
   (double l2, double l3, double m2, double m3,
