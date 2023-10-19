@@ -1,3 +1,10 @@
+0.33.0:
+- general:
+    - if the environment variable DUCC0_NUM_THREADS is not set, the cde will
+      try to read OMP_NUM_THREADS to determine the maximum number of threads
+      to use.
+
+
 0.32.0:
 - general:
     - minimum required Python version is now 3.8

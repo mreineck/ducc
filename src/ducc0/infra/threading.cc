@@ -49,12 +49,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-// temporary
-#include <iostream>
-
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/misc_utils.h"
+#include "ducc0/infra/string_utils.h"
 #include <atomic>
 #include <exception>
 #include <utility>
@@ -67,6 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <queue>
 #include <vector>
 #include <errno.h>
+#include <string>
 #include <string.h>
 #if __has_include(<pthread.h>)
 #include <pthread.h>
@@ -108,29 +107,10 @@ class latch
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
-static long mystrtol(const char *inp)
-  {
-// temporary diagnostics for MacOS
-if (inp==nullptr)
-  std::cout << "mystrtol: got NULL" << std::endl;
-else
-  {
-  std::cout << "mystrtol: string len is " << strlen(inp) << std::endl;
-  std::cout << "mystrtol: string is |" << std::string(inp) << "|" << std::endl;
-  }
-  auto errno_bak = errno;
-  errno=0;
-  auto res = strtol(inp, nullptr, 10);
-  MR_assert(!errno, "error during strtol conversion ", strerror(errno));
-  errno=errno_bak;
-  return res;
-  }
-
 size_t ducc0_max_threads()
   {
   static const size_t max_threads_ = []()
     {
-std::cout << "determining max_threads_" << std::endl;
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -141,17 +121,13 @@ std::cout << "determining max_threads_" << std::endl;
 #else
     size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
 #endif
-std::cout << "trying to read DUCC0_NUM_THREADS" << std::endl;
     auto evar=getenv("DUCC0_NUM_THREADS");
     // fallback
     if (!evar)
-{
-std::cout << "trying to read OMP_NUM_THREADS" << std::endl;
-  evar=getenv("OMP_NUM_THREADS");
-}
+      evar=getenv("OMP_NUM_THREADS");
     if (!evar)
       return res;
-    auto res2 = mystrtol(evar);
+    auto res2 = stringToData<long>(trim(std::string(evar)));
     MR_assert(res2>=0, "invalid value in DUCC0_NUM_THREADS/OMP_NUM_THREADS");
     if (res2==0)
       return res;
@@ -168,7 +144,7 @@ int pin_info()
     auto evar=getenv("DUCC0_PIN_DISTANCE");
     if (!evar)
       return -1; // do nothing at all
-    auto res = mystrtol(evar);
+    auto res = stringToData<long>(trim(std::string(evar)));
     return int(res);
     }();
   return pin_info_;
@@ -180,7 +156,7 @@ int pin_offset()
     auto evar=getenv("DUCC0_PIN_OFFSET");
     if (!evar)
       return 0;
-    auto res = mystrtol(evar);
+    auto res = stringToData<long>(trim(std::string(evar)));
     return int(res);
     }();
   return pin_offset_;
@@ -397,10 +373,9 @@ class ducc_thread_pool: public thread_pool
   };
 
 // return a pointer to a singleton thread_pool, which is always available
-ducc_thread_pool *get_master_pool()
+inline ducc_thread_pool *get_master_pool()
   {
   static auto master_pool = new ducc_thread_pool(ducc0_max_threads()-1);
-std::cout << "get_master_pool" << std::endl;
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
