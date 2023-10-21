@@ -84,7 +84,7 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   }
 
 // version for m2==m3==0
-void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
+void wigner3j_00_internal (double l2, double l3, double l1min,
                            int ncoef, vmav<double,1> &res)
   {
   constexpr double srhuge=0x1p+250,
@@ -109,7 +109,7 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
     for (size_t m=0; m<vlen; ++m)
       iofs[m] = 2*m;
   
-    for (; i+2*vlen<ncoef; i+=2*vlen)
+    for (; i+int(2*vlen)<ncoef; i+=int(2*vlen))
       {
       auto l1 = l1min+i+1+iofs;
       auto l1sq = l1*l1;
@@ -134,7 +134,7 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
         }
       if (abs(res(i+2*vlen))>=srhuge)
         {
-        for (int k=0; k<=i+2*vlen; k+=2)
+        for (size_t k=0; k<=i+2*vlen; k+=2)
           res(k)*=srtiny;
         sumfor*=tiny;
         }
@@ -219,7 +219,6 @@ template<size_t bufsize> void wigner3j_internal_block
 
     const double l1 = l1min+i;
     const double l1sq = l1*l1,
-                 c1old = abs(c1),
                  newfac = sqrt((l1sq-l2ml3sq)*(pre1-l1sq)*(l1sq-m1sq));
     c1 = (l1>1.000001) ? (2.*l1-1.)*(pre2-(l1sq-l1)*m3mm2)/((l1-1.)*newfac)
                        : -(2.*l1-1.)*l1*(m3mm2)/newfac;
@@ -350,7 +349,7 @@ bailout_fwd:
 
 bailout_bwd:
 
-    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+    for (size_t i=nstep2; i<size_t(min(ncoef,nstep2+3)); ++i)
       {
       auto l1=l1min+i;
       sumbac -= (2.*l1+1.)*res(i)*res(i);
@@ -386,7 +385,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
                         vmav<double,1> &res)
   {
   if ((m2==0.) && (m3==0.))
-    return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
+    return wigner3j_00_internal (l2, l3, l1min, ncoef, res);
 
   if constexpr (native_simd<double>::size()>=4)
     return wigner3j_internal_block<16> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, res);
@@ -486,7 +485,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
       }
     while (i>nstep2);
 
-    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+    for (size_t i=nstep2; i<size_t(min(ncoef,nstep2+3)); ++i)
       {
       auto l1=l1min+i;
       sumbac -= (2.*l1+1.)*res(i)*res(i);

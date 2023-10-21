@@ -44,7 +44,7 @@ namespace detail_pymodule_misc {
 
 using namespace std;
 namespace py = pybind11;
-
+auto None = py::none();
 
 constexpr const char *Py_vdot_DS = R"""(
 Compute the scalar product of two arrays or scalars., i.e. sum_i(conj(a_i)*b_i)
@@ -890,6 +890,48 @@ int : the l1 quantum number of the first value in the returned array
 numpy.ndarray(dtype=numpy.float64) : 3j symbols in order of increasing l1
 )""";
 
+py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, size_t algo, py::object &mat__)
+  {
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)>=2*lmax+1, "spectrum lmax is too small.");
+  auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, lmax+1, lmax+1});
+  auto mat = to_vmav<double,3>(mat_);
+  {
+  py::gil_scoped_release release;
+  auto spec2(vmav<double,2>::build_noncritical({2*lmax+1, nspec}, UNINITIALIZED));
+  for (size_t i=0; i<nspec; ++i)
+    for (size_t l=0; l<=2*lmax; ++l)
+      spec2(l,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vmav<double,1> resfull({2*lmax+1});
+    vmav<double,1> val({nspec});
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2++)
+        {
+        auto res=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
+        wigner3j(el1, el2, 0, 0, res);
+      
+        int el3min = abs(el1-el2);
+        for (size_t ispec=0; ispec<nspec; ++ispec)
+          val(ispec)=0;
+        for (size_t i=0; i<res.size(); i+=2)
+          {
+          int el3 = el3min+i;
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            val(ispec) += res(i)*res(i)*spec2(el3,ispec);
+          }
+        for (size_t ispec=0; ispec<nspec; ++ispec)
+          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val(ispec);
+        }
+      }
+    });
+  }
+  return mat_;
+  }
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -937,6 +979,7 @@ void add_misc(py::module_ &msup)
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
+  m.def("coupling_matrix_00", Py_coupling_matrix_00, "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }
