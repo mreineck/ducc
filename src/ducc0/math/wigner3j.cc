@@ -519,8 +519,6 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes (l2, l3, 0, 0);
 
-  constexpr double huge=0x1p+500, tiny=0x1p-500;
-
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.);
 
@@ -530,14 +528,15 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
   using Tv = native_simd<double>;
   constexpr size_t vlen = Tv::size();
 
-  res(0) = tiny;
-  double sumfor = (2.*l1min+1.) * res(0);
+  res(0) = 1.;
+  double sum = (2.*l1min+1.) * res(0);
 
   int i=0;
 
   if constexpr(vlen>=4)
     {
     Tv lofs;
+    Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
       lofs[m] = 2*m;
   
@@ -553,23 +552,13 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
                        /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
 
       Tv resx;
-      resx[0] = res(i)*tmp1[0];
+      resx[0] = res(i+1) = res(i)*tmp1[0];
       for (size_t m=1; m<vlen; ++m)
-        resx[m] = resx[m-1]*tmp1[m];
-      auto resx2 = (2.*l1p1+1.)*resx;
-
-      for (size_t m=0; m<vlen; ++m)
-        {
-        res(i+m+1) = resx[m];
-        sumfor += resx2[m];
-        }
-      if (res(i+vlen)>=huge)
-        {
-        for (size_t k=0; k<=i+vlen; ++k)
-          res(k)*=tiny;
-        sumfor*=tiny;
-        }
+        resx[m] = res(i+m+1) = resx[m-1]*tmp1[m];
+      sumx += (2.*l1p1+1.)*resx;
       }
+    for (size_t m=0; m<vlen; ++m)
+      sum += sumx[m];
     }
 
   for (; i+1<ncoef2; ++i)
@@ -584,16 +573,10 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
                        /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
     res(i+1) = res(i)*tmp1;
 
-    sumfor += (2.*l1p1+1.)*res(i+1);
-    if (res(i+1)>=huge)
-      {
-      for (int k=0; k<=i+1; ++k)
-        res(k)*=tiny;
-      sumfor*=tiny;
-      }
+    sum += (2.*l1p1+1.)*res(i+1);
     }
 
-  double cnorm=1./sumfor;
+  double cnorm=1./sum;
   for (int k=0; k<ncoef2; ++k)
     res(k)*=cnorm;
   }
