@@ -87,9 +87,6 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
 void wigner3j_00_internal (double l2, double l3, double l1min,
                            int ncoef, vmav<double,1> &res)
   {
-  constexpr double srhuge=0x1p+250,
-                   tiny=0x1p-500, srtiny=0x1p-250;
-
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.);
 
@@ -98,14 +95,15 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
   using Tv = native_simd<double>;
   constexpr size_t vlen = Tv::size();
 
-  res(0) = srtiny;
-  double sumfor = (2.*l1min+1.) * res(0)*res(0);
+  res(0) = 1.;
+  double sum = (2.*l1min+1.) * res(0)*res(0);
 
   int i=0;
 
   if constexpr(vlen>=4)
     {
     Tv iofs;
+    Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
       iofs[m] = 2*m;
   
@@ -121,24 +119,18 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
                                /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
 
       Tv resx;
-      resx[0] = -res(i)*tmp1[0];
+      res(i+1) = 0;
+      resx[0] = res(i+2) = -res(i)*tmp1[0];
       for (size_t m=1; m<vlen; ++m)
-        resx[m] = -resx[m-1]*tmp1[m];
-      auto resx2 = (2.*l1p1+1.)*resx*resx;
-
-      for (size_t m=0; m<vlen; ++m)
         {
         res(i+2*m+1) = 0;
-        res(i+2*m+2) = resx[m];
-        sumfor += resx2[m];
+        resx[m] = res(i+2*m+2) = -resx[m-1]*tmp1[m];
         }
-      if (abs(res(i+2*vlen))>=srhuge)
-        {
-        for (size_t k=0; k<=i+2*vlen; k+=2)
-          res(k)*=srtiny;
-        sumfor*=tiny;
-        }
+      sumx += (2.*l1p1+1.)*resx*resx;
       }
+
+    for (size_t m=0; m<vlen; ++m)
+      sum += sumx[m];
     }
 
   for (; i+2<ncoef; i+=2)
@@ -155,17 +147,11 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
                              /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
     res(i+2) = -res(i)*tmp1;
 
-    sumfor += (2.*l1p1+1.)*res(i+2)*res(i+2);
-    if (abs(res(i+2))>=srhuge)
-      {
-      for (int k=0; k<=i+2; k+=2)
-        res(k)*=srtiny;
-      sumfor*=tiny;
-      }
+    sum += (2.*l1p1+1.)*res(i+2)*res(i+2);
     }
 
   bool last_coeff_is_negative = (((ncoef+1)/2)&1) == 0;
-  double cnorm=1./sqrt(sumfor);
+  double cnorm=1./sqrt(sum);
   // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
   bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
   if (last_coeff_is_negative != last_coeff_should_be_negative)
