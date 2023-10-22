@@ -55,7 +55,7 @@ void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vmav<double,1> &r
 
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
-void wigner3j_00_squared_compact (int l2, int l3, vmav<double,1> &res);
+void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res);
 
 }
 

@@ -515,9 +515,9 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     res(k)*=cnorm*fct_bwd;
   }
 
-void wigner3j_00_squared_compact (int l2, int l3, vmav<double,1> &res)
+void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
   {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, 0, 0);
+  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes (l2, l3, 0, 0);
 
   constexpr double huge=0x1p+500, tiny=0x1p-500;
 
