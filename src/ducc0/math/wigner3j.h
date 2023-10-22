@@ -55,11 +55,14 @@ void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vmav<double,1> &r
 
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
+void wigner3j_00_squared_compact (int l2, int l3, vmav<double,1> &res);
+
 }
 
 using detail_wigner3j::wigner3j;
 using detail_wigner3j::wigner3j_int;
 using detail_wigner3j::wigner3j_ncoef_int;
+using detail_wigner3j::wigner3j_00_squared_compact;
 
 }
 

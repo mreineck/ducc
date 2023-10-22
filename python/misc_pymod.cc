@@ -205,10 +205,13 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
   auto res2 = to_vmav<double,1>(res);
+  {
+  py::gil_scoped_release release;
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
+  }
   return res;
   }
 
@@ -668,6 +671,8 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
   {
   auto inp(to_cfmav<Ti>(inp_));
   auto out(to_vfmav<To>(out_));
+  {
+  py::gil_scoped_release release;
   size_t ndim = inp.ndim();
   nthreads = adjust_nthreads(nthreads);
   MR_assert(out.ndim()==ndim, "dimensionality mismatch");
@@ -689,6 +694,7 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
     roll_resize_roll(inp.data(), inp.shape().data(), inp.stride().data(),
       out.data(), out.shape().data(), out.stride().data(),
       ri.data(), ro.data(), 0, ndim);
+  }
   return out_;
   }
 
@@ -786,6 +792,8 @@ py::array Py_get_deflected_angles(const py::array &theta_,
   size_t ncomp = calc_rotation ? 3 : 2;
   auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), ncomp});
   auto res = to_vmav<double,2>(res_);
+  {
+  py::gil_scoped_release release;
   execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext())
@@ -828,6 +836,7 @@ py::array Py_get_deflected_angles(const py::array &theta_,
           }
         }
     });
+  }
   return res_;
   }
 
@@ -836,7 +845,10 @@ template<typename T> void Py2_lensing_rotate(py::array &values_,
   {
   auto values = to_vfmav<complex<T>>(values_);
   auto gamma = to_cfmav<T>(gamma_);
+  {
+  py::gil_scoped_release release;
   mav_apply([&](auto &v, const auto &g) { v*=polar(T(1), spin*g); }, nthreads, values, gamma);
+  }
   }
 void Py_lensing_rotate(py::array &values,
   const py::array &gamma, int spin, size_t nthreads=1)
@@ -869,8 +881,23 @@ py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
   auto res_ = make_Pyarr<double>({ncoef});
   auto res = to_vmav<double,1>(res_);
   int l1min;
+  {
+  py::gil_scoped_release release;
   wigner3j_int (l2, l3, m2, m3, l1min, res);
+  }
   return py::make_tuple(py::cast(l1min), res_);
+  }
+
+py::object Py_wigner3j_00_squared_compact(int l2, int l3)
+  {
+  size_t ncoef = (wigner3j_ncoef_int(l2, l3, 0,0)+1)/2;
+  auto res_ = make_Pyarr<double>({ncoef});
+  auto res = to_vmav<double,1>(res_);
+  {
+  py::gil_scoped_release release;
+  wigner3j_00_squared_compact (l2, l3, res);
+  }
+  return res_;
   }
 
 constexpr const char *Py_wigner3j_int_DS = R"""(
@@ -899,6 +926,36 @@ py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthr
   auto mat = to_vmav<double,3>(mat_);
   {
   py::gil_scoped_release release;
+if (algo==0) // standard, tried and true
+  {
+  ducc0::execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vector<double> res;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=0; el2<=el1; el2++)
+        {
+        ducc0::wigner3j(el1, el2, 0, 0, res);
+      
+        int el3min = abs(el1-el2);
+        int el3max = el1+el2;
+        MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
+        for (size_t ispec=0; ispec<nspec; ++ispec)
+          {
+          double val = 0;
+          for (size_t i=0; i<res.size(); i+=2)
+            {
+            int el3 = el3min+i;
+            val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
+            }
+          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)/ducc0::fourpi*val;
+          }
+        }
+      }
+    });
+  }
+else if (algo==1)
+  {
   auto spec2(vmav<double,2>::build_noncritical({2*lmax+1, nspec}, UNINITIALIZED));
   for (size_t i=0; i<nspec; ++i)
     for (size_t l=0; l<=2*lmax; ++l)
@@ -906,28 +963,34 @@ py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthr
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     vmav<double,1> resfull({2*lmax+1});
-    vmav<double,1> val({nspec});
+    MR_assert(resfull.stride(0)==1,"oops");
+    vmav<double,1> val_({nspec});
+    MR_assert(val_.stride(0)==1,"oops");
+    double * DUCC0_RESTRICT val = val_.data();
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int el2=el1; el2<=int(lmax); el2++)
         {
-        auto res=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
-        wigner3j(el1, el2, 0, 0, res);
+        auto res_=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
+        wigner3j(el1, el2, 0, 0, res_);
+        const double * DUCC0_RESTRICT res = res_.data();
       
         int el3min = abs(el1-el2);
         for (size_t ispec=0; ispec<nspec; ++ispec)
-          val(ispec)=0;
-        for (size_t i=0; i<res.size(); i+=2)
+          val[ispec]=0;
+        for (size_t i=0; i<res_.size(); i+=2)
           {
           int el3 = el3min+i;
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            val(ispec) += res(i)*res(i)*spec2(el3,ispec);
+            val[ispec] += res[i]*res[i]*spec2(el3,ispec);
           }
         for (size_t ispec=0; ispec<nspec; ++ispec)
-          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val(ispec);
+          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
         }
       }
     });
+  }
+else MR_fail("incorrect algo number");
   }
   return mat_;
   }
@@ -979,6 +1042,7 @@ void add_misc(py::module_ &msup)
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
+  m.def("wigner3j_00_squared_compact", Py_wigner3j_00_squared_compact, "m2"_a, "m3"_a);
   m.def("coupling_matrix_00", Py_coupling_matrix_00, "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);

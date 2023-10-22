@@ -515,6 +515,89 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     res(k)*=cnorm*fct_bwd;
   }
 
+void wigner3j_00_squared_compact (int l2, int l3, vmav<double,1> &res)
+  {
+  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, 0, 0);
+
+  constexpr double huge=0x1p+500, tiny=0x1p-500;
+
+  const double l2ml3sq = (l2-l3)*(l2-l3),
+               pre1 = (l2+l3+1.)*(l2+l3+1.);
+
+  int ncoef2 = (ncoef+1)/2;
+  MR_assert(res.shape(0)==size_t(ncoef2), "bad size of result array");
+
+  using Tv = native_simd<double>;
+  constexpr size_t vlen = Tv::size();
+
+  res(0) = tiny;
+  double sumfor = (2.*l1min+1.) * res(0);
+
+  int i=0;
+
+  if constexpr(vlen>=4)
+    {
+    Tv lofs;
+    for (size_t m=0; m<vlen; ++m)
+      lofs[m] = 2*m;
+  
+    for (; i+int(vlen)<ncoef2; i+=int(vlen))
+      {
+      auto l1 = double(l1min+2*i+1)+lofs;
+      auto l1sq = l1*l1;
+  
+      auto l1p1 = l1+1;
+      auto l1p1sq = l1p1*l1p1;
+  
+      const auto tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
+                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
+
+      Tv resx;
+      resx[0] = res(i)*tmp1[0];
+      for (size_t m=1; m<vlen; ++m)
+        resx[m] = resx[m-1]*tmp1[m];
+      auto resx2 = (2.*l1p1+1.)*resx;
+
+      for (size_t m=0; m<vlen; ++m)
+        {
+        res(i+m+1) = resx[m];
+        sumfor += resx2[m];
+        }
+      if (res(i+vlen)>=huge)
+        {
+        for (size_t k=0; k<=i+vlen; ++k)
+          res(k)*=tiny;
+        sumfor*=tiny;
+        }
+      }
+    }
+
+  for (; i+1<ncoef2; ++i)
+    {
+    double l1 = l1min+2*i+1,
+           l1sq = l1*l1;
+
+    double l1p1 = l1+1;
+    double l1p1sq = l1p1*l1p1;
+
+    const double tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
+                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
+    res(i+1) = res(i)*tmp1;
+
+    sumfor += (2.*l1p1+1.)*res(i+1);
+    if (res(i+1)>=huge)
+      {
+      for (int k=0; k<=i+1; ++k)
+        res(k)*=tiny;
+      sumfor*=tiny;
+      }
+    }
+
+  double cnorm=1./sumfor;
+  for (int k=0; k<ncoef2; ++k)
+    res(k)*=cnorm;
+  }
+
 void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
