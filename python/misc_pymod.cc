@@ -951,7 +951,8 @@ if (algo==0) // standard, tried and true
               int el3 = el3min+i;
               val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
               }
-            mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)/ducc0::fourpi*val;
+            mat(ispec, el1, el2) = (2*el2+1.)/ducc0::fourpi*val;
+            mat(ispec, el2, el1) = (2*el1+1.)/ducc0::fourpi*val;
             }
           }
         else
@@ -996,7 +997,10 @@ else if (algo==1)
               val[ispec] += res[i]*res[i]*spec2(el3,ispec);
             }
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
+            {
+            mat(ispec, el1, el2) = (2*el2+1.)*val[ispec];
+            mat(ispec, el2, el1) = (2*el1+1.)*val[ispec];
+            }
           }
         else
           for (size_t ispec=0; ispec<nspec; ++ispec)
@@ -1116,8 +1120,8 @@ res : numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
 
 Returns
 -------
-    numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
-        The coupling matrices. Identical to `res`, if it was provided
+numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
 )""";
 
 constexpr const char *misc_DS = R"""(
