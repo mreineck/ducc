@@ -921,7 +921,8 @@ py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthr
   {
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
-  MR_assert(spec.shape(1)>=2*lmax+1, "spectrum lmax is too small.");
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
   auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, lmax+1, lmax+1});
   auto mat = to_vmav<double,3>(mat_);
   {
@@ -935,30 +936,37 @@ if (algo==0) // standard, tried and true
       {
       for (int el2=0; el2<=el1; el2++)
         {
-        ducc0::wigner3j(el1, el2, 0, 0, res);
-      
         int el3min = abs(el1-el2);
-        int el3max = el1+el2;
-        MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
-        for (size_t ispec=0; ispec<nspec; ++ispec)
+        if (el3min<=int(lmax_spec))
           {
-          double val = 0;
-          for (size_t i=0; i<res.size(); i+=2)
+          int el3max = el1+el2;
+          ducc0::wigner3j(el1, el2, 0, 0, res);
+          MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
+          size_t max_i = min(size_t(el3max), lmax_spec)-size_t(el3min);
+          for (size_t ispec=0; ispec<nspec; ++ispec)
             {
-            int el3 = el3min+i;
-            val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
+            double val = 0;
+            for (size_t i=0; i<=max_i; i+=2)
+              {
+              int el3 = el3min+i;
+              val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
+              }
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)/ducc0::fourpi*val;
             }
-          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)/ducc0::fourpi*val;
           }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
         }
       }
     });
   }
 else if (algo==1)
   {
-  auto spec2(vmav<double,2>::build_noncritical({2*lmax+1, nspec}, UNINITIALIZED));
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({lmax_spec_used+1, nspec}, UNINITIALIZED));
   for (size_t i=0; i<nspec; ++i)
-    for (size_t l=0; l<=2*lmax; ++l)
+    for (size_t l=0; l<=lmax_spec_used; ++l)
       spec2(l,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
@@ -971,29 +979,146 @@ else if (algo==1)
       {
       for (int el2=el1; el2<=int(lmax); el2++)
         {
-        auto res_=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
-        wigner3j(el1, el2, 0, 0, res_);
-        const double * DUCC0_RESTRICT res = res_.data();
-      
         int el3min = abs(el1-el2);
+        if (el3min<=int(lmax_spec))
+          {
+          auto res_=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
+          wigner3j(el1, el2, 0, 0, res_);
+          const double * DUCC0_RESTRICT res = res_.data();
+      
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            val[ispec]=0;
+          size_t max_i = min(size_t(el1+el2), lmax_spec)-size_t(el3min);
+          for (size_t i=0; i<=max_i; i+=2)
+            {
+            int el3 = el3min+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*res[i]*spec2(el3,ispec);
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
+        }
+      }
+    });
+  }
+else if (algo==2)
+  {
+MR_fail("out of order");
+#if 0
+  auto spec_even(vmav<double,2>::build_noncritical({(lmax_spec+2)/2, nspec}, UNINITIALIZED));
+  auto spec_odd(vmav<double,2>::build_noncritical({(lmax_spec+1)/2, nspec}, UNINITIALIZED));
+  for (size_t i=0; i<nspec; ++i)
+    {
+    for (size_t l=0; l<=lmax_spec; ++l)
+      {
+      if (l&1)
+        spec_odd(l/2,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+      else
+        spec_even(l/2,i) = spec(i,l)/ducc0::fourpi*(2.*l+3.);
+      }
+    }
+  execDynamic(lmax+1, nthreads, 16, [&](ducc0::Scheduler &sched)
+    {
+    vmav<double,1> resfull({lmax+1});
+    MR_assert(resfull.stride(0)==1,"oops");
+    vmav<double,1> val_({nspec});
+    MR_assert(val_.stride(0)==1,"oops");
+    double * DUCC0_RESTRICT val = val_.data();
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=2)
+        {
+        auto ncoef = size_t((el2+el1-abs(el2-el1)+2)/2);
+        ncoef = min(ncoef, lmax_spec-abs(el2-el1) xxxx
+        auto res_=subarray<1>(resfull, {{0, ncoef}});
+        wigner3j_00_squared_compact(el1, el2, res_);
+        const double * DUCC0_RESTRICT res = res_.data();
+
+        int idxmin = abs(el1-el2)/2;
         for (size_t ispec=0; ispec<nspec; ++ispec)
           val[ispec]=0;
-        for (size_t i=0; i<res_.size(); i+=2)
-          {
-          int el3 = el3min+i;
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            val[ispec] += res[i]*res[i]*spec2(el3,ispec);
-          }
+        if (((el1+el2)&1)==0)
+          for (size_t i=0; i<ncoef; ++i)
+            {
+            int idx = idxmin+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*spec_even(idx,ispec);
+            }
+        else
+          for (size_t i=0; i<ncoef; ++i)
+            {
+            int idx = idxmin+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*spec_odd(idx,ispec);
+            }
+        for (size_t ispec=0; ispec<nspec; ++ispec)
+          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
+        }
+      for (int el2=el1+1; el2<=int(lmax); ++el2)
+        {
+        auto ncoef = size_t((el2+el1-abs(el2-el1)+2)/2);
+        auto res_=subarray<1>(resfull, {{0, ncoef}});
+        wigner3j_00_squared_compact(el1, el2, res_);
+        const double * DUCC0_RESTRICT res = res_.data();
+      
+        int idxmin = abs(el1-el2)/2;
+        for (size_t ispec=0; ispec<nspec; ++ispec)
+          val[ispec]=0;
+        if (((el1+el2)&1)==0)
+          for (size_t i=0; i<ncoef; ++i)
+            {
+            int idx = idxmin+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*spec_even(idx,ispec);
+            }
+        else
+          for (size_t i=0; i<ncoef; ++i)
+            {
+            int idx = idxmin+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*spec_odd(idx,ispec);
+            }
         for (size_t ispec=0; ispec<nspec; ++ispec)
           mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
         }
       }
     });
+#endif
   }
 else MR_fail("incorrect algo number");
   }
   return mat_;
   }
+
+constexpr const char *Py_coupling_matrix_00_DS = R"""(
+Computes coupling matrices for spin-0/0 cross spectra on the sphere
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, lmax_spec+1), dtype=np.float64)
+    the input spectra
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+nthreads : int
+    the number of threads to use for the calculations.
+algo : int
+    TEMPORARY : the implementation to use for the calculations.
+    Only for validation and benchmark purposes, will go away in the future.
+res : numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
+    Optional array to store the output into.
+
+Returns
+-------
+    numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
+        The coupling matrices. Identical to `res`, if it was provided
+)""";
 
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
@@ -1043,7 +1168,8 @@ void add_misc(py::module_ &msup)
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
   m.def("wigner3j_00_squared_compact", Py_wigner3j_00_squared_compact, "m2"_a, "m3"_a);
-  m.def("coupling_matrix_00", Py_coupling_matrix_00, "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
+  m.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }
