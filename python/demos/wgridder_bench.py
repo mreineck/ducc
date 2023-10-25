@@ -16,7 +16,7 @@
 import os
 from time import time
 
-import ducc0.wgridder.experimental as wgridder
+import ducc0.wgridder as wgridder
 import ducc0
 import matplotlib.pyplot as plt
 import numpy as np

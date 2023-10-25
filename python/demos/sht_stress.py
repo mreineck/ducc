@@ -57,8 +57,8 @@ def test_random_analysis_2d(lmax_max, nthreads_max):
     print("testing analysis: lmax={}, mmax={}, spin={}, nthreads={}, geometry={}, nrings={}, nphi={}".format(lmax,mmax,spin,nthreads,geometry,nrings, nphi))
     ncomp = 1 if spin == 0 else 2
     alm = random_alm(lmax, mmax, spin, ncomp)
-    map = ducc0.sht.experimental.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    alm2 = ducc0.sht.experimental.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    map = ducc0.sht.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    alm2 = ducc0.sht.analysis_2d(map=map, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
     err = ducc0.misc.l2error(alm2,alm)
     if err>1e-11:
         print("AAAAARGH: L2 error after full round-trip:", err)
@@ -90,10 +90,10 @@ def test_random_analysis_adjointness_2d(lmax_max, nthreads_max):
     ncomp = 1 if spin == 0 else 2
     alm0 = random_alm(lmax, mmax, spin, ncomp)
     map0 = np.random.uniform(0., 1., (alm0.shape[0], nrings, nphi))
-    map1 = ducc0.sht.experimental.adjoint_analysis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    map1 = ducc0.sht.adjoint_analysis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     #del map1
-    alm1 = ducc0.sht.experimental.analysis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    alm1 = ducc0.sht.analysis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
     if err>1e-11:
@@ -120,8 +120,8 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     ncomp = 1 if spin == 0 else 2
     alm0 = random_alm(lmax, mmax, spin, ncomp)
     map0 = np.random.uniform(0., 1., (alm0.shape[0], nrings,nphi))
-    map1 = ducc0.sht.experimental.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
-    alm1 = ducc0.sht.experimental.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
+    map1 = ducc0.sht.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry)
+    alm1 = ducc0.sht.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry)
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))

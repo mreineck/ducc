@@ -605,25 +605,34 @@ and also may be moved to other modules in the future. If you use it, be prepared
 to adjust your code at some point ion the future!
 )""";
 
+void add_pythonfuncs(py::module_ &m)
+  {
+  using namespace pybind11::literals;
+
+  m.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
+    "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
+    "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
+    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
+    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0.,
+    "allow_nshift"_a=true, "gpu"_a=false, "double_precision_accumulation"_a=false);
+  m.def("dirty2vis", &Py_dirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
+    "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
+    "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
+    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None, "sigma_min"_a=1.1,
+    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true, "gpu"_a=false);
+  }
+
 void add_wgridder(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("wgridder");
   auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 
+  add_pythonfuncs(m);
+  add_pythonfuncs(m2);
+
   m2.def("sycl_active", &ducc0::sycl_active);
 
-  m2.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
-    "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
-    "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,
-    "mask"_a=None, "flip_v"_a=false, "divide_by_n"_a=true, "dirty"_a=None,
-    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0.,
-    "allow_nshift"_a=true, "gpu"_a=false, "double_precision_accumulation"_a=false);
-  m2.def("dirty2vis", &Py_dirty2vis, dirty2vis_DS, py::kw_only(), "uvw"_a, "freq"_a, "dirty"_a,
-    "wgt"_a=None, "pixsize_x"_a, "pixsize_y"_a, "epsilon"_a,
-    "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0, "mask"_a=None,
-    "flip_v"_a=false, "divide_by_n"_a=true, "vis"_a=None, "sigma_min"_a=1.1,
-    "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true, "gpu"_a=false);
   m2.def("vis2dirty_tuning", &Py_vis2dirty_tuning, vis2dirty_tuning_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
     "epsilon"_a, "do_wgridding"_a=false, "nthreads"_a=1, "verbosity"_a=0,

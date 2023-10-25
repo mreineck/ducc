@@ -46,13 +46,13 @@ def random_alm(rng, lmax, mmax, ncomp):
 
 def convolve(alm1, alm2, lmax, nthreads=1):
     ntheta, nphi = lmax+1, ducc0.fft.good_size(2*lmax+1, True)
-    tmap = ducc0.sht.experimental.synthesis_2d(
+    tmap = ducc0.sht.synthesis_2d(
         alm=alm1.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
         geometry="GL", spin=0, nthreads=nthreads)
-    tmap *= ducc0.sht.experimental.synthesis_2d(
+    tmap *= ducc0.sht.synthesis_2d(
         alm=alm2.reshape((1,-1)), ntheta=ntheta, nphi=nphi, lmax=lmax,
         geometry="GL", spin=0, nthreads=nthreads)
-    res = ducc0.sht.experimental.analysis_2d(
+    res = ducc0.sht.analysis_2d(
         map=tmap, lmax=0, spin=0, geometry="GL", nthreads=nthreads)
     return np.sqrt(4*np.pi)*res[0,0]
 
