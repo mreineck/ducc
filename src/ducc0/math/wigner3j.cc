@@ -30,7 +30,7 @@
  *  Copyright (C) 2009-2023 Max-Planck-Society
  *  \author Martin Reinecke
  */
-#include <iostream>
+
 #include <cmath>
 #include <cstdlib>
 #include <vector>
@@ -375,16 +375,17 @@ template<typename Tsimd> void wigner3j_internal_vec
   // preliminaries
   double m1 = -m2 -m3;
   Tsimd l1min, l1max;
-  array<int,vlen> ncoef_;
+  int ncoef=0;
   for (size_t k=0; k<vlen; ++k)
     {
     auto [ m1_, xl1min, xl1max, xncoef] = wigner3j_checks_and_sizes(l2[k], l3[k], m2, m3);
     l1min[k] = xl1min;
     l1max[k] = xl1max;
-    ncoef_[k] = xncoef;
-    MR_assert(ncoef_[k] == ncoef_[0], "ncoef mismatch");
+    if (k==0)
+      ncoef = xncoef;
+    else
+      MR_assert(ncoef == xncoef, "ncoef mismatch");
     }
-  int ncoef = ncoef_[0];
 
   const Tsimd l2ml3sq = (l2-l3)*(l2-l3),
               pre1 = (l2+l3+1.)*(l2+l3+1.),
@@ -401,7 +402,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   Tsimd sumfor = (2.*l1min+1.) * res(i)*res(i);
   Tsimd resamax = 0.;
   auto done = Tsimd(1.)<Tsimd(0.);  // i.e. false :)
-  Tsimd maxidx = double(ncoef-1);
+  Tsimd splitidx = double(ncoef-1);
 
   while(true)
     {
@@ -436,22 +437,19 @@ template<typename Tsimd> void wigner3j_internal_vec
       {
       Tsimd fct=1.;
       for (size_t k=0; k<vlen; ++k)
-        {
-        if (i<maxidx[k])
+        if (i<splitidx[k])
           {
           int myexp;
           frexp(resamax[k],&myexp);
           fct[k] = ldexp(1., min(0, -myexp));
           }
-        }
       for (int j=0; j<=i; ++j)
         res(j)*=fct;
       sumfor*=fct*fct;
       resamax*=fct;
       }
-    auto diverging = (c1old<=abs(c1));
-    done = done | diverging;
-    where(done, maxidx) = min(maxidx, Tsimd(double(i)));
+    done = done | (c1old<=abs(c1));
+    where(done, splitidx) = min(splitidx, Tsimd(double(i)));
     if (done.all()) break;
     }
 
@@ -471,29 +469,23 @@ template<typename Tsimd> void wigner3j_internal_vec
     }
 
   Tsimd sumbac=0.;
-  Tsimd last_coeff_is_negative=0;
-  Tsimd fct_fwd=1., fct_bwd=1.;
-
-// TEMP
-for (size_t k=0; k<vlen; ++k)
-  MR_assert(maxidx[k]>=2, "OOPS");
 
   /* we always iterate from the other side */
   {
   Tsimd x1, x2, x3;
   for (size_t k=0; k<vlen; ++k)
     {
-    x1[k] = double(res(int(maxidx[k])-2)[k]);
-    x2[k] = double(res(int(maxidx[k])-1)[k]);
-    x3[k] = double(res(int(maxidx[k])  )[k]);
+    x1[k] = double(res(int(splitidx[k])-2)[k]);
+    x2[k] = double(res(int(splitidx[k])-1)[k]);
+    x3[k] = double(res(int(splitidx[k])  )[k]);
     }
-  int minidx = int(maxidx[0])-2;
+  int minidx = int(splitidx[0])-2;
   for (size_t k=1; k<vlen; ++k)
-    minidx = min(minidx, int(maxidx[k])-2);
+    minidx = min(minidx, int(splitidx[k])-2);
 
   i=ncoef-1;
-  res(i) = srtiny;
-  where(Tsimd(i)>maxidx, sumbac) += (2.*l1max+1.) * res(i)*res(i);
+  where(Tsimd(i)>=splitidx-2, res(i)) = srtiny;
+  where(Tsimd(i)>splitidx, sumbac) += (2.*l1max+1.) * res(i)*res(i);
   resamax=0;
 
   do
@@ -504,32 +496,31 @@ for (size_t k=0; k<vlen; ++k)
                 l1p1sq = (l1+1.)*(l1+1.),
                 newfac = sqrt((l1p1sq-l2ml3sq)*(pre1-l1p1sq)*(l1p1sq-m1sq));
 
+    Tsimd tmp;
     if (i<ncoef-2)
-      res(i) = (res(i+1) * (2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
+      tmp = (res(i+1) * (2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
                -res(i+2) * (l1+1.)*oldfac)
                / ((l1+2.)*newfac);
     else
-      res(i) = res(i+1)*(2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
+      tmp = res(i+1)*(2.*l1+3.)*(pre2-(l1p1sq+l1+1.)*m3mm2)
                /((l1+2.)*newfac);
-
+    where(Tsimd(i)>=splitidx-2, res(i)) = tmp;
     oldfac=newfac;
 
-    where(Tsimd(double(i))>maxidx, sumbac) += (2.*l1+1.)*res(i)*res(i);
-    auto mask = Tsimd(double(i))>=(maxidx-2);
+    where(Tsimd(i)>splitidx, sumbac) += (2.*l1+1.)*res(i)*res(i);
+    auto mask = Tsimd(i)>=(splitidx-2);
     // rescaling necessary?
     where(mask, resamax) = max(abs(res(i)), resamax);
     if ((resamax>=srhuge).any())
       {
       Tsimd fct=1.;
       for (size_t k=0; k<vlen; ++k)
-        {
-        if (i>=maxidx[k]-2)
+        if (i>=splitidx[k]-2)
           {
           int myexp;
           frexp(resamax[k],&myexp);
           fct[k] = ldexp(1., min(0, -myexp));
           }
-        }
       for (int j=i; j<ncoef; ++j)
         res(j) *= fct;
       sumbac*=fct*fct;
@@ -541,28 +532,27 @@ for (size_t k=0; k<vlen; ++k)
   Tsimd x4, x5, x6;
   for (size_t k=0; k<vlen; ++k)
     {
-    x4[k] = double(res(int(maxidx[k])-2)[k]);
-    x5[k] = double(res(int(maxidx[k])-1)[k]);
-    x6[k] = double(res(int(maxidx[k])  )[k]);
+    x4[k] = double(res(int(splitidx[k])-2)[k]);
+    x5[k] = double(res(int(splitidx[k])-1)[k]);
+    x6[k] = double(res(int(splitidx[k])  )[k]);
     }
   const auto ratio = (x1*x4+x2*x5+x3*x6)/(x1*x1+x2*x2+x3*x3);
-cout << "ratio: " << ratio[0] << endl;
-  fct_bwd = blend(abs(ratio)<1., Tsimd(1.)/ratio, Tsimd(1.));
-  sumbac *= blend(abs(ratio)<1., Tsimd(1.)/(ratio*ratio), Tsimd(1.));
-  fct_fwd = blend(abs(ratio)<1., Tsimd(1.), ratio);
-  sumfor *= blend(abs(ratio)<1., Tsimd(1.), ratio*ratio);
-  last_coeff_is_negative = blend(abs(ratio)<1., blend(ratio<0, Tsimd(1.), Tsimd(0.)), Tsimd(0.));
+  Tsimd fct_bwd = blend(abs(ratio)<1., Tsimd(1.)/ratio, Tsimd(1.));
+  sumbac *= fct_bwd*fct_bwd;
+  Tsimd fct_fwd = blend(abs(ratio)<1., Tsimd(1.), ratio);
+  sumfor *= fct_fwd*fct_fwd;
 
   {
   Tsimd cnorm = Tsimd(1.)/sqrt(sumfor+sumbac);
   for (size_t k=0; k<vlen; ++k)
     {
     bool last_coeff_should_be_negative = (nearest_int(abs(l2[k]-l3[k]+m2+m3))&1);
-    if (last_coeff_should_be_negative != bool(last_coeff_is_negative[k]))
+    bool last_coeff_is_negative = (abs(ratio[k])<1.) && (ratio[k]<0); 
+    if (last_coeff_should_be_negative != last_coeff_is_negative)
       cnorm[k] = -cnorm[k];
     }
   for (int j=0; j<ncoef; ++j)
-    res(j) *= blend(Tsimd(j)<maxidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
+    res(j) *= blend(Tsimd(j)<splitidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
   }
   }
   }
