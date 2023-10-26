@@ -370,8 +370,6 @@ template<typename Tsimd> void wigner3j_00_internal_vec
   {
   constexpr size_t vlen = Tsimd::size();
 
-  constexpr double srhuge=0x1p+250, srtiny=0x1p-250;
-
   // preliminaries
   Tsimd l1min, l1max;
   int ncoef=0;
@@ -512,7 +510,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     if (done.all()) break;
     }
 
-  if (ncoef<=2)  // normalize and return;
+  if ((ncoef<=2) || !(done.any()))  // normalize and return;
     {
     auto cnorm = Tsimd(1.)/sqrt(sumfor);
     for (size_t k=0; k<vlen; ++k)
@@ -523,7 +521,7 @@ template<typename Tsimd> void wigner3j_internal_vec
         cnorm[k] = -cnorm[k];
       }
     for (int j=0; j<ncoef; ++j)
-      res(i) *= cnorm;
+      res(j) *= cnorm;
     return;
     }
 
