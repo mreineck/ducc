@@ -57,12 +57,16 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
 void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res);
 
+template<typename Tsimd> void wigner3j_internal_vec
+  (Tsimd l2, Tsimd l3, double m2, double m3, vmav<Tsimd,1> &res);
+
 }
 
 using detail_wigner3j::wigner3j;
 using detail_wigner3j::wigner3j_int;
 using detail_wigner3j::wigner3j_ncoef_int;
 using detail_wigner3j::wigner3j_00_squared_compact;
+using detail_wigner3j::wigner3j_internal_vec;
 
 }
 
