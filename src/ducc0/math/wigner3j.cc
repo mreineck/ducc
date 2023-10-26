@@ -443,8 +443,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     l1max[k] = xl1max;
     if (k==0)
       ncoef = xncoef;
-    else
-      MR_assert(ncoef == xncoef, "ncoef mismatch");
+    MR_assert(ncoef == xncoef, "ncoef mismatch");
     }
 
   const Tsimd l2ml3sq = (l2-l3)*(l2-l3),
@@ -508,7 +507,7 @@ template<typename Tsimd> void wigner3j_internal_vec
       sumfor*=fct*fct;
       resamax*=fct;
       }
-    done = done | (c1old<=abs(c1));
+    done |= (c1old<=abs(c1));
     where(done, splitidx) = min(splitidx, Tsimd(double(i)));
     if (done.all()) break;
     }
@@ -531,7 +530,6 @@ template<typename Tsimd> void wigner3j_internal_vec
   Tsimd sumbac=0.;
 
   /* we always iterate from the other side */
-  {
   Tsimd x1, x2, x3;
   for (size_t k=0; k<vlen; ++k)
     {
@@ -602,7 +600,6 @@ template<typename Tsimd> void wigner3j_internal_vec
   Tsimd fct_fwd = blend(abs(ratio)<1., Tsimd(1.), ratio);
   sumfor *= fct_fwd*fct_fwd;
 
-  {
   Tsimd cnorm = Tsimd(1.)/sqrt(sumfor+sumbac);
   for (size_t k=0; k<vlen; ++k)
     {
@@ -614,8 +611,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   for (int j=0; j<ncoef; ++j)
     res(j) *= blend(Tsimd(j)<splitidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
   }
-  }
-  }
+
 template void wigner3j_internal_vec
   (native_simd<double> l2, native_simd<double> l3, double m2, double m3, vmav<native_simd<double>,1> &res);
 
