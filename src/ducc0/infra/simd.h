@@ -384,6 +384,8 @@ template<typename T> class pseudoscalar
       { return v>=other.v; }
     bool operator<(const pseudoscalar &other) const
       { return v<other.v; }
+    bool operator<=(const pseudoscalar &other) const
+      { return v<=other.v; }
     bool operator!=(const pseudoscalar &other) const
       { return v!=other.v; }
     const T &operator[] (size_t /*i*/) const { return v; }
