@@ -380,12 +380,11 @@ template<typename Tsimd> void wigner3j_00_internal_vec
     l1max[k] = xl1max;
     if (k==0)
       ncoef = xncoef;
-    else
-      MR_assert(ncoef == xncoef, "ncoef mismatch");
+    MR_assert(ncoef == xncoef, "ncoef mismatch");
     }
 
   const Tsimd l2ml3sq = (l2-l3)*(l2-l3),
-               pre1 = (l2+l3+1.)*(l2+l3+1.);
+              pre1 = (l2+l3+1.)*(l2+l3+1.);
 
   res(0) = 1.;
   Tsimd sum = (2.*l1min+1.) * res(0)*res(0);
@@ -393,13 +392,11 @@ template<typename Tsimd> void wigner3j_00_internal_vec
   for (int i=0; i+2<ncoef; i+=2)
     {
     Tsimd l1 = l1min+i+1,
-          l1sq = l1*l1;
+          l1sq = l1*l1,
+          l1p1 = l1+1,
+          l1p1sq = l1p1*l1p1;
 
     res(i+1) = 0.;
-
-    Tsimd l1p1 = l1+1;
-    Tsimd l1p1sq = l1p1*l1p1;
-
     const Tsimd tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                            /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
     res(i+2) = -res(i)*tmp1;
@@ -457,10 +454,14 @@ template<typename Tsimd> void wigner3j_internal_vec
 
   res(i) = srtiny;
   Tsimd sumfor = (2.*l1min+1.) * res(i)*res(i);
+  // This tracks the maximum absolute value reached in the current recurrence
   Tsimd resamax = 0.;
+  // True for the l2, l3 for which the instability point has been reached
   auto done = Tsimd(1.)<Tsimd(0.);  // i.e. false :)
+  // Index of the instability point, or ncoef-1 if not (yet) found
   Tsimd splitidx = double(ncoef-1);
 
+  // forward recurrence
   while(true)
     {
     if (i+1==ncoef) break;
@@ -486,6 +487,7 @@ template<typename Tsimd> void wigner3j_internal_vec
 
     oldfac=newfac;
 
+    // only add to sumfor where instability hasn't been reached
     sumfor += blend(done, Tsimd(0.), (2.*l1+1.)*res(i)*res(i));
 
     // rescaling necessary?
@@ -510,7 +512,8 @@ template<typename Tsimd> void wigner3j_internal_vec
     if (done.all()) break;
     }
 
-  if ((ncoef<=2) || !(done.any()))  // normalize and return;
+  // potential early exit
+  if ((ncoef<=2) || (splitidx==Tsimd(ncoef-1)).all())
     {
     auto cnorm = Tsimd(1.)/sqrt(sumfor);
     for (size_t k=0; k<vlen; ++k)
@@ -525,9 +528,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     return;
     }
 
-  Tsimd sumbac=0.;
-
-  /* we always iterate from the other side */
+  // backward recurrence is necessary, save 3 overlapping values
   Tsimd x1, x2, x3;
   for (size_t k=0; k<vlen; ++k)
     {
@@ -535,6 +536,8 @@ template<typename Tsimd> void wigner3j_internal_vec
     x2[k] = double(res(int(splitidx[k])-1)[k]);
     x3[k] = double(res(int(splitidx[k])  )[k]);
     }
+  Tsimd sumbac=0.;
+  // how far do we have to run the recurrence?
   int minidx = int(splitidx[0])-2;
   for (size_t k=1; k<vlen; ++k)
     minidx = min(minidx, int(splitidx[k])-2);
@@ -564,9 +567,8 @@ template<typename Tsimd> void wigner3j_internal_vec
     oldfac=newfac;
 
     where(Tsimd(i)>splitidx, sumbac) += (2.*l1+1.)*res(i)*res(i);
-    auto mask = Tsimd(i)>=(splitidx-2);
     // rescaling necessary?
-    where(mask, resamax) = max(abs(res(i)), resamax);
+    where(Tsimd(i)>=(splitidx-2), resamax) = max(abs(res(i)), resamax);
     if ((resamax>=srhuge).any())
       {
       Tsimd fct=1.;
@@ -585,6 +587,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     }
   while (i>minidx);
 
+  // compute ratio at overlap
   Tsimd x4, x5, x6;
   for (size_t k=0; k<vlen; ++k)
     {
@@ -598,6 +601,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   Tsimd fct_fwd = blend(abs(ratio)<1., Tsimd(1.), ratio);
   sumfor *= fct_fwd*fct_fwd;
 
+  // normalization and sign
   Tsimd cnorm = Tsimd(1.)/sqrt(sumfor+sumbac);
   for (size_t k=0; k<vlen; ++k)
     {
