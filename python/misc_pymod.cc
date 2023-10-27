@@ -1009,7 +1009,96 @@ else if (algo==1)
       }
     });
   }
-else if (algo==2)
+else if (algo==2) // fully vectorized
+  {
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({lmax_spec_used+1, nspec}, UNINITIALIZED));
+  for (size_t i=0; i<nspec; ++i)
+    for (size_t l=0; l<=lmax_spec_used; ++l)
+      spec2(l,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    using Tsimd = native_simd<double>;
+    constexpr size_t vlen = Tsimd::size();
+    vmav<double,1> resfull({2*lmax+1});
+    MR_assert(resfull.stride(0)==1,"oops");
+    vmav<Tsimd,1> resfullv({2*lmax+1});
+    MR_assert(resfullv.stride(0)==1,"oops");
+    vmav<double,1> val_({nspec});
+    MR_assert(val_.stride(0)==1,"oops");
+    double * DUCC0_RESTRICT val = val_.data();
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      int el2=el1;
+      for (; el2+int(vlen)-1<=int(lmax); el2+=vlen)
+        {
+        int xel3min = min(abs(el1-el2), abs(el1-(el2+int(vlen)-1)));
+        if (xel3min<=int(lmax_spec))
+          {
+          auto res_=subarray<1>(resfullv, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
+          Tsimd el2v;
+          for (size_t k=0; k<vlen; ++k)
+            el2v[k]=el2+k;
+          wigner3j_internal_vec(Tsimd(el1), el2v, 0, 0, res_);
+          const Tsimd * DUCC0_RESTRICT res = res_.data();
+
+          for (size_t k=0; k<vlen; ++k)
+            {
+            int xel2 = el2+int(k);
+            int el3min = abs(el1-xel2);
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+xel2, int(lmax_spec))-el3min;
+            for (int i=0; i<=max_i; i+=2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i][k]*res[i][k]*spec2(el3,ispec);
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              {
+              mat(ispec, el1, xel2) = (2*xel2+1.)*val[ispec];
+              mat(ispec, xel2, el1) = (2*el1+1.)*val[ispec];
+              }
+            }
+          }
+        else
+          for (size_t k=0; k<vlen; ++k)
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              mat(ispec, el1, el2+k) = mat(ispec, el2+k, el1) = 0.;
+        }
+      for (; el2<=int(lmax); el2++)
+        {
+        int el3min = abs(el1-el2);
+        if (el3min<=int(lmax_spec))
+          {
+          auto res_=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
+          wigner3j(el1, el2, 0, 0, res_);
+          const double * DUCC0_RESTRICT res = res_.data();
+      
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            val[ispec]=0;
+          size_t max_i = min(size_t(el1+el2), lmax_spec)-size_t(el3min);
+          for (size_t i=0; i<=max_i; i+=2)
+            {
+            int el3 = el3min+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i]*res[i]*spec2(el3,ispec);
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            {
+            mat(ispec, el1, el2) = (2*el2+1.)*val[ispec];
+            mat(ispec, el2, el1) = (2*el1+1.)*val[ispec];
+            }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
+        }
+      }
+    });
+  }
+else if (algo==3)
   {
 MR_fail("out of order");
 #if 0
