@@ -1014,7 +1014,7 @@ else if (algo==2) // fully vectorized
   using Tsimd = native_simd<double>;
   constexpr size_t vlen = Tsimd::size();
   auto lmax_spec_used = min(2*lmax, lmax_spec);
-  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+10*vlen}, UNINITIALIZED));
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, UNINITIALIZED));
   for (size_t i=0; i<nspec; ++i)
     {
     for (size_t l=0; l<=lmax_spec_used; ++l)
@@ -1024,12 +1024,8 @@ else if (algo==2) // fully vectorized
     }
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
-    vmav<double,1> resfull({2*lmax+1});
-    MR_assert(resfull.stride(0)==1,"oops");
     vmav<Tsimd,1> resfullv({2*lmax+1});
-    MR_assert(resfullv.stride(0)==1,"oops");
     vmav<Tsimd,1> val_({nspec});
-    MR_assert(val_.stride(0)==1,"oops");
     Tsimd * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
@@ -1038,8 +1034,8 @@ else if (algo==2) // fully vectorized
       {
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
         {
-        int smallest_el3 = el2-el1;
-        if (smallest_el3<=int(lmax_spec))
+        int el3min = el2-el1;
+        if (el3min<=int(lmax_spec))
           {
           auto res_=subarray<1>(resfullv, {{size_t(0), size_t(2*el1+1)}});
           wigner3j_internal_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0, res_);
@@ -1047,8 +1043,7 @@ else if (algo==2) // fully vectorized
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
             val[ispec]=0;
-          int el3min = el2-el1;
-          int max_i = min(el1+el2, int(lmax_spec))-el3min;
+          int max_i = min(el1+el2, int(lmax_spec)) - el3min;
           for (int i=0; i<=max_i; i+=2)
             {
             int el3 = el3min+i;
@@ -1057,14 +1052,12 @@ else if (algo==2) // fully vectorized
               val[ispec] += tmp*Tsimd(&spec2(ispec,el3), element_aligned_tag());
             }
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            {
             for (size_t k=0; k<vlen; ++k)
               if (el2+k<=lmax)
                 {
                 mat(ispec, el1, el2+k) = (2*(el2+k)+1.)*val[ispec][k];
                 mat(ispec, el2+k, el1) = (2*el1+1.)*val[ispec][k];
                 }
-            }
           }
         else
           for (size_t ispec=0; ispec<nspec; ++ispec)
