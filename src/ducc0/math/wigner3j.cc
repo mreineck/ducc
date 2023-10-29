@@ -109,11 +109,10 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
   
     for (; i+int(2*vlen)<ncoef; i+=int(2*vlen))
       {
-      auto l1 = l1min+i+1+iofs;
-      auto l1sq = l1*l1;
-  
-      auto l1p1 = l1+1;
-      auto l1p1sq = l1p1*l1p1;
+      auto l1 = l1min+i+1+iofs,
+           l1sq = l1*l1,
+           l1p1 = l1+1,
+           l1p1sq = l1p1*l1p1;
   
       const auto tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                                /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
@@ -135,13 +134,12 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
 
   for (; i+2<ncoef; i+=2)
     {
-    double l1 = l1min+i+1,
-           l1sq = l1*l1;
+    auto l1 = l1min+i+1,
+         l1sq = l1*l1,
+         l1p1 = l1+1,
+         l1p1sq = l1p1*l1p1;
 
     res(i+1) = 0.;
-
-    double l1p1 = l1+1;
-    double l1p1sq = l1p1*l1p1;
 
     const double tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                              /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
@@ -537,7 +535,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     x3[k] = double(res(int(splitidx[k])  )[k]);
     }
   Tsimd sumbac=0.;
-  // how far do we have to run the recurrence?
+  // how far back do we have to run the recurrence?
   int minidx = int(splitidx[0])-2;
   for (size_t k=1; k<vlen; ++k)
     minidx = min(minidx, int(splitidx[k])-2);
