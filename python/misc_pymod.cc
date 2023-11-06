@@ -962,54 +962,7 @@ if (algo==0) // standard, tried and true
       }
     });
   }
-else if (algo==1)
-  {
-  auto lmax_spec_used = min(2*lmax, lmax_spec);
-  auto spec2(vmav<double,2>::build_noncritical({lmax_spec_used+1, nspec}, UNINITIALIZED));
-  for (size_t i=0; i<nspec; ++i)
-    for (size_t l=0; l<=lmax_spec_used; ++l)
-      spec2(l,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    vmav<double,1> resfull({2*lmax+1});
-    MR_assert(resfull.stride(0)==1,"oops");
-    vmav<double,1> val_({nspec});
-    MR_assert(val_.stride(0)==1,"oops");
-    double * DUCC0_RESTRICT val = val_.data();
-    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
-      {
-      for (int el2=el1; el2<=int(lmax); el2++)
-        {
-        int el3min = abs(el1-el2);
-        if (el3min<=int(lmax_spec))
-          {
-          auto res_=subarray<1>(resfull, {{size_t(abs(el1-el2)), size_t(el1+el2+1)}});
-          wigner3j(el1, el2, 0, 0, res_);
-          const double * DUCC0_RESTRICT res = res_.data();
-      
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            val[ispec]=0;
-          size_t max_i = min(size_t(el1+el2), lmax_spec)-size_t(el3min);
-          for (size_t i=0; i<=max_i; i+=2)
-            {
-            int el3 = el3min+i;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              val[ispec] += res[i]*res[i]*spec2(el3,ispec);
-            }
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            {
-            mat(ispec, el1, el2) = (2*el2+1.)*val[ispec];
-            mat(ispec, el2, el1) = (2*el1+1.)*val[ispec];
-            }
-          }
-        else
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
-        }
-      }
-    });
-  }
-else if (algo==2) // fully vectorized
+else if (algo==1) // fully vectorized
   {
   using Tsimd = native_simd<double>;
   constexpr size_t vlen = Tsimd::size();
@@ -1067,90 +1020,6 @@ else if (algo==2) // fully vectorized
         }
       }
     });
-  }
-else if (algo==3)
-  {
-MR_fail("out of order");
-#if 0
-  auto spec_even(vmav<double,2>::build_noncritical({(lmax_spec+2)/2, nspec}, UNINITIALIZED));
-  auto spec_odd(vmav<double,2>::build_noncritical({(lmax_spec+1)/2, nspec}, UNINITIALIZED));
-  for (size_t i=0; i<nspec; ++i)
-    {
-    for (size_t l=0; l<=lmax_spec; ++l)
-      {
-      if (l&1)
-        spec_odd(l/2,i) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
-      else
-        spec_even(l/2,i) = spec(i,l)/ducc0::fourpi*(2.*l+3.);
-      }
-    }
-  execDynamic(lmax+1, nthreads, 16, [&](ducc0::Scheduler &sched)
-    {
-    vmav<double,1> resfull({lmax+1});
-    MR_assert(resfull.stride(0)==1,"oops");
-    vmav<double,1> val_({nspec});
-    MR_assert(val_.stride(0)==1,"oops");
-    double * DUCC0_RESTRICT val = val_.data();
-    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
-      {
-      for (int el2=el1; el2<=int(lmax); el2+=2)
-        {
-        auto ncoef = size_t((el2+el1-abs(el2-el1)+2)/2);
-        ncoef = min(ncoef, lmax_spec-abs(el2-el1) xxxx
-        auto res_=subarray<1>(resfull, {{0, ncoef}});
-        wigner3j_00_squared_compact(el1, el2, res_);
-        const double * DUCC0_RESTRICT res = res_.data();
-
-        int idxmin = abs(el1-el2)/2;
-        for (size_t ispec=0; ispec<nspec; ++ispec)
-          val[ispec]=0;
-        if (((el1+el2)&1)==0)
-          for (size_t i=0; i<ncoef; ++i)
-            {
-            int idx = idxmin+i;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              val[ispec] += res[i]*spec_even(idx,ispec);
-            }
-        else
-          for (size_t i=0; i<ncoef; ++i)
-            {
-            int idx = idxmin+i;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              val[ispec] += res[i]*spec_odd(idx,ispec);
-            }
-        for (size_t ispec=0; ispec<nspec; ++ispec)
-          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
-        }
-      for (int el2=el1+1; el2<=int(lmax); ++el2)
-        {
-        auto ncoef = size_t((el2+el1-abs(el2-el1)+2)/2);
-        auto res_=subarray<1>(resfull, {{0, ncoef}});
-        wigner3j_00_squared_compact(el1, el2, res_);
-        const double * DUCC0_RESTRICT res = res_.data();
-      
-        int idxmin = abs(el1-el2)/2;
-        for (size_t ispec=0; ispec<nspec; ++ispec)
-          val[ispec]=0;
-        if (((el1+el2)&1)==0)
-          for (size_t i=0; i<ncoef; ++i)
-            {
-            int idx = idxmin+i;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              val[ispec] += res[i]*spec_even(idx,ispec);
-            }
-        else
-          for (size_t i=0; i<ncoef; ++i)
-            {
-            int idx = idxmin+i;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              val[ispec] += res[i]*spec_odd(idx,ispec);
-            }
-        for (size_t ispec=0; ispec<nspec; ++ispec)
-          mat(ispec, el1, el2) = mat(ispec, el2, el1) = (2*el1+1.)*(2*el2+1.)*val[ispec];
-        }
-      }
-    });
-#endif
   }
 else MR_fail("incorrect algo number");
   }

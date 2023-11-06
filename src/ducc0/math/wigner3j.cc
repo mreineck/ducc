@@ -51,9 +51,6 @@ static inline int nearest_int (double arg)
 static inline bool intcheck (double val)
   { return abs(val-round(val))<1e-13; }
 
-static inline double xpow (int m, double val)
-  { return (m&1) ? -val : val; }
-
 auto wigner3j_checks_and_sizes(double l2, double l3, double m2, double m3)
   {
   MR_assert (l2>=abs(m2),"l2<abs(m2)");
@@ -613,7 +610,8 @@ template<typename Tsimd> void wigner3j_internal_vec
   }
 
 template void wigner3j_internal_vec
-  (native_simd<double> l2, native_simd<double> l3, double m2, double m3, vmav<native_simd<double>,1> &res);
+  (native_simd<double> l2, native_simd<double> l3, double m2, double m3,
+   vmav<native_simd<double>,1> &res);
 
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
