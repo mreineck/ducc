@@ -110,7 +110,7 @@ def with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
 
 def vis2dirty_with_faceting(*, nfacets_x=1, nfacets_y=1, npix_x, npix_y,
                             center_x=0., center_y=0., dirty=None, **kwargs):
-    import ducc0.wgridder.experimental as wgridder
+    import ducc0.wgridder as wgridder
     if dirty is None:
         dtype = np.float32 if kwargs["vis"].dtype == np.complex64 else np.float64
         dirty = np.zeros((npix_x, npix_y), dtype)
@@ -148,7 +148,7 @@ def vis2dirty_with_faceting(*, nfacets_x=1, nfacets_y=1, npix_x, npix_y,
 
 def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0.,
                             dirty, vis=None, **kwargs):
-    import ducc0.wgridder.experimental as wgridder
+    import ducc0.wgridder as wgridder
     npix_x, npix_y = dirty.shape
     istep = (npix_x+nfacets_x-1) // nfacets_x
     istep += istep % 2  # make even

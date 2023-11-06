@@ -62,7 +62,7 @@ nlat = lmax+1
 map = ducc0.misc.empty_noncritical((1,nlat,nlon), dtype=np.float64)
 map[()]=1
 t0 = time()
-map = ducc0.sht.experimental.synthesis_2d(
+map = ducc0.sht.synthesis_2d(
     alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
     geometry="GL", nthreads=nthreads,map=map)
 print("time for map synthesis: {}s".format(time()-t0))
@@ -70,13 +70,13 @@ print("time for map synthesis: {}s".format(time()-t0))
 # transform back to a_lm
 alm2=alm.copy()*7
 t0 = time()
-alm2 = ducc0.sht.experimental.analysis_2d(
+alm2 = ducc0.sht.analysis_2d(
     map=map, lmax=lmax, mmax=mmax, spin=0, geometry="GL", nthreads=nthreads, alm=alm2)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
 print("L2 error: ", ducc0.misc.l2error(alm, alm2))
-map2 = ducc0.sht.experimental.synthesis_2d(
+map2 = ducc0.sht.synthesis_2d(
     alm=alm2, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
     geometry="GL", nthreads=nthreads)
 print("map L2 error: ", ducc0.misc.l2error(map, map2))
@@ -92,19 +92,19 @@ print("but ducc.sht supports advanced analysis techniques which lower this limit
 map = ducc0.misc.empty_noncritical((1,nlat,nlon), dtype=np.float64)
 map[()]=1
 t0 = time()
-map = ducc0.sht.experimental.synthesis_2d(
+map = ducc0.sht.synthesis_2d(
     alm=alm, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
     geometry="CC", nthreads=nthreads, map=map)
 print("time for map synthesis: {}s".format(time()-t0))
 
 t0 = time()
-alm2 = ducc0.sht.experimental.analysis_2d(
+alm2 = ducc0.sht.analysis_2d(
     map=map, lmax=lmax, mmax=mmax, spin=0, geometry="CC", nthreads=nthreads, alm=alm2)
 print("time for map analysis: {}s".format(time()-t0))
 
 # make sure input was recovered accurately
 print("L2 error: ", ducc0.misc.l2error(alm, alm2))
-map2 = ducc0.sht.experimental.synthesis_2d(
+map2 = ducc0.sht.synthesis_2d(
     alm=alm2, ntheta=nlat, nphi=nlon, lmax=lmax, mmax=mmax, spin=0,
     geometry="CC", nthreads=nthreads)
 print("map L2 error: ", ducc0.misc.l2error(map, map2))

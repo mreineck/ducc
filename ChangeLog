@@ -4,6 +4,15 @@
       try to read OMP_NUM_THREADS to determine the maximum number of threads
       to use.
 
+- sht:
+    - make functions from `ducc0.sht.experimental` also available in
+      `ducc0.sht`. The interface should have matured sufficiently by now.
+
+- wgridder:
+    - make functions `vis2dirty` and `dirty2vis` from
+      `ducc0.wgridder.experimental` also available in `ducc0.wgridder`.
+      The interface should have matured sufficiently by now.
+
 
 0.32.0:
 - general:
