@@ -382,8 +382,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     static double phase(double xsq, double ysq, double w, bool adjoint, double nshift)
       {
       double tmp = 1.-xsq-ysq;
-      if (tmp<=0) return 0; // no phase factor beyond the horizon
-      double nm1 = (-xsq-ysq)/(sqrt(tmp)+1); // more accurate form of sqrt(1-xsq-ysq)-1
+      // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
+      double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
       double phs = w*(nm1+nshift);
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
@@ -1359,14 +1359,14 @@ timers.pop();
             auto tmp = 1-xsq-ysq;
             if (tmp>=0)
               {
-              auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1); // accurate form of sqrt(1-x-y)-1
+              // accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
+              auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1);
               fct = krn->corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
             else // beyond the horizon, don't really know what to do here
-//              fct = divide_by_n ? 0 : krn->corfunc((sqrt(-tmp)-1)*dw);
-              fct = divide_by_n ? 0 : krn->corfunc((-sqrt(-tmp)-1+nshift)*dw);
+              fct = divide_by_n ? 0 : krn->corfunc((-sqrt(-tmp)-1.+nshift)*dw);
             if (lmshift)
               {
               auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);

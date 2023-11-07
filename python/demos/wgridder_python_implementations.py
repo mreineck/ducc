@@ -17,7 +17,7 @@
 from time import time
 
 import ducc0.wgridder as wg
-import ducc0.wgridder.experimental as wg_future
+import ducc0.wgridder as wg_future
 import numpy as np
 import scipy.fft
 from numba import njit
