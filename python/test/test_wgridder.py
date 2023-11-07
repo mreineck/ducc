@@ -32,7 +32,7 @@ SPEEDOFLIGHT = 299792458.
 
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
-                     apply_w, mask):
+                     apply_w, mask, divide_by_n=True):
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
                        indexing='ij')
     x *= xpixsize
@@ -40,7 +40,8 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
     res = np.zeros((nxdirty, nydirty))
     eps = x**2+y**2
     if apply_w:
-        nm1 = -eps/(np.sqrt(1.-eps)+1.)
+        tmp = np.sqrt(np.abs(1.-eps))
+        nm1 = np.where(eps<=1, tmp-1., -tmp-1.)
         n = nm1+1
     else:
         nm1 = 0.
@@ -56,10 +57,10 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
             else:
                 res += (ms[row, chan]*wgt[row, chan]
                         * np.exp(2j*np.pi*phase)).real
-    return np.where(n>0, res/n, 0.)
+    return np.where(n>0, res/n, 0.) if divide_by_n else res
 
 def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
-                     apply_w, mask):
+                       apply_w, mask, divide_by_n=True):
     nxdirty, nydirty = dirty.shape
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
                        indexing='ij')
@@ -68,12 +69,13 @@ def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
     res = np.zeros((uvw.shape[0], freq.shape[0]), dtype=np.complex128)
     eps = x**2+y**2
     if apply_w:
-        nm1 = -eps/(np.sqrt(1.-eps)+1.)
+        tmp = np.sqrt(np.abs(1.-eps))
+        nm1 = np.where(eps<=1, tmp-1., -tmp-1.)
         n = nm1+1
     else:
         nm1 = 0.
         n = 1.
-    dirty2 = np.where(n>0, dirty/n, 0.)
+    dirty2 = np.where(n>0, dirty/n, 0.) if divide_by_n else dirty
     for row in range(uvw.shape[0]):
         for chan in range(freq.shape[0]):
             if mask is not None and mask[row, chan] == 0:
@@ -295,6 +297,101 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
         return
     dirty = with_finufft(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                          pixsizey, mask, epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+
+
+@pmp('nx', [128])
+@pmp('ny', [250])
+@pmp("nrow", (27,))
+@pmp("nchan", (5,))
+@pmp("epsilon", (2e-10,))
+@pmp("singleprec", (False,))
+@pmp("wstacking", (True,))
+@pmp("use_wgt", (True, False))
+@pmp("use_mask", (False, True))
+@pmp("nthreads", (2,))
+@pmp("fov", (10., 120.))
+def test_adjointness_wsclean(nx, ny, nrow, nchan, epsilon,
+                             singleprec, wstacking, use_wgt, nthreads,
+                             use_mask, fov):
+    nxdirty, nydirty = nx, ny
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(43)
+    pixsizex = fov*np.pi/180/nxdirty
+    pixsizey = fov*np.pi/180/nydirty*1.1
+    f0 = 1e9
+    freq = f0 + np.arange(nchan)*(f0/nchan)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizey*f0/SPEEDOFLIGHT)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
+    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
+        if use_mask else None
+    dirty = rng.random((nxdirty, nydirty))-0.5
+    nu = nv = 0
+    if singleprec:
+        ms = ms.astype("c8")
+        dirty = dirty.astype("f4")
+        if wgt is not None:
+            wgt = wgt.astype("f4")
+
+    def check(d2, m2):
+        ref = max(vdot(ms, ms).real, vdot(m2, m2).real,
+                  vdot(dirty, dirty).real, vdot(d2, d2).real)
+        tol = 3e-5*ref if singleprec else 2e-13*ref
+        assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=3*tol)
+
+    dirty2 = ng.vis2dirty(
+        uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty,
+        pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon,
+        do_wgridding=wstacking, nthreads=nthreads, mask=mask,
+        divide_by_n=False).astype("f8")
+    ms2 = ng.dirty2vis(uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
+        pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon,
+        do_wgridding=wstacking, nthreads=nthreads, mask=mask,
+        divide_by_n=False).astype("c16")
+    check(dirty2, ms2)
+
+
+@pmp('nx', [50])
+@pmp('ny', [50])
+@pmp("nrow", (27,))
+@pmp("nchan", (5,))
+@pmp("epsilon", (1e-7,))
+@pmp("singleprec", (False,))
+@pmp("wstacking", (True,))
+@pmp("use_wgt", (True,))
+@pmp("use_mask", (False,))
+@pmp("nthreads", (1,))
+@pmp("fov", (10., 80., 90., 120.,))
+def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
+                           singleprec, wstacking, use_wgt, use_mask, fov,
+                           nthreads):
+    nxdirty, nydirty = nx, ny
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(42)
+    pixsizex = fov*np.pi/180/nxdirty
+    pixsizey = fov*np.pi/180/nydirty*1.1
+    f0 = 1e9
+    freq = f0 + np.arange(nchan)*(f0/nchan)
+    uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/SPEEDOFLIGHT)
+    ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
+    wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
+    mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
+        if use_mask else None
+    if singleprec:
+        ms = ms.astype("c8")
+        if wgt is not None:
+            wgt = wgt.astype("f4")
+    dirty = ng.vis2dirty(
+        uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty,
+        pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon,
+        do_wgridding=wstacking, nthreads=nthreads, verbosity=0, mask=mask,
+        divide_by_n=False).astype("f8")
+    ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+                           pixsizey, wstacking, mask, divide_by_n=False)
+    dirty[0,0]=ref[0,0]
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
 
 

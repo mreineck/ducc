@@ -9,6 +9,7 @@
       `ducc0.sht`. The interface should have matured sufficiently by now.
 
 - wgridder:
+    - bug fix for large fields of view that extend beyond the horizon
     - make functions `vis2dirty` and `dirty2vis` from
       `ducc0.wgridder.experimental` also available in `ducc0.wgridder`.
       The interface should have matured sufficiently by now.
@@ -349,7 +350,7 @@
     which can be used to limit the maximum azimuthal moment of a transform.
     If not supplied, the code assumes that `mmax` is equal to `lmax`.
   - added some unit tests for the new SHT interface.
-  - reduced memory overhead forsome of the `sht.experimental.*2d*` functions.
+  - reduced memory overhead for some of the `sht.experimental.*2d*` functions.
 
 - misc:
   - added functionality (originally from Planck Level-S) to simulate time
