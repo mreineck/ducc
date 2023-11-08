@@ -36,7 +36,7 @@
 #include <atomic>
 #include <memory>
 #include <numeric>
-#if ((!defined(DUCC0_NO_SIMD)) && (defined(__AVX__)||defined(__SSE3__)))
+#if ((!defined(DUCC0_NO_SIMD)) && (!defined(__AVX512F__)) && (defined(__AVX__)||defined(__SSE3__)))
 #include <x86intrin.h>
 #endif
 
@@ -103,7 +103,9 @@ template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
 #if (!defined(DUCC0_NO_SIMD))
+#if (!defined(__AVX512F__))
 #if (defined(__AVX__))
+static_assert(mysimd<float>::size()==8, "must not happen");
 #if 1
 template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
   {
@@ -126,12 +128,14 @@ template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<floa
   }
 #endif
 #elif defined(__SSE3__)
+static_assert(mysimd<float>::size()==4, "must not happen");
 template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
   {
   auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
   t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
   return complex<float>(t1[0], t1[2]);
   }
+#endif
 #endif
 #endif
 
