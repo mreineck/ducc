@@ -143,7 +143,10 @@ py::array Py_get_gridweights(const string &type, size_t ntheta)
   {
   auto wgt_ = make_Pyarr<double>({ntheta});
   auto wgt = to_vmav<double,1>(wgt_);
+  {
+  py::gil_scoped_release release;
   get_gridweights(type, wgt);
+  }
   return wgt_;
   }
 

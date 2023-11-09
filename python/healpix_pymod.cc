@@ -305,6 +305,8 @@ class Pyhpbase
       auto nphi = to_vmav<size_t,1>(nphi_);
       auto ringstart_ = make_Pyarr<size_t>(shape_t({nrings}));
       auto ringstart = to_vmav<size_t,1>(ringstart_);
+      {
+      py::gil_scoped_release release;
       for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
         {
         int64_t startpix, ringpix;
@@ -318,6 +320,7 @@ class Pyhpbase
         ringstart(r) = size_t(startpix);
         ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
         }
+      }
       py::dict res;
       res["theta"] = theta_;
       res["phi0"] = phi0_;
