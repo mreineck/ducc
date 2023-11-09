@@ -51,9 +51,6 @@ static inline int nearest_int (double arg)
 static inline bool intcheck (double val)
   { return abs(val-round(val))<1e-13; }
 
-static inline double xpow (int m, double val)
-  { return (m&1) ? -val : val; }
-
 auto wigner3j_checks_and_sizes(double l2, double l3, double m2, double m3)
   {
   MR_assert (l2>=abs(m2),"l2<abs(m2)");
@@ -84,12 +81,9 @@ auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   }
 
 // version for m2==m3==0
-void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
+void wigner3j_00_internal (double l2, double l3, double l1min,
                            int ncoef, vmav<double,1> &res)
   {
-  constexpr double srhuge=0x1p+250,
-                   tiny=0x1p-500, srtiny=0x1p-250;
-
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.);
 
@@ -98,74 +92,61 @@ void wigner3j_00_internal (double l2, double l3, double l1min, double l1max,
   using Tv = native_simd<double>;
   constexpr size_t vlen = Tv::size();
 
-  res(0) = srtiny;
-  double sumfor = (2.*l1min+1.) * res(0)*res(0);
+  res(0) = 1.;
+  double sum = (2.*l1min+1.) * res(0)*res(0);
 
   int i=0;
 
   if constexpr(vlen>=4)
     {
     Tv iofs;
+    Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
       iofs[m] = 2*m;
   
-    for (; i+2*vlen<ncoef; i+=2*vlen)
+    for (; i+int(2*vlen)<ncoef; i+=int(2*vlen))
       {
-      auto l1 = l1min+i+1+iofs;
-      auto l1sq = l1*l1;
-  
-      auto l1p1 = l1+1;
-      auto l1p1sq = l1p1*l1p1;
+      auto l1 = l1min+i+1+iofs,
+           l1sq = l1*l1,
+           l1p1 = l1+1,
+           l1p1sq = l1p1*l1p1;
   
       const auto tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                                /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
 
       Tv resx;
-      resx[0] = -res(i)*tmp1[0];
+      res(i+1) = 0;
+      resx[0] = res(i+2) = -res(i)*tmp1[0];
       for (size_t m=1; m<vlen; ++m)
-        resx[m] = -resx[m-1]*tmp1[m];
-      auto resx2 = (2.*l1p1+1.)*resx*resx;
-
-      for (size_t m=0; m<vlen; ++m)
         {
         res(i+2*m+1) = 0;
-        res(i+2*m+2) = resx[m];
-        sumfor += resx2[m];
+        resx[m] = res(i+2*m+2) = -resx[m-1]*tmp1[m];
         }
-      if (abs(res(i+2*vlen))>=srhuge)
-        {
-        for (int k=0; k<=i+2*vlen; k+=2)
-          res(k)*=srtiny;
-        sumfor*=tiny;
-        }
+      sumx += (2.*l1p1+1.)*resx*resx;
       }
+
+    for (size_t m=0; m<vlen; ++m)
+      sum += sumx[m];
     }
 
   for (; i+2<ncoef; i+=2)
     {
-    double l1 = l1min+i+1,
-           l1sq = l1*l1;
+    auto l1 = l1min+i+1,
+         l1sq = l1*l1,
+         l1p1 = l1+1,
+         l1p1sq = l1p1*l1p1;
 
     res(i+1) = 0.;
-
-    double l1p1 = l1+1;
-    double l1p1sq = l1p1*l1p1;
 
     const double tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                              /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
     res(i+2) = -res(i)*tmp1;
 
-    sumfor += (2.*l1p1+1.)*res(i+2)*res(i+2);
-    if (abs(res(i+2))>=srhuge)
-      {
-      for (int k=0; k<=i+2; k+=2)
-        res(k)*=srtiny;
-      sumfor*=tiny;
-      }
+    sum += (2.*l1p1+1.)*res(i+2)*res(i+2);
     }
 
   bool last_coeff_is_negative = (((ncoef+1)/2)&1) == 0;
-  double cnorm=1./sqrt(sumfor);
+  double cnorm=1./sqrt(sum);
   // follow sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
   bool last_coeff_should_be_negative = nearest_int(abs(l2-l3))&1;
   if (last_coeff_is_negative != last_coeff_should_be_negative)
@@ -219,7 +200,6 @@ template<size_t bufsize> void wigner3j_internal_block
 
     const double l1 = l1min+i;
     const double l1sq = l1*l1,
-                 c1old = abs(c1),
                  newfac = sqrt((l1sq-l2ml3sq)*(pre1-l1sq)*(l1sq-m1sq));
     c1 = (l1>1.000001) ? (2.*l1-1.)*(pre2-(l1sq-l1)*m3mm2)/((l1-1.)*newfac)
                        : -(2.*l1-1.)*l1*(m3mm2)/newfac;
@@ -350,7 +330,7 @@ bailout_fwd:
 
 bailout_bwd:
 
-    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+    for (size_t i=nstep2; i<size_t(min(ncoef,nstep2+3)); ++i)
       {
       auto l1=l1min+i;
       sumbac -= (2.*l1+1.)*res(i)*res(i);
@@ -386,7 +366,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
                         vmav<double,1> &res)
   {
   if ((m2==0.) && (m3==0.))
-    return wigner3j_00_internal (l2, l3, l1min, l1max, ncoef, res);
+    return wigner3j_00_internal (l2, l3, l1min, ncoef, res);
 
   if constexpr (native_simd<double>::size()>=4)
     return wigner3j_internal_block<16> (l2, l3, m2, m3, m1, l1min, l1max, ncoef, res);
@@ -486,7 +466,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
       }
     while (i>nstep2);
 
-    for (size_t i=nstep2; i<min(ncoef,nstep2+3); ++i)
+    for (size_t i=nstep2; i<size_t(min(ncoef,nstep2+3)); ++i)
       {
       auto l1=l1min+i;
       sumbac -= (2.*l1+1.)*res(i)*res(i);

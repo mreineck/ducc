@@ -383,6 +383,7 @@ using Tv=native_simd<double>;
 static constexpr size_t VLEN=Tv::size();
 
 #if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
+static_assert(Tv::size()==4, "must not happen");
 static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
   complex<double> * DUCC0_RESTRICT cc)
   {

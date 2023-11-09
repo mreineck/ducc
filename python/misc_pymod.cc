@@ -205,10 +205,13 @@ py::array Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
   auto res2 = to_vmav<double,1>(res);
+  {
+  py::gil_scoped_release release;
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
+  }
   return res;
   }
 
@@ -668,6 +671,8 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
   {
   auto inp(to_cfmav<Ti>(inp_));
   auto out(to_vfmav<To>(out_));
+  {
+  py::gil_scoped_release release;
   size_t ndim = inp.ndim();
   nthreads = adjust_nthreads(nthreads);
   MR_assert(out.ndim()==ndim, "dimensionality mismatch");
@@ -689,6 +694,7 @@ template<typename Ti, typename To> py::array roll_resize_roll(const py::array &i
     roll_resize_roll(inp.data(), inp.shape().data(), inp.stride().data(),
       out.data(), out.shape().data(), out.stride().data(),
       ri.data(), ro.data(), 0, ndim);
+  }
   return out_;
   }
 
@@ -786,6 +792,8 @@ py::array Py_get_deflected_angles(const py::array &theta_,
   size_t ncomp = calc_rotation ? 3 : 2;
   auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), ncomp});
   auto res = to_vmav<double,2>(res_);
+  {
+  py::gil_scoped_release release;
   execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
     {
     while (auto rng=sched.getNext())
@@ -828,6 +836,7 @@ py::array Py_get_deflected_angles(const py::array &theta_,
           }
         }
     });
+  }
   return res_;
   }
 
@@ -836,7 +845,10 @@ template<typename T> void Py2_lensing_rotate(py::array &values_,
   {
   auto values = to_vfmav<complex<T>>(values_);
   auto gamma = to_cfmav<T>(gamma_);
+  {
+  py::gil_scoped_release release;
   mav_apply([&](auto &v, const auto &g) { v*=polar(T(1), spin*g); }, nthreads, values, gamma);
+  }
   }
 void Py_lensing_rotate(py::array &values,
   const py::array &gamma, int spin, size_t nthreads=1)
@@ -869,7 +881,10 @@ py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
   auto res_ = make_Pyarr<double>({ncoef});
   auto res = to_vmav<double,1>(res_);
   int l1min;
+  {
+  py::gil_scoped_release release;
   wigner3j_int (l2, l3, m2, m3, l1min, res);
+  }
   return py::make_tuple(py::cast(l1min), res_);
   }
 
