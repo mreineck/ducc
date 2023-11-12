@@ -917,53 +917,14 @@ int : the l1 quantum number of the first value in the returned array
 numpy.ndarray(dtype=numpy.float64) : 3j symbols in order of increasing l1
 )""";
 
-py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, size_t algo, py::object &mat__)
+
+#if 0
+void coupling_matrix_00_nontmpl(const cmav<double,2> &spec,
+  size_t lmax, vmav<double,3> &mat, size_t nthreads)
   {
-  auto spec = to_cmav<double,2>(spec_);
-  auto nspec = spec.shape(0);
+  size_t nspec=spec.shape(0);
   MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
   auto lmax_spec = spec.shape(1)-1;
-  auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, lmax+1, lmax+1});
-  auto mat = to_vmav<double,3>(mat_);
-  {
-  py::gil_scoped_release release;
-if (algo==0) // standard, tried and true
-  {
-  ducc0::execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    vector<double> res;
-    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
-      {
-      for (int el2=0; el2<=el1; el2++)
-        {
-        int el3min = abs(el1-el2);
-        if (el3min<=int(lmax_spec))
-          {
-          int el3max = el1+el2;
-          ducc0::wigner3j(el1, el2, 0, 0, res);
-          MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
-          size_t max_i = min(size_t(el3max), lmax_spec)-size_t(el3min);
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            {
-            double val = 0;
-            for (size_t i=0; i<=max_i; i+=2)
-              {
-              int el3 = el3min+i;
-              val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
-              }
-            mat(ispec, el1, el2) = (2*el2+1.)/ducc0::fourpi*val;
-            mat(ispec, el2, el1) = (2*el1+1.)/ducc0::fourpi*val;
-            }
-          }
-        else
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
-        }
-      }
-    });
-  }
-else if (algo==1) // fully vectorized
-  {
   using Tsimd = native_simd<double>;
   constexpr size_t vlen = Tsimd::size();
   auto lmax_spec_used = min(2*lmax, lmax_spec);
@@ -1020,6 +981,188 @@ else if (algo==1) // fully vectorized
         }
       }
     });
+  }
+#endif
+
+void coupling_matrix_00_nontmpl(const cmav<double,2> &spec,
+  size_t lmax, vmav<double,3> &mat, size_t nthreads)
+  {
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vmav<Tsimd,1> resfullv({lmax+1});
+    vmav<Tsimd,1> val_({nspec});
+    Tsimd * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=vlen)
+        {
+        int el3min = el2-el1;
+        if (el3min<=int(lmax_spec))
+          {
+          auto res_=subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}});
+          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs, res_);
+          const Tsimd * DUCC0_RESTRICT res = res_.data();
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            val[ispec]=0;
+          int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+          for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+            {
+            int el3 = el3min+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                {
+                mat(ispec, el1, el2+k) = (2*(el2+k)+1.)*val[ispec][k];
+                mat(ispec, el2+k, el1) = (2*el1+1.)*val[ispec][k];
+                }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                mat(ispec, el1, el2+k) = mat(ispec, el2+k, el1) = 0.;
+        }
+      }
+    });
+  }
+template<size_t nspec> void coupling_matrix_00_tmpl(const cmav<double,2> &spec,
+  size_t lmax, vmav<double,3> &mat, size_t nthreads)
+  {
+  MR_assert(nspec==spec.shape(0), "bad invocation");
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vmav<Tsimd,1> resfullv({lmax+1});
+    array<Tsimd,nspec> val;
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=vlen)
+        {
+        int el3min = el2-el1;
+        if (el3min<=int(lmax_spec))
+          {
+          auto res_=subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}});
+          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs, res_);
+          const Tsimd * DUCC0_RESTRICT res = res_.data();
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            val[ispec]=0;
+          int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+          for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+            {
+            int el3 = el3min+i;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                {
+                mat(ispec, el1, el2+k) = (2*(el2+k)+1.)*val[ispec][k];
+                mat(ispec, el2+k, el1) = (2*el1+1.)*val[ispec][k];
+                }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                mat(ispec, el1, el2+k) = mat(ispec, el2+k, el1) = 0.;
+        }
+      }
+    });
+  }
+
+py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, size_t algo, py::object &mat__)
+  {
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
+  auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, lmax+1, lmax+1});
+  auto mat = to_vmav<double,3>(mat_);
+  {
+  py::gil_scoped_release release;
+if (algo==0) // standard, tried and true
+  {
+  ducc0::execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vector<double> res;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=0; el2<=el1; el2++)
+        {
+        int el3min = abs(el1-el2);
+        if (el3min<=int(lmax_spec))
+          {
+          int el3max = el1+el2;
+          ducc0::wigner3j(el1, el2, 0, 0, res);
+          MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
+          size_t max_i = min(size_t(el3max), lmax_spec)-size_t(el3min);
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            {
+            double val = 0;
+            for (size_t i=0; i<=max_i; i+=2)
+              {
+              int el3 = el3min+i;
+              val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
+              }
+            mat(ispec, el1, el2) = (2*el2+1.)/ducc0::fourpi*val;
+            mat(ispec, el2, el1) = (2*el1+1.)/ducc0::fourpi*val;
+            }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
+        }
+      }
+    });
+  }
+else if (algo==1) // fully vectorized
+  {
+  if (nspec==1)
+    coupling_matrix_00_tmpl<1>(spec, lmax, mat, nthreads);
+  else if (nspec==2)
+    coupling_matrix_00_tmpl<2>(spec, lmax, mat, nthreads);
+  else if (nspec==3)
+    coupling_matrix_00_tmpl<3>(spec, lmax, mat, nthreads);
+  else if (nspec==4)
+    coupling_matrix_00_tmpl<4>(spec, lmax, mat, nthreads);
+  else
+    coupling_matrix_00_nontmpl(spec, lmax, mat, nthreads);
   }
 else MR_fail("incorrect algo number");
   }

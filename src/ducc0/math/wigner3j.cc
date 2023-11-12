@@ -815,6 +815,50 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
     res(k)*=cnorm;
   }
 
+template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, vmav<Tsimd,1> &res)
+  {
+  constexpr size_t vlen=Tsimd::size();
+  Tsimd l1min, l1max;
+  int ncoef=0;
+  for (size_t k=0; k<vlen; ++k)
+    {
+    auto [ m1_, xl1min, xl1max, xncoef] = wigner3j_checks_and_sizes(l2[k], l3[k], 0, 0);
+    l1min[k] = xl1min;
+    l1max[k] = xl1max;
+    if (k==0)
+      ncoef = xncoef;
+    MR_assert(ncoef == xncoef, "ncoef mismatch");
+    }
+
+  const Tsimd l2ml3sq = (l2-l3)*(l2-l3),
+              pre1 = (l2+l3+1.)*(l2+l3+1.);
+
+  int ncoef2 = (ncoef+1)/2;
+  MR_assert(res.shape(0)==size_t(ncoef2), "bad size of result array");
+
+  res(0) = 1.;
+  Tsimd sum = (2.*l1min+1.) * res(0);
+
+  for (int i=0 ; i+1<ncoef2; ++i)
+    {
+    Tsimd l1 = l1min+2*i+1,
+          l1sq = l1*l1,
+          l1p1 = l1+1,
+          l1p1sq = l1p1*l1p1;
+
+    const Tsimd tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
+                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
+    res(i+1) = res(i)*tmp1;
+
+    sum += (2.*l1p1+1.)*res(i+1);
+    }
+
+  auto cnorm=Tsimd(1.)/sum;
+  for (int k=0; k<ncoef2; ++k)
+    res(k)*=cnorm;
+  }
+template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_simd<double> l3, vmav<native_simd<double>,1> &res);
+
 void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
