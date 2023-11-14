@@ -1423,6 +1423,12 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
     for (size_t j=0; j<ncomp_spec; ++j)
       for (size_t i=0; i<nspec; ++i)
         spec2(i,j,l) = 0.;
+vector<double> nom1(2*lmax+1+1), nom2(2*lmax+1+1);
+for (size_t el3=0; el3<nom1.size(); ++el3)
+  {
+nom1[el3] = 2.*sqrt((el3+1.)*el3);
+nom2[el3] = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.));
+  }
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
 // res arrays are one larger to make loops simpler below
@@ -1435,6 +1441,8 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
         {
         int el3min = abs(el2-el1);
         int el3max = el1+el2;
+double xdenom1 = (el2>1) ? sqrt(1. / ((el2-1.)*(el2+2.))) : 0;
+double xdenom2 = (el2>1) ? sqrt(1. / ((el2+2.)*(el2+1.)*el2*(el2-1.))): 0;
         if (el3min<=int(lmax_spec))
           {
 {
@@ -1485,10 +1493,10 @@ if (el3max>1)
           int maxidx = min(el3max, int(lmax_spec));
           for (int el3=el3min; el3<=maxidx; el3+=2)
             {
-            double fac_b = 2.*sqrt((el3+1.)*el3 / ((el2-1.)*(el2+2.)));
-            double fac_c = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.) / ((el2+2.)*(el2+1.)*el2*(el2-1.)));
-            double fac_b2 = 2.*sqrt((el3+2.)*(el3+1.) / ((el2-1.)*(el2+2.)));
-            double fac_c2 = sqrt((el3+3.)*(el3+2.)*(el3+1.)*el3 / ((el2+2.)*(el2+1.)*el2*(el2-1.)));
+            double fac_b = nom1[el3] *xdenom1;
+            double fac_c = nom2[el3] *xdenom2;
+            double fac_b2 = nom1[el3+1] *xdenom1;
+            double fac_c2 = nom2[el3+1] *xdenom2;
 
             for (size_t ispec=0; ispec<nspec; ++ispec)
               {
