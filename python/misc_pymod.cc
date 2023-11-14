@@ -1432,17 +1432,19 @@ nom2[el3] = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.));
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
 // res arrays are one larger to make loops simpler below
-    vmav<double,2> resfullv({4, 2*lmax+1+1});
-    vmav<array<double,ncomp_out>,1> val_({nspec});
-    array<double,ncomp_out> * DUCC0_RESTRICT val = val_.data();
+    vmav<double,2> resfullv({6, 2*lmax+1+1});
+    vmav<array<double,9>,1> val_({nspec});
+    array<double,9> * DUCC0_RESTRICT val = val_.data();
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
-      for (int el2=0; el2<=int(lmax); ++el2)
+      for (int el2=el1; el2<=int(lmax); ++el2)
         {
         int el3min = abs(el2-el1);
         int el3max = el1+el2;
 double xdenom1 = (el2>1) ? sqrt(1. / ((el2-1.)*(el2+2.))) : 0;
 double xdenom2 = (el2>1) ? sqrt(1. / ((el2+2.)*(el2+1.)*el2*(el2-1.))): 0;
+double xxdenom1 = (el1>1) ? sqrt(1. / ((el1-1.)*(el1+2.))) : 0;
+double xxdenom2 = (el1>1) ? sqrt(1. / ((el1+2.)*(el1+1.)*el1*(el1-1.))): 0;
         if (el3min<=int(lmax_spec))
           {
 {
@@ -1484,11 +1486,35 @@ if (el3max>1)
           for (size_t ii=el3min; ii<2; ++ii)
             res20[ii] = 0;
 
+if (el3max>0)
+{
+          auto res12_=subarray<1>(resfullv, {{4}, {size_t(max(1,el3min)), size_t(el3max+1)}});
+          if ((el1>=1) && (el2>=2))
+            wigner3j(el2, el1, -2, 1, res12_);
+          else
+            for (size_t ii=0; ii<res12_.shape(0); ++ii) res12_(ii) = 0;
+}
+          double * DUCC0_RESTRICT res12 = &resfullv(4,0);
+          for (size_t ii=el3min; ii<1; ++ii)
+            res12[ii] = 0;
+
+if (el3max>1)
+{
+          auto res02_=subarray<1>(resfullv, {{5}, {size_t(max(2,el3min)), size_t(el3max+1)}});
+          if (el2>=2)
+            wigner3j(el2, el1, -2, 0, res02_);
+          else
+            for (size_t ii=0; ii<res02_.shape(0); ++ii) res02_(ii) = 0;
+}
+          double * DUCC0_RESTRICT res02 = &resfullv(5,0);
+          for (size_t ii=el3min; ii<2; ++ii)
+            res02[ii] = 0;
+
           // safety zero
-          res00[el3max+1] = res22[el3max+1] = res21[el3max+1] = res20[el3max+1] = 0;
+          res00[el3max+1] = res22[el3max+1] = res21[el3max+1] = res20[el3max+1]  = res12[el3max+1] = res02[el3max+1] = 0;
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_out; ++j)
+            for (size_t j=0; j<9; ++j)
               val[ispec][j]=0;
           int maxidx = min(el3max, int(lmax_spec));
           for (int el3=el3min; el3<=maxidx; el3+=2)
@@ -1497,7 +1523,11 @@ if (el3max>1)
             double fac_c = nom2[el3] *xdenom2;
             double fac_b2 = nom1[el3+1] *xdenom1;
             double fac_c2 = nom2[el3+1] *xdenom2;
-
+      double xfac_b = nom1[el3] *xxdenom1;
+      double xfac_c = nom2[el3] *xxdenom2;
+      double xfac_b2 = nom1[el3+1] *xxdenom1;
+      double xfac_c2 = nom2[el3+1] *xxdenom2;
+double sgn = ((el1+el2+el3)&1) ? -1. : 1.;
             for (size_t ispec=0; ispec<nspec; ++ispec)
               {
               val[ispec][0] += res00[el3]*res00[el3]*spec2(ispec,0,el3);
@@ -1507,16 +1537,32 @@ if (el3max>1)
               val[ispec][3] += combin*combin*spec2(ispec,3,el3);
               double combin2 = res22[el3+1] + fac_b2*res21[el3+1] + fac_c2*res20[el3+1];
               val[ispec][4] += combin2*combin2*spec2(ispec,3,el3+1);
+       double xcombin = sgn*res22[el3] + xfac_b*res12[el3] + xfac_c*res02[el3];
+              val[ispec][5] += sgn*res00[el3]*xcombin*spec2(ispec,1,el3);
+              val[ispec][6] += sgn*res00[el3]*xcombin*spec2(ispec,2,el3);
+              val[ispec][7] += xcombin*xcombin*spec2(ispec,3,el3);
+              double xcombin2 = sgn*res22[el3+1] + xfac_b2*res12[el3+1] + xfac_c2*res02[el3+1];
+              val[ispec][8] += xcombin2*xcombin2*spec2(ispec,3,el3+1);
               }
             }
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_out; ++j)
-              mat(ispec, j, el2, el1) = (2*el1+1.)*val[ispec][j];
+            {
+            mat(ispec, 0, el2, el1) = (2*el1+1.)*val[ispec][0];
+            mat(ispec, 1, el2, el1) = (2*el1+1.)*val[ispec][1];
+            mat(ispec, 2, el2, el1) = (2*el1+1.)*val[ispec][2];
+            mat(ispec, 3, el2, el1) = (2*el1+1.)*val[ispec][3];
+            mat(ispec, 4, el2, el1) = (2*el1+1.)*val[ispec][4];
+            mat(ispec, 0, el1, el2) = (2*el2+1.)*val[ispec][0];
+            mat(ispec, 1, el1, el2) = (2*el2+1.)*val[ispec][5];
+            mat(ispec, 2, el1, el2) = (2*el2+1.)*val[ispec][6];
+            mat(ispec, 3, el1, el2) = (2*el2+1.)*val[ispec][7];
+            mat(ispec, 4, el1, el2) = (2*el2+1.)*val[ispec][8];
+            }
           }
         else
           for (size_t ispec=0; ispec<nspec; ++ispec)
             for (size_t j=0; j<ncomp_out; ++j)
-              mat(ispec, j, el2, el1) = 0.;
+              mat(ispec, j, el2, el1) = mat(ispec, j, el1, el2) = 0.;
         }
       }
     });
