@@ -1403,6 +1403,131 @@ py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size
   }
   return mat_;
   }
+void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
+  size_t lmax, vmav<double,4> &mat, size_t nthreads)
+  {
+  constexpr size_t ncomp_spec=4;
+  constexpr size_t ncomp_out=5;
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
+  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
+  auto lmax_spec = spec.shape(2)-1;
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,3>::build_noncritical
+    ({nspec, ncomp_spec, lmax_spec_used+1+1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+// res arrays are one larger to make loops simpler below
+    vmav<double,2> resfullv({4, 2*lmax+1+1});
+    vmav<array<double,ncomp_out>,1> val_({nspec});
+    array<double,ncomp_out> * DUCC0_RESTRICT val = val_.data();
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=0; el2<=int(lmax); ++el2)
+        {
+        int el3min = abs(el2-el1);
+        int el3max = el1+el2;
+        if (el3min<=int(lmax_spec))
+          {
+{
+          auto res00_=subarray<1>(resfullv, {{0}, {size_t(el3min), size_t(el3max+1)}});
+          wigner3j(el1, el2, 0, 0, res00_);
+}
+          double * DUCC0_RESTRICT res00 = &resfullv(0,0);
+
+{
+          auto res22_=subarray<1>(resfullv, {{1}, {size_t(el3min), size_t(el3max+1)}});
+          if ((el1>=2) && (el2>=2))
+            wigner3j(el1, el2, -2, 2, res22_);
+          else
+            for (size_t ii=0; ii<res22_.shape(0); ++ii) res22_(ii) = 0;
+}
+          double * DUCC0_RESTRICT res22 = &resfullv(1,0);
+
+if (el3max>0)
+{
+          auto res21_=subarray<1>(resfullv, {{2}, {size_t(max(1,el3min)), size_t(el3max+1)}});
+          if ((el1>=2) && (el2>=1))
+            wigner3j(el1, el2, -2, 1, res21_);
+          else
+            for (size_t ii=0; ii<res21_.shape(0); ++ii) res21_(ii) = 0;
+}
+          double * DUCC0_RESTRICT res21 = &resfullv(2,0);
+          for (size_t ii=el3min; ii<1; ++ii)
+            res21[ii] = 0;
+
+if (el3max>1)
+{
+          auto res20_=subarray<1>(resfullv, {{3}, {size_t(max(2,el3min)), size_t(el3max+1)}});
+          if (el1>=2)
+            wigner3j(el1, el2, -2, 0, res20_);
+          else
+            for (size_t ii=0; ii<res20_.shape(0); ++ii) res20_(ii) = 0;
+}
+          double * DUCC0_RESTRICT res20 = &resfullv(3,0);
+          for (size_t ii=el3min; ii<2; ++ii)
+            res20[ii] = 0;
+
+          // safety zero
+          res00[el3max+1] = res22[el3max+1] = res21[el3max+1] = res20[el3max+1] = 0;
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              val[ispec][j]=0;
+          int maxidx = min(el3max, int(lmax_spec));
+          for (int el3=el3min; el3<=maxidx; el3+=2)
+            {
+            double fac_b = 2.*sqrt((el3+1.)*el3 / ((el2-1.)*(el2+2.)));
+            double fac_c = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.) / ((el2+2.)*(el2+1.)*el2*(el2-1.)));
+            double fac_b2 = 2.*sqrt((el3+2.)*(el3+1.) / ((el2-1.)*(el2+2.)));
+            double fac_c2 = sqrt((el3+3.)*(el3+2.)*(el3+1.)*el3 / ((el2+2.)*(el2+1.)*el2*(el2-1.)));
+
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              {
+              val[ispec][0] += res00[el3]*res00[el3]*spec2(ispec,0,el3);
+              double combin = res22[el3] + fac_b*res21[el3] + fac_c*res20[el3];
+              val[ispec][1] += res00[el3]*combin*spec2(ispec,1,el3);
+              val[ispec][2] += res00[el3]*combin*spec2(ispec,2,el3);
+              val[ispec][3] += combin*combin*spec2(ispec,3,el3);
+              double combin2 = res22[el3+1] + fac_b2*res21[el3+1] + fac_c2*res20[el3+1];
+              val[ispec][4] += combin2*combin2*spec2(ispec,3,el3+1);
+              }
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              mat(ispec, j, el2, el1) = (2*el1+1.)*val[ispec][j];
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              mat(ispec, j, el2, el1) = 0.;
+        }
+      }
+    });
+  }
+
+py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax, size_t nthreads, size_t /* algo*/, py::object &mat__)
+  {
+  auto spec = to_cmav<double,3>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)==4, "bad ncomp_spec");
+  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
+  auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, 5, lmax+1, lmax+1});
+  auto mat = to_vmav<double,4>(mat_);
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_spin0and2_pure_nontmpl(spec, lmax, mat, nthreads);
+  }
+  return mat_;
+  }
 
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
@@ -1455,6 +1580,8 @@ void add_misc(py::module_ &msup)
   m.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
   m.def("coupling_matrix_spin0and2", Py_coupling_matrix_spin0and2,
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
+  m.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
