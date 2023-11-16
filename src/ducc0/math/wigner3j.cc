@@ -930,7 +930,7 @@ template<typename Tsimd> void flexible_wigner3j_vec
   else
     for (size_t i=0; i<vlen; ++i)
       {
-      vmav<double,1> arr(reinterpret_cast<double *>(res.data()), {res.shape(0)}, {res.stride(0)*ptrdiff_t(vlen)});
+      vmav<double,1> arr(reinterpret_cast<double *>(res.data())+i, {res.shape(0)}, {res.stride(0)*ptrdiff_t(vlen)});
       flexible_wigner3j (l2[i], l3[i], m2, m3, l1min[i], arr);
       }
   }

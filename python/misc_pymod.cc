@@ -1396,6 +1396,139 @@ py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size
 void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
   size_t lmax, vmav<double,4> &mat, size_t nthreads)
   {
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen=Tsimd::size();
+  constexpr size_t ncomp_spec=4;
+  constexpr size_t ncomp_out=5;
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
+  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
+  auto lmax_spec = spec.shape(2)-1;
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,3>::build_noncritical
+    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = 0.;
+  vector<double> nom1(2*lmax+1+vlen-1+1), nom2(2*lmax+1+vlen-1+1);
+  for (size_t el3=0; el3<nom1.size(); ++el3)
+    {
+    nom1[el3] = 2.*sqrt((el3+1.)*el3);
+    nom2[el3] = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.));
+    }
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    // res arrays are one larger to make loops simpler below
+    vmav<Tsimd,2> resfullv({6, 2*lmax+1+1});
+    vmav<array<Tsimd,9>,1> val_({nspec});
+    array<Tsimd,9> * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int xel2=el1; xel2<=int(lmax); xel2+=vlen)
+        {
+        Tsimd el2=Tsimd(xel2)+lofs;
+        int el3min = abs(xel2-el1);
+        int el3max = el1+xel2;
+        Tsimd xdenom1 = blend(el2>Tsimd(1.), sqrt(Tsimd(1.) / ((el2-1.)*(el2+2.))), Tsimd(0.)),
+              xdenom2 = blend(el2>Tsimd(1.), sqrt(Tsimd(1.) / ((el2+2.)*(el2+1.)*el2*(el2-1.))), Tsimd(0.));
+        double xxdenom1 = (el1>1) ? sqrt(1. / ((el1-1.)*(el1+2.))) : 0,
+               xxdenom2 = (el1>1) ? sqrt(1. / ((el1+2.)*(el1+1.)*el1*(el1-1.))): 0;
+        if (el3min<=int(lmax_spec))
+          {
+          {
+Tsimd xel3min=Tsimd(el3min)+lofs;
+          auto res00_=subarray<1>(resfullv, {{0}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), el2, 0, 0, xel3min, res00_);
+          auto res22_=subarray<1>(resfullv, {{1}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), el2, -2, 2, xel3min, res22_);
+          auto res21_=subarray<1>(resfullv, {{2}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), el2, -2, 1, xel3min, res21_);
+          auto res20_=subarray<1>(resfullv, {{3}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), el2, -2, 0, xel3min, res20_);
+          auto res12_=subarray<1>(resfullv, {{4}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(el2, Tsimd(el1), -2, 1, xel3min, res12_);
+          auto res02_=subarray<1>(resfullv, {{5}, {size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(el2, Tsimd(el1), -2, 0, xel3min, res02_);
+          }
+          const Tsimd * DUCC0_RESTRICT res00 = &resfullv(0,0);
+          const Tsimd * DUCC0_RESTRICT res22 = &resfullv(1,0);
+          const Tsimd * DUCC0_RESTRICT res21 = &resfullv(2,0);
+          const Tsimd * DUCC0_RESTRICT res20 = &resfullv(3,0);
+          const Tsimd * DUCC0_RESTRICT res12 = &resfullv(4,0);
+          const Tsimd * DUCC0_RESTRICT res02 = &resfullv(5,0);
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<9; ++j)
+              val[ispec][j]=0;
+          int maxidx = min(el3max, int(lmax_spec));
+//FIXME: isnt't sgn always 1 by definition?
+          double sgn = ((el1+xel2+el3min)&1) ? -1. : 1.;
+          for (int el3=el3min; el3<=maxidx; el3+=2)
+            {
+            Tsimd fac_b = Tsimd(&nom1[el3],element_aligned_tag())*xdenom1,
+                  fac_c = Tsimd(&nom2[el3],element_aligned_tag())*xdenom2,
+                  fac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xdenom1,
+                  fac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xdenom2,
+                  xfac_b = Tsimd(&nom1[el3],element_aligned_tag())*xxdenom1,
+                  xfac_c = Tsimd(&nom2[el3],element_aligned_tag())*xxdenom2,
+                  xfac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xxdenom1,
+                  xfac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xxdenom2;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              {
+              val[ispec][0] += res00[el3]*res00[el3]*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
+              auto combin = res22[el3] + fac_b*res21[el3] + fac_c*res20[el3];
+              val[ispec][1] += res00[el3]*combin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+              val[ispec][2] += res00[el3]*combin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][3] += combin*combin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              auto combin2 = res22[el3+1] + fac_b2*res21[el3+1] + fac_c2*res20[el3+1];
+              val[ispec][4] += combin2*combin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+              auto xcombin = sgn*res22[el3] + xfac_b*res12[el3] + xfac_c*res02[el3];
+              val[ispec][5] += sgn*res00[el3]*xcombin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+              val[ispec][6] += sgn*res00[el3]*xcombin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][7] += xcombin*xcombin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              auto  xcombin2 = sgn*res22[el3+1] + xfac_b2*res12[el3+1] + xfac_c2*res02[el3+1];
+              val[ispec][8] += xcombin2*xcombin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+              }
+            }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            {
+            for (size_t k=0; k<vlen; ++k)
+              if (el2[k]<=lmax)
+                {
+                mat(ispec, 0, xel2+k, el1) = (2*el1+1.)*val[ispec][0][k];
+                mat(ispec, 1, xel2+k, el1) = (2*el1+1.)*val[ispec][1][k];
+                mat(ispec, 2, xel2+k, el1) = (2*el1+1.)*val[ispec][2][k];
+                mat(ispec, 3, xel2+k, el1) = (2*el1+1.)*val[ispec][3][k];
+                mat(ispec, 4, xel2+k, el1) = (2*el1+1.)*val[ispec][4][k];
+                mat(ispec, 0, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][0][k];
+                mat(ispec, 1, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][5][k];
+                mat(ispec, 2, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][6][k];
+                mat(ispec, 3, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][7][k];
+                mat(ispec, 4, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][8][k];
+                }
+            }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2[k]<=lmax)
+                  mat(ispec, j, xel2+k, el1) = mat(ispec, j, el1, xel2+k) = 0.;
+        }
+      }
+    });
+  }
+void coupling_matrix_spin0and2_pure_nontmpl_novec(const cmav<double,3> &spec,
+  size_t lmax, vmav<double,4> &mat, size_t nthreads)
+  {
   constexpr size_t ncomp_spec=4;
   constexpr size_t ncomp_out=5;
   size_t nspec=spec.shape(0);
@@ -1425,6 +1558,7 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
     vmav<double,2> resfullv({6, 2*lmax+1+1});
     vmav<array<double,9>,1> val_({nspec});
     array<double,9> * DUCC0_RESTRICT val = val_.data();
+
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int el2=el1; el2<=int(lmax); ++el2)
@@ -1434,6 +1568,7 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
         double xdenom1 = (el2>1) ? sqrt(1. / ((el2-1.)*(el2+2.))) : 0,
                xdenom2 = (el2>1) ? sqrt(1. / ((el2+2.)*(el2+1.)*el2*(el2-1.))): 0,
                xxdenom1 = (el1>1) ? sqrt(1. / ((el1-1.)*(el1+2.))) : 0,
+
                xxdenom2 = (el1>1) ? sqrt(1. / ((el1+2.)*(el1+1.)*el1*(el1-1.))): 0;
         if (el3min<=int(lmax_spec))
           {
