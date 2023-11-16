@@ -61,6 +61,9 @@ template<typename Tsimd> void wigner3j_internal_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, vmav<Tsimd,1> &res);
 template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, vmav<Tsimd,1> &res);
 
+void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, vmav<double,1> &res);
+template<typename Tsimd> void flexible_wigner3j_vec
+  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, vmav<Tsimd,1> &res);
 }
 
 using detail_wigner3j::wigner3j;
@@ -70,6 +73,8 @@ using detail_wigner3j::wigner3j_00_squared_compact;
 using detail_wigner3j::wigner3j_internal_vec;
 using detail_wigner3j::wigner3j_00_vec_squared_compact;
 
+using detail_wigner3j::flexible_wigner3j;
+using detail_wigner3j::flexible_wigner3j_vec;
 }
 
 #endif

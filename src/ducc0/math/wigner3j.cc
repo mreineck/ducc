@@ -67,6 +67,22 @@ auto wigner3j_checks_and_sizes(double l2, double l3, double m2, double m3)
   return make_tuple(m1, l1min, l1max, ncoef);
   }
 
+auto wigner3j_checks_and_sizes_alt(double l2, double l3, double m2, double m3)
+  {
+  MR_assert (intcheck(l2+abs(m2)),"l2+abs(m2) is not integer");
+  MR_assert (intcheck(l3+abs(m3)),"l3+abs(m3) is not integer");
+  const double m1 = -m2 -m3;
+  if ((l2<abs(m2)) || (l3<abs(m3)))
+    return make_tuple(m1, -1., -2., -1);
+  const double l1min = max(abs(l2-l3),abs(m1)),
+               l1max = l2 + l3;
+  MR_assert (intcheck(l1max-l1min), "l1max-l1min is not integer");
+  MR_assert (l1max>=l1min, "l1max is smaller than l1min");
+  const int ncoef = nearest_int(l1max-l1min)+1;
+
+  return make_tuple(m1, l1min, l1max, ncoef);
+  }
+
 auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
   {
   MR_assert (l2>=abs(m2),"l2<abs(m2)");
@@ -871,6 +887,55 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
+
+void flexible_wigner3j (double l2, double l3, double m2, double m3,
+  double l1min, vmav<double,1> &res)
+  {
+  auto [m1, l1min_real, l1max_real, ncoef] = wigner3j_checks_and_sizes_alt(l2, l3, m2, m3);
+  if (ncoef<=0)
+    { for (size_t i=0; i<res.shape(0); ++i) res(i)=0.; return; }
+  MR_assert(intcheck(l1min_real-l1min),"l1min_real-l1min is not integer");
+  MR_assert(l1min_real>=l1min, "result does not fit into result array");
+  MR_assert(l1min_real+ncoef<=l1min+res.shape(0), "result does not fit into result array");
+  auto sub = subarray<1>(res, {{size_t(l1min_real-l1min), size_t(l1min_real-l1min+ncoef)}});
+  wigner3j_internal(l2, l3, m2, m3, m1, l1min_real, l1max_real, ncoef, sub);
+  for (size_t i=0; i<size_t(l1min_real-l1min); ++i) res(i) = 0.;
+  for (size_t i=size_t(l1min_real-l1min+ncoef); i<res.shape(0); ++i) res(i) = 0.;
+  }
+template<typename Tsimd> void flexible_wigner3j_vec
+  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, vmav<Tsimd,1> &res)
+  {
+  constexpr size_t vlen = Tsimd::size();
+
+  bool can_vectorize = true;
+  Tsimd xncoef, xofs1;
+  for (size_t i=0; i<vlen; ++i)
+    {
+    auto [m1, l1min_real, l1max_real, ncoef] = wigner3j_checks_and_sizes_alt(l2[i], l3[i], m2, m3);
+    if (ncoef<0) { can_vectorize=false; break; }
+    xncoef[i] = ncoef;
+    MR_assert(intcheck(l1min_real-l1min[i]),"l1min_real-l1min is not integer");
+    MR_assert(l1min_real>=l1min[i], "result does not fit into result array");
+    MR_assert(l1min_real+ncoef<=l1min[i]+res.shape(0), "result does not fit into result array");
+    xofs1[i] = l1min_real-l1min[i];
+    if ((ncoef!=xncoef[0]) || (l1min_real-l1min[i]!=xofs1[0])) { can_vectorize=false; break; }
+    }
+  if (can_vectorize)
+    {
+    auto sub = subarray<1>(res, {{size_t(xofs1[0]), size_t(xofs1[0]+xncoef[0])}});
+    wigner3j_internal_vec(l2, l3, m2, m3, sub);
+    for (size_t i=0; i<size_t(xofs1[0]); ++i) res(i) = 0.;
+    for (size_t i=size_t(xofs1[0]+xncoef[0]); i<res.shape(0); ++i) res(i) = 0.;
+    }
+  else
+    for (size_t i=0; i<vlen; ++i)
+      {
+      vmav<double,1> arr(reinterpret_cast<double *>(res.data()), {res.shape(0)}, {res.stride(0)*ptrdiff_t(vlen)});
+      flexible_wigner3j (l2[i], l3[i], m2, m3, l1min[i], arr);
+      }
+  }
+template void flexible_wigner3j_vec
+  (native_simd<double> l2, native_simd<double> l3, double m2, double m3, native_simd<double> l1min, vmav<native_simd<double>,1> &res);
 
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
   {
