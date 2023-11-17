@@ -1154,8 +1154,7 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
     {
     constexpr size_t ncomp_out=5;
 // res arrays are one larger to make loops simpler below
-    vmav<Tsimd,1> resfullv_00({2*lmax+1+1});
-    vmav<Tsimd,1> resfullv_22({2*lmax+1+1});
+    vmav<Tsimd,2> wig({2, 2*lmax+1+1});
     vmav<array<Tsimd,ncomp_out>,1> val_({nspec});
     array<Tsimd,ncomp_out> * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
@@ -1166,123 +1165,32 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
         {
         int el3min = el2-el1;
+        int el3max = el2+el1;
         if (el3min<=int(lmax_spec))
           {
-          auto res00_=subarray<1>(resfullv_00, {{size_t(0), size_t(2*el1+1)}});
-          wigner3j_internal_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0, res00_);
-          Tsimd * DUCC0_RESTRICT res00 = resfullv_00.data();
-          auto res22_=subarray<1>(resfullv_22, {{size_t(0), size_t(2*el1+1)}});
-          if (el1>=2)
-            wigner3j_internal_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2, res22_);
-          Tsimd * DUCC0_RESTRICT res22 = resfullv_22.data();
-          // safety zero
-          res00[2*el1+1] = res22[2*el1+1] = 0;
-
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_out; ++j)
-              val[ispec][j]=0;
-          int max_i = min(el1+el2, int(lmax_spec)) - el3min;
-          if (el1>=2)
-            for (int i=0; i<=max_i; i+=2)
-              {
-              int el3 = el3min+i;
-              for (size_t ispec=0; ispec<nspec; ++ispec)
-                {
-                val[ispec][0] += res00[i]*res00[i]*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
-                val[ispec][1] += res00[i]*res22[i]*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
-                val[ispec][2] += res00[i]*res22[i]*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
-                val[ispec][3] += res22[i]*res22[i]*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
-                val[ispec][4] += res22[i+1]*res22[i+1]*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
-                }
-              }
-          else
-            for (int i=0; i<=max_i; i+=2)
-              {
-              int el3 = el3min+i;
-              for (size_t ispec=0; ispec<nspec; ++ispec)
-                val[ispec][0] += res00[i]*res00[i]*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
-              }
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_out; ++j)
-              for (size_t k=0; k<vlen; ++k)
-                if (el2+k<=lmax)
-                  {
-                  mat(ispec, j, el1, el2+k) = (2*(el2+k)+1.)*val[ispec][j][k];
-                  mat(ispec, j, el2+k, el1) = (2*el1+1.)*val[ispec][j][k];
-                  }
+          auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
+          {
+          auto tmp2=subarray<1>(tmp, {{0}, {}});
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0, Tsimd(el3min)+lofs, tmp2);
           }
-        else
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_out; ++j)
-              for (size_t k=0; k<vlen; ++k)
-                if (el2+k<=lmax)
-                  mat(ispec, j, el1, el2+k) = mat(ispec, j, el2+k, el1) = 0.;
-        }
-      }
-    });
-  }
-
-template<size_t nspec> void coupling_matrix_spin0and2_tmpl(const cmav<double,3> &spec,
-  size_t lmax, vmav<double,4> &mat, size_t nthreads)
-  {
-  constexpr size_t ncomp_spec=4;
-  MR_assert(nspec==spec.shape(0), "nspec mismatch");
-  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
-  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
-  auto lmax_spec = spec.shape(2)-1;
-  using Tsimd = native_simd<double>;
-  constexpr size_t vlen = Tsimd::size();
-  auto lmax_spec_used = min(2*lmax, lmax_spec);
-  auto spec2(vmav<double,3>::build_noncritical
-    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
-  for (size_t l=0; l<=lmax_spec_used; ++l)
-    for (size_t j=0; j<ncomp_spec; ++j)
-      for (size_t i=0; i<nspec; ++i)
-        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
-  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
-    for (size_t j=0; j<ncomp_spec; ++j)
-      for (size_t i=0; i<nspec; ++i)
-        spec2(i,j,l) = 0.;
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    constexpr size_t ncomp_out=5;
-// res arrays are one larger to make loops simpler below
-    vmav<Tsimd,1> resfullv_00({2*lmax+1+1});
-    vmav<Tsimd,1> resfullv_22({2*lmax+1+1});
-    array<array<Tsimd,ncomp_out>,nspec> val;
-    Tsimd lofs;
-    for (size_t k=0; k<vlen; ++k)
-      lofs[k]=k;
-    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
-      {
-      for (int el2=el1; el2<=int(lmax); el2+=vlen)
-        {
-        int el3min = el2-el1;
-        if (el3min<=int(lmax_spec))
           {
-          auto res00_=subarray<1>(resfullv_00, {{size_t(0), size_t(2*el1+2)}});
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0, Tsimd(el2)+lofs-Tsimd(el1), res00_);
-          const Tsimd * DUCC0_RESTRICT res00 = resfullv_00.data();
-          auto res22_=subarray<1>(resfullv_22, {{size_t(0), size_t(2*el1+2)}});
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2, Tsimd(el2)+lofs-Tsimd(el1), res22_);
-          const Tsimd * DUCC0_RESTRICT res22 = resfullv_22.data();
+          auto tmp2=subarray<1>(tmp, {{1}, {}});
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2, Tsimd(el3min)+lofs, tmp2);
+          }
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
             for (size_t j=0; j<ncomp_out; ++j)
               val[ispec][j]=0;
-          int max_i = min(el1+el2, int(lmax_spec)) - el3min;
-          for (int i=0; i<=max_i; i+=2)
-            {
-            int el3 = el3min+i;
+          int maxidx = min(el3max, int(lmax_spec));
+          for (int el3=el3min; el3<=maxidx; el3+=2)
             for (size_t ispec=0; ispec<nspec; ++ispec)
               {
-              val[ispec][0] += res00[i]*res00[i]*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
-              val[ispec][1] += res00[i]*res22[i]*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
-              val[ispec][2] += res00[i]*res22[i]*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
-              val[ispec][3] += res22[i]*res22[i]*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
-              val[ispec][4] += res22[i+1]*res22[i+1]*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+              val[ispec][0] += wig(0,el3)*wig(0,el3)*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
+              val[ispec][1] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+              val[ispec][2] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][3] += wig(1,el3)*wig(1,el3)*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][4] += wig(1,el3+1)*wig(1,el3+1)*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
               }
-            }
           for (size_t ispec=0; ispec<nspec; ++ispec)
             for (size_t j=0; j<ncomp_out; ++j)
               for (size_t k=0; k<vlen; ++k)
@@ -1313,16 +1221,7 @@ py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size
   auto mat = to_vmav<double,4>(mat_);
   {
   py::gil_scoped_release release;
-  if (nspec==1)
-    coupling_matrix_spin0and2_tmpl<1>(spec, lmax, mat, nthreads);
-  else if (nspec==2)
-    coupling_matrix_spin0and2_tmpl<2>(spec, lmax, mat, nthreads);
-  else if (nspec==3)
-    coupling_matrix_spin0and2_tmpl<3>(spec, lmax, mat, nthreads);
-  else if (nspec==4)
-    coupling_matrix_spin0and2_tmpl<4>(spec, lmax, mat, nthreads);
-  else
-    coupling_matrix_spin0and2_nontmpl(spec, lmax, mat, nthreads);
+  coupling_matrix_spin0and2_nontmpl(spec, lmax, mat, nthreads);
   }
   return mat_;
   }
