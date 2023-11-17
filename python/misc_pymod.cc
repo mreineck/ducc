@@ -1133,7 +1133,6 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
   size_t lmax, vmav<double,4> &mat, size_t nthreads)
   {
   constexpr size_t ncomp_spec=4;
-  constexpr size_t ncomp_out=5;
   size_t nspec=spec.shape(0);
   MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
   MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
@@ -1153,6 +1152,7 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
         spec2(i,j,l) = 0.;
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
+    constexpr size_t ncomp_out=5;
 // res arrays are one larger to make loops simpler below
     vmav<Tsimd,1> resfullv_00({2*lmax+1+1});
     vmav<Tsimd,1> resfullv_22({2*lmax+1+1});
@@ -1226,7 +1226,6 @@ template<size_t nspec> void coupling_matrix_spin0and2_tmpl(const cmav<double,3> 
   size_t lmax, vmav<double,4> &mat, size_t nthreads)
   {
   constexpr size_t ncomp_spec=4;
-  constexpr size_t ncomp_out=5;
   MR_assert(nspec==spec.shape(0), "nspec mismatch");
   MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
   MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
@@ -1246,6 +1245,7 @@ template<size_t nspec> void coupling_matrix_spin0and2_tmpl(const cmav<double,3> 
         spec2(i,j,l) = 0.;
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
+    constexpr size_t ncomp_out=5;
 // res arrays are one larger to make loops simpler below
     vmav<Tsimd,1> resfullv_00({2*lmax+1+1});
     vmav<Tsimd,1> resfullv_22({2*lmax+1+1});
