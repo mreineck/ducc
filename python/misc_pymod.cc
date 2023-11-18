@@ -875,48 +875,6 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
-py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
-  {
-  size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
-  auto res_ = make_Pyarr<double>({ncoef});
-  auto res = to_vmav<double,1>(res_);
-  int l1min;
-  {
-  py::gil_scoped_release release;
-  wigner3j_int (l2, l3, m2, m3, l1min, res);
-  }
-  return py::make_tuple(py::cast(l1min), res_);
-  }
-
-py::object Py_wigner3j_00_squared_compact(int l2, int l3)
-  {
-  size_t ncoef = (wigner3j_ncoef_int(l2, l3, 0,0)+1)/2;
-  auto res_ = make_Pyarr<double>({ncoef});
-  auto res = to_vmav<double,1>(res_);
-  {
-  py::gil_scoped_release release;
-  wigner3j_00_squared_compact (l2, l3, res);
-  }
-  return res_;
-  }
-
-constexpr const char *Py_wigner3j_int_DS = R"""(
-Computes Wigner 3j symbols according to the algorithm of
-Schulten & Gordon: J. Math. Phys. 16, p. 10 (1975)
-
-This special case only takes integer quantum numbers.
-
-Parameters
-----------
-l2, l3, m2, m3 : integer
-    fixed quantum numbers
-
-Returns
--------
-int : the l1 quantum number of the first value in the returned array
-numpy.ndarray(dtype=numpy.float64) : 3j symbols in order of increasing l1
-)""";
-
 
 void coupling_matrix_00_nontmpl(const cmav<double,2> &spec,
   size_t lmax, vmav<double,3> &mat, size_t nthreads)
@@ -1040,53 +998,16 @@ template<size_t nspec> void coupling_matrix_00_tmpl(const cmav<double,2> &spec,
     });
   }
 
-py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, size_t algo, py::object &mat__)
+py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
   {
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
   MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
-  auto lmax_spec = spec.shape(1)-1;
   auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, lmax+1, lmax+1});
   auto mat = to_vmav<double,3>(mat_);
   {
   py::gil_scoped_release release;
-if (algo==0) // standard, tried and true
-  {
-  ducc0::execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
-    {
-    vector<double> res;
-    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
-      {
-      for (int el2=0; el2<=el1; el2++)
-        {
-        int el3min = abs(el1-el2);
-        if (el3min<=int(lmax_spec))
-          {
-          int el3max = el1+el2;
-          ducc0::wigner3j(el1, el2, 0, 0, res);
-          MR_assert(el3max-el3min+1==int(res.size()), "bad 3j array size");
-          size_t max_i = min(size_t(el3max), lmax_spec)-size_t(el3min);
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            {
-            double val = 0;
-            for (size_t i=0; i<=max_i; i+=2)
-              {
-              int el3 = el3min+i;
-              val += (2*el3+1.)*res[i]*res[i]*spec(ispec,el3);
-              }
-            mat(ispec, el1, el2) = (2*el2+1.)/ducc0::fourpi*val;
-            mat(ispec, el2, el1) = (2*el1+1.)/ducc0::fourpi*val;
-            }
-          }
-        else
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            mat(ispec, el1, el2) = mat(ispec, el2, el1) = 0.;
-        }
-      }
-    });
-  }
-else if (algo==1) // fully vectorized
-  {
+
   if (nspec==1)
     coupling_matrix_00_tmpl<1>(spec, lmax, mat, nthreads);
   else if (nspec==2)
@@ -1097,8 +1018,6 @@ else if (algo==1) // fully vectorized
     coupling_matrix_00_tmpl<4>(spec, lmax, mat, nthreads);
   else
     coupling_matrix_00_nontmpl(spec, lmax, mat, nthreads);
-  }
-else MR_fail("incorrect algo number");
   }
   return mat_;
   }
@@ -1117,9 +1036,6 @@ lmax : int
     assumed to be zero.
 nthreads : int
     the number of threads to use for the calculations.
-algo : int
-    TEMPORARY : the implementation to use for the calculations.
-    Only for validation and benchmark purposes, will go away in the future.
 res : numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
     Optional array to store the output into.
 
@@ -1211,7 +1127,7 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
     });
   }
 
-py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size_t nthreads, size_t /* algo*/, py::object &mat__)
+py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
   {
   auto spec = to_cmav<double,3>(spec_);
   auto nspec = spec.shape(0);
@@ -1348,7 +1264,7 @@ mat(ispec,4, xel2+k, el1) = mat(ispec, 4, el1, xel2+k) = 0;
     });
   }
 
-py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax, size_t nthreads, size_t /* algo*/, py::object &mat__)
+py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
   {
   auto spec = to_cmav<double,3>(spec_);
   auto nspec = spec.shape(0);
@@ -1409,14 +1325,12 @@ void add_misc(py::module_ &msup)
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
-  m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
-  m.def("wigner3j_00_squared_compact", Py_wigner3j_00_squared_compact, "m2"_a, "m3"_a);
   m.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
-    "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
   m.def("coupling_matrix_spin0and2", Py_coupling_matrix_spin0and2,
-    "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
   m.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure,
-    "spec"_a, "lmax"_a, "nthreads"_a=1, "algo"_a=0, "res"_a=None);
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }

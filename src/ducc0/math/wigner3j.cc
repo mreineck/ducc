@@ -83,19 +83,6 @@ auto wigner3j_checks_and_sizes_alt(double l2, double l3, double m2, double m3)
   return make_tuple(m1, l1min, l1max, ncoef);
   }
 
-auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
-  {
-  MR_assert (l2>=abs(m2),"l2<abs(m2)");
-  MR_assert (l3>=abs(m3),"l3<abs(m3)");
-  const int m1 = -m2 -m3;
-  const int l1min = max(abs(l2-l3),abs(m1)),
-                   l1max = l2 + l3;
-  MR_assert (l1max>=l1min, "l1max is smaller than l1min");
-  const int ncoef = l1max-l1min+1;
-
-  return make_tuple(m1, l1min, l1max, ncoef);
-  }
-
 // version for m2==m3==0
 void wigner3j_00_internal (double l2, double l3, double l1min,
                            int ncoef, vmav<double,1> &res)
@@ -625,10 +612,6 @@ template<typename Tsimd> void wigner3j_internal_vec
     res(j) *= blend(Tsimd(j)<splitidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
   }
 
-template void wigner3j_internal_vec
-  (native_simd<double> l2, native_simd<double> l3, double m2, double m3,
-   vmav<native_simd<double>,1> &res);
-
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
@@ -936,25 +919,5 @@ template<typename Tsimd> void flexible_wigner3j_vec
   }
 template void flexible_wigner3j_vec
   (native_simd<double> l2, native_simd<double> l3, double m2, double m3, native_simd<double> l1min, vmav<native_simd<double>,1> &res);
-
-void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
-  {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
-  wigner3j_internal (l2, l3, m2, m3, double(m1), double(l1min), double(l1max), ncoef, res);
-  l1min_ = l1min;
-  }
-void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vector<double> &res)
-  {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
-  res.resize(ncoef);
-  vmav<double,1> tmp(res.data(), {size_t(ncoef)});
-  wigner3j_internal (l2, l3, m2, m3, double(m1), double(l1min), double(l1max), ncoef, tmp);
-  l1min_ = l1min;
-  }
-int wigner3j_ncoef_int (int l2, int l3, int m2, int m3)
-  {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
-  return ncoef;
-  }
 
 }}
