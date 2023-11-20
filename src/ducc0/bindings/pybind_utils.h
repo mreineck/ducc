@@ -23,6 +23,7 @@
 
 #include <cstddef>
 #include <array>
+#include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
@@ -160,11 +161,11 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
   return vmav<T,ndim>(tmp.data(), newshape, newstride);
   }
 
-template<typename T, size_t len> array<T,len> to_array(const py::object &obj)
+template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj)
   {
-  auto vec = py::cast<vector<T>>(obj);
+  auto vec = py::cast<std::vector<T>>(obj);
   MR_assert(vec.size()==len, "unexpected number of elements");
-  array<T,len> res;
+  std::array<T,len> res;
   for (size_t i=0;i<len; ++i) res[i] = vec[i];
   return res;
   }
