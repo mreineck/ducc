@@ -876,7 +876,7 @@ nthreads(optional): int
 )""";
 
 
-void coupling_matrix_00_nontmpl(const cmav<double,2> &spec,
+void coupling_matrix_spin0_nontmpl(const cmav<double,2> &spec,
   size_t lmax, vmav<double,3> &mat, size_t nthreads)
   {
   size_t nspec=spec.shape(0);
@@ -937,7 +937,7 @@ void coupling_matrix_00_nontmpl(const cmav<double,2> &spec,
       }
     });
   }
-template<size_t nspec> void coupling_matrix_00_tmpl(const cmav<double,2> &spec,
+template<size_t nspec> void coupling_matrix_spin0_tmpl(const cmav<double,2> &spec,
   size_t lmax, vmav<double,3> &mat, size_t nthreads)
   {
   MR_assert(nspec==spec.shape(0), "bad invocation");
@@ -998,7 +998,7 @@ template<size_t nspec> void coupling_matrix_00_tmpl(const cmav<double,2> &spec,
     });
   }
 
-py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
+py::array Py_coupling_matrix_spin0(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
   {
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
@@ -1009,23 +1009,21 @@ py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthr
   py::gil_scoped_release release;
 
   if (nspec==1)
-    coupling_matrix_00_tmpl<1>(spec, lmax, mat, nthreads);
+    coupling_matrix_spin0_tmpl<1>(spec, lmax, mat, nthreads);
   else if (nspec==2)
-    coupling_matrix_00_tmpl<2>(spec, lmax, mat, nthreads);
+    coupling_matrix_spin0_tmpl<2>(spec, lmax, mat, nthreads);
   else if (nspec==3)
-    coupling_matrix_00_tmpl<3>(spec, lmax, mat, nthreads);
+    coupling_matrix_spin0_tmpl<3>(spec, lmax, mat, nthreads);
   else if (nspec==4)
-    coupling_matrix_00_tmpl<4>(spec, lmax, mat, nthreads);
+    coupling_matrix_spin0_tmpl<4>(spec, lmax, mat, nthreads);
   else
-    coupling_matrix_00_nontmpl(spec, lmax, mat, nthreads);
+    coupling_matrix_spin0_nontmpl(spec, lmax, mat, nthreads);
   }
   return mat_;
   }
 
-constexpr const char *Py_coupling_matrix_00_DS = R"""(
-Computes coupling matrices for spin-0/0 cross spectra on the sphere.
-
-It is very similar to pspy's calc_coupling_spin0() method, with the following
+constexpr const char *Py_coupling_matrix_spin0_DS = R"""(
+This is very similar to pspy's calc_coupling_spin0() method, with the following
 differences:
 - the l values in the output matrix go from 0 to lmax (inclusive) instead of
   2 to lmax (exclusive)
@@ -1152,9 +1150,7 @@ py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size
   }
 
 constexpr const char *Py_coupling_matrix_spin0and2_DS = R"""(
-Computes coupling matrices for spin-0 and 2 cross spectra on the sphere.
-
-It is very similar to pspy's calc_coupling_spin0and2() method, with the following
+This is very similar to pspy's calc_coupling_spin0and2() method, with the following
 differences:
 - the l values in the output matrix go from 0 to lmax (inclusive) instead of
   2 to lmax (exclusive)
@@ -1323,9 +1319,7 @@ py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax,
   }
 
 constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
-Computes coupling matrices for spin-0 and 2 purified cross spectra on the sphere.
-
-It is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
+This is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
 differences:
 - the l values in the output matrix go from 0 to lmax (inclusive) instead of
   2 to lmax (exclusive)
@@ -1406,7 +1400,7 @@ void add_misc(py::module_ &msup)
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
-  m2.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
+  m2.def("coupling_matrix_spin0", Py_coupling_matrix_spin0, Py_coupling_matrix_spin0_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
   m2.def("coupling_matrix_spin0and2", Py_coupling_matrix_spin0and2, Py_coupling_matrix_spin0and2_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
