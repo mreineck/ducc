@@ -67,6 +67,18 @@ auto wigner3j_checks_and_sizes(double l2, double l3, double m2, double m3)
   return make_tuple(m1, l1min, l1max, ncoef);
   }
 
+auto wigner3j_checks_and_sizes_int(int l2, int l3, int m2, int m3)
+  {
+  MR_assert (l2>=abs(m2),"l2<abs(m2)");
+  MR_assert (l3>=abs(m3),"l3<abs(m3)");
+  const int m1 = -m2 -m3;
+  const int l1min = max(abs(l2-l3),abs(m1)),
+                   l1max = l2 + l3;
+  MR_assert (l1max>=l1min, "l1max is smaller than l1min");
+  const int ncoef = l1max-l1min+1;
+  return make_tuple(m1, l1min, l1max, ncoef);
+  }
+
 auto wigner3j_checks_and_sizes_alt(double l2, double l3, double m2, double m3)
   {
   MR_assert (intcheck(l2+abs(m2)),"l2+abs(m2) is not integer");
@@ -869,6 +881,25 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   res.resize(ncoef);
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
+  }
+void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
+  {
+  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
+  wigner3j_internal (l2, l3, m2, m3, double(m1), double(l1min), double(l1max), ncoef, res);
+  l1min_ = l1min;
+  }
+void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vector<double> &res)
+  {
+  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
+  res.resize(ncoef);
+  vmav<double,1> tmp(res.data(), {size_t(ncoef)});
+  wigner3j_internal (l2, l3, m2, m3, double(m1), double(l1min), double(l1max), ncoef, tmp);
+  l1min_ = l1min;
+  }
+int wigner3j_ncoef_int (int l2, int l3, int m2, int m3)
+  {
+  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
+  return ncoef;
   }
 
 void flexible_wigner3j (double l2, double l3, double m2, double m3,
