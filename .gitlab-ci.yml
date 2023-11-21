@@ -20,16 +20,16 @@ build_docker:
 test_gcc:
   stage: testing
   script:
-    - python3 setup.py sdist
+    - python3 -m build --sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && python3 setup.py install --user && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
 
 test_clang:
   stage: testing
   script:
     - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang CXX=clang++ python3 setup.py install --user && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && CC=clang CXX=clang++ python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
 
 test_rust:
   stage: testing
@@ -40,12 +40,12 @@ test_rust:
 #wgridding_demo:
 #  stage: demos
 #  script:
-#    - python3 setup.py install --user -f && python3 python/demos/wgridder_python_implementations.py
+#    - python3 -m pip install --user --break-system-packages . && python3 python/demos/wgridder_python_implementations.py
 
 release:
   stage: release
   script:
-    - python3 setup.py sdist
+    - python3 -m build --sdist
     - 'mv dist/*.tar.gz .'
   artifacts:
     paths:
@@ -54,7 +54,7 @@ release:
 pages:
   stage: release
   script:
-    - DUCC0_OPTIMIZATION=none python3 -m pip install --break-system-packages --user .
+    - DUCC0_OPTIMIZATION=none python3 -m pip install --user --break-system-packages .
     - make -C doc html
     - 'cd src/doc && doxygen Doxyfile && cd ../..'
     - mv doc/build/html public

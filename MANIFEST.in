@@ -1,7 +1,12 @@
-prune .
+prune *
+
+exclude *
 
 include LICENSE
 include ChangeLog
+include pyproject.toml
+include setup.py
+include setup.cfg
 
 include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/bucket_sort.h
@@ -63,6 +68,7 @@ include src/ducc0/wgridder/wgridder.h
 include src/ducc0/wgridder/wgridder_sycl.h
 include src/ducc0/wgridder/wgridder.cc
 
+include python/ducc.cc
 include python/fft_pymod.cc
 include python/nufft_pymod.cc
 include python/sht_pymod.cc
