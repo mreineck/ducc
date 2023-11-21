@@ -1023,7 +1023,16 @@ py::array Py_coupling_matrix_00(const py::array &spec_, size_t lmax, size_t nthr
   }
 
 constexpr const char *Py_coupling_matrix_00_DS = R"""(
-Computes coupling matrices for spin-0/0 cross spectra on the sphere
+Computes coupling matrices for spin-0/0 cross spectra on the sphere.
+
+It is very similar to pspy's calc_coupling_spin0() method, with the following
+differences:
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)
+- the output is multiplied by (2*l1+2)/(4*pi) and the full matrix is populated
+- the computation can be carried out for more than one power spectrum at the
+  same time.
 
 Parameters
 ----------
@@ -1142,13 +1151,47 @@ py::array Py_coupling_matrix_spin0and2(const py::array &spec_, size_t lmax, size
   return mat_;
   }
 
+constexpr const char *Py_coupling_matrix_spin0and2_DS = R"""(
+Computes coupling matrices for spin-0 and 2 cross spectra on the sphere.
+
+It is very similar to pspy's calc_coupling_spin0and2() method, with the following
+differences:
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)
+- the output is multiplied by (2*l1+2)/(4*pi) and the full matrix is populated
+- the computation can be carried out for more than one set of power spectra
+  at the same time.
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, 4, lmax_spec+1), dtype=np.float64)
+    the input spectra
+    the indices of the second dimension correspond to wcl_00, wcl_02, wcl_20,
+    and wcl_22 of calc_coupling_spin0and2(), respectively
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+nthreads : int
+    the number of threads to use for the calculations.
+res : numpy.ndarray((nspec, 5, lmax+1, lmax+1), dtype=np.float64)
+    Optional array to store the output into.
+
+Returns
+-------
+numpy.ndarray((nspec, 5, lmax+1, lmax+1), dtype=np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
+)""";
+
 void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
   size_t lmax, vmav<double,4> &mat, size_t nthreads)
   {
   using Tsimd = native_simd<double>;
   constexpr size_t vlen=Tsimd::size();
   constexpr size_t ncomp_spec=4;
-  constexpr size_t ncomp_out=5;
+  constexpr size_t ncomp_out=4;
   size_t nspec=spec.shape(0);
   MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
   MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
@@ -1174,8 +1217,9 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
     {
     // res arrays are one larger to make loops simpler below
     vmav<Tsimd,2> wig({6, 2*lmax+1+1});
-    vmav<array<Tsimd,9>,1> val_({nspec});
-    array<Tsimd,9> * DUCC0_RESTRICT val = val_.data();
+    constexpr size_t nvcomp = 7;
+    vmav<array<Tsimd,nvcomp>,1> val_({nspec});
+    array<Tsimd,nvcomp> * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
       lofs[k]=k;
@@ -1206,17 +1250,17 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
           }
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<9; ++j)
+            for (size_t j=0; j<nvcomp; ++j)
               val[ispec][j]=0;
           int maxidx = min(el3max, int(lmax_spec));
           for (int el3=el3min; el3<=maxidx; el3+=2)
             {
             Tsimd fac_b = Tsimd(&nom1[el3],element_aligned_tag())*xdenom1,
                   fac_c = Tsimd(&nom2[el3],element_aligned_tag())*xdenom2,
+                  xfac_b = Tsimd(&nom1[el3],element_aligned_tag())*xxdenom1,
+                  xfac_c = Tsimd(&nom2[el3],element_aligned_tag())*xxdenom2;
 //                  fac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xdenom1,
 //                  fac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xdenom2,
-                  xfac_b = Tsimd(&nom1[el3],element_aligned_tag())*xxdenom1,
-                  xfac_c = Tsimd(&nom2[el3],element_aligned_tag())*xxdenom2;//,
 //                  xfac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xxdenom1,
 //                  xfac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xxdenom2;
             for (size_t ispec=0; ispec<nspec; ++ispec)
@@ -1226,12 +1270,12 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
               val[ispec][1] += wig(0,el3)*combin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
               val[ispec][2] += wig(0,el3)*combin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
               val[ispec][3] += combin*combin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
-//              auto combin2 = wig(1,el3+1) + fac_b2*wig(2,el3+1) + fac_c2*wig(3,el3+1);
-//              val[ispec][4] += combin2*combin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
               auto xcombin = wig(1,el3) + xfac_b*wig(4,el3) + xfac_c*wig(5,el3);
-              val[ispec][5] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
-              val[ispec][6] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
-              val[ispec][7] += xcombin*xcombin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][4] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+              val[ispec][5] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][6] += xcombin*xcombin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+//              auto combin2 = wig(1,el3+1) + fac_b2*wig(2,el3+1) + fac_c2*wig(3,el3+1);
+//              val[ispec][7] += combin2*combin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
 //              auto  xcombin2 = wig(1,el3+1) + xfac_b2*wig(4,el3+1) + xfac_c2*wig(5,el3+1);
 //              val[ispec][8] += xcombin2*xcombin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
               }
@@ -1244,13 +1288,12 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
                 mat(ispec, 1, xel2+k, el1) = (2*el1+1.)*val[ispec][1][k];
                 mat(ispec, 2, xel2+k, el1) = (2*el1+1.)*val[ispec][2][k];
                 mat(ispec, 3, xel2+k, el1) = (2*el1+1.)*val[ispec][3][k];
-//                mat(ispec, 4, xel2+k, el1) = (2*el1+1.)*val[ispec][4][k];
                 mat(ispec, 0, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][0][k];
-                mat(ispec, 1, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][5][k];
-                mat(ispec, 2, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][6][k];
-                mat(ispec, 3, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][7][k];
+                mat(ispec, 1, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][4][k];
+                mat(ispec, 2, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][5][k];
+                mat(ispec, 3, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][6][k];
+//                mat(ispec, 4, xel2+k, el1) = (2*el1+1.)*val[ispec][4][k];
 //                mat(ispec, 4, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][8][k];
-mat(ispec,4, xel2+k, el1) = mat(ispec, 4, el1, xel2+k) = 0;
                 }
           }
         else
@@ -1279,6 +1322,41 @@ py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax,
   return mat_;
   }
 
+constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
+Computes coupling matrices for spin-0 and 2 purified cross spectra on the sphere.
+
+It is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
+differences:
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)
+- the output is multiplied by (2*l1+2)/(4*pi) and the full matrix is populated
+- the computation can be carried out for more than one set of power spectra
+  at the same time.
+- the last component is not calculated, since it appears to be zero in all cases
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, 4, lmax_spec+1), dtype=np.float64)
+    the input spectra
+    the indices of the second dimension correspond to wcl_00, wcl_02, wcl_20,
+    and wcl_22 of calc_mcm_spin0and2_pure(), respectively
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+nthreads : int
+    the number of threads to use for the calculations.
+res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float64)
+    Optional array to store the output into.
+
+Returns
+-------
+numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -1295,6 +1373,9 @@ void add_misc(py::module_ &msup)
   using namespace pybind11::literals;
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
+
+  auto m2 = m.def_submodule("experimental");
+//  m2.doc() = sht_experimental_DS;
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
@@ -1325,11 +1406,11 @@ void add_misc(py::module_ &msup)
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
-  m.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
+  m2.def("coupling_matrix_00", Py_coupling_matrix_00, Py_coupling_matrix_00_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
-  m.def("coupling_matrix_spin0and2", Py_coupling_matrix_spin0and2,
+  m2.def("coupling_matrix_spin0and2", Py_coupling_matrix_spin0and2, Py_coupling_matrix_spin0and2_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
-  m.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure,
+  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
