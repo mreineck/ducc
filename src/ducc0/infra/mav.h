@@ -847,7 +847,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       }
     operator vfmav<T>() const
       {
-      return vfmav<T>(*static_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     // Needed for template tricks.
     using cmav<T, ndim>::to_fmav;
