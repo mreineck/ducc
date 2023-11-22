@@ -1261,15 +1261,19 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
 //                  xfac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xxdenom2;
             for (size_t ispec=0; ispec<nspec; ++ispec)
               {
-              val[ispec][0] += wig(0,el3)*wig(0,el3)*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
+              const Tsimd s0(&spec2(ispec,0,el3), element_aligned_tag()),
+                          s1(&spec2(ispec,1,el3), element_aligned_tag()),
+                          s2(&spec2(ispec,2,el3), element_aligned_tag()),
+                          s3(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][0] += wig(0,el3)*wig(0,el3)*s0;
               auto combin = wig(1,el3) + fac_b*wig(2,el3) + fac_c*wig(3,el3);
-              val[ispec][1] += wig(0,el3)*combin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
-              val[ispec][2] += wig(0,el3)*combin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][1] += wig(0,el3)*combin*s1;
+              val[ispec][2] += wig(0,el3)*combin*s2;
               val[ispec][3] += combin*combin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
               auto xcombin = wig(1,el3) + xfac_b*wig(4,el3) + xfac_c*wig(5,el3);
-              val[ispec][4] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
-              val[ispec][5] += wig(0,el3)*xcombin*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
-              val[ispec][6] += xcombin*xcombin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][4] += wig(0,el3)*xcombin*s1;
+              val[ispec][5] += wig(0,el3)*xcombin*s2;
+              val[ispec][6] += xcombin*xcombin*s3;
 //              auto combin2 = wig(1,el3+1) + fac_b2*wig(2,el3+1) + fac_c2*wig(3,el3+1);
 //              val[ispec][7] += combin2*combin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
 //              auto  xcombin2 = wig(1,el3+1) + xfac_b2*wig(4,el3+1) + xfac_c2*wig(5,el3+1);
