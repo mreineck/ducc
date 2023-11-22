@@ -59,7 +59,7 @@ template<typename T> auto sym_ortho(T a, T b, T &c, T &s, T &r)
 template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
   auto lsqr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
-            const cmav<Tb,bdim> &b, vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
+            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
@@ -285,7 +285,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
 template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
   auto lsmr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
-            const cmav<Tb,bdim> &b, vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
+            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {

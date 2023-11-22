@@ -45,7 +45,7 @@ inline bool even_odd_m(const cmav<size_t,1> &mval)
   }
 
 template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
-  vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
+  const vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
   {
   constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
@@ -136,7 +136,7 @@ template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool np
   }
 
 template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
-  vmav<complex<T>,3> &lego, bool npo, bool spo, const vector<double> &kernel, size_t spin, size_t nthreads, bool adjoint)
+  const vmav<complex<T>,3> &lego, bool npo, bool spo, const vector<double> &kernel, size_t spin, size_t nthreads, bool adjoint)
   {
   constexpr size_t chunksize=64;
   MR_assert(legi.shape(0)==lego.shape(0), "number of components mismatch");
@@ -235,7 +235,7 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
     });
   }
 
-template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> &legi, vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
+template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> &legi, const vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
   MR_assert(even_odd_m(mval), "bad set of m values");
   auto nplanes = legi.shape(0);
@@ -316,7 +316,7 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
     });
   }
 
-template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> &legi, vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
+template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> &legi, const vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
   MR_assert(even_odd_m(mval), "bad set of m values");
   auto nplanes = legi.shape(0);

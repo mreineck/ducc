@@ -110,7 +110,7 @@ template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
   }
 
 template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
-  (vmav<T,ndim> &arr)
+  (const vmav<T,ndim> &arr)
   {
   MR_assert(arr.contiguous(), "mav must be contiguous");
   if constexpr (ndim==1)

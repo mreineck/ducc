@@ -362,12 +362,9 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        {
-        auto subalm = subarray<2>(alm, {{itrans},{},{}});
-        auto submap = subarray<2>(map, {{itrans},{},{}});
-        synthesis(subalm, submap, spin, lmax, mstart, lstride, theta, nphi,
+        synthesis(subarray<2>(alm, {{itrans},{},{}}),
+          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta, nphi,
           phi0, ringstart, pixstride, nthreads, mode, theta_interpol);
-        }
     });
   }
   return map_;
@@ -532,12 +529,9 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        {
-        auto submap = subarray<2>(map, {{itrans},{},{}});
-        auto subalm = subarray<2>(alm, {{itrans},{},{}});
-        adjoint_synthesis(subalm, submap, spin, lmax, mstart, lstride, theta,
+        adjoint_synthesis(subarray<2>(alm, {{itrans},{},{}}),
+          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta,
           nphi, phi0, ringstart, pixstride, nthreads, mode, theta_interpol);
-        }
     });
   }
   return alm_;
@@ -593,9 +587,8 @@ template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
         {
-        auto submap = subarray<2>(map, {{itrans},{},{}});
-        auto subalm = subarray<2>(alm, {{itrans},{},{}});
-        auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(subalm, submap,
+        auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(
+          subarray<2>(alm, {{itrans},{},{}}), subarray<2>(map, {{itrans},{},{}}),
           spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, pixstride,
           nthreads, maxiter, epsilon, theta_interpol);
         itn[itrans] = xitn;

@@ -453,7 +453,7 @@ template <typename Titer, typename T> DUCC0_NOINLINE void copy_input(const Titer
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Cmplx<Tsimd> *DUCC0_RESTRICT src, vfmav<Cmplx<typename Tsimd::value_type>> &dst)
+  const Cmplx<Tsimd> *DUCC0_RESTRICT src, const vfmav<Cmplx<typename Tsimd::value_type>> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
@@ -466,7 +466,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Tsimd *DUCC0_RESTRICT src, vfmav<typename Tsimd::value_type> &dst)
+  const Tsimd *DUCC0_RESTRICT src, const vfmav<typename Tsimd::value_type> &dst)
   {
   constexpr auto vlen=Tsimd::size();
   typename Tsimd::value_type * DUCC0_RESTRICT ptr = dst.data();
@@ -479,7 +479,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   }
 
 template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const T *DUCC0_RESTRICT src, vfmav<T> &dst)
+  const T *DUCC0_RESTRICT src, const vfmav<T> &dst)
   {
   T * DUCC0_RESTRICT ptr=dst.data();
   if (src == &dst.raw(it.oofs(0))) return;  // in-place
@@ -539,7 +539,7 @@ template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Cmplx<Tsimd> * DUCC0_RESTRICT src, vfmav<Cmplx<typename Tsimd::value_type>> &dst, size_t nvec, size_t vstr)
+  const Cmplx<Tsimd> * DUCC0_RESTRICT src, const vfmav<Cmplx<typename Tsimd::value_type>> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
   Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
@@ -552,7 +552,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
       }
   }
 template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Cmplx<T> * DUCC0_RESTRICT src, vfmav<Cmplx<T>> &dst, size_t nvec, size_t vstr)
+  const Cmplx<T> * DUCC0_RESTRICT src, const vfmav<Cmplx<T>> &dst, size_t nvec, size_t vstr)
   {
   Cmplx<T> * DUCC0_RESTRICT ptr = dst.data();
   for (size_t i=0; i<it.length_out(); ++i)
@@ -560,7 +560,7 @@ template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer
       ptr[it.oofs(j0,i)] = src[j0*vstr+i];
   }
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const Tsimd * DUCC0_RESTRICT src, vfmav<typename Tsimd::value_type> &dst, size_t nvec, size_t vstr)
+  const Tsimd * DUCC0_RESTRICT src, const vfmav<typename Tsimd::value_type> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
   typename Tsimd::value_type * DUCC0_RESTRICT ptr = dst.data();
@@ -573,7 +573,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
       }
   }
 template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
-  const T * DUCC0_RESTRICT src, vfmav<T> &dst, size_t nvec, size_t vstr)
+  const T * DUCC0_RESTRICT src, const vfmav<T> &dst, size_t nvec, size_t vstr)
   {
   T * DUCC0_RESTRICT ptr = dst.data();
   for (size_t i=0; i<it.length_out(); ++i)
@@ -589,7 +589,7 @@ template <typename T, size_t vlen> struct add_vec<Cmplx<T>, vlen>
 template <typename T, size_t vlen> using add_vec_t = typename add_vec<T, vlen>::type;
 
 template<typename Tplan, typename T, typename T0, typename Exec>
-DUCC0_NOINLINE void general_nd(const cfmav<T> &in, vfmav<T> &out,
+DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, T0 fct, size_t nthreads, const Exec &exec,
   const bool /*allow_inplace*/=true)
   {
@@ -790,7 +790,7 @@ struct ExecC2C
 
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
     const Titer &it, const cfmav<Cmplx<T0>> &in,
-    vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct,
+    const vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct,
     size_t nthreads, bool inplace=false) const
     {
     using T = typename Tstorage::datatype;
@@ -809,7 +809,7 @@ struct ExecC2C
     }
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<Cmplx<T0>> &in,
-    vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct, size_t nvec,
+    const vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -832,7 +832,7 @@ struct ExecC2C
 struct ExecHartley
   {
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    const Titer &it, const cfmav<T0> &in, const vfmav<T0> &out,
     Tstorage &storage, const pocketfft_hartley<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
@@ -852,7 +852,7 @@ struct ExecHartley
     }
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<T0> &in,
-    vfmav<T0> &out, Tstorage &storage, const pocketfft_hartley<T0> &plan, T0 fct, size_t nvec,
+    const vfmav<T0> &out, Tstorage &storage, const pocketfft_hartley<T0> &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -875,7 +875,7 @@ struct ExecHartley
 struct ExecFHT
   {
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    const Titer &it, const cfmav<T0> &in, const vfmav<T0> &out,
     Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
@@ -895,7 +895,7 @@ struct ExecFHT
     }
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<T0> &in,
-    vfmav<T0> &out, Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nvec,
+    const vfmav<T0> &out, Tstorage &storage, const pocketfft_fht<T0> &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -920,7 +920,7 @@ struct ExecFFTW
   bool forward;
 
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    const Titer &it, const cfmav<T0> &in, const vfmav<T0> &out,
     Tstorage &storage, const pocketfft_fftw<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
@@ -940,7 +940,7 @@ struct ExecFFTW
     }
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<T0> &in,
-    vfmav<T0> &out, Tstorage &storage, const pocketfft_fftw<T0> &plan, T0 fct, size_t nvec,
+    const vfmav<T0> &out, Tstorage &storage, const pocketfft_fftw<T0> &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -968,7 +968,7 @@ struct ExecDcst
 
   template <typename T0, typename Tstorage, typename Tplan, typename Titer>
   DUCC0_NOINLINE void operator() (const Titer &it, const cfmav<T0> &in,
-    vfmav <T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nthreads,
+    const vfmav <T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
     using T = typename Tstorage::datatype;
@@ -987,7 +987,7 @@ struct ExecDcst
     }
   template <typename T0, typename Tstorage, typename Tplan, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<T0> &in,
-    vfmav<T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nvec,
+    const vfmav<T0> &out, Tstorage &storage, const Tplan &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -1008,7 +1008,7 @@ struct ExecDcst
   };
 
 template<typename T> DUCC0_NOINLINE void general_r2c(
-  const cfmav<T> &in, vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
+  const cfmav<T> &in, const vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
@@ -1126,7 +1126,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
     });  // end of parallel region
   }
 template<typename T> DUCC0_NOINLINE void general_c2r(
-  const cfmav<Cmplx<T>> &in, vfmav<T> &out, size_t axis, bool forward, T fct,
+  const cfmav<Cmplx<T>> &in, const vfmav<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
@@ -1277,7 +1277,7 @@ struct ExecR2R
   bool r2c, forward;
 
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out, Tstorage &storage,
+    const Titer &it, const cfmav<T0> &in, const vfmav<T0> &out, Tstorage &storage,
     const pocketfft_r<T0> &plan, T0 fct, size_t nthreads,
     bool inplace=false) const
     {
@@ -1311,7 +1311,7 @@ struct ExecR2R
     }
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
     const Titer &it, const cfmav<T0> &in,
-    vfmav<T0> &out, Tstorage &storage, const pocketfft_r<T0> &plan, T0 fct, size_t nvec,
+    const vfmav<T0> &out, Tstorage &storage, const pocketfft_r<T0> &plan, T0 fct, size_t nvec,
     size_t nthreads) const
     {
     using T = typename Tstorage::datatype;
@@ -1346,13 +1346,13 @@ struct ExecR2R
   };
 
 template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T> >&>(in));
-  auto &out2(reinterpret_cast<vfmav<Cmplx<T> >&>(out));
+  const auto &out2(reinterpret_cast<const vfmav<Cmplx<T> >&>(out));
   if ((axes.size()>1) && (in.data()!=out.data())) // optimize axis order
     {
     if ((in.stride(axes[0])!=1)&&(out.stride(axes[0])==1))
@@ -1374,7 +1374,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
   general_nd<pocketfft_c<T>>(in2, out2, axes, fct, nthreads, ExecC2C{forward});
   }
 
-template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
@@ -1389,7 +1389,7 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
     general_nd<T_dcst23<T>>(in, out, axes, fct, nthreads, exec);
   }
 
-template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
@@ -1405,17 +1405,17 @@ template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   util::sanity_check_cr(out, in, axis);
   if (in.size()==0) return;
-  auto &out2(reinterpret_cast<vfmav<Cmplx<T>>&>(out));
+  const auto &out2(reinterpret_cast<const vfmav<Cmplx<T>>&>(out));
   general_r2c(in, out2, axis, forward, fct, nthreads);
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<std::complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads)
   {
   util::sanity_check_cr(out, in, axes);
@@ -1428,7 +1428,7 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads)
+  const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads)
   {
   util::sanity_check_cr(in, out, axis);
   if (in.size()==0) return;
@@ -1437,7 +1437,7 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads)
   {
   if (axes.size()==1)
@@ -1450,8 +1450,8 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<std::complex<T>> &in,
+  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads)
   {
   if (axes.size()==1)
@@ -1464,7 +1464,7 @@ template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
+  const vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
@@ -1474,7 +1474,7 @@ template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_fftw(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward,
+  const vfmav<T> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
@@ -1484,7 +1484,7 @@ template<typename T> DUCC0_NOINLINE void r2r_fftw(const cfmav<T> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
@@ -1493,7 +1493,7 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &i
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
@@ -1503,7 +1503,7 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
 
 template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
   ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
-  vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
+  const vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
   {
   auto cstr=c.stride(idim), str=r.stride(idim);
   auto len=r.shape(idim);
@@ -1566,7 +1566,7 @@ template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim
     }
   }
 
-template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
+template<typename T> void oscarize(const vfmav<T> &data, size_t ax0, size_t ax1,
   size_t nthreads)
   {
   auto nu=data.shape(ax0), nv=data.shape(ax1);
@@ -1593,7 +1593,7 @@ template<typename T> void oscarize(vfmav<T> &data, size_t ax0, size_t ax1,
   }
 
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
   {
   if (axes.size()==1)
     return r2r_separable_hartley(in, out, axes, fct, nthreads);
@@ -1617,7 +1617,7 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   }
 
 template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
   {
   if (axes.size()==1)
     return r2r_separable_fht(in, out, axes, fct, nthreads);
@@ -1641,7 +1641,7 @@ template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
   }
 
 template<typename Tplan, typename T0, typename T, typename Exec>
-DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
+DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, const vfmav<T> &out,
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
@@ -1705,7 +1705,7 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, vfmav<T> &out,
 struct ExecConv1R
   {
   template <typename T0, typename Tstorage, typename Titer> void operator() (
-    const Titer &it, const cfmav<T0> &in, vfmav<T0> &out,
+    const Titer &it, const cfmav<T0> &in, const vfmav<T0> &out,
     Tstorage &storage, const pocketfft_r<T0> &plan1, const pocketfft_r<T0> &plan2,
     const cmav<T0,1> &fkernel) const
     {
@@ -1750,7 +1750,7 @@ struct ExecConv1R
 struct ExecConv1C
   {
   template <typename T0, typename Tstorage, typename Titer> void operator() (
-    const Titer &it, const cfmav<Cmplx<T0>> &in, vfmav<Cmplx<T0>> &out,
+    const Titer &it, const cfmav<Cmplx<T0>> &in, const vfmav<Cmplx<T0>> &out,
     Tstorage &storage, const pocketfft_c<T0> &plan1, const pocketfft_c<T0> &plan2,
     const cmav<Cmplx<T0>,1> &fkernel) const
     {
@@ -1789,7 +1789,7 @@ struct ExecConv1C
   };
 
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
-  vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads)
+  const vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads)
   {
   MR_assert(axis<in.ndim(), "bad axis number");
   MR_assert(in.ndim()==out.ndim(), "dimensionality mismatch");
@@ -1803,7 +1803,7 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
     ExecConv1R());
   }
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &in,
-  vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
+  const vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
   size_t nthreads)
   {
   MR_assert(axis<in.ndim(), "bad axis number");
@@ -1815,7 +1815,7 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &
       MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T>>&>(in));
-  auto &out2(reinterpret_cast<vfmav<Cmplx<T>>&>(out));
+  const auto &out2(reinterpret_cast<const vfmav<Cmplx<T>>&>(out));
   const auto &kernel2(reinterpret_cast<const cmav<Cmplx<T>,1>&>(kernel));
   general_convolve_axis<pocketfft_c<T>, T>(in2, out2, axis, kernel2, nthreads,
     ExecConv1C());

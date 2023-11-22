@@ -97,7 +97,7 @@ auto wigner3j_checks_and_sizes_alt(double l2, double l3, double m2, double m3)
 
 // version for m2==m3==0
 void wigner3j_00_internal (double l2, double l3, double l1min,
-                           int ncoef, vmav<double,1> &res)
+                           int ncoef, const vmav<double,1> &res)
   {
   const double l2ml3sq = (l2-l3)*(l2-l3),
                pre1 = (l2+l3+1.)*(l2+l3+1.);
@@ -175,7 +175,7 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
 template<size_t bufsize> void wigner3j_internal_block
   (double l2, double l3, double m2, double m3,
    double m1, double l1min, double l1max, int ncoef,
-   vmav<double,1> &res)
+   const vmav<double,1> &res)
   {
   constexpr double srhuge=0x1p+250,
                    tiny=0x1p-500, srtiny=0x1p-250;
@@ -376,7 +376,7 @@ bailout_bwd:
   }
 
 template<typename Tsimd> void wigner3j_00_internal_vec
-  (Tsimd l2, Tsimd l3, vmav<Tsimd,1> &res)
+  (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen = Tsimd::size();
 
@@ -428,7 +428,7 @@ template<typename Tsimd> void wigner3j_00_internal_vec
   }
 
 template<typename Tsimd> void wigner3j_internal_vec
-  (Tsimd l2, Tsimd l3, double m2, double m3, vmav<Tsimd,1> &res)
+  (Tsimd l2, Tsimd l3, double m2, double m3, const vmav<Tsimd,1> &res)
   {
   if ((m2==0) && (m3==0))
     return wigner3j_00_internal_vec(l2, l3, res);
@@ -627,7 +627,7 @@ template<typename Tsimd> void wigner3j_internal_vec
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
                         double m1, double l1min, double l1max, int ncoef,
-                        vmav<double,1> &res)
+                        const vmav<double,1> &res)
   {
   if ((m2==0.) && (m3==0.))
     return wigner3j_00_internal (l2, l3, l1min, ncoef, res);
@@ -760,7 +760,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     res(k)*=cnorm*fct_bwd;
   }
 
-void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
+void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes (l2, l3, 0, 0);
 
@@ -826,7 +826,7 @@ void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res)
     res(k)*=cnorm;
   }
 
-template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, vmav<Tsimd,1> &res)
+template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen=Tsimd::size();
   Tsimd l1min, l1max;
@@ -868,9 +868,9 @@ template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l
   for (int k=0; k<ncoef2; ++k)
     res(k)*=cnorm;
   }
-template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_simd<double> l3, vmav<native_simd<double>,1> &res);
+template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_simd<double> l3, const vmav<native_simd<double>,1> &res);
 
-void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res)
+void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, res);  
@@ -882,7 +882,7 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
-void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, vmav<double,1> &res)
+void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
   wigner3j_internal (l2, l3, m2, m3, double(m1), double(l1min), double(l1max), ncoef, res);
@@ -903,7 +903,7 @@ int wigner3j_ncoef_int (int l2, int l3, int m2, int m3)
   }
 
 void flexible_wigner3j (double l2, double l3, double m2, double m3,
-  double l1min, vmav<double,1> &res)
+  double l1min, const vmav<double,1> &res)
   {
   auto [m1, l1min_real, l1max_real, ncoef] = wigner3j_checks_and_sizes_alt(l2, l3, m2, m3);
   if (ncoef<=0)
@@ -917,7 +917,7 @@ void flexible_wigner3j (double l2, double l3, double m2, double m3,
   for (size_t i=size_t(l1min_real-l1min+ncoef); i<res.shape(0); ++i) res(i) = 0.;
   }
 template<typename Tsimd> void flexible_wigner3j_vec
-  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, vmav<Tsimd,1> &res)
+  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen = Tsimd::size();
 
@@ -949,6 +949,6 @@ template<typename Tsimd> void flexible_wigner3j_vec
       }
   }
 template void flexible_wigner3j_vec
-  (native_simd<double> l2, native_simd<double> l3, double m2, double m3, native_simd<double> l1min, vmav<native_simd<double>,1> &res);
+  (native_simd<double> l2, native_simd<double> l3, double m2, double m3, native_simd<double> l1min, const vmav<native_simd<double>,1> &res);
 
 }}

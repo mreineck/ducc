@@ -154,8 +154,8 @@ class Communicator
     template<typename T> void bcastRaw (T *data, size_t num, int root=0) const
       { bcastRawVoid (data, tidx<T>(), num, root); }
 
-    template<typename T> void redistribute (const cfmav<T> &in, vfmav<T> &out,
-      size_t axin, size_t axout) const
+    template<typename T> void redistribute (const cfmav<T> &in,
+      const vfmav<T> &out, size_t axin, size_t axout) const
       {
       if (num_ranks()==1)
         mav_apply([](const T &i, T &o){ o=i; }, 1, in, out);

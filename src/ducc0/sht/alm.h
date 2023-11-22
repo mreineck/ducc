@@ -423,7 +423,7 @@ struct ft_partial_sph_isometry_plan
   };
 
 
-template<typename T> void xchg_yz(const Alm_Base &base, vmav<complex<T>,1> &alm,
+template<typename T> void xchg_yz(const Alm_Base &base, const vmav<complex<T>,1> &alm,
   size_t nthreads)
   {
   auto lmax = base.Lmax();
@@ -486,7 +486,7 @@ template<typename T> void xchg_yz(const Alm_Base &base, vmav<complex<T>,1> &alm,
     });
   }
 
-template<typename T> void rotate_alm (const Alm_Base &base, vmav<complex<T>,1> &alm,
+template<typename T> void rotate_alm (const Alm_Base &base, const vmav<complex<T>,1> &alm,
   double psi, double theta, double phi, size_t nthreads)
   {
   auto lmax=base.Lmax();

@@ -450,7 +450,7 @@ class OofaNoise
       : filter(slope_, f_min_, f_knee_, f_samp_), sigma(sigmawhite_)
       {}
 
-    void filterGaussian(vmav<double,1> &data)
+    void filterGaussian(const vmav<double,1> &data)
       {
       for (size_t i=0; i<data.shape(0); ++i)
         data(i) = sigma*filter(data(i));
@@ -877,7 +877,7 @@ nthreads(optional): int
 
 
 void coupling_matrix_spin0_nontmpl(const cmav<double,2> &spec,
-  size_t lmax, vmav<double,3> &mat, size_t nthreads)
+  size_t lmax, const vmav<double,3> &mat, size_t nthreads)
   {
   size_t nspec=spec.shape(0);
   MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
@@ -938,7 +938,7 @@ void coupling_matrix_spin0_nontmpl(const cmav<double,2> &spec,
     });
   }
 template<size_t nspec> void coupling_matrix_spin0_tmpl(const cmav<double,2> &spec,
-  size_t lmax, vmav<double,3> &mat, size_t nthreads)
+  size_t lmax, const vmav<double,3> &mat, size_t nthreads)
   {
   MR_assert(nspec==spec.shape(0), "bad invocation");
   MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
@@ -1053,7 +1053,7 @@ numpy.ndarray((nspec, lmax+1, lmax+1), dtype=np.float64)
 )""";
 
 void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
-  size_t lmax, vmav<double,4> &mat, size_t nthreads)
+  size_t lmax, const vmav<double,4> &mat, size_t nthreads)
   {
   constexpr size_t ncomp_spec=4;
   size_t nspec=spec.shape(0);
@@ -1182,7 +1182,7 @@ numpy.ndarray((nspec, 5, lmax+1, lmax+1), dtype=np.float64)
 )""";
 
 void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
-  size_t lmax, vmav<double,4> &mat, size_t nthreads)
+  size_t lmax, const vmav<double,4> &mat, size_t nthreads)
   {
   using Tsimd = native_simd<double>;
   constexpr size_t vlen=Tsimd::size();
