@@ -638,7 +638,6 @@ template<typename T> class vfmav: public cfmav<T>
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
 
-    using cfmav<T>::data;
     T *data() const
      { return const_cast<T *>(tbuf::d); }
     template<typename I> T &raw(I i) const
@@ -863,7 +862,6 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return vmav<T,nd2> (ninfo, data()+nofs, *this);
       }
 
-    using parent::data;
     T *data() const
      { return const_cast<T *>(tbuf::d); }
     // read access to element #i
