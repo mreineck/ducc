@@ -907,9 +907,9 @@ void coupling_matrix_spin0_nontmpl(const cmav<double,2> &spec,
         int el3min = el2-el1;
         if (el3min<=int(lmax_spec))
           {
-          auto res_=subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}});
-          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs, res_);
-          const Tsimd * DUCC0_RESTRICT res = res_.data();
+          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs,
+            subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}}));
+          const Tsimd * DUCC0_RESTRICT res = resfullv.data();
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
             val[ispec]=0;
@@ -967,9 +967,9 @@ template<size_t nspec> void coupling_matrix_spin0_tmpl(const cmav<double,2> &spe
         int el3min = el2-el1;
         if (el3min<=int(lmax_spec))
           {
-          auto res_=subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}});
-          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs, res_);
-          const Tsimd * DUCC0_RESTRICT res = res_.data();
+          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs,
+            subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}}));
+          const Tsimd * DUCC0_RESTRICT res = resfullv.data();
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
             val[ispec]=0;
@@ -1092,14 +1092,10 @@ void coupling_matrix_spin0and2_nontmpl(const cmav<double,3> &spec,
         if (el3min<=int(lmax_spec))
           {
           auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
-          {
-          auto tmp2=subarray<1>(tmp, {{0}, {}});
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0, Tsimd(el3min)+lofs, tmp2);
-          }
-          {
-          auto tmp2=subarray<1>(tmp, {{1}, {}});
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2, Tsimd(el3min)+lofs, tmp2);
-          }
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
             for (size_t j=0; j<ncomp_out; ++j)
@@ -1239,10 +1235,8 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
           array<Tsimd,6> xl1 {{el1, el1, el1, el1, el2, el2}};
           array<Tsimd,6> xl2 {{el2, el2, el2, el2, el1, el1}};
           for (size_t ii=0; ii<6; ++ii)
-            {
-            auto wig_=subarray<1>(tmp, {{ii}, {}});
-            flexible_wigner3j_vec(xl1[ii], xl2[ii], m1[ii], m2[ii], Tsimd(el3min)+lofs, wig_);
-            }
+            flexible_wigner3j_vec(xl1[ii], xl2[ii], m1[ii], m2[ii],
+              Tsimd(el3min)+lofs, subarray<1>(tmp, {{ii}, {}}));
           }
 
           for (size_t ispec=0; ispec<nspec; ++ispec)
