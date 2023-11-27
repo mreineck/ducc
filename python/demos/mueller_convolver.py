@@ -286,14 +286,14 @@ class MuellerConvolver:
 
         Parameters
         ----------
-        ptg : numpy.ndarray((nptg, 3), dtype=float)
+        ptg : numpy.ndarray((nptg, 3), dtype=numpy.float32/64)
             the input pointings in radians, in (theta, phi, psi) order
-        alpha : numpy.ndarray((nptg,), dtype=np.float)
+        alpha : numpy.ndarray((nptg,), dtype=numpy.float32/64)
             the HWP angles in radians
 
         Returns
         -------
-        signal : numpy.ndarray((nptg,), dtype=np.float)
+        signal : numpy.ndarray((nptg,), dtype=numpy.float32/64)
             the signal measured by the detector
         """
         ptg = ptg.astype(self._ftype)
