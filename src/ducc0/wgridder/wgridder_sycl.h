@@ -176,9 +176,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     bool gridding;
     TimerHierarchy timers;
     const cmav<complex<Tms>,2> &ms_in;
-    vmav<complex<Tms>,2> &ms_out;
+    const vmav<complex<Tms>,2> &ms_out;
     const cmav<Timg,2> &dirty_in;
-    vmav<Timg,2> &dirty_out;
+    const vmav<Timg,2> &dirty_out;
     const cmav<Tms,2> &wgt;
     const cmav<uint8_t,2> &mask;
     vmav<uint8_t,2> lmask;
@@ -1507,8 +1507,8 @@ timers.pop();
 
   public:
     Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
-           const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
-           const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
+           const cmav<complex<Tms>,2> &ms_in_, const vmav<complex<Tms>,2> &ms_out_,
+           const cmav<Timg,2> &dirty_in_, const vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
@@ -1574,7 +1574,7 @@ timers.pop();
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
@@ -1590,7 +1590,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
@@ -1609,7 +1609,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_sycl(const cmav<double,2> &,
   const cmav<double,1> &, const cmav<complex<Tms>,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
-  bool, size_t, vmav<Timg,2> &, size_t,
+  bool, size_t, const vmav<Timg,2> &, size_t,
   bool=false, bool=true, double=1.1,
   double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
@@ -1617,7 +1617,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &,
   const cmav<double,1> &, const cmav<Timg,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
-  double, bool, size_t, vmav<complex<Tms>,2> &,
+  double, bool, size_t, const vmav<complex<Tms>,2> &,
   size_t, bool=false, bool=true,
   double=1.1, double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }

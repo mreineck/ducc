@@ -181,7 +181,7 @@ template<typename T> class ConvolverPlan
 
     template<size_t supp> void interpolx(size_t supp_, const cmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, vmav<T,1> &signal) const
+      const cmav<T,1> &psi, const vmav<T,1> &signal) const
       {
       if constexpr (supp>=8)
         if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
@@ -249,7 +249,7 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    template<size_t supp> void deinterpolx(size_t supp_, vmav<T,3> &cube,
+    template<size_t supp> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
       const cmav<T,1> &psi, const cmav<T,1> &signal) const
       {
@@ -416,7 +416,7 @@ template<typename T> class ConvolverPlan
       }
 
     void getPlane(const cmav<complex<T>,2> &vslm, const cmav<complex<T>,2> &vblm,
-      size_t mbeam, vmav<T,3> &planes) const
+      size_t mbeam, const vmav<T,3> &planes) const
       {
       size_t nplanes=1+(mbeam>0);
       auto ncomp = vslm.shape(0);
@@ -531,7 +531,7 @@ template<typename T> class ConvolverPlan
       }
 
     void getPlane(const cmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
-      size_t mbeam, vmav<T,3> &planes) const
+      size_t mbeam, const vmav<T,3> &planes) const
       {
       cmav<complex<T>,2> vslm(&slm(0), {1,slm.shape(0)}, {0,slm.stride(0)});
       cmav<complex<T>,2> vblm(&blm(0), {1,blm.shape(0)}, {0,blm.stride(0)});
@@ -540,13 +540,13 @@ template<typename T> class ConvolverPlan
 
     void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, vmav<T,1> &signal) const
+      const cmav<T,1> &psi, const vmav<T,1> &signal) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
       interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
-    void deinterpol(vmav<T,3> &cube, size_t itheta0,
+    void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
       const cmav<T,1> &psi, const cmav<T,1> &signal) const
       {
@@ -554,8 +554,8 @@ template<typename T> class ConvolverPlan
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
-    void updateSlm(vmav<complex<T>,2> &vslm, const cmav<complex<T>,2> &vblm,
-      size_t mbeam, vmav<T,3> &planes) const
+    void updateSlm(const vmav<complex<T>,2> &vslm, const cmav<complex<T>,2> &vblm,
+      size_t mbeam, const vmav<T,3> &planes) const
       {
       size_t nplanes=1+(mbeam>0);
       auto ncomp = vslm.shape(0);
@@ -657,15 +657,15 @@ template<typename T> class ConvolverPlan
               }
       }
 
-    void updateSlm(vmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
-      size_t mbeam, vmav<T,3> &planes) const
+    void updateSlm(const vmav<complex<T>,1> &slm, const cmav<complex<T>,1> &blm,
+      size_t mbeam, const vmav<T,3> &planes) const
       {
       auto vslm(slm.prepend_1());
       auto vblm(blm.prepend_1());
       updateSlm(vslm, vblm, mbeam, planes);
       }
 
-    void prepPsi(vmav<T,3> &subcube) const
+    void prepPsi(const vmav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
       auto newpart = subarray<3>(subcube, {{npsi_s, MAXIDX}, {}, {}});
@@ -682,7 +682,7 @@ template<typename T> class ConvolverPlan
       r2r_fftpack(fsubcube, fsubcube, {0}, false, true, T(1), nthreads);
       }
 
-    void deprepPsi(vmav<T,3> &subcube) const
+    void deprepPsi(const vmav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
       vfmav<T> fsubcube(subcube);

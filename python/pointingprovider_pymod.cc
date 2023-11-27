@@ -67,7 +67,7 @@ template<typename T> class PointingProvider
       }
 
     void get_rotated_quaternions(double t0, double freq, const cmav<T,1> &rot,
-      vmav<T,2> &out, bool rot_left)
+      const vmav<T,2> &out, bool rot_left)
       {
       using Tsimd = native_simd<T>;
       constexpr size_t vlen = Tsimd::size();

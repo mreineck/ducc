@@ -1,9 +1,12 @@
 0.33.0:
 - general:
   - slightly modernized Python build system
-  - if the environment variable DUCC0_NUM_THREADS is not set, the cde will
+  - if the environment variable DUCC0_NUM_THREADS is not set, the code will
     try to read OMP_NUM_THREADS to determine the maximum number of threads
     to use.
+  - semantics of ducc0::v(f)mav have changed: if the v(f)mav is const,the data
+    it points to can still be changed. If immutability of pointed-to data is
+    required, the object needs to be cast/converted to a c(f)mav.
 
 - sht:
   - make functions from `ducc0.sht.experimental` also available in

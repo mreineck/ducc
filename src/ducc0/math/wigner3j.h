@@ -43,15 +43,15 @@ using namespace std;
   The results are returned in \a res, which is resized appropriately.
  */
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
-void wigner3j (double l2, double l3, double m2, double m3, vmav<double,1> &res);
+void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res);
 
-void wigner3j_00_squared_compact (double l2, double l3, vmav<double,1> &res);
+void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res);
 
-template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, vmav<Tsimd,1> &res);
+template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res);
 
-void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, vmav<double,1> &res);
+void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, const vmav<double,1> &res);
 template<typename Tsimd> void flexible_wigner3j_vec
-  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, vmav<Tsimd,1> &res);
+  (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res);
 
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
@@ -60,7 +60,7 @@ template<typename Tsimd> void flexible_wigner3j_vec
   The l1 value of the first entry in \a res is returned in \a l1min.
  */
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vector<double> &res);
-void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vmav<double,1> &res);
+void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, const vmav<double,1> &res);
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 }
 

@@ -66,7 +66,7 @@ template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
 
 template<typename T> T sqr(T val) { return val*val; }
 
-template<typename T> void quickzero(vmav<T,2> &arr, size_t nthreads)
+template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
   {
 #if 0
   arr.fill(T(0));
@@ -157,7 +157,7 @@ template<size_t ndim> void checkShape
 //
 
 template<typename T> void complex2hartley
-  (const cmav<complex<T>, 2> &grid, vmav<T,2> &grid2, size_t nthreads)
+  (const cmav<complex<T>, 2> &grid, const vmav<T,2> &grid2, size_t nthreads)
   {
   MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -172,7 +172,7 @@ template<typename T> void complex2hartley
   }
 
 template<typename T> void hartley2complex
-  (const cmav<T,2> &grid, vmav<complex<T>,2> &grid2, size_t nthreads)
+  (const cmav<T,2> &grid, const vmav<complex<T>,2> &grid2, size_t nthreads)
   {
   MR_assert(grid.conformable(grid2), "shape mismatch");
   size_t nu=grid.shape(0), nv=grid.shape(1);
@@ -186,7 +186,7 @@ template<typename T> void hartley2complex
     });
   }
 
-template<typename T> void hartley2_2D(vmav<T,2> &arr, size_t vlim,
+template<typename T> void hartley2_2D(const vmav<T,2> &arr, size_t vlim,
   bool first_fast, size_t nthreads)
   {
   size_t nu=arr.shape(0), nv=arr.shape(1);
@@ -335,9 +335,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     bool gridding;
     TimerHierarchy timers;
     const cmav<complex<Tms>,2> &ms_in;
-    vmav<complex<Tms>,2> &ms_out;
+    const vmav<complex<Tms>,2> &ms_out;
     const cmav<Timg,2> &dirty_in;
-    vmav<Timg,2> &dirty_out;
+    const vmav<Timg,2> &dirty_out;
     const cmav<Tms,2> &wgt;
     const cmav<uint8_t,2> &mask;
     vmav<uint8_t,2> lmask;
@@ -392,7 +392,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       return twopi*(phs-floor(phs));
       }
 
-    void grid2dirty_post(vmav<Tcalc,2> &tmav, vmav<Timg,2> &dirty) const
+    void grid2dirty_post(const vmav<Tcalc,2> &tmav, const vmav<Timg,2> &dirty) const
       {
       checkShape(dirty.shape(), {nxdirty, nydirty});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -414,7 +414,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
           }
         });
       }
-    void grid2dirty_post2(vmav<complex<Tcalc>,2> &tmav, vmav<Timg,2> &dirty, double w)
+    void grid2dirty_post2(const vmav<complex<Tcalc>,2> &tmav, const vmav<Timg,2> &dirty, double w)
       {
       timers.push("wscreen+grid correction");
       checkShape(dirty.shape(), {nxdirty,nydirty});
@@ -472,7 +472,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       timers.pop();
       }
 
-    void grid2dirty_overwrite(vmav<Tcalc,2> &grid, vmav<Timg,2> &dirty)
+    void grid2dirty_overwrite(const vmav<Tcalc,2> &grid, const vmav<Timg,2> &dirty)
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
@@ -483,7 +483,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       }
 
     void grid2dirty_c_overwrite_wscreen_add
-      (vmav<complex<Tcalc>,2> &grid, vmav<Timg,2> &dirty, double w, size_t iplane)
+      (const vmav<complex<Tcalc>,2> &grid, const vmav<Timg,2> &dirty, double w, size_t iplane)
       {
       timers.push("FFT");
       checkShape(grid.shape(), {nu,nv});
@@ -522,7 +522,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       grid2dirty_post2(grid, dirty, w);
       }
 
-    void dirty2grid_pre(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
+    void dirty2grid_pre(const cmav<Timg,2> &dirty, const vmav<Tcalc,2> &grid)
       {
       timers.push("zeroing grid");
       checkShape(grid.shape(), {nu, nv});
@@ -552,7 +552,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
         });
       timers.pop();
       }
-    void dirty2grid_pre2(const cmav<Timg,2> &dirty, vmav<complex<Tcalc>,2> &grid, double w)
+    void dirty2grid_pre2(const cmav<Timg,2> &dirty, const vmav<complex<Tcalc>,2> &grid, double w)
       {
       timers.push("zeroing grid");
       checkShape(dirty.shape(), {nxdirty, nydirty});
@@ -600,7 +600,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       timers.pop();
       }
 
-    void dirty2grid(const cmav<Timg,2> &dirty, vmav<Tcalc,2> &grid)
+    void dirty2grid(const cmav<Timg,2> &dirty, const vmav<Tcalc,2> &grid)
       {
       dirty2grid_pre(dirty, grid);
       timers.push("FFT");
@@ -609,7 +609,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       }
 
     void dirty2grid_c_wscreen(const cmav<Timg,2> &dirty,
-      vmav<complex<Tcalc>,2> &grid, double w, size_t iplane)
+      const vmav<complex<Tcalc>,2> &grid, double w, size_t iplane)
       {
       dirty2grid_pre2(dirty, grid, w);
       timers.push("FFT");
@@ -936,7 +936,7 @@ timers.pop();
         static constexpr double xsupp=2./supp;
         const Wgridder *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
-        vmav<complex<Tcalc>,2> &grid;
+        const vmav<complex<Tcalc>,2> &grid;
         int iu0, iv0; // start index of the current visibility
         int bu0, bv0; // start index of the current buffer
 
@@ -980,7 +980,7 @@ timers.pop();
           };
         kbuf buf;
 
-        HelperX2g2(const Wgridder *parent_, vmav<complex<Tcalc>,2> &grid_,
+        HelperX2g2(const Wgridder *parent_, const vmav<complex<Tcalc>,2> &grid_,
           vector<Mutex> &locks_, double w0_=-1, double dw_=-1)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             iu0(-1000000), iv0(-1000000),
@@ -1133,7 +1133,7 @@ timers.pop();
       }
 
     template<size_t SUPP, bool wgrid> [[gnu::hot]] void x2grid_c_helper
-      (size_t supp, vmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
+      (size_t supp, const vmav<complex<Tcalc>,2> &grid, size_t p0, double w0)
       {
       if constexpr (SUPP>=8)
         if (supp<=SUPP/2) return x2grid_c_helper<SUPP/2, wgrid>(supp, grid, p0, w0);
@@ -1228,7 +1228,7 @@ timers.pop();
         });
       }
 
-    template<bool wgrid> void x2grid_c(vmav<complex<Tcalc>,2> &grid,
+    template<bool wgrid> void x2grid_c(const vmav<complex<Tcalc>,2> &grid,
       size_t p0, double w0=-1)
       {
       checkShape(grid.shape(), {nu, nv});
@@ -1338,7 +1338,7 @@ timers.pop();
       grid2x_c_helper<maxsupp, wgrid>(supp, grid, p0, w0);
       }
 
-    void apply_global_corrections(vmav<Timg,2> &dirty)
+    void apply_global_corrections(const vmav<Timg,2> &dirty)
       {
       timers.push("global corrections");
       double x0 = lshift-0.5*nxdirty*pixsize_x,
@@ -1615,8 +1615,8 @@ timers.pop();
 
   public:
     Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
-           const cmav<complex<Tms>,2> &ms_in_, vmav<complex<Tms>,2> &ms_out_,
-           const cmav<Timg,2> &dirty_in_, vmav<Timg,2> &dirty_out_,
+           const cmav<complex<Tms>,2> &ms_in_, const vmav<complex<Tms>,2> &ms_out_,
+           const cmav<Timg,2> &dirty_in_, const vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
@@ -1692,7 +1692,7 @@ timers.pop();
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
@@ -1708,7 +1708,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
@@ -1729,7 +1729,7 @@ tuple<size_t, size_t, size_t, size_t, double, double>
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0)
   {
@@ -1746,7 +1746,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_faceted(size_t nfx,size_t nfy, const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0)
   {
@@ -1777,7 +1777,7 @@ tuple<vmav<uint8_t,2>,size_t,size_t, size_t>  get_tuning_parameters(const cmav<d
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_tuning(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, vmav<Timg,2> &dirty, size_t verbosity,
+  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0)
   {
@@ -1831,7 +1831,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_tuning(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, vmav<complex<Tms>,2> &ms,
+  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool negate_v=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0)
   {

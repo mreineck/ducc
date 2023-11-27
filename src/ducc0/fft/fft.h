@@ -830,7 +830,7 @@ constexpr bool FORWARD  = true,
  *  be distributed over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1);
 
 /// Fast Discrete Cosine Transform
@@ -854,7 +854,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1);
 
 /// Fast Discrete Sine Transform
@@ -878,47 +878,47 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, vfmav<T> &out,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, vfmav<T> &out,
+template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<std::complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1);
+  const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r_mut(vfmav<std::complex<T>> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<std::complex<T>> &in,
+  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
+  const vfmav<T> &out, const shape_t &axes, bool real2hermitian, bool forward,
   T fct, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2r_fftw(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, bool forward,
+  const vfmav<T> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2r_separable_hartley(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
 
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
 
 template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
-  vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
+  const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads=1);
 
 /// Convolution and zero-padding/truncation along one axis
 /** This performs a circular convolution with the kernel \a kernel on axis
@@ -943,10 +943,10 @@ template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
  *  be distributed over \a nthreads threads.
  */
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
-  vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads=1);
+  const vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &in,
-  vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
+  const vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
   size_t nthreads=1);
 }
 

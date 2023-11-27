@@ -172,7 +172,7 @@ template<typename T> class SphereInterpol
 
     template<size_t supp, typename Tloc> void interpolx(size_t supp_, const cmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      vmav<T,2> &signal) const
+      const vmav<T,2> &signal) const
       {
       if constexpr (supp>=8)
         if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal);
@@ -272,7 +272,7 @@ template<typename T> class SphereInterpol
           }
         });
       }
-    template<size_t supp, typename Tloc> void deinterpolx(size_t supp_, vmav<T,3> &cube,
+    template<size_t supp, typename Tloc> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<T,2> &signal) const
       {
@@ -463,7 +463,7 @@ template<typename T> class SphereInterpol
       return res;
       }
 
-    void getPlane(const cmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
+    void getPlane(const cmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
       {
       timers.push("alm2leg");
       size_t nplanes=1+(spin>0);
@@ -545,7 +545,7 @@ template<typename T> class SphereInterpol
       timers.pop();
       }
 
-    void getPlane(const cmav<complex<T>,1> &alm, vmav<T,3> &planes) const
+    void getPlane(const cmav<complex<T>,1> &alm, const vmav<T,3> &planes) const
       {
       cmav<complex<T>,2> valm(&alm(0), {1,alm.shape(0)}, {0,alm.stride(0)});
       getPlane(valm, planes);
@@ -553,13 +553,13 @@ template<typename T> class SphereInterpol
 
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      vmav<T,2> &signal) const
+      const vmav<T,2> &signal) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
       interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    template<typename Tloc> void deinterpol(vmav<T,3> &cube, size_t itheta0,
+    template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<T,2> &signal) const
       {
@@ -567,7 +567,7 @@ template<typename T> class SphereInterpol
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
       }
 
-    void updateAlm(vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
+    void updateAlm(const vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const
       {
       size_t nplanes=1+(spin>0);
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
@@ -646,7 +646,7 @@ template<typename T> class SphereInterpol
       timers.pop();
       }
 
-    void updateAlm(vmav<complex<T>,1> &alm, vmav<T,3> &planes, SHT_mode mode) const
+    void updateAlm(const vmav<complex<T>,1> &alm, const vmav<T,3> &planes, SHT_mode mode) const
       {
       auto valm(alm.prepend_1());
       updateAlm(valm, planes, mode);
