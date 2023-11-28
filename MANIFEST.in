@@ -23,7 +23,9 @@ include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
 include src/ducc0/infra/useful_macros.h
 
+include src/ducc0/bindings/array_descriptor.h
 include src/ducc0/bindings/pybind_utils.h
+include src/ducc0/bindings/typecode.h
 
 include src/ducc0/math/cmplx.h
 include src/ducc0/math/constants.h
