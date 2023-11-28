@@ -70,6 +70,7 @@ include src/ducc0/wgridder/wgridder.cc
 
 include python/ducc.cc
 include python/fft_pymod.cc
+include python/jax_pymod.cc
 include python/nufft_pymod.cc
 include python/sht_pymod.cc
 include python/healpix_pymod.cc
