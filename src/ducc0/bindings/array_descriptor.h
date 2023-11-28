@@ -33,14 +33,128 @@ using namespace std;
 
 struct ArrayDescriptor
   {
-  static constexpr size_t maxdim=10;
+  public:
+    static constexpr size_t maxdim=10;
 
-  array<uint64_t, maxdim> shape;
-  array<int64_t, maxdim> stride;
+    array<uint64_t, maxdim> shape;
+    array<int64_t, maxdim> stride;
 
-  void *data;
-  uint8_t ndim;
-  uint8_t dtype;
+    void *data;
+    uint8_t ndim;
+    uint8_t dtype;
+    uint8_t readonly=0;
+
+    ArrayDescriptor() : data(nullptr), ndim(0), dtype(0), readonly(0) {}
+    template<typename T> ArrayDescriptor(const cfmav<T> &in)
+      : data(const_cast<T *>(in.data())), ndim(in.ndim()),
+        dtype(Typecode<T>::value), readonly(1)
+      {
+      MR_assert(ndim<=maxdim, "dimensionality too high");
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shape[i] = in.shape(ndim-1-i);
+        stride[i] = in.stride(ndim-1-i);
+        }
+      }
+    template<typename T, size_t ndim2> ArrayDescriptor(const cmav<T,ndim2> &in)
+      : data(const_cast<T *>(in.data())), ndim(ndim2),
+        dtype(Typecode<T>::value), readonly(1)
+      {
+      MR_assert(ndim<=maxdim, "dimensionality too high");
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shape[i] = in.shape(ndim-1-i);
+        stride[i] = in.stride(ndim-1-i);
+        }
+      }
+    template<typename T> ArrayDescriptor(const vfmav<T> &in)
+      : data(in.data()), ndim(in.ndim()),
+        dtype(Typecode<T>::value), readonly(0)
+      {
+      MR_assert(ndim<=maxdim, "dimensionality too high");
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shape[i] = in.shape(ndim-1-i);
+        stride[i] = in.stride(ndim-1-i);
+        }
+      }
+    template<typename T, size_t ndim2> ArrayDescriptor(const vmav<T,ndim2> &in)
+      : data(in.data()), ndim(ndim2),
+        dtype(Typecode<T>::value), readonly(0)
+      {
+      MR_assert(ndim<=maxdim, "dimensionality too high");
+      for (size_t i=0; i<ndim; ++i)
+        {
+        shape[i] = in.shape(ndim-1-i);
+        stride[i] = in.stride(ndim-1-i);
+        }
+      }
+  private:
+    template<bool swapdims, typename T1, typename T2> void copy_data
+      (T1 &shp, T2 &str) const
+      {
+      if constexpr (swapdims)
+        for (size_t i=0; i<ndim; ++i)
+          {
+          shp[i] = shape[ndim-1-i];
+          str[i] = stride[ndim-1-i];
+          }
+      else
+        for (size_t i=0; i<ndim; ++i)
+          {
+          shp[i] = shape[i];
+          str[i] = stride[i];
+          }
+      }
+    
+    template<bool swapdims, typename T, size_t ndim2> auto prep1() const
+      {
+      static_assert(ndim2<=maxdim, "dimensionality too high");
+      MR_assert(ndim2==ndim, "dimensionality mismatch");
+      MR_assert(Typecode<T>::value==dtype, "data type mismatch");
+      typename mav_info<ndim2>::shape_t shp;
+      typename mav_info<ndim2>::stride_t str;
+      copy_data<swapdims>(shp, str);
+      return make_tuple(shp, str);
+      }
+    template<bool swapdims, typename T> auto prep2() const
+      {
+      MR_assert(Typecode<T>::value==dtype, "data type mismatch");
+      typename fmav_info::shape_t shp(ndim);
+      typename fmav_info::stride_t str(ndim);
+      copy_data<swapdims>(shp, str);
+      return make_tuple(shp, str);
+      }
+
+  public:
+    template<bool swapdims, typename T, size_t ndim> cmav<T,ndim> to_cmav() const
+      {
+      auto [shp, str] = prep1<swapdims, T, ndim>();
+      return cmav<T, ndim>(reinterpret_cast<const T *>(data), shp, str);
+      }
+    template<bool swapdims, typename T, typename T2, size_t ndim>
+      cmav<T2,ndim> to_cmav_with_typecast() const
+      {
+      static_assert(sizeof(T)==sizeof(T2), "type size mismatch");
+      auto [shp, str] = prep1<swapdims, T, ndim>();
+      return cmav<T2, ndim>(reinterpret_cast<const T2 *>(data), shp, str);
+      }
+    template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav() const
+      {
+      MR_assert(!readonly, "object is read-only");
+      auto [shp, str] = prep1<swapdims, T, ndim>();
+      return vmav<T, ndim>(reinterpret_cast<T *>(data), shp, str);
+      }
+    template<bool swapdims, typename T> cfmav<T> to_cfmav() const
+      {
+      auto [shp, str] = prep2<swapdims, T>();
+      return cfmav<T>(reinterpret_cast<const T *>(data), shp, str);
+      }
+    template<bool swapdims, typename T> vfmav<T> to_vfmav() const
+      {
+      auto [shp, str] = prep2<swapdims, T>();
+      return vfmav<T>(reinterpret_cast<T *>(data), shp, str);
+      }
   };
 
 template<bool swapdims, typename T1, typename T2> void copy_data
@@ -83,7 +197,7 @@ template<bool swapdims, typename T, typename T2, size_t ndim> cmav<T2,ndim> to_c
   auto [shp, str] = prep1<swapdims, T, ndim>(desc);
   return cmav<T2, ndim>(reinterpret_cast<const T2 *>(desc.data), shp, str);
   }
-template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav(ArrayDescriptor &desc)
+template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav(const ArrayDescriptor &desc)
   {
   auto [shp, str] = prep1<swapdims, T, ndim>(desc);
   return vmav<T, ndim>(reinterpret_cast<T *>(desc.data), shp, str);
@@ -101,7 +215,7 @@ template<bool swapdims, typename T> cfmav<T> to_cfmav(const ArrayDescriptor &des
   auto [shp, str] = prep2<swapdims, T>(desc);
   return cfmav<T>(reinterpret_cast<const T *>(desc.data), shp, str);
   }
-template<bool swapdims, typename T> vfmav<T> to_vfmav(ArrayDescriptor &desc)
+template<bool swapdims, typename T> vfmav<T> to_vfmav(const ArrayDescriptor &desc)
   {
   auto [shp, str] = prep2<swapdims, T>(desc);
   return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
