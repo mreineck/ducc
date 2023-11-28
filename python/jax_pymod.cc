@@ -30,8 +30,6 @@
 #include <vector>
 #include <complex>
 
-#include "ducc0/sht/sht.h"
-#include "ducc0/sht/alm.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -202,30 +200,6 @@ void add_jax(py::module_ &msup)
     .def(py::init<const string &, const py::dict &>(), "job"_a, "params"_a)
     .def("apply", &Py_Linop::apply, "in"_a)
     .def("applyAdjoint", &Py_Linop::applyAdjoint, "in"_a);
-    //.def("set_nthreads", &Py_sharpjob<double>::set_nthreads, "nthreads"_a)
-    //.def("set_gauss_geometry", &Py_sharpjob<double>::set_gauss_geometry,
-      //"ntheta"_a,"nphi"_a)
-    //.def("set_healpix_geometry", &Py_sharpjob<double>::set_healpix_geometry,
-      //"nside"_a)
-    //.def("set_fejer1_geometry", &Py_sharpjob<double>::set_fejer1_geometry,
-      //"ntheta"_a, "nphi"_a)
-    //.def("set_fejer2_geometry", &Py_sharpjob<double>::set_fejer2_geometry,
-      //"ntheta"_a, "nphi"_a)
-    //.def("set_cc_geometry", &Py_sharpjob<double>::set_cc_geometry,
-      //"ntheta"_a, "nphi"_a)
-    //.def("set_dh_geometry", &Py_sharpjob<double>::set_dh_geometry,
-      //"ntheta"_a, "nphi"_a)
-    //.def("set_mw_geometry", &Py_sharpjob<double>::set_mw_geometry,
-      //"ntheta"_a, "nphi"_a)
-    //.def("set_triangular_alm_info",
-      //&Py_sharpjob<double>::set_triangular_alm_info, "lmax"_a, "mmax"_a)
-    //.def("n_alm", &Py_sharpjob<double>::n_alm)
-    //.def("alm2map", &Py_sharpjob<double>::alm2map,"alm"_a)
-    //.def("alm2map_adjoint", &Py_sharpjob<double>::alm2map_adjoint,"map"_a)
-    //.def("map2alm", &Py_sharpjob<double>::map2alm,"map"_a)
-    //.def("alm2map_spin", &Py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
-    //.def("map2alm_spin", &Py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
-    //.def("__repr__", &Py_sharpjob<double>::repr);
   }
 
 }
