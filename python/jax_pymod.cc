@@ -50,12 +50,9 @@ auto None = py::none();
 class LinOp
   {
   public:
-    virtual void apply(const ArrayDescriptor &in, const ArrayDescriptor &out) const = 0;
-    virtual void applyAdjoint(const ArrayDescriptor &in, const ArrayDescriptor &out) const = 0;
-    virtual vector<size_t> shape_apply(const vector<size_t> &shp_in) const = 0;
-    virtual uint8_t type_apply(const uint8_t &type_in) const = 0;
-    virtual vector<size_t> shape_applyAdjoint(const vector<size_t> &shp_in) const = 0;
-    virtual uint8_t type_applyAdjoint(const uint8_t &type_in) const = 0;
+    virtual void apply(const ArrayDescriptor &in, const ArrayDescriptor &out, bool adjoint) const = 0;
+    virtual vector<size_t> shape_out(const vector<size_t> &shp_in, bool adjoint) const = 0;
+    virtual uint8_t type_out(const uint8_t &type_in, bool adjoint) const = 0;
 
     virtual ~LinOp() {}
   };
@@ -73,49 +70,49 @@ class C2C: public LinOp
 
 
     // virtual
-    void apply(const ArrayDescriptor &in, const ArrayDescriptor &out) const
+    void apply(const ArrayDescriptor &in, const ArrayDescriptor &out, bool adjoint) const
       {
-      if (isDtype<complex<float>>(in.dtype))
-        c2c(to_cfmav<false, complex<float>>(in),
-            to_vfmav<false, complex<float>>(out),
-            axes, fwd, 1.f, nthreads);
-      else if (isDtype<complex<double>>(in.dtype))
-        c2c(to_cfmav<false, complex<double>>(in),
-            to_vfmav<false, complex<double>>(out),
-            axes, fwd, 1., nthreads);
+      bool direction = adjoint ? (!fwd) : fwd;
+      if (isTypecode<complex<float>>(in.dtype))
+        c2c(in.to_cfmav<false, complex<float>>(),
+            out.to_vfmav<false, complex<float>>(),
+            axes, direction, 1.f, nthreads);
+      else if (isTypecode<complex<double>>(in.dtype))
+        c2c(in.to_cfmav<false, complex<double>>(),
+            out.to_vfmav<false, complex<double>>(),
+            axes, direction, 1., nthreads);
       else
         MR_fail("bad invocation");
       }
     // virtual
-    void applyAdjoint(const ArrayDescriptor &in, const ArrayDescriptor &out) const
-      {
-      if (isDtype<complex<float>>(in.dtype))
-        c2c(to_cfmav<false, complex<float>>(in),
-            to_vfmav<false, complex<float>>(out),
-            axes, !fwd, 1.f, nthreads);
-      else if (isDtype<complex<double>>(in.dtype))
-        c2c(to_cfmav<false, complex<double>>(in),
-            to_vfmav<false, complex<double>>(out),
-            axes, !fwd, 1., nthreads);
-      else
-        MR_fail("bad invocation");
-      }
+    vector<size_t> shape_out(const vector<size_t> &shp_in, bool /*adjoint*/) const { return shp_in; }
     // virtual
-    vector<size_t> shape_apply(const vector<size_t> &shp_in) const { return shp_in; }
-    // virtual
-    uint8_t type_apply(const uint8_t &type_in) const { return type_in; }
-    // virtual
-    vector<size_t> shape_applyAdjoint(const vector<size_t> &shp_in) const { return shp_in; }
-    // virtual
-    uint8_t type_applyAdjoint(const uint8_t &type_in) const { return type_in; }
+    uint8_t type_out(const uint8_t &type_in,bool /*adjoint*/) const { return type_in; }
   };
 
-uint8_t dtype2typecode(const py::array &arr)
+uint8_t nparr2typecode(const py::array &arr)
   {
   if (isPyarr<float>(arr)) return Typecode<float>::value;
   if (isPyarr<double>(arr)) return Typecode<double>::value;
   if (isPyarr<complex<float>>(arr)) return Typecode<complex<float>>::value;
   if (isPyarr<complex<double>>(arr)) return Typecode<complex<double>>::value;
+  MR_fail("unsupported data type");
+  }
+uint8_t dtype2typecode(const py::object &type)
+  {
+  auto type2 = normalizeDtype(type);
+  if (isDtype<float>(type2)) return Typecode<float>::value;
+  if (isDtype<double>(type2)) return Typecode<double>::value;
+  if (isDtype<complex<float>>(type2)) return Typecode<complex<float>>::value;
+  if (isDtype<complex<double>>(type2)) return Typecode<complex<double>>::value;
+  MR_fail("unsupported data type");
+  }
+py::object typecode2dtype(uint8_t typecode)
+  {
+  if (isTypecode<float>(typecode)) return Dtype<float>();
+  if (isTypecode<double>(typecode)) return Dtype<double>();
+  if (isTypecode<complex<float>>(typecode)) return Dtype<complex<float>>();
+  if (isTypecode<complex<double>>(typecode)) return Dtype<complex<double>>();
   MR_fail("unsupported data type");
   }
 
@@ -124,7 +121,7 @@ ArrayDescriptor arrdesc(const py::array &arr)
   ArrayDescriptor res;
   res.ndim = arr.ndim();
   MR_assert(res.ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
-  res.dtype = dtype2typecode(arr);
+  res.dtype = nparr2typecode(arr);
   res.data = const_cast<void *>(arr.data());
   for (size_t i=0; i<res.ndim; ++i)
     res.shape[i] = size_t(arr.shape(int(i)));
@@ -167,27 +164,31 @@ class Py_Linop
         MR_fail("unrecognized kind of operator");
       }
 
-    py::array apply(const py::array &in) const
+    py::array apply(const py::array &in, bool adjoint) const
       {
       auto desc_in = arrdesc(in);
       vector<size_t> shp;
       for (size_t i=0; i<desc_in.ndim; ++i)
         shp.push_back(size_t(desc_in.shape[i]));
-      auto out = makeFlexiblePyarr(op->shape_apply(shp), op->type_apply(desc_in.dtype));
+      auto out = makeFlexiblePyarr(op->shape_out(shp,adjoint), op->type_out(desc_in.dtype,adjoint));
       auto desc_out = arrdesc(out);
-      op->apply(desc_in, desc_out);
+      op->apply(desc_in, desc_out, adjoint);
       return out;
       }
-    py::array applyAdjoint(const py::array &in) const
+    py::tuple shape_out(const py::tuple &shape_in, bool adjoint) const
       {
-      auto desc_in = arrdesc(in);
       vector<size_t> shp;
-      for (size_t i=0; i<desc_in.ndim; ++i)
-        shp.push_back(size_t(desc_in.shape[i]));
-      auto out = makeFlexiblePyarr(op->shape_applyAdjoint(shp), op->type_applyAdjoint(desc_in.dtype));
-      auto desc_out = arrdesc(out);
-      op->applyAdjoint(desc_in, desc_out);
-      return out;
+      for (size_t i=0; i<py::len(shape_in); ++i)
+        shp.push_back(shape_in[i].cast<size_t>());
+      auto shp2 = op->shape_out(shp, adjoint);
+      py::list shp3;
+      for (auto num : shp2)
+        shp3.append(py::cast(num));
+      return py::tuple(shp3);
+      }
+    py::object type_out(const py::object &type_in, bool adjoint) const
+      {
+      return typecode2dtype(op->type_out(dtype2typecode(type_in), adjoint));
       }
   };
 
@@ -198,8 +199,9 @@ void add_jax(py::module_ &msup)
 
   py::class_<Py_Linop> (m, "Linop", py::module_local())
     .def(py::init<const string &, const py::dict &>(), "job"_a, "params"_a)
-    .def("apply", &Py_Linop::apply, "in"_a)
-    .def("applyAdjoint", &Py_Linop::applyAdjoint, "in"_a);
+    .def("apply", &Py_Linop::apply, "in"_a, "adjoint"_a)
+    .def("shape_out", &Py_Linop::shape_out, "shape_in"_a, "adjoint"_a)
+    .def("type_out", &Py_Linop::type_out, "type_in"_a, "adjoint"_a);
   }
 
 }

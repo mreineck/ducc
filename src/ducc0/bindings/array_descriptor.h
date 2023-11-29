@@ -155,115 +155,51 @@ struct ArrayDescriptor
       auto [shp, str] = prep2<swapdims, T>();
       return vfmav<T>(reinterpret_cast<T *>(data), shp, str);
       }
+
+    template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
+      () const
+      {
+      MR_assert(Typecode<Tin>::value==dtype, "data type mismatch");
+      MR_assert(ndim==1, "need 1D array for conversion to vector");
+      vector<Tout> res;
+      res.reserve(shape[0]);
+      auto data_ = reinterpret_cast<const Tin *>(data);
+      for (size_t i=0; i<shape[0]; ++i)
+        res.push_back(swap_content ? data_[(shape[0]-1-i)*stride[0]]
+                                   : data_[i*stride[0]]);
+      return res;
+      }
+    template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector_subtract_1
+      () const
+      {
+      static_assert(is_integral<Tin>::value, "need an integral type for this");
+      MR_assert(Typecode<Tin>::value==dtype, "data type mismatch");
+      MR_assert(ndim==1, "need 1D array for conversion to vector");
+      vector<Tout> res;
+      res.reserve(shape[0]);
+      auto data_ = reinterpret_cast<const Tin *>(data);
+      for (size_t i=0; i<shape[0]; ++i)
+        {
+        Tin val = (swap_content ? data_[(shape[0]-1-i)*stride[0]]
+                                : data_[i*stride[0]]) - Tin(1);
+        res.push_back(Tout(val));
+        }
+      return res;
+      }
+    template<bool swap_content, typename Tout> vector<Tout> to_vector_subtract_1
+      () const
+      {
+      if (isTypecode<int32_t>(dtype))
+        return to_vector_subtract_1<swap_content, int32_t, Tout>();
+      if (isTypecode<int64_t>(dtype))
+        return to_vector_subtract_1<swap_content, int64_t, Tout>();
+      if (isTypecode<uint32_t>(dtype))
+        return to_vector_subtract_1<swap_content, uint32_t, Tout>();
+      if (isTypecode<uint64_t>(dtype))
+        return to_vector_subtract_1<swap_content, uint64_t, Tout>();
+      MR_fail("no suitable type found");
+      }
   };
-
-template<bool swapdims, typename T1, typename T2> void copy_data
-  (const ArrayDescriptor &desc, T1 &shp, T2 &str)
-  {
-  auto ndim = desc.ndim;
-  if constexpr (swapdims)
-    for (size_t i=0; i<ndim; ++i)
-      {
-      shp[i] = desc.shape[ndim-1-i];
-      str[i] = desc.stride[ndim-1-i];
-      }
-  else
-    for (size_t i=0; i<ndim; ++i)
-      {
-      shp[i] = desc.shape[i];
-      str[i] = desc.stride[i];
-      }
-  }
-
-template<bool swapdims, typename T, size_t ndim> auto prep1
-  (const ArrayDescriptor &desc)
-  {
-  static_assert(ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
-  MR_assert(ndim==desc.ndim, "dimensionality mismatch");
-  MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
-  typename mav_info<ndim>::shape_t shp;
-  typename mav_info<ndim>::stride_t str;
-  copy_data<swapdims>(desc, shp, str);
-  return make_tuple(shp, str);
-  }
-template<bool swapdims, typename T, size_t ndim> cmav<T,ndim> to_cmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
-  return cmav<T, ndim>(reinterpret_cast<const T *>(desc.data), shp, str);
-  }
-template<bool swapdims, typename T, typename T2, size_t ndim> cmav<T2,ndim> to_cmav_with_typecast(const ArrayDescriptor &desc)
-  {
-  static_assert(sizeof(T)==sizeof(T2), "type size mismatch");
-  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
-  return cmav<T2, ndim>(reinterpret_cast<const T2 *>(desc.data), shp, str);
-  }
-template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep1<swapdims, T, ndim>(desc);
-  return vmav<T, ndim>(reinterpret_cast<T *>(desc.data), shp, str);
-  }
-template<bool swapdims, typename T> auto prep2(const ArrayDescriptor &desc)
-  {
-  MR_assert(Typecode<T>::value==desc.dtype, "data type mismatch");
-  typename fmav_info::shape_t shp(desc.ndim);
-  typename fmav_info::stride_t str(desc.ndim);
-  copy_data<swapdims>(desc, shp, str);
-  return make_tuple(shp, str);
-  }
-template<bool swapdims, typename T> cfmav<T> to_cfmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep2<swapdims, T>(desc);
-  return cfmav<T>(reinterpret_cast<const T *>(desc.data), shp, str);
-  }
-template<bool swapdims, typename T> vfmav<T> to_vfmav(const ArrayDescriptor &desc)
-  {
-  auto [shp, str] = prep2<swapdims, T>(desc);
-  return vfmav<T>(reinterpret_cast<T *>(desc.data), shp, str);
-  }
-
-template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
-  (const ArrayDescriptor &desc)
-  {
-  MR_assert(Typecode<Tin>::value==desc.dtype, "data type mismatch");
-  MR_assert(desc.ndim==1, "need 1D array for conversion to vector");
-  vector<Tout> res;
-  res.reserve(desc.shape[0]);
-  auto data = reinterpret_cast<const Tin *>(desc.data);
-  for (size_t i=0; i<desc.shape[0]; ++i)
-    res.push_back(swap_content ? data[(desc.shape[0]-1-i)*desc.stride[0]]
-                               : data[i*desc.stride[0]]);
-  return res;
-  }
-template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector_subtract_1
-  (const ArrayDescriptor &desc)
-  {
-  static_assert(is_integral<Tin>::value, "need an integral type for this");
-  MR_assert(Typecode<Tin>::value==desc.dtype, "data type mismatch");
-  MR_assert(desc.ndim==1, "need 1D array for conversion to vector");
-  vector<Tout> res;
-  res.reserve(desc.shape[0]);
-  auto data = reinterpret_cast<const Tin *>(desc.data);
-  for (size_t i=0; i<desc.shape[0]; ++i)
-    {
-    Tin val = (swap_content ? data[(desc.shape[0]-1-i)*desc.stride[0]]
-                            : data[i*desc.stride[0]]) - Tin(1);
-    res.push_back(Tout(val));
-    }
-  return res;
-  }
-template<bool swap_content, typename Tout> vector<Tout> to_vector_subtract_1
-  (const ArrayDescriptor &desc)
-  {
-  if (isDtype<int32_t>(desc.dtype))
-    return to_vector_subtract_1<swap_content, int32_t, Tout>(desc);
-  if (isDtype<int64_t>(desc.dtype))
-    return to_vector_subtract_1<swap_content, int64_t, Tout>(desc);
-  if (isDtype<uint32_t>(desc.dtype))
-    return to_vector_subtract_1<swap_content, uint32_t, Tout>(desc);
-  if (isDtype<uint64_t>(desc.dtype))
-    return to_vector_subtract_1<swap_content, uint64_t, Tout>(desc);
-  MR_fail("no suitable type found");
-  }
 
 template<typename T, size_t ndim> cmav<T,ndim> subtract_1(const cmav<T,ndim> &inp)
   {
@@ -274,13 +210,6 @@ template<typename T, size_t ndim> cmav<T,ndim> subtract_1(const cmav<T,ndim> &in
 }
 
 using detail_array_descriptor::ArrayDescriptor;
-using detail_array_descriptor::to_cmav;
-using detail_array_descriptor::to_cmav_with_typecast;
-using detail_array_descriptor::to_vmav;
-using detail_array_descriptor::to_cfmav;
-using detail_array_descriptor::to_vfmav;
-using detail_array_descriptor::to_vector;
-using detail_array_descriptor::to_vector_subtract_1;
 using detail_array_descriptor::subtract_1;
 
 }

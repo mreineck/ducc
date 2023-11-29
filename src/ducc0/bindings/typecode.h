@@ -79,14 +79,14 @@ template<typename T> class Typecode<complex<T>>
 inline size_t typeSize(size_t dtype)
   { return ((dtype&15)+1)*((dtype>>6)+1); }
 
-template<typename T> bool isDtype(size_t dtype)
+template<typename T> bool isTypecode(size_t dtype)
   { return dtype==Typecode<T>::value; }
 
 }
 
 using detail_typecode::Typecode;
 using detail_typecode::typeSize;
-using detail_typecode::isDtype;
+using detail_typecode::isTypecode;
 
 }
 

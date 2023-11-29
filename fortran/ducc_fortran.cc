@@ -96,18 +96,18 @@ void fft_c2c_c(const CFI_cdesc_t *in__, CFI_cdesc_t *out__,
   auto &in(in_);
   auto &out(out_);
   const auto &axes(axes_);
-  auto myaxes(to_vector_subtract_1<false, size_t>(axes));
+  auto myaxes(axes.to_vector_subtract_1<false, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (isDtype<complex<double>>(in.dtype))
+  if (isTypecode<complex<double>>(in.dtype))
     {
-    auto myin(to_cfmav<true,complex<double>>(in));
-    auto myout(to_vfmav<true,complex<double>>(out));
+    auto myin(in.to_cfmav<true,complex<double>>());
+    auto myout(out.to_vfmav<true,complex<double>>());
     c2c(myin, myout, myaxes, bool(forward), fct, nthreads);
     }
-  else if (isDtype<complex<float>>(in.dtype))
+  else if (isTypecode<complex<float>>(in.dtype))
     {
-    auto myin(to_cfmav<true,complex<float>>(in));
-    auto myout(to_vfmav<true,complex<float>>(out));
+    auto myin(in.to_cfmav<true,complex<float>>());
+    auto myout(out.to_vfmav<true,complex<float>>());
     c2c(myin, myout, myaxes, bool(forward), float(fct), nthreads);
     }
   else
