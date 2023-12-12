@@ -59,9 +59,9 @@ extern "C" {
 void fft_c2c_(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
               const ducc0::ArrayDescriptor &axes, const bool forward,
               const double fct, const size_t nthreads) {
-  if (in.dtype == C128)
+  if (in.typecode == C128)
     fft_c2c<double>(in, out, axes, forward, fct, nthreads);
-  else if (in.dtype == C64)
+  else if (in.typecode == C64)
     fft_c2c<float>(in, out, axes, forward, fct, nthreads);
   else
     MR_fail("Type not supported");
