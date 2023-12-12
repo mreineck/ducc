@@ -45,6 +45,17 @@ struct ArrayDescriptor
     uint8_t readonly=0;
 
     ArrayDescriptor() : data(nullptr), ndim(0), dtype(0), readonly(0) {}
+    ArrayDescriptor(void *data_, const vector<size_t> &shape_, uint8_t typecode_)
+      : data(data_), ndim(shape_.size()), dtype(typecode_), readonly(0)
+      {
+      size_t str = 1;
+      for (int i=ndim-1; i>=0; --i)
+        {
+        shape[i] = shape_[i];
+        stride[i] = str;
+        str *= shape[i];
+        }
+      }
     template<typename T> ArrayDescriptor(const cfmav<T> &in)
       : data(const_cast<T *>(in.data())), ndim(in.ndim()),
         dtype(Typecode<T>::value), readonly(1)
