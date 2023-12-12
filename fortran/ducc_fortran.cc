@@ -63,18 +63,18 @@ void arraytodesc_c(const CFI_cdesc_t *arr, ducc0::ArrayDescriptor *desc)
   MR_assert((arr!=nullptr) && (desc!=nullptr), "Null pointer found");
   switch (arr->type)
     {
-    case CFI_type_int32_t: desc->dtype=19; break;
-    case CFI_type_int64_t: desc->dtype=23; break;
-    case CFI_type_float: desc->dtype=3; break;
-    case CFI_type_double: desc->dtype=7; break;
-    case CFI_type_float_Complex: desc->dtype=67; break;
-    case CFI_type_double_Complex: desc->dtype=71; break;
+    case CFI_type_int32_t: desc->typecode=19; break;
+    case CFI_type_int64_t: desc->typecode=23; break;
+    case CFI_type_float: desc->typecode=3; break;
+    case CFI_type_double: desc->typecode=7; break;
+    case CFI_type_float_Complex: desc->typecode=67; break;
+    case CFI_type_double_Complex: desc->typecode=71; break;
     default: MR_fail("unsupported data type");
     }
   desc->ndim = arr->rank;
   MR_assert(desc->ndim<=10, "array rank too large");
   desc->data = arr->base_addr; // FIXME: perhaps needs correction!
-  size_t nbytes = typeSize(desc->dtype);
+  size_t nbytes = typeSize(desc->typecode);
   for (size_t i=0; i<size_t(desc->ndim); ++i)
     {
     desc->shape[i] = arr->dim[i].extent;
@@ -98,13 +98,13 @@ void fft_c2c_c(const CFI_cdesc_t *in__, CFI_cdesc_t *out__,
   const auto &axes(axes_);
   auto myaxes(axes.to_vector_subtract_1<false, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (isTypecode<complex<double>>(in.dtype))
+  if (isTypecode<complex<double>>(in.typecode))
     {
     auto myin(in.to_cfmav<true,complex<double>>());
     auto myout(out.to_vfmav<true,complex<double>>());
     c2c(myin, myout, myaxes, bool(forward), fct, nthreads);
     }
-  else if (isTypecode<complex<float>>(in.dtype))
+  else if (isTypecode<complex<float>>(in.typecode))
     {
     auto myin(in.to_cfmav<true,complex<float>>());
     auto myout(out.to_vfmav<true,complex<float>>());

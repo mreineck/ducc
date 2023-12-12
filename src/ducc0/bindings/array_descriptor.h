@@ -41,12 +41,12 @@ struct ArrayDescriptor
 
     void *data;
     uint8_t ndim;
-    uint8_t dtype;
+    uint8_t typecode;
     uint8_t readonly=0;
 
-    ArrayDescriptor() : data(nullptr), ndim(0), dtype(0), readonly(0) {}
+    ArrayDescriptor() : data(nullptr), ndim(0), typecode(0), readonly(0) {}
     ArrayDescriptor(void *data_, const vector<size_t> &shape_, uint8_t typecode_)
-      : data(data_), ndim(shape_.size()), dtype(typecode_), readonly(0)
+      : data(data_), ndim(shape_.size()), typecode(typecode_), readonly(0)
       {
       size_t str = 1;
       for (int i=ndim-1; i>=0; --i)
@@ -58,7 +58,7 @@ struct ArrayDescriptor
       }
     template<typename T> ArrayDescriptor(const cfmav<T> &in)
       : data(const_cast<T *>(in.data())), ndim(in.ndim()),
-        dtype(Typecode<T>::value), readonly(1)
+        typecode(Typecode<T>::value), readonly(1)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -69,7 +69,7 @@ struct ArrayDescriptor
       }
     template<typename T, size_t ndim2> ArrayDescriptor(const cmav<T,ndim2> &in)
       : data(const_cast<T *>(in.data())), ndim(ndim2),
-        dtype(Typecode<T>::value), readonly(1)
+        typecode(Typecode<T>::value), readonly(1)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -80,7 +80,7 @@ struct ArrayDescriptor
       }
     template<typename T> ArrayDescriptor(const vfmav<T> &in)
       : data(in.data()), ndim(in.ndim()),
-        dtype(Typecode<T>::value), readonly(0)
+        typecode(Typecode<T>::value), readonly(0)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -91,7 +91,7 @@ struct ArrayDescriptor
       }
     template<typename T, size_t ndim2> ArrayDescriptor(const vmav<T,ndim2> &in)
       : data(in.data()), ndim(ndim2),
-        dtype(Typecode<T>::value), readonly(0)
+        typecode(Typecode<T>::value), readonly(0)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -122,7 +122,7 @@ struct ArrayDescriptor
       {
       static_assert(ndim2<=maxdim, "dimensionality too high");
       MR_assert(ndim2==ndim, "dimensionality mismatch");
-      MR_assert(Typecode<T>::value==dtype, "data type mismatch");
+      MR_assert(Typecode<T>::value==typecode, "data type mismatch");
       typename mav_info<ndim2>::shape_t shp;
       typename mav_info<ndim2>::stride_t str;
       copy_data<swapdims>(shp, str);
@@ -130,7 +130,7 @@ struct ArrayDescriptor
       }
     template<bool swapdims, typename T> auto prep2() const
       {
-      MR_assert(Typecode<T>::value==dtype, "data type mismatch");
+      MR_assert(Typecode<T>::value==typecode, "data type mismatch");
       typename fmav_info::shape_t shp(ndim);
       typename fmav_info::stride_t str(ndim);
       copy_data<swapdims>(shp, str);
@@ -170,7 +170,7 @@ struct ArrayDescriptor
     template<bool swap_content, typename Tin, typename Tout> vector<Tout> to_vector
       () const
       {
-      MR_assert(Typecode<Tin>::value==dtype, "data type mismatch");
+      MR_assert(Typecode<Tin>::value==typecode, "data type mismatch");
       MR_assert(ndim==1, "need 1D array for conversion to vector");
       vector<Tout> res;
       res.reserve(shape[0]);
@@ -184,7 +184,7 @@ struct ArrayDescriptor
       () const
       {
       static_assert(is_integral<Tin>::value, "need an integral type for this");
-      MR_assert(Typecode<Tin>::value==dtype, "data type mismatch");
+      MR_assert(Typecode<Tin>::value==typecode, "data type mismatch");
       MR_assert(ndim==1, "need 1D array for conversion to vector");
       vector<Tout> res;
       res.reserve(shape[0]);
@@ -200,13 +200,13 @@ struct ArrayDescriptor
     template<bool swap_content, typename Tout> vector<Tout> to_vector_subtract_1
       () const
       {
-      if (isTypecode<int32_t>(dtype))
+      if (isTypecode<int32_t>(typecode))
         return to_vector_subtract_1<swap_content, int32_t, Tout>();
-      if (isTypecode<int64_t>(dtype))
+      if (isTypecode<int64_t>(typecode))
         return to_vector_subtract_1<swap_content, int64_t, Tout>();
-      if (isTypecode<uint32_t>(dtype))
+      if (isTypecode<uint32_t>(typecode))
         return to_vector_subtract_1<swap_content, uint32_t, Tout>();
-      if (isTypecode<uint64_t>(dtype))
+      if (isTypecode<uint64_t>(typecode))
         return to_vector_subtract_1<swap_content, uint64_t, Tout>();
       MR_fail("no suitable type found");
       }

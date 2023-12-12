@@ -76,13 +76,13 @@ int fft_c2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &axes(*axes_);
   auto myaxes(axes.to_vector_subtract_1<false, uint64_t, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (in.dtype==Typecode<complex<double>>::value)
+  if (in.typecode==Typecode<complex<double>>::value)
     {
     auto myin(in.to_cfmav<true,complex<double>>());
     auto myout(out.to_vfmav<true,complex<double>>());
     c2c(myin, myout, myaxes, forward, fct, nthreads);
     }
-  else if (in.dtype==Typecode<complex<float>>::value)
+  else if (in.typecode==Typecode<complex<float>>::value)
     {
     auto myin(in.to_cfmav<true,complex<float>>());
     auto myout(out.to_vfmav<true,complex<float>>());
@@ -102,13 +102,13 @@ int fft_r2c(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &axes(*axes_);
   auto myaxes(axes.to_vector_subtract_1<false, uint64_t, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (in.dtype==Typecode<double>::value)
+  if (in.typecode==Typecode<double>::value)
     {
     auto myin(in.to_cfmav<true,double>());
     auto myout(out.to_vfmav<true,complex<double>>());
     r2c(myin, myout, myaxes, forward, fct, nthreads);
     }
-  else if (in.dtype==Typecode<float>::value)
+  else if (in.typecode==Typecode<float>::value)
     {
     auto myin(in.to_cfmav<true,float>());
     auto myout(out.to_vfmav<true,complex<float>>());
@@ -128,13 +128,13 @@ int fft_c2r(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &axes(*axes_);
   auto myaxes(axes.to_vector_subtract_1<false, uint64_t, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (in.dtype==Typecode<complex<double>>::value)
+  if (in.typecode==Typecode<complex<double>>::value)
     {
     auto myin(in.to_cfmav<true,complex<double>>());
     auto myout(out.to_vfmav<true,double>());
     c2r(myin, myout, myaxes, forward, fct, nthreads);
     }
-  else if (in.dtype==Typecode<complex<float>>::value)
+  else if (in.typecode==Typecode<complex<float>>::value)
     {
     auto myin(in.to_cfmav<true,complex<float>>());
     auto myout(out.to_vfmav<true,float>());
@@ -154,13 +154,13 @@ int fft_r2r_genuine_fht(const ArrayDescriptor *in_, ArrayDescriptor *out_,
   const auto &axes(*axes_);
   auto myaxes(axes.to_vector_subtract_1<false, uint64_t, size_t>());
   for (auto &a: myaxes) a = in.ndim-1-a;
-  if (in.dtype==Typecode<double>::value)
+  if (in.typecode==Typecode<double>::value)
     {
     auto myin(in.to_cfmav<true,double>());
     auto myout(out.to_vfmav<true,double>());
     r2r_genuine_fht(myin, myout, myaxes, fct, nthreads);
     }
-  else if (in.dtype==Typecode<float>::value)
+  else if (in.typecode==Typecode<float>::value)
     {
     auto myin(in.to_cfmav<true,float>());
     auto myout(out.to_vfmav<true,float>());
@@ -202,10 +202,10 @@ int nufft_u2nu(const ArrayDescriptor *grid_,
   const auto &grid(*grid_);
   const auto &coord(*coord_);
   auto &out(*out_);
-  if (coord.dtype==Typecode<double>::value)
+  if (coord.typecode==Typecode<double>::value)
     {
     auto mycoord = get_coord<double>(coord);
-    if (grid.dtype==Typecode<complex<double>>::value)
+    if (grid.typecode==Typecode<complex<double>>::value)
       {
       auto mygrid(grid.to_cfmav<true,complex<double>>());
       auto myout(out.to_vmav<true,complex<double>,1>());
@@ -214,7 +214,7 @@ int nufft_u2nu(const ArrayDescriptor *grid_,
       u2nu<double,double>(mycoord,mygrid,forward,epsilon,nthreads,myout,
         verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
-    else if (grid.dtype==Typecode<complex<float>>::value)
+    else if (grid.typecode==Typecode<complex<float>>::value)
       {
       auto mygrid(grid.to_cfmav<true,complex<float>>());
       auto myout(out.to_vmav<true,complex<float>,1>());
@@ -226,10 +226,10 @@ int nufft_u2nu(const ArrayDescriptor *grid_,
     else
       MR_fail("bad datatype");
     }
-  else if (coord.dtype==Typecode<float>::value)
+  else if (coord.typecode==Typecode<float>::value)
     {
     auto mycoord = get_coord<float>(coord);
-    if (grid.dtype==Typecode<complex<float>>::value)
+    if (grid.typecode==Typecode<complex<float>>::value)
       {
       auto mygrid(grid.to_cfmav<true,complex<float>>());
       auto myout(out.to_vmav<true,complex<float>,1>());
@@ -261,10 +261,10 @@ int nufft_nu2u(const ArrayDescriptor *points_,
   const auto &points(*points_);
   const auto &coord(*coord_);
   auto &out(*out_);
-  if (coord.dtype==Typecode<double>::value)
+  if (coord.typecode==Typecode<double>::value)
     {
     auto mycoord = get_coord<double>(coord);
-    if (points.dtype==Typecode<complex<double>>::value)
+    if (points.typecode==Typecode<complex<double>>::value)
       {
       auto mypoints(points.to_cmav<true,complex<double>,1>());
       auto myout(out.to_vfmav<true,complex<double>>());
@@ -273,7 +273,7 @@ int nufft_nu2u(const ArrayDescriptor *points_,
       nu2u<double,double>(mycoord,mypoints,forward,epsilon,nthreads,myout,
         verbosity,sigma_min,sigma_max,periodicity,fft_order);
       }
-    else if (points.dtype==Typecode<complex<float>>::value)
+    else if (points.typecode==Typecode<complex<float>>::value)
       {
       auto mypoints(points.to_cmav<true,complex<float>,1>());
       auto myout(out.to_vfmav<true,complex<float>>());
@@ -285,10 +285,10 @@ int nufft_nu2u(const ArrayDescriptor *points_,
     else
       MR_fail("bad datatype");
     }
-  else if (coord.dtype==Typecode<float>::value)
+  else if (coord.typecode==Typecode<float>::value)
     {
     auto mycoord = get_coord<float>(coord);
-    if (points.dtype==Typecode<complex<float>>::value)
+    if (points.typecode==Typecode<complex<float>>::value)
       {
       auto mypoints(points.to_cmav<true,complex<float>,1>());
       auto myout(out.to_vfmav<true,complex<float>>());
@@ -330,8 +330,8 @@ Tplan *nufft_make_plan(int nu2u,
     auto ndim = myshape.size();
     MR_assert(coord.ndim==2, "bad coordinate dimensionality");
     MR_assert(coord.shape[0]==ndim, "dimensionality mismatch");
-    auto res = new Tplan{coord.shape[1],myshape,coord.dtype,nullptr};
-    if (coord.dtype==Typecode<double>::value)
+    auto res = new Tplan{coord.shape[1],myshape,coord.typecode,nullptr};
+    if (coord.typecode==Typecode<double>::value)
       {
       auto mycoord = get_coord<double>(coord);
       if (ndim==1)
@@ -347,7 +347,7 @@ Tplan *nufft_make_plan(int nu2u,
         MR_fail("bad number of dimensions");
       return res;
       }
-    else if (coord.dtype==Typecode<float>::value)
+    else if (coord.typecode==Typecode<float>::value)
       {
       auto mycoord = get_coord<float>(coord);
       if (ndim==1)
@@ -401,7 +401,7 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[uniform.ndim-1-i], "array dimension mismatch");
-  if (points.dtype==Typecode<complex<double>>::value)
+  if (points.typecode==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
     auto mypoints(points.to_cmav<true,complex<double>,1>());
@@ -426,7 +426,7 @@ int nufft_nu2u_planned(Tplan *plan, int forward, size_t verbosity,
     else
       MR_fail("bad number of dimensions");
     }
-  else if (points.dtype==Typecode<complex<float>>::value)
+  else if (points.typecode==Typecode<complex<float>>::value)
     {
     MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
     auto mypoints(points.to_cmav<true,complex<float>,1>());
@@ -466,7 +466,7 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
   MR_assert(uniform.ndim==plan->shp.size(), "dimensionality mismatch");
   for (size_t i=0; i<uniform.ndim; ++i)
     MR_assert(uniform.shape[i]==plan->shp[uniform.ndim-1-i], "array dimension mismatch");
-  if (points.dtype==Typecode<complex<double>>::value)
+  if (points.typecode==Typecode<complex<double>>::value)
     {
     MR_assert(plan->coord_type==Typecode<double>::value, "data type mismatch");
     auto mypoints(points.to_vmav<true,complex<double>,1>());
@@ -491,7 +491,7 @@ int nufft_u2nu_planned(Tplan *plan, int forward, size_t verbosity,
     else
       MR_fail("bad number of dimensions");
     }
-  else if (points.dtype==Typecode<complex<float>>::value)
+  else if (points.typecode==Typecode<complex<float>>::value)
     {
     MR_assert(plan->coord_type==Typecode<float>::value, "data type mismatch");
     auto mypoints(points.to_vmav<true,complex<float>,1>());
@@ -531,13 +531,13 @@ int sht_alm2leg(const ArrayDescriptor *alm_, size_t spin,
   auto mval(mval_->to_cmav<true,size_t,1>());
   auto mstart(subtract_1(mstart_->to_cmav_with_typecast<true,ptrdiff_t,size_t,1>()));
   auto theta(theta_->to_cmav<true,double,1>());
-  if (alm_->dtype==Typecode<complex<double>>::value)
+  if (alm_->typecode==Typecode<complex<double>>::value)
     {
     auto alm(alm_->to_cmav<true,complex<double>,2>());
     auto leg(leg_->to_vmav<true,complex<double>,3>());
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
-  else if (alm_->dtype==Typecode<complex<float>>::value)
+  else if (alm_->typecode==Typecode<complex<float>>::value)
     {
     auto alm(alm_->to_cmav<true,complex<float>,2>());
     auto leg(leg_->to_vmav<true,complex<float>,3>());
@@ -558,13 +558,13 @@ int sht_leg2alm(const ArrayDescriptor *leg_, size_t spin,
   auto mval(mval_->to_cmav<true,size_t,1>());
   auto mstart(subtract_1(mstart_->to_cmav_with_typecast<true,ptrdiff_t,size_t,1>()));
   auto theta(theta_->to_cmav<true,double,1>());
-  if (leg_->dtype==Typecode<complex<double>>::value)
+  if (leg_->typecode==Typecode<complex<double>>::value)
     {
     auto leg(leg_->to_cmav<true,complex<double>,3>());
     auto alm(alm_->to_vmav<true,complex<double>,2>());
     leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
     }
-  else if (leg_->dtype==Typecode<complex<float>>::value)
+  else if (leg_->typecode==Typecode<complex<float>>::value)
     {
     auto leg(leg_->to_cmav<true,complex<float>,3>());
     auto alm(alm_->to_vmav<true,complex<float>,2>());
@@ -585,13 +585,13 @@ int sht_leg2map(const ArrayDescriptor *leg_,
   auto nphi(nphi_->to_cmav<true,size_t,1>());
   auto phi0(phi0_->to_cmav<true,double,1>());
   auto ringstart(subtract_1(ringstart_->to_cmav<true,size_t,1>()));
-  if (leg_->dtype==Typecode<complex<double>>::value)
+  if (leg_->typecode==Typecode<complex<double>>::value)
     {
     auto leg(leg_->to_cmav<true,complex<double>,3>());
     auto map(map_->to_vmav<true,double,2>());
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
-  else if (leg_->dtype==Typecode<complex<float>>::value)
+  else if (leg_->typecode==Typecode<complex<float>>::value)
     {
     auto leg(leg_->to_cmav<true,complex<float>,3>());
     auto map(map_->to_vmav<true,float,2>());
@@ -612,13 +612,13 @@ DUCC0_INTERFACE_FUNCTION
     auto nphi(nphi_->to_cmav<true,size_t,1>());
     auto phi0(phi0_->to_cmav<true,double,1>());
     auto ringstart(subtract_1(ringstart_->to_cmav<true,size_t,1>()));
-    if (map_->dtype==Typecode<double>::value)
+    if (map_->typecode==Typecode<double>::value)
       {
       auto map(map_->to_cmav<true,double,2>());
       auto leg(leg_->to_vmav<true,complex<double>,3>());
       map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
       }
-    else if (map_->dtype==Typecode<float>::value)
+    else if (map_->typecode==Typecode<float>::value)
       {
       auto map(map_->to_cmav<true,float,2>());
       auto leg(leg_->to_vmav<true,complex<float>,3>());
