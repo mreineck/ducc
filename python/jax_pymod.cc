@@ -73,11 +73,11 @@ class C2C: public LinOp
     void apply(const ArrayDescriptor &in, const ArrayDescriptor &out, bool adjoint) const
       {
       bool direction = adjoint ? (!fwd) : fwd;
-      if (isTypecode<complex<float>>(in.dtype))
+      if (isTypecode<complex<float>>(in.typecode))
         c2c(in.to_cfmav<false, complex<float>>(),
             out.to_vfmav<false, complex<float>>(),
             axes, direction, 1.f, nthreads);
-      else if (isTypecode<complex<double>>(in.dtype))
+      else if (isTypecode<complex<double>>(in.typecode))
         c2c(in.to_cfmav<false, complex<double>>(),
             out.to_vfmav<false, complex<double>>(),
             axes, direction, 1., nthreads);
@@ -121,11 +121,11 @@ ArrayDescriptor arrdesc(const py::array &arr)
   ArrayDescriptor res;
   res.ndim = arr.ndim();
   MR_assert(res.ndim<=ArrayDescriptor::maxdim, "dimensionality too high");
-  res.dtype = nparr2typecode(arr);
+  res.typecode = nparr2typecode(arr);
   res.data = const_cast<void *>(arr.data());
   for (size_t i=0; i<res.ndim; ++i)
     res.shape[i] = size_t(arr.shape(int(i)));
-  auto st = ptrdiff_t(typeSize(res.dtype));
+  auto st = ptrdiff_t(typeSize(res.typecode));
   for (size_t i=0; i<res.ndim; ++i)
     {
     auto tmp = arr.strides(int(i));
@@ -170,7 +170,7 @@ class Py_Linop
       vector<size_t> shp;
       for (size_t i=0; i<desc_in.ndim; ++i)
         shp.push_back(size_t(desc_in.shape[i]));
-      auto out = makeFlexiblePyarr(op->shape_out(shp,adjoint), op->type_out(desc_in.dtype,adjoint));
+      auto out = makeFlexiblePyarr(op->shape_out(shp,adjoint), op->type_out(desc_in.typecode,adjoint));
       auto desc_out = arrdesc(out);
       op->apply(desc_in, desc_out, adjoint);
       return out;
