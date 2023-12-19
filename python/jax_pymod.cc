@@ -132,7 +132,7 @@ ArrayDescriptor arrdesc(const py::array &arr)
     MR_assert((tmp/st)*st==tmp, "bad stride");
     res.stride[i] = tmp/st;
     }
-  res.readonly = 0;
+  //res.readonly = 0;
   return res;
   }
 

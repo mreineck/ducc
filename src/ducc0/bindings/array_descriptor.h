@@ -42,11 +42,11 @@ struct ArrayDescriptor
     void *data;
     uint8_t ndim;
     uint8_t typecode;
-    uint8_t readonly=0;
+//    uint8_t readonly=0;
 
-    ArrayDescriptor() : data(nullptr), ndim(0), typecode(0), readonly(0) {}
+    ArrayDescriptor() : data(nullptr), ndim(0), typecode(0)/*, readonly(0)*/ {}
     ArrayDescriptor(void *data_, const vector<size_t> &shape_, uint8_t typecode_)
-      : data(data_), ndim(shape_.size()), typecode(typecode_), readonly(0)
+      : data(data_), ndim(shape_.size()), typecode(typecode_)//, readonly(0)
       {
       size_t str = 1;
       for (int i=ndim-1; i>=0; --i)
@@ -58,7 +58,7 @@ struct ArrayDescriptor
       }
     template<typename T> ArrayDescriptor(const cfmav<T> &in)
       : data(const_cast<T *>(in.data())), ndim(in.ndim()),
-        typecode(Typecode<T>::value), readonly(1)
+        typecode(Typecode<T>::value)//, readonly(1)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -69,7 +69,7 @@ struct ArrayDescriptor
       }
     template<typename T, size_t ndim2> ArrayDescriptor(const cmav<T,ndim2> &in)
       : data(const_cast<T *>(in.data())), ndim(ndim2),
-        typecode(Typecode<T>::value), readonly(1)
+        typecode(Typecode<T>::value)//, readonly(1)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -80,7 +80,7 @@ struct ArrayDescriptor
       }
     template<typename T> ArrayDescriptor(const vfmav<T> &in)
       : data(in.data()), ndim(in.ndim()),
-        typecode(Typecode<T>::value), readonly(0)
+        typecode(Typecode<T>::value)//, readonly(0)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -91,7 +91,7 @@ struct ArrayDescriptor
       }
     template<typename T, size_t ndim2> ArrayDescriptor(const vmav<T,ndim2> &in)
       : data(in.data()), ndim(ndim2),
-        typecode(Typecode<T>::value), readonly(0)
+        typecode(Typecode<T>::value)//, readonly(0)
       {
       MR_assert(ndim<=maxdim, "dimensionality too high");
       for (size_t i=0; i<ndim; ++i)
@@ -152,7 +152,7 @@ struct ArrayDescriptor
       }
     template<bool swapdims, typename T, size_t ndim> vmav<T,ndim> to_vmav() const
       {
-      MR_assert(!readonly, "object is read-only");
+//      MR_assert(!readonly, "object is read-only");
       auto [shp, str] = prep1<swapdims, T, ndim>();
       return vmav<T, ndim>(reinterpret_cast<T *>(data), shp, str);
       }
