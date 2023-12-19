@@ -253,7 +253,7 @@ template<typename T> py::object Dtype()
   return tp;
   }
 template<typename T> bool isDtype(const py::object &dtype)
-  { return Dtype<T>().is(dtype); }
+  { return Dtype<T>().equal(dtype); }
 
 }
 
