@@ -247,11 +247,13 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
   return tmp;
   }
 
-template<typename T> bool isDtype(const py::object &dtype)
+template<typename T> py::object Dtype()
   {
-  static const auto tmp = make_Pyarr<T>({}).dtype();
-  return tmp.is(dtype);
+  static const auto tp = make_Pyarr<T>({}).dtype();
+  return tp;
   }
+template<typename T> bool isDtype(const py::object &dtype)
+  { return Dtype<T>().equal(dtype); }
 
 }
 
@@ -271,6 +273,7 @@ using detail_pybind::to_vmav_with_optional_leading_dimensions;
 using detail_pybind::to_array;
 using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;
+using detail_pybind::Dtype;
 
 }
 

@@ -76,17 +76,17 @@ template<typename T> class Typecode<complex<T>>
     static constexpr size_t value = compute();
   };
 
-inline size_t typeSize(size_t dtype)
-  { return ((dtype&15)+1)*((dtype>>6)+1); }
+inline size_t typeSize(size_t typecode)
+  { return ((typecode&15)+1)*((typecode>>6)+1); }
 
-template<typename T> bool isDtype(size_t dtype)
-  { return dtype==Typecode<T>::value; }
+template<typename T> bool isTypecode(size_t typecode)
+  { return typecode==Typecode<T>::value; }
 
 }
 
 using detail_typecode::Typecode;
 using detail_typecode::typeSize;
-using detail_typecode::isDtype;
+using detail_typecode::isTypecode;
 
 }
 

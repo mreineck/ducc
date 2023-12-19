@@ -23,7 +23,9 @@ include src/ducc0/infra/threading.h
 include src/ducc0/infra/timers.h
 include src/ducc0/infra/useful_macros.h
 
+include src/ducc0/bindings/array_descriptor.h
 include src/ducc0/bindings/pybind_utils.h
+include src/ducc0/bindings/typecode.h
 
 include src/ducc0/math/cmplx.h
 include src/ducc0/math/constants.h
@@ -70,6 +72,7 @@ include src/ducc0/wgridder/wgridder.cc
 
 include python/ducc.cc
 include python/fft_pymod.cc
+include python/jax_pymod.cc
 include python/nufft_pymod.cc
 include python/sht_pymod.cc
 include python/healpix_pymod.cc

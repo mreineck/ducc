@@ -37,7 +37,7 @@ static constexpr size_t C64 = ducc0::Typecode<complex<float>>::value;
 static constexpr size_t C128 = ducc0::Typecode<complex<double>>::value;
 
 shape_t arraydesc2vec(const ducc0::ArrayDescriptor &arrdesc) {
-  auto mav = ducc0::to_cmav<false, size_t, 1>(arrdesc);
+  auto mav = arrdesc.to_cmav<false, size_t, 1>();
   shape_t res;
   for (size_t i = 0; i < mav.shape(0); i++)
     res.push_back(mav(i));
@@ -48,8 +48,8 @@ template <typename T>
 void fft_c2c(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
              const ducc0::ArrayDescriptor &axes, const bool forward,
              const double fct, const size_t nthreads) {
-  auto in_mav = ducc0::to_cfmav<false, complex<T>>(in);
-  auto out_mav = ducc0::to_vfmav<false, complex<T>>(out);
+  auto in_mav = in.to_cfmav<false, complex<T>>();
+  auto out_mav = out.to_vfmav<false, complex<T>>();
   auto axes1 = arraydesc2vec(axes);
   ducc0::c2c(in_mav, out_mav, axes1, forward, T(fct), nthreads);
 }
@@ -59,9 +59,9 @@ extern "C" {
 void fft_c2c_(const ducc0::ArrayDescriptor &in, ducc0::ArrayDescriptor &out,
               const ducc0::ArrayDescriptor &axes, const bool forward,
               const double fct, const size_t nthreads) {
-  if (in.dtype == C128)
+  if (in.typecode == C128)
     fft_c2c<double>(in, out, axes, forward, fct, nthreads);
-  else if (in.dtype == C64)
+  else if (in.typecode == C64)
     fft_c2c<float>(in, out, axes, forward, fct, nthreads);
   else
     MR_fail("Type not supported");
