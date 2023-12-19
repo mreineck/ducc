@@ -1,3 +1,4 @@
+#include "ducc0/infra/startup_checks.cc"
 #include "ducc0/infra/string_utils.cc"
 #include "ducc0/infra/threading.cc"
 #include "ducc0/infra/mav.cc"

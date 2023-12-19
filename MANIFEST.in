@@ -15,6 +15,7 @@ include src/ducc0/infra/mav.h
 include src/ducc0/infra/mav.cc
 include src/ducc0/infra/misc_utils.h
 include src/ducc0/infra/simd.h
+include src/ducc0/infra/startup_checks.cc
 include src/ducc0/infra/string_utils.cc
 include src/ducc0/infra/string_utils.h
 include src/ducc0/infra/sycl_utils.h
