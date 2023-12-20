@@ -84,7 +84,7 @@ pybind11::capsule EncapsulateFunction(T* fn) {
   return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET");
 }
 
-template<typename T> void do_hartley2(const ArrayDescriptor &ain,
+template<typename T> void do_fht2(const ArrayDescriptor &ain,
   ArrayDescriptor &aout, const py::dict &state, const vector<size_t> &axes,
   size_t nthreads)
   {
@@ -93,21 +93,21 @@ template<typename T> void do_hartley2(const ArrayDescriptor &ain,
   auto fct(state["fct"].cast<T>());
   {
   py::gil_scoped_release release;
-  r2r_genuine_hartley(ain2, aout2, axes, fct, nthreads);
+  r2r_genuine_fht(ain2, aout2, axes, fct, nthreads);
   }
   }
 
-void do_hartley(const ArrayDescriptor &ain, ArrayDescriptor &aout,
+void do_fht(const ArrayDescriptor &ain, ArrayDescriptor &aout,
   const py::dict &state, bool /*adjoint*/)
   {
   auto axes = tuple2vector<size_t>(state["axes"]);
   auto nthreads = state["nthreads"].cast<size_t>();
   if (isTypecode<float>(ain.typecode))
-    do_hartley2<float>(ain, aout, state, axes, nthreads);
+    do_fht2<float>(ain, aout, state, axes, nthreads);
   else if (isTypecode<double>(ain.typecode))
-    do_hartley2<double>(ain, aout, state, axes, nthreads);
+    do_fht2<double>(ain, aout, state, axes, nthreads);
   else    
-    MR_fail("Bad types for Hartley transform");
+    MR_fail("Bad types for FHT");
   }
 
 template<typename T> void do_sht2d2(const ArrayDescriptor &ain,
@@ -236,8 +236,8 @@ void linop(void *out, void **in, bool adjoint) {
                   aout(out, shape_out, dtout);
 
   auto job = state["job"].cast<string>();
-  if (job=="hartley")
-    do_hartley(ain, aout, state, adjoint); 
+  if (job=="FHT")
+    do_fht(ain, aout, state, adjoint); 
   else if (job=="SHT2D")
     do_sht2d(ain, aout, state, adjoint); 
   else if (job=="SHT_Healpix")
