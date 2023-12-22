@@ -353,6 +353,7 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp);
   auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  nthreads = adjust_nthreads(nthreads);
   size_t nthreads_outer=1;
   if (alm.shape(0)>nthreads)  // parallelize over entire transforms
     { nthreads_outer=nthreads; nthreads=1; }
@@ -520,6 +521,7 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
   auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
+  nthreads = adjust_nthreads(nthreads);
   size_t nthreads_outer=1;
   if (map.shape(0)>nthreads)  // parallelize over entire transforms
     { nthreads_outer=nthreads; nthreads=1; }
@@ -575,6 +577,7 @@ template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
   auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
   MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
+  nthreads = adjust_nthreads(nthreads);
   size_t nthreads_outer=1;
   if (map.shape(0)>nthreads)  // parallelize over entire transforms
     { nthreads_outer=nthreads; nthreads=1; }
