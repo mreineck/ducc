@@ -41,9 +41,15 @@ if have_jax:
         import jaxlib
         state = _from_id(stateid)
         shape_in = _shape_res(state, not adjoint)
+        shape_in2 = ctx.avals_in[0].shape
         dtype_in = _dtype_res(state, not adjoint)
+        dtype_in2 =ctx.avals_in[0].dtype
         shape_out = _shape_res(state, adjoint)
+        shape_out2 = ctx.avals_out[0].shape
         dtype_out = _dtype_res(state, adjoint)
+        dtype_out2 =ctx.avals_out[0].dtype
+        if (shape_in, dtype_in, shape_out, dtype_out) != (shape_in2, dtype_in2, shape_out2, dtype_out2):
+            raise RuntimeError("bad input or output arrays")
         jaxtype_in = mlir.ir.RankedTensorType(x.type)
     
         dtype_out_mlir = mlir.dtype_to_ir_type(dtype_out)
@@ -140,22 +146,46 @@ if have_jax:
         # everything in kwargs that are not accessible from anywhere else.
         kwargs_clean = copy.deepcopy(kwargs)  # FIXME TODO
         return _Linop(kwargs_clean)
-    
-    
-    def fht_operator(shape, dtype, axes, fct, nthreads):
+
+    def fht_operator(shape, dtype, axes, nthreads):
+        def fhtfunc(inp, out, adjoint, state):
+            ducc0.fft.genuine_fht(inp,
+                                  out=out,
+                                  axes=state["axes"],
+                                  nthreads=state["nthreads"])
+
         shape = tuple(shape)
         dtype = np.dtype(dtype)
         return make_linop(
-            job="FHT",
+            func=fhtfunc,
             axes=tuple(axes),
-            fct=float(fct),
             nthreads=int(nthreads),
             shape_in=shape,
             shape_out=shape,
             dtype_in=dtype,
             dtype_out=dtype)
-          
+   
     def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, dtype, nthreads):
+        def sht2dfunc(inp, out, adjoint, state):
+            if adjoint:
+                ducc0.sht.adjoint_synthesis_2d(
+                    lmax=state["lmax"],
+                    mmax=state["mmax"],
+                    spin=state["spin"],
+                    map=inp,
+                    alm=out,
+                    nthreads=state["nthreads"],
+                    geometry=state["geometry"])
+            else:
+                ducc0.sht.synthesis_2d(
+                    lmax=state["lmax"],
+                    mmax=state["mmax"],
+                    spin=state["spin"],
+                    map=out,
+                    alm=inp,
+                    nthreads=state["nthreads"],
+                    geometry=state["geometry"])
+
         lmax = int(lmax)
         mmax = int(mmax)
         spin = int(spin)
@@ -166,7 +196,7 @@ if have_jax:
         tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
                   np.dtype(np.float64) : np.dtype(np.complex128)}
         return make_linop(
-            job="SHT2D",
+            func=sht2dfunc,
             shape_in=(ncomp, nalm),
             shape_out=(ncomp, ntheta, nphi),
             dtype_in=tdict[dtype],
@@ -176,36 +206,14 @@ if have_jax:
             spin=spin,
             geometry=str(geometry),
             nthreads=int(nthreads))
-    
-    def sht_healpix_operator(lmax, mmax, nside, spin, dtype, nthreads):
-        lmax = int(lmax)
-        mmax = int(mmax)
-        nside = int(nside)
-        spin = int(spin)
-        nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
-        ncomp = 1 if spin == 0 else 2
-        dtype = np.dtype(dtype)
-    
-        tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
-                  np.dtype(np.float64) : np.dtype(np.complex128)}
-        return make_linop(
-            job="SHT_Healpix",
-            shape_in=(ncomp, nalm),
-            shape_out=(ncomp, 12*nside**2),
-            dtype_in=tdict[dtype],
-            dtype_out=dtype,
-            lmax=lmax,
-            mmax=mmax,
-            nside=nside,
-            spin=spin,
-            nthreads=int(nthreads))
-    
-    
+
     from jax import config
     config.update("jax_enable_x64", True)
-   
+
+
 def _assert_close(a, b, epsilon):
     assert_allclose(ducc0.misc.l2error(a, b), 0, atol=epsilon)
+
 
 @pmp("shape_axes", (((100,),(0,)), ((10,17), (0,1)), ((10,17,3), (1,))))
 @pmp("dtype", (np.float32, np.float64))
@@ -215,20 +223,74 @@ def test_fht(shape_axes, dtype, nthreads):
         pytest.skip()
     from jax import jit
     shape, axes = shape_axes
-    myop = fht_operator(shape=shape, dtype=dtype, axes=axes, fct=1., nthreads=nthreads)
-    myop2 = jit(myop)
+    myop = fht_operator(shape=shape, dtype=dtype, axes=axes, nthreads=nthreads)
+    op = jit(myop)
+    op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
-    a = (rng.random(shape)-0.5).astype(dtype)
-    b1 = np.array(myop2(a)[0])
+    a = (rng.random(shape)-0.5+1000).astype(dtype)
+    b1 = np.array(op(a)[0])
     b2 = ducc0.fft.genuine_fht(a, axes=axes, nthreads=nthreads)
     _assert_close(b1, b2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
-    b3 = np.array(jit(myop.adjoint)(a)[0])
+    b3 = np.array(op_adj(a)[0])
     _assert_close(b1, b3, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
     from jax.test_util import check_grads
     # this seems to work for any order
-    check_grads(myop2, (a,), order=1, modes=("fwd",))
-    check_grads(jit(myop.adjoint), (a,), order=1, modes=("fwd",))
+    check_grads(op, (a,), order=1, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (a,), order=1, modes=("fwd",), eps=1.)
     # this works for order=1, but not for higher ones
-    check_grads(myop2, (a,), order=1, modes=("rev",))
-    check_grads(jit(myop.adjoint), (a,), order=1, modes=("rev",))
+    check_grads(op, (a,), order=1, modes=("rev",), eps=1.)
+    check_grads(op_adj, (a,), order=1, modes=("rev",), eps=1.)
+
+def nalm(lmax, mmax):
+    return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
+
+def random_alm(lmax, mmax, spin, ncomp, rng):
+    res = rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax))) \
+     + 1j*rng.uniform(-1., 1., (ncomp, nalm(lmax, mmax)))
+    # make a_lm with m==0 real-valued
+    res[:, 0:lmax+1].imag = 0.
+    ofs=0
+    for s in range(spin):
+        res[:, ofs:ofs+spin-s] = 0.
+        ofs += lmax+1-s
+    return res
+
+@pmp("lmmax", ((10,10), (20, 5)))
+@pmp("geometry", ("GL", "F1"))
+@pmp("ntheta", (20,))
+@pmp("nphi", (30,))
+@pmp("spin", (0, 2))
+@pmp("dtype", (np.float32, np.float64))
+@pmp("nthreads", (1, 2))
+def test_sht(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
+    if not have_jax:
+        pytest.skip()
+    from jax import jit
+    lmax, mmax = lmmax
+    ncomp = 1 if spin==0 else 2
+    myop = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, dtype=dtype, nthreads=nthreads)
+    op = jit(myop)
+    op_adj = jit(myop.adjoint)
+    rng = np.random.default_rng(42)
+    tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
+              np.dtype(np.float64) : np.dtype(np.complex128)}
+    alm0 = random_alm(lmax, mmax, spin, ncomp, rng).astype(tdict[np.dtype(dtype)])
+
+    map1 = np.array(op(alm0)[0])
+    map2 = ducc0.sht.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, ntheta=ntheta, nphi=nphi, nthreads=nthreads)
+    _assert_close(map1, map2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
+
+    map0 = (rng.random((ncomp, ntheta, nphi))-0.5).astype(dtype)
+    alm1 = np.array(op_adj(map0)[0])
+    alm2 = ducc0.sht.adjoint_synthesis_2d(map=map0, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
+    _assert_close(alm1, alm2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
+
+    from jax.test_util import check_grads
+    # this seems to work for any order
+    check_grads(op, (alm0,), order=1, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (map0,), order=1, modes=("fwd",), eps=1.)
+    # this doesn"t seem to work at all
+#    check_grads(op, (alm0,), order=1, modes=("rev",), eps=1.)
+#    check_grads(op_adj, (map0,), order=1, modes=("rev",), eps=1.)
+

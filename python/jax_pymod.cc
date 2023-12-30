@@ -33,10 +33,6 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/bindings/array_descriptor.h"
-#include "ducc0/fft/fft.h"
-#include "ducc0/fft/fftnd_impl.h"
-#include "ducc0/sht/sht.h"
-#include "ducc0/healpix/healpix_base.h"
 
 namespace ducc0 {
 
@@ -84,136 +80,57 @@ pybind11::capsule EncapsulateFunction(T* fn) {
   return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET");
 }
 
-template<typename T> void do_fht2(const ArrayDescriptor &ain,
-  ArrayDescriptor &aout, const py::dict &state, const vector<size_t> &axes,
-  size_t nthreads)
+template<typename Tin,typename Tout> void do_pyfunc2(const ArrayDescriptor &ain,
+  ArrayDescriptor &aout, const py::dict &state,  bool adjoint)
   {
-  auto ain2(ain.to_cfmav<false,T>());
-  auto aout2(aout.to_vfmav<false,T>());
-  auto fct(state["fct"].cast<T>());
-  {
-  py::gil_scoped_release release;
-  r2r_genuine_fht(ain2, aout2, axes, fct, nthreads);
-  }
-  }
+  auto in(ain.to_cfmav<false,Tin>());
+  auto out(aout.to_vfmav<false,Tout>());
 
-void do_fht(const ArrayDescriptor &ain, ArrayDescriptor &aout,
-  const py::dict &state, bool /*adjoint*/)
-  {
-  auto axes = tuple2vector<size_t>(state["axes"]);
-  auto nthreads = state["nthreads"].cast<size_t>();
-  if (isTypecode<float>(ain.typecode))
-    do_fht2<float>(ain, aout, state, axes, nthreads);
-  else if (isTypecode<double>(ain.typecode))
-    do_fht2<double>(ain, aout, state, axes, nthreads);
-  else    
-    MR_fail("Bad types for FHT");
+  auto Pyin = make_Pyarr_from_cfmav(in);
+  auto Pyout = make_Pyarr_from_vfmav(out);
+  state["func"](Pyin, Pyout, adjoint, state);
   }
-
-template<typename T> void do_sht2d2(const ArrayDescriptor &ain,
-  ArrayDescriptor &aout, const py::dict &/*state*/, size_t spin, size_t lmax,
-  size_t mmax, const string &geometry, size_t nthreads, bool adjoint)
-  {
-  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
-  for (size_t m=0, idx=0; m<=mmax; ++m, idx+=lmax+1-m)
-    mstart(m) = idx;
-
-  if (adjoint)
-    {
-    auto ain2(ain.to_cmav<false,T,3>());
-    auto aout2(aout.to_vmav<false,complex<T>,2>());
-    {
-    py::gil_scoped_release release;
-    adjoint_synthesis_2d(aout2, ain2, spin, lmax, mstart, 1, geometry, 0., nthreads, STANDARD);
-    }
-    }
-  else
-    {
-    auto ain2(ain.to_cmav<false,complex<T>,2>());
-    auto aout2(aout.to_vmav<false,T,3>());
-    {
-    py::gil_scoped_release release;
-    synthesis_2d(ain2, aout2, spin, lmax, mstart, 1, geometry, 0., nthreads, STANDARD);
-    }
-    }
-  }
-void do_sht2d(const ArrayDescriptor &ain, ArrayDescriptor &aout,
+void do_pyfunc(const ArrayDescriptor &ain, ArrayDescriptor &aout,
   const py::dict &state, bool adjoint)
   {
-  auto spin = state["spin"].cast<size_t>();
-  auto lmax = state["lmax"].cast<size_t>();
-  auto mmax = state["mmax"].cast<size_t>();
-  auto geometry = state["geometry"].cast<string>();
-  auto nthreads = state["nthreads"].cast<size_t>();
-
-  auto floattype = adjoint ? ain.typecode : aout.typecode;
-  if (isTypecode<float>(floattype))
-    do_sht2d2<float>(ain, aout, state, spin, lmax, mmax, geometry, nthreads, adjoint);
-  else if (isTypecode<double>(floattype))
-    do_sht2d2<double>(ain, aout, state, spin, lmax, mmax, geometry, nthreads, adjoint);
-  else    
-    MR_fail("Bad types for SHT2D transform");
-  }
-
-template<typename T> void do_sht_healpix2(const ArrayDescriptor &ain,
-  ArrayDescriptor &aout, const py::dict &/*state*/, size_t spin, size_t lmax,
-  size_t mmax, size_t nside, size_t nthreads, bool adjoint)
-  {
-  vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
-  for (size_t m=0, idx=0; m<=mmax; ++m, idx+=lmax+1-m)
-    mstart(m) = idx;
-
-  Healpix_Base2 base(nside, RING, SET_NSIDE);
-  auto nrings = size_t(4*nside-1);
-  vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
-  vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
-  for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+  auto tin = ain.typecode;
+  auto tout = aout.typecode;
+  if (isTypecode<float>(tin))
     {
-    int64_t startpix, ringpix;
-    double ringtheta;
-    bool shifted;
-    base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
-    theta(r) = ringtheta;
-    theta(rs) = pi-ringtheta;
-    nphi(r) = nphi(rs) = size_t(ringpix);
-    phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
-    ringstart(r) = size_t(startpix);
-    ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
+    if (isTypecode<float>(tout))
+      do_pyfunc2<float,float>(ain, aout, state, adjoint);
+    else if (isTypecode<complex<float>>(tout))
+      do_pyfunc2<float,complex<float>>(ain, aout, state, adjoint);
+    else
+      MR_fail("unsupported data types for pyfunc");
     }
-
-  if (adjoint)
+  else if (isTypecode<double>(tin))
     {
-    auto ain2(ain.to_cmav<false,T,2>());
-    auto aout2(aout.to_vmav<false,complex<T>,2>());
+    if (isTypecode<double>(tout))
+      do_pyfunc2<double,double>(ain, aout, state, adjoint);
+    else if (isTypecode<complex<double>>(tout))
+      do_pyfunc2<double,complex<double>>(ain, aout, state, adjoint);
+    else
+      MR_fail("unsupported data types for pyfunc");
+    }
+  else if (isTypecode<complex<float>>(tin))
     {
-    py::gil_scoped_release release;
-    adjoint_synthesis(aout2, ain2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads, STANDARD);
+    if (isTypecode<float>(tout))
+      do_pyfunc2<complex<float>,float>(ain, aout, state, adjoint);
+    else if (isTypecode<complex<float>>(tout))
+      do_pyfunc2<complex<float>,complex<float>>(ain, aout, state, adjoint);
+    else
+      MR_fail("unsupported data types for pyfunc");
     }
-    }
-  else
+  else if (isTypecode<complex<double>>(tin))
     {
-    auto ain2(ain.to_cmav<false,complex<T>,2>());
-    auto aout2(aout.to_vmav<false,T,2>());
-    {
-    py::gil_scoped_release release;
-    synthesis(ain2, aout2, spin, lmax, mstart, 1, theta, nphi, phi0, ringstart, 1, nthreads, STANDARD);
+    if (isTypecode<double>(tout))
+      do_pyfunc2<complex<double>,double>(ain, aout, state, adjoint);
+    else if (isTypecode<complex<double>>(tout))
+      do_pyfunc2<complex<double>,complex<double>>(ain, aout, state, adjoint);
+    else
+      MR_fail("unsupported data types for pyfunc");
     }
-    }
-  }
-void do_sht_healpix(const ArrayDescriptor &ain, ArrayDescriptor &aout,
-  const py::dict &state, bool adjoint)
-  {
-  auto spin = state["spin"].cast<size_t>();
-  auto lmax = state["lmax"].cast<size_t>();
-  auto mmax = state["mmax"].cast<size_t>();
-  auto nside = state["nside"].cast<size_t>();
-  auto nthreads = state["nthreads"].cast<size_t>();
-
-  auto floattype = adjoint ? ain.typecode : aout.typecode;
-  if (isTypecode<float>(floattype))
-    do_sht_healpix2<float>(ain, aout, state, spin, lmax, mmax, nside, nthreads, adjoint);
-  else if (isTypecode<double>(floattype))
-    do_sht_healpix2<double>(ain, aout, state, spin, lmax, mmax, nside, nthreads, adjoint);
   else    
     MR_fail("Bad types for Healpix SHT");
   }
@@ -235,15 +152,7 @@ void linop(void *out, void **in, bool adjoint) {
   ArrayDescriptor ain(in[1], shape_in, dtin),
                   aout(out, shape_out, dtout);
 
-  auto job = state["job"].cast<string>();
-  if (job=="FHT")
-    do_fht(ain, aout, state, adjoint); 
-  else if (job=="SHT2D")
-    do_sht2d(ain, aout, state, adjoint); 
-  else if (job=="SHT_Healpix")
-    do_sht_healpix(ain, aout, state, adjoint); 
-  else
-    MR_fail("unsupported operator job type");
+  do_pyfunc(ain, aout, state, adjoint); 
 }
 
 void linop_forward(void *out, void **in) { linop(out, in, false); }
