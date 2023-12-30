@@ -132,7 +132,6 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
         shp = rng.integers(nmax//3, nmax+1, ndim)
         if nice_sizes:
             shp = np.array([ducc0.fft.good_size(sz) for sz in shp])
-        shp=(2**24,)
         print("  {0:4d}/{1}: shape={2} ...".format(n, ntry, shp), end=" ", flush=True)
         a = (rng.random(shp)-0.5 + 1j*(rng.random(shp)-0.5)).astype(tp)
         output = []
@@ -154,11 +153,11 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.close()
 
 f1 = lambda a, nrepeat, nthr: measure_duccfft(a, nrepeat, nthr, inplace=True, noncritical=True)
-f2 = lambda a, nrepeat, nthr: measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',), timelimit=None)
+f2 = lambda a, nrepeat, nthr: measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',), timelimit=20)
 funcs = (f1, f2)
 ttl = "duccfft/FFTW"
 ntry = 10
-nthr = 4
+nthr = 1
 nice_sizes = True
 limits = [8192, 2048, 256]
 #limits = [524288, 8192, 512]

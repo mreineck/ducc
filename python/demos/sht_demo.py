@@ -22,7 +22,7 @@ import numpy as np
 from time import time
 
 # just run on one thread
-nthreads = 0
+nthreads = 1
 
 # set maximum multipole moment
 lmax = 2047

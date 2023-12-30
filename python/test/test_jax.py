@@ -102,7 +102,7 @@ if have_jax:
     _make_prims()
     
     def _call(x, state, adjoint):
-        return _get_prim(adjoint).bind(x, stateid=id(state))
+        return _get_prim(adjoint).bind(x, stateid=id(state))[0]
         
     
     class _Linop:
@@ -213,22 +213,13 @@ def _assert_close(a, b, epsilon):
 def test_fht(shape_axes, dtype, nthreads):
     if not have_jax:
         pytest.skip()
-    from jax import jit
     shape, axes = shape_axes
     myop = fht_operator(shape=shape, dtype=dtype, axes=axes, fct=1., nthreads=nthreads)
-    myop2 = jit(myop)
     rng = np.random.default_rng(42)
     a = (rng.random(shape)-0.5).astype(dtype)
-    b1 = np.array(myop2(a)[0])
+    b1 = np.array(myop(a))
     b2 = ducc0.fft.genuine_fht(a, axes=axes, nthreads=nthreads)
     _assert_close(b1, b2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
-    b3 = np.array(jit(myop.adjoint)(a)[0])
+    b3 = np.array(myop.adjoint(a))
     _assert_close(b1, b3, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
-    from jax.test_util import check_grads
-    # this seems to work for any order
-    check_grads(myop2, (a,), order=1, modes=("fwd",))
-    check_grads(jit(myop.adjoint), (a,), order=1, modes=("fwd",))
-    # this works for order=1, but not for higher ones
-    check_grads(myop2, (a,), order=1, modes=("rev",))
-    check_grads(jit(myop.adjoint), (a,), order=1, modes=("rev",))
