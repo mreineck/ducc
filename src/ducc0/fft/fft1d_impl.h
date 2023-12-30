@@ -74,6 +74,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/threading.h"
+#include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/unity_roots.h"
 #include "ducc0/fft/fft.h"
 
@@ -665,12 +666,20 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
       }
 
     template<bool fwd, typename Tcd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t nthreads) const
       {
+//if (nthreads!=1) cerr << "called with " << nthreads << " threads" << endl;
+Tcd *res;
+if (ip*ido*l1<2000) nthreads=1;
+//Mutex mut;
+execParallel(nthreads,[&](size_t ithread){
+  auto [l1lo, l1hi] = (l1>ido) ? calcShare(nthreads, ithread, size_t(0), l1) : make_tuple(size_t(0), l1);
+  auto [idolo, idohi] = calcShare((l1>ido)? 1 : nthreads, (l1>ido) ? 0 : ithread, size_t(0), ido);
       if (l1==1)
         {
         auto CC = [cc,this](size_t a, size_t b) -> Tcd&
           { return cc[a+ido*b]; };
+if (idolo==0)
         {
         Tcd a0, a1, a2, a3, a4, a5, a6, a7;
         PM(a1,a5,CC(0,1),CC(0,5));
@@ -691,7 +700,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
         PM(CC(0,1),CC(0,5),a4+a6,a5);
         PM(CC(0,3),CC(0,7),a4-a6,a7);
         }
-        for (size_t i=1; i<ido; ++i)
+        for (size_t i=max<size_t>(idolo,1); i<idohi; ++i)
           {
           Tcd a0, a1, a2, a3, a4, a5, a6, a7;
           PM(a1,a5,CC(i,1),CC(i,5));
@@ -716,15 +725,15 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           special_mul<fwd>(a6+a7,WA(2,i),CC(i,3));
           special_mul<fwd>(a6-a7,WA(6,i),CC(i,7));
           }
-        return cc;
+        res = cc;
         }
-      if (ido==1)
+      else if (ido==1)
         {
         auto CH = [ch,this](size_t b, size_t c) -> Tcd&
           { return ch[b+l1*c]; };
         auto CC = [cc](size_t b, size_t c) -> const Tcd&
           { return cc[b+ip*c]; };
-        for (size_t k=0; k<l1; ++k)
+        for (size_t k=l1lo; k<l1hi; ++k)
           {
           Tcd a0, a1, a2, a3, a4, a5, a6, a7;
           PM(a1,a5,CC(1,k),CC(5,k));
@@ -745,6 +754,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           PM(CH(k,1),CH(k,5),a4+a6,a5);
           PM(CH(k,3),CH(k,7),a4-a6,a7);
           }
+        res = ch;
         }
       else
         {
@@ -752,8 +762,9 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           { return ch[a+ido*(b+l1*c)]; };
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
           { return cc[a+ido*(b+ip*c)]; };
-        for (size_t k=0; k<l1; ++k)
+        for (size_t k=l1lo; k<l1hi; ++k)
           {
+if(idolo==0)
           {
           Tcd a0, a1, a2, a3, a4, a5, a6, a7;
           PM(a1,a5,CC(0,1,k),CC(0,5,k));
@@ -774,7 +785,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
           PM(CH(0,k,1),CH(0,k,5),a4+a6,a5);
           PM(CH(0,k,3),CH(0,k,7),a4-a6,a7);
           }
-          for (size_t i=1; i<ido; ++i)
+          for (size_t i=max<size_t>(idolo,1); i<idohi; ++i)
             {
             Tcd a0, a1, a2, a3, a4, a5, a6, a7;
             PM(a1,a5,CC(i,1,k),CC(i,5,k));
@@ -800,8 +811,10 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
             special_mul<fwd>(a6-a7,WA(6,i),CH(i,k,7));
             }
           }
+        res = ch;
         }
-      return ch;
+});
+      return res;
       }
 
   public:
@@ -1251,7 +1264,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && fft1d_simd_exists<Tfs>) // we can vectorize!
+        if constexpr (false) //constexpr(is_same<T,Tfs>::value && fft1d_simd_exists<Tfs>) // we can vectorize!
           {
           using Tfv = fft1d_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
@@ -1601,8 +1614,10 @@ MR_fail("must not get here");
 
       // FIXME TBD
 // do we need the vectorize flag at all?
+#if 0
       size_t lim = 10000; //vectorize ? 10000 : 10000;
       if (ip<=lim)
+#endif
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
         size_t l1l=1;
@@ -1612,6 +1627,7 @@ MR_fail("must not get here");
           l1l*=fct;
           }
         }
+#if 0
       else
         {
         vector<size_t> packets(2,1);
@@ -1626,6 +1642,7 @@ MR_fail("must not get here");
           l1l*=pkt;
           }
         }
+#endif
       for (const auto &pass: passes)
         {
         bufsz = max(bufsz, pass->bufsize());
@@ -1731,6 +1748,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
+#if 0
   // do we have an 1D vectorizable FFT?
   if (vectorize && (ip>300)&& (ip<=100000) && (l1==1) && (ido==1))
     {
@@ -1741,7 +1759,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
       if ((ip&(vlen-1))==0)
         return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
     }
-
+#endif
   if (ip==1) return make_shared<cfftp1<Tfs>>();
   auto factors=cfftpass<Tfs>::factorize(ip);
   if (factors.size()==1)
