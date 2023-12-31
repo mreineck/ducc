@@ -41,10 +41,14 @@ if have_jax:
         import jaxlib
         state = _from_id(stateid)
         shape_in = _shape_res(state, not adjoint)
+        if len(ctx.avals_in) != 1:
+            raise RuntimeError("need exactly one input object")
         shape_in2 = ctx.avals_in[0].shape
         dtype_in = _dtype_res(state, not adjoint)
         dtype_in2 =ctx.avals_in[0].dtype
         shape_out = _shape_res(state, adjoint)
+        if len(ctx.avals_out) != 1:
+            raise RuntimeError("need exactly one output object")
         shape_out2 = ctx.avals_out[0].shape
         dtype_out = _dtype_res(state, adjoint)
         dtype_out2 =ctx.avals_out[0].dtype
@@ -78,7 +82,8 @@ if have_jax:
                                                    else prim.bind(tangents[0], stateid=stateid))
     
     def _transpose(cotangents, args, *, stateid, adjoint):
-        return (_get_prim(not adjoint).bind(cotangents[0], stateid=stateid), )
+# FIXME: I added the last '[0]' and things seem to work properly now ... but is this actually correct?
+        return (_get_prim(not adjoint).bind(cotangents[0], stateid=stateid)[0], )
         
     def _batch(args, axes, *, stateid, adjoint):
         raise NotImplementedError("FIXME")
@@ -165,24 +170,39 @@ if have_jax:
             dtype_in=dtype,
             dtype_out=dtype)
    
+    def alm2realalm(alm, lmax, dtype):
+        res = np.zeros((alm.shape[0], alm.shape[1]*2-lmax-1),dtype=dtype)
+        res[:, 0:lmax+1] = alm[:, 0:lmax+1].real
+        res[:, lmax+1:] = alm[:, lmax+1:].view(dtype)*np.sqrt(2.)
+        return res
+    def realalm2alm(alm, lmax, dtype):
+        res = np.zeros((alm.shape[0], (alm.shape[1]+lmax+1)//2), dtype=dtype)
+        res[:, 0:lmax+1] = alm[:, 0:lmax+1]
+        res[:, lmax+1:] = alm[:, lmax+1:].view(dtype)*(np.sqrt(2.)/2)
+        return res
+   
     def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, dtype, nthreads):
+        tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
+                  np.dtype(np.float64) : np.dtype(np.complex128)}
+
         def sht2dfunc(inp, out, adjoint, state):
             if adjoint:
-                ducc0.sht.adjoint_synthesis_2d(
+                tmp = ducc0.sht.adjoint_synthesis_2d(
                     lmax=state["lmax"],
                     mmax=state["mmax"],
                     spin=state["spin"],
                     map=inp,
-                    alm=out,
                     nthreads=state["nthreads"],
                     geometry=state["geometry"])
+                out[()] = alm2realalm(tmp, state["lmax"], state["dtype_in"])
             else:
+                tmp = realalm2alm(inp, state["lmax"], tdict[state["dtype_in"]])
                 ducc0.sht.synthesis_2d(
                     lmax=state["lmax"],
                     mmax=state["mmax"],
                     spin=state["spin"],
                     map=out,
-                    alm=inp,
+                    alm=tmp,
                     nthreads=state["nthreads"],
                     geometry=state["geometry"])
 
@@ -190,16 +210,15 @@ if have_jax:
         mmax = int(mmax)
         spin = int(spin)
         nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
+        nalm = nalm*2 - lmax - 1
         ncomp = 1 if spin == 0 else 2
         dtype = np.dtype(dtype)
     
-        tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
-                  np.dtype(np.float64) : np.dtype(np.complex128)}
         return make_linop(
             func=sht2dfunc,
             shape_in=(ncomp, nalm),
             shape_out=(ncomp, ntheta, nphi),
-            dtype_in=tdict[dtype],
+            dtype_in=dtype,
             dtype_out=dtype,
             lmax=lmax,
             mmax=mmax,
@@ -227,7 +246,7 @@ def test_fht(shape_axes, dtype, nthreads):
     op = jit(myop)
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
-    a = (rng.random(shape)-0.5+1000).astype(dtype)
+    a = (rng.random(shape)-0.5).astype(dtype)
     b1 = np.array(op(a)[0])
     b2 = ducc0.fft.genuine_fht(a, axes=axes, nthreads=nthreads)
     _assert_close(b1, b2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
@@ -235,12 +254,11 @@ def test_fht(shape_axes, dtype, nthreads):
     _assert_close(b1, b3, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
     from jax.test_util import check_grads
-    # this seems to work for any order
-    check_grads(op, (a,), order=1, modes=("fwd",), eps=1.)
-    check_grads(op_adj, (a,), order=1, modes=("fwd",), eps=1.)
-    # this works for order=1, but not for higher ones
-    check_grads(op, (a,), order=1, modes=("rev",), eps=1.)
-    check_grads(op_adj, (a,), order=1, modes=("rev",), eps=1.)
+    max_order = 2
+    check_grads(op, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op, (a,), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op_adj, (a,), order=max_order, modes=("rev",), eps=1.)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
@@ -267,6 +285,9 @@ def test_sht(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     if not have_jax:
         pytest.skip()
     from jax import jit
+    tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
+              np.dtype(np.float64) : np.dtype(np.complex128)}
+
     lmax, mmax = lmmax
     ncomp = 1 if spin==0 else 2
     myop = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, dtype=dtype, nthreads=nthreads)
@@ -276,21 +297,22 @@ def test_sht(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
               np.dtype(np.float64) : np.dtype(np.complex128)}
     alm0 = random_alm(lmax, mmax, spin, ncomp, rng).astype(tdict[np.dtype(dtype)])
+    alm0r = alm2realalm(alm0, lmax, dtype)
 
-    map1 = np.array(op(alm0)[0])
+    map1 = np.array(op(alm0r)[0])
     map2 = ducc0.sht.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, ntheta=ntheta, nphi=nphi, nthreads=nthreads)
     _assert_close(map1, map2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
     map0 = (rng.random((ncomp, ntheta, nphi))-0.5).astype(dtype)
-    alm1 = np.array(op_adj(map0)[0])
+    alm1r = np.array(op_adj(map0)[0])
+    alm1 = realalm2alm(alm1r, lmax, tdict[np.dtype(dtype)])
     alm2 = ducc0.sht.adjoint_synthesis_2d(map=map0, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
     _assert_close(alm1, alm2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
     from jax.test_util import check_grads
-    # this seems to work for any order
-    check_grads(op, (alm0,), order=1, modes=("fwd",), eps=1.)
-    check_grads(op_adj, (map0,), order=1, modes=("fwd",), eps=1.)
-    # this doesn"t seem to work at all
-#    check_grads(op, (alm0,), order=1, modes=("rev",), eps=1.)
-#    check_grads(op_adj, (map0,), order=1, modes=("rev",), eps=1.)
+    max_order = 2
+    check_grads(op, (alm0r,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (map0,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op, (alm0r,), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op_adj, (map0,), order=max_order, modes=("rev",), eps=1.)
 
