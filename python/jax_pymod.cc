@@ -29,8 +29,8 @@
 
 #include <vector>
 #include <cmath>
+#include <cstdint>
 
-#include "ducc0/math/constants.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/bindings/array_descriptor.h"
 
@@ -65,7 +65,8 @@ template <class To, class From>
 typename std::enable_if<sizeof(To) == sizeof(From) && std::is_trivially_copyable<From>::value &&
                             std::is_trivially_copyable<To>::value,
                         To>::type
-bit_cast(const From& src) noexcept {
+bit_cast(const From& src) noexcept
+  {
   static_assert(
       std::is_trivially_constructible<To>::value,
       "This implementation additionally requires destination type to be trivially constructible");
@@ -73,70 +74,16 @@ bit_cast(const From& src) noexcept {
   To dst;
   memcpy(&dst, &src, sizeof(To));
   return dst;
-}
+  }
 
 template <typename T>
-pybind11::capsule EncapsulateFunction(T* fn) {
+pybind11::capsule EncapsulateFunction(T* fn)
+  {
   return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET");
-}
-
-template<typename Tin,typename Tout> void do_pyfunc2(const ArrayDescriptor &ain,
-  ArrayDescriptor &aout, const py::dict &state,  bool adjoint)
-  {
-  auto in(ain.to_cfmav<false,Tin>());
-  auto out(aout.to_vfmav<false,Tout>());
-
-  auto Pyin = make_Pyarr_from_cfmav(in);
-  auto Pyout = make_Pyarr_from_vfmav(out);
-  state["func"](Pyin, Pyout, adjoint, state);
-  }
-void do_pyfunc(const ArrayDescriptor &ain, ArrayDescriptor &aout,
-  const py::dict &state, bool adjoint)
-  {
-  auto tin = ain.typecode;
-  auto tout = aout.typecode;
-  if (isTypecode<float>(tin))
-    {
-    if (isTypecode<float>(tout))
-      do_pyfunc2<float,float>(ain, aout, state, adjoint);
-    else if (isTypecode<complex<float>>(tout))
-      do_pyfunc2<float,complex<float>>(ain, aout, state, adjoint);
-    else
-      MR_fail("unsupported data types for pyfunc");
-    }
-  else if (isTypecode<double>(tin))
-    {
-    if (isTypecode<double>(tout))
-      do_pyfunc2<double,double>(ain, aout, state, adjoint);
-    else if (isTypecode<complex<double>>(tout))
-      do_pyfunc2<double,complex<double>>(ain, aout, state, adjoint);
-    else
-      MR_fail("unsupported data types for pyfunc");
-    }
-  else if (isTypecode<complex<float>>(tin))
-    {
-    if (isTypecode<float>(tout))
-      do_pyfunc2<complex<float>,float>(ain, aout, state, adjoint);
-    else if (isTypecode<complex<float>>(tout))
-      do_pyfunc2<complex<float>,complex<float>>(ain, aout, state, adjoint);
-    else
-      MR_fail("unsupported data types for pyfunc");
-    }
-  else if (isTypecode<complex<double>>(tin))
-    {
-    if (isTypecode<double>(tout))
-      do_pyfunc2<complex<double>,double>(ain, aout, state, adjoint);
-    else if (isTypecode<complex<double>>(tout))
-      do_pyfunc2<complex<double>,complex<double>>(ain, aout, state, adjoint);
-    else
-      MR_fail("unsupported data types for pyfunc");
-    }
-  else    
-    MR_fail("Bad types for Healpix SHT");
   }
 
-void linop(void *out, void **in, bool adjoint) {
-  // Parse the inputs
+void linop(void *out, void **in, bool adjoint)
+  {
   py::gil_scoped_acquire get_GIL;
   py::handle hnd(*reinterpret_cast<PyObject **>(in[0]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
@@ -146,25 +93,50 @@ void linop(void *out, void **in, bool adjoint) {
   auto dtin = dtype2typecode(state["dtype_in"]);
   auto dtout = dtype2typecode(state["dtype_out"]);
 
-  if (adjoint) swap(shape_in, shape_out);
-  if (adjoint) swap(dtin, dtout);
+  if (adjoint) { swap(shape_in, shape_out); swap(dtin, dtout); }
 
   ArrayDescriptor ain(in[1], shape_in, dtin),
                   aout(out, shape_out, dtout);
 
-  do_pyfunc(ain, aout, state, adjoint); 
-}
+  auto tin = ain.typecode;
+  auto tout = aout.typecode;
+
+  py::array pyin, pyout;
+  if (isTypecode<float>(tin))
+    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,float>());
+  else if (isTypecode<double>(tin))
+    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,double>());
+  else if (isTypecode<complex<float>>(tin))
+    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,complex<float>>());
+  else if (isTypecode<complex<double>>(tin))
+    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,complex<double>>());
+  else
+    MR_fail("unsupported input array type");
+
+  if (isTypecode<float>(tout))
+    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,float>());
+  else if (isTypecode<double>(tout))
+    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,double>());
+  else if (isTypecode<complex<float>>(tout))
+    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,complex<float>>());
+  else if (isTypecode<complex<double>>(tout))
+    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,complex<double>>());
+  else
+    MR_fail("unsupported output array type");
+
+  state["func"](pyin, pyout, adjoint, state);
+  }
 
 void linop_forward(void *out, void **in) { linop(out, in, false); }
 void linop_adjoint(void *out, void **in) { linop(out, in, true); }
 
-pybind11::dict Registrations() {
+pybind11::dict Registrations()
+  {
   pybind11::dict dict;
   dict["cpu_linop_forward"] = EncapsulateFunction(linop_forward);
   dict["cpu_linop_adjoint"] = EncapsulateFunction(linop_adjoint);
   return dict;
-
-}
+  }
 
 void add_jax(py::module_ &msup)
   {

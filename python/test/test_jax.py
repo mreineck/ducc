@@ -275,13 +275,13 @@ def random_alm(lmax, mmax, spin, ncomp, rng):
     return res
 
 @pmp("lmmax", ((10,10), (20, 5)))
-@pmp("geometry", ("GL", "F1"))
+@pmp("geometry", ("GL", "F1", "F2", "CC", "DH", "MW", "MWflip"))
 @pmp("ntheta", (20,))
 @pmp("nphi", (30,))
 @pmp("spin", (0, 2))
 @pmp("dtype", (np.float32, np.float64))
 @pmp("nthreads", (1, 2))
-def test_sht(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
+def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     if not have_jax:
         pytest.skip()
     from jax import jit
@@ -315,4 +315,3 @@ def test_sht(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     check_grads(op_adj, (map0,), order=max_order, modes=("fwd",), eps=1.)
     check_grads(op, (alm0r,), order=max_order, modes=("rev",), eps=1.)
     check_grads(op_adj, (map0,), order=max_order, modes=("rev",), eps=1.)
-
