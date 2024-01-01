@@ -82,9 +82,8 @@ if have_jax:
                                                    else prim.bind(tangents[0], stateid=stateid))
     
     def _transpose(cotangents, args, *, stateid, adjoint):
-# FIXME: I added the last '[0]' and things seem to work properly now ... but is this actually correct?
-        return (_get_prim(not adjoint).bind(cotangents[0], stateid=stateid)[0], )
-        
+        return _get_prim(not adjoint).bind(cotangents[0], stateid=stateid)        
+
     def _batch(args, axes, *, stateid, adjoint):
         raise NotImplementedError("FIXME")
     
