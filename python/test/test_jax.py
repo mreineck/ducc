@@ -146,7 +146,7 @@ if have_jax:
             return _call(x, self._state, self._adjoint)
     
     
-    def make_linop(**kwargs):
+    def make_linop(func, shape_in, dtype_in, shape_out, dtype_out, **kwargs):
         import copy
         # somehow make sure that kwargs_clean only contains deep copies of
         # everything in kwargs that are not accessible from anywhere else.
@@ -154,6 +154,11 @@ if have_jax:
         global _global_opcounter
         kwargs_clean["_opid"] = _global_opcounter
         _global_opcounter += 1
+        kwargs_clean["_func"] = func
+        kwargs_clean["_shape_in"] = tuple(shape_in)
+        kwargs_clean["_dtype_in"] = np.dtype(dtype_in)
+        kwargs_clean["_shape_out"] = tuple(shape_out)
+        kwargs_clean["_dtype_out"] = np.dtype(dtype_out)
         return _Linop(kwargs_clean)
 
     def fht_operator(shape, dtype, axes, nthreads):
@@ -166,13 +171,9 @@ if have_jax:
         shape = tuple(shape)
         dtype = np.dtype(dtype)
         return make_linop(
-            _func=fhtfunc,
+            fhtfunc, shape, dtype, shape, dtype,
             axes=tuple(axes),
-            nthreads=int(nthreads),
-            _shape_in=shape,
-            _shape_out=shape,
-            _dtype_in=dtype,
-            _dtype_out=dtype)
+            nthreads=int(nthreads))
    
     def alm2realalm(alm, lmax, dtype):
         res = np.zeros((alm.shape[0], alm.shape[1]*2-lmax-1),dtype=dtype)
@@ -219,14 +220,10 @@ if have_jax:
         dtype = np.dtype(dtype)
     
         return make_linop(
-            _func=sht2dfunc,
-            _shape_in=(ncomp, nalm),
-            _shape_out=(ncomp, ntheta, nphi),
-            _dtype_in=dtype,
-            _dtype_out=dtype,
-            lmax=lmax,
-            mmax=mmax,
-            spin=spin,
+            sht2dfunc, (ncomp, nalm), dtype, (ncomp, ntheta, nphi), dtype,
+            lmax=int(lmax),
+            mmax=int(mmax),
+            spin=int(spin),
             geometry=str(geometry),
             nthreads=int(nthreads))
 
