@@ -76,10 +76,10 @@ void linop(void *out, void **in, bool adjoint)
   py::handle hnd(*reinterpret_cast<PyObject **>(in[0]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
   const py::dict state(obj);
-  auto shape_in = tuple2vector<size_t>(state[adjoint ? "shape_out" : "shape_in"]);
-  auto shape_out = tuple2vector<size_t>(state[adjoint ? "shape_in" : "shape_out"]);
-  auto dtin = state[adjoint ? "dtype_out" : "dtype_in"];
-  auto dtout = state[adjoint ? "dtype_in" : "dtype_out"];
+  auto shape_in = tuple2vector<size_t>(state[adjoint ? "_shape_out" : "_shape_in"]);
+  auto shape_out = tuple2vector<size_t>(state[adjoint ? "_shape_in" : "_shape_out"]);
+  auto dtin = state[adjoint ? "_dtype_out" : "_dtype_in"];
+  auto dtout = state[adjoint ? "_dtype_in" : "_dtype_out"];
 
   py::str dummy;
   py::array pyin (dtin, shape_in, in[1], dummy);
@@ -89,7 +89,7 @@ MR_assert(!pyin.writeable(), "oops40");
   py::array pyout (dtout, shape_out, out, dummy);
 MR_assert(!pyout.owndata(), "oops3");
 MR_assert(pyout.writeable(), "oops40");
-  state["func"](pyin, pyout, adjoint, state);
+  state["_func"](pyin, pyout, adjoint, state);
   }
 
 void linop_forward(void *out, void **in) { linop(out, in, false); }

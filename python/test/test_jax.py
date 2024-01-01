@@ -14,6 +14,8 @@ pmp = pytest.mark.parametrize
 
 if have_jax:
 
+    _global_opcounter = 0
+
     from jax.interpreters import ad, mlir    
     
     for _name, _value in ducc0.jax.registrations().items():
@@ -27,10 +29,10 @@ if have_jax:
         return _prim_adjoint if adjoint else _prim_forward
     
     def _shape_res(state, adjoint):
-        return state["shape_in" if adjoint else "shape_out"] 
+        return state["_shape_in" if adjoint else "_shape_out"] 
     
     def _dtype_res(state, adjoint):
-        return state["dtype_in" if adjoint else "dtype_out"] 
+        return state["_dtype_in" if adjoint else "_dtype_out"] 
     
     def _exec_abstract(x, stateid, adjoint):
         state = _from_id(stateid)
@@ -65,8 +67,8 @@ if have_jax:
             return jaxlib.hlo_helpers.custom_call(
                 platform + "_linop" + ("_adjoint" if adjoint else "_forward"),
                 result_types=[jaxtype_out, ],
-                operands=[mlir.ir_constant(stateid),  x],
-                operand_layouts=[(), layout_in],
+                operands=[mlir.ir_constant(stateid),  x, mlir.ir_constant(state["_opid"])],
+                operand_layouts=[(), layout_in, ()],
                 result_layouts=[layout_out, ]
             ).results
         elif platform == "gpu":
@@ -149,6 +151,9 @@ if have_jax:
         # somehow make sure that kwargs_clean only contains deep copies of
         # everything in kwargs that are not accessible from anywhere else.
         kwargs_clean = copy.deepcopy(kwargs)  # FIXME TODO
+        global _global_opcounter
+        kwargs_clean["_opid"] = _global_opcounter
+        _global_opcounter += 1
         return _Linop(kwargs_clean)
 
     def fht_operator(shape, dtype, axes, nthreads):
@@ -161,13 +166,13 @@ if have_jax:
         shape = tuple(shape)
         dtype = np.dtype(dtype)
         return make_linop(
-            func=fhtfunc,
+            _func=fhtfunc,
             axes=tuple(axes),
             nthreads=int(nthreads),
-            shape_in=shape,
-            shape_out=shape,
-            dtype_in=dtype,
-            dtype_out=dtype)
+            _shape_in=shape,
+            _shape_out=shape,
+            _dtype_in=dtype,
+            _dtype_out=dtype)
    
     def alm2realalm(alm, lmax, dtype):
         res = np.zeros((alm.shape[0], alm.shape[1]*2-lmax-1),dtype=dtype)
@@ -193,9 +198,9 @@ if have_jax:
                     map=inp,
                     nthreads=state["nthreads"],
                     geometry=state["geometry"])
-                out[()] = alm2realalm(tmp, state["lmax"], state["dtype_in"])
+                out[()] = alm2realalm(tmp, state["lmax"], state["_dtype_in"])
             else:
-                tmp = realalm2alm(inp, state["lmax"], tdict[state["dtype_in"]])
+                tmp = realalm2alm(inp, state["lmax"], tdict[state["_dtype_in"]])
                 ducc0.sht.synthesis_2d(
                     lmax=state["lmax"],
                     mmax=state["mmax"],
@@ -214,11 +219,11 @@ if have_jax:
         dtype = np.dtype(dtype)
     
         return make_linop(
-            func=sht2dfunc,
-            shape_in=(ncomp, nalm),
-            shape_out=(ncomp, ntheta, nphi),
-            dtype_in=dtype,
-            dtype_out=dtype,
+            _func=sht2dfunc,
+            _shape_in=(ncomp, nalm),
+            _shape_out=(ncomp, ntheta, nphi),
+            _dtype_in=dtype,
+            _dtype_out=dtype,
             lmax=lmax,
             mmax=mmax,
             spin=spin,
