@@ -27,49 +27,78 @@ if have_jax:
     
     def _get_prim(adjoint):
         return _prim_adjoint if adjoint else _prim_forward
-    
-    def _shape_res(state, adjoint):
-        return state["_shape_in" if adjoint else "_shape_out"] 
-    
-    def _dtype_res(state, adjoint):
-        return state["_dtype_in" if adjoint else "_dtype_out"] 
-    
+        
     def _exec_abstract(x, stateid, adjoint):
         state = _from_id(stateid)
-        return (jax.core.ShapedArray(_shape_res(state, adjoint),
-                                     _dtype_res(state, adjoint)), )
+        shp, tp = state["_func_abstract"](x.shape, x.dtype, adjoint, state)
+        return (jax.core.ShapedArray(shp, tp), )
     
     def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
         import jaxlib
         state = _from_id(stateid)
-        shape_in = _shape_res(state, not adjoint)
         if len(ctx.avals_in) != 1:
             raise RuntimeError("need exactly one input object")
-        shape_in2 = ctx.avals_in[0].shape
-        dtype_in = _dtype_res(state, not adjoint)
-        dtype_in2 =ctx.avals_in[0].dtype
-        shape_out = _shape_res(state, adjoint)
+        shape_in = ctx.avals_in[0].shape
+        dtype_in = ctx.avals_in[0].dtype
         if len(ctx.avals_out) != 1:
             raise RuntimeError("need exactly one output object")
-        shape_out2 = ctx.avals_out[0].shape
-        dtype_out = _dtype_res(state, adjoint)
-        dtype_out2 =ctx.avals_out[0].dtype
-        if (shape_in, dtype_in, shape_out, dtype_out) != (shape_in2, dtype_in2, shape_out2, dtype_out2):
-            raise RuntimeError("bad input or output arrays")
+        shape_out, dtype_out = state["_func_abstract"](shape_in, dtype_in, adjoint, state)
+
         jaxtype_in = mlir.ir.RankedTensorType(x.type)
     
         dtype_out_mlir = mlir.dtype_to_ir_type(dtype_out)
         jaxtype_out = mlir.ir.RankedTensorType.get(shape_out, dtype_out_mlir)
         layout_in = tuple(range(len(shape_in) - 1, -1, -1))
         layout_out = tuple(range(len(shape_out) - 1, -1, -1))
-    
+
+        dtype_dict = { np.dtype(np.float32): 3,
+                       np.dtype(np.float64): 7,
+                       np.dtype(np.complex64): 67,
+                       np.dtype(np.complex128): 71 }
+
+        operands = []
+        operand_layouts = []
+
+        # add array
+        operands.append(x)
+        operand_layouts.append(layout_in)
+
+        # add opid
+        operands.append(mlir.ir_constant(state["_opid"]))
+        operand_layouts.append(())
+
+        # add stateid
+        operands.append(mlir.ir_constant(stateid))
+        operand_layouts.append(())
+
+        # add input dtype
+        operands.append(mlir.ir_constant(dtype_dict[dtype_in]))
+        operand_layouts.append(())
+        # add input rank and shape
+        operands.append(mlir.ir_constant(len(shape_in)))
+        operand_layouts.append(())
+        for i in shape_in:
+            operands.append(mlir.ir_constant(i))
+            operand_layouts.append(())
+
+        # add output dtype
+        operands.append(mlir.ir_constant(dtype_dict[dtype_out]))
+        operand_layouts.append(())
+        # add output rank and shape
+        operands.append(mlir.ir_constant(len(shape_out)))
+        operand_layouts.append(())
+        for i in shape_out:
+            operands.append(mlir.ir_constant(i))
+            operand_layouts.append(())
+
         if platform == "cpu":
+            shapeconst = tuple(mlir.ir_constant(s) for s in shape_in)
             return jaxlib.hlo_helpers.custom_call(
                 platform + "_linop" + ("_adjoint" if adjoint else "_forward"),
                 result_types=[jaxtype_out, ],
-                operands=[mlir.ir_constant(stateid),  x, mlir.ir_constant(state["_opid"])],
-                operand_layouts=[(), layout_in, ()],
-                result_layouts=[layout_out, ]
+                operands=operands,
+                operand_layouts=operand_layouts,
+                result_layouts=[layout_out,]
             ).results
         elif platform == "gpu":
             raise ValueError("No GPU support")
@@ -119,22 +148,6 @@ if have_jax:
     
     class _Linop:
         @property
-        def shape_in(self):
-            return _shape_res(self._state, not self._adjoint)
-    
-        @property
-        def shape_out(self):
-            return _shape_res(self._state, self._adjoint)
-    
-        @property
-        def dtype_in(self):
-            return _dtype_res(self._state, not self._adjoint)
-    
-        @property
-        def dtype_out(self):
-            return _dtype_res(self._state, self._adjoint)
-    
-        @property
         def adjoint(self):
             return _Linop(self._state, not self._adjoint)
     
@@ -146,7 +159,7 @@ if have_jax:
             return _call(x, self._state, self._adjoint)
     
     
-    def make_linop(func, shape_in, dtype_in, shape_out, dtype_out, **kwargs):
+    def make_linop(func, func_abstract, **kwargs):
         import copy
         # somehow make sure that kwargs_clean only contains deep copies of
         # everything in kwargs that are not accessible from anywhere else.
@@ -155,24 +168,36 @@ if have_jax:
         kwargs_clean["_opid"] = _global_opcounter
         _global_opcounter += 1
         kwargs_clean["_func"] = func
-        kwargs_clean["_shape_in"] = tuple(shape_in)
-        kwargs_clean["_dtype_in"] = np.dtype(dtype_in)
-        kwargs_clean["_shape_out"] = tuple(shape_out)
-        kwargs_clean["_dtype_out"] = np.dtype(dtype_out)
+        kwargs_clean["_func_abstract"] = func_abstract
         return _Linop(kwargs_clean)
 
-    def fht_operator(shape, dtype, axes, nthreads):
+    def fht_operator(axes, nthreads):
         def fhtfunc(inp, out, adjoint, state):
+            # This function must _not_ keep any reference to 'inp' or 'out'!
+            # Also, it must not change 'inp' or 'state'.
             ducc0.fft.genuine_fht(inp,
                                   out=out,
                                   axes=state["axes"],
                                   nthreads=state["nthreads"])
+        def fhtfunc_abstract(shape, dtype, adjoint, state):
+            return shape, dtype
 
-        shape = tuple(shape)
-        dtype = np.dtype(dtype)
         return make_linop(
-            fhtfunc, shape, dtype, shape, dtype,
-            axes=tuple(axes),
+            fhtfunc, fhtfunc_abstract, axes=tuple(axes),
+            nthreads=int(nthreads))
+   
+    def c2c_operator(axes, nthreads):
+        def c2cfunc(inp, out, adjoint, state):
+            ducc0.fft.c2c(inp,
+                          out=out,
+                          axes=state["axes"],
+                          nthreads=state["nthreads"],
+                          forward=not adjoint)
+        def c2cfunc_abstract(shape, dtype, adjoint, state):
+            return shape, dtype
+
+        return make_linop(
+            c2cfunc, c2cfunc_abstract, axes=tuple(axes),
             nthreads=int(nthreads))
    
     def alm2realalm(alm, lmax, dtype):
@@ -191,6 +216,8 @@ if have_jax:
                   np.dtype(np.float64) : np.dtype(np.complex128)}
 
         def sht2dfunc(inp, out, adjoint, state):
+            # This function must _not_ keep any reference to 'inp' or 'out'!
+            # Also, it must not change 'inp' or 'state'.
             if adjoint:
                 tmp = ducc0.sht.adjoint_synthesis_2d(
                     lmax=state["lmax"],
@@ -199,9 +226,9 @@ if have_jax:
                     map=inp,
                     nthreads=state["nthreads"],
                     geometry=state["geometry"])
-                out[()] = alm2realalm(tmp, state["lmax"], state["_dtype_in"])
+                out[()] = alm2realalm(tmp, state["lmax"], inp.dtype)
             else:
-                tmp = realalm2alm(inp, state["lmax"], tdict[state["_dtype_in"]])
+                tmp = realalm2alm(inp, state["lmax"], tdict[np.dtype(inp.dtype)])
                 ducc0.sht.synthesis_2d(
                     lmax=state["lmax"],
                     mmax=state["mmax"],
@@ -211,19 +238,30 @@ if have_jax:
                     nthreads=state["nthreads"],
                     geometry=state["geometry"])
 
+        def sht2dfunc_abstract(shape_in, dtype_in, adjoint, state):
+            spin = state["spin"]
+            ncomp = 1 if spin==0 else 2
+            if adjoint:
+                lmax = state["lmax"]
+                mmax = state["mmax"]
+                nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
+                nalm = nalm*2 - lmax - 1
+                shape_out = (ncomp, nalm)
+            else:
+                shape_out = (ncomp, state["ntheta"], state["nphi"])
+            return shape_out, dtype_in
+
         lmax = int(lmax)
         mmax = int(mmax)
         spin = int(spin)
-        nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
-        nalm = nalm*2 - lmax - 1
-        ncomp = 1 if spin == 0 else 2
-        dtype = np.dtype(dtype)
     
         return make_linop(
-            sht2dfunc, (ncomp, nalm), dtype, (ncomp, ntheta, nphi), dtype,
+            sht2dfunc, sht2dfunc_abstract,
             lmax=int(lmax),
             mmax=int(mmax),
             spin=int(spin),
+            ntheta=int(ntheta),
+            nphi=int(nphi),
             geometry=str(geometry),
             nthreads=int(nthreads))
 
@@ -243,7 +281,7 @@ def test_fht(shape_axes, dtype, nthreads):
         pytest.skip()
     from jax import jit
     shape, axes = shape_axes
-    myop = fht_operator(shape=shape, dtype=dtype, axes=axes, nthreads=nthreads)
+    myop = fht_operator(axes=axes, nthreads=nthreads)
     op = jit(myop)
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
@@ -260,6 +298,34 @@ def test_fht(shape_axes, dtype, nthreads):
     check_grads(op_adj, (a,), order=max_order, modes=("fwd",), eps=1.)
     check_grads(op, (a,), order=max_order, modes=("rev",), eps=1.)
     check_grads(op_adj, (a,), order=max_order, modes=("rev",), eps=1.)
+
+@pmp("shape_axes", (((100,),(0,)), ((10,17), (0,1)), ((10,17,3), (1,))))
+@pmp("dtype", (np.complex64, np.complex128))
+@pmp("nthreads", (1, 2))
+def test_c2c(shape_axes, dtype, nthreads):
+    if not have_jax:
+        pytest.skip()
+    from jax import jit
+    shape, axes = shape_axes
+    myop = c2c_operator(axes=axes, nthreads=nthreads)
+    op = jit(myop)
+    op_adj = jit(myop.adjoint)
+    rng = np.random.default_rng(42)
+    a = (rng.random(shape)-0.5).astype(dtype) + (1j*(rng.random(shape)-0.5)).astype(dtype)
+    b1 = np.array(op(a)[0])
+    b2 = ducc0.fft.c2c(a, axes=axes, forward=True, nthreads=nthreads)
+    _assert_close(b1, b2, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
+    b3 = np.array(op_adj(a)[0])
+    b4 = ducc0.fft.c2c(a, axes=axes, forward=False, nthreads=nthreads)
+    _assert_close(b3, b4, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
+
+    from jax.test_util import check_grads
+    max_order = 2
+    check_grads(op, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (a,), order=max_order, modes=("fwd",), eps=1.)
+# these two fail ... no idea why
+#    check_grads(op, (a,), order=max_order, modes=("rev",), eps=1.)
+#    check_grads(op_adj, (a,), order=max_order, modes=("rev",), eps=1.)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)

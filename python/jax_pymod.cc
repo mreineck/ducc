@@ -31,6 +31,8 @@
 #include <vector>
 
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/bindings/typecode.h"
+#include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {
 
@@ -46,6 +48,15 @@ template<typename T> vector<T> tuple2vector (const py::tuple &tp)
   for (auto v:tp)
     res.push_back(v.cast<size_t>());
   return res;
+  }
+
+py::object typecode2dtype(uint8_t typecode)
+  {
+  if (isTypecode<float>(typecode)) return Dtype<float>();
+  if (isTypecode<double>(typecode)) return Dtype<double>();
+  if (isTypecode<complex<float>>(typecode)) return Dtype<complex<float>>();
+  if (isTypecode<complex<double>>(typecode)) return Dtype<complex<double>>();
+  MR_fail("unsupported data type");
   }
 
 // https://en.cppreference.com/w/cpp/numeric/bit_cast
@@ -73,16 +84,23 @@ pybind11::capsule EncapsulateFunction(T* fn)
 void linop(void *out, void **in, bool adjoint)
   {
   py::gil_scoped_acquire get_GIL;
-  py::handle hnd(*reinterpret_cast<PyObject **>(in[0]));
+  py::handle hnd(*reinterpret_cast<PyObject **>(in[2]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
   const py::dict state(obj);
-  auto shape_in = tuple2vector<size_t>(state[adjoint ? "_shape_out" : "_shape_in"]);
-  auto shape_out = tuple2vector<size_t>(state[adjoint ? "_shape_in" : "_shape_out"]);
-  auto dtin = state[adjoint ? "_dtype_out" : "_dtype_in"];
-  auto dtout = state[adjoint ? "_dtype_in" : "_dtype_out"];
+  size_t idx = 3;
+  auto dtin = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
+  size_t ndim_in = *reinterpret_cast<uint64_t *>(in[idx++]);
+  vector<size_t> shape_in;
+  for (size_t i=0; i<ndim_in; ++i)
+    shape_in.push_back(*reinterpret_cast<uint64_t *>(in[idx++]));
+  auto dtout = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
+  size_t ndim_out = *reinterpret_cast<uint64_t *>(in[idx++]);
+  vector<size_t> shape_out;
+  for (size_t i=0; i<ndim_out; ++i)
+    shape_out.push_back(*reinterpret_cast<uint64_t *>(in[idx++]));
 
   py::str dummy;
-  py::array pyin (dtin, shape_in, in[1], dummy);
+  py::array pyin (dtin, shape_in, in[0], dummy);
 MR_assert(!pyin.owndata(), "oops1");
   pyin.attr("flags").attr("writeable")=false;
 MR_assert(!pyin.writeable(), "oops40");
