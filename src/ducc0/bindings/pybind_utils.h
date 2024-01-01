@@ -189,28 +189,6 @@ template<typename T, size_t ndim> py::array_t<T> make_Pyarr
   if (zero) zero_Pyarr(res);
   return res;
   }
-template<typename T> py::array_t<T> make_Pyarr_from_cfmav(const cfmav<T> &mav)
-  {
-  stride_t stride2;
-  for (auto str : mav.stride())
-    stride2.push_back(str*sizeof(T));
-  py::str bla;
-  auto res=py::array_t<T>(mav.shape(), stride2, const_cast<T *>(mav.data()), bla);
-  MR_assert(!res.owndata(), "oops1");
-  res.attr("flags").attr("writeable")=false;
-  MR_assert(!res.writeable(), "oops2");
-  return res;
-  }
-template<typename T> py::array_t<T> make_Pyarr_from_vfmav(const vfmav<T> &mav)
-  {
-  stride_t stride2;
-  for (auto str : mav.stride())
-    stride2.push_back(str*sizeof(T));
-  py::str bla;
-  auto res=py::array_t<T>(mav.shape(), stride2, mav.data(), bla);
-  MR_assert(!res.owndata(), "oops1");
-  return res;
-  }
 
 template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   {
@@ -297,8 +275,6 @@ using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;
 using detail_pybind::Dtype;
 
-using detail_pybind::make_Pyarr_from_cfmav;
-using detail_pybind::make_Pyarr_from_vfmav;
 }
 
 #endif

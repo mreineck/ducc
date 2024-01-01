@@ -26,13 +26,11 @@
  */
 
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 
 #include <vector>
-#include <cmath>
-#include <cstdint>
 
-#include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/bindings/array_descriptor.h"
+#include "ducc0/infra/error_handling.h"
 
 namespace ducc0 {
 
@@ -41,16 +39,6 @@ namespace detail_pymodule_jax {
 namespace py = pybind11;
 using namespace std;
 using namespace ducc0;
-
-uint8_t dtype2typecode(const py::object &type)
-  {
-  auto type2 = normalizeDtype(type);
-  if (isDtype<float>(type2)) return Typecode<float>::value;
-  if (isDtype<double>(type2)) return Typecode<double>::value;
-  if (isDtype<complex<float>>(type2)) return Typecode<complex<float>>::value;
-  if (isDtype<complex<double>>(type2)) return Typecode<complex<double>>::value;
-  MR_fail("unsupported data type");
-  }
 
 template<typename T> vector<T> tuple2vector (const py::tuple &tp)
   {
@@ -88,42 +76,19 @@ void linop(void *out, void **in, bool adjoint)
   py::handle hnd(*reinterpret_cast<PyObject **>(in[0]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
   const py::dict state(obj);
-  auto shape_in = tuple2vector<size_t>(state["shape_in"]);
-  auto shape_out = tuple2vector<size_t>(state["shape_out"]);
-  auto dtin = dtype2typecode(state["dtype_in"]);
-  auto dtout = dtype2typecode(state["dtype_out"]);
+  auto shape_in = tuple2vector<size_t>(state[adjoint ? "shape_out" : "shape_in"]);
+  auto shape_out = tuple2vector<size_t>(state[adjoint ? "shape_in" : "shape_out"]);
+  auto dtin = state[adjoint ? "dtype_out" : "dtype_in"];
+  auto dtout = state[adjoint ? "dtype_in" : "dtype_out"];
 
-  if (adjoint) { swap(shape_in, shape_out); swap(dtin, dtout); }
-
-  ArrayDescriptor ain(in[1], shape_in, dtin),
-                  aout(out, shape_out, dtout);
-
-  auto tin = ain.typecode;
-  auto tout = aout.typecode;
-
-  py::array pyin, pyout;
-  if (isTypecode<float>(tin))
-    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,float>());
-  else if (isTypecode<double>(tin))
-    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,double>());
-  else if (isTypecode<complex<float>>(tin))
-    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,complex<float>>());
-  else if (isTypecode<complex<double>>(tin))
-    pyin = make_Pyarr_from_cfmav(ain.to_cfmav<false,complex<double>>());
-  else
-    MR_fail("unsupported input array type");
-
-  if (isTypecode<float>(tout))
-    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,float>());
-  else if (isTypecode<double>(tout))
-    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,double>());
-  else if (isTypecode<complex<float>>(tout))
-    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,complex<float>>());
-  else if (isTypecode<complex<double>>(tout))
-    pyout = make_Pyarr_from_vfmav(aout.to_vfmav<false,complex<double>>());
-  else
-    MR_fail("unsupported output array type");
-
+  py::str dummy;
+  py::array pyin (dtin, shape_in, in[1], dummy);
+MR_assert(!pyin.owndata(), "oops1");
+  pyin.attr("flags").attr("writeable")=false;
+MR_assert(!pyin.writeable(), "oops40");
+  py::array pyout (dtout, shape_out, out, dummy);
+MR_assert(!pyout.owndata(), "oops3");
+MR_assert(pyout.writeable(), "oops40");
   state["func"](pyin, pyout, adjoint, state);
   }
 
