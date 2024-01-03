@@ -92,7 +92,7 @@ void linop(void *out, void **in)
   py::handle hnd(*reinterpret_cast<PyObject **>(in[2]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
   const py::dict state(obj);
-  // Are we doing the forward opration or the adjoint?
+  // Are we doing the forward operation or the adjoint?
   auto adjoint = bool(*reinterpret_cast<int64_t *>(in[3]));
   
   size_t idx = 4;
