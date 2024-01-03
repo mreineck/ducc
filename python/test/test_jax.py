@@ -12,6 +12,24 @@ import pytest
 from numpy.testing import assert_, assert_allclose
 pmp = pytest.mark.parametrize
 
+r2cdict = {np.dtype(np.float32) : np.dtype(np.complex64),
+           np.dtype(np.float64) : np.dtype(np.complex128)}
+
+c2rdict = {np.dtype(np.complex64) : np.dtype(np.float32),
+           np.dtype(np.complex128) : np.dtype(np.float64)}
+
+def realify(arr):
+    return arr.view(c2rdict[arr.dtype])
+
+def complexify(arr):
+    return arr.view(r2cdict[arr.dtype])
+
+def realtype(dtype):
+    return c2rdict[np.dtype(dtype)]
+
+def complextype(dtype):
+    return r2cdict[np.dtype(dtype)]
+
 if have_jax:
 
     _global_opcounter = 0
@@ -51,6 +69,7 @@ if have_jax:
         layout_in = tuple(range(len(shape_in) - 1, -1, -1))
         layout_out = tuple(range(len(shape_out) - 1, -1, -1))
 
+        # the values are explained in src/duc0/bindings/typecode.h
         dtype_dict = { np.dtype(np.float32): 3,
                        np.dtype(np.float64): 7,
                        np.dtype(np.complex64): 67,
@@ -188,8 +207,8 @@ if have_jax:
    
     def c2c_operator(axes, nthreads):
         def c2cfunc(inp, out, adjoint, state):
-            ducc0.fft.c2c(inp,
-                          out=out,
+            ducc0.fft.c2c(complexify(inp),
+                          out=complexify(out),
                           axes=state["axes"],
                           nthreads=state["nthreads"],
                           forward=not adjoint)
@@ -212,9 +231,6 @@ if have_jax:
         return res
    
     def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, dtype, nthreads):
-        tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
-                  np.dtype(np.float64) : np.dtype(np.complex128)}
-
         def sht2dfunc(inp, out, adjoint, state):
             # This function must _not_ keep any reference to 'inp' or 'out'!
             # Also, it must not change 'inp' or 'state'.
@@ -228,7 +244,7 @@ if have_jax:
                     geometry=state["geometry"])
                 out[()] = alm2realalm(tmp, state["lmax"], inp.dtype)
             else:
-                tmp = realalm2alm(inp, state["lmax"], tdict[np.dtype(inp.dtype)])
+                tmp = realalm2alm(inp, state["lmax"], complextype(inp.dtype))
                 ducc0.sht.synthesis_2d(
                     lmax=state["lmax"],
                     mmax=state["mmax"],
@@ -312,20 +328,20 @@ def test_c2c(shape_axes, dtype, nthreads):
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
     a = (rng.random(shape)-0.5).astype(dtype) + (1j*(rng.random(shape)-0.5)).astype(dtype)
-    b1 = np.array(op(a)[0])
+    b1 = complexify(np.array(op(realify(a))[0]))
     b2 = ducc0.fft.c2c(a, axes=axes, forward=True, nthreads=nthreads)
     _assert_close(b1, b2, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
-    b3 = np.array(op_adj(a)[0])
+    b3 = complexify(np.array(op_adj(realify(a))[0]))
     b4 = ducc0.fft.c2c(a, axes=axes, forward=False, nthreads=nthreads)
     _assert_close(b3, b4, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
 
     from jax.test_util import check_grads
     max_order = 2
-    check_grads(op, (a,), order=max_order, modes=("fwd",), eps=1.)
-    check_grads(op_adj, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op, (realify(a),), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (realify(a),), order=max_order, modes=("fwd",), eps=1.)
 # these two fail ... no idea why
-#    check_grads(op, (a,), order=max_order, modes=("rev",), eps=1.)
-#    check_grads(op_adj, (a,), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op, (realify(a),), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op_adj, (realify(a),), order=max_order, modes=("rev",), eps=1.)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
@@ -352,8 +368,6 @@ def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     if not have_jax:
         pytest.skip()
     from jax import jit
-    tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
-              np.dtype(np.float64) : np.dtype(np.complex128)}
 
     lmax, mmax = lmmax
     ncomp = 1 if spin==0 else 2
@@ -361,9 +375,8 @@ def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     op = jit(myop)
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
-    tdict = { np.dtype(np.float32) : np.dtype(np.complex64),
-              np.dtype(np.float64) : np.dtype(np.complex128)}
-    alm0 = random_alm(lmax, mmax, spin, ncomp, rng).astype(tdict[np.dtype(dtype)])
+
+    alm0 = random_alm(lmax, mmax, spin, ncomp, rng).astype(complextype(dtype))
     alm0r = alm2realalm(alm0, lmax, dtype)
 
     map1 = np.array(op(alm0r)[0])
@@ -372,7 +385,7 @@ def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
 
     map0 = (rng.random((ncomp, ntheta, nphi))-0.5).astype(dtype)
     alm1r = np.array(op_adj(map0)[0])
-    alm1 = realalm2alm(alm1r, lmax, tdict[np.dtype(dtype)])
+    alm1 = realalm2alm(alm1r, lmax, complextype(dtype))
     alm2 = ducc0.sht.adjoint_synthesis_2d(map=map0, lmax=lmax, mmax=mmax, spin=spin, geometry=geometry, nthreads=nthreads)
     _assert_close(alm1, alm2, epsilon=1e-6 if dtype==np.float32 else 1e-14)
 
