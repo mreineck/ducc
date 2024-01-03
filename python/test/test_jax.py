@@ -1,5 +1,5 @@
 try:
-    import jax
+    import jax_linop
     have_jax = True
 except ImportError:
     have_jax = False
@@ -25,178 +25,28 @@ def complextype(dtype):
     return r2cdict[np.dtype(dtype)]
 
 if have_jax:
-
-    _global_opcounter = 0
-
-    from jax.interpreters import ad, mlir    
-    
-    for _name, _value in ducc0.jax.registrations().items():
-        jax.lib.xla_client.register_custom_call_target(_name, _value, platform="cpu")
-    
-    def _from_id(objectid):
-        import ctypes
-        return ctypes.cast(objectid, ctypes.py_object).value
-    
-    def _get_prim(adjoint):
-        return _prim_adjoint if adjoint else _prim_forward
-        
-    def _exec_abstract(x, stateid, adjoint):
-        state = _from_id(stateid)
-        shp, tp = state["_func_abstract"](x.shape, x.dtype, adjoint, state)
-        return (jax.core.ShapedArray(shp, tp), )
-    
-    def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
-        import jaxlib
-        state = _from_id(stateid)
-        if len(ctx.avals_in) != 1:
-            raise RuntimeError("need exactly one input object")
-        shape_in = ctx.avals_in[0].shape
-        dtype_in = ctx.avals_in[0].dtype
-        if len(ctx.avals_out) != 1:
-            raise RuntimeError("need exactly one output object")
-        shape_out, dtype_out = state["_func_abstract"](shape_in, dtype_in, adjoint, state)
-
-        jaxtype_in = mlir.ir.RankedTensorType(x.type)
-    
-        dtype_out_mlir = mlir.dtype_to_ir_type(dtype_out)
-        jaxtype_out = mlir.ir.RankedTensorType.get(shape_out, dtype_out_mlir)
-        layout_in = tuple(range(len(shape_in) - 1, -1, -1))
-        layout_out = tuple(range(len(shape_out) - 1, -1, -1))
-
-        # the values are explained in src/duc0/bindings/typecode.h
-        dtype_dict = { np.dtype(np.float32): 3,
-                       np.dtype(np.float64): 7,
-                       np.dtype(np.complex64): 67,
-                       np.dtype(np.complex128): 71 }
-
-        # add array
-        operands = [x]
-        operand_layouts = [layout_in] + [()]*(6+len(shape_in)+len(shape_out))
-
-        # add opid and stateid
-        operands.append(mlir.ir_constant(state["_opid"]))
-        operands.append(mlir.ir_constant(stateid))
-
-        # add input dtype, rank, and shape
-        operands.append(mlir.ir_constant(dtype_dict[dtype_in]))
-        operands.append(mlir.ir_constant(len(shape_in)))
-        operands += [mlir.ir_constant(i) for i in shape_in]
-
-        # add output dtype, rank, and shape
-        operands.append(mlir.ir_constant(dtype_dict[dtype_out]))
-        operands.append(mlir.ir_constant(len(shape_out)))
-        operands += [mlir.ir_constant(i) for i in shape_out]
-
-        if platform == "cpu":
-            shapeconst = tuple(mlir.ir_constant(s) for s in shape_in)
-            return jaxlib.hlo_helpers.custom_call(
-                platform + "_linop" + ("_adjoint" if adjoint else "_forward"),
-                result_types=[jaxtype_out, ],
-                operands=operands,
-                operand_layouts=operand_layouts,
-                result_layouts=[layout_out]
-            ).results
-        elif platform == "gpu":
-            raise ValueError("No GPU support")
-        raise ValueError(
-            "Unsupported platform; this must be either 'cpu' or 'gpu'"
-        )
-    
-    def _jvp(args, tangents, *, stateid, adjoint):
-        prim = _get_prim(adjoint)
-        res = prim.bind(args[0], stateid=stateid)
-        return (res, jax.lax.zeros_like_array(res) if type(tangents[0]) is ad.Zero
-                                                   else prim.bind(tangents[0], stateid=stateid))
-    
-    def _transpose(cotangents, args, *, stateid, adjoint):
-        tmp = _get_prim(not adjoint).bind(cotangents[0].conj(), stateid=stateid)
-        tmp[0] = tmp[0].conj()
-        return tmp
-
-    def _batch(args, axes, *, stateid, adjoint):
-        raise NotImplementedError("FIXME")
-    
-    def _make_prims():
-        name = "ducc_linop_prim"
-        global _prim_forward, _prim_adjoint
-        _prim_forward = jax.core.Primitive(name+"_forward")
-        _prim_adjoint = jax.core.Primitive(name+"_adjoint")
-    
-        for adjoint in (False, True):
-            prim = _get_prim(adjoint)
-            prim.multiple_results = True
-            prim.def_impl(partial(jax.interpreters.xla.apply_primitive, prim))
-            prim.def_abstract_eval(partial(_exec_abstract,adjoint=adjoint))
-        
-            for platform in ["cpu", "gpu"]:
-                mlir.register_lowering(
-                    prim,
-                    partial(_lowering, platform=platform, adjoint=adjoint),
-                    platform=platform)
-    
-            ad.primitive_jvps[prim] = partial(_jvp, adjoint=adjoint)
-            ad.primitive_transposes[prim] = partial(_transpose, adjoint=adjoint)
-            jax.interpreters.batching.primitive_batchers[prim] = partial(_batch, adjoint=adjoint)
-    
-    _make_prims()
-    
-    def _call(x, state, adjoint):
-        return _get_prim(adjoint).bind(x, stateid=id(state))
-        
-    
-    class _Linop:
-        @property
-        def adjoint(self):
-            return _Linop(self._state, not self._adjoint)
-    
-        def __init__(self, state, adjoint=False):
-            self._state = state
-            self._adjoint = adjoint
-    
-        def __call__(self, x):
-            return _call(x, self._state, self._adjoint)
-    
-    
-    def make_linop(func, func_abstract, **kwargs):
-        import copy
-        # somehow make sure that kwargs_clean only contains deep copies of
-        # everything in kwargs that are not accessible from anywhere else.
-        kwargs_clean = copy.deepcopy(kwargs)  # FIXME TODO
-        global _global_opcounter
-        kwargs_clean["_opid"] = _global_opcounter
-        _global_opcounter += 1
-        kwargs_clean["_func"] = func
-        kwargs_clean["_func_abstract"] = func_abstract
-        return _Linop(kwargs_clean)
-
     def fht_operator(axes, nthreads):
         def fhtfunc(inp, out, adjoint, state):
             # This function must _not_ keep any reference to 'inp' or 'out'!
             # Also, it must not change 'inp' or 'state'.
-            ducc0.fft.genuine_fht(inp,
-                                  out=out,
-                                  axes=state["axes"],
+            ducc0.fft.genuine_fht(inp, out=out, axes=state["axes"],
                                   nthreads=state["nthreads"])
         def fhtfunc_abstract(shape, dtype, adjoint, state):
             return shape, dtype
 
-        return make_linop(
+        return jax_linop.make_linop(
             fhtfunc, fhtfunc_abstract, axes=tuple(axes),
             nthreads=int(nthreads))
    
     def c2c_operator(axes, nthreads):
         def c2cfunc(inp, out, adjoint, state):
-            ducc0.fft.c2c(inp,
-                          out=out,
-                          axes=state["axes"],
-                          nthreads=state["nthreads"],
-                          forward=not adjoint)
+            ducc0.fft.c2c(inp, out=out, axes=state["axes"],
+                          nthreads=state["nthreads"], forward=not adjoint)
         def c2cfunc_abstract(shape, dtype, adjoint, state):
             return shape, dtype
 
-        return make_linop(
-            c2cfunc, c2cfunc_abstract, axes=tuple(axes),
-            nthreads=int(nthreads))
+        return jax_linop.make_linop(c2cfunc, c2cfunc_abstract, axes=tuple(axes),
+                          nthreads=int(nthreads))
    
     def alm2realalm(alm, lmax, dtype):
         res = np.zeros((alm.shape[0], alm.shape[1]*2-lmax-1),dtype=dtype)
@@ -211,53 +61,35 @@ if have_jax:
    
     def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, dtype, nthreads):
         def sht2dfunc(inp, out, adjoint, state):
-            # This function must _not_ keep any reference to 'inp' or 'out'!
-            # Also, it must not change 'inp' or 'state'.
             if adjoint:
                 tmp = ducc0.sht.adjoint_synthesis_2d(
-                    lmax=state["lmax"],
-                    mmax=state["mmax"],
-                    spin=state["spin"],
-                    map=inp,
-                    nthreads=state["nthreads"],
+                    lmax=state["lmax"], mmax=state["mmax"], spin=state["spin"],
+                    map=inp, nthreads=state["nthreads"],
                     geometry=state["geometry"])
                 out[()] = alm2realalm(tmp, state["lmax"], inp.dtype)
             else:
                 tmp = realalm2alm(inp, state["lmax"], complextype(inp.dtype))
                 ducc0.sht.synthesis_2d(
-                    lmax=state["lmax"],
-                    mmax=state["mmax"],
-                    spin=state["spin"],
-                    map=out,
-                    alm=tmp,
-                    nthreads=state["nthreads"],
+                    lmax=state["lmax"], mmax=state["mmax"], spin=state["spin"],
+                    map=out, alm=tmp, nthreads=state["nthreads"],
                     geometry=state["geometry"])
 
         def sht2dfunc_abstract(shape_in, dtype_in, adjoint, state):
             spin = state["spin"]
             ncomp = 1 if spin==0 else 2
             if adjoint:
-                lmax = state["lmax"]
-                mmax = state["mmax"]
+                lmax, mmax = state["lmax"], state["mmax"]
                 nalm = ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
                 nalm = nalm*2 - lmax - 1
                 shape_out = (ncomp, nalm)
             else:
                 shape_out = (ncomp, state["ntheta"], state["nphi"])
             return shape_out, dtype_in
-
-        lmax = int(lmax)
-        mmax = int(mmax)
-        spin = int(spin)
     
-        return make_linop(
+        return jax_linop.make_linop(
             sht2dfunc, sht2dfunc_abstract,
-            lmax=int(lmax),
-            mmax=int(mmax),
-            spin=int(spin),
-            ntheta=int(ntheta),
-            nphi=int(nphi),
-            geometry=str(geometry),
+            lmax=int(lmax), mmax=int(mmax), spin=int(spin),
+            ntheta=int(ntheta), nphi=int(nphi), geometry=str(geometry),
             nthreads=int(nthreads))
 
     from jax import config

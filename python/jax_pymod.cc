@@ -81,24 +81,37 @@ pybind11::capsule EncapsulateFunction(T* fn)
   return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET");
   }
 
-void linop(void *out, void **in, bool adjoint)
+void linop(void *out, void **in)
   {
   py::gil_scoped_acquire get_GIL;
+  // the "opid" in in[1] is not used; it is only passed to guarantee uniqueness
+  // of the passed parameters for every distinvt operator, so that JAX knows
+  // when and when not to recompile.
+
+  // Getting the "state" dictionary from the passed ID
   py::handle hnd(*reinterpret_cast<PyObject **>(in[2]));
   auto obj = py::reinterpret_borrow<py::object>(hnd);
   const py::dict state(obj);
-  size_t idx = 3;
+  // Are we doing the forward opration or the adjoint?
+  auto adjoint = bool(*reinterpret_cast<int64_t *>(in[3]));
+  
+  size_t idx = 4;
+  // Getting type, rank, and shape of the input
   auto dtin = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
   size_t ndim_in = *reinterpret_cast<uint64_t *>(in[idx++]);
   vector<size_t> shape_in;
   for (size_t i=0; i<ndim_in; ++i)
     shape_in.push_back(*reinterpret_cast<uint64_t *>(in[idx++]));
+  // Getting type, rank, and shape of the output
   auto dtout = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
   size_t ndim_out = *reinterpret_cast<uint64_t *>(in[idx++]);
   vector<size_t> shape_out;
   for (size_t i=0; i<ndim_out; ++i)
     shape_out.push_back(*reinterpret_cast<uint64_t *>(in[idx++]));
 
+  // Building "pseudo" numpy.ndarays on top of the provided memory regions.
+  // This should be completely fine, as long as the called function does not
+  // keep any references to them.
   py::str dummy;
   py::array pyin (dtin, shape_in, in[0], dummy);
   MR_assert(!pyin.owndata(), "owndata should be false");
@@ -107,17 +120,15 @@ void linop(void *out, void **in, bool adjoint)
   py::array pyout (dtout, shape_out, out, dummy);
   MR_assert(!pyout.owndata(), "owndata should be false");
   MR_assert(pyout.writeable(), "output data must be writable");
+
+  // Execute the Python function implementing the linear operation
   state["_func"](pyin, pyout, adjoint, state);
   }
-
-void linop_forward(void *out, void **in) { linop(out, in, false); }
-void linop_adjoint(void *out, void **in) { linop(out, in, true); }
 
 pybind11::dict Registrations()
   {
   pybind11::dict dict;
-  dict["cpu_linop_forward"] = EncapsulateFunction(linop_forward);
-  dict["cpu_linop_adjoint"] = EncapsulateFunction(linop_adjoint);
+  dict["cpu_linop"] = EncapsulateFunction(linop);
   return dict;
   }
 
