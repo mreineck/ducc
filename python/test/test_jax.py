@@ -18,12 +18,6 @@ r2cdict = {np.dtype(np.float32) : np.dtype(np.complex64),
 c2rdict = {np.dtype(np.complex64) : np.dtype(np.float32),
            np.dtype(np.complex128) : np.dtype(np.float64)}
 
-def realify(arr):
-    return arr.view(c2rdict[arr.dtype])
-
-def complexify(arr):
-    return arr.view(r2cdict[arr.dtype])
-
 def realtype(dtype):
     return c2rdict[np.dtype(dtype)]
 
@@ -132,7 +126,9 @@ if have_jax:
                                                    else prim.bind(tangents[0], stateid=stateid))
     
     def _transpose(cotangents, args, *, stateid, adjoint):
-        return _get_prim(not adjoint).bind(cotangents[0], stateid=stateid)        
+        tmp = _get_prim(not adjoint).bind(cotangents[0].conj(), stateid=stateid)
+        tmp[0] = tmp[0].conj()
+        return tmp
 
     def _batch(args, axes, *, stateid, adjoint):
         raise NotImplementedError("FIXME")
@@ -207,8 +203,8 @@ if have_jax:
    
     def c2c_operator(axes, nthreads):
         def c2cfunc(inp, out, adjoint, state):
-            ducc0.fft.c2c(complexify(inp),
-                          out=complexify(out),
+            ducc0.fft.c2c(inp,
+                          out=out,
                           axes=state["axes"],
                           nthreads=state["nthreads"],
                           forward=not adjoint)
@@ -328,20 +324,19 @@ def test_c2c(shape_axes, dtype, nthreads):
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
     a = (rng.random(shape)-0.5).astype(dtype) + (1j*(rng.random(shape)-0.5)).astype(dtype)
-    b1 = complexify(np.array(op(realify(a))[0]))
+    b1 = np.array(op(a)[0])
     b2 = ducc0.fft.c2c(a, axes=axes, forward=True, nthreads=nthreads)
     _assert_close(b1, b2, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
-    b3 = complexify(np.array(op_adj(realify(a))[0]))
+    b3 = np.array(op_adj(a)[0])
     b4 = ducc0.fft.c2c(a, axes=axes, forward=False, nthreads=nthreads)
     _assert_close(b3, b4, epsilon=1e-6 if dtype==np.complex64 else 1e-14)
 
     from jax.test_util import check_grads
     max_order = 2
-    check_grads(op, (realify(a),), order=max_order, modes=("fwd",), eps=1.)
-    check_grads(op_adj, (realify(a),), order=max_order, modes=("fwd",), eps=1.)
-# these two fail ... no idea why
-    check_grads(op, (realify(a),), order=max_order, modes=("rev",), eps=1.)
-    check_grads(op_adj, (realify(a),), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op_adj, (a,), order=max_order, modes=("fwd",), eps=1.)
+    check_grads(op, (a,), order=max_order, modes=("rev",), eps=1.)
+    check_grads(op_adj, (a,), order=max_order, modes=("rev",), eps=1.)
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
