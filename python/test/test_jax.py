@@ -69,40 +69,23 @@ if have_jax:
                        np.dtype(np.complex64): 67,
                        np.dtype(np.complex128): 71 }
 
-        operands = []
-        operand_layouts = []
-
         # add array
-        operands.append(x)
-        operand_layouts.append(layout_in)
+        operands = [x]
+        operand_layouts = [layout_in] + [()]*(6+len(shape_in)+len(shape_out))
 
-        # add opid
+        # add opid and stateid
         operands.append(mlir.ir_constant(state["_opid"]))
-        operand_layouts.append(())
-
-        # add stateid
         operands.append(mlir.ir_constant(stateid))
-        operand_layouts.append(())
 
-        # add input dtype
+        # add input dtype, rank, and shape
         operands.append(mlir.ir_constant(dtype_dict[dtype_in]))
-        operand_layouts.append(())
-        # add input rank and shape
         operands.append(mlir.ir_constant(len(shape_in)))
-        operand_layouts.append(())
-        for i in shape_in:
-            operands.append(mlir.ir_constant(i))
-            operand_layouts.append(())
+        operands += [mlir.ir_constant(i) for i in shape_in]
 
-        # add output dtype
+        # add output dtype, rank, and shape
         operands.append(mlir.ir_constant(dtype_dict[dtype_out]))
-        operand_layouts.append(())
-        # add output rank and shape
         operands.append(mlir.ir_constant(len(shape_out)))
-        operand_layouts.append(())
-        for i in shape_out:
-            operands.append(mlir.ir_constant(i))
-            operand_layouts.append(())
+        operands += [mlir.ir_constant(i) for i in shape_out]
 
         if platform == "cpu":
             shapeconst = tuple(mlir.ir_constant(s) for s in shape_in)
@@ -111,7 +94,7 @@ if have_jax:
                 result_types=[jaxtype_out, ],
                 operands=operands,
                 operand_layouts=operand_layouts,
-                result_layouts=[layout_out,]
+                result_layouts=[layout_out]
             ).results
         elif platform == "gpu":
             raise ValueError("No GPU support")

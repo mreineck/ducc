@@ -101,12 +101,12 @@ void linop(void *out, void **in, bool adjoint)
 
   py::str dummy;
   py::array pyin (dtin, shape_in, in[0], dummy);
-MR_assert(!pyin.owndata(), "oops1");
+  MR_assert(!pyin.owndata(), "owndata should be false");
   pyin.attr("flags").attr("writeable")=false;
-MR_assert(!pyin.writeable(), "oops40");
+  MR_assert(!pyin.writeable(), "input array should not be writeable");
   py::array pyout (dtout, shape_out, out, dummy);
-MR_assert(!pyout.owndata(), "oops3");
-MR_assert(pyout.writeable(), "oops40");
+  MR_assert(!pyout.owndata(), "owndata should be false");
+  MR_assert(pyout.writeable(), "output data must be writable");
   state["_func"](pyin, pyout, adjoint, state);
   }
 
