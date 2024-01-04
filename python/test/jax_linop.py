@@ -72,7 +72,6 @@ def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
     operands += [mlir.ir_constant(i) for i in shape_out]
 
     if platform == "cpu":
-        shapeconst = tuple(mlir.ir_constant(s) for s in shape_in)
         return jaxlib.hlo_helpers.custom_call(
             platform + "_linop",
             result_types=[jaxtype_out, ],

@@ -191,6 +191,123 @@ size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart,
   return res+1;
   }
 
+template<typename T> py::array Py2_alm2flm(const py::array &alm_, int spin,
+  py::object &flm__)
+  {
+  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto nalm = alm.shape(1);
+  MR_assert(nalm>0, "degenerate number of alm");
+  auto lmax = size_t(sqrt(2*nalm))-1;
+  MR_assert(nalm==((lmax+1)*(lmax+2))/2, "bad nalm value");
+  auto ncomp = alm.shape(0);
+  if (spin==0)
+    MR_assert((ncomp==1)||(ncomp==2), "need one or two components for spin 0");
+  else
+    MR_assert(ncomp==2, "need two components for spin >0");
+  auto flm_ = get_optional_Pyarr<complex<T>>(flm__,
+    {(lmax+1)*(lmax+1)});
+  auto flm = to_vmav<complex<T>,1>(flm_);
+  size_t ofs=0;
+  T mfac=T(1.);
+  if (ncomp==1)  // spin must be 0
+    {
+    for (size_t m=0; m<=lmax; ++m)
+      {
+      for (size_t l=m; l<=lmax; ++l)
+        {
+        size_t lidx = l*(l+1);
+        flm(lidx+m) = alm(0, ofs-m+l);
+        flm(lidx-m) = mfac*conj(alm(0,ofs-m+l));
+        }
+      ofs += lmax+1-m;
+      mfac=-mfac;
+      }
+    }
+  else
+    {
+    T sfac = (abs(spin)&1) ? -T(1) : T(1);
+    for (size_t m=0; m<=lmax; ++m)
+      {
+      for (size_t l=m; l<=lmax; ++l)
+        {
+        size_t lidx = l*(l+1);
+        auto fp = alm(0, ofs-m+l) + alm(1, ofs-m+l)*complex<T>(T(0),T(1));
+        auto fm = alm(0, ofs-m+l) - alm(1, ofs-m+l)*complex<T>(T(0),T(1));
+        if (spin>=0)
+          {
+          flm(lidx+m) = fp;
+          flm(lidx-m) = mfac*conj(fm);
+          }
+        else
+          {
+          flm(lidx+m) = sfac*fm;
+          flm(lidx-m) = sfac*mfac*conj(fp);
+          }
+        }
+      ofs += lmax+1-m;
+      mfac=-mfac;
+      }
+    }
+  return flm_;
+  }
+py::array Py_alm2flm(const py::array &alm, int spin, py::object &flm)
+  {
+  if (isPyarr<complex<float>>(alm))
+    return Py2_alm2flm<float>(alm, spin, flm);
+  if (isPyarr<complex<double>>(alm))
+    return Py2_alm2flm<double>(alm, spin, flm);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+template<typename T> py::array Py2_flm2alm(const py::array &flm_, int spin,
+  py::object &alm__, bool real)
+  {
+  auto flm = to_cmav<complex<T>,1>(flm_);
+  MR_assert(flm.shape(0)>0, "degenerate shape of flm");
+  size_t lmax = size_t(sqrt(flm.shape(0)))-1;
+  MR_assert(flm.shape(0)==(lmax+1)*(lmax+1), "bad shape of flm");
+  size_t nalm = ((lmax+1)*(lmax+2))/2;
+  if (spin!=0) MR_assert(!real, "no real fields at nonzero spins");
+  size_t ncomp = real ? 1 : 2;
+  auto alm_ = get_optional_Pyarr<complex<T>>(alm__, {ncomp, nalm});
+  auto alm = to_vmav<complex<T>,2>(alm_);
+  size_t ofs=0;
+  T mfac=T(1.);
+  T sfac = (abs(spin)&1) ? -T(1) : T(1);
+  for (size_t m=0; m<=lmax; ++m)
+    {
+    for (size_t l=m; l<=lmax; ++l)
+      {
+      size_t lidx = l*(l+1);
+      if (spin>=0)
+        {
+        auto fp = flm(lidx+m);
+        auto fm = mfac*conj(flm(lidx-m));
+        alm(0, ofs-m+l) = (fp+fm)*T(0.5);
+        if (ncomp>1)
+          alm(1, ofs-m+l) = (fp-fm)*complex<T>(T(0),T(-0.5));
+        }
+      else
+        {
+        auto fp = mfac*sfac*conj(flm(lidx-m));
+        auto fm = sfac*flm(lidx+m);
+        alm(0, ofs-m+l) = (fp+fm)*T(0.5);
+        alm(1, ofs-m+l) = (fp-fm)*complex<T>(T(0),T(-0.5));
+        }
+      }
+    ofs += lmax+1-m;
+    mfac=-mfac;
+    }
+  return alm_;
+  }
+py::array Py_flm2alm(const py::array &flm, int spin, py::object &alm, bool real)
+  {
+  if (isPyarr<complex<float>>(flm))
+    return Py2_flm2alm<float>(flm, spin, alm, real);
+  if (isPyarr<complex<double>>(flm))
+    return Py2_flm2alm<double>(flm, spin, alm, real);
+  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  }
+
 template<typename T> py::array Py2_alm2leg(const py::array &alm_, size_t spin,
   size_t lmax, const py::object &mval_, const py::object &mstart_,
   ptrdiff_t lstride, const py::array &theta_, size_t nthreads,
@@ -2247,6 +2364,9 @@ void add_sht(py::module_ &msup)
     .def("alm2map_spin", &Py_sharpjob<double>::alm2map_spin,"alm"_a,"spin"_a)
     .def("map2alm_spin", &Py_sharpjob<double>::map2alm_spin,"map"_a,"spin"_a)
     .def("__repr__", &Py_sharpjob<double>::repr);
+
+  m2.def("alm2flm", &Py_alm2flm, "alm"_a, "spin"_a, "flm"_a=None);
+  m2.def("flm2alm", &Py_flm2alm, "flm"_a, "spin"_a, "alm"_a=None, "real"_a=false);
   }
 
 }

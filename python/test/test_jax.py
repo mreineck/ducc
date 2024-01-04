@@ -59,7 +59,7 @@ if have_jax:
         res[:, lmax+1:] = alm[:, lmax+1:].view(dtype)*(np.sqrt(2.)/2)
         return res
    
-    def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, dtype, nthreads):
+    def sht2d_operator(lmax, mmax, ntheta, nphi, geometry, spin, nthreads):
         def sht2dfunc(inp, out, adjoint, state):
             if adjoint:
                 tmp = ducc0.sht.adjoint_synthesis_2d(
@@ -181,7 +181,7 @@ def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
 
     lmax, mmax = lmmax
     ncomp = 1 if spin==0 else 2
-    myop = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, dtype=dtype, nthreads=nthreads)
+    myop = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, nthreads=nthreads)
     op = jit(myop)
     op_adj = jit(myop.adjoint)
     rng = np.random.default_rng(42)
