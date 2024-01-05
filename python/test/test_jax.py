@@ -106,11 +106,8 @@ def _assert_close(a, b, epsilon):
 def test_fht(shape_axes, dtype, nthreads):
     if not have_jax:
         pytest.skip()
-    from jax import jit
     shape, axes = shape_axes
-    myop = fht_operator(axes=axes, nthreads=nthreads)
-    op = jit(myop)
-    op_adj = jit(myop.adjoint)
+    op, op_adj = fht_operator(axes=axes, nthreads=nthreads)
     rng = np.random.default_rng(42)
     a = (rng.random(shape)-0.5).astype(dtype)
     b1 = np.array(op(a)[0])
@@ -132,11 +129,8 @@ def test_fht(shape_axes, dtype, nthreads):
 def test_c2c(shape_axes, dtype, nthreads):
     if not have_jax:
         pytest.skip()
-    from jax import jit
     shape, axes = shape_axes
-    myop = c2c_operator(axes=axes, nthreads=nthreads)
-    op = jit(myop)
-    op_adj = jit(myop.adjoint)
+    op, op_adj = c2c_operator(axes=axes, nthreads=nthreads)
     rng = np.random.default_rng(42)
     a = (rng.random(shape)-0.5).astype(dtype) + (1j*(rng.random(shape)-0.5)).astype(dtype)
     b1 = np.array(op(a)[0])
@@ -177,13 +171,10 @@ def random_alm(lmax, mmax, spin, ncomp, rng):
 def test_sht2d(lmmax, geometry, ntheta, nphi, spin, dtype, nthreads):
     if not have_jax:
         pytest.skip()
-    from jax import jit
 
     lmax, mmax = lmmax
     ncomp = 1 if spin==0 else 2
-    myop = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, nthreads=nthreads)
-    op = jit(myop)
-    op_adj = jit(myop.adjoint)
+    op, op_adj = sht2d_operator(lmax=lmax, mmax=mmax, ntheta=ntheta, nphi=nphi, geometry=geometry, spin=spin, nthreads=nthreads)
     rng = np.random.default_rng(42)
 
     alm0 = random_alm(lmax, mmax, spin, ncomp, rng).astype(complextype(dtype))

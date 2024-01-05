@@ -204,49 +204,37 @@ template<typename T> py::array Py2_alm2flm(const py::array &alm_, int spin,
     MR_assert((ncomp==1)||(ncomp==2), "need one or two components for spin 0");
   else
     MR_assert(ncomp==2, "need two components for spin >0");
-  auto flm_ = get_optional_Pyarr<complex<T>>(flm__,
-    {(lmax+1)*(lmax+1)});
-  auto flm = to_vmav<complex<T>,1>(flm_);
+  auto flm_ = get_optional_Pyarr<complex<T>>(flm__, {lmax+1, 2*lmax+1});
+  auto flm = to_vmav<complex<T>,2>(flm_);
+  mav_apply([&](auto &v){v=0;},1,flm);
   size_t ofs=0;
   T mfac=T(1.);
-  if (ncomp==1)  // spin must be 0
+  constexpr complex<T> icmplx(T(0), T(1));
+  T sfac = (abs(spin)&1) ? -T(1) : T(1);
+  for (size_t m=0; m<=lmax; ++m)
     {
-    for (size_t m=0; m<=lmax; ++m)
+    for (size_t l=m; l<=lmax; ++l)
       {
-      for (size_t l=m; l<=lmax; ++l)
+      auto fp = alm(0, ofs-m+l);
+      auto fm = alm(0, ofs-m+l);
+      if (ncomp>1)
         {
-        size_t lidx = l*(l+1);
-        flm(lidx+m) = alm(0, ofs-m+l);
-        flm(lidx-m) = mfac*conj(alm(0,ofs-m+l));
+        fp += alm(1, ofs-m+l)*icmplx;
+        fm -= alm(1, ofs-m+l)*icmplx;
         }
-      ofs += lmax+1-m;
-      mfac=-mfac;
-      }
-    }
-  else
-    {
-    T sfac = (abs(spin)&1) ? -T(1) : T(1);
-    for (size_t m=0; m<=lmax; ++m)
-      {
-      for (size_t l=m; l<=lmax; ++l)
+      if (spin>=0)
         {
-        size_t lidx = l*(l+1);
-        auto fp = alm(0, ofs-m+l) + alm(1, ofs-m+l)*complex<T>(T(0),T(1));
-        auto fm = alm(0, ofs-m+l) - alm(1, ofs-m+l)*complex<T>(T(0),T(1));
-        if (spin>=0)
-          {
-          flm(lidx+m) = fp;
-          flm(lidx-m) = mfac*conj(fm);
-          }
-        else
-          {
-          flm(lidx+m) = sfac*fm;
-          flm(lidx-m) = sfac*mfac*conj(fp);
-          }
+        flm(l, lmax+m) = fp;
+        flm(l, lmax-m) = mfac*conj(fm);
         }
-      ofs += lmax+1-m;
-      mfac=-mfac;
+      else
+        {
+        flm(l, lmax+m) = sfac*fm;
+        flm(l, lmax-m) = sfac*mfac*conj(fp);
+        }
       }
+    ofs += lmax+1-m;
+    mfac=-mfac;
     }
   return flm_;
   }
@@ -261,35 +249,34 @@ py::array Py_alm2flm(const py::array &alm, int spin, py::object &flm)
 template<typename T> py::array Py2_flm2alm(const py::array &flm_, int spin,
   py::object &alm__, bool real)
   {
-  auto flm = to_cmav<complex<T>,1>(flm_);
+  auto flm = to_cmav<complex<T>,2>(flm_);
   MR_assert(flm.shape(0)>0, "degenerate shape of flm");
-  size_t lmax = size_t(sqrt(flm.shape(0)))-1;
-  MR_assert(flm.shape(0)==(lmax+1)*(lmax+1), "bad shape of flm");
+  size_t lmax = flm.shape(0)-1;
+  MR_assert(flm.shape(1)==2*lmax+1, "bad shape of flm");
   size_t nalm = ((lmax+1)*(lmax+2))/2;
   if (spin!=0) MR_assert(!real, "no real fields at nonzero spins");
   size_t ncomp = real ? 1 : 2;
   auto alm_ = get_optional_Pyarr<complex<T>>(alm__, {ncomp, nalm});
   auto alm = to_vmav<complex<T>,2>(alm_);
   size_t ofs=0;
-  T mfac=T(1.);
+  T mfac=T(1);
   T sfac = (abs(spin)&1) ? -T(1) : T(1);
   for (size_t m=0; m<=lmax; ++m)
     {
     for (size_t l=m; l<=lmax; ++l)
       {
-      size_t lidx = l*(l+1);
       if (spin>=0)
         {
-        auto fp = flm(lidx+m);
-        auto fm = mfac*conj(flm(lidx-m));
+        auto fp = flm(l,lmax+m);
+        auto fm = mfac*conj(flm(l,lmax-m));
         alm(0, ofs-m+l) = (fp+fm)*T(0.5);
         if (ncomp>1)
           alm(1, ofs-m+l) = (fp-fm)*complex<T>(T(0),T(-0.5));
         }
       else
         {
-        auto fp = mfac*sfac*conj(flm(lidx-m));
-        auto fm = sfac*flm(lidx+m);
+        auto fp = mfac*sfac*conj(flm(l,lmax-m));
+        auto fm = sfac*flm(l,lmax+m);
         alm(0, ofs-m+l) = (fp+fm)*T(0.5);
         alm(1, ofs-m+l) = (fp-fm)*complex<T>(T(0),T(-0.5));
         }

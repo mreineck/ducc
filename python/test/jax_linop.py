@@ -17,9 +17,6 @@ for _name, _value in ducc0.jax.registrations().items():
 def _from_id(objectid):
     import ctypes
     return ctypes.cast(objectid, ctypes.py_object).value
-
-def _get_prim(adjoint):
-    return _prim_adjoint if adjoint else _prim_forward
     
 def _exec_abstract(x, stateid, adjoint):
     state = _from_id(stateid)
@@ -86,60 +83,43 @@ def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
     )
 
 def _jvp(args, tangents, *, stateid, adjoint):
-    prim = _get_prim(adjoint)
-    res = prim.bind(args[0], stateid=stateid)
+#    prim = _get_prim(adjoint)
+    res = _prim.bind(args[0], stateid=stateid, adjoint=adjoint)
     return (res, jax.lax.zeros_like_array(res) if type(tangents[0]) is ad.Zero
-                                               else prim.bind(tangents[0], stateid=stateid))
+                                               else _prim.bind(tangents[0], stateid=stateid,adjoint=adjoint))
 
 def _transpose(cotangents, args, *, stateid, adjoint):
-    tmp = _get_prim(not adjoint).bind(cotangents[0].conj(), stateid=stateid)
+    tmp = _prim.bind(cotangents[0].conj(), stateid=stateid, adjoint=not adjoint)
     tmp[0] = tmp[0].conj()
     return tmp
 
 def _batch(args, axes, *, stateid, adjoint):
     raise NotImplementedError("FIXME")
 
-def _make_prims():
+def _make_prim():
     name = "ducc_linop_prim"
-    global _prim_forward, _prim_adjoint
-    _prim_forward = jax.core.Primitive(name+"_forward")
-    _prim_adjoint = jax.core.Primitive(name+"_adjoint")
+    global _prim
+    _prim = jax.core.Primitive(name)
 
-    for adjoint in (False, True):
-        prim = _get_prim(adjoint)
-        prim.multiple_results = True
-        prim.def_impl(partial(jax.interpreters.xla.apply_primitive, prim))
-        prim.def_abstract_eval(partial(_exec_abstract,adjoint=adjoint))
+    _prim.multiple_results = True
+    _prim.def_impl(partial(jax.interpreters.xla.apply_primitive, _prim))
+    _prim.def_abstract_eval(_exec_abstract)
     
-        for platform in ["cpu", "gpu"]:
-            mlir.register_lowering(
-                prim,
-                partial(_lowering, platform=platform, adjoint=adjoint),
-                platform=platform)
+    for platform in ["cpu", "gpu"]:
+        mlir.register_lowering(
+            _prim,
+            partial(_lowering, platform=platform),
+            platform=platform)
 
-        ad.primitive_jvps[prim] = partial(_jvp, adjoint=adjoint)
-        ad.primitive_transposes[prim] = partial(_transpose, adjoint=adjoint)
-        jax.interpreters.batching.primitive_batchers[prim] = partial(_batch, adjoint=adjoint)
+        ad.primitive_jvps[_prim] = _jvp
+        ad.primitive_transposes[_prim] = _transpose
+        jax.interpreters.batching.primitive_batchers[_prim] = _batch
 
-_make_prims()
+_make_prim()
 
 def _call(x, state, adjoint):
-    return _get_prim(adjoint).bind(x, stateid=id(state))
+    return _prim.bind(x, stateid=id(state), adjoint=adjoint)
     
-
-class _Linop:
-    @property
-    def adjoint(self):
-        return _Linop(self._state, not self._adjoint)
-
-    def __init__(self, state, adjoint=False):
-        self._state = state
-        self._adjoint = adjoint
-
-    def __call__(self, x):
-        return _call(x, self._state, self._adjoint)
-
-
 def make_linop(func, func_abstract, **kwargs):
     import copy
     # somehow make sure that kwargs_clean only contains deep copies of
@@ -150,4 +130,5 @@ def make_linop(func, func_abstract, **kwargs):
     _global_opcounter += 1
     kwargs_clean["_func"] = func
     kwargs_clean["_func_abstract"] = func_abstract
-    return _Linop(kwargs_clean)
+    return (jax.jit(partial(_call, state=kwargs_clean, adjoint=False)),
+            jax.jit(partial(_call, state=kwargs_clean, adjoint=True)))
