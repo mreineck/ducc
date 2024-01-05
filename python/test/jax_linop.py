@@ -83,7 +83,6 @@ def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
     )
 
 def _jvp(args, tangents, *, stateid, adjoint):
-#    prim = _get_prim(adjoint)
     res = _prim.bind(args[0], stateid=stateid, adjoint=adjoint)
     return (res, jax.lax.zeros_like_array(res) if type(tangents[0]) is ad.Zero
                                                else _prim.bind(tangents[0], stateid=stateid,adjoint=adjoint))
