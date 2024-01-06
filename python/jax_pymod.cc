@@ -47,12 +47,6 @@ template<typename T> vector<T> tuple2vector (const py::tuple &tp)
   return res;
   }
 
-const map<uint8_t, py::object> tcdict = {
- { 3, py::dtype::of<float>()},
- { 7, py::dtype::of<double>()},
- {67, py::dtype::of<complex<float>>()},
- {71, py::dtype::of<complex<double>>()}};
-
 // https://en.cppreference.com/w/cpp/numeric/bit_cast
 template <class To, class From>
 typename std::enable_if<sizeof(To) == sizeof(From) && std::is_trivially_copyable<From>::value &&
@@ -78,6 +72,13 @@ pybind11::capsule EncapsulateFunction(T* fn)
 void linop(void *out, void **in)
   {
   py::gil_scoped_acquire get_GIL;
+
+  static const map<uint8_t, py::object> tcdict = {
+    { 3, py::dtype::of<float>()},
+    { 7, py::dtype::of<double>()},
+    {67, py::dtype::of<complex<float>>()},
+    {71, py::dtype::of<complex<double>>()}};
+
   // the "opid" in in[1] is not used; it is only passed to guarantee uniqueness
   // of the passed parameters for every distinvt operator, so that JAX knows
   // when and when not to recompile.
