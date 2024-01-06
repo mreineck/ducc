@@ -39,14 +39,6 @@ namespace py = pybind11;
 using namespace std;
 using namespace ducc0;
 
-template<typename T> vector<T> tuple2vector (const py::tuple &tp)
-  {
-  vector<size_t> res;
-  for (auto v:tp)
-    res.push_back(v.cast<size_t>());
-  return res;
-  }
-
 // https://en.cppreference.com/w/cpp/numeric/bit_cast
 template <class To, class From>
 typename std::enable_if<sizeof(To) == sizeof(From) && std::is_trivially_copyable<From>::value &&
@@ -65,9 +57,7 @@ bit_cast(const From& src) noexcept
 
 template <typename T>
 pybind11::capsule EncapsulateFunction(T* fn)
-  {
-  return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET");
-  }
+  { return pybind11::capsule(bit_cast<void*>(fn), "xla._CUSTOM_CALL_TARGET"); }
 
 void linop(void *out, void **in)
   {
@@ -128,10 +118,7 @@ pybind11::dict Registrations()
   }
 
 void add_jax(py::module_ &msup)
-  {
-  auto m = msup.def_submodule("jax");
-  m.def("registrations", &Registrations);
-  }
+  { msup.def_submodule("jax").def("registrations", &Registrations); }
 
 }
 
