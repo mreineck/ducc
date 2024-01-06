@@ -1,5 +1,4 @@
 import jax
-
 from functools import partial
 import numpy as np
 import ducc0
@@ -21,7 +20,13 @@ def _from_id(objectid):
 def _exec_abstract(x, stateid, adjoint):
     state = _from_id(stateid)
     shp, tp = state["_func_abstract"](x.shape, x.dtype, adjoint, state)
-    return (jax.core.ShapedArray(shp, tp), )
+    return (jax.core.ShapedArray(shp, tp),)
+
+# the values are explained in src/duc0/bindings/typecode.h
+_dtype_dict = { np.dtype(np.float32): 3,
+                np.dtype(np.float64): 7,
+                np.dtype(np.complex64): 67,
+                np.dtype(np.complex128): 71 }
 
 def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
     import jaxlib
@@ -41,40 +46,29 @@ def _lowering(ctx, x, *, platform="cpu", stateid, adjoint):
     layout_in = tuple(range(len(shape_in) - 1, -1, -1))
     layout_out = tuple(range(len(shape_out) - 1, -1, -1))
 
-    # the values are explained in src/duc0/bindings/typecode.h
-    dtype_dict = { np.dtype(np.float32): 3,
-                   np.dtype(np.float64): 7,
-                   np.dtype(np.complex64): 67,
-                   np.dtype(np.complex128): 71 }
-
     # add array
     operands = [x]
-    operand_layouts = [layout_in] + [()]*(7+len(shape_in)+len(shape_out))
-
     # add opid and stateid
     operands.append(mlir.ir_constant(state["_opid"]))
     operands.append(mlir.ir_constant(stateid))
-
     # add forward/adjoint mode
     operands.append(mlir.ir_constant(int(adjoint)))
-
     # add input dtype, rank, and shape
-    operands.append(mlir.ir_constant(dtype_dict[dtype_in]))
+    operands.append(mlir.ir_constant(_dtype_dict[dtype_in]))
     operands.append(mlir.ir_constant(len(shape_in)))
     operands += [mlir.ir_constant(i) for i in shape_in]
-
     # add output dtype, rank, and shape
-    operands.append(mlir.ir_constant(dtype_dict[dtype_out]))
+    operands.append(mlir.ir_constant(_dtype_dict[dtype_out]))
     operands.append(mlir.ir_constant(len(shape_out)))
     operands += [mlir.ir_constant(i) for i in shape_out]
+
+    operand_layouts = [layout_in] + [()]*(7+len(shape_in)+len(shape_out))
 
     if platform == "cpu":
         return jaxlib.hlo_helpers.custom_call(
             platform + "_linop",
-            result_types=[jaxtype_out, ],
-            operands=operands,
-            operand_layouts=operand_layouts,
-            result_layouts=[layout_out]
+            result_types=[jaxtype_out], result_layouts=[layout_out],
+            operands=operands, operand_layouts=operand_layouts,
         ).results
     elif platform == "gpu":
         raise ValueError("No GPU support")
@@ -95,26 +89,17 @@ def _transpose(cotangents, args, *, stateid, adjoint):
 def _batch(args, axes, *, stateid, adjoint):
     raise NotImplementedError("FIXME")
 
-def _make_prim():
-    name = "ducc_linop_prim"
-    global _prim
-    _prim = jax.core.Primitive(name)
-
-    _prim.multiple_results = True
-    _prim.def_impl(partial(jax.interpreters.xla.apply_primitive, _prim))
-    _prim.def_abstract_eval(_exec_abstract)
+_prim = jax.core.Primitive("ducc_linop_prim")
+_prim.multiple_results = True
+_prim.def_impl(partial(jax.interpreters.xla.apply_primitive, _prim))
+_prim.def_abstract_eval(_exec_abstract)
     
-    for platform in ["cpu", "gpu"]:
-        mlir.register_lowering(
-            _prim,
-            partial(_lowering, platform=platform),
-            platform=platform)
-
-        ad.primitive_jvps[_prim] = _jvp
-        ad.primitive_transposes[_prim] = _transpose
-        jax.interpreters.batching.primitive_batchers[_prim] = _batch
-
-_make_prim()
+for platform in ["cpu", "gpu"]:
+    mlir.register_lowering(_prim, partial(_lowering, platform=platform),
+                           platform=platform)
+    ad.primitive_jvps[_prim] = _jvp
+    ad.primitive_transposes[_prim] = _transpose
+    jax.interpreters.batching.primitive_batchers[_prim] = _batch
 
 def _call(x, state, adjoint):
     return _prim.bind(x, stateid=id(state), adjoint=adjoint)

@@ -248,10 +248,7 @@ template<typename T> py::array_t<T> get_optional_const_Pyarr(
   }
 
 template<typename T> py::object Dtype()
-  {
-  static const auto tp = make_Pyarr<T>({}).dtype();
-  return tp;
-  }
+  { return py::dtype::of<T>(); }
 template<typename T> bool isDtype(const py::object &dtype)
   { return Dtype<T>().equal(dtype); }
 

@@ -29,10 +29,7 @@
 #include <pybind11/numpy.h>
 
 #include <vector>
-
-#include "ducc0/infra/error_handling.h"
-#include "ducc0/bindings/typecode.h"
-#include "ducc0/bindings/pybind_utils.h"
+#include <map>
 
 namespace ducc0 {
 
@@ -50,14 +47,11 @@ template<typename T> vector<T> tuple2vector (const py::tuple &tp)
   return res;
   }
 
-py::object typecode2dtype(uint8_t typecode)
-  {
-  if (isTypecode<float>(typecode)) return Dtype<float>();
-  if (isTypecode<double>(typecode)) return Dtype<double>();
-  if (isTypecode<complex<float>>(typecode)) return Dtype<complex<float>>();
-  if (isTypecode<complex<double>>(typecode)) return Dtype<complex<double>>();
-  MR_fail("unsupported data type");
-  }
+const map<uint8_t, py::object> tcdict = {
+ { 3, py::dtype::of<float>()},
+ { 7, py::dtype::of<double>()},
+ {67, py::dtype::of<complex<float>>()},
+ {71, py::dtype::of<complex<double>>()}};
 
 // https://en.cppreference.com/w/cpp/numeric/bit_cast
 template <class To, class From>
@@ -97,13 +91,13 @@ void linop(void *out, void **in)
   
   size_t idx = 4;
   // Getting type, rank, and shape of the input
-  auto dtin = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
+  auto dtin = tcdict.at(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
   size_t ndim_in = *reinterpret_cast<uint64_t *>(in[idx++]);
   vector<size_t> shape_in;
   for (size_t i=0; i<ndim_in; ++i)
     shape_in.push_back(*reinterpret_cast<uint64_t *>(in[idx++]));
   // Getting type, rank, and shape of the output
-  auto dtout = typecode2dtype(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
+  auto dtout = tcdict.at(uint8_t(*reinterpret_cast<int64_t *>(in[idx++])));
   size_t ndim_out = *reinterpret_cast<uint64_t *>(in[idx++]);
   vector<size_t> shape_out;
   for (size_t i=0; i<ndim_out; ++i)
@@ -114,12 +108,12 @@ void linop(void *out, void **in)
   // keep any references to them.
   py::str dummy;
   py::array pyin (dtin, shape_in, in[0], dummy);
-  MR_assert(!pyin.owndata(), "owndata should be false");
+//  MR_assert(!pyin.owndata(), "owndata should be false");
   pyin.attr("flags").attr("writeable")=false;
-  MR_assert(!pyin.writeable(), "input array should not be writeable");
+//  MR_assert(!pyin.writeable(), "input array should not be writeable");
   py::array pyout (dtout, shape_out, out, dummy);
-  MR_assert(!pyout.owndata(), "owndata should be false");
-  MR_assert(pyout.writeable(), "output data must be writable");
+//  MR_assert(!pyout.owndata(), "owndata should be false");
+//  MR_assert(pyout.writeable(), "output data must be writable");
 
   // Execute the Python function implementing the linear operation
   state["_func"](pyin, pyout, adjoint, state);
