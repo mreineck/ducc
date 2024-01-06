@@ -33,7 +33,7 @@ PYBIND11_MODULE(PKGNAME, m)
 #undef DUCC0_STRINGIFY
 #undef DUCC0_XSTRINGIFY
 
-  add_jax(m);
+//  add_jax(m);
   add_fft(m);
   add_sht(m);
   add_totalconvolve(m);
