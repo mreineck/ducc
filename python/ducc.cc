@@ -13,7 +13,6 @@
 #include "ducc0/wgridder/wgridder.cc"
 
 #include <pybind11/pybind11.h>
-#include "python/jax_pymod.cc"
 #include "python/sht_pymod.cc"
 #include "python/fft_pymod.cc"
 #include "python/totalconvolve_pymod.cc"
@@ -33,7 +32,6 @@ PYBIND11_MODULE(PKGNAME, m)
 #undef DUCC0_STRINGIFY
 #undef DUCC0_XSTRINGIFY
 
-  add_jax(m);
   add_fft(m);
   add_sht(m);
   add_totalconvolve(m);
