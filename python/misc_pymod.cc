@@ -758,7 +758,7 @@ phi0 : numpy.ndarray((nrings,), dtype=float)
     longitude of the first pixel in each ring
 ringstart : numpy.ndarray((nrings,), dtype=np.uint64)
     index of the first pixel of each ring in output map
-deflect : numpy.ndarray((2, npix), dtype=float) 
+deflect : numpy.ndarray((npix, 2), dtype=float) 
     Spin-1 deflection field, with real and imaginary comp in first and second entry
     (typically, the output of a spin-1 alm2map_spin transform)
     The array layout and npix must be consistent with the given geometry
