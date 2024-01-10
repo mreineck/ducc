@@ -766,8 +766,10 @@ calc_rotation(optional) : boolean
     If set, also returns the phase correction (gamma in astro-ph/0502469v3)
 nthreads(optional): int
     Number of threads to use. Defaults to 1
-res(optional):  numpy.ndarray((npix, 3 if calc_rotation is set or 2), dtype=float)
+res(optional): numpy.ndarray((npix, 3 if calc_rotation is set or 2), dtype=float)
     output array, containing new co-latitudes, new longitudes, and rotation gammma if required
+dphi(optional): numpy.ndarray((nrings,), dtype=float)
+    azimuthal distance between pixels in each ring (in radians)
 
 Returns
 -------
@@ -775,18 +777,28 @@ numpy.ndarray : identical to res
 
 )""";
 
+cmav<double,1> get_dphi_default(const cmav<size_t,1> &nphi)
+  {
+  vmav<double,1> res(nphi.shape());
+  mav_apply([](auto np, auto &dp){dp=2.*pi/np;}, 1, nphi, res);
+  return res;
+  }
+
 py::array Py_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
-  const py::array &deflect_, bool calc_rotation, py::object &res__, size_t nthreads=1)
+  const py::array &deflect_, bool calc_rotation, py::object &res__,
+  size_t nthreads, const py::object &dphi_)
   {
   auto theta=to_cmav<double,1>(theta_);
   auto phi0=to_cmav<double,1>(phi0_);
   auto nphi=to_cmav<size_t,1>(nphi_);
   auto ringstart=to_cmav<size_t,1>(ringstart_);
   auto deflect=to_cmav<double,2>(deflect_);
+  auto dphi = dphi_.is(None) ? get_dphi_default(nphi) : to_cmav<double,1>(dphi_);
   size_t nrings = theta.shape(0);
   MR_assert(phi0.shape(0)==nrings, "nrings mismatch");
   MR_assert(nphi.shape(0)==nrings, "nrings mismatch");
+  MR_assert(dphi.shape(0)==nrings, "nrings mismatch");
   MR_assert(ringstart.shape(0)==nrings, "nrings mismatch");
   MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
   size_t ncomp = calc_rotation ? 3 : 2;
@@ -800,10 +812,9 @@ py::array Py_get_deflected_angles(const py::array &theta_,
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
         vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
-        double dphi = 2*pi/nphi(iring);
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
-          double phi = phi0(iring) + iphi*dphi;
+          double phi = phi0(iring) + iphi*dphi(iring);
           size_t i = ringstart(iring)+iphi;
           double a_theta = deflect(i,0),
                  a_phi = deflect(i,1);
@@ -1421,7 +1432,7 @@ void add_misc(py::module_ &msup)
 
   m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
-    "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1);
+    "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1, "dphi"_a=None);
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 
