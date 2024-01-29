@@ -594,7 +594,7 @@ template<typename T> class ScopedValueChanger
       { object=original_value; }
   };
 
-#define DUCC0_HIERARCHICAL_SUBMISSION
+//#define DUCC0_HIERARCHICAL_SUBMISSION
 #ifdef DUCC0_HIERARCHICAL_SUBMISSION
 
 // The next two definitions are taken from TensorFlow sources.
