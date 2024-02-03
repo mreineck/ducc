@@ -292,7 +292,7 @@ class ducc_thread_pool: public thread_pool
           worker->busy_flag.clear();
           worker->work = nullptr;
           worker->thread = std::thread(
-            [worker, this, i]{ worker->worker_main(shutdown_, unscheduled_tasks_, overflow_work_, i); });
+            [worker, this, i]{ worker->worker_main(shutdown_, unscheduled_tasks_, overflow_work_, i+1); });
           }
         catch (...)
           {
@@ -316,7 +316,7 @@ class ducc_thread_pool: public thread_pool
   public:
     explicit ducc_thread_pool(size_t nthreads):
       workers_(nthreads)
-      { create_threads(); }
+      { do_pinning(0); create_threads(); }
 
     //virtual
     ~ducc_thread_pool() { shutdown(); }
@@ -730,6 +730,7 @@ void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
 void execParallel(size_t nthreads, std::function<void(size_t)> func)
   {
   Distribution dist;
+  MR_assert(nthreads==adjust_nthreads(nthreads), "bad nthreads value");
   dist.execParallel(nthreads, [&](Scheduler &sched)
     { func(sched.thread_num()); });
   }
@@ -747,7 +748,7 @@ void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
 void execParallel(size_t work_lo, size_t work_hi, size_t nthreads,
   std::function<void(size_t, size_t, size_t)> func)
   {
-  nthreads = adjust_nthreads(nthreads);
+  MR_assert(nthreads==adjust_nthreads(nthreads), "bad nthreads value");
   execParallel(nthreads, [&](Scheduler &sched)
     {
     auto tid = sched.thread_num();
