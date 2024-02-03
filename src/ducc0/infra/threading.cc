@@ -438,6 +438,8 @@ thread_pool *get_active_pool()
   return active_pool;
   }
 
+static bool in_parallel_region=false;
+
 #endif
 
 size_t max_threads()
