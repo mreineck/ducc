@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2024 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
@@ -946,7 +946,7 @@ template<typename Func, typename Ttuple> inline void call_with_tuple2
 template<typename...Ts, typename Func, size_t... Is>
 inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Func &&func,
   index_sequence<Is...>)
-  { return tuple<result_of_t<Func(Ts)>...>{func(get<Is>(inputs))...}; }
+  { return tuple<invoke_result_t<Func,Ts>...>{func(get<Is>(inputs))...}; }
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
@@ -976,7 +976,7 @@ template<typename...Ts, typename Func, size_t... Is>
 inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
    Func &&func, index_sequence<Is...>)
   {
-  return tuple<result_of_t<Func(Ts, int)>...>
+  return tuple<invoke_result_t<Func, Ts, int>...>
     {func(get<Is>(inputs), Is)...};
   }
 
@@ -1224,7 +1224,7 @@ template<typename T, size_t ndim>
 template<typename...Ts, typename ...Qs, typename Func, size_t... Is>
 inline auto tuple_transform2_impl(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
   Func &&func, index_sequence<Is...>)
-  { return tuple<result_of_t<Func(Ts, Qs)>...>{func(get<Is>(i1),get<Is>(i2))...}; }
+  { return tuple<invoke_result_t<Func, Ts, Qs>...>{func(get<Is>(i1),get<Is>(i2))...}; }
 template<typename... Ts, typename ...Qs, typename Func>
 inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
   Func &&func)
