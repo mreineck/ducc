@@ -1,6 +1,6 @@
 /** \file ducc0/infra/error_handling.h
  *
- * \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ * \copyright Copyright (C) 2019-2024 Max-Planck-Society
  * \author Martin Reinecke
  */
 
@@ -54,19 +54,42 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sstream>
 #include <stdexcept>
+#if __has_include(<version>)
+#include <version>
+#if __cpp_lib_source_location
+#include <source_location>
+#endif
+#endif
 #include "ducc0/infra/useful_macros.h"
 
 namespace ducc0 {
 
 namespace detail_error_handling {
 
+#if __cpp_lib_source_location
+#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(std::source_location::current())
+class CodeLocation
+  {
+  private:
+    std::source_location loc;
+
+  public:
+    CodeLocation(const std::source_location &loc_)
+      : loc(loc_) {}
+
+    inline ::std::ostream &print(::std::ostream &os) const
+      {
+      return os << "\n" << loc.file_name() <<  ": " <<  loc.line() << ":"
+                << loc.column() << " (" << loc.function_name() << ")" << ":\n";
+      }
+  };
+#else
 #if defined (__GNUC__)
 #define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
 #define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
 
-// to be replaced with std::source_location once generally available
 class CodeLocation
   {
   private:
@@ -85,6 +108,7 @@ class CodeLocation
       return os;
       }
   };
+#endif
 
 inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
   { return loc.print(os); }
