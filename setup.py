@@ -48,7 +48,7 @@ include_dirs = ['.', './src/',
                 pybind11.get_include(True),
                 pybind11.get_include(False)]
 
-extra_compile_args = ['-std=c++17', '-fvisibility=hidden']
+extra_compile_args = ['-std=c++20', '-fvisibility=hidden']
 
 if do_debug:
     extra_compile_args += ['-g']
@@ -72,7 +72,7 @@ if sys.platform == 'darwin':
     extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
     python_module_link_args += ['-mmacosx-version-min=10.14', '-pthread']
 elif sys.platform == 'win32':
-    extra_compile_args = ['/EHsc', '/std:c++17']
+    extra_compile_args = ['/EHsc', '/std:c++20']
     if do_optimize:
         extra_compile_args += ['/Ox']
 else:

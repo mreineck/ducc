@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2024 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -73,12 +73,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 #endif
+#if __has_include(<version>)
+#include <version>
+#if __cpp_lib_latch
+#include <latch>
+#endif
+#endif
 #endif
 
 namespace ducc0 {
 
 namespace detail_threading {
 
+#if __cpp_lib_latch
+using std::latch;
+#else
 class latch
   {
     std::atomic<size_t> num_left_;
@@ -104,6 +113,7 @@ class latch
       }
     bool is_ready() { return num_left_ == 0; }
   };
+#endif
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
@@ -333,17 +343,27 @@ class ducc_thread_pool: public thread_pool
         return ducc0_max_threads();
       return std::min(ducc0_max_threads(), nthreads_in);
       }
+
     //virtual
     void submit(std::function<void()> work)
+      { submit(std::move(work), 0); }
+
+    //virtual
+    void submit(std::function<void()> work, size_t thread_hint)
       {
       lock_t lock(mut_);
       if (shutdown_)
         throw std::runtime_error("Work item submitted after shutdown");
 
+      if (thread_hint>=workers_.size()) thread_hint=0;
+
       ++unscheduled_tasks_;
 
       // First check for any idle workers and wake those
-      for (auto &worker : workers_)
+      for (size_t i=0; i<workers_.size(); ++i)
+        {
+        size_t iwrk = (i+thread_hint)%workers_.size();
+        auto &worker(workers_[iwrk]);
         if (!worker.busy_flag.test_and_set())
           {
           --unscheduled_tasks_;
@@ -354,6 +374,7 @@ class ducc_thread_pool: public thread_pool
           }
           return;
           }
+        }
 
       // If no workers were idle, push onto the overflow queue for later
       overflow_work_.push(std::move(work));
@@ -596,27 +617,6 @@ template<typename T> class ScopedValueChanger
       { object=original_value; }
   };
 
-//#define DUCC0_HIERARCHICAL_SUBMISSION
-#ifdef DUCC0_HIERARCHICAL_SUBMISSION
-
-// The next two definitions are taken from TensorFlow sources.
-// Copyright 2015 The TensorFlow Authors.
-
-// Basic y-combinator implementation.
-template <class Func> struct YCombinatorImpl {
-  Func func;
-  template <class... Args>
-  decltype(auto) operator()(Args&&... args) const {
-    return func(*this, std::forward<Args>(args)...);
-  }
-};
-
-template <class Func> YCombinatorImpl<std::decay_t<Func>> YCombinator(Func&& func) {
-  return YCombinatorImpl<std::decay_t<Func>>{std::forward<Func>(func)};
-}
-
-#endif
-
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
   if (nthreads_ == 1)
@@ -637,36 +637,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // automatically prohibiting nested parallelism.
   auto pool = get_active_pool();
 
-#ifdef DUCC0_HIERARCHICAL_SUBMISSION
-
-  latch counter(nthreads_);
-  // distribute work to helper threads, in a recursive fashion
-  auto new_f = YCombinator([this, &f, &counter, &ex, &ex_mut, pool](auto &new_f, size_t istart, size_t step) -> void {
-    try
-      {
-      ScopedValueChanger<bool> changer(in_parallel_region, true);
-      ScopedUseThreadPool guard(*pool);
-      for(; step>0; step>>=1)
-        if(istart+step<nthreads_)
-          pool->submit([&new_f, istart, step]()
-            {new_f(istart+step, step>>1);});
-      MyScheduler sched(*this, istart);
-      f(sched);
-      }
-    catch (...)
-      {
-      LockGuard lock(ex_mut);
-      ex = std::current_exception();
-      }
-    counter.count_down();
-    });
-
-  size_t biggest_step=1;
-  while (biggest_step*2<nthreads_) biggest_step<<=1;
-  new_f(0, biggest_step);
-
-#else  // sequential submission
-
   latch counter(nthreads_-1);
   for (size_t i=1; i<nthreads_; ++i)
     {
@@ -684,7 +654,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
         ex = std::current_exception();
         }
       counter.count_down();
-      });
+      }, i-1);
     }
   {
   // do remaining work directly on this thread
@@ -692,9 +662,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   MyScheduler sched(*this, 0);
   f(sched);
   }
-
-#endif
-#undef DUCC0_HIERARCHICAL_SUBMISSION
 
   counter.wait();
   if (ex)
