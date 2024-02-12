@@ -229,8 +229,9 @@ class ducc_thread_pool: public thread_pool
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
-      CondVar work_ready;
-      Mutex mut;
+std::atomic_flag fwork_ready = ATOMIC_FLAG_INIT;
+//      CondVar work_ready;
+//      Mutex mut;
       std::atomic_flag busy_flag = ATOMIC_FLAG_INIT;
       std::function<void()> work;
 
@@ -241,18 +242,21 @@ class ducc_thread_pool: public thread_pool
         {
         in_parallel_region = true;
         do_pinning(ithread);
-        using lock_t = UniqueLock;
+//        using lock_t = UniqueLock;
         bool expect_work = true;
         while (!shutdown_flag || expect_work)
           {
           std::function<void()> local_work;
           if (expect_work || unscheduled_tasks == 0)
             {
-            lock_t lock(mut);
+//            lock_t lock(mut);
             // Wait until there is work to be executed
-            work_ready.wait(lock, [&]{ return (work || shutdown_flag); });
+fwork_ready.wait(false);
+//            work_ready.wait(lock, [&]{ return (work || shutdown_flag); });
             local_work.swap(work);
             expect_work = false;
+fwork_ready.clear();
+//fwork_ready.notify_one();
             }
 
           bool marked_busy = false;
@@ -316,7 +320,8 @@ class ducc_thread_pool: public thread_pool
       {
       shutdown_ = true;
       for (auto &worker : workers_)
-        worker.work_ready.notify_all();
+        { worker.fwork_ready.test_and_set(); worker.fwork_ready.notify_all(); }
+//        worker.work_ready.notify_all();
 
       for (auto &worker : workers_)
         if (worker.thread.joinable())
@@ -368,9 +373,12 @@ class ducc_thread_pool: public thread_pool
           {
           --unscheduled_tasks_;
           {
-          lock_t lock(worker.mut);
+worker.fwork_ready.wait(true);
+//          lock_t lock(worker.mut);
           worker.work = std::move(work);
-          worker.work_ready.notify_one();
+//          worker.work_ready.notify_one();
+worker.fwork_ready.test_and_set();
+worker.fwork_ready.notify_one();
           }
           return;
           }
