@@ -107,8 +107,7 @@ class thread_pool
         return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
     virtual void submit(std::function<void()> work) = 0;
-    virtual void submit(std::function<void()> work, size_t /*thread_hint*/)
-      { submit(work); }
+    virtual void submit(std::function<void()> work, size_t ithread) = 0;
   };
 
 }}

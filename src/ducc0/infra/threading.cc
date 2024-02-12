@@ -73,49 +73,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 #endif
-#if __has_include(<version>)
-#include <version>
-#if __cpp_lib_latch
 #include <latch>
-#endif
-#endif
 #endif
 
 namespace ducc0 {
 
 namespace detail_threading {
 
-#if __cpp_lib_latch
-using std::latch;
-#else
-class latch
-  {
-    std::atomic<size_t> num_left_;
-    Mutex mut_;
-    CondVar completed_;
-    using lock_t = UniqueLock;
-
-  public:
-    latch(size_t n): num_left_(n) {}
-
-    void count_down()
-      {
-      lock_t lock(mut_);
-      if (--num_left_)
-        return;
-      completed_.notify_all();
-      }
-
-    void wait()
-      {
-      lock_t lock(mut_);
-      completed_.wait(lock, [this]{ return is_ready(); });
-      }
-    bool is_ready() { return num_left_ == 0; }
-  };
-#endif
-
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
+
+using std::latch;
 
 size_t ducc0_max_threads()
   {
@@ -172,37 +139,6 @@ int pin_offset()
   return pin_offset_;
   }
 
-template <typename T> class concurrent_queue
-  {
-    std::queue<T> q_;
-    Mutex mut_;
-    std::atomic<size_t> size_=0;
-    using lock_t = LockGuard;
-
-  public:
-    void push(T val)
-      {
-      lock_t lock(mut_);
-      ++size_;
-      q_.push(std::move(val));
-      }
-
-    bool try_pop(T &val)
-      {
-      if (size_==0) return false;
-      lock_t lock(mut_);
-      // Queue might have been emptied while we acquired the lock
-      if (q_.empty()) return false;
-
-      val = std::move(q_.front());
-      --size_;
-      q_.pop();
-      return true;
-      }
-
-    bool empty() const { return size_==0; }
-  };
-
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
 static void do_pinning(int ithread)
   {
@@ -229,69 +165,31 @@ class ducc_thread_pool: public thread_pool
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
-std::atomic_flag fwork_ready = ATOMIC_FLAG_INIT;
-//      CondVar work_ready;
-//      Mutex mut;
-      std::atomic_flag busy_flag = ATOMIC_FLAG_INIT;
+      std::atomic_flag news = ATOMIC_FLAG_INIT;
       std::function<void()> work;
 
-      void worker_main(
-        std::atomic<bool> &shutdown_flag,
-        std::atomic<size_t> &unscheduled_tasks,
-        concurrent_queue<std::function<void()>> &overflow_work, size_t ithread)
+      void worker_main(std::atomic<bool> &shutdown_flag, size_t ithread)
         {
         in_parallel_region = true;
         do_pinning(ithread);
-//        using lock_t = UniqueLock;
-        bool expect_work = true;
-        while (!shutdown_flag || expect_work)
+        while (true)
           {
           std::function<void()> local_work;
-          if (expect_work || unscheduled_tasks == 0)
-            {
-//            lock_t lock(mut);
-            // Wait until there is work to be executed
-fwork_ready.wait(false);
-//            work_ready.wait(lock, [&]{ return (work || shutdown_flag); });
-            local_work.swap(work);
-            expect_work = false;
-fwork_ready.clear();
-//fwork_ready.notify_one();
-            }
+          // Wait until something happens
+          news.wait(false);
+          if (shutdown_flag) return;
+          local_work.swap(work);
+          news.clear();
 
-          bool marked_busy = false;
           if (local_work)
-            {
-            marked_busy = true;
             local_work();
-            }
-
-          if (!overflow_work.empty())
-            {
-            if (!marked_busy && busy_flag.test_and_set())
-              {
-              expect_work = true;
-              continue;
-              }
-            marked_busy = true;
-
-            while (overflow_work.try_pop(local_work))
-              {
-              --unscheduled_tasks;
-              local_work();
-              }
-            }
-
-          if (marked_busy) busy_flag.clear();
           }
         }
       };
 
-    concurrent_queue<std::function<void()>> overflow_work_;
     Mutex mut_;
     std::vector<worker> workers_;
     std::atomic<bool> shutdown_=false;
-    std::atomic<size_t> unscheduled_tasks_=0;
     using lock_t = LockGuard;
 
     void create_threads()
@@ -303,10 +201,9 @@ fwork_ready.clear();
         try
           {
           auto *worker = &workers_[i];
-          worker->busy_flag.clear();
           worker->work = nullptr;
           worker->thread = std::thread(
-            [worker, this, i]{ worker->worker_main(shutdown_, unscheduled_tasks_, overflow_work_, i+1); });
+            [worker, this, i]{ worker->worker_main(shutdown_, i+1); });
           }
         catch (...)
           {
@@ -320,8 +217,7 @@ fwork_ready.clear();
       {
       shutdown_ = true;
       for (auto &worker : workers_)
-        { worker.fwork_ready.test_and_set(); worker.fwork_ready.notify_all(); }
-//        worker.work_ready.notify_all();
+        { worker.news.test_and_set(); worker.news.notify_all(); }
 
       for (auto &worker : workers_)
         if (worker.thread.joinable())
@@ -350,42 +246,22 @@ fwork_ready.clear();
       }
 
     //virtual
-    void submit(std::function<void()> work)
-      { submit(std::move(work), 0); }
-
+    void submit(std::function<void()> /*work*/)
+      { MR_fail("don't call this"); }
     //virtual
-    void submit(std::function<void()> work, size_t thread_hint)
+    void submit(std::function<void()> work, size_t ithread)
       {
       lock_t lock(mut_);
       if (shutdown_)
         throw std::runtime_error("Work item submitted after shutdown");
 
-      if (thread_hint>=workers_.size()) thread_hint=0;
+      MR_assert(ithread<workers_.size(), "bad thread index");
 
-      ++unscheduled_tasks_;
-
-      // First check for any idle workers and wake those
-      for (size_t i=0; i<workers_.size(); ++i)
-        {
-        size_t iwrk = (i+thread_hint)%workers_.size();
-        auto &worker(workers_[iwrk]);
-        if (!worker.busy_flag.test_and_set())
-          {
-          --unscheduled_tasks_;
-          {
-worker.fwork_ready.wait(true);
-//          lock_t lock(worker.mut);
-          worker.work = std::move(work);
-//          worker.work_ready.notify_one();
-worker.fwork_ready.test_and_set();
-worker.fwork_ready.notify_one();
-          }
-          return;
-          }
-        }
-
-      // If no workers were idle, push onto the overflow queue for later
-      overflow_work_.push(std::move(work));
+      auto &worker(workers_[ithread]);
+      worker.news.wait(true);
+      worker.work = std::move(work);
+      worker.news.test_and_set();
+      worker.news.notify_one();
       }
 
     void shutdown()
@@ -447,6 +323,9 @@ class ducc_pseudo_thread_pool: public thread_pool
       { return 1; }
     //virtual
     void submit(std::function<void()> work)
+      { work(); }
+    //virtual
+    void submit(std::function<void()> work, size_t)
       { work(); }
   };
 
@@ -633,7 +512,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     f(sched);
     return;
     }
-
+#ifndef DUCC0_NO_LOWLEVEL_THREADING
   std::exception_ptr ex;
   Mutex ex_mut;
   // we "copy" the currently active thread pool to all executing threads
@@ -674,6 +553,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   counter.wait();
   if (ex)
     std::rethrow_exception(ex);
+#endif
   }
 
 void execSingle(size_t nwork, std::function<void(Scheduler &)> func)
@@ -701,6 +581,7 @@ void execGuided(size_t nwork, size_t nthreads, size_t chunksize_min,
   }
 void execParallel(size_t nthreads, std::function<void(Scheduler &)> func)
   {
+  nthreads = adjust_nthreads(nthreads);
   Distribution dist;
   dist.execParallel(nthreads, std::move(func));
   }
