@@ -247,7 +247,7 @@ class ducc_thread_pool: public thread_pool
       }
 
     //virtual
-    void submit(std::function<void(Scheduler &)> work, Distribution &dist,
+    void submit(const std::function<void(Scheduler &)> &work, Distribution &dist,
       size_t nthreads);
 
     void shutdown()
@@ -307,11 +307,8 @@ class ducc_pseudo_thread_pool: public thread_pool
     size_t adjust_nthreads(size_t /*nthreads_in*/) const
       { return 1; }
     //virtual
-    void submit(std::function<void()> work)
-      { work(); }
-    //virtual
-    void submit(std::function<void()> work, size_t)
-      { work(); }
+    void submit(const std::function<void(Scheduler &)> &, Distribution &, size_t)
+      { MR_fail("must not get here"); }
   };
 
 // return a pointer to a singleton thread_pool, which is always available
@@ -489,7 +486,8 @@ template<typename T> class ScopedValueChanger
       { object=original_value; }
   };
 
-void ducc_thread_pool::submit(std::function<void(Scheduler &)> work, Distribution &dist,
+#ifndef DUCC0_NO_LOWLEVEL_THREADING
+void ducc_thread_pool::submit(const std::function<void(Scheduler &)> &work, Distribution &dist,
   size_t nthreads)
   {
   lock_t lock(mut_);
@@ -530,6 +528,7 @@ void ducc_thread_pool::submit(std::function<void(Scheduler &)> work, Distributio
   if (ex)
     std::rethrow_exception(ex);
   }
+#endif
 
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {

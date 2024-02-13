@@ -107,7 +107,7 @@ class thread_pool
     /** "Normalizes" a requested number of threads. A useful convention could be
         return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
-    virtual void submit(std::function<void(Scheduler &)> work, Distribution &dist, size_t nthreads) = 0;
+    virtual void submit(const std::function<void(Scheduler &)> &work, Distribution &dist, size_t nthreads) = 0;
   };
 
 }}
