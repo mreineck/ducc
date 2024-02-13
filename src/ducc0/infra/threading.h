@@ -95,7 +95,8 @@ namespace ducc0 {
 namespace detail_threading {
 
 using std::size_t;
-
+class Scheduler;
+class Distribution;
 /// Abstract base class for minimalistic thread pool functionality
 class thread_pool
   {
@@ -106,8 +107,7 @@ class thread_pool
     /** "Normalizes" a requested number of threads. A useful convention could be
         return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
-    virtual void submit(std::function<void()> work) = 0;
-    virtual void submit(std::function<void()> work, size_t ithread) = 0;
+    virtual void submit(std::function<void(Scheduler &)> work, Distribution &dist, size_t nthreads) = 0;
   };
 
 }}

@@ -165,45 +165,45 @@ class ducc_thread_pool: public thread_pool
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
-      std::atomic_flag news = ATOMIC_FLAG_INIT;
-      std::function<void()> work;
 
-      void worker_main(std::atomic<bool> &shutdown_flag, size_t ithread)
+      void worker_main(const std::atomic<bool> &news,
+        std::function<void(size_t)> &work_, size_t ithread, const size_t &nthreads)
         {
+        bool nextnews = true;
         in_parallel_region = true;
         do_pinning(ithread);
         while (true)
           {
-          std::function<void()> local_work;
           // Wait until something happens
-          news.wait(false);
-          if (shutdown_flag) return;
-          local_work.swap(work);
-          news.clear();
-
-          if (local_work)
-            local_work();
+          news.wait(!nextnews);
+          nextnews=!nextnews;
+          // shutting down?
+          if (!work_) return;
+          // if not, do the work
+          work_(ithread);
           }
         }
       };
 
     Mutex mut_;
     std::vector<worker> workers_;
-    std::atomic<bool> shutdown_=false;
+    std::atomic<bool> news_=false;
+    size_t nthreads_ = 0;
     using lock_t = LockGuard;
+    std::function<void(size_t)> work_;
 
     void create_threads()
       {
       lock_t lock(mut_);
+      news_=false;
       size_t nthreads=workers_.size();
       for (size_t i=0; i<nthreads; ++i)
         {
         try
           {
           auto *worker = &workers_[i];
-          worker->work = nullptr;
           worker->thread = std::thread(
-            [worker, this, i]{ worker->worker_main(shutdown_, i+1); });
+            [worker, this, i]{ worker->worker_main(news_, work_, i+1, nthreads_); });
           }
         catch (...)
           {
@@ -215,9 +215,10 @@ class ducc_thread_pool: public thread_pool
 
     void shutdown_locked()
       {
-      shutdown_ = true;
-      for (auto &worker : workers_)
-        { worker.news.test_and_set(); worker.news.notify_all(); }
+      // we send a nullptr work to the workers, signalling shutdown
+      work_ = nullptr;
+      news_ = !news_;
+      news_.notify_all();
 
       for (auto &worker : workers_)
         if (worker.thread.joinable())
@@ -246,23 +247,8 @@ class ducc_thread_pool: public thread_pool
       }
 
     //virtual
-    void submit(std::function<void()> /*work*/)
-      { MR_fail("don't call this"); }
-    //virtual
-    void submit(std::function<void()> work, size_t ithread)
-      {
-      lock_t lock(mut_);
-      if (shutdown_)
-        throw std::runtime_error("Work item submitted after shutdown");
-
-      MR_assert(ithread<workers_.size(), "bad thread index");
-
-      auto &worker(workers_[ithread]);
-      worker.news.wait(true);
-      worker.work = std::move(work);
-      worker.news.test_and_set();
-      worker.news.notify_one();
-      }
+    void submit(std::function<void(Scheduler &)> work, Distribution &dist,
+      size_t nthreads);
 
     void shutdown()
       {
@@ -272,7 +258,6 @@ class ducc_thread_pool: public thread_pool
 
     void restart()
       {
-      shutdown_ = false;
       create_threads();
       }
   };
@@ -504,55 +489,58 @@ template<typename T> class ScopedValueChanger
       { object=original_value; }
   };
 
-void Distribution::thread_map(std::function<void(Scheduler &)> f)
+void ducc_thread_pool::submit(std::function<void(Scheduler &)> work, Distribution &dist,
+  size_t nthreads)
   {
-  if (nthreads_ == 1)
-    {
-    MyScheduler sched(*this, 0);
-    f(sched);
-    return;
-    }
-#ifndef DUCC0_NO_LOWLEVEL_THREADING
+  lock_t lock(mut_);
+//     if (shutdown_)
+//       throw std::runtime_error("Work items submitted after shutdown");
+
+  MR_assert(nthreads<=workers_.size()+1, "too many threads requested");
+
   std::exception_ptr ex;
   Mutex ex_mut;
-  // we "copy" the currently active thread pool to all executing threads
-  // during the execution of f. This ensures that possible nested parallel
-  // regions are handled by the same pool and not by the one that happens
-  // to be active on the worker threads.
-  // Alternatively we could put a "no-threading" thread pool onto the executing
-  // threads, which executes everything sequentially on its own thread,
-  // automatically prohibiting nested parallelism.
-  auto pool = get_active_pool();
-
-  latch counter(nthreads_-1);
-  for (size_t i=1; i<nthreads_; ++i)
+  nthreads_ = nthreads;
+  latch counter(workers_.size());
+  work_ = [this, &work, nthreads, &counter, &dist, &ex, &ex_mut](size_t i)
     {
-    pool->submit(
-      [this, &f, i, &counter, &ex, &ex_mut, pool] {
+    if (i<nthreads)
+      {
       try
         {
-        ScopedUseThreadPool guard(*pool);
-        MyScheduler sched(*this, i);
-        f(sched);
+        MyScheduler sched(dist, i);
+        work(sched);
         }
       catch (...)
         {
         LockGuard lock(ex_mut);
         ex = std::current_exception();
         }
-      counter.count_down();
-      }, i-1);
-    }
+      }
+    counter.count_down();
+    };
+  news_ = !news_;
+  news_.notify_all();
   {
-  // do remaining work directly on this thread
   ScopedValueChanger<bool> changer(in_parallel_region, true);
-  MyScheduler sched(*this, 0);
-  f(sched);
+  MyScheduler sched(dist, 0);
+  work(sched);
   }
-
   counter.wait();
   if (ex)
     std::rethrow_exception(ex);
+  }
+
+void Distribution::thread_map(std::function<void(Scheduler &)> f)
+  {
+  if (nthreads_ == 1)
+    {
+    MyScheduler sched(*this, 0);
+    f(sched);
+    }
+#ifndef DUCC0_NO_LOWLEVEL_THREADING
+  else
+    get_active_pool()->submit(f, *this, nthreads_);
 #endif
   }
 
