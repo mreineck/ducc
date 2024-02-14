@@ -2,7 +2,7 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .file("ducc_rust.cc")
-        .flag_if_supported("-std=c++17")
+        .flag_if_supported("-std=c++20")
         .include("cpp_src")
         .compile("ducc0");
 
