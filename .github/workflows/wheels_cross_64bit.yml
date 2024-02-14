@@ -25,6 +25,6 @@ jobs:
           CIBW_MANYLINUX_S390X_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux_2_28
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
