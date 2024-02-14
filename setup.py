@@ -69,8 +69,8 @@ define_macros = [("PKGNAME", pkgname),
                  ("PKGVERSION", version)]
 
 if sys.platform == 'darwin':
-    extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
-    python_module_link_args += ['-mmacosx-version-min=10.14', '-pthread']
+    extra_compile_args += ['-mmacosx-version-min=11.0', '-pthread']
+    python_module_link_args += ['-mmacosx-version-min=11.0', '-pthread']
 elif sys.platform == 'win32':
     extra_compile_args = ['/EHsc', '/std:c++20']
     if do_optimize:
