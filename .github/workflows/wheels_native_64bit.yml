@@ -18,7 +18,7 @@ jobs:
           CIBW_SKIP: cp36-* cp37-*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: pytest -x {project}/python/test
+          CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
           CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_I686_IMAGE: manylinux2014
