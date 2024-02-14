@@ -15,19 +15,19 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* cp38-* cp39-* *-musllinux* pp*
+          CIBW_SKIP: cp36-* cp37-* *-musllinux* pp*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: pytest -x {project}/python/test
           CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-*
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_I686_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PPC64LE_IMAGE: manylinux2014
-          CIBW_MANYLINUX_S390X_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux2014
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_PPC64LE_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_S390X_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux_2_28
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
