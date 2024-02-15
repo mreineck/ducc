@@ -73,7 +73,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 #endif
-#include <latch>
 #endif
 
 namespace ducc0 {
@@ -82,7 +81,45 @@ namespace detail_threading {
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
-using std::latch;
+constexpr size_t nwait=100;
+
+void flagwait(const std::atomic<bool> &flag, bool val)
+  {
+  for (size_t i=0; i<nwait; ++i)
+    {
+    if (flag.load()!=val) return;
+    std::this_thread::yield();
+    }
+  flag.wait(val);
+  }
+
+class custom_latch
+  {
+  private:
+    std::atomic<std::ptrdiff_t> val;
+
+  public:
+    custom_latch(std::ptrdiff_t start)
+      : val(start) {}
+
+    void count_down()
+      { if (val.fetch_sub(1)==1) val.notify_all(); }
+
+    void wait()
+      {
+      for (size_t i=0; i<nwait; ++i)
+        {
+        if (val.load()==0) return;
+        std::this_thread::yield();
+        }
+      while(true)
+        {
+        auto vval = val.load();
+        if (vval==0) return;
+        val.wait(vval);
+        }
+      }
+  };
 
 size_t ducc0_max_threads()
   {
@@ -175,7 +212,7 @@ class ducc_thread_pool: public thread_pool
         while (true)
           {
           // Wait until something happens
-          news.wait(!nextnews);
+          flagwait(news, !nextnews);
           nextnews=!nextnews;
           // shutting down?
           if (!work_) return;
@@ -499,7 +536,7 @@ void ducc_thread_pool::submit(const std::function<void(Scheduler &)> &work, Dist
   std::exception_ptr ex;
   Mutex ex_mut;
   nthreads_ = nthreads;
-  latch counter(workers_.size());
+  custom_latch counter(workers_.size());
   work_ = [this, &work, nthreads, &counter, &dist, &ex, &ex_mut](size_t i)
     {
     if (i<nthreads)
