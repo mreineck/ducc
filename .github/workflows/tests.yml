@@ -2,7 +2,7 @@ name: ducc-tests
 on: [workflow_dispatch]
 jobs:
   test-macos:
-    runs-on: macos-11.0
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,7 +22,7 @@ jobs:
       - run: python -m pip install --user .
       - run: python -m pytest python/test -x
   test-intel:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

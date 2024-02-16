@@ -5,7 +5,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,7 +15,7 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp*win*
+          CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp*win* *-musllinux*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
