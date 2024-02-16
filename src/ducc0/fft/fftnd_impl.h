@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2023 Max-Planck-Society
+Copyright (C) 2010-2024 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -1340,12 +1340,64 @@ struct ExecR2R
     }
   };
 
+template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
+  {
+  public:
+    Long1dPlan(size_t length, bool)
+      : UnityRoots<T,complex<T>>(length) {}
+  };
+
 template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
   const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
+
+  // special treatment for long 1D transforms (Bailey's algorithm)
+  // TODO:
+  //  - if not in-place and out has no critical stride, the "tmp" array can be avoided
+  if ((in.ndim()==1) && (in.shape(0)>=16384*((nthreads==1) ? 4 : 1)))
+    {
+    size_t ip = in.shape(0);
+    auto factors = util1d::prime_factors(ip);
+    sort(factors.begin(), factors.end(), std::greater<size_t>());
+    size_t f1=1, f2=1;
+    for (auto fct: factors)
+      (f2>f1) ? f1*=fct : f2*=fct;
+    if (f1>f2) swap(f1,f2);
+    if (f1>=16) // 2D algorithm makes sense
+      {
+      auto istr=in.stride(0);
+      auto ostr=out.stride(0);
+      cmav<std::complex<T>,2> in2 (in.data(), {f1,f2}, {ptrdiff_t(f2)*istr, istr});
+      auto tmp (vmav<std::complex<T>,2>::build_noncritical({f1,f2}));
+      vmav<std::complex<T>,2> out2 (out.data(), {f1,f2}, {ostr, ptrdiff_t(f1)*ostr});
+      auto fin2(in2.to_fmav());
+      auto ftmp(tmp.to_fmav());
+      auto fout2(out2.to_fmav());
+      c2c(fin2, ftmp, {0}, forward, T(1), nthreads);
+      auto roots_p = get_plan<Long1dPlan<T>>(ip);
+      const auto &roots(*roots_p);
+      if (forward)
+        execStatic(f1, nthreads, 0, [&](Scheduler &sched) {
+          while (auto rng=sched.getNext())
+            for (auto i=rng.lo; i<rng.hi; ++i)
+              for (size_t j=0; j<f2; ++j)
+                tmp(i,j) *= conj(roots[i*j]);
+          });
+      else
+        execStatic(f1, nthreads, 0, [&](Scheduler &sched) {
+          while (auto rng=sched.getNext())
+            for (auto i=rng.lo; i<rng.hi; ++i)
+              for (size_t j=0; j<f2; ++j)
+                tmp(i,j) *= roots[i*j];
+          });
+      c2c(ftmp, fout2, {1}, forward, fct, nthreads);
+      return;
+      }
+    }
+ 
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T> >&>(in));
   const auto &out2(reinterpret_cast<const vfmav<Cmplx<T> >&>(out));
   if ((axes.size()>1) && (in.data()!=out.data())) // optimize axis order
