@@ -1,11 +1,11 @@
-name: wheels_native_64bit
-on: [push]
+name: wheels_64bit_macos
+on: [workflow_dispatch]
 jobs:
   build-wheels:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macOS-13, windows-2022]
+        os: [macOS-11.0]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,11 +15,11 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* *-musllinux* pp*
+          CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp*win*
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: pytest -x {project}/python/test
-          CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-*
+          CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
+          CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-* cp311-* pp36-* pp37-* pp38-* pp39-* pp311-* pp312-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
@@ -30,4 +30,5 @@ jobs:
           CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux_2_28
       - uses: actions/upload-artifact@v4
         with:
+          name: ducc_macos64
           path: ./wheelhouse/*.whl

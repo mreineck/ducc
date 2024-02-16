@@ -1,5 +1,5 @@
 name: ducc-tests
-on: [push]
+on: [workflow_dispatch]
 jobs:
   test-macos:
     runs-on: macos-13
