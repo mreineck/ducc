@@ -153,7 +153,7 @@ struct util // hack to avoid duplicate symbols
     {
     if (nthreads==1) return 1;
     size_t size = info.size();
-    if (size<8192) return 1;
+    if (size<32768) return 1;
     return ducc0::adjust_nthreads(nthreads);
     }
   };
@@ -1357,7 +1357,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
   // special treatment for long 1D transforms (Bailey's algorithm)
   // TODO:
   //  - if not in-place and out has no critical stride, the "tmp" array can be avoided
-  if ((in.ndim()==1) && (in.shape(0)>=16384*((nthreads==1) ? 4 : 1)))
+  if ((in.ndim()==1) && (in.shape(0)>=65536*2))
     {
     size_t ip = in.shape(0);
     auto factors = util1d::prime_factors(ip);
