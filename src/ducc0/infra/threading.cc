@@ -87,7 +87,7 @@ void flagwait(const std::atomic<bool> &flag, bool val)
   {
   for (size_t i=0; i<nwait; ++i)
     {
-    if (flag.load()!=val) return;
+    if (flag.load(std::memory_order::acquire)!=val) return;
     std::this_thread::yield();
     }
   flag.wait(val);
@@ -103,20 +103,20 @@ class custom_latch
       : val(start) {}
 
     void count_down()
-      { if (val.fetch_sub(1)==1) val.notify_all(); }
+      { if (val.fetch_sub(1, std::memory_order::release)==1) val.notify_all(); }
 
     void wait()
       {
       for (size_t i=0; i<nwait; ++i)
         {
-        if (val.load()==0) return;
+        if (val.load(std::memory_order::acquire)==0) return;
         std::this_thread::yield();
         }
       while(true)
         {
-        auto vval = val.load();
+        auto vval = val.load(std::memory_order::acquire);
         if (vval==0) return;
-        val.wait(vval);
+        val.wait(vval, std::memory_order::acquire);
         }
       }
   };
@@ -125,6 +125,9 @@ size_t ducc0_max_threads()
   {
   static const size_t max_threads_ = []()
     {
+MR_assert(std::atomic<bool>{}.is_lock_free(), "no real atomic<bool>");
+MR_assert(std::atomic<size_t>{}.is_lock_free(), "no real atomic<size_t>");
+MR_assert(std::atomic<std::ptrdiff_t>{}.is_lock_free(), "no real atomic<ptrdiff_t>");
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
