@@ -1635,6 +1635,281 @@ numpy.ndarray((nspec, 3, ((lmax+1)*(lmax+2))/2)), dtype=np.float32 or np.float64
     The coupling matrices. Identical to `res`, if it was provided
 )""";
 
+template<typename Tout> void coupling_matrix_spin0and2_tri_zach2_nontmpl(
+  const cmav<double,3> &spec, size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
+  {
+  constexpr size_t ncomp_spec=3;
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 3.");
+  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
+  auto lmax_spec = spec.shape(2)-1;
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,3>::build_noncritical
+    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    constexpr size_t ncomp_out=4;
+// res arrays are one larger to make loops simpler below
+    vmav<Tsimd,2> wig({2, 2*lmax+1+1});
+    vmav<array<Tsimd,ncomp_out>,1> val_({nspec});
+    array<Tsimd,ncomp_out> * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=vlen)
+        {
+        int el3min = el2-el1;
+        int el3max = el2+el1;
+        size_t idx_out = el1*(lmax+1) - (el1*(el1+1))/2 + el2;
+        if (el3min<=int(lmax_spec))
+          {
+          auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              val[ispec][j]=0;
+          int maxidx = min(el3max, int(lmax_spec));
+          for (int el3=el3min; el3<=maxidx; el3+=2)
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              {
+              val[ispec][0] += wig(0,el3)*wig(0,el3)*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
+              val[ispec][1] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+//              val[ispec][2] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+//              val[ispec][3] += wig(1,el3)*wig(1,el3)*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][2] += wig(1,el3)*wig(1,el3)*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][3] += wig(1,el3+1)*wig(1,el3+1)*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+              }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  mat(ispec, j, idx_out+k) = Tout(val[ispec][j][k]);
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  mat(ispec, j, idx_out+k) = Tout(0);
+        }
+      }
+    });
+  }
+
+template<typename Tout> py::array Py2_coupling_matrix_spin0and2_tri_zach2(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
+  {
+  auto spec = to_cmav<double,3>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)==3, "bad ncomp_spec");
+  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
+  auto mat_ = get_optional_Pyarr<Tout>(mat__, {nspec, 4, ((lmax+1)*(lmax+2))/2});
+  auto mat = to_vmav<Tout,3>(mat_);
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_spin0and2_tri_zach2_nontmpl(spec, lmax, mat, nthreads);
+  }
+  return mat_;
+  }
+
+py::array Py_coupling_matrix_spin0and2_tri_zach2
+  (const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__,
+  bool singleprec)
+  {
+  if (!mat__.is_none())
+    singleprec = isPyarr<float>(mat__); // override
+  return singleprec ?
+    Py2_coupling_matrix_spin0and2_tri_zach2<float>(spec_, lmax, nthreads, mat__) :
+    Py2_coupling_matrix_spin0and2_tri_zach2<double>(spec_, lmax, nthreads, mat__);
+  }
+
+constexpr const char *Py_coupling_matrix_spin0and2_tri_zach2_DS = R"""(
+This is very similar to pspy's calc_coupling_spin0and2() method, with the following
+differences:
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)/(4*pi)
+- the output is stored in a triangular format,such that the entry (l1,l2>=l1)
+  has the index l1*(lmax+1) - (l1*(l1+1))/2 + l2.
+- the computation can be carried out for more than one set of power spectra
+  at the same time.
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, 3, lmax_spec+1), dtype=np.float64)
+    the input spectra
+    the indices of the second dimension correspond to wcl_00, wcl_02,
+    and wcl_22 of calc_coupling_spin0and2(), respectively
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+nthreads : int
+    the number of threads to use for the calculations.
+res : numpy.ndarray((nspec, 4, ((lmax+1)*(lmax+2))/2), dtype=np.float32 or np.float64)
+    Optional array to store the output into.
+singleprec : bool
+    determines the acccuracy of the output if `res` is not provided
+
+Returns
+-------
+numpy.ndarray((nspec, 4, ((lmax+1)*(lmax+2))/2)), dtype=np.float32 or np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
+)""";
+
+template<typename Tout> void coupling_matrix_spin0and2_tri_zach3_nontmpl(
+  const cmav<double,3> &spec, size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
+  {
+  constexpr size_t ncomp_spec=4;
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be 4.");
+  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
+  auto lmax_spec = spec.shape(2)-1;
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,3>::build_noncritical
+    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    constexpr size_t ncomp_out=4;
+// res arrays are one larger to make loops simpler below
+    vmav<Tsimd,2> wig({2, 2*lmax+1+1});
+    vmav<array<Tsimd,ncomp_out>,1> val_({nspec});
+    array<Tsimd,ncomp_out> * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=vlen)
+        {
+        int el3min = el2-el1;
+        int el3max = el2+el1;
+        size_t idx_out = el1*(lmax+1) - (el1*(el1+1))/2 + el2;
+        if (el3min<=int(lmax_spec))
+          {
+          auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
+          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
+            Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
+
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              val[ispec][j]=0;
+          int maxidx = min(el3max, int(lmax_spec));
+          for (int el3=el3min; el3<=maxidx; el3+=2)
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              {
+              val[ispec][0] += wig(0,el3)*wig(0,el3)*Tsimd(&spec2(ispec,0,el3), element_aligned_tag());
+              val[ispec][1] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,1,el3), element_aligned_tag());
+              val[ispec][2] += wig(0,el3)*wig(1,el3)*Tsimd(&spec2(ispec,2,el3), element_aligned_tag());
+              val[ispec][3] += wig(1,el3)*wig(1,el3)*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              }
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  mat(ispec, j, idx_out+k) = Tout(val[ispec][j][k]);
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t j=0; j<ncomp_out; ++j)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  mat(ispec, j, idx_out+k) = Tout(0);
+        }
+      }
+    });
+  }
+
+template<typename Tout> py::array Py2_coupling_matrix_spin0and2_tri_zach3(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
+  {
+  auto spec = to_cmav<double,3>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)==4, "bad ncomp_spec");
+  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
+  auto mat_ = get_optional_Pyarr<Tout>(mat__, {nspec, 4, ((lmax+1)*(lmax+2))/2});
+  auto mat = to_vmav<Tout,3>(mat_);
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_spin0and2_tri_zach3_nontmpl(spec, lmax, mat, nthreads);
+  }
+  return mat_;
+  }
+
+py::array Py_coupling_matrix_spin0and2_tri_zach3
+  (const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__,
+  bool singleprec)
+  {
+  if (!mat__.is_none())
+    singleprec = isPyarr<float>(mat__); // override
+  return singleprec ?
+    Py2_coupling_matrix_spin0and2_tri_zach3<float>(spec_, lmax, nthreads, mat__) :
+    Py2_coupling_matrix_spin0and2_tri_zach3<double>(spec_, lmax, nthreads, mat__);
+  }
+
+constexpr const char *Py_coupling_matrix_spin0and2_tri_zach3_DS = R"""(
+This is very similar to pspy's calc_coupling_spin0and2() method, with the following
+differences:
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)/(4*pi)
+- the output is stored in a triangular format,such that the entry (l1,l2>=l1)
+  has the index l1*(lmax+1) - (l1*(l1+1))/2 + l2.
+- the computation can be carried out for more than one set of power spectra
+  at the same time.
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, 3, lmax_spec+1), dtype=np.float64)
+    the input spectra
+    the indices of the second dimension correspond to wcl_00, wcl_02, wcl_20
+    and wcl_22 of calc_coupling_spin0and2(), respectively
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+nthreads : int
+    the number of threads to use for the calculations.
+res : numpy.ndarray((nspec, 4, ((lmax+1)*(lmax+2))/2), dtype=np.float32 or np.float64)
+    Optional array to store the output into.
+singleprec : bool
+    determines the acccuracy of the output if `res` is not provided
+
+Returns
+-------
+numpy.ndarray((nspec, 4, ((lmax+1)*(lmax+2))/2)), dtype=np.float32 or np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
+)""";
+
+
 py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
   size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
@@ -1722,6 +1997,10 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_spin0and2_tri_zach1", Py_coupling_matrix_spin0and2_tri_zach1, Py_coupling_matrix_spin0and2_tri_zach1_DS,
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+  m2.def("coupling_matrix_spin0and2_tri_zach2", Py_coupling_matrix_spin0and2_tri_zach2, Py_coupling_matrix_spin0and2_tri_zach2_DS,
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+  m2.def("coupling_matrix_spin0and2_tri_zach3", Py_coupling_matrix_spin0and2_tri_zach3, Py_coupling_matrix_spin0and2_tri_zach3_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
