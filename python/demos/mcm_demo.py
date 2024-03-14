@@ -60,6 +60,14 @@ def mcm00_ducc(spec, lmax):
 
 def mcm02_ducc(spec, lmax):
     return ducc0.misc.experimental.coupling_matrix_spin0and2(spec, lmax, nthreads=nthreads)
+def mcm02_ducc_2(spec, lmax):
+    tmp = ducc0.misc.experimental.coupling_matrix_spin0and2_tru(spec, lmax, nthreads=nthreads, singleprec=True)
+    res = np.zeros((spec.shape[0], 5, lmax+1, lmax+1))
+    for l1 in range(lmax+1):
+        for l2 in range(l1, lmax+1):
+            res[:,:,l1,l2] = (2*l2+1) * tmp[:,:, l1*(lmax+1) - (l1*(l1+1))//2 + l2]
+            res[:,:,l2,l1] = (2*l1+1) * tmp[:,:, l1*(lmax+1) - (l1*(l1+1))//2 + l2]
+    return res
 
 def mcm02_pure_ducc(spec, lmax):
     res = np.zeros((nspec, 5, lmax+1, lmax+1))
@@ -102,9 +110,13 @@ print(f"pspy time: {time()-t0}s")
 t0=time()
 mcm_ducc = mcm02_ducc(spec, lmax)
 print(f"ducc time: {time()-t0}s")
+t0=time()
+mcm_ducc2 = mcm02_ducc_2(spec, lmax)
+print(f"ducc2 time: {time()-t0}s")
 
 # compare the results
 print(f"L2 error between solutions: {ducc0.misc.l2error(mcm_pspy[:,:,2:,2:],mcm_ducc[:,:,2:,2:])}")
+print(f"L2 error between ducc solutions: {ducc0.misc.l2error(mcm_ducc[:,:,2:,2:],mcm_ducc2[:,:,2:,2:])}")
 
 print()
 print("Spin 0and2_pure case:")
