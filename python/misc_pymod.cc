@@ -1687,10 +1687,10 @@ py::array Py_coupling_matrix_spin0and2_tri
     return singleprec ?
       Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,float>(spec_, lmax, nthreads, mat__) :
       Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,double>(spec_, lmax, nthreads, mat__);
-  if ((spec_index==vector<int>{0,1,1,2}) && (mat_index==vector<int>{0,1,-1,-1,2}))
+  if ((spec_index==vector<int>{0,1,1,2}) && (mat_index==vector<int>{0,1,-1,2,-1}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,-1,2,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,-1,2,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,float>(spec_, lmax, nthreads, mat__) :
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,double>(spec_, lmax, nthreads, mat__);
   if ((spec_index==vector<int>{0,1,1,2}) && (mat_index==vector<int>{0,1,-1,2,3}))
     return singleprec ?
       Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,3,float>(spec_, lmax, nthreads, mat__) :
