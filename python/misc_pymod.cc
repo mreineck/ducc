@@ -1706,7 +1706,122 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
     });
   }
 
-template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> py::array Py2_coupling_matrix_spin0and2_tri(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
+template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> void coupling_matrix_spin0and2_tri_nontmpl_nvec(
+  const cmav<double,3> &spec, size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
+  {
+constexpr int nvec=8;
+  if constexpr ((im02<0) && (im20<0) && (impp<0) && (immm<0))
+    return coupling_matrix_spin0_tri_nontmpl(subarray<2>(spec, {{},{is00},{}}),
+      lmax, subarray<2>(mat, {{},{im00},{}}), nthreads);
+
+  constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be .", ncomp_spec);
+  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
+  auto lmax_spec = spec.shape(2)-1;
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,3>::build_noncritical
+    ({nspec, ncomp_spec, lmax_spec_used+1+nvec*vlen-1+1}, UNINITIALIZED));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
+    for (size_t j=0; j<ncomp_spec; ++j)
+      for (size_t i=0; i<nspec; ++i)
+        spec2(i,j,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    constexpr size_t ncomp_out = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
+// res arrays are one larger to make loops simpler below
+    vmav<Tsimd,1> wigtmp({2*lmax+1+1});
+    vmav<array<Tsimd, 2*nvec>,1> wig({2*lmax+1+1});
+//    vmav<array<Tsimd,ncomp_out>,1> val_({nspec});
+//    array<Tsimd,ncomp_out> * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=k;
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=nvec*vlen)
+        {
+        int el3min = el2-el1;
+        int el3max = el2+el1;
+        size_t idx_out = el1*(lmax+1) - (el1*(el1+1))/2 + el2;
+        if (el3min<=int(lmax_spec))
+          {
+          auto tmp=subarray<1>(wigtmp,{{size_t(el3min), size_t(el3max+2)}});
+          for (int ivec=0; ivec<nvec; ++ivec)
+            {
+            flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs+ivec*vlen, 0, 0,
+                                  Tsimd(el3min)+lofs+ivec*vlen, tmp);
+            for (int l3t=el3min; l3t<=el3max+1; ++l3t)
+              wig(l3t)[2*ivec] = wigtmp(l3t);
+            flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs+ivec*vlen, -2, 2,
+                                  Tsimd(el3min)+lofs+ivec*vlen, tmp);
+            for (int l3t=el3min; l3t<=el3max+1; ++l3t)
+              wig(l3t)[2*ivec+1] = wigtmp(l3t);
+            }
+          int maxidx = min(el3max, int(lmax_spec));
+
+          if (nspec<=20)
+            {
+            array<array<array<Tsimd,ncomp_out>,nvec>,20> val;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t ivec=0; ivec<nvec; ++ivec)
+                for (size_t j=0; j<ncomp_out; ++j)
+                  val[ispec][ivec][j]=0;
+            for (int el3=el3min; el3<=maxidx; el3+=2)
+              {
+              for (int ivec=0; ivec<nvec; ++ivec)
+                {
+                const Tsimd w0=wig(el3)[2*ivec], w1=wig(el3)[2*ivec+1];
+                const Tsimd w00=w0*w0, w01=w0*w1, w11=w1*w1;
+                const Tsimd w11p1=wig(el3+1)[2*ivec+1]*wig(el3+1)[2*ivec+1];
+                for (size_t ispec=0; ispec<nspec; ++ispec)
+                  {
+                  array<Tsimd, ncomp_spec> sp;
+                  for (size_t i=0; i<ncomp_spec; ++i)
+                    sp[i] = Tsimd(&spec2(ispec,i,el3+ivec*vlen), element_aligned_tag());
+                  if constexpr (im00>=0)
+                    val[ispec][ivec][im00] += w00*sp[is00];
+                  if constexpr (im02>=0)
+                    val[ispec][ivec][im02] += w01*sp[is02];
+                  if constexpr (im20>=0)
+                    val[ispec][ivec][im20] += w01*sp[is20];
+                  if constexpr (impp>=0)
+                    val[ispec][ivec][impp] += w11*sp[is22];
+                  if constexpr (immm>=0)
+                    val[ispec][ivec][immm] += w11p1*Tsimd(&spec2(ispec,is22,el3+1+ivec*vlen), element_aligned_tag());
+                  }
+                }
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t ivec=0; ivec<nvec; ++ivec)
+                for (size_t j=0; j<ncomp_out; ++j)
+                  for (size_t k=0; k<vlen; ++k)
+                    if (el2+ivec*vlen+k<=lmax)
+                      mat(ispec, j, idx_out+ivec*vlen+k) = Tout(val[ispec][ivec][j][k]);
+            }
+
+          else
+            MR_fail("not supported");
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t ivec=0; ivec<nvec; ++ivec)
+              for (size_t j=0; j<ncomp_out; ++j)
+                for (size_t k=0; k<vlen; ++k)
+                  if (el2+ivec*vlen+k<=lmax)
+                    mat(ispec, j, idx_out+ivec*vlen+k) = Tout(0);
+        }
+      }
+    });
+  }
+
+template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> py::array Py2_coupling_matrix_spin0and2_tri(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__, bool nvec)
   {
   constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
   constexpr size_t ncomp_out = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
@@ -1718,6 +1833,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   auto mat = to_vmav<Tout,3>(mat_);
   {
   py::gil_scoped_release release;
+nvec?coupling_matrix_spin0and2_tri_nontmpl_nvec<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads):
   coupling_matrix_spin0and2_tri_nontmpl<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
   }
   return mat_;
@@ -1725,35 +1841,35 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
 
 py::array Py_coupling_matrix_spin0and2_tri
   (const py::array &spec_, size_t lmax, const vector<int> &spec_index, const vector<int> &mat_index, size_t nthreads, py::object &mat__,
-  bool singleprec)
+  bool singleprec,bool nvec)
   {
   if (!mat__.is_none())
     singleprec = isPyarr<float>(mat__); // override
   if ((spec_index==vector<int>{0,0,0,0}) && (mat_index==vector<int>{0,-1,-1,-1,-1}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,-1,-1,-1,-1,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,-1,-1,-1,-1,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,-1,-1,-1,-1,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,-1,-1,-1,-1,double>(spec_, lmax, nthreads, mat__, nvec);
   if ((spec_index==vector<int>{0,0,0,0}) && (mat_index==vector<int>{0,1,2,3,4}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,1,2,3,4,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,1,2,3,4,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,1,2,3,4,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,0,0,0,0,1,2,3,4,double>(spec_, lmax, nthreads, mat__, nvec);
   if ((spec_index==vector<int>{0,1,2,3}) && (mat_index==vector<int>{0,1,2,3,4}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,4,double>(spec_, lmax, nthreads, mat__, nvec);
   if ((spec_index==vector<int>{0,1,1,2}) && (mat_index==vector<int>{0,1,-1,2,-1}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,-1,double>(spec_, lmax, nthreads, mat__, nvec);
   if ((spec_index==vector<int>{0,1,1,2}) && (mat_index==vector<int>{0,1,-1,2,3}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,3,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,3,double>(spec_, lmax, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,3,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,1,1,2,0,1,-1,2,3,double>(spec_, lmax, nthreads, mat__, nvec);
   if ((spec_index==vector<int>{0,1,2,3}) && (mat_index==vector<int>{0,1,2,3,-1}))
     return singleprec ?
-      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,-1,float>(spec_, lmax, nthreads, mat__) :
-      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,-1,double>(spec_, lmax, nthreads, mat__);
-  MR_fail("unsupported cmbiantion of spec_index and mat_index");
+      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,-1,float>(spec_, lmax, nthreads, mat__, nvec) :
+      Py2_coupling_matrix_spin0and2_tri<0,1,2,3,0,1,2,3,-1,double>(spec_, lmax, nthreads, mat__, nvec);
+  MR_fail("unsupported combination of spec_index and mat_index");
   }
 
 constexpr const char *Py_coupling_matrix_spin0and2_tri_DS = R"""(
@@ -1905,7 +2021,7 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
-    "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+    "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false, "nvec"_a=false);
 
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }
