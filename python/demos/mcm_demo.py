@@ -11,6 +11,16 @@ os.environ["OMP_NUM_THREADS"]=str(nthreads)
 from pspy.mcm_fortran.mcm_fortran import mcm_compute as mcm_fortran
 import ducc0
 
+def tri2full(tri, lmax):
+    res = np.zeros((tri.shape[0], tri.shape[1], lmax+1, lmax+1))
+    lfac = 2.*np.arange(lmax+1) + 1.
+    for l1 in range(lmax+1):
+        startidx = l1*(lmax+1) - (l1*(l1+1))//2
+        res[:,:,l1,l1:] = lfac[l1:] * tri[:,:, startidx+l1:startidx+lmax+1]
+        res[:,:,l1:,l1] = (2*l1+1) * tri[:,:, startidx+l1:startidx+lmax+1]
+    return res
+    
+
 # This routine is more complicated than mcm00_ducc, since a few multiplication
 # steps are carried out in Python in pspy, and since the array indices are
 # a bit different. Overall this should not have noticeable impact on performance
@@ -55,28 +65,30 @@ def mcm02_pure_pspy(spec, lmax):
     return res
 
 
-def mcm00_ducc(spec, lmax):
+def mcm00_ducc_square(spec, lmax):
     return ducc0.misc.experimental.coupling_matrix_spin0(spec, lmax, nthreads=nthreads)
 
-def mcm02_ducc(spec, lmax):
+def mcm00_ducc_tri(spec, lmax):
+    out= np.empty((spec.shape[0],1,((lmax+1)*(lmax+2))//2),dtype=np.float32)
+    ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec.reshape((spec.shape[0],1,spec.shape[1])), lmax, (0,0,0,0), (0,-1,-1,-1,-1), nthreads=nthreads, res=out)
+    return out
+
+def mcm02_ducc_square(spec, lmax):
     return ducc0.misc.experimental.coupling_matrix_spin0and2(spec, lmax, nthreads=nthreads)
-def mcm02_ducc_2(spec, lmax):
-    tmp = ducc0.misc.experimental.coupling_matrix_spin0and2_tru(spec, lmax, nthreads=nthreads, singleprec=True)
-    res = np.zeros((spec.shape[0], 5, lmax+1, lmax+1))
-    for l1 in range(lmax+1):
-        for l2 in range(l1, lmax+1):
-            res[:,:,l1,l2] = (2*l2+1) * tmp[:,:, l1*(lmax+1) - (l1*(l1+1))//2 + l2]
-            res[:,:,l2,l1] = (2*l1+1) * tmp[:,:, l1*(lmax+1) - (l1*(l1+1))//2 + l2]
-    return res
+def mcm02_ducc_tri(spec, lmax):
+    out= np.empty((spec.shape[0],5,((lmax+1)*(lmax+2))//2),dtype=np.float32)
+    ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec[:,:,:], lmax, (0,1,2,3), (0,1,2,3,4), nthreads=nthreads, res=out)
+    return out
 
 def mcm02_pure_ducc(spec, lmax):
     res = np.zeros((nspec, 5, lmax+1, lmax+1))
-    return ducc0.misc.experimental.coupling_matrix_spin0and2_pure(spec, lmax, nthreads=nthreads, res=res[:5])
+    return ducc0.misc.experimental.coupling_matrix_spin0and2_pure(spec, lmax, nthreads=nthreads, res=res)
 
 # lmax up to which the MCM will be computed
 lmax=1000
 # number of spectra to process simultaneously
-nspec=4
+    
+nspec=10
 
 print()
 print("Mode coupling matrix computation comparison")
@@ -90,44 +102,49 @@ print()
 print("Spin 0 case:")
 
 t0=time()
-mcm_pspy = mcm00_pspy(spec[:,0,:], lmax)
+pspy = mcm00_pspy(spec[:,0,:], lmax)
 print(f"pspy time: {time()-t0}s")
 
 t0=time()
-mcm_ducc = mcm00_ducc(spec[:,0,:], lmax)
-print(f"ducc time: {time()-t0}s")
+ducc_1 = mcm00_ducc_square(spec[:,0,:], lmax)
+print(f"ducc square time: {time()-t0}s")
+t0=time()
+ducc_2 = mcm00_ducc_tri(spec[:,0,:], lmax)
+print(f"ducc triangular time (single precision): {time()-t0}s")
 
 # compare the results
-print(f"L2 error between solutions: {ducc0.misc.l2error(mcm_pspy[:,2:,2:],mcm_ducc[:,2:,2:])}")
+print(f"L2 error between pspy and square ducc solutions: {ducc0.misc.l2error(pspy[:,2:,2:],ducc_1[:,2:,2:])}")
+print(f"L2 error between ducc solutions: {ducc0.misc.l2error(ducc_1, tri2full(ducc_2,lmax)[:,0,:,:])}")
 
 print()
 print("Spin 0and2 case:")
 
 t0=time()
-mcm_pspy = mcm02_pspy(spec, lmax)
+pspy = mcm02_pspy(spec, lmax)
 print(f"pspy time: {time()-t0}s")
 
 t0=time()
-mcm_ducc = mcm02_ducc(spec, lmax)
-print(f"ducc time: {time()-t0}s")
+ducc_1 = mcm02_ducc_square(spec, lmax)
+print(f"ducc square time: {time()-t0}s")
+
 t0=time()
-mcm_ducc2 = mcm02_ducc_2(spec, lmax)
-print(f"ducc2 time: {time()-t0}s")
+ducc_2 = mcm02_ducc_tri(spec, lmax)
+print(f"ducc triangular time (single precision): {time()-t0}s")
 
 # compare the results
-print(f"L2 error between solutions: {ducc0.misc.l2error(mcm_pspy[:,:,2:,2:],mcm_ducc[:,:,2:,2:])}")
-print(f"L2 error between ducc solutions: {ducc0.misc.l2error(mcm_ducc[:,:,2:,2:],mcm_ducc2[:,:,2:,2:])}")
+print(f"L2 error between pspy and square ducc solutions: {ducc0.misc.l2error(pspy[:,:,2:,2:],ducc_1[:,:,2:,2:])}")
+print(f"L2 error between ducc solutions: {ducc0.misc.l2error(ducc_1,tri2full(ducc_2,lmax))}")
 
 print()
 print("Spin 0and2_pure case:")
 
 t0=time()
-mcm_pspy = mcm02_pure_pspy(spec, lmax)
+pspy = mcm02_pure_pspy(spec, lmax)
 print(f"pspy time: {time()-t0}s")
 
 t0=time()
-mcm_ducc = mcm02_pure_ducc(spec, lmax)
-print(f"ducc time: {time()-t0}s")
+ducc_1 = mcm02_pure_ducc(spec, lmax)
+print(f"ducc square time: {time()-t0}s")
 
 # compare the results
-print(f"L2 error between solutions: {ducc0.misc.l2error(mcm_pspy[:,:,2:,2:],mcm_ducc[:,:,2:,2:])}")
+print(f"L2 error between pspy and square ducc solutions: {ducc0.misc.l2error(pspy[:,:,2:,2:],ducc_1[:,:,2:,2:])}")
