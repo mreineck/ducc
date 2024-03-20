@@ -48,7 +48,7 @@ def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi, [2]))
+@pmp("periodicity", ([1.], 2*np.pi))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
@@ -109,7 +109,7 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi, (1.,2.)))
+@pmp("periodicity", ((1., 1.), 2*np.pi))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
@@ -172,7 +172,7 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("epsilon", (1e-5, 3e-5, 5e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi, [1., np.pi, 7]))
+@pmp("periodicity", (1., [1., np.pi, 7]))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
