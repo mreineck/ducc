@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2023 Max-Planck-Society
+/* Copyright (C) 2019-2024 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_R_H
@@ -79,7 +79,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class RNufft<Tcalc, Tac
     RNufft(bool gridding, const cmav<Tcoord,2> &coords, \
           const array<size_t, ndim> &uniform_shape_, double epsilon_,  \
           size_t nthreads_, double sigma_min, double sigma_max, \
-          double periodicity, bool fft_order_) \
+          const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_, \
                sigma_min, sigma_max, periodicity, fft_order_), \
         coords_sorted({npoints,ndim},UNINITIALIZED) \
@@ -635,7 +635,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   void nu2u_r(const cmav<Tcoord,2> &coord, const cmav<Tpoints,1> &points,
     bool forward, double epsilon, size_t nthreads,
     const vfmav<complex<Tgrid>> &uniform, size_t verbosity,
-    double sigma_min, double sigma_max, double periodicity, bool fft_order)
+    double sigma_min, double sigma_max, const vector<double> &periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=3) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -652,7 +652,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   void u2nu_r(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
     bool forward, double epsilon, size_t nthreads,
     const vmav<Tpoints,1> &points, size_t verbosity,
-    double sigma_min, double sigma_max, double periodicity, bool fft_order)
+    double sigma_min, double sigma_max, const vector<double> &periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=3) && (ndim<=3), "transform must be 1D/2D/3D");
