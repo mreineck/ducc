@@ -65,16 +65,11 @@ def mcm02_pure_pspy(spec, lmax):
     return res
 
 
-def mcm00_ducc_square(spec, lmax):
-    return ducc0.misc.experimental.coupling_matrix_spin0(spec, lmax, nthreads=nthreads)
-
 def mcm00_ducc_tri(spec, lmax):
     out= np.empty((spec.shape[0],1,((lmax+1)*(lmax+2))//2),dtype=np.float32)
     ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec.reshape((spec.shape[0],1,spec.shape[1])), lmax, (0,0,0,0), (0,-1,-1,-1,-1), nthreads=nthreads, res=out)
     return out
 
-def mcm02_ducc_square(spec, lmax):
-    return ducc0.misc.experimental.coupling_matrix_spin0and2(spec, lmax, nthreads=nthreads)
 def mcm02_ducc_tri(spec, lmax):
     out= np.empty((spec.shape[0],5,((lmax+1)*(lmax+2))//2),dtype=np.float32)
     ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec[:,:,:], lmax, (0,1,2,3), (0,1,2,3,4), nthreads=nthreads, res=out)
@@ -106,15 +101,11 @@ pspy = mcm00_pspy(spec[:,0,:], lmax)
 print(f"pspy time: {time()-t0}s")
 
 t0=time()
-ducc_1 = mcm00_ducc_square(spec[:,0,:], lmax)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-ducc_2 = mcm00_ducc_tri(spec[:,0,:], lmax)
-print(f"ducc triangular time (single precision): {time()-t0}s")
+ducc = mcm00_ducc_tri(spec[:,0,:], lmax)
+print(f"ducc time (single precision): {time()-t0}s")
 
 # compare the results
-print(f"L2 error between pspy and square ducc solutions: {ducc0.misc.l2error(pspy[:,2:,2:],ducc_1[:,2:,2:])}")
-print(f"L2 error between ducc solutions: {ducc0.misc.l2error(ducc_1, tri2full(ducc_2,lmax)[:,0,:,:])}")
+print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,2:,2:],tri2full(ducc, lmax)[:,0,2:,2:])}")
 
 print()
 print("Spin 0and2 case:")
@@ -124,16 +115,11 @@ pspy = mcm02_pspy(spec, lmax)
 print(f"pspy time: {time()-t0}s")
 
 t0=time()
-ducc_1 = mcm02_ducc_square(spec, lmax)
-print(f"ducc square time: {time()-t0}s")
-
-t0=time()
-ducc_2 = mcm02_ducc_tri(spec, lmax)
+ducc = mcm02_ducc_tri(spec, lmax)
 print(f"ducc triangular time (single precision): {time()-t0}s")
 
 # compare the results
-print(f"L2 error between pspy and square ducc solutions: {ducc0.misc.l2error(pspy[:,:,2:,2:],ducc_1[:,:,2:,2:])}")
-print(f"L2 error between ducc solutions: {ducc0.misc.l2error(ducc_1,tri2full(ducc_2,lmax))}")
+print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,:,2:,2:],tri2full(ducc, lmax)[:,:,2:,2:])}")
 
 print()
 print("Spin 0and2_pure case:")
