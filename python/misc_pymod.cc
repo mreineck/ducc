@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2023 Max-Planck-Society
+ *  Copyright (C) 2020-2024 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -752,13 +752,13 @@ Obtains new pointing angles on the sky according to a deflection field on a set 
 
 Parameters
 ----------
-theta : numpy.ndarray((nrings,), dtype=float)
+theta : numpy.ndarray((nrings,), dtype=numpy.float64)
     colatitudes of the rings  (nrings any number)
-phi0 : numpy.ndarray((nrings,), dtype=float)
+phi0 : numpy.ndarray((nrings,), dtype=numpy.float64)
     longitude of the first pixel in each ring
-ringstart : numpy.ndarray((nrings,), dtype=np.uint64)
+ringstart : numpy.ndarray((nrings,), dtype=numpy.uint64)
     index of the first pixel of each ring in output map
-deflect : numpy.ndarray((npix, 2), dtype=float) 
+deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64) 
     Spin-1 deflection field, with real and imaginary comp in first and second entry
     (typically, the output of a spin-1 alm2map_spin transform)
     The array layout and npix must be consistent with the given geometry
@@ -766,9 +766,9 @@ calc_rotation(optional) : boolean
     If set, also returns the phase correction (gamma in astro-ph/0502469v3)
 nthreads(optional): int
     Number of threads to use. Defaults to 1
-res(optional): numpy.ndarray((npix, 3 if calc_rotation is set or 2), dtype=float)
+res(optional): numpy.ndarray((npix, 3 if calc_rotation is set or 2), same dtype as deflect)
     output array, containing new co-latitudes, new longitudes, and rotation gammma if required
-dphi(optional): numpy.ndarray((nrings,), dtype=float)
+dphi(optional): numpy.ndarray((nrings,), dtype=numpy.float64)
     azimuthal distance between pixels in each ring (in radians)
 
 Returns
@@ -784,7 +784,7 @@ cmav<double,1> get_dphi_default(const cmav<size_t,1> &nphi)
   return res;
   }
 
-py::array Py_get_deflected_angles(const py::array &theta_,
+template<typename Tout>py::array Py2_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
   const py::array &deflect_, bool calc_rotation, py::object &res__,
   size_t nthreads, const py::object &dphi_)
@@ -793,7 +793,7 @@ py::array Py_get_deflected_angles(const py::array &theta_,
   auto phi0=to_cmav<double,1>(phi0_);
   auto nphi=to_cmav<size_t,1>(nphi_);
   auto ringstart=to_cmav<size_t,1>(ringstart_);
-  auto deflect=to_cmav<double,2>(deflect_);
+  auto deflect=to_cmav<Tout,2>(deflect_);
   auto dphi = dphi_.is(None) ? get_dphi_default(nphi) : to_cmav<double,1>(dphi_);
   size_t nrings = theta.shape(0);
   MR_assert(phi0.shape(0)==nrings, "nrings mismatch");
@@ -802,7 +802,7 @@ py::array Py_get_deflected_angles(const py::array &theta_,
   MR_assert(ringstart.shape(0)==nrings, "nrings mismatch");
   MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
   size_t ncomp = calc_rotation ? 3 : 2;
-  auto res_ = get_optional_Pyarr<double>(res__, {deflect.shape(0), ncomp});
+  auto res_ = get_optional_Pyarr<Tout>(res__, {deflect.shape(0), ncomp});
   auto res = to_vmav<double,2>(res_);
   {
   py::gil_scoped_release release;
@@ -820,35 +820,53 @@ py::array Py_get_deflected_angles(const py::array &theta_,
                  a_phi = deflect(i,1);
           double d = a_theta*a_theta + a_phi*a_phi;
           double sin_aoa, twohav_aod, cos_a;
-          if (d < 0.0025){ // largely covers all CMB-lensing relevant cases to double precision
+          if (d < 0.0025) // largely covers all CMB-lensing relevant cases to double precision
+            {
             sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));         // sin(a) / a
             twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a) (also needed for rotation)      
             cos_a = 1. + d * twohav_aod;                               // cos(a)
-          }
-          else{
+            }
+          else
+            {
             double a = sqrt(d);
             sin_aoa = sin(a)/a;
             cos_a = cos(a);
             twohav_aod = (cos_a -1.) / d;
-          }
+            }
           vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); 
           pointing n_prime(e_r*cos_a + e_a*sin_aoa);
           double phinew = n_prime.phi+phi;
           phinew = (phinew>=2*pi) ? (phinew-2*pi) : phinew;
-          res(i,0) = n_prime.theta;
-          res(i,1) = phinew;
-          if (calc_rotation){ 
-            if (d > 0.){
+          res(i,0) = Tout(n_prime.theta);
+          res(i,1) = Tout(phinew);
+          if (calc_rotation)
+            { 
+            if (d > 0.)
+              {
               double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
-              res(i, 2) = atan2(a_phi * temp, e_r.x + a_theta * temp);} 
-            else{
-              res(i, 2) = 0.;
-            }} 
+              res(i, 2) = Tout(atan2(a_phi * temp, e_r.x + a_theta * temp));
+              } 
+            else
+              res(i, 2) = Tout(0);
+            }
           }
         }
     });
   }
   return res_;
+  }
+py::array Py_get_deflected_angles(const py::array &theta_,
+  const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
+  const py::array &deflect_, bool calc_rotation, py::object &res__,
+  size_t nthreads, const py::object &dphi_)
+  {
+  if (isPyarr<float>(deflect_))
+    return Py2_get_deflected_angles<float>(theta_, phi0_, nphi_, ringstart_,
+      deflect_, calc_rotation, res__, nthreads, dphi_);
+  else if (isPyarr<double>(deflect_))
+    return Py2_get_deflected_angles<double>(theta_, phi0_, nphi_, ringstart_,
+      deflect_, calc_rotation, res__, nthreads, dphi_);
+  MR_fail("type matching failed: 'deflect' has neither type 'f4' nor 'f8'");
   }
 
 template<typename T> void Py2_lensing_rotate(py::array &values_,
