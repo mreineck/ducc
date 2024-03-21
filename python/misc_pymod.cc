@@ -784,7 +784,7 @@ cmav<double,1> get_dphi_default(const cmav<size_t,1> &nphi)
   return res;
   }
 
-template<typename Tout>py::array Py2_get_deflected_angles(const py::array &theta_,
+template<typename Tout> py::array Py2_get_deflected_angles(const py::array &theta_,
   const py::array &phi0_, const py::array &nphi_, const py::array &ringstart_,
   const py::array &deflect_, bool calc_rotation, py::object &res__,
   size_t nthreads, const py::object &dphi_)
@@ -803,7 +803,7 @@ template<typename Tout>py::array Py2_get_deflected_angles(const py::array &theta
   MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
   size_t ncomp = calc_rotation ? 3 : 2;
   auto res_ = get_optional_Pyarr<Tout>(res__, {deflect.shape(0), ncomp});
-  auto res = to_vmav<double,2>(res_);
+  auto res = to_vmav<Tout,2>(res_);
   {
   py::gil_scoped_release release;
   execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
