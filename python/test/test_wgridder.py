@@ -50,13 +50,13 @@ def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
         for chan in range(ms.shape[1]):
             if mask is not None and mask[row, chan] == 0:
                 continue
-            phase = (freq[chan]/SPEEDOFLIGHT *
+            phase = ((2j*np.pi*freq[chan]/SPEEDOFLIGHT) *
                      (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
             if wgt is None:
-                res += (ms[row, chan]*np.exp(2j*np.pi*phase)).real
+                res += (ms[row, chan]*np.exp(phase)).real
             else:
-                res += (ms[row, chan]*wgt[row, chan]
-                        * np.exp(2j*np.pi*phase)).real
+                res += ((ms[row, chan]*wgt[row, chan])
+                        * np.exp(phase)).real
     return np.where(n>0, res/n, 0.) if divide_by_n else res
 
 def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
@@ -80,13 +80,13 @@ def explicit_degridder(uvw, freq, dirty, wgt, xpixsize, ypixsize,
         for chan in range(freq.shape[0]):
             if mask is not None and mask[row, chan] == 0:
                 continue
-            phase = (-freq[chan]/SPEEDOFLIGHT *
+            phase = ((-2j*np.pi*freq[chan]/SPEEDOFLIGHT) *
                      (x*uvw[row, 0] + y*uvw[row, 1] - uvw[row, 2]*nm1))
             if wgt is None:
-                res[row, chan] = np.sum(dirty2*np.exp(2j*np.pi*phase))
+                res[row, chan] = np.sum(dirty2*np.exp(phase))
             else:
                 res[row, chan] = np.sum((dirty2*wgt[row, chan]
-                        * np.exp(2j*np.pi*phase)))
+                        * np.exp(phase)))
     return res
 
 
