@@ -14,11 +14,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2022 Max-Planck-Society
+/* Copyright (C) 2019-2024 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/nufft/nufft.h"
 
@@ -32,16 +33,33 @@ namespace py = pybind11;
 
 auto None = py::none();
 
+vector<double> get_periodicity(const py::object &inp, size_t ndim)
+  {
+  try
+    {
+    auto val = inp.cast<double>();
+    vector<double> res;
+    for (size_t i=0; i<ndim; ++i) res.push_back(val);
+    return res;
+    }
+  catch(...)
+    {}
+  auto res = inp.cast<vector<double>>();
+  MR_assert(res.size()==ndim, "bad size of periodicity argument");
+  return res;
+  }
+
 template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &grid_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
   py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+  const py::object &periodicity_, bool fft_order)
   {
   using Tpoints = Tgrid;
   auto coord = to_cmav<Tcoord,2>(coord_);
   auto grid = to_cfmav<complex<Tgrid>>(grid_);
   auto out_ = get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)});
   auto out = to_vmav<complex<Tpoints>,1>(out_);
+  auto periodicity = get_periodicity(periodicity_, coord.shape(1));
   {
   py::gil_scoped_release release;
   u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,
@@ -52,7 +70,7 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
 py::array Py_u2nu(const py::array &grid,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
   py::object &out, size_t verbosity, double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+  const py::object &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
@@ -78,12 +96,13 @@ py::array Py_u2nu(const py::array &grid,
 template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
   const py::array &coord_, bool forward, double epsilon, size_t nthreads,
   py::array &out_, size_t verbosity, double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+  const py::object &periodicity_, bool fft_order)
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
   auto points = to_cmav<complex<Tpoints>,1>(points_);
   auto out = to_vfmav<complex<Tgrid>>(out_);
+  auto periodicity = get_periodicity(periodicity_, coord.shape(1));
   {
   py::gil_scoped_release release;
   nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,
@@ -94,7 +113,7 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
 py::array Py_nu2u(const py::array &points,
   const py::array &coord, bool forward, double epsilon, size_t nthreads,
   py::array &out, size_t verbosity, double sigma_min, double sigma_max,
-  double periodicity, bool fft_order)
+  const py::object &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
@@ -137,10 +156,11 @@ class Py_Nufftplan
       double epsilon_, 
       size_t nthreads_, 
       double sigma_min, double sigma_max,
-      double periodicity, bool fft_order_)
+      const py::object &periodicity_, bool fft_order_)
       {
       auto coord = to_cmav<T,2>(coord_);
       auto shp = to_array<size_t,ndim>(uniform_shape_);
+      auto periodicity = get_periodicity(periodicity_, coord.shape(1));
       {
       py::gil_scoped_release release;
       ptr = make_unique<Nufft<T,T,T,ndim>> (gridding, coord, shp,
@@ -182,7 +202,7 @@ class Py_Nufftplan
                  double epsilon_, 
                  size_t nthreads_, 
                  double sigma_min, double sigma_max,
-                 double periodicity, bool fft_order_)
+                 const py::object &periodicity, bool fft_order_)
       : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
         npoints(coord_.shape(0))
       {
@@ -269,7 +289,7 @@ verbosity: int
     1: some diagnostic console output
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
-periodicity: float
+periodicity: float or sequence of floats
     periodicity of the coordinates
 fft_order: bool
     if False, grids start with the most negative Fourier node
@@ -312,7 +332,7 @@ verbosity: int
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
     1.2 <= sigma_min < sigma_max <= 2.5
-periodicity: float
+periodicity: float or sequence of floats
     periodicity of the coordinates
 fft_order: bool
     if False, grids start with the most negative Fourier node
@@ -351,7 +371,7 @@ nthreads : int >= 0
 sigma_min, sigma_max: float
     minimum and maximum allowed oversampling factors
     1.2 <= sigma_min < sigma_max <= 2.5
-periodicity: float
+periodicity: float or sequence of floats
     periodicity of the coordinates
 fft_order: bool
     if False, grids start with the most negative Fourier node
@@ -440,7 +460,7 @@ void add_nufft(py::module_ &msup)
 
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,
-                  double, size_t, double, double, double, bool>(),
+                  double, size_t, double, double, const py::object &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false)

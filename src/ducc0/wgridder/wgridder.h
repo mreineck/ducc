@@ -701,7 +701,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       size_t nwmin = do_wgridding ? nplanes-supp+3 : 1;
 timers.push("counting");
       // align members with cache lines
-      struct alignas(64) spaced_size_t { atomic<size_t> v; }; 
+      struct alignas(64) spaced_size_t { atomic<size_t> v; };
       vector<spaced_size_t> buf(ntiles_u*ntiles_v*nwmin+1);
       auto chunk = max<size_t>(1, nrow/(20*nthreads));
       execDynamic(nrow, nthreads, chunk, [&](Scheduler &sched)
@@ -1523,7 +1523,12 @@ timers.pop();
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
       size_t minnu=0, minnv=0, minidx=~(size_t(0));
-      size_t vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
+      size_t vlen;
+      // Avoid duplicated-branches warning when the sizes are equal.
+      if constexpr (mysimd<Tacc>::size() == mysimd<Tcalc>::size())
+        vlen = mysimd<Tacc>::size();
+      else
+        vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
       for (size_t i=0; i<idx.size(); ++i)
         {
         const auto &krn(getKernel(idx[i]));

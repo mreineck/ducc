@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2023 Max-Planck-Society
+/* Copyright (C) 2019-2024 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_H
@@ -289,7 +289,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
     size_t nthreads;
 
     // 1./<periodicity of coordinates>
-    double coordfct;
+    array<double, ndim> coordfct;
 
     // if true, start with zero mode
     // if false, start with most negative mode
@@ -333,7 +333,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
       using Tbig = typename conditional<is_same<Tcoord,double>::value, long double, double>::type;
       for (size_t i=0; i<ndim; ++i)
         {
-        auto tmp = in[i]*coordfct;
+        auto tmp = in[i]*coordfct[i];
         auto tmp2 = Tbig(tmp-floor(tmp))*nover[i];
         out0[i] = min(int(tmp2+shift[i])-int(nover[i]), maxi0[i]);
         out[i] = double(tmp2-out0[i]);
@@ -422,13 +422,22 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
            << accumulate(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
+    static array<double, ndim> get_coordfct(const vector<double> &periodicity)
+      {
+      MR_assert(periodicity.size()==ndim, "periodicity size mismatch");
+      array<double, ndim> res;
+      for (size_t i=0; i<ndim; ++i)
+        res[i] = 1./periodicity[i];
+      return res;
+      }
+
   public:
     Nufft_ancestor(bool gridding, size_t npoints_,
       const array<size_t,ndim> &uniform_shape, double epsilon_,
       size_t nthreads_, double sigma_min, double sigma_max,
-      double periodicity, bool fft_order_)
+      const vector<double> &periodicity, bool fft_order_)
       : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
-        nthreads(adjust_nthreads(nthreads_)), coordfct(1./periodicity),
+        nthreads(adjust_nthreads(nthreads_)), coordfct(get_coordfct(periodicity)),
         fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
       {
       MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
@@ -486,7 +495,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
     Nufft(bool gridding, const cmav<Tcoord,2> &coords, \
           const array<size_t, ndim> &uniform_shape_, double epsilon_,  \
           size_t nthreads_, double sigma_min, double sigma_max, \
-          double periodicity, bool fft_order_) \
+          const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_, \
                sigma_min, sigma_max, periodicity, fft_order_), \
         coords_sorted({npoints,ndim},UNINITIALIZED) \
@@ -1853,7 +1862,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   void nu2u(const cmav<Tcoord,2> &coord, const cmav<complex<Tpoints>,1> &points,
     bool forward, double epsilon, size_t nthreads,
     const vfmav<complex<Tgrid>> &uniform, size_t verbosity,
-    double sigma_min, double sigma_max, double periodicity, bool fft_order)
+    double sigma_min, double sigma_max, const vector<double> &periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -1884,7 +1893,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   void u2nu(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
     bool forward, double epsilon, size_t nthreads,
     const vmav<complex<Tpoints>,1> &points, size_t verbosity,
-    double sigma_min, double sigma_max, double periodicity, bool fft_order)
+    double sigma_min, double sigma_max, const vector<double> &periodicity, bool fft_order)
   {
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");

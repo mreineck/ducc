@@ -1,11 +1,33 @@
 [project]
-requires-python = ">=3.8"
 name = "ducc0"
-readme = "README.md"
+description = "Distinctly useful code collection: contains efficient algorithms for Fast Fourier (and related) transforms, spherical harmonic transforms involving very general spherical grids, gridding/degridding tools for radio interferometry, 4pi spherical convolution operators and much more."
 authors = [
   {name = "Martin Reinecke", email = "martin@mpa-garching.mpg.de"},
 ]
-dynamic = ["license", "description", "version", "urls", "classifiers", "dependencies"]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Physics",
+  "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+  "Operating System :: OS Independent",
+  "Programming Language :: C++",
+  "Programming Language :: Python",
+]
+requires-python = ">=3.8"
+dependencies = ["numpy>=1.17.0"]
+dynamic = ["version"]
+
+[project_urls]
+"Bug Tracker" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/issues"
+"Bug Tracker (Github)" = "https://github.com/mreineck/ducc/issues"
+"Documentation" = "https://mtr.pages.mpcdf.de/ducc"
+"Source Code" = "https://gitlab.mpcdf.mpg.de/mtr/ducc"
+"Source Code (Github)" = "https://github.com/mreineck/ducc"
+"README" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/README.md"
+"Changelog" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/ChangeLog"
 
 [build-system]
 requires = ["setuptools >= 40.6.0", "pybind11 >= 2.6.0", "numpy >= 1.17.0"]

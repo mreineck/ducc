@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2022 Max-Planck-Society
+# Copyright(C) 2020-2024 Max-Planck-Society
 
 from itertools import product
 
@@ -30,13 +30,14 @@ pmp = pytest.mark.parametrize
 
 
 def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
-    xyz = np.meshgrid(*[(-(ss//2) + np.arange(ss)) for ss in shape],
-                       indexing='ij')
     isign = -1 if forward else 1
+    corfact = isign*1j*2*np.pi*np.ones(len(shape))/np.array(periodicity)
+    xyz = np.meshgrid(*[(-(ss//2) + np.arange(ss))*cf for ss, cf in zip(shape,corfact)],
+                       indexing='ij')
     res = np.zeros(shape, dtype=ms.dtype)
     for row in range(ms.shape[0]):
         phase = sum([a*b for a,b in zip(xyz, uvw[row,:])])
-        res += (ms[row]*np.exp((2*np.pi/periodicity*isign*1j)*phase))
+        res += (ms[row]*np.exp(phase))
     if fft_order:
         res = np.fft.ifftshift(res)
     return res
@@ -47,7 +48,7 @@ def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi))
+@pmp("periodicity", ([1.], 2*np.pi))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
@@ -93,7 +94,8 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
         check(dirty2, ms2)
 
     if have_finufft and not singleprec:
-        comp = finufft.nufft1d2(uvw[:,0]*2*np.pi/periodicity, dirty,
+        fct = np.ones(uvw.shape[1])*2*np.pi/periodicity
+        comp = finufft.nufft1d2(uvw[:,0]*fct[0], dirty,
                                 nthreads=nthreads,eps=epsilon,
                                 isign=1 if forward else -1,
                                 modeord=1 if fft_order else 0)
@@ -107,7 +109,7 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi))
+@pmp("periodicity", ((1., 1.), 2*np.pi))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
@@ -153,8 +155,9 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
         check(dirty2, ms2)
 
     if have_finufft and not singleprec:
-        comp = finufft.nufft2d2(uvw[:,0]*2*np.pi/periodicity,
-                                uvw[:,1]*2*np.pi/periodicity,
+        fct = np.ones(uvw.shape[1])*2*np.pi/periodicity
+        comp = finufft.nufft2d2(uvw[:,0]*fct[0],
+                                uvw[:,1]*fct[1],
                                 dirty, nthreads=nthreads,eps=epsilon,
                                 isign=1 if forward else -1,
                                 modeord=1 if fft_order else 0)
@@ -169,7 +172,7 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
 @pmp("epsilon", (1e-5, 3e-5, 5e-13))
 @pmp("forward", (True, False))
 @pmp("singleprec", (True, False))
-@pmp("periodicity", (1., 2*np.pi))
+@pmp("periodicity", (1., [1., np.pi, 7]))
 @pmp("fft_order", (False, True))
 @pmp("nthreads", (1, 2))
 def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
@@ -215,9 +218,10 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
         check(dirty2, ms2)
 
     if have_finufft and not singleprec:
-        comp = finufft.nufft3d2(uvw[:,0]*2*np.pi/periodicity,
-                                uvw[:,1]*2*np.pi/periodicity,
-                                uvw[:,2]*2*np.pi/periodicity,
+        fct = np.ones(uvw.shape[1])*2*np.pi/periodicity
+        comp = finufft.nufft3d2(uvw[:,0]*fct[0],
+                                uvw[:,1]*fct[1],
+                                uvw[:,2]*fct[2],
                                 dirty, nthreads=nthreads,eps=epsilon,
                                 isign=1 if forward else -1,
                                 modeord=1 if fft_order else 0)

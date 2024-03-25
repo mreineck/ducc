@@ -6,7 +6,6 @@ include LICENSE
 include ChangeLog
 include pyproject.toml
 include setup.py
-include setup.cfg
 
 include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/bucket_sort.h
