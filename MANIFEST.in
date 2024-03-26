@@ -35,6 +35,7 @@ include src/ducc0/math/gl_integrator.cc
 include src/ducc0/math/gridding_kernel.h
 include src/ducc0/math/gridding_kernel.cc
 include src/ducc0/math/math_utils.h
+include src/ducc0/math/mcm.h
 include src/ducc0/math/pointing.cc
 include src/ducc0/math/pointing.h
 include src/ducc0/math/quaternion.h

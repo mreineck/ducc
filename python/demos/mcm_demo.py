@@ -81,7 +81,7 @@ def mcmpm_ducc_tri(spec, lmax):
     return out
 
 def mcm02_pure_ducc(spec, lmax):
-    res = np.empty((nspec, 5, lmax+1, lmax+1), dtype=np.float32)
+    res = np.empty((nspec, 4, lmax+1, lmax+1), dtype=np.float32)
     return ducc0.misc.experimental.coupling_matrix_spin0and2_pure(spec, lmax, nthreads=nthreads, res=res)
 
 # lmax up to which the MCM will be computed
@@ -138,6 +138,9 @@ print("Spin 0and2_pure case:")
 t0=time()
 pspy = mcm02_pure_pspy(spec, lmax)
 print(f"pspy time: {time()-t0}s")
+# Component 4 is always zero; why does pspy compute it?
+print("Maximum value of component 4: ", np.max(np.abs(pspy[:,4,2:,2:])))
+pspy = pspy[:,0:4,:,:]
 
 t0=time()
 ducc_1 = mcm02_pure_ducc(spec, lmax)
