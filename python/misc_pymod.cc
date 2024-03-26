@@ -1538,6 +1538,7 @@ The currently supported combinations of `spec_index` and `mat_index` are:
   (0,1,1,2), ( 0, 1,-1, 2,-1)
   (0,1,1,2), ( 0, 1,-1, 2, 3)
   (0,1,2,3), ( 0, 1, 2, 3,-1)
+  (0,0,0,0), (-1,-1,-1, 0, 1)   # only ++ and --
   (0,0,0,0), ( 0, 1, 2, 3, 4)   # for testing purposes
 )""";
 
