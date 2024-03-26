@@ -905,8 +905,8 @@ nthreads(optional): int
 )""";
 
 
-void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
-  size_t lmax, const vmav<double,4> &mat, size_t nthreads)
+template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3> &spec,
+  size_t lmax, const vmav<Tout,4> &mat, size_t nthreads)
   {
   using Tsimd = native_simd<double>;
   constexpr size_t vlen=Tsimd::size();
@@ -1006,14 +1006,14 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
             for (size_t k=0; k<vlen; ++k)
               if (el2[k]<=lmax)
                 {
-                mat(ispec, 0, xel2+k, el1) = (2*el1+1.)*val[ispec][0][k];
-                mat(ispec, 1, xel2+k, el1) = (2*el1+1.)*val[ispec][1][k];
-                mat(ispec, 2, xel2+k, el1) = (2*el1+1.)*val[ispec][2][k];
-                mat(ispec, 3, xel2+k, el1) = (2*el1+1.)*val[ispec][3][k];
-                mat(ispec, 0, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][0][k];
-                mat(ispec, 1, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][4][k];
-                mat(ispec, 2, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][5][k];
-                mat(ispec, 3, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][6][k];
+                mat(ispec, 0, xel2+k, el1) = Tout((2*el1+1.)*val[ispec][0][k]);
+                mat(ispec, 1, xel2+k, el1) = Tout((2*el1+1.)*val[ispec][1][k]);
+                mat(ispec, 2, xel2+k, el1) = Tout((2*el1+1.)*val[ispec][2][k]);
+                mat(ispec, 3, xel2+k, el1) = Tout((2*el1+1.)*val[ispec][3][k]);
+                mat(ispec, 0, el1, xel2+k) = Tout((2*el2[k]+1.)*val[ispec][0][k]);
+                mat(ispec, 1, el1, xel2+k) = Tout((2*el2[k]+1.)*val[ispec][4][k]);
+                mat(ispec, 2, el1, xel2+k) = Tout((2*el2[k]+1.)*val[ispec][5][k]);
+                mat(ispec, 3, el1, xel2+k) = Tout((2*el2[k]+1.)*val[ispec][6][k]);
 //                mat(ispec, 4, xel2+k, el1) = (2*el1+1.)*val[ispec][4][k];
 //                mat(ispec, 4, el1, xel2+k) = (2*el2[k]+1.)*val[ispec][8][k];
                 }
@@ -1029,19 +1029,31 @@ void coupling_matrix_spin0and2_pure_nontmpl(const cmav<double,3> &spec,
     });
   }
 
-py::array Py_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
+template<typename Tout> py::array Py2_coupling_matrix_spin0and2_pure(const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__)
   {
   auto spec = to_cmav<double,3>(spec_);
   auto nspec = spec.shape(0);
   MR_assert(spec.shape(1)==4, "bad ncomp_spec");
   MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto mat_ = get_optional_Pyarr<double>(mat__, {nspec, 5, lmax+1, lmax+1});
-  auto mat = to_vmav<double,4>(mat_);
+  auto mat_ = get_optional_Pyarr<Tout>(mat__, {nspec, 5, lmax+1, lmax+1});
+  auto mat = to_vmav<Tout,4>(mat_);
   {
   py::gil_scoped_release release;
-  coupling_matrix_spin0and2_pure_nontmpl(spec, lmax, mat, nthreads);
+  coupling_matrix_spin0and2_pure<Tout>(spec, lmax, mat, nthreads);
   }
   return mat_;
+  }
+
+py::array Py_coupling_matrix_spin0and2_pure
+  (const py::array &spec_, size_t lmax, size_t nthreads, py::object &mat__,
+  bool singleprec)
+  {
+  if (!mat__.is_none())
+    singleprec = isPyarr<float>(mat__); // override
+  return singleprec ?
+    Py2_coupling_matrix_spin0and2_pure<float>(spec_, lmax, nthreads, mat__) :
+    Py2_coupling_matrix_spin0and2_pure<double>(spec_, lmax, nthreads, mat__);
+  MR_fail("unsupported combination of spec_index and mat_index");
   }
 
 constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
@@ -1068,16 +1080,18 @@ lmax : int
     assumed to be zero.
 nthreads : int
     the number of threads to use for the calculations.
-res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float64)
+res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     Optional array to store the output into.
+singleprec : bool
+    determines the acccuracy of the output if `res` is not provided
 
 Returns
 -------
-numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float64)
+numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     The coupling matrices. Identical to `res`, if it was provided
 )""";
 
-template<typename Tout> void coupling_matrix_spin0_tri_nontmpl(const cmav<double,2> &spec,
+template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spec,
   size_t lmax, const vmav<Tout,2> &mat, size_t nthreads)
   {
   size_t nspec=spec.shape(0);
@@ -1225,11 +1239,11 @@ template<typename Tout> void coupling_matrix_spin0_tri_nontmpl(const cmav<double
     });
   }
 
-template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> void coupling_matrix_spin0and2_tri_nontmpl(
+template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> void coupling_matrix_spin0and2_tri(
   const cmav<double,3> &spec, size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
   {
   if constexpr ((im02<0) && (im20<0) && (impp<0) && (immm<0))
-    return coupling_matrix_spin0_tri_nontmpl(subarray<2>(spec, {{},{is00},{}}),
+    return coupling_matrix_spin0_tri(subarray<2>(spec, {{},{is00},{}}),
       lmax, subarray<2>(mat, {{},{im00},{}}), nthreads);
 
   constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
@@ -1270,8 +1284,11 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
         if (el3min<=int(lmax_spec))
           {
           auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
-            Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
+          // only compute 00 wigners if necessary
+          if constexpr ((im00>=0) || (im02>=0) || (im20>=0))
+            flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
+              Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
+          // we always need those if we arrive here
           flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
             Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
           const Tsimd * DUCC0_RESTRICT wp0 = &wig(0,0);
@@ -1434,7 +1451,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   auto mat = to_vmav<Tout,3>(mat_);
   {
   py::gil_scoped_release release;
-  coupling_matrix_spin0and2_tri_nontmpl<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
+  coupling_matrix_spin0and2_tri<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
   }
   return mat_;
   }
@@ -1450,11 +1467,12 @@ py::array Py_coupling_matrix_spin0and2_tri
     return singleprec ? \
       Py2_coupling_matrix_spin0and2_tri<s0,s1,s2,s3,m0,m1,m2,m3,m4,float>(spec_, lmax, nthreads, mat__) : \
       Py2_coupling_matrix_spin0and2_tri<s0,s1,s2,s3,m0,m1,m2,m3,m4,double>(spec_, lmax, nthreads, mat__);
-  DUCC0_COUPLING_MACRO(0,0,0,0, 0,-1,-1,-1,-1)
-  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3, 4)
+  DUCC0_COUPLING_MACRO(0,0,0,0, 0,-1,-1,-1,-1)  // plain spin-0
+  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3, 4)  // full spin0and2
   DUCC0_COUPLING_MACRO(0,1,1,2, 0, 1,-1, 2,-1)
   DUCC0_COUPLING_MACRO(0,1,1,2, 0, 1,-1, 2, 3)
-  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3,-1)
+  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3,-1)  // full spin0and2 except --
+  DUCC0_COUPLING_MACRO(0,0,0,0,-1,-1,-1, 0, 1)  // just ++ and --
   DUCC0_COUPLING_MACRO(0,0,0,0, 0, 1, 2, 3, 4)
 #undef DUCC0_COUPLING_MACRO
   MR_fail("unsupported combination of spec_index and mat_index");
@@ -1603,7 +1621,7 @@ void add_misc(py::module_ &msup)
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
 
   m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
-    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None);
+    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
     "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
 
