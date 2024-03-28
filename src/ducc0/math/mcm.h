@@ -190,7 +190,32 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   const cmav<double,3> &spec, size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
   {
   constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
+  static_assert(ncomp_spec>0, "need at least one spectral component");
+  static_assert(ncomp_spec <= (is00>=0)+(is02>=0)+(is20>=0)+(is22>=0),
+    "gaps in spectral component indices");
+  static_assert((is00==0)||(is02==0)||(is20==0)||(is22==0),
+    "gaps in spectral component indices");
+  static_assert((ncomp_spec<2) || (is00==1)||(is02==1)||(is20==1)||(is22==1),
+    "gaps in spectral component indices");
+  static_assert((ncomp_spec<3) || (is00==2)||(is02==2)||(is20==2)||(is22==2),
+    "gaps in spectral component indices");
+  static_assert((ncomp_spec<4) || (is00==3)||(is02==3)||(is20==3)||(is22==3),
+    "gaps in spectral component indices");
+
   constexpr size_t ncomp_mat = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
+  static_assert(ncomp_mat>0, "need at least one matrix component");
+  static_assert(ncomp_mat == (im00>=0)+(im02>=0)+(im20>=0)+(impp>=0)+(immm>=0),
+    "gaps in matrix component indices");
+  static_assert((im00==0)+(im02==0)+(im20==0)+(impp==0)+(immm==0)==1,
+    "gaps in matrix component indices");
+  static_assert((ncomp_mat<2) || ((im00==1)+(im02==1)+(im20==1)+(impp==1)+(immm==1)==1),
+    "gaps in matrix component indices");
+  static_assert((ncomp_mat<3) || ((im00==2)+(im02==2)+(im20==2)+(impp==2)+(immm==2)==1),
+    "gaps in matrix component indices");
+  static_assert((ncomp_mat<4) || ((im00==3)+(im02==3)+(im20==3)+(impp==3)+(immm==3)==1),
+    "gaps in matrix component indices");
+  static_assert((ncomp_mat<5) || ((im00==4)+(im02==4)+(im20==4)+(impp==4)+(immm==4)==1),
+    "gaps in matrix component indices");
 
   if constexpr ((im02<0) && (im20<0) && (impp<0) && (immm<0))
     return coupling_matrix_spin0_tri(subarray<2>(spec, {{},{is00},{}}),
