@@ -2,6 +2,10 @@
 - nufft:
   - allow different periodicities for every coordinate axis
 
+- misc:
+  - significant improvements (and broken interfaces) in the mode-coupling
+    matrix code
+
 
 0.33.0:
 - general:
