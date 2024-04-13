@@ -16,13 +16,33 @@
 
 from time import time
 
-import ducc0.wgridder as wg
 import numpy as np
+
+import numba.cuda as cuda
+import numba.types as types
+import cupyx.scipy.fft as cufft
+import cupy as cp
+
+import ducc0.wgridder as wg
+import math
 import scipy.fft
 from numba import njit
 from scipy.special import p_roots
 
 speedoflight = 299792458.
+THREADSPERBLOCK = 32
+# TODO Figure out if and where to enable fastmath https://numba.readthedocs.io/en/stable/cuda/fastmath.html
+gpu_kwargs = {
+    "debug": False,
+    "fastmath": False
+}
+precision = "double"
+
+# TODO Remove this for performance debugging
+from numba.core.errors import NumbaWarning
+import warnings
+warnings.simplefilter('ignore', category=NumbaWarning)
+
 
 
 def mymod(arr):
@@ -61,22 +81,6 @@ def init(uvw, freq, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding,
     return u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, conjind
 
 
-def ms2dirty_dft(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    shp = nxdirty, nydirty
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, conjind = init(uvw, freq, shp[0], shp[1], pixsizex, pixsizey, epsilon, do_wgridding)
-    x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in shp], indexing='ij')
-    x *= pixsizex
-    y *= pixsizey
-    res = np.zeros(shp)
-    for row in range(ms.shape[0]):
-        for chan in range(ms.shape[1]):
-            phase = freq[chan]/speedoflight*(x*uvw[row, 0]+y*uvw[row, 1]-uvw[row, 2]*nm1)
-            res += (ms[row, chan]*np.exp(2j*np.pi*phase)).real
-    if do_wgridding:
-        return res/(nm1+1)
-    return res
-
-
 class Kernel:
     def __init__(self, supp, func):
         self._func = func
@@ -109,195 +113,202 @@ def es_kernel(supp, beta):
     return Kernel(supp, lambda x: np.exp(beta*(pow((1-x)*(1+x), 0.5) - 1)))
 
 
-def dirty2ms_python_slow(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, conjind = init(uvw, freq, dirty.shape[0], dirty.shape[1], pixsizex, pixsizey, epsilon, do_wgridding)
-    im = np.zeros(ng)
-    im[slc0, slc1] = dirty / ((nm1+1)*kernel.ft(nm1*dw) if do_wgridding else 1)
-    im /= kernel.ft(gridcoord[0])[:, None]
-    im /= kernel.ft(gridcoord[1])
-    ms = np.zeros(len(u), dtype=np.complex128)
-    wscreen = np.zeros(im.shape, dtype=np.complex128)
-    for ii in range(nwplanes):
-        wscreen[slc0, slc1] = np.exp(2j*np.pi*nm1*(w0+ii*dw)) if do_wgridding else 1
-        grid = scipy.fft.fft2(np.fft.fftshift(im*wscreen))
-        for jj, (uu, vv, ww) in enumerate(zip(u, v, w)):
-            wfactor = kernel(ii-(ww-w0)/dw) if do_wgridding else 1
-            ms[jj] += wfactor*np.sum(grid*np.outer(kernel(mymod(gridcoord[0]-uu)*ng[0]),
-                                                   kernel(mymod(gridcoord[1]-vv)*ng[1])))
-    ms[conjind] = ms[conjind].conjugate()
-    return ms.reshape(-1, len(freq))
+@cuda.jit(**gpu_kwargs)
+def _apply_wkernel_on_ms(ms, w, ii, w0, dw, supp, outms):
+    assert ms.shape == w.shape
+
+    pos = cuda.grid(1)
+    if pos < ms.shape[0]:
+        for jj in range(ms.shape[1]):
+            x = ii-(w[pos, jj]-w0)/dw
+            outms[pos, jj] = ms[pos, jj] * __gk_wkernel(x, supp)
 
 
-def ms2dirty_python_slow(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, ms = init(uvw, freq, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, ms)
-    im = np.zeros((nxdirty, nydirty))
-    for ii in range(nwplanes):
-        grid = np.zeros(ng, dtype=ms.dtype)
-        for uu, vv, vis in zip(u, v, ms*kernel(ii-(w-w0)/dw) if do_wgridding else ms):
-            grid += vis*np.outer(kernel(mymod(gridcoord[0]-uu)*ng[0]),
-                                 kernel(mymod(gridcoord[1]-vv)*ng[1]))
-        loopim = np.fft.fftshift(scipy.fft.ifft2(grid)*np.prod(ng))
-        loopim = loopim[slc0, slc1]
-        if do_wgridding:
-            loopim *= np.exp(-2j*np.pi*nm1*(w0+ii*dw))
-        im += loopim.real
-    im /= kernel.ft(gridcoord[0][slc0])[:, None]
-    im /= kernel.ft(gridcoord[1][slc1])
-    if do_wgridding:
-        im /= (nm1+1)*kernel.ft(nm1*dw)
-    return im
+# TODO Can I pass "supp" as constant value?
+@cuda.jit(device=True, **gpu_kwargs)
+def __gk_wkernel(x, supp):
+    # TODO @Martin rewrite as arithmetic expression (is this possible given
+    # that the expression below shall not be executed?)
+    x = 2*x/supp
+    if abs(x) <= 1:
+        return math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
+    return 0.
 
 
-def ms2dirty_python_fast(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, ms = init(uvw, freq, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, ms)
-    im = np.zeros((nxdirty, nydirty))
-    supp = kernel._supp
-    for ii in range(nwplanes):
-        grid = np.zeros(ng, dtype=ms.dtype)
-        for uu, vv, vis in zip(u, v, ms*kernel(ii-(w-w0)/dw) if do_wgridding else ms):
-            if vis == 0:
-                continue
-            ratposx = (uu*ng[0]) % ng[0]
-            ratposy = (vv*ng[1]) % ng[1]
-            xle = int(np.round(ratposx))-supp//2
-            yle = int(np.round(ratposy))-supp//2
-            pos = np.arange(0, supp)
-            xkernel = kernel(pos-ratposx+xle)
-            ykernel = kernel(pos-ratposy+yle)
-            for xx in range(supp):
-                foo = vis*xkernel[xx]
-                myxpos = (xle+xx) % ng[0]
-                for yy in range(supp):
-                    myypos = (yle+yy) % ng[1]
-                    grid[myxpos, myypos] += foo*ykernel[yy]
-        loopim = np.fft.fftshift(scipy.fft.ifft2(grid)*np.prod(ng))
-        loopim = loopim[slc0, slc1]
-        if do_wgridding:
-            loopim *= np.exp(-2j*np.pi*nm1*(w0+ii*dw))
-        im += loopim.real
-    im /= kernel.ft(gridcoord[0][slc0])[:, None]
-    im /= kernel.ft(gridcoord[1][slc1])
-    if do_wgridding:
-        im /= (nm1+1)*kernel.ft(nm1*dw)
-    return im
+@cuda.jit(**gpu_kwargs)
+def _ms2grid_gpu_supp5(u, v, ms, ng, grid_real, grid_imag):
+    supp = 5
 
+    xkernel = cuda.local.array(supp, dtype=types.double)
+    ykernel = cuda.local.array(supp, dtype=types.double)
 
-def dirty2ms_python_fast(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, conjind = init(uvw, freq, dirty.shape[0], dirty.shape[1], pixsizex, pixsizey, epsilon, do_wgridding)
-    supp = kernel._supp
-    im = np.zeros(ng)
-    im[slc0, slc1] = dirty / ((nm1+1)*kernel.ft(nm1*dw) if do_wgridding else 1)
-    im /= kernel.ft(gridcoord[0])[:, None]
-    im /= kernel.ft(gridcoord[1])
-    ms = np.zeros(len(u), dtype=np.complex128)
-    if do_wgridding:
-        wscreen = np.zeros(im.shape, dtype=np.complex128)
-    for ii in range(nwplanes):
-        if do_wgridding:
-            wscreen[slc0, slc1] = np.exp(2j*np.pi*nm1*(w0+ii*dw))
-            loopim = im*wscreen
-        else:
-            loopim = im
-        grid = scipy.fft.fft2(np.fft.fftshift(loopim))
-        for jj, (uu, vv, ww) in enumerate(zip(u, v, w)):
-            if do_wgridding:
-                arg = ii-(ww-w0)/dw
-                if abs(arg) > supp/2:
-                    continue
-                wfactor = kernel(arg)
-            else:
-                wfactor = 1.
-            ratposx = (uu*ng[0]) % ng[0]
-            ratposy = (vv*ng[1]) % ng[1]
-            xle = int(np.round(ratposx))-supp//2
-            yle = int(np.round(ratposy))-supp//2
-            pos = np.arange(0, supp)
-            xkernel = kernel(pos-ratposx+xle)
-            ykernel = kernel(pos-ratposy+yle)
-            if xle+supp > ng[0] or xle < 0:
-                inds = (pos+xle) % ng[0]
-                mygrid = grid[inds]
-            else:
-                mygrid = grid[xle:xle+supp]
-            if yle+supp > ng[1] or yle < 0:
-                inds = (pos+yle) % ng[1]
-                mygrid = mygrid[:, inds]
-            else:
-                mygrid = mygrid[:, yle:yle+supp]
-            assert mygrid.shape == (supp, supp)
-            mygrid = mygrid*np.outer(xkernel, ykernel)
-            myvis = np.sum(mygrid)
-            ms[jj] += myvis*wfactor
-    ms[conjind] = ms[conjind].conjugate()
-    return ms.reshape(-1, len(freq))
+    pos = cuda.grid(1)
+    if pos >= u.shape[0]:
+        return
 
-
-def ms2dirty_numba(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, ms = init(uvw, freq, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, ms)
-    im = np.zeros((nxdirty, nydirty))
-    for ii in range(nwplanes):
-        myms = ms*kernel(ii-(w-w0)/dw) if do_wgridding else ms
-        grid = _ms2dirty_inner_loop(ii, kernel._supp, u, v, w, w0, dw, ng, myms)
-        loopim = np.fft.fftshift(scipy.fft.ifft2(grid)*np.prod(ng))
-        loopim = loopim[slc0, slc1]
-        if do_wgridding:
-            loopim *= np.exp(-2j*np.pi*nm1*(w0+ii*dw))
-        im += loopim.real
-    im /= kernel.ft(gridcoord[0][slc0])[:, None]
-    im /= kernel.ft(gridcoord[1][slc1])
-    if do_wgridding:
-        im /= (nm1+1)*kernel.ft(nm1*dw)
-    return im
-
-
-@njit
-def _ms2dirty_inner_loop(ii, supp, u, v, w, w0, dw, ng, myms):
-    grid = np.zeros(ng, dtype=myms.dtype)
-    kernel = lambda x: np.exp(2.3*supp*(np.sqrt((1-x)*(1+x)) - 1))
-    fct = 2./supp
-    xkernel = np.empty(supp)
-    ykernel = np.empty(supp)
-    for uu, vv, vis in zip(u, v, myms):
-        if vis == 0:
+    for ifreq in range(u.shape[1]):
+        if ms[pos, ifreq] == 0:
             continue
-        ratposx = (uu*ng[0]) % ng[0]
-        ratposy = (vv*ng[1]) % ng[1]
-        xle = int(np.round(ratposx))-supp//2
-        yle = int(np.round(ratposy))-supp//2
+
+        ratposx = (u[pos, ifreq]*ng[0]) % ng[0]
+        ratposy = (v[pos, ifreq]*ng[1]) % ng[1]
+        xle = int(round(ratposx))-supp//2
+        yle = int(round(ratposy))-supp//2
         dx = xle-ratposx
         dy = yle-ratposy
         for i in range(supp):
-            xkernel[i] = kernel((i+dx)*fct)
-            ykernel[i] = kernel((i+dy)*fct)
+            knl = lambda x: math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
+            fct = 2./supp
+            xkernel[i] = knl((i+dx)*fct)
+            ykernel[i] = knl((i+dy)*fct)
         if xle+supp <= ng[0] and yle+supp <= ng[1]:
             for xx in range(supp):
-                foo = vis*xkernel[xx]
+                foo = ms[pos, ifreq]*xkernel[xx]
                 myxpos = xle+xx
                 for yy in range(supp):
-                    grid[myxpos, yle+yy] += foo*ykernel[yy]
+                    val = foo*ykernel[yy]*ng[0]*ng[1]
+                    # TODO Highly inperformant due to global atomics
+                    cuda.atomic.add(grid_real, (myxpos, yle+yy), val.real)
+                    cuda.atomic.add(grid_imag, (myxpos, yle+yy), val.imag)
         else:
             for xx in range(supp):
-                foo = vis*xkernel[xx]
+                foo = ms[pos, ifreq]*xkernel[xx]
                 myxpos = (xle+xx) % ng[0]
                 for yy in range(supp):
+                    val = foo*ykernel[yy]*ng[0]*ng[1]
                     myypos = (yle+yy) % ng[1]
-                    grid[myxpos, myypos] += foo*ykernel[yy]
-    return grid
+                    cuda.atomic.add(grid_real, (myxpos, myypos), val.real)
+                    cuda.atomic.add(grid_imag, (myxpos, myypos), val.imag)
+
+
+def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
+
+    # TODO FFT Tuning guide: https://docs.cupy.dev/en/stable/reference/scipy_fft.html#code-compatibility-features
+
+    ofac = 2
+    x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in (nxdirty, nydirty)], indexing='ij')
+    x *= pixsizex
+    y *= pixsizey
+    eps = x**2+y**2
+    nm1 = -eps/(np.sqrt(1.-eps)+1.)
+    ng = ofac*nxdirty, ofac*nydirty
+    supp = int(np.ceil(np.log10(1/epsilon*(3 if do_wgridding else 2)))) + 1
+    kernel = es_kernel(supp, 2.3*supp)
+    uvw = np.transpose((uvw[..., None]*freq/speedoflight), (0, 2, 1)).reshape(-1, 3)
+    conjind = uvw[:, 2] < 0
+    uvw[conjind] *= -1
+    u, v, w = uvw.T
+    if do_wgridding:
+        wmin, wmax = np.min(w), np.max(w)
+        dw = 1/ofac/np.max(np.abs(nm1))/2
+        nwplanes = int(np.ceil((wmax-wmin)/dw+supp)) if do_wgridding else 1
+        w0 = (wmin+wmax)/2 - dw*(nwplanes-1)/2
+    else:
+        nwplanes, w0, dw = 1, None, None
+    gridcoord = [np.linspace(-0.5, 0.5, nn, endpoint=False) for nn in ng]
+    slc0, slc1 = slice(nxdirty//2, nxdirty*3//2), slice(nydirty//2, nydirty*3//2)
+    u *= pixsizex
+    v *= pixsizey
+    ms = ms.flatten()  # TODO do not flatten ms...
+    ms[conjind] = ms[conjind].conjugate()
+
+    im = cp.zeros((nxdirty, nydirty))
+    nm1 = cp.array(nm1)  # TODO Generate nm1 on device
+
+    # TODO do not flatten, do not compute outer product of uvw and freq
+    ms = ms[:, None]
+    u = np.ascontiguousarray(u[:, None])
+    v = np.ascontiguousarray(v[:, None])
+    w = np.ascontiguousarray(w[:, None])
+    conjind = conjind[:, None]
+
+    nfreq = len(freq)
+    ms = ms.reshape(-1, nfreq)
+    u = u.reshape(-1, nfreq)
+    v = v.reshape(-1, nfreq)
+    w = w.reshape(-1, nfreq)
+    conjind = conjind
+
+    myms = ms.copy()
+
+    u = cuda.to_device(u)
+    v = cuda.to_device(v)
+    w = cuda.to_device(w)
+    ms = cuda.to_device(ms)
+
+    blockspergrid = (w.shape[0] + (THREADSPERBLOCK - 1)) // THREADSPERBLOCK
+
+    if ms.dtype == np.complex128:
+        # grid_dtype = types.float64
+        grid_dtype = np.float64
+    elif ms.dtype == np.complex64:
+        # grid_dtype = types.float32
+        grid_dtype = np.float32
+    else:
+        raise RuntimeError()
+
+    for ii in range(nwplanes):
+        if do_wgridding:
+            # TODO Get rid of myms and directly write to the grid
+            myms = cuda.device_array(ms.shape, dtype=ms.dtype)
+            _apply_wkernel_on_ms[blockspergrid, THREADSPERBLOCK](ms, w, ii, w0, dw, supp, myms)
+        else:
+            myms = ms
+
+        # TODO Allocate grid outside of loop and zero it within the ms2grid kernel
+        grid2_real = cuda.to_device(np.zeros(ng, dtype=grid_dtype))
+        grid2_imag = cuda.to_device(np.zeros(ng, dtype=grid_dtype))
+        # TODO Can we pass compile-time constants somehow differently?
+        assert supp == 5
+        _ms2grid_gpu_supp5[blockspergrid, THREADSPERBLOCK](u, v, myms, ng, grid2_real, grid2_imag)
+
+        loopim = cufft.ifft2(cp.array(grid2_real) + 1j*cp.array(grid2_imag))
+
+        # TODO Merge all the following operations into one kernel
+        loopim = cufft.fftshift(cp.array(loopim))
+        loopim = loopim[slc0, slc1]
+        if do_wgridding:
+            fac = -2j*np.pi*(w0+ii*dw)
+            loopim *= cp.exp(fac*nm1)
+        im += loopim.real
+
+    post_correction1 = cp.array(1/kernel.ft(gridcoord[0][slc0])[:, None])
+    post_correction2 = cp.array(1/kernel.ft(gridcoord[1][slc1]))
+    im *= post_correction1
+    im *= post_correction2
+
+    if do_wgridding:
+        # TODO Write post_correction3 as proper GPU kernel
+        x = nm1*dw*supp*np.pi
+        nroots = 2*supp
+        if supp % 2 == 0:
+            nroots += 1
+        q, weights = p_roots(nroots)
+        ind = q > 0
+        weights = cp.array(weights[ind])
+        q = cp.array(q[ind])
+        assert len(x.shape) != 1
+        kq = cp.einsum('ij,k->ijk', x, q)
+        kernel = lambda x: cp.exp(2.3*supp*(pow((1-x)*(1+x), 0.5) - 1))
+        post_correction3 = supp*cp.sum(weights*kernel(q)*cp.cos(kq), axis=-1)
+        im /= (nm1+1)*post_correction3
+
+    return cp.asnumpy(im)
 
 
 # Interface adapters
 def ms2dirty_ducc(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    return wg.ms2dirty(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+    return wg.ms2dirty(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding, nthreads=8)
 
 def dirty2ms_ducc(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    return wg.dirty2ms(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding)
+    return wg.dirty2ms(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding, nthread=8)
 # End interface adapters
 
 
 def main():
     fov = 5
-    nxdirty, nydirty = 512, 512
-    nrow, nchan = 100, 2
+    nxdirty, nydirty = 1024, 1024
+    nrow, nchan = 100000, 10
     rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
@@ -311,32 +322,42 @@ def main():
     nvis = nrow*nchan
 
     dirty0 = None
-    for f in (ms2dirty_dft, ms2dirty_python_slow, ms2dirty_python_fast, ms2dirty_numba, ms2dirty_ducc):
+
+    if precision == "single":
+        ms = ms.astype(np.complex64)
+    elif precision == "double":
+        pass
+    else:
+        raise RuntimeError()
+
+    # Compiling...
+    ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
+
+    for f in (ms2dirty_ducc, ms2dirty_numba_gpu):
         t0 = time()
         dirty = f(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
         print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
         if dirty0 is not None:
-            print(np.max(np.abs(dirty-dirty0)) / np.max(np.abs(dirty0)))
+            err = np.max(np.abs(dirty-dirty0)) / np.max(np.abs(dirty0))
+            if err > epsilon:
+                raise AssertionError(f"Implementation not accurate: err={err}. Should be: epsilon={epsilon}\n{dirty}\n\n{dirty0}")
+            assert np.max(np.abs(dirty-dirty0)) / np.max(np.abs(dirty0)) < epsilon
         else:
             dirty0 = dirty
 
-    ms0 = None
-    for f in (dirty2ms_python_slow, dirty2ms_python_fast, dirty2ms_ducc):
-        t0 = time()
-        ms = f(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding)
-        t1 = time()-t0
-        print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
-        if ms0 is not None:
-            print(np.max(np.abs(ms-ms0)) / np.max(np.abs(ms0)))
-        else:
-            ms0 = ms
+    # TODO
+    # ms0 = None
+    # for f in (dirty2ms_ducc, ms2dirty_numba_gpu):
+    #     t0 = time()
+    #     ms = f(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding)
+    #     t1 = time()-t0
+    #     print(f'Wall time {f.__name__} {t1:.2f} s ({nvis/t1:.0f} vis/s)')
+    #     if ms0 is not None:
+    #         print(np.max(np.abs(ms-ms0)) / np.max(np.abs(ms0)))
+    #     else:
+    #         ms0 = ms
 
 
 if __name__ == '__main__':
-    print("""Disclaimer:
-Note that the following values for vis/s are unusually small
-since in the demo only few visibilities are used. In typical
-real-world scenarios these values are several orders of magnitude
-larger (except for "*dft" and "*_python_slow").\n""")
     main()
