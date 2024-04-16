@@ -243,6 +243,9 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
         spec2(i,j,l) = 0.;
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
+// FIXME: these two lines are necessary for Visual C++, no idea why
+    constexpr size_t ncomp_mat = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
+    constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
 // res arrays are one larger to make loops simpler below
     vmav<Tsimd,2> wig({2, 2*lmax+1+1});
     vmav<array<Tsimd,ncomp_mat>,1> val_({nspec});
