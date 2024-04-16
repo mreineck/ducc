@@ -12,6 +12,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Copyright(C) 2020 Max-Planck-Society
+# Copyright(C) 2024 Philipp Arras
 # Author: Philipp Arras
 
 from time import time
@@ -20,29 +21,117 @@ import numpy as np
 
 import numba.cuda as cuda
 import numba.types as types
-import cupyx.scipy.fft as cufft
-import cupy as cp
 
 import ducc0.wgridder as wg
 import math
 import scipy.fft
 from numba import njit
 from scipy.special import p_roots
+from time import time
+
 
 speedoflight = 299792458.
+
+TILESIZE = 16
 THREADSPERBLOCK = 32
+THREADSPERBLOCK2d = 8, 8
+
+
+# NOTE that the configuration of the run changes if DEBUG_ON_CPU (e.g., fewer visibilities)
+DEBUG_ON_CPU = False
+
 # TODO Figure out if and where to enable fastmath https://numba.readthedocs.io/en/stable/cuda/fastmath.html
 gpu_kwargs = {
     "debug": False,
     "fastmath": False
 }
-precision = "double"
+precision = "single"
+
+
+if DEBUG_ON_CPU:
+    import scipy.fft as cufft
+    import numpy as cp
+else:
+    import cupyx.scipy.fft as cufft
+    import cupy as cp
 
 # TODO Remove this for performance debugging
 from numba.core.errors import NumbaWarning
 import warnings
 warnings.simplefilter('ignore', category=NumbaWarning)
 
+cuda.profile_stop()
+
+
+class Timer:
+    def __init__(self, name):
+        self.reset()
+        self._name = str(name)
+
+    def push(self, s):
+        assert self._t0 is None
+        self._t0 = time(), s
+
+    def pop(self):
+        self.synchronize()
+        t1 = time()
+        t0, s = self._t0
+        if s not in self._dct:
+            self._dct[s] = 0.
+        self._dct[s] += t1 - t0
+        self._t0 = None
+
+    def poppush(self, s):
+        self.pop()
+        self.push(s)
+
+    def reset(self):
+        self._dct = {}
+        self._t0 = None
+        self._globalstart = time()
+
+    def synchronize(self):
+        if not DEBUG_ON_CPU:
+            cuda.synchronize()
+
+    def report(self):
+        if self._t0 is not None:
+            self.pop()
+        self.synchronize()
+
+        total = time() - self._globalstart
+        not_allocated = total - sum(self._dct.values())
+
+        values = list(self._dct.values()) + [not_allocated]
+        keys = list(self._dct.keys()) + ["<not_allocated>"]
+
+        idx = np.argsort(values)[::-1]
+        keys = [keys[ii] for ii in idx]
+        values = [values[ii] for ii in idx]
+
+        print()
+        title = f"Timer report: {self._name}"
+        print(title)
+        print("^"*len(title))
+        for kk, vv in zip(keys, values):
+            print(f"{vv:.3f} s: {kk}")
+        print(len(title)*"-")
+        print(f"{total:.3f} s: Total")
+        print()
+        self.reset()
+
+
+def kernelconfig(*nthreads):
+    assert all(isinstance(xx, (int, np.int64)) and xx > 0 for xx in nthreads)
+
+    if len(nthreads) == 1:
+        return int(math.ceil(nthreads[0] / THREADSPERBLOCK)), THREADSPERBLOCK
+
+    elif len(nthreads) == 2:
+        nthreads = np.array(nthreads, dtype=int)
+        return tuple((np.ceil(nthreads / np.array(THREADSPERBLOCK2d))).astype(int)), THREADSPERBLOCK2d
+
+    raise NotImplementedError()
 
 
 def mymod(arr):
@@ -135,55 +224,288 @@ def __gk_wkernel(x, supp):
     return 0.
 
 
+@cuda.jit(device=True, **gpu_kwargs)
+def __gk_wkernel_no_bound_checks(x, supp):
+    x = 2*x/supp
+    return math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
+
+
 @cuda.jit(**gpu_kwargs)
-def _ms2grid_gpu_supp5(u, v, ms, ng, grid_real, grid_imag):
-    supp = 5
+def _2dzero_gpu(arr):
+    x, y = cuda.grid(2)
+    if x < arr.shape[0] or y < arr.shape[1]:
+        arr[x, y] = 0
 
-    xkernel = cuda.local.array(supp, dtype=types.double)
-    ykernel = cuda.local.array(supp, dtype=types.double)
+# TODO Somehow tell numba that this is a compile-time constant
+supp = 5
+shared_grid_size = TILESIZE+2*supp
 
-    pos = cuda.grid(1)
-    if pos >= u.shape[0]:
+@cuda.jit(**gpu_kwargs)
+def _ms2grid_gpu_supp5_tiles(
+        u, v, ms,
+        sorting_1d_idx,
+        TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
+        ng, grid_real, grid_imag):
+
+    global_tid = cuda.grid(1)  # Global index
+    local_tid = cuda.threadIdx.x  # Index of thread in current TB
+
+    TB = cuda.blockIdx.x
+
+    if local_tid >= TB_to_nvis_in_TB[TB]:
         return
 
-    for ifreq in range(u.shape[1]):
-        if ms[pos, ifreq] == 0:
-            continue
+    shared_grid_real = cuda.shared.array((shared_grid_size, shared_grid_size),
+                                         dtype=types.double)
+    shared_grid_imag = cuda.shared.array((shared_grid_size, shared_grid_size),
+                                         dtype=types.double)
 
-        ratposx = (u[pos, ifreq]*ng[0]) % ng[0]
-        ratposy = (v[pos, ifreq]*ng[1]) % ng[1]
-        xle = int(round(ratposx))-supp//2
-        yle = int(round(ratposy))-supp//2
-        dx = xle-ratposx
-        dy = yle-ratposy
-        for i in range(supp):
-            knl = lambda x: math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
-            fct = 2./supp
-            xkernel[i] = knl((i+dx)*fct)
-            ykernel[i] = knl((i+dy)*fct)
-        if xle+supp <= ng[0] and yle+supp <= ng[1]:
-            for xx in range(supp):
-                foo = ms[pos, ifreq]*xkernel[xx]
-                myxpos = xle+xx
-                for yy in range(supp):
-                    val = foo*ykernel[yy]*ng[0]*ng[1]
-                    # TODO Highly inperformant due to global atomics
-                    cuda.atomic.add(grid_real, (myxpos, yle+yy), val.real)
-                    cuda.atomic.add(grid_imag, (myxpos, yle+yy), val.imag)
-        else:
-            for xx in range(supp):
-                foo = ms[pos, ifreq]*xkernel[xx]
-                myxpos = (xle+xx) % ng[0]
-                for yy in range(supp):
-                    val = foo*ykernel[yy]*ng[0]*ng[1]
-                    myypos = (yle+yy) % ng[1]
-                    cuda.atomic.add(grid_real, (myxpos, myypos), val.real)
-                    cuda.atomic.add(grid_imag, (myxpos, myypos), val.imag)
+    # Zero shared grid
+
+    # TODO Distribute this across threads
+    if local_tid == 0:
+        for xx in range(shared_grid_size):
+            for yy in range(shared_grid_size):
+                shared_grid_real[xx, yy] = 0.
+                shared_grid_imag[xx, yy] = 0.
+    cuda.syncthreads()
+
+    # if DEBUG_ON_CPU:
+    #     for xx in range(shared_grid_size):
+    #         for yy in range(shared_grid_size):
+    #             if shared_grid_real[xx, yy] != 0.:
+    #                 print(f"Shared grid real not zero. tid={tid}, gridid={idx}")
+    #             if shared_grid_imag[xx, yy] != 0.:
+    #                 print(f"Shared grid imag not zero. tid={tid}, gridid={idx}")
+    #     cuda.syncthreads()
+
+    xtile = TB_to_xtile[TB]
+    ytile = TB_to_ytile[TB]
+
+    tile_dx = TILESIZE * xtile - supp//2
+    tile_dy = TILESIZE * ytile - supp//2
+
+    idx0 = TB_to_idx_start[TB]
+    # TODO Can we use global_tid here somehow?
+    data_idx = sorting_1d_idx[idx0 + local_tid]
+
+    dd = ms[data_idx]
+    ratposx = u[data_idx]
+    ratposy = v[data_idx]
+
+    # Subpixel offset
+    dx = int(round(ratposx)) - supp//2 - ratposx
+    dy = int(round(ratposy)) - supp//2 - ratposy
+
+    xle = int(round(ratposx)) - supp//2 - tile_dx
+    yle = int(round(ratposy)) - supp//2 - tile_dy
+
+    # if DEBUG_ON_CPU:
+    #     assert 0 <= xle < shared_grid_size
+    #     assert 0 <= yle + supp < shared_grid_size
+
+    for i in range(supp):
+        xkernel = __gk_wkernel_no_bound_checks(i+dx, supp)
+        myxpos = xle+i
+        for j in range(supp):
+            if DEBUG_ON_CPU:
+                assert 0 <= myxpos < shared_grid_size
+                assert 0 <= yle+j < shared_grid_size
+            # TODO Optimize shared memory accesses (bank conflicts are bad)
+            # TODO Check, if ng[0]*ng[1] could be part of the Fourier transform
+            ykernel = __gk_wkernel_no_bound_checks(j+dy, supp)
+            val = dd * xkernel * ykernel * ng[0] * ng[1]
+            cuda.atomic.add(shared_grid_real, (myxpos, yle+j), val.real)
+            cuda.atomic.add(shared_grid_imag, (myxpos, yle+j), val.imag)
+
+    cuda.syncthreads()
+
+    # Write local grid atomically to global grid
+    # TODO Split the atomic write operation into a separate kernel and write the shared_grid to global memory here?
+    # TODO Distribute this across threads
+
+    if local_tid == 0:
+        for xx in range(shared_grid_size):
+            xpos = (tile_dx + xx) % ng[0]
+            for yy in range(shared_grid_size):
+                ypos = (tile_dy + yy) % ng[1]
+                cuda.atomic.add(grid_real, (xpos, ypos), shared_grid_real[xx, yy])
+                cuda.atomic.add(grid_imag, (xpos, ypos), shared_grid_imag[xx, yy])
+
+    cuda.syncthreads()
 
 
-def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
+def bucketsort(buckets, n_buckets):
+    if len(buckets) == 0:
+        return np.array([], int), np.zeros(n_buckets+1, int)
+
+    idx = cp.argsort(buckets)
+    if DEBUG_ON_CPU:
+        assert min(buckets) >= 0
+        assert max(buckets) < n_buckets
+        host_buckets = buckets
+    else:
+        host_buckets = buckets.get()
+
+    # TODO Compute histogram on GPU
+    offsets, _ = np.histogram(host_buckets, bins=np.array(list(np.arange(n_buckets))+ [np.infty]))
+    offsets = np.cumsum([0] + list(offsets))
+
+    if DEBUG_ON_CPU:
+        assert n_buckets + 1 == len(offsets)
+        assert offsets[-1] == len(idx)
+        assert offsets[0] == 0
+        for tx in range(len(offsets) - 1):
+            start, stop = offsets[tx], offsets[tx+1]
+            assert len(np.unique(buckets[idx[start:stop]])) in [0, 1]
+
+    return idx, offsets
+
+
+def apply_periodicity_on_uv(u, v, ng):
+    # Alternative ideas by Martin
+    # u=u/ng[0] + 100;  u = (u-int(u))
+    # xng0 = 1./ng[0]; u= u*xng0 + 100; ...
+
+    u = (cp.array(u) * ng[0]) % ng[0]
+    v = (cp.array(v) * ng[1]) % ng[1]
+    return u, v
+
+
+def sort_into_tiles(u, v, ng):
+    # Resources for how to implement bucket sort on GPU
+    # https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting
+    # https://stackoverflow.com/questions/16781995/efficient-bucket-sort-on-gpu
+
+    if DEBUG_ON_CPU:
+        assert u.ndim == v.ndim == 2
+        assert u.shape == v.shape
+        assert isinstance(ng, tuple) and len(ng) == 2 and all(isinstance(nn, int) for nn in ng)
+
+        assert ng[0] >= TILESIZE
+        assert ng[1] >= TILESIZE
+
+    ntile_u = int(math.ceil(ng[0] / TILESIZE))
+    ntile_v = int(math.ceil(ng[1] / TILESIZE))
+
+    start_tile_idx = np.empty((ntile_u, ntile_v), dtype=int)
+    stop_tile_idx = np.empty_like(start_tile_idx)
+
+    u = u.ravel()
+    v = v.ravel()
+
+    u_tiles = (u / TILESIZE).astype(int)
+    v_tiles = (v / TILESIZE).astype(int)
+
+    if DEBUG_ON_CPU:
+        assert min(u_tiles) >= 0
+        assert max(u_tiles) < ntile_u
+        assert min(v_tiles) >= 0
+        assert max(v_tiles) < ntile_v
+
+        # print(min(u_tiles), max(u_tiles), ntile_u)
+        # print(min(u_tiles), max(v_tiles), ntile_v)
+
+    idx_sorting, offsets_u = bucketsort(u_tiles, ntile_u)
+
+    if DEBUG_ON_CPU:
+        for tx in range(len(offsets_u)-1):
+            start = offsets_u[tx]
+            stop = offsets_u[tx+1]
+            idx = idx_sorting[start:stop]
+            uu = u[idx]
+
+            if len(uu) > 0:
+                if not (uu.min() >= tx*TILESIZE):
+                    print("Min fail", tx, uu, tx*TILESIZE)
+                if not (uu.max() < (tx+1)*TILESIZE):
+                    print("Max fail", tx, uu, (tx+1)*TILESIZE)
+
+    # Bring v coordinates into u-sorted order
+    v_tiles = v_tiles[idx_sorting]
+
+    # For each u-bucket, perform bucket sort in v-direction
+    for itile_u in range(len(offsets_u) - 1):
+        istart, iend = offsets_u[itile_u], offsets_u[itile_u+1]
+        idx_sorting_v, offsets_v = bucketsort(v_tiles[istart:iend], ntile_v)
+
+        # Overwrite sorting indices for current u-tile-column
+        idx_sorting[istart:iend] = idx_sorting[istart:iend][idx_sorting_v]
+        v_tiles[istart:iend] = v_tiles[istart:iend][idx_sorting_v]
+
+        start_tile_idx[itile_u] = offsets_u[itile_u] + offsets_v[:-1]
+
+    # Stop index of tiles equals start index of next tile (with special case at the end)
+    stop_tile_idx.ravel()[:-1] = start_tile_idx.ravel()[1:]
+    stop_tile_idx.ravel()[-1] = u.size
+
+    if DEBUG_ON_CPU:
+        tile_occupancy = stop_tile_idx - start_tile_idx
+        # print("Tile occupancy")
+        # print(tile_occupancy)
+
+    return idx_sorting, start_tile_idx, stop_tile_idx
+
+
+def _ms2grid_gpu(u, v, ms, sorting_1d_idx, tile_start, tile_stop, ng, grid_real, grid_imag):
+    # TODO: Idea launch all kernels in one go (with much idling)
+    # TODO: Split kernels into groups of different sizes and launch them together respectively
+
+    VISPERTHREADBLOCK = 512
+
+    TB_to_xtile = []
+    TB_to_ytile = []
+    TB_to_nvis_in_TB = []
+    TB_to_idx_start = []
+
+    nxtiles, nytiles = tile_start.shape
+    for xtile in range(nxtiles):
+        for ytile in range(nytiles):
+            idx0 = tile_start[xtile, ytile]
+            idx1 = tile_stop[xtile, ytile]
+            nvis_in_tile = idx1 - idx0
+
+            # Skip empty tiles
+            if nvis_in_tile == 0:
+                continue
+
+            n_TBs_needed = int(math.ceil(nvis_in_tile / VISPERTHREADBLOCK))
+            TB_to_xtile.extend(n_TBs_needed*[xtile])
+            TB_to_ytile.extend(n_TBs_needed*[ytile])
+
+            TB_to_idx_start.extend(list(idx0 + VISPERTHREADBLOCK*ii for ii in range(n_TBs_needed)))
+
+            lst_nvis_in_TB = n_TBs_needed*[VISPERTHREADBLOCK]
+            lst_nvis_in_TB[-1] -= sum(lst_nvis_in_TB) - nvis_in_tile
+            assert sum(lst_nvis_in_TB) == nvis_in_tile
+            TB_to_nvis_in_TB.extend(lst_nvis_in_TB)
+
+    n_TBs = len(TB_to_xtile)
+    TB_to_xtile = cp.array(TB_to_xtile)
+    TB_to_ytile = cp.array(TB_to_ytile)
+    TB_to_idx_start = cp.array(TB_to_idx_start)
+    TB_to_nvis_in_TB = cp.array(TB_to_nvis_in_TB)
+
+    # TODO Think about if all this indexing logic can be computed in the kernel
+    cuda.profile_start()
+    _ms2grid_gpu_supp5_tiles[n_TBs, VISPERTHREADBLOCK](
+        u, v, ms,
+        sorting_1d_idx,
+        TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
+        ng, grid_real, grid_imag)
+    cuda.profile_stop()
+
+
+def ms2dirty_numba_gpu_verbose(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
+    return ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, verbose=True)
+
+def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, verbose=False):
+
+    timer = Timer("numba_gpu")
 
     # TODO FFT Tuning guide: https://docs.cupy.dev/en/stable/reference/scipy_fft.html#code-compatibility-features
+
+    timer.push("Preparation")  # -----------------------------------------------
 
     ofac = 2
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in (nxdirty, nydirty)], indexing='ij')
@@ -191,9 +513,9 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
     y *= pixsizey
     eps = x**2+y**2
     nm1 = -eps/(np.sqrt(1.-eps)+1.)
-    ng = ofac*nxdirty, ofac*nydirty
+    ng = int(ofac*nxdirty), int(ofac*nydirty)
     supp = int(np.ceil(np.log10(1/epsilon*(3 if do_wgridding else 2)))) + 1
-    kernel = es_kernel(supp, 2.3*supp)
+    # TODO Compute outer product of uv and freq on GPU
     uvw = np.transpose((uvw[..., None]*freq/speedoflight), (0, 2, 1)).reshape(-1, 3)
     conjind = uvw[:, 2] < 0
     uvw[conjind] *= -1
@@ -212,8 +534,7 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
     ms = ms.flatten()  # TODO do not flatten ms...
     ms[conjind] = ms[conjind].conjugate()
 
-    im = cp.zeros((nxdirty, nydirty))
-    nm1 = cp.array(nm1)  # TODO Generate nm1 on device
+    timer.poppush("Copy to device")  # -----------------------------------------------
 
     # TODO do not flatten, do not compute outer product of uvw and freq
     ms = ms[:, None]
@@ -229,14 +550,49 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
     w = w.reshape(-1, nfreq)
     conjind = conjind
 
-    myms = ms.copy()
+    timer.poppush("Preparation: Create tiles")  # -----------------------------------------------
+
+    # tile_start, tile_stop are refer to indices of sorting_1d_idx
+    u, v = apply_periodicity_on_uv(u, v, ng)
+
+    sorting_1d_idx, tile_start, tile_stop = sort_into_tiles(u, v, ng)
+
+    if DEBUG_ON_CPU:
+        assert u.min() >= 0
+        assert u.max() < ng[0]
+        assert v.min() >= 0
+        assert v.max() < ng[1]
+        for tx in range(tile_start.shape[0]):
+            for ty in range(tile_start.shape[1]):
+                idx = sorting_1d_idx[tile_start[tx, ty]:tile_stop[tx, ty]]
+                uu = u.ravel()[idx]
+                vv = v.ravel()[idx]
+                # print("tx", tx, "ty", ty) # , tile_start.shape)
+                if len(uu) > 0:
+                    assert uu.min() >= tx*TILESIZE
+                    if not (uu.max() < (tx+1)*TILESIZE):
+                        raise AssertionError(uu.max(), (tx+1)*TILESIZE, (tx, ty), ng[0])
+                    assert uu.max() < (tx+1)*TILESIZE
+                    if not vv.min() >= ty*TILESIZE:
+                        print("err3", vv.min(), ty*TILESIZE, (tx, ty), ng[1])
+                    if not vv.max() < (ty+1)*TILESIZE:
+                        print("err4", vv.max(), (ty+1)*TILESIZE, (tx, ty), ng[1])
+
+    nx, ny = tile_start.shape
+    for xx in range(nx):
+        for yy in range(ny):
+            i0 = tile_start[xx, yy]
+            i1 = tile_stop[xx, yy]
+
+    timer.poppush("Copy to device")  # -----------------------------------------------
+
+    im = cp.zeros((nxdirty, nydirty))
+    nm1 = cp.array(nm1)  # TODO Generate nm1 on device
 
     u = cuda.to_device(u)
     v = cuda.to_device(v)
     w = cuda.to_device(w)
     ms = cuda.to_device(ms)
-
-    blockspergrid = (w.shape[0] + (THREADSPERBLOCK - 1)) // THREADSPERBLOCK
 
     if ms.dtype == np.complex128:
         # grid_dtype = types.float64
@@ -247,37 +603,69 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
     else:
         raise RuntimeError()
 
+    timer.pop()
+
+    grid2_real = cuda.device_array(ng, dtype=grid_dtype)
+    grid2_imag = cuda.device_array(ng, dtype=grid_dtype)
+    nrow, nfreq = ms.shape
+    nxtiles, nytiles = tile_start.shape
+
+    # TODO: Idea sort u, v, w, vis once and get rid of sorting_1d_idx? Compatible with wgridding?
+
     for ii in range(nwplanes):
+        # print(f"wplane #{ii}")
         if do_wgridding:
+            timer.push("Apply wkernel")
             # TODO Get rid of myms and directly write to the grid
             myms = cuda.device_array(ms.shape, dtype=ms.dtype)
-            _apply_wkernel_on_ms[blockspergrid, THREADSPERBLOCK](ms, w, ii, w0, dw, supp, myms)
+            nblocks, nthreadsperblock = kernelconfig(nrow)
+            _apply_wkernel_on_ms[nblocks, nthreadsperblock](ms, w, ii, w0, dw, supp, myms)
+            timer.pop()
         else:
             myms = ms
 
-        # TODO Allocate grid outside of loop and zero it within the ms2grid kernel
-        grid2_real = cuda.to_device(np.zeros(ng, dtype=grid_dtype))
-        grid2_imag = cuda.to_device(np.zeros(ng, dtype=grid_dtype))
+        timer.push("zero grid")
+
+        if DEBUG_ON_CPU:
+            grid2_real *= 0.
+            grid2_imag *= 0.
+        else:
+            # TODO apply by tiles already here?
+            nblocks, nthreadsperblock = kernelconfig(*ng)
+            _2dzero_gpu[nblocks, nthreadsperblock](grid2_real)
+            _2dzero_gpu[nblocks, nthreadsperblock](grid2_imag)
+
+        timer.poppush("ms2grid")
+
         # TODO Can we pass compile-time constants somehow differently?
         assert supp == 5
-        _ms2grid_gpu_supp5[blockspergrid, THREADSPERBLOCK](u, v, myms, ng, grid2_real, grid2_imag)
 
+        _ms2grid_gpu(u.ravel(), v.ravel(), myms.ravel(),
+                     sorting_1d_idx, tile_start, tile_stop,
+                     ng, grid2_real, grid2_imag)
+
+        timer.poppush("FFT (incl. conversion 2xreal -> complex)")
         loopim = cufft.ifft2(cp.array(grid2_real) + 1j*cp.array(grid2_imag))
 
+        timer.poppush("Grid correction")
         # TODO Merge all the following operations into one kernel
         loopim = cufft.fftshift(cp.array(loopim))
         loopim = loopim[slc0, slc1]
         if do_wgridding:
             fac = -2j*np.pi*(w0+ii*dw)
             loopim *= cp.exp(fac*nm1)
+        timer.poppush("Grid accumulation")
         im += loopim.real
+        timer.pop()
 
-    post_correction1 = cp.array(1/kernel.ft(gridcoord[0][slc0])[:, None])
-    post_correction2 = cp.array(1/kernel.ft(gridcoord[1][slc1]))
+    timer.push("Correct uv-kernel")
+    post_correction1 = cp.array(1/es_kernel(supp, 2.3*supp).ft(gridcoord[0][slc0])[:, None])
+    post_correction2 = cp.array(1/es_kernel(supp, 2.3*supp).ft(gridcoord[1][slc1]))
     im *= post_correction1
     im *= post_correction2
 
     if do_wgridding:
+        timer.poppush("Correct w-kernel")
         # TODO Write post_correction3 as proper GPU kernel
         x = nm1*dw*supp*np.pi
         nroots = 2*supp
@@ -293,12 +681,16 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
         post_correction3 = supp*cp.sum(weights*kernel(q)*cp.cos(kq), axis=-1)
         im /= (nm1+1)*post_correction3
 
-    return cp.asnumpy(im)
+    timer.poppush("Copy result to host")
+    res = im if DEBUG_ON_CPU else cp.asnumpy(im)
+    if verbose and not DEBUG_ON_CPU:
+        timer.report()
+    return res
 
 
 # Interface adapters
 def ms2dirty_ducc(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
-    return wg.ms2dirty(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding, nthreads=8)
+    return wg.ms2dirty(uvw, freq, ms, None, nxdirty, nydirty, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding, nthreads=8, verbosity=2)
 
 def dirty2ms_ducc(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
     return wg.dirty2ms(uvw, freq, dirty, None, pixsizex, pixsizey, 0, 0, epsilon, do_wgridding, nthread=8)
@@ -307,18 +699,24 @@ def dirty2ms_ducc(uvw, freq, dirty, pixsizex, pixsizey, epsilon, do_wgridding):
 
 def main():
     fov = 5
-    nxdirty, nydirty = 1024, 1024
-    nrow, nchan = 100000, 10
+    if DEBUG_ON_CPU:
+        nxdirty, nydirty = 100, 120
+        nrow, nchan = 20, 2
+    else:
+        nxdirty, nydirty = 1024, 1024
+        nrow, nchan = 100000, 50
     rng = np.random.default_rng(42)
     pixsizex = fov*np.pi/180/nxdirty
     pixsizey = fov*np.pi/180/nydirty*1.1
     f0 = 1e9
     freq = f0 + np.arange(nchan)*(f0/nchan)
     uvw = (rng.random((nrow, 3))-0.5)/(pixsizex*f0/speedoflight)
+    uvw[:, 0] *= 1.5
     uvw[:, 2] /= 20
     ms = rng.random((nrow, nchan))-0.5 + 1j*(rng.random((nrow, nchan))-0.5)
     epsilon = 1e-3
     do_wgridding = True
+    do_wgridding = False
     nvis = nrow*nchan
 
     dirty0 = None
@@ -331,9 +729,10 @@ def main():
         raise RuntimeError()
 
     # Compiling...
-    ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
+    if not DEBUG_ON_CPU:
+        ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
 
-    for f in (ms2dirty_ducc, ms2dirty_numba_gpu):
+    for f in (ms2dirty_ducc, ms2dirty_numba_gpu_verbose):
         t0 = time()
         dirty = f(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding)
         t1 = time()-t0
