@@ -491,7 +491,7 @@ template<typename T> class SphereInterpol
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
       ducc0::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
-      timers.poppush("phi FFT and dconvolution");
+      timers.poppush("phi FFT and deconvolution");
       // fix phi
       size_t nj=2*mmax+1;
       auto phikrn = getKernel(nphi_s, nphi_b);
