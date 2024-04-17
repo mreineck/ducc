@@ -1658,8 +1658,9 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
-    r0 = c.real()+c.imag();
-    r1 = c.real()-c.imag();
+    auto ccopy = c;
+    r0 = ccopy.real()+ccopy.imag();
+    r1 = ccopy.real()-ccopy.imag();
     }, nthreads);
   }
 
@@ -1682,8 +1683,9 @@ template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
   r2c(in, atmp, axes, true, fct, nthreads);
   hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
     {
-    r0 = c.real()-c.imag();
-    r1 = c.real()+c.imag();
+    auto ccopy = c;
+    r0 = ccopy.real()-ccopy.imag();
+    r1 = ccopy.real()+ccopy.imag();
     }, nthreads);
   }
 
