@@ -240,6 +240,14 @@ def _2dzero_gpu(arr):
 supp = 5
 shared_grid_size = TILESIZE+2*supp
 
+@cuda.jit(device=True, **gpu_kwargs)
+def _distribute_1d_in_TB(ndata):
+    local_tid = cuda.threadIdx.x
+    nthreads = min(ndata, cuda.blockDim.x)
+    i0 = int(math.ceil((local_tid + 0) / nthreads * ndata))
+    i1 = int(math.ceil((local_tid + 1) / nthreads * ndata))
+    return i0, i1
+
 @cuda.jit(**gpu_kwargs)
 def _ms2grid_gpu_supp5_tiles(
         u, v, ms,
@@ -247,37 +255,23 @@ def _ms2grid_gpu_supp5_tiles(
         TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
         ng, grid_real, grid_imag):
 
-    global_tid = cuda.grid(1)  # Global index
     local_tid = cuda.threadIdx.x  # Index of thread in current TB
-
     TB = cuda.blockIdx.x
 
     if local_tid >= TB_to_nvis_in_TB[TB]:
         return
 
-    shared_grid_real = cuda.shared.array((shared_grid_size, shared_grid_size),
-                                         dtype=types.double)
-    shared_grid_imag = cuda.shared.array((shared_grid_size, shared_grid_size),
-                                         dtype=types.double)
-
-    # Zero shared grid
-
-    # TODO Distribute this across threads
-    if local_tid == 0:
-        for xx in range(shared_grid_size):
+    # Initialize shared grid
+    dtype = types.double
+    shp = (shared_grid_size, shared_grid_size)
+    shared_grid_real = cuda.shared.array(shp, dtype=dtype)
+    shared_grid_imag = cuda.shared.array(shp, dtype=dtype)
+    if local_tid < shared_grid_size:
+        for xx in range(*_distribute_1d_in_TB(shared_grid_size)):
             for yy in range(shared_grid_size):
                 shared_grid_real[xx, yy] = 0.
                 shared_grid_imag[xx, yy] = 0.
     cuda.syncthreads()
-
-    # if DEBUG_ON_CPU:
-    #     for xx in range(shared_grid_size):
-    #         for yy in range(shared_grid_size):
-    #             if shared_grid_real[xx, yy] != 0.:
-    #                 print(f"Shared grid real not zero. tid={tid}, gridid={idx}")
-    #             if shared_grid_imag[xx, yy] != 0.:
-    #                 print(f"Shared grid imag not zero. tid={tid}, gridid={idx}")
-    #     cuda.syncthreads()
 
     xtile = TB_to_xtile[TB]
     ytile = TB_to_ytile[TB]
@@ -300,10 +294,6 @@ def _ms2grid_gpu_supp5_tiles(
     xle = int(round(ratposx)) - supp//2 - tile_dx
     yle = int(round(ratposy)) - supp//2 - tile_dy
 
-    # if DEBUG_ON_CPU:
-    #     assert 0 <= xle < shared_grid_size
-    #     assert 0 <= yle + supp < shared_grid_size
-
     for i in range(supp):
         xkernel = __gk_wkernel_no_bound_checks(i+dx, supp)
         myxpos = xle+i
@@ -324,14 +314,13 @@ def _ms2grid_gpu_supp5_tiles(
     # TODO Split the atomic write operation into a separate kernel and write the shared_grid to global memory here?
     # TODO Distribute this across threads
 
-    if local_tid == 0:
-        for xx in range(shared_grid_size):
+    if local_tid < shared_grid_size:
+        for xx in range(*_distribute_1d_in_TB(shared_grid_size)):
             xpos = (tile_dx + xx) % ng[0]
             for yy in range(shared_grid_size):
                 ypos = (tile_dy + yy) % ng[1]
                 cuda.atomic.add(grid_real, (xpos, ypos), shared_grid_real[xx, yy])
                 cuda.atomic.add(grid_imag, (xpos, ypos), shared_grid_imag[xx, yy])
-
     cuda.syncthreads()
 
 
