@@ -223,6 +223,7 @@ def _ms2grid_gpu_supp5_tiles(
         return
 
     # Initialize shared grid
+    # TODO Try single precision here
     dtype = types.double
     shp = (shared_grid_size, shared_grid_size)
     shared_grid_real = cuda.shared.array(shp, dtype=dtype)
@@ -255,13 +256,16 @@ def _ms2grid_gpu_supp5_tiles(
     xle = int(round(ratposx)) - supp//2 - tile_dx
     yle = int(round(ratposy)) - supp//2 - tile_dy
 
+    # @Martin: It makes no difference if the loop is this or the other way around
+    ykernel = cuda.local.array(supp, dtype=dtype)
+    for j in range(supp):
+        ykernel[j] = __gk_wkernel_no_bound_checks(j+dy, supp)
     for i in range(supp):
         xkernel = __gk_wkernel_no_bound_checks(i+dx, supp)
         myxpos = xle+i
         for j in range(supp):
             # TODO Optimize shared memory accesses (bank conflicts are bad)
-            ykernel = __gk_wkernel_no_bound_checks(j+dy, supp)
-            val = dd * xkernel * ykernel
+            val = dd * xkernel * ykernel[j]
             cuda.atomic.add(shared_grid_real, (myxpos, yle+j), val.real)
             cuda.atomic.add(shared_grid_imag, (myxpos, yle+j), val.imag)
 
