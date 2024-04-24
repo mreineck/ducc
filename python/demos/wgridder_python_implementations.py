@@ -220,14 +220,14 @@ def __gk_wkernel(x, supp):
     # that the expression below shall not be executed?)
     x = 2*x/supp
     if abs(x) <= 1:
-        return math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
+        return math.exp(2.3*supp*(math.sqrt((1-x)*(1+x)) - 1))
     return 0.
 
 
 @cuda.jit(device=True, **gpu_kwargs)
 def __gk_wkernel_no_bound_checks(x, supp):
     x = 2*x/supp
-    return math.exp(2.3*supp*(math.pow((1-x)*(1+x), 0.5) - 1))
+    return math.exp(2.3*supp*(math.sqrt((1-x)*(1+x)) - 1))
 
 
 @cuda.jit(**gpu_kwargs)
