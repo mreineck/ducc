@@ -29,6 +29,8 @@ from numba import njit
 from scipy.special import p_roots
 from time import time
 
+# TODO @Martin: wgridder says supp=4, my implementation uses supp=5. Why?
+
 
 speedoflight = 299792458.
 
@@ -36,6 +38,7 @@ TILESIZE = 16
 THREADSPERBLOCK = 32
 THREADSPERBLOCK2d = 8, 8
 
+MS2GRID_VISPERTHREADBLOCK = 512
 
 # NOTE that the configuration of the run changes if DEBUG_ON_CPU (e.g., fewer visibilities)
 DEBUG_ON_CPU = False
@@ -134,42 +137,6 @@ def kernelconfig(*nthreads):
     raise NotImplementedError()
 
 
-def mymod(arr):
-    return arr-np.floor(arr)-0.5
-
-
-def init(uvw, freq, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, ms=None):
-    ofac = 2
-    x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in (nxdirty, nydirty)], indexing='ij')
-    x *= pixsizex
-    y *= pixsizey
-    eps = x**2+y**2
-    nm1 = -eps/(np.sqrt(1.-eps)+1.)
-    ng = ofac*nxdirty, ofac*nydirty
-    supp = int(np.ceil(np.log10(1/epsilon*(3 if do_wgridding else 2)))) + 1
-    kernel = es_kernel(supp, 2.3*supp)
-    uvw = np.transpose((uvw[..., None]*freq/speedoflight), (0, 2, 1)).reshape(-1, 3)
-    conjind = uvw[:, 2] < 0
-    uvw[conjind] *= -1
-    u, v, w = uvw.T
-    if do_wgridding:
-        wmin, wmax = np.min(w), np.max(w)
-        dw = 1/ofac/np.max(np.abs(nm1))/2
-        nwplanes = int(np.ceil((wmax-wmin)/dw+supp)) if do_wgridding else 1
-        w0 = (wmin+wmax)/2 - dw*(nwplanes-1)/2
-    else:
-        nwplanes, w0, dw = 1, None, None
-    gridcoord = [np.linspace(-0.5, 0.5, nn, endpoint=False) for nn in ng]
-    slc0, slc1 = slice(nxdirty//2, nxdirty*3//2), slice(nydirty//2, nydirty*3//2)
-    u *= pixsizex
-    v *= pixsizey
-    if ms is not None:
-        ms = ms.flatten()
-        ms[conjind] = ms[conjind].conjugate()
-        return u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, ms
-    return u, v, w, w0, dw, nwplanes, nm1, kernel, gridcoord, slc0, slc1, ng, conjind
-
-
 class Kernel:
     def __init__(self, supp, func):
         self._func = func
@@ -196,10 +163,6 @@ class Kernel:
         res = np.zeros_like(x)
         res[ind] = self._func(x[ind])
         return res
-
-
-def es_kernel(supp, beta):
-    return Kernel(supp, lambda x: np.exp(beta*(pow((1-x)*(1+x), 0.5) - 1)))
 
 
 @cuda.jit(**gpu_kwargs)
@@ -429,54 +392,6 @@ def sort_into_tiles(u, v, ng):
     return idx_sorting, start_tile_idx, stop_tile_idx
 
 
-def _ms2grid_gpu(u, v, ms, tile_start, tile_stop, ng, grid_real, grid_imag):
-    # TODO: Idea launch all kernels in one go (with much idling)
-    # TODO: Split kernels into groups of different sizes and launch them together respectively
-
-    VISPERTHREADBLOCK = 512
-
-    TB_to_xtile = []
-    TB_to_ytile = []
-    TB_to_nvis_in_TB = []
-    TB_to_idx_start = []
-
-    nxtiles, nytiles = tile_start.shape
-    for xtile in range(nxtiles):
-        for ytile in range(nytiles):
-            idx0 = tile_start[xtile, ytile]
-            idx1 = tile_stop[xtile, ytile]
-            nvis_in_tile = idx1 - idx0
-
-            # Skip empty tiles
-            if nvis_in_tile == 0:
-                continue
-
-            n_TBs_needed = int(math.ceil(nvis_in_tile / VISPERTHREADBLOCK))
-            TB_to_xtile.extend(n_TBs_needed*[xtile])
-            TB_to_ytile.extend(n_TBs_needed*[ytile])
-
-            TB_to_idx_start.extend(list(idx0 + VISPERTHREADBLOCK*ii for ii in range(n_TBs_needed)))
-
-            lst_nvis_in_TB = n_TBs_needed*[VISPERTHREADBLOCK]
-            lst_nvis_in_TB[-1] -= sum(lst_nvis_in_TB) - nvis_in_tile
-            assert sum(lst_nvis_in_TB) == nvis_in_tile
-            TB_to_nvis_in_TB.extend(lst_nvis_in_TB)
-
-    n_TBs = len(TB_to_xtile)
-    TB_to_xtile = cp.array(TB_to_xtile)
-    TB_to_ytile = cp.array(TB_to_ytile)
-    TB_to_idx_start = cp.array(TB_to_idx_start)
-    TB_to_nvis_in_TB = cp.array(TB_to_nvis_in_TB)
-
-    # TODO Think about if all this indexing logic can be computed in the kernel
-    cuda.profile_start()
-    _ms2grid_gpu_supp5_tiles[n_TBs, VISPERTHREADBLOCK](
-        u, v, ms,
-        TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
-        ng, grid_real, grid_imag)
-    cuda.profile_stop()
-
-
 def ms2dirty_numba_gpu_verbose(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding):
     return ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsilon, do_wgridding, verbose=True)
 
@@ -523,6 +438,11 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
     v = np.ascontiguousarray(v[:, None])
     w = np.ascontiguousarray(w[:, None])
     conjind = conjind[:, None]
+
+    if precision == "single":
+        u = u.astype(np.float32)
+        v = v.astype(np.float32)
+        w = w.astype(np.float32)
 
     nfreq = len(freq)
     ms = ms.reshape(-1, nfreq)
@@ -580,8 +500,8 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
 
     timer.pop()
 
-    grid2_real = cuda.device_array(ng, dtype=grid_dtype)
-    grid2_imag = cuda.device_array(ng, dtype=grid_dtype)
+    grid_real = cuda.device_array(ng, dtype=grid_dtype)
+    grid_imag = cuda.device_array(ng, dtype=grid_dtype)
     nxtiles, nytiles = tile_start.shape
 
     # Idea sort u, v, w, vis once and get rid of sorting_1d_idx? Compatible with wgridding?
@@ -593,7 +513,47 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
 
     sorting_1d_idx, tile_start, tile_stop = sort_into_tiles(cp.array(u), cp.array(v), ng)
     assert list(np.unique(np.diff(sorting_1d_idx))) == [1]
+
+
+    timer.poppush("Preparation: More work on tile indices")
+
+    TB_to_xtile = []
+    TB_to_ytile = []
+    TB_to_nvis_in_TB = []
+    TB_to_idx_start = []
+
+    nxtiles, nytiles = tile_start.shape
+    for xtile in range(nxtiles):
+        for ytile in range(nytiles):
+            idx0 = tile_start[xtile, ytile]
+            idx1 = tile_stop[xtile, ytile]
+            nvis_in_tile = idx1 - idx0
+
+            # Skip empty tiles
+            if nvis_in_tile == 0:
+                continue
+
+            n_TBs_needed = int(math.ceil(nvis_in_tile / MS2GRID_VISPERTHREADBLOCK))
+            TB_to_xtile.extend(n_TBs_needed*[xtile])
+            TB_to_ytile.extend(n_TBs_needed*[ytile])
+
+            TB_to_idx_start.extend(list(idx0 + MS2GRID_VISPERTHREADBLOCK*ii for ii in range(n_TBs_needed)))
+
+            lst_nvis_in_TB = n_TBs_needed*[MS2GRID_VISPERTHREADBLOCK]
+            lst_nvis_in_TB[-1] -= sum(lst_nvis_in_TB) - nvis_in_tile
+            assert sum(lst_nvis_in_TB) == nvis_in_tile
+            TB_to_nvis_in_TB.extend(lst_nvis_in_TB)
+
+    n_TBs = len(TB_to_xtile)
+    TB_to_xtile = cp.array(TB_to_xtile)
+    TB_to_ytile = cp.array(TB_to_ytile)
+    TB_to_idx_start = cp.array(TB_to_idx_start)
+    TB_to_nvis_in_TB = cp.array(TB_to_nvis_in_TB)
+
     timer.pop()
+
+
+
 
     for ii in range(nwplanes):
         # print(f"wplane #{ii}")
@@ -610,25 +570,38 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
         timer.push("zero grid")
 
         if DEBUG_ON_CPU:
-            grid2_real *= 0.
-            grid2_imag *= 0.
+            grid_real *= 0.
+            grid_imag *= 0.
         else:
             # TODO apply by tiles already here?
             nblocks, nthreadsperblock = kernelconfig(*ng)
-            _2dzero_gpu[nblocks, nthreadsperblock](grid2_real)
-            _2dzero_gpu[nblocks, nthreadsperblock](grid2_imag)
+            _2dzero_gpu[nblocks, nthreadsperblock](grid_real)
+            _2dzero_gpu[nblocks, nthreadsperblock](grid_imag)
+
+
+        ########################################################################
 
         timer.poppush("ms2grid")
+        # TODO: Split kernels into groups of different sizes and launch them together respectively
 
         # TODO Can we pass compile-time constants somehow differently?
         assert supp == 5
 
-        _ms2grid_gpu(u, v, myms,
-                     tile_start, tile_stop,
-                     ng, grid2_real, grid2_imag)
+        # TODO Think about if all this indexing logic can be computed in the kernel
+        cuda.profile_start()
+        _ms2grid_gpu_supp5_tiles[n_TBs, MS2GRID_VISPERTHREADBLOCK](
+            u, v, ms,
+            TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
+            ng, grid_real, grid_imag)
+        cuda.profile_stop()
+
+        ########################################################################
+
+
 
         timer.poppush("FFT (incl. conversion 2xreal -> complex)")
-        loopim = cufft.ifft2(cp.array(grid2_real) + 1j*cp.array(grid2_imag)) * ng[0] * ng[1]
+
+        loopim = cufft.ifft2(cp.array(grid_real) + 1j*cp.array(grid_imag)) * ng[0] * ng[1]
 
         timer.poppush("Grid correction")
         # TODO Merge all the following operations into one kernel
@@ -642,8 +615,9 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
         timer.pop()
 
     timer.push("Correct uv-kernel")
-    post_correction1 = cp.array(1/es_kernel(supp, 2.3*supp).ft(gridcoord[0][slc0])[:, None])
-    post_correction2 = cp.array(1/es_kernel(supp, 2.3*supp).ft(gridcoord[1][slc1]))
+    krl = Kernel(supp, lambda x: np.exp(2.3*supp*(np.sqrt((1-x)*(1+x)) - 1)))
+    post_correction1 = cp.array(1/krl.ft(gridcoord[0][slc0])[:, None])
+    post_correction2 = cp.array(1/krl.ft(gridcoord[1][slc1]))
     im *= post_correction1
     im *= post_correction2
 
