@@ -296,13 +296,9 @@ def _ms2grid_gpu_supp5_tiles(
         xkernel = __gk_wkernel_no_bound_checks(i+dx, supp)
         myxpos = xle+i
         for j in range(supp):
-            if DEBUG_ON_CPU:
-                assert 0 <= myxpos < shared_grid_size
-                assert 0 <= yle+j < shared_grid_size
             # TODO Optimize shared memory accesses (bank conflicts are bad)
-            # TODO Check, if ng[0]*ng[1] could be part of the Fourier transform
             ykernel = __gk_wkernel_no_bound_checks(j+dy, supp)
-            val = dd * xkernel * ykernel * ng[0] * ng[1]
+            val = dd * xkernel * ykernel
             cuda.atomic.add(shared_grid_real, (myxpos, yle+j), val.real)
             cuda.atomic.add(shared_grid_imag, (myxpos, yle+j), val.imag)
 
@@ -319,7 +315,6 @@ def _ms2grid_gpu_supp5_tiles(
                 ypos = (tile_dy + yy) % ng[1]
                 cuda.atomic.add(grid_real, (xpos, ypos), shared_grid_real[xx, yy])
                 cuda.atomic.add(grid_imag, (xpos, ypos), shared_grid_imag[xx, yy])
-    cuda.syncthreads()
 
 
 def bucketsort(buckets, n_buckets):
@@ -633,7 +628,7 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
                      ng, grid2_real, grid2_imag)
 
         timer.poppush("FFT (incl. conversion 2xreal -> complex)")
-        loopim = cufft.ifft2(cp.array(grid2_real) + 1j*cp.array(grid2_imag))
+        loopim = cufft.ifft2(cp.array(grid2_real) + 1j*cp.array(grid2_imag)) * ng[0] * ng[1]
 
         timer.poppush("Grid correction")
         # TODO Merge all the following operations into one kernel
