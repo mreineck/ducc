@@ -208,9 +208,8 @@ def _apply_wkernel_on_ms(ms, w, ii, w0, dw, supp, outms):
 
     pos = cuda.grid(1)
     if pos < ms.shape[0]:
-        for jj in range(ms.shape[1]):
-            x = ii-(w[pos, jj]-w0)/dw
-            outms[pos, jj] = ms[pos, jj] * __gk_wkernel(x, supp)
+        x = ii-(w[pos]-w0)/dw
+        outms[pos] = ms[pos] * __gk_wkernel(x, supp)
 
 
 # TODO Can I pass "supp" as constant value?
@@ -251,7 +250,6 @@ def _distribute_1d_in_TB(ndata):
 @cuda.jit(**gpu_kwargs)
 def _ms2grid_gpu_supp5_tiles(
         u, v, ms,
-        sorting_1d_idx,
         TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
         ng, grid_real, grid_imag):
 
@@ -281,7 +279,7 @@ def _ms2grid_gpu_supp5_tiles(
 
     idx0 = TB_to_idx_start[TB]
     # TODO Can we use global_tid here somehow?
-    data_idx = sorting_1d_idx[idx0 + local_tid]
+    data_idx = idx0 + local_tid
 
     dd = ms[data_idx]
     ratposx = u[data_idx]
@@ -436,7 +434,7 @@ def sort_into_tiles(u, v, ng):
     return idx_sorting, start_tile_idx, stop_tile_idx
 
 
-def _ms2grid_gpu(u, v, ms, sorting_1d_idx, tile_start, tile_stop, ng, grid_real, grid_imag):
+def _ms2grid_gpu(u, v, ms, tile_start, tile_stop, ng, grid_real, grid_imag):
     # TODO: Idea launch all kernels in one go (with much idling)
     # TODO: Split kernels into groups of different sizes and launch them together respectively
 
@@ -479,7 +477,6 @@ def _ms2grid_gpu(u, v, ms, sorting_1d_idx, tile_start, tile_stop, ng, grid_real,
     cuda.profile_start()
     _ms2grid_gpu_supp5_tiles[n_TBs, VISPERTHREADBLOCK](
         u, v, ms,
-        sorting_1d_idx,
         TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
         ng, grid_real, grid_imag)
     cuda.profile_stop()
@@ -567,12 +564,6 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
                     if not vv.max() < (ty+1)*TILESIZE:
                         print("err4", vv.max(), (ty+1)*TILESIZE, (tx, ty), ng[1])
 
-    nx, ny = tile_start.shape
-    for xx in range(nx):
-        for yy in range(ny):
-            i0 = tile_start[xx, yy]
-            i1 = tile_stop[xx, yy]
-
     timer.poppush("Copy to device")  # -----------------------------------------------
 
     im = cp.zeros((nxdirty, nydirty))
@@ -596,10 +587,18 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
 
     grid2_real = cuda.device_array(ng, dtype=grid_dtype)
     grid2_imag = cuda.device_array(ng, dtype=grid_dtype)
-    nrow, nfreq = ms.shape
     nxtiles, nytiles = tile_start.shape
 
-    # TODO: Idea sort u, v, w, vis once and get rid of sorting_1d_idx? Compatible with wgridding?
+    # Idea sort u, v, w, vis once and get rid of sorting_1d_idx? Compatible with wgridding?
+    timer.push("u, v, w, ms ravel and sort")
+    u = cuda.to_device(cp.array(u).ravel()[sorting_1d_idx])
+    v = cuda.to_device(cp.array(v).ravel()[sorting_1d_idx])
+    w = cuda.to_device(cp.array(w).ravel()[sorting_1d_idx])
+    ms = cuda.to_device(cp.array(ms).ravel()[sorting_1d_idx])
+
+    sorting_1d_idx, tile_start, tile_stop = sort_into_tiles(cp.array(u), cp.array(v), ng)
+    assert list(np.unique(np.diff(sorting_1d_idx))) == [1]
+    timer.pop()
 
     for ii in range(nwplanes):
         # print(f"wplane #{ii}")
@@ -607,7 +606,7 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
             timer.push("Apply wkernel")
             # TODO Get rid of myms and directly write to the grid
             myms = cuda.device_array(ms.shape, dtype=ms.dtype)
-            nblocks, nthreadsperblock = kernelconfig(nrow)
+            nblocks, nthreadsperblock = kernelconfig(myms.shape[0])
             _apply_wkernel_on_ms[nblocks, nthreadsperblock](ms, w, ii, w0, dw, supp, myms)
             timer.pop()
         else:
@@ -629,8 +628,8 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
         # TODO Can we pass compile-time constants somehow differently?
         assert supp == 5
 
-        _ms2grid_gpu(u.ravel(), v.ravel(), myms.ravel(),
-                     sorting_1d_idx, tile_start, tile_stop,
+        _ms2grid_gpu(u, v, myms,
+                     tile_start, tile_stop,
                      ng, grid2_real, grid2_imag)
 
         timer.poppush("FFT (incl. conversion 2xreal -> complex)")
