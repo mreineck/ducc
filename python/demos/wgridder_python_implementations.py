@@ -38,6 +38,7 @@ TILESIZE = 16
 THREADSPERBLOCK = 32
 THREADSPERBLOCK2d = 8, 8
 
+# TODO Figure out why results are wrong if value != 512
 MS2GRID_VISPERTHREADBLOCK = 512
 
 # NOTE that the configuration of the run changes if DEBUG_ON_CPU (e.g., fewer visibilities)
@@ -223,8 +224,7 @@ def _ms2grid_gpu_supp5_tiles(
         return
 
     # Initialize shared grid
-    # TODO Try single precision here
-    dtype = types.double
+    dtype = types.float64 if precision == "double" else types.float32
     shp = (shared_grid_size, shared_grid_size)
     shared_grid_real = cuda.shared.array(shp, dtype=dtype)
     shared_grid_imag = cuda.shared.array(shp, dtype=dtype)
