@@ -337,6 +337,8 @@ class ducc_thread_pool: public thread_pool
     void resize(size_t nthreads_new)
       {
       if (nthreads_new==workers_.size()) return;
+      MR_assert(!in_parallel_region,
+        "trying to resize the thread pool from within a parallel region");
       shutdown();
       std::vector<worker>(nthreads_new).swap(workers_);
       restart();
