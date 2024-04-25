@@ -107,9 +107,9 @@ class latch
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
-size_t ducc0_max_threads()
+size_t available_hardware_threads()
   {
-  static const size_t max_threads_ = []()
+  static const size_t available_hardware_thrads_ = []()
     {
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
     cpu_set_t cpuset;
@@ -121,6 +121,15 @@ size_t ducc0_max_threads()
 #else
     size_t res = std::max<size_t>(1, std::thread::hardware_concurrency());
 #endif
+    return res;
+    }();
+  return available_hardware_thrads_;
+  }
+size_t ducc0_default_num_threads()
+  {
+  static const size_t num_threads_ = []()
+    {
+    static size_t res = available_hardware_threads();
     auto evar=getenv("DUCC0_NUM_THREADS");
     // fallback
     if (!evar)
@@ -133,7 +142,7 @@ size_t ducc0_max_threads()
       return res;
     return std::min<size_t>(res, res2);
     }();
-  return max_threads_;
+  return num_threads_;
   }
  
 static thread_local bool in_parallel_region = false;
@@ -324,14 +333,23 @@ class ducc_thread_pool: public thread_pool
     //virtual
     size_t nthreads() const { return workers_.size(); }
 
+    // virtual
+    void resize(size_t nthreads_new)
+      {
+      if (nthreads_new==workers_.size()) return;
+      shutdown();
+      std::vector<worker>(nthreads_new).swap(workers_);
+      restart();
+      }
+
     //virtual
     size_t adjust_nthreads(size_t nthreads_in) const
       {
       if (in_parallel_region)
         return 1;
       if (nthreads_in==0)
-        return ducc0_max_threads();
-      return std::min(ducc0_max_threads(), nthreads_in);
+        return workers_.size()+1;
+      return std::min(workers_.size()+1, nthreads_in);
       }
     //virtual
     void submit(std::function<void()> work)
@@ -375,7 +393,7 @@ class ducc_thread_pool: public thread_pool
 // return a pointer to a singleton thread_pool, which is always available
 inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new ducc_thread_pool(ducc0_max_threads()-1);
+  static auto master_pool = new ducc_thread_pool(ducc0_default_num_threads()-1);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -442,8 +460,13 @@ static bool in_parallel_region=false;
 
 #endif
 
-size_t max_threads()
+size_t thread_pool_size()
   { return get_active_pool()->nthreads()+1; }
+void resize_thread_pool(size_t nthreads_new)
+  {
+  MR_assert(nthreads_new>=1, "nthreads_new must be at least 1");
+  get_active_pool()->resize(nthreads_new-1);
+  }
 size_t adjust_nthreads(size_t nthreads_in)
   { return get_active_pool()->adjust_nthreads(nthreads_in); }
 
