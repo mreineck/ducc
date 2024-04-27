@@ -188,9 +188,15 @@ def __gk_wkernel(x, supp):
 
 
 @cuda.jit(device=True, **gpu_kwargs)
-def __gk_wkernel_no_bound_checks(x, supp):
-    x = 2*x/supp
-    return math.exp(2.3*supp*(math.sqrt((1-x)*(1+x)) - 1))
+def __gk_wkernel_no_bound_checks(x, coeffs, i, supp):
+    # x = 2*x/supp
+    # return math.exp(2.3*supp*(math.sqrt((1-x)*(1+x)) - 1))
+
+    for d in range(supp + 3 + 1):
+        x *= x + coeffs[i, d]
+
+    return x
+
 
 
 @cuda.jit(**gpu_kwargs)
@@ -215,7 +221,10 @@ def _distribute_1d_in_TB(ndata):
 def _ms2grid_gpu_supp5_tiles(
         u, v, ms,
         TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
+        coeffs,
         ng, grid_real, grid_imag):
+
+    coeffs = cuda.const.array_like(coeffs)
 
     local_tid = cuda.threadIdx.x  # Index of thread in current TB
     TB = cuda.blockIdx.x
@@ -256,18 +265,24 @@ def _ms2grid_gpu_supp5_tiles(
     xle = int(round(ratposx)) - supp//2 - tile_dx
     yle = int(round(ratposy)) - supp//2 - tile_dy
 
+    val = 0
+
     # @Martin: It makes no difference if the loop is this or the other way around
     ykernel = cuda.local.array(supp, dtype=dtype)
     for j in range(supp):
-        ykernel[j] = __gk_wkernel_no_bound_checks(j+dy, supp)
+        ykernel[j] = __gk_wkernel_no_bound_checks(j+dy, coeffs, j, supp)
     for i in range(supp):
-        xkernel = __gk_wkernel_no_bound_checks(i+dx, supp)
+        xkernel = __gk_wkernel_no_bound_checks(i+dx, coeffs, i, supp)
         myxpos = xle+i
         for j in range(supp):
             # TODO Optimize shared memory accesses (bank conflicts are bad)
-            val = dd * xkernel * ykernel[j]
-            cuda.atomic.add(shared_grid_real, (myxpos, yle+j), val.real)
-            cuda.atomic.add(shared_grid_imag, (myxpos, yle+j), val.imag)
+            val += dd * xkernel * ykernel[j]
+            # cuda.atomic.add(shared_grid_real, (myxpos, yle+j), val.real)
+            # cuda.atomic.add(shared_grid_imag, (myxpos, yle+j), val.imag)
+
+    if local_tid % 32 == 0:
+        cuda.atomic.add(shared_grid_real, (0, 0), val.real)
+        cuda.atomic.add(shared_grid_imag, (0, 0), val.imag)
 
     cuda.syncthreads()
 
@@ -591,11 +606,15 @@ def ms2dirty_numba_gpu(uvw, freq, ms, nxdirty, nydirty, pixsizex, pixsizey, epsi
         # TODO Can we pass compile-time constants somehow differently?
         assert supp == 5
 
+        coeffs = np.random.uniform(low=0., high=1., size=(supp, supp+4)).astype(np.float32)
+        coeffs = cuda.to_device(coeffs)
+
         # TODO Think about if all this indexing logic can be computed in the kernel
         cuda.profile_start()
         _ms2grid_gpu_supp5_tiles[n_TBs, MS2GRID_VISPERTHREADBLOCK](
             u, v, ms,
             TB_to_xtile, TB_to_ytile, TB_to_idx_start, TB_to_nvis_in_TB,
+            coeffs,
             ng, grid_real, grid_imag)
         cuda.profile_stop()
 
