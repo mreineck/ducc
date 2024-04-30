@@ -223,7 +223,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   double sigma_min, double sigma_max,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool verbose=false);
 }
 
 using detail_sht::SHT_mode;

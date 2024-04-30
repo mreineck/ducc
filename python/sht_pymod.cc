@@ -889,7 +889,7 @@ template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
   size_t lmax,
   const py::array &map_, const py::array &loc_, size_t spin,
   size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
-  const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_)
+  const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_, bool verbose)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto map = to_cmav<T,2>(map_);
@@ -904,7 +904,7 @@ template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
   double rnorm, sqnorm;
   {
   py::gil_scoped_release release;
-  auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis_general(alm, map, spin, lmax, mstart, lstride, loc, sigma_min, sigma_max, nthreads, maxiter, epsilon);
+  auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis_general(alm, map, spin, lmax, mstart, lstride, loc, sigma_min, sigma_max, nthreads, maxiter, epsilon, verbose);
   istop = xistop;
   itn = xitn;
   rnorm = xrnorm;
@@ -916,14 +916,14 @@ py::tuple Py_pseudo_analysis_general(
   size_t lmax,
   const py::array &map, const py::array &loc, size_t spin,
   size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
-  const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_, py::object &alm=None)
+  const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_, py::object &alm=None, bool verbose=false)
   {
   if (isPyarr<float>(map))
     return Py2_pseudo_analysis_general<float>(alm, lmax, map, loc,
-       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_);
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose);
   else if (isPyarr<double>(map))
     return Py2_pseudo_analysis_general<double>(alm, lmax, map, loc,
-       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_);
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -2298,7 +2298,7 @@ void add_pythonfuncs(py::module_ &m)
 
   m.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a=1e-5, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
-  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None);
+  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None, "verbose"_a=false);
 
   m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "geometry"_a, "ntheta"_a);
 
