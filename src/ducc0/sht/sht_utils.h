@@ -37,6 +37,9 @@ namespace detail_sht {
 
 using namespace std;
 
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
+using std::min, std::max;
+
 inline bool even_odd_m(const cmav<size_t,1> &mval)
   {
   for (size_t im=0; im<mval.shape(0); ++im)

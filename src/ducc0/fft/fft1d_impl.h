@@ -83,7 +83,7 @@ namespace detail_fft {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 template<typename T> constexpr inline size_t fft1d_simdlen
