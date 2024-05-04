@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2021 Max-Planck-Society
+ *  Copyright (C) 2020-2024 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -40,6 +40,7 @@ template<typename T> class PointingProvider
   {
   private:
     double t0_, freq_;
+    size_t nquat;
     vector<quaternion_t<T>> quat_;
     vector<T> rangle, rxsin;
     vector<bool> rotflip;
@@ -47,15 +48,16 @@ template<typename T> class PointingProvider
 
   public:
     PointingProvider(double t0, double freq, const cmav<T,2> &quat, size_t nthreads_=1)
-      : t0_(t0), freq_(freq), quat_(quat.shape(0)), rangle(quat.shape(0)),
-        rxsin(quat.shape(0)), rotflip(quat.shape(0)), nthreads(nthreads_)
+      : t0_(t0), freq_(freq), nquat(quat.shape(0)), quat_(nquat+1), rangle(nquat),
+        rxsin(nquat), rotflip(nquat), nthreads(nthreads_)
       {
-      MR_assert(quat.shape(0)>=2, "need at least 2 quaternions");
+      MR_assert(nquat>=2, "need at least 2 quaternions");
       MR_assert(quat.shape(1)==4, "need 4 entries in quaternion");
       quat_[0] = quaternion_t<T>(quat(0,0), quat(0,1), quat(0,2), quat(0,3)).normalized();
-      for (size_t m=0; m<quat_.size()-1; ++m)
+      for (size_t m=0; m<nquat; ++m)
         {
-        quat_[m+1] = quaternion_t<T>(quat(m+1,0), quat(m+1,1), quat(m+1,2), quat(m+1,3)).normalized();
+        size_t mp1 = (m+1==nquat) ? 0 : m+1;
+        quat_[m+1] = quaternion_t<T>(quat(mp1,0), quat(mp1,1), quat(mp1,2), quat(mp1,3)).normalized();
         quaternion_t<T> delta(quat_[m+1]*quat_[m].conj());
         rotflip[m]=false;
         if (delta.w < 0.)
@@ -70,7 +72,9 @@ template<typename T> class PointingProvider
       const vmav<T,2> &out, bool rot_left)
       {
       using Tsimd = native_simd<T>;
-      constexpr size_t vlen = Tsimd::size();
+      double tmp = fmod(t0-t0_, nquat*freq_);
+      if (tmp<0) tmp += nquat*freq_;
+      t0 = t0_ + tmp;
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
       auto rot_ = quaternion_t<T>(rot(0), rot(1), rot(2), rot(3)).normalized();
       auto rots_ = quaternion_t<Tsimd>(rot_.x, rot_.y, rot_.z, rot_.w);
@@ -79,23 +83,21 @@ template<typename T> class PointingProvider
       double fratio = freq_/freq;
       execParallel(out.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
+        constexpr size_t vlen = Tsimd::size();
         size_t i=lo;
         quaternion_t<Tsimd> q1s(0,0,0,0), q2s(0,0,0,0);
-#if defined (_MSC_VER) // no comment
-        vector<size_t> idx(vlen);
-#else
         array<size_t,vlen> idx;
-#endif
         for (; i+vlen-1<hi; i+=vlen)
           {
           Tsimd fi, frac, omega, xsin, w1, w2;
           for (size_t ii = 0; ii<vlen; ++ii)
             {
             fi[ii] = ofs + (i+ii)*fratio;
-            MR_assert((fi[ii]>=0) && fi[ii]<=(quat_.size()-1+1e-7), "time outside available range");
+            MR_assert(fi[ii]>=0, "time before start of available range");
             idx[ii] = size_t(fi[ii]);
-            idx[ii] = min(idx[ii], quat_.size()-2);
-            frac[ii] = fi[ii]-idx[ii];
+            if (idx[ii]>=nquat)
+              idx[ii] %= nquat;
+            frac[ii] = fi[ii]-floor(fi[ii]);
             omega[ii] = rangle[idx[ii]];
             xsin[ii] = rxsin[idx[ii]];
             }
@@ -129,10 +131,11 @@ template<typename T> class PointingProvider
         for (; i<hi; ++i)
           {
           double fi = ofs + i*fratio;
-          MR_assert((fi>=0) && fi<=(quat_.size()-1+1e-7), "time outside available range");
+          MR_assert(fi>=0, "time before start of available range");
           size_t idx = size_t(fi);
-          idx = min(idx, quat_.size()-2);
-          double frac = fi-idx;
+          if (idx>=nquat)
+            idx %= nquat;
+          double frac = fi-floor(fi);
           double omega = rangle[idx];
           double xsin = rxsin[idx];
           double w1 = sin((1.-frac)*omega)*xsin,
@@ -207,6 +210,11 @@ nthreads : int
 Returns
 -------
 PointingProvider : the constructed object
+
+Notes
+-----
+The supplied quaternion data is assumed to be periodically repeating.
+
 )""";
 
 const char *get_rotated_quaternions_DS = R"""(
@@ -220,6 +228,8 @@ t0 : float
     the time of the first output sample
     This must use the same reference system as the time passed to the
     constructor.
+    It may lie outside the interval passed to the constructor, in which case
+    it will be mapped periodically to this interval.
 freq : float
     the frequency at which the output orientations should be sampled
 rot : numpy.ndarray((4,), dtype=numpy.float64)
