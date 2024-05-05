@@ -37,7 +37,6 @@
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
-#include "ducc0/fft/fft.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
