@@ -128,6 +128,8 @@ Compute the L2 error between two arrays or scalars.
 More specifically, compute
 ``sqrt(sum_i(|a_i - b_i|^2) / max(sum_i(|a_i|^2), sum_i(|b_i|^2)))``,
 where i goes over all array elements.
+In the special case that both a and b are identically zero, the return value is
+also zero.
 
 Parameters
 ----------
@@ -159,7 +161,9 @@ template<typename T1, typename T2> double Py3_l2error(const py::array &a_, const
     acc3 += norm(cv1-cv2);
     }, 1, a, b);
   }
-  return double(sqrt(acc3/max(acc1,acc2)));
+  auto maxval = max(acc1,acc2);
+  if (maxval==Tacc(0)) return 0.;
+  return double(sqrt(acc3/maxval));
   }
 template<typename T1> double Py2_l2error(const py::array &a, const py::array &b)
   {
