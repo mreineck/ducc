@@ -1,3 +1,11 @@
+0.35.0:
+- misc:
+  - new functions `available_hardware_threads`, `thread_pool_size`, and
+    `resize_thread_pool` in `ducc0.misc` to allow deterination of hardware
+    resources and influencing thread pool size at run time. Up to now, the size
+    of the thread pool was set at startup and could not be influenced later on.
+
+
 0.34.0:
 - nufft:
   - allow different periodicities for every coordinate axis
