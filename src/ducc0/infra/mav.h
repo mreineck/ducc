@@ -706,7 +706,7 @@ template<typename T> class vfmav: public cfmav<T>
       }
     vfmav transpose() const
       {
-      return vfmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      return vfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
       }
   };
 

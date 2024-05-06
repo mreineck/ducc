@@ -1102,6 +1102,47 @@ int : the l1 quantum number of the first value in the returned array
 numpy.ndarray(dtype=numpy.float64) : 3j symbols in order of increasing l1
 )""";
 
+constexpr const char *available_hardware_threads_DS = R"""(
+Returns
+-------
+int : ducc0's best guess of the number of hardware threads available for the code.
+
+
+Notes
+-----
+On Linux, the code checks the thread affinity mask of the current process and
+returns the number of (possibly virtual) cores available to the process.
+If this cannot be done, std::thread::hardware_concurrency() is returned
+)""";
+
+constexpr const char *thread_pool_size_DS = R"""(
+Returns
+-------
+int : the number of threads available for parallel execution
+
+Notes
+-----
+The default value is determined according to the following pseudo code:
+
+res = available_hardware_threads();
+if (DUCC0_NUM_THREADS defined)
+  res = min(res, $DUCC0_NUM_THREADS)
+else
+  if (OMP_NUM_THREADS defined)
+    res = min(res, $OMP_NUM_THREADS)
+return max(1, res)
+)""";
+
+constexpr const char *resize_thread_pool_DS = R"""(
+Parameters
+----------
+Resizes the thread pool to allow parallel execution with up to `nthreads_new`
+threads.
+
+nthreads_new : int >=1
+    the desired new number of threads for ducc0 parallel execution
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -1158,6 +1199,9 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
     "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
 
+  m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
+  m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
+  m.def("resize_thread_pool", resize_thread_pool, resize_thread_pool_DS, "nthreads_new"_a);
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
   }
 

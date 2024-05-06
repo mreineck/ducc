@@ -28,6 +28,7 @@
 #ifndef DUCC0_MCM_H
 #define DUCC0_MCM_H
 
+#include "ducc0/infra/simd.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/wigner3j.h"
