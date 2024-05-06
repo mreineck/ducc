@@ -131,8 +131,8 @@ template<typename T, size_t alignment=alignof(T)> class array_base
     array_base &operator=(const array_base &) = delete;
     array_base &operator=(array_base &&other)
       {
-      swap(p, other.p);
-      swap(sz, other.sz);
+      std::swap(p, other.p);
+      std::swap(sz, other.sz);
       return *this;
       }
 
