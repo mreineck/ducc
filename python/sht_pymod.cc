@@ -2302,7 +2302,7 @@ void add_pythonfuncs(py::module_ &m)
 
   m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "geometry"_a, "ntheta"_a);
 
-  m.def("maxium_safe_l", &maximum_safe_l, maximum_safe_l_DS, "geometry"_a, "ntheta"_a);
+  m.def("maximum_safe_l", &maximum_safe_l, maximum_safe_l_DS, "geometry"_a, "ntheta"_a);
 
   m.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);
   m.def("alm2leg_deriv1", &Py_alm2leg_deriv1, alm2leg_deriv1_DS, py::kw_only(), "alm"_a, "lmax"_a, "theta"_a, "mval"_a=None, "mstart"_a=None, "lstride"_a=1, "nthreads"_a=1, "leg"_a=None,"theta_interpol"_a=false);
