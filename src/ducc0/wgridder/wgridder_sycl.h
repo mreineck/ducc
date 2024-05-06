@@ -558,6 +558,10 @@ timers.pop();
               lwmin_d = min(lwmin_d, w);
               lwmax_d = max(lwmax_d, w);
               }
+            else
+              {
+              if (!gridding) ms_out(irow, ichan)=0;
+              }
         {
         LockGuard lock(mut);
         wmin_d = min(wmin_d, lwmin_d);
