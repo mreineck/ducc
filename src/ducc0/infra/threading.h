@@ -81,11 +81,12 @@ static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined extern
 #include <optional>
 #include <vector>
 
+#include "ducc0/infra/error_handling.h"
+
 // threading-specific headers
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <mutex>
 #include <condition_variable>
-#include "ducc0/infra/error_handling.h"
 #endif
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING

@@ -52,6 +52,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_ALIGNED_ARRAY_H
 #define DUCC0_ALIGNED_ARRAY_H
 
+#include <algorithm>
 #include <cstdlib>
 #include <new>
 
