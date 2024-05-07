@@ -81,6 +81,8 @@ static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined extern
 #include <optional>
 #include <vector>
 
+#include "ducc0/infra/error_handling.h"
+
 // threading-specific headers
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <mutex>
@@ -105,7 +107,9 @@ class thread_pool
     /// Returns the total number of threads managed by the pool
     virtual size_t nthreads() const = 0;
     /** "Normalizes" a requested number of threads. A useful convention could be
-        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */ 
+        return (nthreads_in==0) ? nthreads() : min(nthreads(), nthreads_in); */
+    virtual void resize(size_t /*nthreads_new*/)
+      { MR_fail("Resizing is not supported by this thread pool"); }
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
     virtual void submit(const std::function<void(Scheduler &)> &work, Distribution &dist, size_t nthreads) = 0;
   };
@@ -195,9 +199,11 @@ class Scheduler
     virtual Range getNext() = 0;
   };
 
+size_t available_hardware_threads();
 /** Returns the maximum number of threads that are supported by currently
     active thread pool. */
-size_t max_threads();
+size_t thread_pool_size();
+void resize_thread_pool(size_t nthreads_new);
 size_t adjust_nthreads(size_t nthreads);
 
 /// Execute \a func over \a nwork work items, on a single thread.
@@ -315,7 +321,9 @@ using detail_threading::UniqueLock;
 using detail_threading::CondVar;
 using detail_threading::thread_pool;
 using detail_threading::ScopedUseThreadPool;
-using detail_threading::max_threads;
+using detail_threading::available_hardware_threads;
+using detail_threading::thread_pool_size;
+using detail_threading::resize_thread_pool;
 using detail_threading::adjust_nthreads;
 using detail_threading::Scheduler;
 using detail_threading::execSingle;

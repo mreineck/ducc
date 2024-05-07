@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022-2023 Max-Planck-Society
+/* Copyright (C) 2022-2024 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
 #ifndef DUCC0_WGRIDDER_SYCL_H
@@ -49,9 +49,10 @@ namespace ducc0 {
 
 namespace detail_wgridder_sycl {
 
+using namespace std;
+
 #if defined(DUCC0_USE_SYCL)
 
-using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
@@ -88,6 +89,7 @@ class RowchanRange
 
     RowchanRange() = default;
     RowchanRange(const RowchanRange &) = default;
+    RowchanRange &operator=(const RowchanRange &) = default;
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
     uint16_t nchan() const { return ch_end-ch_begin; }
@@ -325,6 +327,7 @@ timers.push("counting");
             }
           }
         });
+
 timers.poppush("allocation");
 // accumulate
       {
@@ -450,7 +453,7 @@ timers.pop();
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+             << ", dw=" << dw << ", (wmax-wmin)/dw=" << (wmax_d-wmin_d)/dw << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
       ovh0 += vissum.size()*sizeof(vissum[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
@@ -481,18 +484,14 @@ timers.pop();
         for (auto yc: yext)
           {
           double tmp = xc*xc+yc*yc;
-          double nval;
-          if (tmp <= 1.) // northern hemisphere
-            nval = sqrt(1.-tmp) - 1.;
-          else
-            nval = -sqrt(tmp-1.) -1.;
+          double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
           nm1min = min(nm1min, nval);
           nm1max = max(nm1max, nval);
           }
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels_new<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -504,6 +503,8 @@ timers.pop();
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
+        nu = max<size_t>(nu,16);
+        nv = max<size_t>(nv,16);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*supp + ((2*supp+1)*(supp+3)));
@@ -557,6 +558,10 @@ timers.pop();
               double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
               lwmax_d = max(lwmax_d, w);
+              }
+            else
+              {
+              if (!gridding) ms_out(irow, ichan)=0;
               }
         {
         LockGuard lock(mut);
@@ -1548,7 +1553,7 @@ timers.pop();
       MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
