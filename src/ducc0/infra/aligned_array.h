@@ -54,6 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstddef>
 #include <new>
 
 namespace ducc0 {

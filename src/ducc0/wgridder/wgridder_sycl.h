@@ -49,9 +49,10 @@ namespace ducc0 {
 
 namespace detail_wgridder_sycl {
 
+using namespace std;
+
 #if defined(DUCC0_USE_SYCL)
 
-using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
