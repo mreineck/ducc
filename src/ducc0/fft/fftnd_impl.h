@@ -149,12 +149,14 @@ struct util // hack to avoid duplicate symbols
     }
 
   static size_t thread_count (size_t nthreads, const fmav_info &info,
-    size_t /*axis*/, size_t /*vlen*/)
+    size_t axis, size_t /*vlen*/)
     {
     if (nthreads==1) return 1;
     size_t size = info.size();
     if (size<32768) return 1;
-    return ducc0::adjust_nthreads(nthreads);
+    size_t max_threads = ducc0::adjust_nthreads(nthreads);
+    size_t rem = size / info.shape(axis);
+    return std::max(size_t(1), std::min(rem, max_threads));
     }
   };
 
