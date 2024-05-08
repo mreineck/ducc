@@ -72,7 +72,7 @@ template<typename T, size_t ndim> inline sycl::buffer<T, ndim> make_sycl_buffer
     return sycl::buffer<T, ndim> {arr.data(),
            sycl::range<ndim>(arr.shape(0), arr.shape(1), arr.shape(2), arr.shape(3)),
            {sycl::property::buffer::use_host_ptr()}};
-#else  // hack to avoid unnecessary copies with hipSYCL
+#else  // hack to avoid unnecessary copies with AdaptiveCpp
   if constexpr (ndim==1)
     {
     sycl::buffer<T, ndim> res {const_cast<T *>(arr.data()),
@@ -139,7 +139,7 @@ template<typename T> inline sycl::buffer<T,1> make_sycl_buffer
   return sycl::buffer<T, 1> {arr.data(),
          sycl::range<1>(arr.size()),
          {sycl::property::buffer::use_host_ptr()}};
-#else  // hack to avoid unnecessary copies with hipSYCL
+#else  // hack to avoid unnecessary copies with AdaptiveCpp
   sycl::buffer<T, 1> res{const_cast<T *>(arr.data()),
     sycl::range<1>(arr.size()),
     {sycl::property::buffer::use_host_ptr()}};

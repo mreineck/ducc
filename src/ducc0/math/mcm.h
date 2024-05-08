@@ -37,6 +37,9 @@ namespace ducc0 {
 
 using namespace std;
 
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
+using std::min, std::max;
+
 template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spec,
   size_t lmax, const vmav<Tout,2> &mat, size_t nthreads)
   {

@@ -31,7 +31,7 @@ namespace detail_pymodule_pointingprovider {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 namespace py = pybind11;

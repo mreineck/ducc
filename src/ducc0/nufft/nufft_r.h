@@ -27,7 +27,7 @@ namespace ducc0 {
 namespace detail_nufft {
 
 using namespace std;
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class RNufft;
