@@ -45,7 +45,7 @@ namespace detail_sht {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;

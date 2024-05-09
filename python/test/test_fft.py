@@ -394,3 +394,9 @@ def test_conv2(L1,L2,dtype):
     x2 = refconv(a,L2,1,k)
     eps = tol[x2.real.dtype.type]
     _assert_close(x, x2, eps)
+
+
+def test_multi_iter_bug():
+    a=np.zeros((128000,),dtype=np.complex128)
+    # this used to raise an exception
+    fft.c2c(a[::2],axes=(0,),nthreads=8)
