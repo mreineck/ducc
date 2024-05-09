@@ -91,7 +91,7 @@ namespace ducc0 {
 
 namespace detail_fft {
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 template<typename T> constexpr inline size_t fft_simdlen
@@ -149,12 +149,14 @@ struct util // hack to avoid duplicate symbols
     }
 
   static size_t thread_count (size_t nthreads, const fmav_info &info,
-    size_t /*axis*/, size_t /*vlen*/)
+    size_t axis, size_t /*vlen*/)
     {
     if (nthreads==1) return 1;
     size_t size = info.size();
-    if (size<4096) return 1;
-    return ducc0::adjust_nthreads(nthreads);
+    if (size<4096) return 1;  // not worth opening a parallel region
+    size_t max_parallel = size / info.shape(axis);
+    size_t max_threads = ducc0::adjust_nthreads(nthreads);
+    return std::max(size_t(1), std::min(max_parallel, max_threads));
     }
   };
 
@@ -298,6 +300,10 @@ template<size_t N> class multi_iter
       if (myshare>=nshares) throw std::runtime_error("impossible share requested");
       auto [lo, hi] = calcShare(nshares, myshare, rem);
       size_t todo = hi-lo;
+
+      // this shouldn't normally happen, but make sure we handle it properly
+      if (todo==0)
+        { rem=0; return; }
 
       size_t chunk = rem;
       for (size_t i2=0, i=pos.size()-1; i2<pos.size(); ++i2,--i)

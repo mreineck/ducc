@@ -66,6 +66,7 @@ def main():
 
     do_sycl = False #True
     do_cng = False #True
+    do_cufinufft = False #True
 
     ntries = 1
 
