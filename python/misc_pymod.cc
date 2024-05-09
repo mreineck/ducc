@@ -1216,6 +1216,42 @@ template<typename Tin> py::array ptg2quat (const py::array &in, size_t nthreads)
   }
   return out__;
   }
+const char *quat2ptg_DS = R"""(
+Converts rotation quaternions to ZYZ Euler angles
+
+Parameters
+----------
+quat : numpy.ndarray((nval, 4), dtype=numpy.float64) : the input quaternions
+    The quaternions are in the order (x, y, z, w)
+nthreads : int
+    the number of threads to use for the calculations.
+
+Returns
+-------
+numpy.ndarray((nval, 3), dtype=numpy.float64)
+    Euler angles in radians in the order (colatitude, longitude, position angle)
+    aka (theta, phi, psi). This order is unconventional, but it matches the
+    order in which detector pointings are often stored in CMB mapmaking software.
+)""";
+
+const char *ptg2quat_DS = R"""(
+Converts ZYZ Euler angles to rotation quaternions
+
+Parameters
+----------
+ptg : numpy.ndarray((nval, 3), dtype=numpy.float64)
+    Euler angles in radians in the order (colatitude, longitude, position angle)
+    aka (theta, phi, psi). This order is unconventional, but it matches the
+    order in which detector pointings are often stored in CMB mapmaking software.
+nthreads : int
+    the number of threads to use for the calculations.
+
+Returns
+-------
+numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
+    The quaternions are normalized and in the order (x, y, z, w)
+)""";
+
 
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
@@ -1278,8 +1314,8 @@ void add_misc(py::module_ &msup)
   m.def("resize_thread_pool", resize_thread_pool, resize_thread_pool_DS, "nthreads_new"_a);
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
 
-  m.def("quat2ptg", quat2ptg<double>, "quat"_a, "nthreads"_a=1);
-  m.def("ptg2quat", ptg2quat<double>, "ptg"_a, "nthreads"_a=1);
+  m.def("quat2ptg", quat2ptg<double>, quat2ptg_DS, "quat"_a, "nthreads"_a=1);
+  m.def("ptg2quat", ptg2quat<double>, ptg2quat_DS, "ptg"_a, "nthreads"_a=1);
   }
 
 }
