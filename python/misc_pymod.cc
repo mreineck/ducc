@@ -1201,7 +1201,7 @@ template<typename Tin> py::array ptg2quat (const py::array &in, size_t nthreads)
     {
     double cpsi2=cos(in(2)*0.5), spsi2=sin(in(2)*0.5);
     double cphi2=cos(in(1)*0.5), sphi2=sin(in(1)*0.5);
-    double cth2=cos(in(0)*0.5), sth2=sin(in(0)*0.5);
+    double cth2 =cos(in(0)*0.5), sth2 =sin(in(0)*0.5);
 //    quaternion_t<double> q1(0., 0., spsi2, cpsi2);
 //    quaternion_t<double> q2(0., sth2, 0., cth2);
 //    quaternion_t<double> q3(0., 0., sphi2, cphi2);
