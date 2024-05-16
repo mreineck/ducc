@@ -1169,8 +1169,8 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
+                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_in.prefetch_r(nextrcr.row, nextrcr.ch_begin);
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1272,9 +1272,9 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
+                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_out.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_out.prefetch_w(nextrcr.row, nextrcr.ch_begin);
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;

@@ -334,9 +334,9 @@ rw1=max<int>(rw1,i0[2]-b0[2]+supp);
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_R(&points(nextidx));
+            points.prefetch_r(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
@@ -387,9 +387,9 @@ rw1=max<int>(rw1,i0[2]-b0[2]+supp);
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_W(&points(nextidx));
+            points.prefetch_w(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
