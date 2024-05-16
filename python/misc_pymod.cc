@@ -1165,17 +1165,18 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
   py::array myprep(const py::array_t<T1> &ain, const array<size_t,nd1> &a1,
-  const array<size_t,nd2> &a2)
+  const array<size_t,nd2> &a2, py::object &out)
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return make_Pyarr<T2>(oshp);
+  return get_optional_Pyarr<T2>(out, oshp, false);
   }
 
-template<typename Tin> py::array quat2ptg (const py::array &in, size_t nthreads)
+template<typename Tin> py::array quat2ptg2 (const py::array &in, size_t nthreads,
+  py::object &out)
   {
   auto in_ = to_cfmav<Tin>(in);
-  auto out__ = myprep<Tin, Tin, 1, 1>(in, {4}, {3});
+  auto out__ = myprep<Tin, Tin, 1, 1>(in, {4}, {3}, out);
   auto out_ = to_vfmav<Tin>(out__);
   {
   py::gil_scoped_release release;
@@ -1190,10 +1191,19 @@ template<typename Tin> py::array quat2ptg (const py::array &in, size_t nthreads)
   }
   return out__;
   }
-template<typename Tin> py::array ptg2quat (const py::array &in, size_t nthreads)
+py::array quat2ptg (const py::array &in, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<float>(in))
+    return quat2ptg2<float> (in, nthreads, out);
+  else if (isPyarr<double>(in))
+    return quat2ptg2<double> (in, nthreads, out);
+  MR_fail("type matching failed: 'quat' has neither type 'r4' nor 'r8'");
+  }
+template<typename Tin> py::array ptg2quat2 (const py::array &in, size_t nthreads,
+  py::object &out)
   {
   auto in_ = to_cfmav<Tin>(in);
-  auto out__ = myprep<Tin, Tin, 1, 1>(in, {3}, {4});
+  auto out__ = myprep<Tin, Tin, 1, 1>(in, {3}, {4}, out);
   auto out_ = to_vfmav<Tin>(out__);
   {
   py::gil_scoped_release release;
@@ -1216,22 +1226,34 @@ template<typename Tin> py::array ptg2quat (const py::array &in, size_t nthreads)
   }
   return out__;
   }
+py::array ptg2quat (const py::array &in, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<float>(in))
+    return ptg2quat2<float> (in, nthreads, out);
+  else if (isPyarr<double>(in))
+    return ptg2quat2<double> (in, nthreads, out);
+  MR_fail("type matching failed: 'ptg' has neither type 'r4' nor 'r8'");
+  }
 const char *quat2ptg_DS = R"""(
 Converts rotation quaternions to ZYZ Euler angles
 
 Parameters
 ----------
-quat : numpy.ndarray((nval, 4), dtype=numpy.float64) : the input quaternions
+quat : numpy.ndarray((nval, 4), dtype=numpy.float32 or np.float64)
+    the input quaternions
     The quaternions are in the order (x, y, z, w)
 nthreads : int
     the number of threads to use for the calculations.
+out : numpy.ndarray((nval, 3), same dtype as `quat`)
+    optional array for storing the output
 
 Returns
 -------
-numpy.ndarray((nval, 3), dtype=numpy.float64)
+numpy.ndarray((nval, 3), same dtype as `quat`)
     Euler angles in radians in the order (colatitude, longitude, position angle)
     aka (theta, phi, psi). This order is unconventional, but it matches the
     order in which detector pointings are often stored in CMB mapmaking software.
+    Identical to `out` if it was provided.
 )""";
 
 const char *ptg2quat_DS = R"""(
@@ -1239,17 +1261,20 @@ Converts ZYZ Euler angles to rotation quaternions
 
 Parameters
 ----------
-ptg : numpy.ndarray((nval, 3), dtype=numpy.float64)
+ptg : numpy.ndarray((nval, 3), dtype=numpy.float32 or numpy.float64)
     Euler angles in radians in the order (colatitude, longitude, position angle)
     aka (theta, phi, psi). This order is unconventional, but it matches the
     order in which detector pointings are often stored in CMB mapmaking software.
 nthreads : int
     the number of threads to use for the calculations.
+out : numpy.ndarray((nval, 4), same dtype as `ptg`)
+    optional array for storing the output
 
 Returns
 -------
-numpy.ndarray((nval, 4), dtype=numpy.float64) : the output quaternions
+numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
     The quaternions are normalized and in the order (x, y, z, w)
+    Identical to `out` if it was provided.
 )""";
 
 
@@ -1314,8 +1339,8 @@ void add_misc(py::module_ &msup)
   m.def("resize_thread_pool", resize_thread_pool, resize_thread_pool_DS, "nthreads_new"_a);
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
 
-  m.def("quat2ptg", quat2ptg<double>, quat2ptg_DS, "quat"_a, "nthreads"_a=1);
-  m.def("ptg2quat", ptg2quat<double>, ptg2quat_DS, "ptg"_a, "nthreads"_a=1);
+  m.def("quat2ptg", quat2ptg, quat2ptg_DS, "quat"_a, "nthreads"_a=1, "out"_a=None);
+  m.def("ptg2quat", ptg2quat, ptg2quat_DS, "ptg"_a, "nthreads"_a=1, "out"_a=None);
   }
 
 }
