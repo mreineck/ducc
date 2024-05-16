@@ -36,6 +36,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/mcm.h"
+#include "ducc0/math/quaternion.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {
@@ -1143,6 +1144,140 @@ nthreads_new : int >=1
     the desired new number of threads for ducc0 parallel execution
 )""";
 
+using shape_t = fmav_info::shape_t;
+template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
+  const array<size_t,nd1> &si, const array<size_t,nd2> &so)
+  {
+  if constexpr (nd1>0)
+    {
+    MR_assert(s.size()>=nd1,"too few input array dimensions");
+    for (size_t i=0; i<nd1; ++i)
+      MR_assert(si[i]==s[s.size()-nd1+i], "input dimension mismatch");
+    }
+  shape_t snew(s.size()-nd1+nd2);
+  for (size_t i=0; i<s.size()-nd1; ++i)
+    snew[i]=s[i];
+  if constexpr (nd2>0)
+    for (size_t i=0; i<nd2; ++i)
+      snew[i+s.size()-nd1] = so[i];
+  return snew;
+  }
+
+template<typename T1, typename T2, size_t nd1, size_t nd2>
+  py::array myprep(const py::array_t<T1> &ain, const array<size_t,nd1> &a1,
+  const array<size_t,nd2> &a2, py::object &out)
+  {
+  auto in = to_cfmav<T1>(ain);
+  auto oshp = repl_dim(in.shape(), a1, a2);
+  return get_optional_Pyarr<T2>(out, oshp, false);
+  }
+
+template<typename Tin> py::array quat2ptg2 (const py::array &in, size_t nthreads,
+  py::object &out)
+  {
+  auto in_ = to_cfmav<Tin>(in);
+  auto out__ = myprep<Tin, Tin, 1, 1>(in, {4}, {3}, out);
+  auto out_ = to_vfmav<Tin>(out__);
+  {
+  py::gil_scoped_release release;
+  flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
+    {
+    quaternion_t<double> q(in(0), in(1), in(2), in(3));
+    double atzw=atan2(q.z, q.w), atxy=atan2(-q.x, q.y);
+    out(1) = Tin(atzw - atxy); // phi
+    out(2) = Tin(atzw + atxy);
+    out(0) = Tin(2.*atan2(sqrt(q.y*q.y+q.x*q.x), sqrt(q.w*q.w+q.z*q.z)));
+    }, nthreads, in_, out_);
+  }
+  return out__;
+  }
+py::array quat2ptg (const py::array &in, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<float>(in))
+    return quat2ptg2<float> (in, nthreads, out);
+  else if (isPyarr<double>(in))
+    return quat2ptg2<double> (in, nthreads, out);
+  MR_fail("type matching failed: 'quat' has neither type 'r4' nor 'r8'");
+  }
+template<typename Tin> py::array ptg2quat2 (const py::array &in, size_t nthreads,
+  py::object &out)
+  {
+  auto in_ = to_cfmav<Tin>(in);
+  auto out__ = myprep<Tin, Tin, 1, 1>(in, {3}, {4}, out);
+  auto out_ = to_vfmav<Tin>(out__);
+  {
+  py::gil_scoped_release release;
+  flexible_mav_apply<1,1>([&](const auto &in, const auto &out)
+    {
+    double cpsi2=cos(in(2)*0.5), spsi2=sin(in(2)*0.5);
+    double cphi2=cos(in(1)*0.5), sphi2=sin(in(1)*0.5);
+    double cth2 =cos(in(0)*0.5), sth2 =sin(in(0)*0.5);
+//    quaternion_t<double> q1(0., 0., spsi2, cpsi2);
+//    quaternion_t<double> q2(0., sth2, 0., cth2);
+//    quaternion_t<double> q3(0., 0., sphi2, cphi2);
+//    auto res = q1*q2*q3;
+
+    quaternion_t<double> q1q2(-spsi2*sth2, cpsi2*sth2, spsi2*cth2, cpsi2*cth2);
+    out(0) = Tin( q1q2.x*cphi2+q1q2.y*sphi2);
+    out(1) = Tin(-q1q2.x*sphi2+q1q2.y*cphi2);
+    out(2) = Tin( q1q2.w*sphi2+q1q2.z*cphi2);
+    out(3) = Tin( q1q2.w*cphi2-q1q2.z*sphi2);
+    }, nthreads, in_, out_);
+  }
+  return out__;
+  }
+py::array ptg2quat (const py::array &in, size_t nthreads, py::object &out)
+  {
+  if (isPyarr<float>(in))
+    return ptg2quat2<float> (in, nthreads, out);
+  else if (isPyarr<double>(in))
+    return ptg2quat2<double> (in, nthreads, out);
+  MR_fail("type matching failed: 'ptg' has neither type 'r4' nor 'r8'");
+  }
+const char *quat2ptg_DS = R"""(
+Converts rotation quaternions to ZYZ Euler angles
+
+Parameters
+----------
+quat : numpy.ndarray((nval, 4), dtype=numpy.float32 or np.float64)
+    the input quaternions
+    The quaternions are in the order (x, y, z, w)
+nthreads : int
+    the number of threads to use for the calculations.
+out : numpy.ndarray((nval, 3), same dtype as `quat`)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval, 3), same dtype as `quat`)
+    Euler angles in radians in the order (colatitude, longitude, position angle)
+    aka (theta, phi, psi). This order is unconventional, but it matches the
+    order in which detector pointings are often stored in CMB mapmaking software.
+    Identical to `out` if it was provided.
+)""";
+
+const char *ptg2quat_DS = R"""(
+Converts ZYZ Euler angles to rotation quaternions
+
+Parameters
+----------
+ptg : numpy.ndarray((nval, 3), dtype=numpy.float32 or numpy.float64)
+    Euler angles in radians in the order (colatitude, longitude, position angle)
+    aka (theta, phi, psi). This order is unconventional, but it matches the
+    order in which detector pointings are often stored in CMB mapmaking software.
+nthreads : int
+    the number of threads to use for the calculations.
+out : numpy.ndarray((nval, 4), same dtype as `ptg`)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
+    The quaternions are normalized and in the order (x, y, z, w)
+    Identical to `out` if it was provided.
+)""";
+
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -1203,6 +1338,9 @@ void add_misc(py::module_ &msup)
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
   m.def("resize_thread_pool", resize_thread_pool, resize_thread_pool_DS, "nthreads_new"_a);
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
+
+  m.def("quat2ptg", quat2ptg, quat2ptg_DS, "quat"_a, "nthreads"_a=1, "out"_a=None);
+  m.def("ptg2quat", ptg2quat, ptg2quat_DS, "ptg"_a, "nthreads"_a=1, "out"_a=None);
   }
 
 }
