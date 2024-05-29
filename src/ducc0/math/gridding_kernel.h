@@ -263,8 +263,8 @@ template<size_t W, typename Tsimd> class TemplateKernel
       zfac = tvalz*z+tvalz2;
       res[0] = (tvalx*x+tvalx2)*zfac;
       res[nvec] = tvaly*y+tvaly2;
-      auto tmpx = Tsimd(tvalx2-x*tvalx)*zfac;
-      auto tmpy = Tsimd(tvaly2-y*tvaly);
+      auto tmpx = Tsimd(tvalx2-tvalx*x)*zfac;
+      auto tmpy = Tsimd(tvaly2-tvaly*y);
       for (size_t j=0, j2=W-1; (j<vlen)&&(j2>=nvec_really*vlen); ++j,--j2)
         {
         res[j2/vlen][j2%vlen] = T(tmpx[j]);
@@ -284,8 +284,8 @@ template<size_t W, typename Tsimd> class TemplateKernel
           }
         res[i] = (tvalx*x+tvalx2)*zfac;
         res[nvec+i] = tvaly*y+tvaly2;
-        auto tmpx = Tsimd(tvalx2-x*tvalx)*zfac;
-        auto tmpy = Tsimd(tvaly2-y*tvaly);
+        auto tmpx = Tsimd(tvalx2-tvalx*x)*zfac;
+        auto tmpy = Tsimd(tvaly2-tvaly*y);
         for (size_t j=0, j2=W-1-i*vlen; (j<vlen)&&(j2>=nvec_really*vlen); ++j,--j2)
           {
           res[j2/vlen][j2%vlen] = T(tmpx[j]);
@@ -308,8 +308,8 @@ template<size_t W, typename Tsimd> class TemplateKernel
           tvalx = tvalx*x2 + Tvl(coeff[i+j*nvec_really]);
           tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec_really]);
           }
-        res[i] = x*tvalx+tvalx2;
-        auto tmp = Tsimd(tvalx2-x*tvalx);
+        res[i] = tvalx*x+tvalx2;
+        auto tmp = Tsimd(tvalx2-tvalx*x);
         for (size_t j=0, j2=W-1-i*vlen; (j<vlen)&&(j2>=nvec_really*vlen); ++j,--j2)
           res[j2/vlen][j2%vlen] = T(tmp[j]);
         }
@@ -331,10 +331,10 @@ template<size_t W, typename Tsimd> class TemplateKernel
           tvalx2 = tvalx2*x2 + Tvl(coeff[i+(j+1)*nvec_really]);
           tvaly2 = tvaly2*y2 + Tvl(coeff[i+(j+1)*nvec_really]);
           }
-        res[i] = x*tvalx+tvalx2;
+        res[i] = tvalx*x+tvalx2;
         res[nvec+i] = tvaly*y+tvaly2;
-        auto tmpx = Tsimd(tvalx2-x*tvalx);
-        auto tmpy = Tsimd(tvaly2-y*tvaly);
+        auto tmpx = Tsimd(tvalx2-tvalx*x);
+        auto tmpy = Tsimd(tvaly2-tvaly*y);
         for (size_t j=0, j2=W-1-i*vlen; (j<vlen)&&(j2>=nvec_really*vlen); ++j,--j2)
           {
           res[j2/vlen][j2%vlen] = T(tmpx[j]);
@@ -364,9 +364,9 @@ template<size_t W, typename Tsimd> class TemplateKernel
         res[i] = tvalx*x+tvalx2;
         res[nvec+i] = tvaly*y+tvaly2;
         res[2*nvec+i] = tvalz*z+tvalz2;
-        auto tmpx = Tsimd(tvalx2-x*tvalx);
-        auto tmpy = Tsimd(tvaly2-y*tvaly);
-        auto tmpz = Tsimd(tvalz2-z*tvalz);
+        auto tmpx = Tsimd(tvalx2-tvalx*x);
+        auto tmpy = Tsimd(tvaly2-tvaly*y);
+        auto tmpz = Tsimd(tvalz2-tvalz*z);
         for (size_t j=0, j2=W-1-i*vlen; (j<vlen)&&(j2>=nvec_really*vlen); ++j,--j2)
           {
           res[j2/vlen][j2%vlen] = T(tmpx[j]);
