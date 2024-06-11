@@ -1184,6 +1184,8 @@ template<typename Tin> py::array quat2ptg2 (const py::array &in, size_t nthreads
     {
     quaternion_t<double> q(in(0), in(1), in(2), in(3));
     double atzw=atan2(q.z, q.w), atxy=atan2(-q.x, q.y);
+// FIXME: if q.x should be flipped
+//    double atzw=atan2(q.z, q.w), atxy=atan2(q.x, q.y);
     out(1) = Tin(atzw - atxy); // phi
     out(2) = Tin(atzw + atxy);
     out(0) = Tin(2.*atan2(sqrt(q.y*q.y+q.x*q.x), sqrt(q.w*q.w+q.z*q.z)));
@@ -1219,6 +1221,8 @@ template<typename Tin> py::array ptg2quat2 (const py::array &in, size_t nthreads
 
     quaternion_t<double> q1q2(-spsi2*sth2, cpsi2*sth2, spsi2*cth2, cpsi2*cth2);
     out(0) = Tin( q1q2.x*cphi2+q1q2.y*sphi2);
+// FIXME: if out(0) should be flipped
+//    out(0) = Tin(-q1q2.x*cphi2-q1q2.y*sphi2);
     out(1) = Tin(-q1q2.x*sphi2+q1q2.y*cphi2);
     out(2) = Tin( q1q2.w*sphi2+q1q2.z*cphi2);
     out(3) = Tin( q1q2.w*cphi2-q1q2.z*sphi2);
