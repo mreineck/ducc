@@ -96,7 +96,7 @@ def hc2c_fftw(inp, otype):
 tol = {np.float32: 6e-7, np.float64: 2e-15, np.longdouble: 1e-18}
 ctype = {np.float32: np.complex64,
          np.float64: np.complex128,
-         np.longdouble: np.longcomplex}
+         np.longdouble: np.clongdouble}
 
 
 on_windows = ("microsoft" in platform.uname()[3].lower() or
