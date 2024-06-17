@@ -328,13 +328,13 @@ class Baselines
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgridder
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> class Wgridder
   {
   private:
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
     TimerHierarchy timers;
-    const cmav<complex<Tms>,2> &ms_in;
+    const Tms_in &ms_in;
     const vmav<complex<Tms>,2> &ms_out;
     const cmav<Timg,2> &dirty_in;
     const vmav<Timg,2> &dirty_out;
@@ -1169,8 +1169,8 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_R(&ms_in(nextrcr.row, nextrcr.ch_begin));
+                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_in.prefetch_r(nextrcr.row, nextrcr.ch_begin);
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1272,9 +1272,9 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                DUCC0_PREFETCH_R(&wgt(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_R(&ms_out(nextrcr.row, nextrcr.ch_begin));
-                DUCC0_PREFETCH_W(&ms_out(nextrcr.row, nextrcr.ch_begin));
+                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_out.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                ms_out.prefetch_w(nextrcr.row, nextrcr.ch_begin);
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1620,7 +1620,7 @@ timers.pop();
 
   public:
     Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
-           const cmav<complex<Tms>,2> &ms_in_, const vmav<complex<Tms>,2> &ms_out_,
+           const Tms_in &ms_in_, const vmav<complex<Tms>,2> &ms_out_,
            const cmav<Timg,2> &dirty_in_, const vmav<Timg,2> &dirty_out_,
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
@@ -1694,8 +1694,8 @@ timers.pop();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,2>, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
@@ -1705,7 +1705,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg, Tms_in> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
@@ -1731,8 +1731,7 @@ tuple<size_t, size_t, size_t, size_t, double, double>
  get_facet_data(size_t npix_x, size_t npix_y, size_t nfx, size_t nfy, size_t ifx, size_t ify,
   double pixsize_x, double pixsize_y, double center_x, double center_y);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
@@ -1779,8 +1778,8 @@ tuple<vmav<uint8_t,2>,size_t,size_t, size_t>  get_tuning_parameters(const cmav<d
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, double center_x, double center_y);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dirty_tuning(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> void ms2dirty_tuning(const cmav<double,2> &uvw,
+  const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,

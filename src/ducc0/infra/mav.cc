@@ -50,8 +50,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include "ducc0/infra/mav.h"
 #include <cmath>
+#include <tuple>
+#include <algorithm>
+#include "ducc0/infra/mav.h"
 
 namespace ducc0 {
 

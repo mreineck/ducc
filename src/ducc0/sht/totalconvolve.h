@@ -207,11 +207,11 @@ template<typename T> class ConvolverPlan
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
-            DUCC0_PREFETCH_R(&psi(i));
-            DUCC0_PREFETCH_R(&signal(i));
-            DUCC0_PREFETCH_W(&signal(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
+            psi.prefetch_r(i);
+            signal.prefetch_r(i);
+            signal.prefetch_w(i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
@@ -283,10 +283,10 @@ template<typename T> class ConvolverPlan
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
-            DUCC0_PREFETCH_R(&psi(i));
-            DUCC0_PREFETCH_R(&signal(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
+            psi.prefetch_r(i);
+            signal.prefetch_r(i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));

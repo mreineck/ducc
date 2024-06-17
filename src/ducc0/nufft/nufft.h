@@ -731,9 +731,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_R(&points(nextidx));
+            points.prefetch_r(nextidx);
             if (!sorted)
-              DUCC0_PREFETCH_R(&coords(nextidx,0));
+              coords.prefetch_r(nextidx,0);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
@@ -778,8 +778,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_W(&points(nextidx));
-            if (!sorted) DUCC0_PREFETCH_R(&coords(nextidx,0));
+            points.prefetch_w(nextidx);
+            if (!sorted) coords.prefetch_r(nextidx,0);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0)})
@@ -1072,9 +1072,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<coord_idx.size())
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_R(&points(nextidx));
+            points.prefetch_r(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
@@ -1134,9 +1134,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<coord_idx.size())
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_R(&points(nextidx));
+            points.prefetch_r(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
@@ -1194,9 +1194,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_W(&points(nextidx));
+            points.prefetch_w(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
@@ -1586,9 +1586,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_R(&points(nextidx));
+            points.prefetch_r(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
@@ -1639,9 +1639,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
-            DUCC0_PREFETCH_W(&points(nextidx));
+            points.prefetch_w(nextidx);
             if (!sorted)
-              for (size_t d=0; d<ndim; ++d) DUCC0_PREFETCH_R(&coords(nextidx,d));
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
             }
           size_t row = coord_idx[ix];
           sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})

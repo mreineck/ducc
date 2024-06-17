@@ -197,12 +197,12 @@ template<typename T> class SphereInterpol
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
             for (size_t j=0; j<ncomp; ++j)
               {
-              DUCC0_PREFETCH_R(&signal(j,i));
-              DUCC0_PREFETCH_W(&signal(j,i));
+              signal.prefetch_r(j,i);
+              signal.prefetch_w(j,i);
               }
             }
           size_t i=idx[ind];
@@ -305,10 +305,10 @@ template<typename T> class SphereInterpol
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
             for (size_t j=0; j<ncomp; ++j)
-              DUCC0_PREFETCH_R(&signal(j,i));
+              signal.prefetch_r(j,i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i));
