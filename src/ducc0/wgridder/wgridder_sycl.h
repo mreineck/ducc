@@ -122,7 +122,7 @@ class Baselines
   public:
     Baselines() = default;
     template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool negate_v=false)
+      const cmav<T,1> &freq, bool negate_u=false, bool negate_v=false, bool negate_w=false)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -140,11 +140,13 @@ class Baselines
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
+      double ufac = negate_u ? -1 : 1;
       double vfac = negate_v ? -1 : 1;
+      double wfac = negate_w ? -1 : 1;
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        coord[i] = UVW(ufac*coord_(i,0), vfac*coord_(i,1), wfac*coord_(i,2));
         umax = max(umax, abs(coord_(i,0)));
         vmax = max(vmax, abs(coord_(i,1)));
         }
@@ -190,7 +192,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     bool do_wgridding;
     size_t nthreads;
     size_t verbosity;
-    bool negate_v, divide_by_n;
+    bool divide_by_n;
     double sigma_min, sigma_max;
 
     Baselines bl;
@@ -1517,7 +1519,7 @@ timers.pop();
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
-           bool negate_v_, bool divide_by_n_, double sigma_min_,
+           bool negate_u, bool negate_v, bool negate_w, bool divide_by_n_, double sigma_min_,
            double sigma_max_, double center_x, double center_y, bool allow_nshift)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding", "lmask allocation"),
@@ -1539,7 +1541,7 @@ timers.pop();
         no_nshift(!allow_nshift)
       {
       timers.poppush("Baseline construction");
-      bl = Baselines(uvw, freq, negate_v);
+      bl = Baselines(uvw, freq, negate_u, negate_v, negate_w);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
@@ -1580,7 +1582,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
+  bool negate_u=false, bool negate_v=false, bool negate_w=false, bool divide_by_n=true, double sigma_min=1.1,
   double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
@@ -1588,7 +1590,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_u, negate_v, negate_w
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1596,7 +1598,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
+  size_t verbosity, bool negate_u=false, bool negate_v=false, bool negate_w=false, bool divide_by_n=true,
   double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
   {
   if (ms.size()==0) return;  // nothing to do
@@ -1605,7 +1607,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_u, negate_v, negate_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1615,7 +1617,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &, const cmav<complex<Tms>,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
   bool, size_t, const vmav<Timg,2> &, size_t,
-  bool=false, bool=true, double=1.1,
+  bool=false, bool=false, bool=false, bool=true, double=1.1,
   double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
@@ -1623,7 +1625,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   const cmav<double,1> &, const cmav<Timg,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
   double, bool, size_t, const vmav<complex<Tms>,2> &,
-  size_t, bool=false, bool=true,
+  size_t, bool=false, bool=false, bool=false, bool=true,
   double=1.1, double=2.6, double=0, double=0, bool=true)
   { throw runtime_error("no SYCL support available"); }
 
