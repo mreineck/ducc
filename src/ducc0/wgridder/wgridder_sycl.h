@@ -122,7 +122,7 @@ class Baselines
   public:
     Baselines() = default;
     template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool negate_v=false)
+      const cmav<T,1> &freq, bool flip_u=false, bool flip_v=false, bool flip_w=false)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -140,11 +140,13 @@ class Baselines
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
-      double vfac = negate_v ? -1 : 1;
+      double ufac = flip_u ? -1 : 1;
+      double vfac = flip_v ? -1 : 1;
+      double wfac = flip_w ? -1 : 1;
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        coord[i] = UVW(ufac*coord_(i,0), vfac*coord_(i,1), wfac*coord_(i,2));
         umax = max(umax, abs(coord_(i,0)));
         vmax = max(vmax, abs(coord_(i,1)));
         }
@@ -190,7 +192,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     bool do_wgridding;
     size_t nthreads;
     size_t verbosity;
-    bool negate_v, divide_by_n;
+    bool divide_by_n;
     double sigma_min, sigma_max;
 
     Baselines bl;
@@ -863,13 +865,17 @@ class RowchanComputer
 
 vector<Tcalc> prepCoeff()
   {
-  auto D = supp+3;
+  auto D = supp+3+(supp&1);
   const auto &dcoef(krn->Coeff());
   auto lim = (supp+1)/2;
   vector<Tcalc> res(lim*(D+1));
+  auto ofs = supp&1;
+  if (ofs>0)
+    for (size_t i=0; i<lim; ++i)
+      res[i*(D+1)] = 0;
   for (size_t i=0; i<lim; ++i)
     for (size_t j=0; j<=D; ++j)
-      res[i*(D+1) + j] = Tcalc(dcoef[j*supp + i]);
+      res[i*(D+1) + j + ofs] = Tcalc(dcoef[j*supp + i]);
   return res;
   }
 
@@ -882,28 +888,30 @@ template<typename T> class KernelComputer
   public:
     KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
       : acc_coeff(buf_coeff, cgh, sycl::read_only),
-        supp(uint32_t(supp_)), D(uint32_t(supp_+3)) {}
+        supp(uint32_t(supp_)), D(uint32_t(supp_+3+(supp&1))) {}
     template<size_t Supp> inline void compute_uv(T ufrac, T vfrac, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
 //      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
+      auto x0square = x0*x0;
+      auto y0square = y0*y0;
       auto lim = (supp+1)/2;
       for (uint32_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
-        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (uint32_t j=1; j<=D; ++j)
+        Tcalc tvalx=acc_coeff[i*(D+1)], tvalx2=acc_coeff[i*(D+1)+1];
+        Tcalc tvaly=acc_coeff[i*(D+1)], tvaly2=acc_coeff[i*(D+1)+1];
+        for (uint32_t j=2; j<D; j+=2)
           {
-          resu = acc_coeff[j+i*(D+1)] + resu*x0;
-          resv = acc_coeff[j+i*(D+1)] + resv*y0;
-          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
-          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
+          tvalx = acc_coeff[j+i*(D+1)] + tvalx*x0square;
+          tvaly = acc_coeff[j+i*(D+1)] + tvaly*y0square;
+          tvalx2 = acc_coeff[j+i*(D+1)+1] + tvalx2*x0square;
+          tvaly2 = acc_coeff[j+i*(D+1)+1] + tvaly2*y0square;
           }
-        ku[i] = resu;
-        kv[i] = resv;
-        ku[supp-1-i] = resmu;
-        kv[supp-1-i] = resmv;
+        ku[i] = tvalx*x0 + tvalx2;
+        kv[i] = tvaly*y0 + tvaly2;
+        ku[supp-1-i] = tvalx2 - tvalx*x0;
+        kv[supp-1-i] = tvaly2 - tvaly*y0;
         }
       }
     template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, uint32_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
@@ -912,52 +920,35 @@ template<typename T> class KernelComputer
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       auto z0 = T(wval-nth)*T(2)+T(supp-1);
+      auto x0square = x0*x0;
+      auto y0square = y0*y0;
+      auto z0square = z0*z0;
       auto lim = (supp+1)/2;
       if (nth>=lim)
         { nth = supp-1-nth; z0=-z0; }
-      Tcalc resw=acc_coeff[nth*(D+1)];
-      for (uint32_t j=1; j<=D; ++j)
-        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
+      Tcalc tvalz=acc_coeff[nth*(D+1)], tvalz2=acc_coeff[nth*(D+1)+1];
+      for (uint32_t j=2; j<D; j+=2)
+        {
+        tvalz = acc_coeff[j+i*(D+1)] + tvalz*z0square;
+        tvalz2 = acc_coeff[j+i*(D+1)+1] + tvalz2*z0square;
+        }
+      auto kw = tvalz*z0 + tvalz2;
       for (uint32_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
-        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (uint32_t j=1; j<=D; ++j)
+        Tcalc tvalx=acc_coeff[i*(D+1)], tvalx2=acc_coeff[i*(D+1)+1];
+        Tcalc tvaly=acc_coeff[i*(D+1)], tvaly2=acc_coeff[i*(D+1)+1];
+        for (uint32_t j=2; j<D; j+=2)
           {
-          resu = acc_coeff[j+i*(D+1)] + resu*x0;
-          resv = acc_coeff[j+i*(D+1)] + resv*y0;
-          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
-          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
+          tvalx = acc_coeff[j+i*(D+1)] + tvalx*x0square;
+          tvaly = acc_coeff[j+i*(D+1)] + tvaly*y0square;
+          tvalx2 = acc_coeff[j+i*(D+1)+1] + tvalx2*x0square;
+          tvaly2 = acc_coeff[j+i*(D+1)+1] + tvaly2*y0square;
           }
-        ku[i] = resu*resw;
-        kv[i] = resv;
-        ku[supp-1-i] = resmu*resw;
-        kv[supp-1-i] = resmv;
+        ku[i] = (tvalx*x + tvalx2)*kw;
+        kv[i] = tvaly*y + tvaly2;
+        ku[supp-1-i] = (tvalx2 - tvalx*x)*kw;
+        kv[supp-1-i] = tvaly2 - tvaly*y;
         }
-      }
-    inline T compute_uvw_single(T ufrac, uint32_t unth, T vfrac, uint32_t vnth, T wval, uint32_t nth) const
-      {
-//      if (Supp<supp) throw runtime_error("bad array size");
-      auto x0 = T(ufrac)*T(-2)+T(supp-1);
-      auto y0 = T(vfrac)*T(-2)+T(supp-1);
-      auto z0 = T(wval-nth)*T(2)+T(supp-1);
-      auto lim = (supp+1)/2;
-      if (unth>=lim)
-        { unth = supp-1-unth; x0=-x0; }
-      if (vnth>=lim)
-        { vnth = supp-1-vnth; y0=-y0; }
-      if (nth>=lim)
-        { nth = supp-1-nth; z0=-z0; }
-      Tcalc resu=acc_coeff[unth*(D+1)];
-      Tcalc resv=acc_coeff[vnth*(D+1)];
-      Tcalc resw=acc_coeff[nth*(D+1)];
-      for (uint32_t j=1; j<=D; ++j)
-        {
-        resu = resu*x0 + acc_coeff[j+unth*(D+1)];
-        resv = resv*y0 + acc_coeff[j+vnth*(D+1)];
-        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
-        }
-      return resu*resv*resw;
       }
   };
 
@@ -1517,7 +1508,7 @@ timers.pop();
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
-           bool negate_v_, bool divide_by_n_, double sigma_min_,
+           bool flip_u, bool flip_v, bool flip_w, bool divide_by_n_, double sigma_min_,
            double sigma_max_, double center_x, double center_y, bool allow_nshift)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding", "lmask allocation"),
@@ -1532,14 +1523,14 @@ timers.pop();
         do_wgridding(do_wgridding_),
         nthreads(adjust_nthreads(nthreads_)),
         verbosity(verbosity_),
-        negate_v(negate_v_), divide_by_n(divide_by_n_),
+        flip_v(flip_v_), divide_by_n(divide_by_n_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        lshift(center_x), mshift(negate_v ? -center_y : center_y),
+        lshift(flip_u ? -center_x : center_x), mshift(flip_v ? -center_y : center_y),
         lmshift((lshift!=0) || (mshift!=0)),
         no_nshift(!allow_nshift)
       {
       timers.poppush("Baseline construction");
-      bl = Baselines(uvw, freq, negate_v);
+      bl = Baselines(uvw, freq, flip_u, flip_v, flip_w);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
@@ -1580,15 +1571,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
+  double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1596,8 +1587,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+  double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
@@ -1605,7 +1596,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1615,16 +1606,16 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &, const cmav<complex<Tms>,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
   bool, size_t, const vmav<Timg,2> &, size_t,
-  bool=false, bool=true, double=1.1,
-  double=2.6, double=0, double=0, bool=true)
+  bool, bool, bool, bool, double,
+  double, double, double, bool)
   { throw runtime_error("no SYCL support available"); }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &,
   const cmav<double,1> &, const cmav<Timg,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
   double, bool, size_t, const vmav<complex<Tms>,2> &,
-  size_t, bool=false, bool=true,
-  double=1.1, double=2.6, double=0, double=0, bool=true)
+  size_t, bool, bool, bool, bool,
+  double, double, double, double, bool)
   { throw runtime_error("no SYCL support available"); }
 
 #endif

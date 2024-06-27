@@ -5,6 +5,16 @@
     resources and influencing thread pool size at run time. Up to now, the size
     of the thread pool was set at startup and could not be influenced later on.
 
+- wgridder:
+  - slightly accelerated evaluation of kernel functions by using kernel
+    symmetry
+  - extended internal C++ interface to allow easier support for different
+    conventions. (This change is not visible from Python.)
+
+- pointingprovider:
+  - quaternions passed to the constructor are now assumed to repeat
+    periodically, i.e. output can now be requested for any point in time
+
 
 0.34.0:
 - nufft:
