@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -e
+
+HIPSYCL=/opt/AdaptiveCpp
+CC=${HIPSYCL}/bin/acpp CXX=${HIPSYCL}/bin/acpp DUCC0_FLAGS="--acpp-targets='cuda:sm_75' -DDUCC0_USE_SYCL -I${HIPSYCL}/include -lcufft" pip3 install --user .

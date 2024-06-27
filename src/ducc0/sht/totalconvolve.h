@@ -41,6 +41,7 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/sht/sht.h"
+#include "ducc0/sht/sht_utils.h"
 #include "ducc0/sht/alm.h"
 #include "ducc0/fft/fft.h"
 #include "ducc0/math/math_utils.h"
@@ -206,11 +207,11 @@ template<typename T> class ConvolverPlan
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
-            DUCC0_PREFETCH_R(&psi(i));
-            DUCC0_PREFETCH_R(&signal(i));
-            DUCC0_PREFETCH_W(&signal(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
+            psi.prefetch_r(i);
+            signal.prefetch_r(i);
+            signal.prefetch_w(i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
@@ -282,10 +283,10 @@ template<typename T> class ConvolverPlan
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
-            DUCC0_PREFETCH_R(&psi(i));
-            DUCC0_PREFETCH_R(&signal(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
+            psi.prefetch_r(i);
+            signal.prefetch_r(i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i), psi(i));
@@ -369,7 +370,7 @@ template<typename T> class ConvolverPlan
       : nthreads(adjust_nthreads(nthreads_)),
         lmax(lmax_),
         kmax(kmax_),
-        nphi_s(2*good_size_real(lmax+1)),
+        nphi_s(good_size_real(2*lmax+1,2)),
         ntheta_s(nphi_s/2+1),
         npsi_s(kmax*2+1),
         kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,

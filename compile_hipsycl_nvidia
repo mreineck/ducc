@@ -1,3 +1,0 @@
-#!/bin/bash
-HIPSYCL=${HOME}/myhipsycl
-CC=${HIPSYCL}/bin/syclcc CXX=${HIPSYCL}/bin/syclcc DUCC0_FLAGS="--hipsycl-targets='cuda:sm_80' -DDUCC0_USE_SYCL -I${HIPSYCL}/include -lcufft" DUCC0_OPTIMIZATION=native  pip3 install --user .

@@ -60,6 +60,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #include <functional>
 #include <tuple>
+#include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/misc_utils.h"
@@ -71,7 +72,7 @@ namespace detail_mav {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 struct uninitialized_dummy {};
@@ -120,6 +121,12 @@ template<typename T> class cmembuf
     // read access to data area
     const T *data() const
       { return d; }
+
+    // prefetch the specified element for reading
+    template<typename I> void prefetch_r(I i) const
+      { DUCC0_PREFETCH_R(&d[i]); }
+    template<typename I> void prefetch_w(I i) const
+      { DUCC0_PREFETCH_W(&d[i]); }
   };
 
 constexpr size_t MAXIDX=~(size_t(0));
@@ -572,6 +579,11 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     template<typename RAiter> const T& val(RAiter beg, RAiter end) const
       { return raw(idxval(beg, end)); }
 
+    template<typename... Ns> void prefetch_r(Ns... ns) const
+      { cmembuf<T>::prefetch_r(idx(ns...)); }
+    void prefetch_r(const shape_t &ns) const
+      { cmembuf<T>::prefetch_r(idx(ns)); }
+
     cfmav subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = subdata(slices);
@@ -662,6 +674,12 @@ template<typename T> class vfmav: public cfmav<T>
     template<typename RAiter> T& val(RAiter beg, RAiter end) const
       { return raw(idxval(beg, end)); }
 
+    using cfmav<T>::prefetch_r;
+    template<typename... Ns> void prefetch_w(Ns... ns) const
+      { cmembuf<T>::prefetch_w(idx(ns...)); }
+    void prefetch_r(const shape_t &ns) const
+      { cmembuf<T>::prefetch_w(idx(ns)); }
+
     vfmav subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::subdata(slices);
@@ -706,7 +724,7 @@ template<typename T> class vfmav: public cfmav<T>
       }
     vfmav transpose() const
       {
-      return vfmav(static_cast<tinfo *>(this)->transpose(), *static_cast<tbuf *>(this));
+      return vfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
       }
   };
 
@@ -764,6 +782,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
 
     template<typename... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
+
+    template<typename... Ns> void prefetch_r(Ns... ns) const
+      { cmembuf<T>::prefetch_r(idx(ns...)); }
+
     template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
@@ -855,6 +877,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns) const
       { return const_cast<T &>(parent::operator()(ns...)); }
+
+    using parent::prefetch_r;
+    template<typename... Ns> void prefetch_w(Ns... ns) const
+      { cmembuf<T>::prefetch_w(idx(ns...)); }
 
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices) const
       {

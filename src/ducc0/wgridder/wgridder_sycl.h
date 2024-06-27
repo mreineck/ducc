@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2022-2023 Max-Planck-Society
+/* Copyright (C) 2022-2024 Max-Planck-Society
    Authors: Martin Reinecke, Philipp Arras */
 
 #ifndef DUCC0_WGRIDDER_SYCL_H
@@ -49,9 +49,10 @@ namespace ducc0 {
 
 namespace detail_wgridder_sycl {
 
+using namespace std;
+
 #if defined(DUCC0_USE_SYCL)
 
-using namespace std;
 // the next line is necessary to address some sloppy name choices in hipSYCL
 using std::min, std::max;
 
@@ -88,6 +89,7 @@ class RowchanRange
 
     RowchanRange() = default;
     RowchanRange(const RowchanRange &) = default;
+    RowchanRange &operator=(const RowchanRange &) = default;
     RowchanRange(uint32_t row_, uint16_t ch_begin_, uint16_t ch_end_)
       : row(row_), ch_begin(ch_begin_), ch_end(ch_end_) {}
     uint16_t nchan() const { return ch_end-ch_begin; }
@@ -120,7 +122,7 @@ class Baselines
   public:
     Baselines() = default;
     template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool negate_v=false)
+      const cmav<T,1> &freq, bool flip_u=false, bool flip_v=false, bool flip_w=false)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -138,11 +140,13 @@ class Baselines
         fcmax = max(fcmax, abs(f_over_c[i]));
         }
       coord.resize(nrows);
-      double vfac = negate_v ? -1 : 1;
+      double ufac = flip_u ? -1 : 1;
+      double vfac = flip_v ? -1 : 1;
+      double wfac = flip_w ? -1 : 1;
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(coord_(i,0), vfac*coord_(i,1), coord_(i,2));
+        coord[i] = UVW(ufac*coord_(i,0), vfac*coord_(i,1), wfac*coord_(i,2));
         umax = max(umax, abs(coord_(i,0)));
         vmax = max(vmax, abs(coord_(i,1)));
         }
@@ -188,7 +192,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     bool do_wgridding;
     size_t nthreads;
     size_t verbosity;
-    bool negate_v, divide_by_n;
+    bool divide_by_n;
     double sigma_min, sigma_max;
 
     Baselines bl;
@@ -325,6 +329,7 @@ timers.push("counting");
             }
           }
         });
+
 timers.poppush("allocation");
 // accumulate
       {
@@ -450,7 +455,7 @@ timers.pop();
            << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
-             << ", dw=" << dw << ", wmax/dw=" << wmax_d/dw << endl;
+             << ", dw=" << dw << ", (wmax-wmin)/dw=" << (wmax_d-wmin_d)/dw << endl;
       size_t ovh0 = ranges.size()*sizeof(ranges[0]);
       ovh0 += vissum.size()*sizeof(vissum[0]);
       ovh0 += blockstart.size()*sizeof(blockstart[0]);
@@ -481,18 +486,14 @@ timers.pop();
         for (auto yc: yext)
           {
           double tmp = xc*xc+yc*yc;
-          double nval;
-          if (tmp <= 1.) // northern hemisphere
-            nval = sqrt(1.-tmp) - 1.;
-          else
-            nval = -sqrt(tmp-1.) -1.;
+          double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
           nm1min = min(nm1min, nval);
           nm1max = max(nm1max, nval);
           }
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels_new<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
+      auto idx = getAvailableKernels<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
@@ -504,6 +505,8 @@ timers.pop();
         auto ofactor = krn.ofactor;
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
+        nu = max<size_t>(nu,16);
+        nv = max<size_t>(nv,16);
         double logterm = log(nu*nv)/log(nref_fft*nref_fft);
         double fftcost = nu/nref_fft*nv/nref_fft*logterm*costref_fft;
         double gridcost = 2.2e-10*nvis*(supp*supp + ((2*supp+1)*(supp+3)));
@@ -557,6 +560,10 @@ timers.pop();
               double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
               lwmax_d = max(lwmax_d, w);
+              }
+            else
+              {
+              if (!gridding) ms_out(irow, ichan)=0;
               }
         {
         LockGuard lock(mut);
@@ -1512,7 +1519,7 @@ timers.pop();
            const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
-           bool negate_v_, bool divide_by_n_, double sigma_min_,
+           bool flip_u, bool flip_v, bool flip_w, bool divide_by_n_, double sigma_min_,
            double sigma_max_, double center_x, double center_y, bool allow_nshift)
       : gridding(ms_out_.size()==0),
         timers(gridding ? "gridding" : "degridding", "lmask allocation"),
@@ -1527,14 +1534,14 @@ timers.pop();
         do_wgridding(do_wgridding_),
         nthreads(adjust_nthreads(nthreads_)),
         verbosity(verbosity_),
-        negate_v(negate_v_), divide_by_n(divide_by_n_),
+        flip_v(flip_v_), divide_by_n(divide_by_n_),
         sigma_min(sigma_min_), sigma_max(sigma_max_),
-        lshift(center_x), mshift(negate_v ? -center_y : center_y),
+        lshift(flip_u ? -center_x : center_x), mshift(flip_v ? -center_y : center_y),
         lmshift((lshift!=0) || (mshift!=0)),
         no_nshift(!allow_nshift)
       {
       timers.poppush("Baseline construction");
-      bl = Baselines(uvw, freq, negate_v);
+      bl = Baselines(uvw, freq, flip_u, flip_v, flip_w);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
@@ -1548,7 +1555,7 @@ timers.pop();
       MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
       ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel<Tcalc>(kidx);
+      krn = selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;
@@ -1575,15 +1582,15 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &freq, const cmav<complex<Tms>,2> &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
-  bool negate_v=false, bool divide_by_n=true, double sigma_min=1.1,
-  double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
+  double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1591,8 +1598,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool negate_v=false, bool divide_by_n=true,
-  double sigma_min=1.1, double sigma_max=2.6, double center_x=0, double center_y=0, bool allow_nshift=true)
+  size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+  double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));
@@ -1600,7 +1607,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
-    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, negate_v,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
@@ -1610,16 +1617,16 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void ms2dir
   const cmav<double,1> &, const cmav<complex<Tms>,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double, double,
   bool, size_t, const vmav<Timg,2> &, size_t,
-  bool=false, bool=true, double=1.1,
-  double=2.6, double=0, double=0, bool=true)
+  bool, bool, bool, bool, double,
+  double, double, double, bool)
   { throw runtime_error("no SYCL support available"); }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_sycl(const cmav<double,2> &,
   const cmav<double,1> &, const cmav<Timg,2> &,
   const cmav<Tms,2> &, const cmav<uint8_t,2> &, double, double,
   double, bool, size_t, const vmav<complex<Tms>,2> &,
-  size_t, bool=false, bool=true,
-  double=1.1, double=2.6, double=0, double=0, bool=true)
+  size_t, bool, bool, bool, bool,
+  double, double, double, double, bool)
   { throw runtime_error("no SYCL support available"); }
 
 #endif

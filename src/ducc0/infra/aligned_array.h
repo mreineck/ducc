@@ -52,7 +52,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_ALIGNED_ARRAY_H
 #define DUCC0_ALIGNED_ARRAY_H
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstddef>
 #include <new>
 
 namespace ducc0 {
@@ -131,8 +133,8 @@ template<typename T, size_t alignment=alignof(T)> class array_base
     array_base &operator=(const array_base &) = delete;
     array_base &operator=(array_base &&other)
       {
-      swap(p, other.p);
-      swap(sz, other.sz);
+      std::swap(p, other.p);
+      std::swap(sz, other.sz);
       return *this;
       }
 

@@ -197,12 +197,12 @@ template<typename T> class SphereInterpol
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i));
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
             for (size_t j=0; j<ncomp; ++j)
               {
-              DUCC0_PREFETCH_R(&signal(j,i));
-              DUCC0_PREFETCH_W(&signal(j,i));
+              signal.prefetch_r(j,i);
+              signal.prefetch_w(j,i);
               }
             }
           size_t i=idx[ind];
@@ -305,10 +305,10 @@ template<typename T> class SphereInterpol
           if (ind+pfdist<rng.hi)
             {
             size_t i=idx[ind+pfdist];
-            DUCC0_PREFETCH_R(&theta(i));
-            DUCC0_PREFETCH_R(&phi(i))
+            theta.prefetch_r(i);
+            phi.prefetch_r(i);
             for (size_t j=0; j<ncomp; ++j)
-              DUCC0_PREFETCH_R(&signal(j,i));
+              signal.prefetch_r(j,i);
             }
           size_t i=idx[ind];
           hlp.prep(theta(i), phi(i));
@@ -421,7 +421,7 @@ template<typename T> class SphereInterpol
         lmax(lmax_),
         mmax(mmax_),
         spin(spin_),
-        nphi_s(2*good_size_real(mmax+1)),
+        nphi_s(good_size_real(2*mmax+1, 2)),
         ntheta_s(good_size_real(lmax+1)+1),
         kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
           {(2*ntheta_s-2), nphi_s}, npoints, true, nthreads)),

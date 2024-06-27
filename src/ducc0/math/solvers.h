@@ -33,6 +33,7 @@
 #include <cmath>
 #include <limits>
 #include <iostream>
+#include <complex>
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/aligned_array.h"
 

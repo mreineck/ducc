@@ -28,6 +28,7 @@
 #ifndef DUCC0_MCM_H
 #define DUCC0_MCM_H
 
+#include "ducc0/infra/simd.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/wigner3j.h"
@@ -35,6 +36,9 @@
 namespace ducc0 {
 
 using namespace std;
+
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
+using std::min, std::max;
 
 template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spec,
   size_t lmax, const vmav<Tout,2> &mat, size_t nthreads)

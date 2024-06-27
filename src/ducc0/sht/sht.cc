@@ -45,7 +45,7 @@ namespace detail_sht {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in hipSYCL
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
@@ -3011,17 +3011,18 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   double sigma_min, double sigma_max,
   size_t nthreads,
   size_t maxiter,
-  double epsilon)
+  double epsilon,
+  bool verbose)
   {
   auto op = [&](const cmav<complex<T>,2> &xalm, const vmav<T,2> &xmap)
     {
     synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
-                      sigma_min, sigma_max, nthreads, STANDARD);
+                      sigma_min, sigma_max, nthreads, STANDARD, verbose);
     };
   auto op_adj = [&](const cmav<T,2> &xmap, const vmav<complex<T>,2> &xalm)
     {
     adjoint_synthesis_general(xalm, xmap, spin, lmax, mstart, lstride, loc, 1e-1*epsilon,
-                              sigma_min, sigma_max, nthreads, STANDARD);
+                              sigma_min, sigma_max, nthreads, STANDARD, verbose);
     };
   auto mapnorm = [&](const cmav<T,2> &xmap)
     {
@@ -3066,7 +3067,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   double sigma_min, double sigma_max,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool verbose);
 template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const vmav<complex<double>,2> &alm, // (ncomp, *)
   const cmav<double,2> &map, // (ncomp, npix)
@@ -3078,6 +3080,7 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   double sigma_min, double sigma_max,
   size_t nthreads,
   size_t maxiter,
-  double epsilon);
+  double epsilon,
+  bool verbose);
 
 }}

@@ -136,10 +136,12 @@ def vis2dirty_with_faceting(*, nfacets_x=1, nfacets_y=1, npix_x, npix_y,
             cy = center_y + kwargs["pixsize_y"]*0.5*((2*j+1)*jstep-npix_y)
             jmax = min((j+1)*jstep, dirty.shape[1])
             if imax == (i+1)*istep and jmax == (j+1)*jstep:
+                tmp = np.ascontiguousarray(dirty[i*istep:imax, j*jstep:jmax])  # TEMPORARY until fixed in sycl-wgridder
                 _ = wgridder.vis2dirty(**kwargs,
                                        center_x=cx, center_y=cy,
                                        npix_x=istep, npix_y=jstep,
-                                       dirty=dirty[i*istep:imax, j*jstep:jmax])
+                                       dirty=tmp)
+                dirty[i*istep:imax, j*jstep:jmax] = tmp  # TEMPORARY until fixed in sycl-wgridder
             else:
                 tdirty = wgridder.vis2dirty(
                     **kwargs, center_x=cx, center_y=cy,
@@ -166,6 +168,7 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
             jmax = min((j+1)*jstep, dirty.shape[1])
             if imax == (i+1)*istep and jmax == (j+1)*jstep:
                 tdirty = dirty[i*istep:imax, j*jstep:jmax]
+                tdirty = np.ascontiguousarray(tdirty)  # TEMPORARY until fixed in sycl-wgridder
             else:
                 tdirty = np.zeros((istep, jstep), dtype=dirty.dtype)
                 tdirty[:imax-i*istep, :jmax-j*jstep] = dirty[i*istep:imax, j*jstep:jmax]

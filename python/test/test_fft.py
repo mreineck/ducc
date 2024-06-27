@@ -93,20 +93,20 @@ def hc2c_fftw(inp, otype):
     return out
 
 
-tol = {np.float32: 6e-7, np.float64: 2e-15, np.longfloat: 1e-18}
+tol = {np.float32: 6e-7, np.float64: 2e-15, np.longdouble: 1e-18}
 ctype = {np.float32: np.complex64,
          np.float64: np.complex128,
-         np.longfloat: np.longcomplex}
+         np.longdouble: np.clongdouble}
 
 
 on_windows = ("microsoft" in platform.uname()[3].lower() or
               platform.system() == "Windows")
 on_arm = ("arm" in platform.machine().lower())
 on_ppc64le = ("ppc64le" in platform.machine().lower())
-true_long_double = (np.longfloat != np.float64 and not (on_windows or on_arm or on_ppc64le))
+true_long_double = (np.longdouble != np.float64 and not (on_windows or on_arm or on_ppc64le))
 dtypes = [np.float32, np.float64]
 if true_long_double:
-    dtypes += [np.longfloat]
+    dtypes += [np.longdouble]
 
 
 @pmp("len", len1D)
@@ -394,3 +394,9 @@ def test_conv2(L1,L2,dtype):
     x2 = refconv(a,L2,1,k)
     eps = tol[x2.real.dtype.type]
     _assert_close(x, x2, eps)
+
+
+def test_multi_iter_bug():
+    a=np.zeros((128000,),dtype=np.complex128)
+    # this used to raise an exception
+    fft.c2c(a[::2],axes=(0,),nthreads=8)

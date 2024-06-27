@@ -101,7 +101,7 @@ template<typename RAidx, typename Tkey, typename Tidx> void subsort
 template<typename RAidx, typename RAkey> void bucket_sort
   (RAkey keys, RAidx res, size_t nval, size_t max_key, size_t nthreads)
   {
-  nthreads = min(nthreads, max_threads());
+  nthreads = min(nthreads, thread_pool_size());
   using Tidx = typename remove_reference<decltype(*res)>::type;
   using Tkey = typename remove_reference<decltype(*keys)>::type;
   // align members with cache lines
@@ -173,7 +173,7 @@ template<typename Tidx, typename Tkey> void bucket_sort2
   {
   auto nval = keys.size();
   idx.resize(nval);
-  nthreads = min(nthreads, max_threads());
+  nthreads = min(nthreads, thread_pool_size());
   auto sizelimit = max<Tidx>(1, nval/nthreads);
   // align members with cache lines
   struct alignas(64) vbuf { vector<Tidx> v; };

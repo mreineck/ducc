@@ -117,6 +117,14 @@ struct util1d // hack to avoid duplicate symbols
           }
     return bestfac;
     }
+  /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n
+     and a multiple of required_factor. */
+  DUCC0_NOINLINE static size_t good_size_cmplx(size_t n,
+    size_t required_factor)
+    {
+    MR_assert(required_factor>=1, "required_factor must not be 0");
+    return good_size_cmplx((n+required_factor-1)/required_factor) * required_factor;
+    }
 
   /* returns the smallest composite of 2, 3, 5 which is >= n */
   DUCC0_NOINLINE static size_t good_size_real(size_t n)
@@ -143,6 +151,14 @@ struct util1d // hack to avoid duplicate symbols
         }
       }
     return bestfac;
+    }
+  /* returns the smallest composite of 2, 3, 5 which is >= n
+     and a multiple of required_factor. */
+  DUCC0_NOINLINE static size_t good_size_real(size_t n,
+    size_t required_factor)
+    {
+    MR_assert(required_factor>=1, "required_factor must not be 0");
+    return good_size_real((n+required_factor-1)/required_factor) * required_factor;
     }
 
   DUCC0_NOINLINE static vector<size_t> prime_factors(size_t N)
@@ -976,6 +992,10 @@ inline size_t good_size_complex(size_t n)
   { return detail_fft::util1d::good_size_cmplx(n); }
 inline size_t good_size_real(size_t n)
   { return detail_fft::util1d::good_size_real(n); }
+inline size_t good_size_complex(size_t n, size_t required_factor)
+  { return detail_fft::util1d::good_size_cmplx(n, required_factor); }
+inline size_t good_size_real(size_t n, size_t required_factor)
+  { return detail_fft::util1d::good_size_real(n, required_factor); }
 
 }
 

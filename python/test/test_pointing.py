@@ -80,3 +80,45 @@ def testp2():
     squat3 = r3.as_quat()
     squat3 *= np.sign(squat3[:, 0]).reshape((-1, 1))
     assert_allclose(ducc0.misc.l2error(quat4, squat3), 0, atol=1e-13)
+
+
+def testp3():  # test periodicity
+    rng = np.random.default_rng(42)
+    t01, f1, size1 = 0., 1., 200
+    quat1 = rng.uniform(-.5, .5, (size1, 4))
+    prov = pp.PointingProvider(t01, f1, quat1)
+    rquat = rng.uniform(-.5, .5, (4,))
+    t02, f2, size2 = 3.7, 10.2, 300
+    quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
+    t03 = t02 + 2*size1/f1
+    quat3 = prov.get_rotated_quaternions(t03, f2, rquat, size2)
+    assert_allclose(ducc0.misc.l2error(quat2, quat3), 0., atol=1e-13)
+    t04 = t02 - 5*size1/f1
+    quat4 = prov.get_rotated_quaternions(t04, f2, rquat, size2)
+    assert_allclose(ducc0.misc.l2error(quat2, quat4), 0., atol=1e-13)
+
+
+def test_quat_euler():
+    nsamp = 10000
+
+    euler = np.empty((nsamp,3))
+
+    # theta
+    euler[:,0] = np.random.uniform(low=-3*np.pi, high=5*np.pi, size=nsamp)
+    # phi
+    euler[:,1] = np.random.uniform(low=-5*np.pi, high=8*np.pi, size=nsamp)
+    # psi
+    euler[:,2] = np.random.uniform(low=-5*np.pi, high=8*np.pi, size=nsamp)
+
+    euler2 = ducc0.misc.quat2ptg(ducc0.misc.ptg2quat(euler))
+
+    # Normalize angle ranges
+    euler = (euler + 8*np.pi)%(2*np.pi)
+    mask = euler[:,0]>np.pi
+    euler[:,0] = np.where(mask,2*np.pi-euler[:,0],euler[:,0])
+    euler[:,1] = np.where(mask,(euler[:,1]+np.pi)%(2*np.pi),euler[:,1])
+    euler[:,2] = np.where(mask,(euler[:,2]+np.pi)%(2*np.pi),euler[:,2])
+
+    euler2[:,1:3] = (euler2[:,1:3] + 8*np.pi)%(2*np.pi)
+
+    assert_allclose(ducc0.misc.l2error(euler, euler2), 0, atol=1e-13)
