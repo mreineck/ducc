@@ -9,6 +9,10 @@
   - slightly accelerated evaluation of kernel functions by using kernel
     symmetry
 
+- pointingprovider:
+  - quaternions passed to the constructor are now assumed to repeat
+    periodically, i.e. output can now be requested for any point in time
+
 
 0.34.0:
 - nufft:
