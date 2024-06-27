@@ -5,6 +5,10 @@
     resources and influencing thread pool size at run time. Up to now, the size
     of the thread pool was set at startup and could not be influenced later on.
 
+- wgridder:
+  - slightly accelerated evaluation of kernel functions by using kernel
+    symmetry
+
 
 0.34.0:
 - nufft:

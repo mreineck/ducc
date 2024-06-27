@@ -865,13 +865,17 @@ class RowchanComputer
 
 vector<Tcalc> prepCoeff()
   {
-  auto D = supp+3;
+  auto D = supp+3+(supp&1);
   const auto &dcoef(krn->Coeff());
   auto lim = (supp+1)/2;
   vector<Tcalc> res(lim*(D+1));
+  auto ofs = supp&1;
+  if (ofs>0)
+    for (size_t i=0; i<lim; ++i)
+      res[i*(D+1)] = 0;
   for (size_t i=0; i<lim; ++i)
     for (size_t j=0; j<=D; ++j)
-      res[i*(D+1) + j] = Tcalc(dcoef[j*supp + i]);
+      res[i*(D+1) + j + ofs] = Tcalc(dcoef[j*supp + i]);
   return res;
   }
 
@@ -884,28 +888,30 @@ template<typename T> class KernelComputer
   public:
     KernelComputer(sycl::buffer<T,1> &buf_coeff, size_t supp_, sycl::handler &cgh)
       : acc_coeff(buf_coeff, cgh, sycl::read_only),
-        supp(uint32_t(supp_)), D(uint32_t(supp_+3)) {}
+        supp(uint32_t(supp_)), D(uint32_t(supp_+3+(supp&1))) {}
     template<size_t Supp> inline void compute_uv(T ufrac, T vfrac, array<T,Supp> &ku, array<T,Supp> &kv) const
       {
 //      if (Supp<supp) throw runtime_error("bad array size");
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
+      auto x0square = x0*x0;
+      auto y0square = y0*y0;
       auto lim = (supp+1)/2;
       for (uint32_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
-        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (uint32_t j=1; j<=D; ++j)
+        Tcalc tvalx=acc_coeff[i*(D+1)], tvalx2=acc_coeff[i*(D+1)+1];
+        Tcalc tvaly=acc_coeff[i*(D+1)], tvaly2=acc_coeff[i*(D+1)+1];
+        for (uint32_t j=2; j<D; j+=2)
           {
-          resu = acc_coeff[j+i*(D+1)] + resu*x0;
-          resv = acc_coeff[j+i*(D+1)] + resv*y0;
-          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
-          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
+          tvalx = acc_coeff[j+i*(D+1)] + tvalx*x0square;
+          tvaly = acc_coeff[j+i*(D+1)] + tvaly*y0square;
+          tvalx2 = acc_coeff[j+i*(D+1)+1] + tvalx2*x0square;
+          tvaly2 = acc_coeff[j+i*(D+1)+1] + tvaly2*y0square;
           }
-        ku[i] = resu;
-        kv[i] = resv;
-        ku[supp-1-i] = resmu;
-        kv[supp-1-i] = resmv;
+        ku[i] = tvalx*x0 + tvalx2;
+        kv[i] = tvaly*y0 + tvaly2;
+        ku[supp-1-i] = tvalx2 - tvalx*x0;
+        kv[supp-1-i] = tvaly2 - tvaly*y0;
         }
       }
     template<size_t Supp> inline void compute_uvw(T ufrac, T vfrac, T wval, uint32_t nth, array<T,Supp> &ku, array<T,Supp> &kv) const
@@ -914,52 +920,35 @@ template<typename T> class KernelComputer
       auto x0 = T(ufrac)*T(-2)+T(supp-1);
       auto y0 = T(vfrac)*T(-2)+T(supp-1);
       auto z0 = T(wval-nth)*T(2)+T(supp-1);
+      auto x0square = x0*x0;
+      auto y0square = y0*y0;
+      auto z0square = z0*z0;
       auto lim = (supp+1)/2;
       if (nth>=lim)
         { nth = supp-1-nth; z0=-z0; }
-      Tcalc resw=acc_coeff[nth*(D+1)];
-      for (uint32_t j=1; j<=D; ++j)
-        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
+      Tcalc tvalz=acc_coeff[nth*(D+1)], tvalz2=acc_coeff[nth*(D+1)+1];
+      for (uint32_t j=2; j<D; j+=2)
+        {
+        tvalz = acc_coeff[j+i*(D+1)] + tvalz*z0square;
+        tvalz2 = acc_coeff[j+i*(D+1)+1] + tvalz2*z0square;
+        }
+      auto kw = tvalz*z0 + tvalz2;
       for (uint32_t i=0; i<lim; ++i)
         {
-        Tcalc resu=acc_coeff[i*(D+1)], resv=acc_coeff[i*(D+1)];
-        Tcalc resmu=acc_coeff[i*(D+1)], resmv=acc_coeff[i*(D+1)];
-        for (uint32_t j=1; j<=D; ++j)
+        Tcalc tvalx=acc_coeff[i*(D+1)], tvalx2=acc_coeff[i*(D+1)+1];
+        Tcalc tvaly=acc_coeff[i*(D+1)], tvaly2=acc_coeff[i*(D+1)+1];
+        for (uint32_t j=2; j<D; j+=2)
           {
-          resu = acc_coeff[j+i*(D+1)] + resu*x0;
-          resv = acc_coeff[j+i*(D+1)] + resv*y0;
-          resmu = acc_coeff[j+i*(D+1)] - resmu*x0;
-          resmv = acc_coeff[j+i*(D+1)] - resmv*y0;
+          tvalx = acc_coeff[j+i*(D+1)] + tvalx*x0square;
+          tvaly = acc_coeff[j+i*(D+1)] + tvaly*y0square;
+          tvalx2 = acc_coeff[j+i*(D+1)+1] + tvalx2*x0square;
+          tvaly2 = acc_coeff[j+i*(D+1)+1] + tvaly2*y0square;
           }
-        ku[i] = resu*resw;
-        kv[i] = resv;
-        ku[supp-1-i] = resmu*resw;
-        kv[supp-1-i] = resmv;
+        ku[i] = (tvalx*x + tvalx2)*kw;
+        kv[i] = tvaly*y + tvaly2;
+        ku[supp-1-i] = (tvalx2 - tvalx*x)*kw;
+        kv[supp-1-i] = tvaly2 - tvaly*y;
         }
-      }
-    inline T compute_uvw_single(T ufrac, uint32_t unth, T vfrac, uint32_t vnth, T wval, uint32_t nth) const
-      {
-//      if (Supp<supp) throw runtime_error("bad array size");
-      auto x0 = T(ufrac)*T(-2)+T(supp-1);
-      auto y0 = T(vfrac)*T(-2)+T(supp-1);
-      auto z0 = T(wval-nth)*T(2)+T(supp-1);
-      auto lim = (supp+1)/2;
-      if (unth>=lim)
-        { unth = supp-1-unth; x0=-x0; }
-      if (vnth>=lim)
-        { vnth = supp-1-vnth; y0=-y0; }
-      if (nth>=lim)
-        { nth = supp-1-nth; z0=-z0; }
-      Tcalc resu=acc_coeff[unth*(D+1)];
-      Tcalc resv=acc_coeff[vnth*(D+1)];
-      Tcalc resw=acc_coeff[nth*(D+1)];
-      for (uint32_t j=1; j<=D; ++j)
-        {
-        resu = resu*x0 + acc_coeff[j+unth*(D+1)];
-        resv = resv*y0 + acc_coeff[j+vnth*(D+1)];
-        resw = resw*z0 + acc_coeff[j+nth*(D+1)];
-        }
-      return resu*resv*resw;
       }
   };
 
