@@ -8,6 +8,8 @@
 - wgridder:
   - slightly accelerated evaluation of kernel functions by using kernel
     symmetry
+  - extended internal C++ interface to allow easier support for different
+    conventions. (This change is not visible from Python.)
 
 - pointingprovider:
   - quaternions passed to the constructor are now assumed to repeat
