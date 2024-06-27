@@ -84,11 +84,11 @@ def testp2():
 
 def testp3():  # test periodicity
     rng = np.random.default_rng(42)
-    t01, f1, size1 = 0., 1., 200
+    t01, f1, size1 = 0., 1., 20
     quat1 = rng.uniform(-.5, .5, (size1, 4))
     prov = pp.PointingProvider(t01, f1, quat1)
     rquat = rng.uniform(-.5, .5, (4,))
-    t02, f2, size2 = 3.7, 10.2, 300
+    t02, f2, size2 = 3.7, 10.2, 30000
     quat2 = prov.get_rotated_quaternions(t02, f2, rquat, size2)
     t03 = t02 + 2*size1/f1
     quat3 = prov.get_rotated_quaternions(t03, f2, rquat, size2)
