@@ -563,7 +563,7 @@ void ducc_thread_pool::submit(std::function<void(size_t)> work,
   Mutex ex_mut;
   nthreads_ = nthreads;
   custom_latch counter(workers_.size());
-  work_ = [this, &work, nthreads, &counter, &ex, &ex_mut](size_t i)
+  work_ = [&work, nthreads, &counter, &ex, &ex_mut](size_t i)
     {
     if (i<nthreads)
       {
