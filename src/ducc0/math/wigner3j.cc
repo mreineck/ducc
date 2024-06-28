@@ -117,7 +117,7 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
     Tv iofs;
     Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
-      iofs[m] = 2*m;
+      iofs[m] = double(2*m);
   
     for (; i+int(2*vlen)<ncoef; i+=int(2*vlen))
       {
@@ -502,7 +502,7 @@ template<typename Tsimd> void wigner3j_internal_vec
 
     // rescaling necessary?
     resamax = blend(done, resamax, max(abs(res(i)), resamax));
-    if ((resamax>=srhuge).any())
+    if (any_of(resamax>=srhuge))
       {
       Tsimd fct=1.;
       for (size_t k=0; k<vlen; ++k)
@@ -519,11 +519,11 @@ template<typename Tsimd> void wigner3j_internal_vec
       }
     done |= (c1old<=abs(c1));
     where(done, splitidx) = min(splitidx, Tsimd(double(i)));
-    if (done.all()) break;
+    if (all_of(done)) break;
     }
 
   // potential early exit
-  if ((ncoef<=2) || (splitidx==Tsimd(ncoef-1)).all())
+  if ((ncoef<=2) || all_of(splitidx==Tsimd(ncoef-1)))
     {
     auto cnorm = Tsimd(1.)/sqrt(sumfor);
     for (size_t k=0; k<vlen; ++k)
@@ -579,7 +579,7 @@ template<typename Tsimd> void wigner3j_internal_vec
     where(Tsimd(i)>splitidx, sumbac) += (2.*l1+1.)*res(i)*res(i);
     // rescaling necessary?
     where(Tsimd(i)>=(splitidx-2), resamax) = max(abs(res(i)), resamax);
-    if ((resamax>=srhuge).any())
+    if (any_of(resamax>=srhuge))
       {
       Tsimd fct=1.;
       for (size_t k=0; k<vlen; ++k)
@@ -783,7 +783,7 @@ void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &re
     Tv lofs;
     Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
-      lofs[m] = 2*m;
+      lofs[m] = double(2*m);
   
     for (; i+int(vlen)<ncoef2; i+=int(vlen))
       {

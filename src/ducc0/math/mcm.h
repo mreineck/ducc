@@ -65,7 +65,7 @@ template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spe
     Tsimd * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
-      lofs[k]=k;
+      lofs[k]=double(k);
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
@@ -256,7 +256,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
     array<Tsimd,ncomp_mat> * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
-      lofs[k]=k;
+      lofs[k]=double(k);
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
@@ -463,7 +463,7 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
     array<Tsimd,nvcomp> * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
-      lofs[k]=k;
+      lofs[k]=double(k);
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int xel2=el1; xel2<=int(lmax); xel2+=vlen)

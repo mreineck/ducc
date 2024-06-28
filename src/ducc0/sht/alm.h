@@ -225,7 +225,11 @@ struct ft_partial_sph_isometry_plan
         constexpr size_t step=vlen*N;
 // FIXME: All of the juggling with Tvl and Tv can probably go away once
 // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99728 is fixed.
+#ifdef DUCC0_HOMEGROWN_SIMD
         using Tvl = typename Tv::Tv;
+#else
+        using Tvl = Tv;
+#endif
         int j=jmin;
         for (; j+int(step)<=n; j+=int(step))
           {
