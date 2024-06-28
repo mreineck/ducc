@@ -180,7 +180,11 @@ template<size_t W, typename Tsimd> class TemplateKernel
   private:
     static constexpr auto D=W+3+(W&1);
     using T = typename Tsimd::value_type;
+#ifdef DUCC0_HOMEGROWN_SIMD
     using Tvl = typename Tsimd::Tv;
+#else
+    using Tvl = Tsimd;
+#endif
     static constexpr auto vlen = Tsimd::size();
     static constexpr auto nvec = (W+vlen-1)/vlen;
     static constexpr auto nvec_eval = (nvec+1)/2;

@@ -109,7 +109,7 @@ class latch
 
 size_t available_hardware_threads()
   {
-  static const size_t available_hardware_thrads_ = []()
+  static const size_t available_hardware_threads_ = []()
     {
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
     cpu_set_t cpuset;
@@ -123,7 +123,7 @@ size_t available_hardware_threads()
 #endif
     return res;
     }();
-  return available_hardware_thrads_;
+  return available_hardware_threads_;
   }
 size_t ducc0_default_num_threads()
   {

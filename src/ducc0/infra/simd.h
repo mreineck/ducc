@@ -55,7 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
-#if 0 //__has_include(<experimental/simd>)
+#if __has_include(<experimental/simd>)
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
@@ -72,8 +72,21 @@ using stdx::native_simd;
 template<typename T, int len> struct simd_select
   { using type = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>; };
 
+template<typename T, bool vect> struct vectorizable_helper;
+
+template<typename T> struct vectorizable_helper<T,false>
+  {
+  static constexpr bool value = false;
+  };
+
+template<typename T> struct vectorizable_helper<T,true>
+  {
+  static constexpr bool value = native_simd<T>::size()>1;
+  };
+
 using stdx::element_aligned_tag;
-template<typename T> constexpr inline bool vectorizable = native_simd<T>::size()>1;
+template<typename T> constexpr inline bool vectorizable = vectorizable_helper<T,
+  is_same<T,float>::value || is_same<T,double>::value>::value;
 
 template<typename T, int N> constexpr bool simd_exists_h()
   {
@@ -97,6 +110,9 @@ template<typename T, typename Abi> inline stdx::simd<T,Abi> sin(stdx::simd<T,Abi
 template<typename T, typename Abi> inline stdx::simd<T,Abi> cos(stdx::simd<T,Abi> in)
   { return apply(in,[](T v){return cos(v);}); }
 
+template<typename M, typename T> T blend(M mask, T a, T b)
+  { T res=b; where(mask, res) = a; return res; }
+
 }
 
 using detail_simd::element_aligned_tag;
@@ -104,6 +120,7 @@ using detail_simd::native_simd;
 using detail_simd::simd_select;
 using detail_simd::simd_exists;
 using detail_simd::vectorizable;
+using detail_simd::blend;
 
 }
 
@@ -133,6 +150,9 @@ using detail_simd::vectorizable;
 #include <algorithm>
 
 #ifndef DUCC0_NO_SIMD
+
+#define DUCC0_HOMEGROWN_SIMD
+
 #if defined(__SSE2__)  // we are on an x86 platform and we have vector types
 #include <x86intrin.h>
 #endif
