@@ -97,8 +97,7 @@ namespace ducc0 {
 namespace detail_threading {
 
 using std::size_t;
-class Scheduler;
-class Distribution;
+
 /// Abstract base class for minimalistic thread pool functionality
 class thread_pool
   {
@@ -111,7 +110,7 @@ class thread_pool
     virtual void resize(size_t /*nthreads_new*/)
       { MR_fail("Resizing is not supported by this thread pool"); }
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
-    virtual void submit(const std::function<void(Scheduler &)> &work, Distribution &dist, size_t nthreads) = 0;
+    virtual void submit(std::function<void(size_t)> work, size_t nthreads) = 0;
   };
 
 }}

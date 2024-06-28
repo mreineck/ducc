@@ -123,7 +123,7 @@ class custom_latch
 
 size_t available_hardware_threads()
   {
-  static const size_t available_hardware_thrads_ = []()
+  static const size_t available_hardware_threads_ = []()
     {
 #if __has_include(<pthread.h>) && defined(__linux__) && defined(_GNU_SOURCE)
     cpu_set_t cpuset;
@@ -137,7 +137,7 @@ size_t available_hardware_threads()
 #endif
     return res;
     }();
-  return available_hardware_thrads_;
+  return available_hardware_threads_;
   }
 size_t ducc0_default_num_threads()
   {
@@ -207,13 +207,14 @@ class ducc_thread_pool: public thread_pool
   private:
     // A reasonable guess, probably close enough for most hardware
     static constexpr size_t cache_line_size = 64;
+
     // align members with cache lines
     struct alignas(cache_line_size) worker
       {
       std::thread thread;
 
       void worker_main(const std::atomic<bool> &news,
-        std::function<void(size_t)> &work_, size_t ithread, const size_t &nthreads)
+        std::function<void(size_t)> &work_, size_t ithread)
         {
         bool nextnews = true;
         in_parallel_region = true;
@@ -249,7 +250,7 @@ class ducc_thread_pool: public thread_pool
           {
           auto *worker = &workers_[i];
           worker->thread = std::thread(
-            [worker, this, i]{ worker->worker_main(news_, work_, i+1, nthreads_); });
+            [worker, this, i]{ worker->worker_main(news_, work_, i+1); });
           }
         catch (...)
           {
@@ -304,8 +305,7 @@ class ducc_thread_pool: public thread_pool
       }
 
     //virtual
-    void submit(const std::function<void(Scheduler &)> &work, Distribution &dist,
-      size_t nthreads);
+    void submit(std::function<void(size_t)> work, size_t nthreads);
 
     void shutdown()
       {
@@ -352,6 +352,8 @@ thread_pool *get_active_pool()
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING
 
+size_t available_hardware_threads()
+  { return 1; }
 class ducc_pseudo_thread_pool: public thread_pool
   {
   public:
@@ -364,8 +366,11 @@ class ducc_pseudo_thread_pool: public thread_pool
     size_t adjust_nthreads(size_t /*nthreads_in*/) const
       { return 1; }
     //virtual
-    void submit(const std::function<void(Scheduler &)> &, Distribution &, size_t)
-      { MR_fail("must not get here"); }
+    void submit(std::function<void(size_t)> work, size_t nthreads)
+      {
+      MR_assert(nthreads==1, "bad number of threads");
+      work(0);
+      }
   };
 
 // return a pointer to a singleton thread_pool, which is always available
@@ -384,8 +389,6 @@ thread_pool *get_active_pool()
   MR_assert(active_pool!=nullptr, "no thread pool active");
   return active_pool;
   }
-
-static bool in_parallel_region=false;
 
 #endif
 
@@ -549,12 +552,10 @@ template<typename T> class ScopedValueChanger
   };
 
 #ifndef DUCC0_NO_LOWLEVEL_THREADING
-void ducc_thread_pool::submit(const std::function<void(Scheduler &)> &work, Distribution &dist,
+void ducc_thread_pool::submit(std::function<void(size_t)> work,
   size_t nthreads)
   {
   lock_t lock(mut_);
-//     if (shutdown_)
-//       throw std::runtime_error("Work items submitted after shutdown");
 
   MR_assert(nthreads<=workers_.size()+1, "too many threads requested");
 
@@ -562,15 +563,12 @@ void ducc_thread_pool::submit(const std::function<void(Scheduler &)> &work, Dist
   Mutex ex_mut;
   nthreads_ = nthreads;
   custom_latch counter(workers_.size());
-  work_ = [this, &work, nthreads, &counter, &dist, &ex, &ex_mut](size_t i)
+  work_ = [this, &work, nthreads, &counter, &ex, &ex_mut](size_t i)
     {
     if (i<nthreads)
       {
       try
-        {
-        MyScheduler sched(dist, i);
-        work(sched);
-        }
+        { work(i); }
       catch (...)
         {
         LockGuard lock(ex_mut);
@@ -583,8 +581,7 @@ void ducc_thread_pool::submit(const std::function<void(Scheduler &)> &work, Dist
   news_.notify_all();
   {
   ScopedValueChanger<bool> changer(in_parallel_region, true);
-  MyScheduler sched(dist, 0);
-  work(sched);
+  work(0);
   }
   counter.wait();
   if (ex)
@@ -601,7 +598,13 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     }
 #ifndef DUCC0_NO_LOWLEVEL_THREADING
   else
-    get_active_pool()->submit(f, *this, nthreads_);
+    {
+    get_active_pool()->submit([this,&f](size_t ithread)
+      {
+      MyScheduler sched(*this, ithread);
+      f(sched);
+      }, nthreads_);
+    }
 #endif
   }
 
