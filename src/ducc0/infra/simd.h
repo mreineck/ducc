@@ -60,6 +60,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <type_traits>
 #include <experimental/simd>
 
 namespace ducc0 {
@@ -75,18 +76,14 @@ template<typename T, int len> struct simd_select
 template<typename T, bool vect> struct vectorizable_helper;
 
 template<typename T> struct vectorizable_helper<T,false>
-  {
-  static constexpr bool value = false;
-  };
+  { static constexpr bool value = false; };
 
 template<typename T> struct vectorizable_helper<T,true>
-  {
-  static constexpr bool value = native_simd<T>::size()>1;
-  };
+  { static constexpr bool value = native_simd<T>::size()>1; };
 
 using stdx::element_aligned_tag;
 template<typename T> constexpr inline bool vectorizable = vectorizable_helper<T,
-  is_same<T,float>::value || is_same<T,double>::value>::value;
+  std::is_arithmetic_v<T> && (!std::is_same_v<T,bool>)>::value;
 
 template<typename T, int N> constexpr bool simd_exists_h()
   {
