@@ -56,7 +56,17 @@ else:
     extra_compile_args += ['-g0']
 
 if do_optimize:
-    extra_compile_args += ['-ffast-math', '-O3']
+    extra_compile_args += ['-ffp-contract=fast',
+                           '-fno-math-errno',
+                           '-freciprocal-math',
+                           '-fassociative-math',
+                           '-fno-signed-zeros',
+                           '-fno-trapping-math',
+                           '-fno-signaling-nans',
+                           '-fcx-limited-range',
+                           '-fexcess-precision=fast',
+                           '-ffinite-math-only',
+                           '-O3']
 else:
     extra_compile_args += ['-O0']
 
