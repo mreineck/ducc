@@ -240,7 +240,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     // some of which will be small near a solution.
     auto test1 = rnorm / bnorm;
     auto test2 = (anorm*rnorm==0) ?
-      numeric_limits<double>::infinity() : arnorm / (anorm*rnorm);
+      numeric_limits<double>::max() : arnorm / (anorm*rnorm);
     auto test3 = 1 / acond;
     t1 = test1 / (1 + anorm * xnorm / bnorm);
     auto rtol = btol + atol * anorm * xnorm / bnorm;
@@ -488,7 +488,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     // some of which will be small near a solution.
     auto test1 = normr / normb;
     auto test2 = (normA*normr==0) ?
-      numeric_limits<double>::infinity() : normar / (normA*normr);
+      numeric_limits<double>::max() : normar / (normA*normr);
     auto test3 = 1 / condA;
     auto t1 = test1 / (1 + normA * normx / normb);
     auto rtol = btol + atol * normA * normx / normb;
