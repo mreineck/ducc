@@ -25,55 +25,45 @@ import matplotlib.pyplot as plt
 import ducc0
 from time import time
 
-def gridder_to_C(gridder, W):
-    M = len(gridder) // W
-    C = np.zeros((W, M), dtype=float)
+def calc_map_error(krn, corr, nu, x, W):
+    M = len(nu) // W
+    nu = nu[:M]
+    nx = len(x)
     indx0 = np.arange(M) - (M*(-W+2))
+    one_app=np.zeros((nx, M), dtype=np.complex128)
+    fact0 = np.exp(2j * np.pi * (- (W / 2) + 1 -nu).reshape((1,-1)) * x.reshape((-1,1)))
+    fact1 = np.exp(2j * np.pi * x.reshape((-1,1)))
     for r in range(0, W):
         ell = r - (W / 2) + 1
         indx = indx0 - 2*r*M
         # Use symmetry to deal with negative indices
-        indx[indx < 0] = -indx[indx < 0] -1
-        C[r, :] = gridder[indx]
-    return C
+        indx[indx < 0] = -indx[indx < 0] - 1
+        Cr = krn[indx]
+        one_app += fact0*Cr
+        fact0 *= fact1
 
-def calc_map_error_from_C(C, grid_correction, nu_C, x, W):
-    M = len(nu_C)
-    nx = len(x)
-    one_app=np.zeros((nx, M), dtype=np.complex128)
-    fact0 = np.exp(2j * np.pi * (- (W / 2) + 1 -nu_C).reshape((1,-1)) * x.reshape((-1,1)))
-    fact1 = np.exp(2j * np.pi * x.reshape((-1,1)))
-    for r in range(0, W):
-        one_app += fact0*C[r,:]
-        fact0 *=fact1
-
-    one_app *= grid_correction.reshape((-1,1))
+    one_app *= corr.reshape((-1,1))
     one_app = (one_app.real-1)**2 + one_app.imag**2
-    map_error = np.sum(one_app,  axis=1)/M
-    return map_error
+    return np.sum(one_app,  axis=1)/M
 
-def calc_map_error(krn, corr, nu, x, W):
-    M = len(nu) // W
-    C = gridder_to_C(krn, W)
-    return calc_map_error_from_C(C, corr, nu[:M], x, W)
-
-def getmaxerr(coeff, nu, W, M, N, x0, D, mach_eps, ofactor):
+def getmaxerr(coeff, W, M, N, x0, D, mach_eps, ofactor):
     nu=(np.arange(W*M)+0.5)/(2*M)
-    x=np.arange(N+1)/(2*N)
+    maxidx = int(2*x0*N+0.9999)+1
+    x=np.arange(maxidx)/(2*N)
     krn = ducc0.misc.get_kernel(coeff[0], coeff[1], W, len(nu))
     corr = ducc0.misc.get_correction(coeff[0], coeff[1], W, len(x), 1./(2*N))
 
     err = calc_map_error(krn, corr, nu, x, W)
-    err = np.sqrt(np.max(np.abs(err[0:int(2*x0*N+0.9999)+1])))*D
-    corr = np.max(corr[:int(len(corr)/ofactor)+1])/np.min(corr[:int(len(corr)/ofactor)+1])
+    err = np.sqrt(np.max(np.abs(err)))*D
+    corr = np.max(corr)/np.min(corr)
     err += mach_eps*corr**D
     return err
 
-def scan_esk(rbeta, re0, nu, x, W, M, N, x0, nsamp, D, mach_eps, ofactor):
+def scan_esk(rbeta, re0, x, W, M, N, x0, nsamp, D, mach_eps, ofactor):
     curmin=1e30
     for e0 in np.linspace(re0[0], re0[1], nsamp):
         for beta in np.linspace(rbeta[0], rbeta[1], nsamp):
-            test = getmaxerr([beta,e0], nu, W, M, N, x0, D, mach_eps, ofactor)
+            test = getmaxerr([beta,e0], W, M, N, x0, D, mach_eps, ofactor)
             if test<curmin:
                 curmin, coeffmin = test, [beta,e0]
     return coeffmin, test
@@ -93,7 +83,7 @@ def get_best_kernel(D, mach_eps, W, ofactor):
     res = [(re0[0]+re0[1])*0.5, (rbeta[0]+rbeta[1])*0.5]
     err = 1e30
     while dbeta>tol*res[0] or de0>tol*res[1]:
-        res_tmp, err_tmp = scan_esk(rbeta, re0, nu, x, W, M, N, x0, 10, D, mach_eps, ofactor)
+        res_tmp, err_tmp = scan_esk(rbeta, re0, x, W, M, N, x0, 10, D, mach_eps, ofactor)
         if err_tmp < err:
             err = err_tmp
             res = res_tmp
