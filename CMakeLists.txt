@@ -87,7 +87,7 @@ target_compile_options(ducc0 PRIVATE
         -freciprocal-math
         # if nan are not used we could disable them manually
         # Why no -fast-math or -funsafe-math-optimizations ?
-        # It breaks the code, and influences other software that depend on finufft bu changing the rounding mode.
+        # It breaks the code, and influences other software that depend on ducc by changing the rounding mode.
         # GCC-13 recently fixed this issue:
         # https://github.com/llvm/llvm-project/issues/57589
         # https://gcc.gnu.org/gcc-13/changes.html
