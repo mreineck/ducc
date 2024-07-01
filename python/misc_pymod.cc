@@ -572,6 +572,93 @@ py::array get_correction(double beta, double e0, size_t W, size_t npoints, doubl
   return res_;
   }
 
+double get_max_kernel_error(double beta, double e0, size_t W, size_t M,
+  size_t N, double x0, size_t D, double mach_eps)
+  {
+  auto lam = [beta,W,e0](double v){return esknew(v, W*beta, e0);};
+  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
+
+  vmav<double,1> nu({M});
+  for (size_t i=0; i<M; ++i)
+    nu(i) = (i+0.5)/(2*M);
+  size_t nx = size_t(2*x0*N+0.9999)+1;
+
+  auto corr=Corr.corfunc(nx, 1./(2*N));
+
+  vmav<double,2> Cr({M,W});
+  for (size_t r=0; r<W; ++r)
+    for (size_t j=0; j<M; ++j)
+      {
+      int indx = int(j) - int(M)*(-int(W)+2) - int(2*r*M);
+      if (indx<0) indx = -indx-1;
+      Cr(j,r) = lam((indx+0.5)/(W*M));
+      }
+  
+  double err = 0;
+  for (size_t i=0; i<nx; ++i)
+    {
+    double xi = i/double(2*N);
+    auto fctmul = polar(1., 2*pi * xi);
+    double tres=0;
+    for (size_t j=0; j<M; ++j)
+      {
+      auto fct = polar(1., 2*pi * (-(W/2.) - nu(j))*xi);
+      complex<double> tmp(0,0);
+      for (size_t r=0; r<W; ++r)
+        {
+        fct *= fctmul;
+        tmp += fct*Cr(j,r);
+        }
+      tmp *= corr[i];
+      tres += norm(tmp-1.);
+      }
+    if (sqrt(abs(tres))>err)
+      err = sqrt(abs(tres));
+    }
+
+  err *= D/sqrt(M);
+  double mincorr=1e38, maxcorr=-1e38;
+  for (size_t i=0; i<nx; ++i)
+    {
+    mincorr = min(mincorr, corr[i]);
+    maxcorr = max(maxcorr, corr[i]);
+    }
+  err += mach_eps*pow(maxcorr/mincorr, D);
+  return err;
+  }
+
+py::object scan_kernel(double betamin, double betamax,
+  double e0min, double e0max, size_t W, size_t M, size_t N, double x0,
+  size_t nsamp, size_t D, double mach_eps, size_t nthreads)
+  {
+  double errbest=1e38, betabest=1e38, e0best=1e38;
+  Mutex mut;
+  execDynamic(nsamp*nsamp, nthreads, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext()) for(auto idx=rng.lo; idx<rng.hi; ++idx)
+      {
+      double beta = betamin + (betamax-betamin)/(nsamp-1)*(idx%nsamp);
+      double e0 = e0min + (e0max-e0min)/(nsamp-1)*(idx/nsamp);
+
+      auto err = get_max_kernel_error(beta, e0, W, M, N, x0, D, mach_eps);
+      {
+      LockGuard lock(mut);
+      if (err<errbest)
+        {
+        errbest=err;
+        betabest=beta;
+        e0best=e0;
+        }
+      }
+      }
+    });
+  py::list res;
+  res.append(errbest);
+  res.append(betabest);
+  res.append(e0best);
+  return res;
+  }
+
 template<typename To> void fill_zero(
   To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   size_t idim, size_t ndim)
@@ -1321,6 +1408,11 @@ void add_misc(py::module_ &msup)
 
   m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
   m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
+  m.def("get_max_kernel_error", get_max_kernel_error, "beta"_a, "e0"_a, "W"_a, "M"_a,
+    "N"_a, "x0"_a, "D"_a, "mach_eps"_a);
+  m.def("scan_kernel", scan_kernel, "betamin"_a, "betamax"_a,
+    "e0min"_a, "e0max"_a, "W"_a, "M"_a, "N"_a, "x0"_a,
+    "nsamp"_a, "D"_a, "mach_eps"_a, "nthreads"_a);
 
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
     "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
