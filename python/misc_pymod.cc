@@ -572,10 +572,16 @@ py::array get_correction(double beta, double e0, size_t W, size_t npoints, doubl
   return res_;
   }
 
-double get_max_kernel_error(double beta, double e0, size_t W, size_t M,
+double get_max_kernel_error(const string &func, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
   {
-  auto lam = [beta,W,e0](double v){return esknew(v, W*beta, e0);};
+  function<double(double)> lam;
+  if (func=="esk")
+    lam = [W, &par](double v){return esknew(v, W*par[0], par[1]);};
+  else if (func=="gauss")
+    lam = [&par](double v){return exp(-par[0]*v*v);};
+  else
+    MR_fail ("unknown function");
   ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
 
   vmav<double,1> nu({M});
@@ -627,35 +633,56 @@ double get_max_kernel_error(double beta, double e0, size_t W, size_t M,
   return err;
   }
 
-py::object scan_kernel(double betamin, double betamax,
-  double e0min, double e0max, size_t W, size_t M, size_t N, double x0,
+py::object scan_kernel(const string &func, const vector<double> par_min, const vector<double> &par_max,
+  size_t W, size_t M, size_t N, double x0,
   size_t nsamp, size_t D, double mach_eps, size_t nthreads)
   {
-  double errbest=1e38, betabest=1e38, e0best=1e38;
+  size_t npar = par_min.size();
+  MR_assert(npar==par_max.size(), "parameter size mismatch");
+  double err_best=1e38;
+  vector<double> par_best(npar, 1e38);
+  vector<bool> par_sampled;
+  for (size_t i=0; i<npar; ++i)
+    par_sampled.push_back(par_min[i]!=par_max[i]);
+
+  size_t niter=1;
+  for (const auto &smp: par_sampled)
+    if (smp) niter *= nsamp;
+
   Mutex mut;
-  execDynamic(nsamp*nsamp, nthreads, 1, [&](Scheduler &sched)
+  execDynamic(niter, nthreads, 1, [&](Scheduler &sched)
     {
+    vector<double> par(npar);
     while (auto rng=sched.getNext()) for(auto idx=rng.lo; idx<rng.hi; ++idx)
       {
-      double beta = betamin + (betamax-betamin)/(nsamp-1)*(idx%nsamp);
-      double e0 = e0min + (e0max-e0min)/(nsamp-1)*(idx/nsamp);
+      size_t idx2=idx;
+      for (size_t i=0; i<npar; ++i)
+        {
+        if (par_sampled[i])
+          {
+          par[i] = par_min[i] + (par_max[i]-par_min[i])/(nsamp-1)*(idx2%nsamp);
+          idx2/=nsamp;
+          }
+        else
+          par[i] = par_min[i];
+        }
 
-      auto err = get_max_kernel_error(beta, e0, W, M, N, x0, D, mach_eps);
+      auto err = get_max_kernel_error(func, par, W, M, N, x0, D, mach_eps);
       {
       LockGuard lock(mut);
-      if (err<errbest)
+      if (err<err_best)
         {
-        errbest=err;
-        betabest=beta;
-        e0best=e0;
+        err_best=err;
+        par_best = par;
         }
       }
       }
     });
   py::list res;
-  res.append(errbest);
-  res.append(betabest);
-  res.append(e0best);
+  py::list parlist;
+  for (const auto &p: par_best) parlist.append(p);
+  res.append(err_best);
+  res.append(parlist);
   return res;
   }
 
@@ -1387,7 +1414,6 @@ void add_misc(py::module_ &msup)
   m.doc() = misc_DS;
 
   auto m2 = m.def_submodule("experimental");
-//  m2.doc() = sht_experimental_DS;
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
@@ -1406,13 +1432,8 @@ void add_misc(py::module_ &msup)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
 
-  m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
-  m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
-  m.def("get_max_kernel_error", get_max_kernel_error, "beta"_a, "e0"_a, "W"_a, "M"_a,
-    "N"_a, "x0"_a, "D"_a, "mach_eps"_a);
-  m.def("scan_kernel", scan_kernel, "betamin"_a, "betamax"_a,
-    "e0min"_a, "e0max"_a, "W"_a, "M"_a, "N"_a, "x0"_a,
-    "nsamp"_a, "D"_a, "mach_eps"_a, "nthreads"_a);
+  m.def("scan_kernel", scan_kernel, "func"_a, "par_min"_a, "par_max"_a,
+    "W"_a, "M"_a, "N"_a, "x0"_a, "nsamp"_a, "D"_a, "mach_eps"_a, "nthreads"_a);
 
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
     "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
