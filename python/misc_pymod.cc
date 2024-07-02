@@ -549,7 +549,8 @@ class PolynomialFunctionApproximator
     size_t W, D;
     vector<double> coeff;
 
-    static vector<double> getCoeffs(size_t W, size_t D, const function<vector<double>(const vector<double> &)> &func)
+    static vector<double> getCoeffs(size_t W, size_t D,
+      const function<vector<double>(const vector<double> &)> &func)
       {
       vector<double> coeff(W*(D+1));
       vector<double> chebroot(D+1);
@@ -607,7 +608,8 @@ class PolynomialFunctionApproximator
       return coeff;
       }
   public:
-    PolynomialFunctionApproximator(size_t W_, size_t D_, const function<vector<double>(const vector<double> &)> &func)
+    PolynomialFunctionApproximator(size_t W_, size_t D_,
+      const function<vector<double>(const vector<double> &)> &func)
       : W(W_), D(D_), coeff(getCoeffs(W_, D_, func)) {}
 
     double operator()(double x) const
@@ -624,7 +626,8 @@ class PolynomialFunctionApproximator
       }
   };
 
-double get_max_kernel_error(const function<vector<double>(const vector<double> &, const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
+double get_max_kernel_error(const function<vector<double>(const vector<double> &,
+    const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
   {
   vmav<double,1> nu({M});
@@ -687,7 +690,9 @@ double get_max_kernel_error(const function<vector<double>(const vector<double> &
   return err;
   }
 
-py::object scan_kernel(const function<vector<double>(const vector<double> &, const vector<double> &)> &func, const vector<double> &par_min, const vector<double> &par_max,
+py::object scan_kernel(const function<vector<double>(const vector<double> &,
+  const vector<double> &)> &func, const vector<double> &par_min,
+  const vector<double> &par_max,
   size_t W, size_t M, size_t N, double x0,
   size_t nsamp, size_t D, double mach_eps, size_t nthreads)
   {

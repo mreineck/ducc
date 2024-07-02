@@ -24,7 +24,7 @@ import numpy as np
 import ducc0
 
 def get_best_kernel(kernelfunc, D, mach_eps, W, ofactor, par_min, par_max, nthreads):
-    # tuning parameters; can ost likely be left as they are
+    # tuning parameters; can most likely be left as they are
     tol=1e-5
     M=128
     N=512
@@ -59,37 +59,38 @@ nthreads=8
 # Standard ES kernel
 def kernel(x, par):
     x=np.array(x)
-    beta = par[0]
+    beta = par[0]*par[1]
     tmp2 = np.abs(x)<=1
     return tmp2*np.exp(beta*(np.sqrt(1-(tmp2*x)**2)-1))
 
 print("Table for standard ES kernels")
 for ofactor in ofactors:
     for W in Ws:
-        par_min=[W*1.3]
-        par_max=[W*2.4]
+        par_min=[1.3, W]
+        par_max=[2.4, W]
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
 # Gauss kernel
 def kernel(x, par):
     x=np.array(x)
-    sigma = par[0]
+    sigma = par[0]*par[1]
     tmp2 = np.abs(x)<=1
     return tmp2*np.exp(-sigma*x**2)
 
 print("Table for truncated Gauss kernels")
 for ofactor in ofactors:
     for W in Ws:
-        par_min=[0.01]
-        par_max=[100]
+        par_min=[0.01, W]
+        par_max=[100, W]
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
 # Generalized ES kernel
 def kernel(x, par):
     x=np.array(x)
-    beta, e0 = par
+    beta = par[0] * par[2]
+    e0 = par[1]
     tmp = (1-x)*(1+x)
     tmp2 = np.abs(x)<=1
     return tmp2*np.exp(beta*((tmp2*tmp)**e0-1))
@@ -97,8 +98,8 @@ def kernel(x, par):
 print("Table for generalized ES kernels")
 for ofactor in ofactors:
     for W in Ws:
-        par_min=[W*1.3, 0.45]
-        par_max=[W*2.4, 0.6]
+        par_min=[1.3, 0.45, W]
+        par_max=[2.4, 0.6, W]
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
