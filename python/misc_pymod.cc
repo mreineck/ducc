@@ -27,6 +27,8 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+#include <pybind11/functional.h>
 #include <vector>
 #include <cmath>
 #include <complex>
@@ -541,57 +543,100 @@ To generate multiple independent noise streams, use different `OofaNoise`
 objects (and supply them with independent Gaussian noise streams)! 
 )""";
 
-template<typename T> T esknew (T v, T beta, T e0)
+class PolynomialFunctionApproximator
   {
-  auto tmp = (1-v)*(1+v);
-  auto tmp2 = tmp>=0;
-  return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
-  }
+  private:
+    size_t W, D;
+    vector<double> coeff;
 
-py::array get_kernel(double beta, double e0, size_t W, size_t npoints)
-  {
-  auto res_ = make_Pyarr<double>({npoints});
-  auto res = to_vmav<double,1>(res_);
-  for (size_t i=0; i<npoints; ++i)
-    {
-    res(i) = esknew((i+0.5)/npoints, W*beta, e0);
-    }
-  return res_;
-  }
-py::array get_correction(double beta, double e0, size_t W, size_t npoints, double dx)
-  {
-  auto res_ = make_Pyarr<double>({npoints});
-  auto res = to_vmav<double,1>(res_);
-  beta*=W;
-  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  ducc0::detail_gridding_kernel::GLFullCorrection corr (W, lam);
-  auto vec=corr.corfunc(npoints, dx);
+    static vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &func)
+      {
+      vector<double> coeff(W*(D+1));
+      vector<double> chebroot(D+1);
+      for (size_t i=0; i<=D; ++i)
+        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
+      vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
+      for (size_t i=0; i<W; ++i)
+        {
+        double l = -1+2.*i/double(W);
+        double r = -1+2.*(i+1)/double(W);
+        // function values at Chebyshev nodes
+        double avg = 0;
+        for (size_t j=0; j<=D; ++j)
+          {
+          y[j] = func(chebroot[j]*(r-l)*0.5 + (r+l)*0.5);
+          avg += y[j];
+          }
+        avg/=(D+1);
+        for (size_t j=0; j<=D; ++j)
+          y[j] -= avg;
+        // Chebyshev coefficients
+        for (size_t j=0; j<=D; ++j)
+          {
+          lcf[j] = 0;
+          for (size_t k=0; k<=D; ++k)
+            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
+          }
+        lcf[0] *= 0.5;
+        // Polynomial coefficients
+        fill(C.begin(), C.end(), 0.);
+        C[0] = 1.;
+        C[1*(D+1) + 1] = 1.;
+        for (size_t j=2; j<=D; ++j)
+          {
+          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
+          for (size_t k=1; k<=j; ++k)
+            C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
+          }
+        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
+        for (size_t j=0; j<=D; ++j)
+          for (size_t k=0; k<=D; ++k)
+            lcf2[k] += C[j*(D+1) + k]*lcf[j];
+        lcf2[0] += avg;
+        for (size_t j=0; j<=D; ++j)
+          coeff[j*W + i] = lcf2[D-j];
+        }
+      return coeff;
+      }
+  public:
+    PolynomialFunctionApproximator(size_t W_, size_t D_, const function<double(double)> &func)
+      : W(W_), D(D_), coeff(getCoeffs(W_, D_, func)) {}
 
-  for (size_t i=0; i<npoints; ++i)
-    res(i) = vec[i];
-  return res_;
-  }
+    double operator()(double x) const
+      {
+      if (abs(x)>=1) return 0.;
+      double xrel = W*0.5*(x+1.);
+      size_t nth = size_t(xrel);
+      nth = min<size_t>(nth, W-1);
+      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
+      double res = coeff[nth];
+      for (size_t i=1; i<=D; ++i)
+        res = res*locx+coeff[i*W+nth];
+      return res;
+      }
+  };
 
-double get_max_kernel_error(const string &func, const vector<double> &par, size_t W, size_t M,
+double get_max_kernel_error(const function<double(double, const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
   {
-  function<double(double)> lam;
-  if (func=="esk")
-    lam = [W, &par](double v){return esknew(v, W*par[0], par[1]);};
-  else if (func=="gauss")
-    lam = [&par](double v){return exp(-par[0]*v*v);};
-  else
-    MR_fail ("unknown function");
-  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
-
   vmav<double,1> nu({M});
   for (size_t i=0; i<M; ++i)
     nu(i) = (i+0.5)/(2*M);
   size_t nx = size_t(2*x0*N+0.9999)+1;
-
-  auto corr=Corr.corfunc(nx, 1./(2*N));
-
+  vector<double> corr;
   vmav<double,2> Cr({M,W});
+  unique_ptr<PolynomialFunctionApproximator> lamptr;
+  {
+  py::gil_scoped_acquire acquire;
+  function<double(double)> lam_ = [&par,&func_](double v){ return func_(v, par); };
+  lamptr = make_unique<PolynomialFunctionApproximator>(W, W+3, lam_);
+  }
+  const auto &lam(*lamptr);
+
+  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
+
+  corr=Corr.corfunc(nx, 1./(2*N));
+
   for (size_t r=0; r<W; ++r)
     for (size_t j=0; j<M; ++j)
       {
@@ -599,7 +644,7 @@ double get_max_kernel_error(const string &func, const vector<double> &par, size_
       if (indx<0) indx = -indx-1;
       Cr(j,r) = lam((indx+0.5)/(W*M));
       }
-  
+
   double err = 0;
   for (size_t i=0; i<nx; ++i)
     {
@@ -633,7 +678,7 @@ double get_max_kernel_error(const string &func, const vector<double> &par, size_
   return err;
   }
 
-py::object scan_kernel(const string &func, const vector<double> par_min, const vector<double> &par_max,
+py::object scan_kernel(const function<double(double, const vector<double> &)> &func, const vector<double> par_min, const vector<double> &par_max,
   size_t W, size_t M, size_t N, double x0,
   size_t nsamp, size_t D, double mach_eps, size_t nthreads)
   {
@@ -641,6 +686,8 @@ py::object scan_kernel(const string &func, const vector<double> par_min, const v
   MR_assert(npar==par_max.size(), "parameter size mismatch");
   double err_best=1e38;
   vector<double> par_best(npar, 1e38);
+  {
+  py::gil_scoped_release release;
   vector<bool> par_sampled;
   for (size_t i=0; i<npar; ++i)
     par_sampled.push_back(par_min[i]!=par_max[i]);
@@ -678,6 +725,7 @@ py::object scan_kernel(const string &func, const vector<double> par_min, const v
       }
       }
     });
+  }
   py::list res;
   py::list parlist;
   for (const auto &p: par_best) parlist.append(p);
