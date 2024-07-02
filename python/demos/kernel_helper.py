@@ -58,10 +58,10 @@ nthreads=8
 
 # Standard ES kernel
 def kernel(x, par):
+    x=np.array(x)
     beta = par[0]
-    if np.abs(x) > 1:
-        return 0
-    return np.exp(beta*(np.sqrt(1-x**2)-1))
+    tmp2 = np.abs(x)<=1
+    return tmp2*np.exp(beta*(np.sqrt(1-(tmp2*x)**2)-1))
 
 print("Table for standard ES kernels")
 for ofactor in ofactors:
@@ -73,10 +73,10 @@ for ofactor in ofactors:
 
 # Gauss kernel
 def kernel(x, par):
+    x=np.array(x)
     sigma = par[0]
-    if np.abs(x) > 1:
-        return 0
-    return np.exp(-sigma*x**2)
+    tmp2 = np.abs(x)<=1
+    return tmp2*np.exp(-sigma*x**2)
 
 print("Table for truncated Gauss kernels")
 for ofactor in ofactors:
@@ -88,11 +88,11 @@ for ofactor in ofactors:
 
 # Generalized ES kernel
 def kernel(x, par):
-    beta = par[0]
-    e0 = par[1]
-    if np.abs(x) > 1:
-        return 0
-    return np.exp(beta*((1-x**2)**e0-1))
+    x=np.array(x)
+    beta, e0 = par
+    tmp = (1-x)*(1+x)
+    tmp2 = np.abs(x)<=1
+    return tmp2*np.exp(beta*((tmp2*tmp)**e0-1))
 
 print("Table for generalized ES kernels")
 for ofactor in ofactors:
