@@ -27,6 +27,8 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+#include <pybind11/functional.h>
 #include <vector>
 #include <cmath>
 #include <complex>
@@ -541,35 +543,209 @@ To generate multiple independent noise streams, use different `OofaNoise`
 objects (and supply them with independent Gaussian noise streams)! 
 )""";
 
-template<typename T> T esknew (T v, T beta, T e0)
+class PolynomialFunctionApproximator
   {
-  auto tmp = (1-v)*(1+v);
-  auto tmp2 = tmp>=0;
-  return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
-  }
+  private:
+    size_t W, D;
+    vector<double> coeff;
 
-py::array get_kernel(double beta, double e0, size_t W, size_t npoints)
+    static vector<double> getCoeffs(size_t W, size_t D,
+      const function<vector<double>(const vector<double> &)> &func)
+      {
+      vector<double> coeff(W*(D+1));
+      vector<double> chebroot(D+1);
+      for (size_t i=0; i<=D; ++i)
+        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
+      vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
+      vector<double> locations(W*(D+1));
+      for (size_t i=0; i<W; ++i)
+        {
+        double l = -1+2.*i/double(W);
+        double r = -1+2.*(i+1)/double(W);
+        for (size_t j=0; j<=D; ++j)
+          locations[i*(D+1)+j] = chebroot[j]*(r-l)*0.5 + (r+l)*0.5;
+        }
+      // function values at Chebyshev nodes
+      auto funcval(func(locations));
+
+      for (size_t i=0; i<W; ++i)
+        {
+        double avg = 0;
+        for (size_t j=0; j<=D; ++j)
+          {
+          y[j] = funcval[i*(D+1)+j];
+          avg += y[j];
+          }
+        avg/=(D+1);
+        for (size_t j=0; j<=D; ++j)
+          y[j] -= avg;
+        // Chebyshev coefficients
+        for (size_t j=0; j<=D; ++j)
+          {
+          lcf[j] = 0;
+          for (size_t k=0; k<=D; ++k)
+            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
+          }
+        lcf[0] *= 0.5;
+        // Polynomial coefficients
+        fill(C.begin(), C.end(), 0.);
+        C[0] = 1.;
+        C[1*(D+1) + 1] = 1.;
+        for (size_t j=2; j<=D; ++j)
+          {
+          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
+          for (size_t k=1; k<=j; ++k)
+            C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
+          }
+        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
+        for (size_t j=0; j<=D; ++j)
+          for (size_t k=0; k<=D; ++k)
+            lcf2[k] += C[j*(D+1) + k]*lcf[j];
+        lcf2[0] += avg;
+        for (size_t j=0; j<=D; ++j)
+          coeff[j*W + i] = lcf2[D-j];
+        }
+      return coeff;
+      }
+  public:
+    PolynomialFunctionApproximator(size_t W_, size_t D_,
+      const function<vector<double>(const vector<double> &)> &func)
+      : W(W_), D(D_), coeff(getCoeffs(W_, D_, func)) {}
+
+    double operator()(double x) const
+      {
+      if (abs(x)>=1) return 0.;
+      double xrel = W*0.5*(x+1.);
+      size_t nth = size_t(xrel);
+      nth = min<size_t>(nth, W-1);
+      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
+      double res = coeff[nth];
+      for (size_t i=1; i<=D; ++i)
+        res = res*locx+coeff[i*W+nth];
+      return res;
+      }
+  };
+
+double get_max_kernel_error(const function<vector<double>(const vector<double> &,
+    const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
+  size_t N, double x0, size_t D, double mach_eps)
   {
-  auto res_ = make_Pyarr<double>({npoints});
-  auto res = to_vmav<double,1>(res_);
-  for (size_t i=0; i<npoints; ++i)
+  vmav<double,1> nu({M});
+  for (size_t i=0; i<M; ++i)
+    nu(i) = (i+0.5)/(2*M);
+  size_t nx = size_t(2*x0*N+0.9999)+1;
+  vector<double> corr;
+  vmav<double,2> Cr({M,W});
+  unique_ptr<PolynomialFunctionApproximator> lamptr;
+  {
+  py::gil_scoped_acquire acquire;
+  function<vector<double>(const vector<double> &)> lam_
+    = [&par,&func_](const vector<double> &v){ return func_(v, par); };
+  lamptr = make_unique<PolynomialFunctionApproximator>(W, W+3, lam_);
+  }
+  const auto &lam(*lamptr);
+
+  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
+
+  corr=Corr.corfunc(nx, 1./(2*N));
+
+  for (size_t r=0; r<W; ++r)
+    for (size_t j=0; j<M; ++j)
+      {
+      int indx = int(j) - int(M)*(-int(W)+2) - int(2*r*M);
+      if (indx<0) indx = -indx-1;
+      Cr(j,r) = lam((indx+0.5)/(W*M));
+      }
+
+  double err = 0;
+  for (size_t i=0; i<nx; ++i)
     {
-    res(i) = esknew((i+0.5)/npoints, W*beta, e0);
+    double xi = i/double(2*N);
+    auto fctmul = polar(1., 2*pi * xi);
+    double tres=0;
+    for (size_t j=0; j<M; ++j)
+      {
+      auto fct = polar(1., 2*pi * (-(W/2.) - nu(j))*xi);
+      complex<double> tmp(0,0);
+      for (size_t r=0; r<W; ++r)
+        {
+        fct *= fctmul;
+        tmp += fct*Cr(j,r);
+        }
+      tmp *= corr[i];
+      tres += norm(tmp-1.);
+      }
+    if (sqrt(abs(tres))>err)
+      err = sqrt(abs(tres));
     }
-  return res_;
-  }
-py::array get_correction(double beta, double e0, size_t W, size_t npoints, double dx)
-  {
-  auto res_ = make_Pyarr<double>({npoints});
-  auto res = to_vmav<double,1>(res_);
-  beta*=W;
-  auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
-  ducc0::detail_gridding_kernel::GLFullCorrection corr (W, lam);
-  auto vec=corr.corfunc(npoints, dx);
 
-  for (size_t i=0; i<npoints; ++i)
-    res(i) = vec[i];
-  return res_;
+  err *= D/sqrt(M);
+  double mincorr=1e38, maxcorr=-1e38;
+  for (size_t i=0; i<nx; ++i)
+    {
+    mincorr = min(mincorr, corr[i]);
+    maxcorr = max(maxcorr, corr[i]);
+    }
+  err += mach_eps*pow(maxcorr/mincorr, D);
+  return err;
+  }
+
+py::object scan_kernel(const function<vector<double>(const vector<double> &,
+  const vector<double> &)> &func, const vector<double> &par_min,
+  const vector<double> &par_max,
+  size_t W, size_t M, size_t N, double x0,
+  size_t nsamp, size_t D, double mach_eps, size_t nthreads)
+  {
+  size_t npar = par_min.size();
+  MR_assert(npar==par_max.size(), "parameter size mismatch");
+  double err_best=1e38;
+  vector<double> par_best(npar, 1e38);
+  {
+  py::gil_scoped_release release;
+  vector<bool> par_sampled;
+  for (size_t i=0; i<npar; ++i)
+    par_sampled.push_back(par_min[i]!=par_max[i]);
+
+  size_t niter=1;
+  for (const auto &smp: par_sampled)
+    if (smp) niter *= nsamp;
+
+  Mutex mut;
+  execDynamic(niter, nthreads, 1, [&](Scheduler &sched)
+    {
+    vector<double> par(npar);
+    while (auto rng=sched.getNext()) for(auto idx=rng.lo; idx<rng.hi; ++idx)
+      {
+      size_t idx2=idx;
+      for (size_t i=0; i<npar; ++i)
+        {
+        if (par_sampled[i])
+          {
+          par[i] = par_min[i] + (par_max[i]-par_min[i])/(nsamp-1)*(idx2%nsamp);
+          idx2/=nsamp;
+          }
+        else
+          par[i] = par_min[i];
+        }
+
+      auto err = get_max_kernel_error(func, par, W, M, N, x0, D, mach_eps);
+      {
+      LockGuard lock(mut);
+      if (err<err_best)
+        {
+        err_best=err;
+        par_best = par;
+        }
+      }
+      }
+    });
+  }
+  py::list res;
+  py::list parlist;
+  for (const auto &p: par_best) parlist.append(p);
+  res.append(err_best);
+  res.append(parlist);
+  return res;
   }
 
 template<typename To> void fill_zero(
@@ -1300,7 +1476,6 @@ void add_misc(py::module_ &msup)
   m.doc() = misc_DS;
 
   auto m2 = m.def_submodule("experimental");
-//  m2.doc() = sht_experimental_DS;
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
@@ -1319,8 +1494,8 @@ void add_misc(py::module_ &msup)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
 
-  m.def("get_kernel", get_kernel,"beta"_a, "e0"_a, "W"_a, "npoints"_a);
-  m.def("get_correction", get_correction,"beta"_a, "e0"_a, "W"_a, "npoints"_a, "dx"_a);
+  m.def("scan_kernel", scan_kernel, "func"_a, "par_min"_a, "par_max"_a,
+    "W"_a, "M"_a, "N"_a, "x0"_a, "nsamp"_a, "D"_a, "mach_eps"_a, "nthreads"_a);
 
   m.def("roll_resize_roll", Py_roll_resize_roll, Py_roll_resize_roll_DS,
     "inp"_a, "out"_a, "roll_inp"_a, "roll_out"_a, "nthreads"_a=1);
