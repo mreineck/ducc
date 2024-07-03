@@ -1,4 +1,7 @@
 0.35.0:
+- general:
+  - Cmake-based build machinery contributed by Marco Barbone
+
 - misc:
   - new functions `available_hardware_threads`, `thread_pool_size`, and
     `resize_thread_pool` in `ducc0.misc` to allow deterination of hardware
