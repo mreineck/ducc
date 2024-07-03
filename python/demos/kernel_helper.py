@@ -45,8 +45,8 @@ def get_best_kernel(kernelfunc, D, mach_eps, W, ofactor, par_min, par_max, nthre
             err = err_tmp
             res = res_tmp
         dpar = [0.5*d for d in dpar]
-        par_min = [r-0.5*d for r, d in zip(res, dpar)]
-        par_max = [r+0.5*d for r, d in zip(res, dpar)]
+        par_min = [max(pm, r-0.5*d) for r, d, pm in zip(res, dpar, par_min)]
+        par_max = [min(pm, r+0.5*d) for r, d, pm in zip(res, dpar, par_max)]
     return res, err
 
 
@@ -55,6 +55,21 @@ Ws = np.arange(4,17)  # range of kernel supports
 mach_eps = 2.2e-16  # for double precision; use 1.19e-07 for single precision
 D = 1  # dimensionality
 nthreads=8
+
+# Kaiser-Bessel kernel
+def kernel(x, par):
+    x=np.array(x)
+    beta = par[0]*par[1]
+    tmp2 = np.abs(x)<=1
+    return tmp2* np.i0(np.pi*beta*np.sqrt(1-tmp2*x**2))/np.i0(np.pi*beta)
+
+print("Table for Kaiser-Bessel kernels")
+for ofactor in ofactors:
+    for W in Ws:
+        par_min=[0, W]
+        par_max=[10, W]
+        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        print(W, ofactor, err, res)
 
 # Standard ES kernel
 def kernel(x, par):

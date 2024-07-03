@@ -71,7 +71,7 @@ Additionally, pre-compiled binaries are distributed for the following systems:
 ### Building only the C++ part 
 
 If you want to use ducc's algorithms in a C++ code, there is a CMakeLists.txt
-file to help you integrate the library in your project. Please use the C++
+file to help you integrate the library into your project. Please use the C++
 interface only as an internal dependency of your projects and do not install
 the ducc0 C++ library system-wide, since its interface is not guaranteed to
 be stable and in fact expected to change significantly in the future.
