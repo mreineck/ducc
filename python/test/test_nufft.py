@@ -17,6 +17,8 @@ from itertools import product
 
 import ducc0
 
+ducc0.misc.resize_thread_pool(2)
+
 try:
     import finufft
     have_finufft = True

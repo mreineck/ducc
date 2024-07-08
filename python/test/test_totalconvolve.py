@@ -19,6 +19,8 @@ import pytest
 from numpy.testing import assert_allclose
 import ducc0
 
+ducc0.misc.resize_thread_pool(2)
+
 pmp = pytest.mark.parametrize
 
 

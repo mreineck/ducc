@@ -30,6 +30,7 @@ from numpy.testing import assert_allclose
 pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
+ducc0.misc.resize_thread_pool(2)
 
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                      apply_w, mask, divide_by_n=True):

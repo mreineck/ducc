@@ -19,6 +19,9 @@ import numpy as np
 import math
 import pytest
 from numpy.testing import assert_equal
+import ducc0
+
+ducc0.misc.resize_thread_pool(2)
 
 pmp = pytest.mark.parametrize
 

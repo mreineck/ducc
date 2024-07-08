@@ -22,6 +22,9 @@ import pytest
 from numpy.testing import assert_, assert_allclose
 import platform
 
+import ducc0
+ducc0.misc.resize_thread_pool(2)
+
 pmp = pytest.mark.parametrize
 
 shapes1D = ((10,), (127,))
