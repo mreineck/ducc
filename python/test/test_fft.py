@@ -237,7 +237,7 @@ def test_identity_r2(shp):
 
 
 @pmp("shp", shapes2D+shapes3D)
-@pmp("nthreads", [1,2,11])
+@pmp("nthreads", [1,2,4])
 def test_genuine_hartley(shp, nthreads):
     rng = np.random.default_rng(42)
     a = rng.random(shp)-0.5

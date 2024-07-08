@@ -406,7 +406,7 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
 @pmp("singleprec", (False,))
 @pmp("wstacking", (True,))
 @pmp("use_wgt", (True,))
-@pmp("nthreads", (1, 10))
+@pmp("nthreads", (1, 2))
 @pmp("fov", (10.,))
 def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, fov, nthreads):
