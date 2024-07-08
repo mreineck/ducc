@@ -81,7 +81,7 @@ namespace detail_threading {
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
-constexpr size_t nwait=100;
+constexpr size_t nwait=1;
 
 void flagwait(const std::atomic<bool> &flag, bool val)
   {
