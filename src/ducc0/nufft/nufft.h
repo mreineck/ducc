@@ -611,7 +611,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           kbuf() {}
 #endif
           };
-        kbuf buf;
+//        kbuf buf;
 
         HelperNu2u(const Nufft *parent_, const vmav<complex<Tcalc>,ndim> &grid_,
           Mutex &mylock_)
@@ -621,14 +621,16 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
             px0r(bufr.data()), px0i(bufi.data()), mylock(mylock_) {}
         ~HelperNu2u() { dump(); }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        const auto &getKernel() const { return tkrn; }
+        [[gnu::always_inline]] [[gnu::hot]] void get_i0_frac(
+          array<double,ndim> in, array<int,ndim> &ind, array<double,ndim> &frac) const
           {
-          array<double,ndim> frac;
-          auto i0old = i0;
-          parent->template getpix<Tcoord>(in, frac, i0);
-          auto x0 = -frac[0]*2+(supp-1);
-          tkrn.eval1(Tacc(x0), &buf.simd[0]);
-          if (i0==i0old) return;
+          parent->template getpix<Tcoord>(in, frac, ind);
+          }
+        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int,ndim> ind)
+          {
+          if (ind==i0) return;
+          i0 = ind;
           if ((i0[0]<b0[0]) || (i0[0]+int(supp)>b0[0]+su))
             {
             dump();
@@ -723,7 +725,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
         HelperNu2u<SUPP> hlp(this, grid, mylock);
-        const auto * DUCC0_RESTRICT ku = hlp.buf.simd;
+        const auto &tkrn(hlp.getKernel());
+        typename HelperNu2u<SUPP>::kbuf kernelbuf;
+        auto * DUCC0_RESTRICT ku = kernelbuf.simd;
 
         constexpr size_t lookahead=10;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
@@ -736,8 +740,15 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
               coords.prefetch_r(nextidx,0);
             }
           size_t row = coord_idx[ix];
-          sorted ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
+ //         sorted ? hlp.prep({coords(ix,0)}) : hlp.prep({coords(row,0)});
           auto v(points(row));
+          array<int,1> index;
+          array<double,1> frac;
+          array<double,1> pos(sorted ? array<double,1>{coords(ix,0)} : array<double,1>{coords(row,0)});
+          hlp.get_i0_frac(pos, index,frac);
+          auto x0 = -frac[0]*2+(supp-1);
+          tkrn.eval1(Tacc(x0), &ku[0]);
+          hlp.prep_for_index(index);
 
           Tacc vr(v.real()), vi(v.imag());
           for (size_t cu=0; cu<hlp.nvec; ++cu)
