@@ -700,6 +700,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
         HelperNu2u<SUPP> hlp(this, grid, mylock);
 
         constexpr size_t batchsize=3;
+        array<array<int,1>,batchsize> index;
+        array<array<double,1>,batchsize> frac;
         mysimd<Tacc> kubuf[batchsize*hlp.nvec];
 
         constexpr size_t lookahead=10;
@@ -709,8 +711,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           auto ix = rng.lo;
           for(; ix+batchsize<=rng.hi; ix+=batchsize)
             {
-            array<array<int,1>,batchsize> index;
-            array<array<double,1>,batchsize> frac;
             for(size_t k=0; k<batchsize; ++k)
               {
               if (ix+k+lookahead<npoints)
@@ -759,12 +759,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
               if (!sorted) coords.prefetch_r(nextidx,0);
               }
             auto v(points(coord_idx[ix]));
-            array<int,1> index;
-            array<double,1> frac;
-            parent::template getpix<Tcoord>({coords(sorted ? ix : coord_idx[ix],0)}, frac, index);
+            parent::template getpix<Tcoord>(
+              {coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
             auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tacc(supp-1-2*frac[0]), &ku[0]);
-            hlp.prep_for_index(index);
+            tkrn.eval1(Tacc(supp-1-2*frac[0][0]), &ku[0]);
+            hlp.prep_for_index(index[0]);
   
             Tacc vr(v.real()), vi(v.imag());
             for (size_t cu=0; cu<hlp.nvec; ++cu)
@@ -795,13 +794,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       bool sorted = coords_sorted.size()!=0;
 
       TemplateKernel<SUPP, mysimd<Tcalc>> tkrn(*parent::krn);
-
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
         {
         HelperU2nu<SUPP> hlp(this, grid);
 
         constexpr size_t batchsize=3;
+        array<array<int,1>,batchsize> index;
+        array<array<double,1>,batchsize> frac;
         mysimd<Tcalc> kubuf[batchsize*hlp.nvec];
 
         constexpr size_t lookahead=10;
@@ -811,8 +811,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
 
           for(; ix+batchsize<=rng.hi; ix+=batchsize)
             {
-            array<array<int,1>,batchsize> index;
-            array<array<double,1>,batchsize> frac;
             for(size_t k=0; k<batchsize; ++k)
               {
               if (ix+k+lookahead<npoints)
@@ -859,12 +857,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
               if (!sorted) coords.prefetch_r(nextidx,0);
               }
             size_t row = coord_idx[ix];
-            array<int,1> index;
-            array<double,1> frac;
-            parent::template getpix<Tcoord>({coords(sorted ? ix : coord_idx[ix],0)}, frac, index);
+            parent::template getpix<Tcoord>({coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
             auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tcalc(supp-1-2*frac[0]), &ku[0]);
-            hlp.prep_for_index(index);
+            tkrn.eval1(Tcalc(supp-1-2*frac[0][0]), &ku[0]);
+            hlp.prep_for_index(index[0]);
 
             mysimd<Tcalc> rr=0, ri=0;
             for (size_t cu=0; cu<hlp.nvec; ++cu)
