@@ -2,6 +2,10 @@
 - general:
   - Cmake-based build machinery contributed by Marco Barbone
 
+- nufft:
+  - faster 1D transforms due to batched calculation of kernel coefficients
+    (inspired by FINUFFT)
+
 - misc:
   - new functions `available_hardware_threads`, `thread_pool_size`, and
     `resize_thread_pool` in `ducc0.misc` to allow deterination of hardware
