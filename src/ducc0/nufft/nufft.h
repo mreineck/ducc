@@ -210,51 +210,8 @@ template<typename Tcalc, typename Tacc> auto findNufftKernel(double epsilon,
   double sigma_min, double sigma_max, const vector<size_t> &dims,
   size_t npoints, bool gridding, size_t nthreads)
   {
-  auto vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
-  auto ndim = dims.size();
-  auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
-  double mincost = 1e300;
-  constexpr double nref_fft=2048;
-  constexpr double costref_fft=0.0693;
-  size_t minidx=~(size_t(0));
-  for (size_t i=0; i<idx.size(); ++i)
-    {
-    const auto &krn(getKernel(idx[i]));
-    auto supp = krn.W;
-    auto nvec = (supp+vlen-1)/vlen;
-    auto ofactor = krn.ofactor;
-    double gridsize=1;
-    for (size_t idim=0; idim<ndim; ++idim)
-      {
-      size_t bigdim = 2*good_size_complex(size_t(dims[idim]*ofactor*0.5)+1);
-      bigdim = max<size_t>(bigdim, 16);
-      gridsize *= bigdim;
-      }
-    double logterm = log(gridsize)/log(nref_fft*nref_fft);
-    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
-    size_t kernelpoints = nvec*vlen;
-    for (size_t idim=0; idim+1<ndim; ++idim)
-      kernelpoints*=supp;
-    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
-    if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
-    // FIXME: heuristics could be improved
-    gridcost /= nthreads;  // assume perfect scaling for now
-    constexpr double max_fft_scaling = 6;
-    constexpr double scaling_power=2;
-    auto sigmoid = [](double x, double m, double s)
-      {
-      auto x2 = x-1;
-      auto m2 = m-1;
-      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
-      };
-    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
-    double cost = fftcost+gridcost;
-    if (cost<mincost)
-      {
-      mincost=cost;
-      minidx = idx[i];
-      }
-    }
+  auto [minidx, bigdims] = findNufftParameters<Tcalc, Tacc>
+    (epsilon, sigma_min, sigma_max, dims, npoints, gridding, nthreads);
   return minidx;
   }
 //#define NEW_DUMP
