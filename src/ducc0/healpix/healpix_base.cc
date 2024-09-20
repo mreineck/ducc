@@ -252,8 +252,17 @@ template<typename I> template<typename I2>
       double x = (cosrbig-z*z0)*xa;
       double ysq = 1-z*z-x*x;
       double dphi=-1;
+      bool fullcircle = false;
       if (ysq<=0) // no intersection, ring completely inside or outside
-        dphi = (fct==1) ? 0: pi-1e-15;
+        {
+        if (fct==1)
+          dphi = 0;
+        else
+          {
+          fullcircle = true;
+          dphi = pi-1e-15;
+          }
+        }
       else
         dphi = atan2(sqrt(ysq),x);
       if (dphi>0)
@@ -267,6 +276,16 @@ template<typename I> template<typename I2>
 
         I ip_lo = ifloor<I>(nr*inv_twopi*(ptg.phi-dphi) - shift)+1;
         I ip_hi = ifloor<I>(nr*inv_twopi*(ptg.phi+dphi) - shift);
+        if (fullcircle)  // make sure we test the entire ring
+          {
+          if (ip_hi-ip_lo<nr-1)
+            {
+            if (ip_lo>0)
+              --ip_lo;
+            else
+              ++ip_hi;
+            }
+          }
 
         if (fct>1)
           {
