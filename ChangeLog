@@ -1,6 +1,7 @@
 0.35.0:
 - general:
   - Cmake-based build machinery contributed by Marco Barbone
+  - flake/nix support contributed by Philipp Arras
 
 - nufft:
   - faster 1D transforms due to batched calculation of kernel coefficients
