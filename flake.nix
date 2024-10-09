@@ -10,11 +10,12 @@
       let
         pkgs = import nixpkgs { inherit system; };
         py-pkgs = pkgs.python3Packages;
+        src = ./.;
 
         ducc = py-pkgs.buildPythonPackage {
           pname = "ducc0";
           version = "0.34.0";
-          src = ./.;
+          inherit src;
           pyproject = true;
           build-system = with py-pkgs; [ setuptools ];
           dependencies = with py-pkgs; [ numpy scipy pybind11 ];
@@ -23,6 +24,11 @@
           pythonImportsCheck = [ "ducc0" ];
 
           DUCC0_OPTIMIZATION = "portable-strip";
+
+          postInstall = ''
+            mkdir -p $out/include/ducc0
+            cp -r $src/src/ducc0/* $out/include/ducc0
+          '';
         };
 
       in {
