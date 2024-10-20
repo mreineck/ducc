@@ -15,8 +15,8 @@ jobs:
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS_MACOS: arm64
-          CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp*win*
-          CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
+          CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp38-* pp*win*
+          CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable MACOSX_DEPLOYMENT_TARGET=10.14
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
