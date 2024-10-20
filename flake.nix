@@ -14,7 +14,7 @@
 
         ducc = py-pkgs.buildPythonPackage {
           pname = "ducc0";
-          version = "0.34.0";
+          version = "0.35.0";
           inherit src;
           pyproject = true;
           build-system = with py-pkgs; [ setuptools ];

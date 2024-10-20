@@ -2,6 +2,7 @@
 - general:
   - Cmake-based build machinery contributed by Marco Barbone
   - flake/nix support contributed by Philipp Arras
+  - adjustments for numpy 2.0
 
 - nufft:
   - faster 1D transforms due to batched calculation of kernel coefficients
