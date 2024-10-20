@@ -16,7 +16,7 @@ jobs:
         env:
           CIBW_ARCHS: auto64
           CIBW_SKIP: cp36-* cp37-* pp36-* pp37-* pp*win*
-          CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
+          CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable MACOSX_DEPLOYMENT_TARGET=10.14
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
           CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-* cp311-* pp36-* pp37-* pp38-* pp39-* pp311-* pp312-*
