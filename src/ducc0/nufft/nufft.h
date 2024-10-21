@@ -692,7 +692,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
               auto * DUCC0_RESTRICT ku = &kubuf[k*hlp.nvec];
               hlp.prep_for_index(index[k]);
               auto v(points(coord_idx[ix+k]));
-  
+
               Tacc vr(v.real()), vi(v.imag());
               for (size_t cu=0; cu<hlp.nvec; ++cu)
                 {
@@ -721,7 +721,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
             auto * DUCC0_RESTRICT ku = &kubuf[0];
             tkrn.eval1(Tacc(supp-1-2*frac[0][0]), &ku[0]);
             hlp.prep_for_index(index[0]);
-  
+
             Tacc vr(v.real()), vi(v.imag());
             for (size_t cu=0; cu<hlp.nvec; ++cu)
               {
