@@ -67,9 +67,6 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
     // number of threads to use for this transform.
     size_t nthreads;
 
-    // 1./<periodicity of coordinates>
-    array<double, ndim> coordfct;
-
     // if true, start with zero mode
     // if false, start with most negative mode
     bool fft_order;
@@ -82,10 +79,6 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
 
     // oversampled grid dimensions
     array<size_t, ndim> nover;
-
-    // holds the indices of the nonuniform points in the order in which they
-    // should be processed
-    quick_array<uint32_t> coord_idx;
 
 size_t krn_id;
     shared_ptr<PolynomialKernel> krn;
@@ -102,58 +95,6 @@ size_t krn_id;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc),
       "Tacc must be at least as accurate as Tcalc");
-
-    /*! Compute minimum index in the oversampled grid touched by the kernel
-        around coordinate \a in. */
-    template<typename Tcoord> [[gnu::always_inline]] void getpix(array<double,ndim> in,
-      array<double,ndim> &out, array<int,ndim> &out0) const
-      {
-      // do range reduction in long double when Tcoord is double,
-      // to avoid inaccuracies with very large grids
-      using Tbig = typename conditional<is_same<Tcoord,double>::value, long double, double>::type;
-      for (size_t i=0; i<ndim; ++i)
-        {
-        auto tmp = in[i]*coordfct[i];
-        auto tmp2 = Tbig(tmp-floor(tmp))*nover[i];
-        out0[i] = min(int(tmp2+shift[i])-int(nover[i]), maxi0[i]);
-        out[i] = double(tmp2-out0[i]);
-        }
-      }
-
-    /*! Compute index of the tile into which \a in falls. */
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in) const
-      {
-      array<double,ndim> dum;
-      array<int,ndim> i0;
-      getpix<Tcoord>(in, dum, i0);
-      array<uint32_t,ndim> res;
-      for (size_t i=0; i<ndim; ++i)
-        res[i] = uint32_t((i0[i]+nsafe)>>log2tile);
-      return res;
-      }
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
-      {
-      array<double,ndim> dum;
-      array<int,ndim> i0;
-      getpix<Tcoord>(in, dum, i0);
-      array<uint32_t,ndim> res;
-      for (size_t i=0; i<ndim; ++i)
-        res[i] = uint32_t((i0[i]+nsafe)>>lsq2);
-      return res;
-      }
-
-    template<typename Tcoord> void sort_coords(const cmav<Tcoord,2> &coords,
-      const vmav<Tcoord,2> &coords_sorted)
-      {
-      timers.push("sorting coords");
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          for (size_t d=0; d<ndim; ++d)
-            coords_sorted(i,d) = coords(coord_idx[i],d);
-        });
-      timers.pop();
-      }
 
     template<typename Tpoints, typename Tgrid> bool prep_nu2u
       (const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &uniform)
@@ -202,23 +143,13 @@ size_t krn_id;
            << accumulate(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
-    static array<double, ndim> get_coordfct(const vector<double> &periodicity)
-      {
-      MR_assert(periodicity.size()==ndim, "periodicity size mismatch");
-      array<double, ndim> res;
-      for (size_t i=0; i<ndim; ++i)
-        res[i] = 1./periodicity[i];
-      return res;
-      }
-
   public:
     Nufft_ancestor(bool gridding, size_t npoints_,
       const array<size_t,ndim> &uniform_shape, double epsilon_,
       size_t nthreads_, double sigma_min, double sigma_max,
-      const vector<double> &periodicity, bool fft_order_)
+      bool fft_order_)
       : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
         nthreads(adjust_nthreads(nthreads_)),
-        coordfct(get_coordfct(periodicity)),
         fft_order(fft_order_), npoints(npoints_), nuni(uniform_shape)
       {
       MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
@@ -264,13 +195,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
 #define DUCC0_NUFFT_BOILERPLATE \
   private: \
     using parent=Nufft_ancestor<Tcalc, Tacc, ndim>; \
-    using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp, \
+    using parent::nthreads, parent::npoints, parent::supp, \
           parent::timers, parent::krn, parent::krn_id, parent::fft_order, parent::nuni, \
           parent::nover, parent::shift, parent::maxi0, parent::report, \
-          parent::log2tile, parent::corfac, parent::sort_coords, \
+          parent::corfac, \
           parent::prep_nu2u, parent::prep_u2nu; \
  \
-    vmav<Tcoord,2> coords_sorted; \
     unique_ptr<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>> spreadinterp; \
  \
   public: \
@@ -280,39 +210,36 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
           size_t nthreads_, double sigma_min, double sigma_max, \
           const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_, \
-               sigma_min, sigma_max, periodicity, fft_order_), \
-        coords_sorted({npoints,ndim},UNINITIALIZED) \
+               sigma_min, sigma_max, fft_order_) \
       { \
 spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(coords, nover, krn_id, nthreads, periodicity); \
-      build_index(coords); \
-      sort_coords(coords, coords_sorted); \
       } \
     Nufft (bool gridding, size_t npoints_, \
       const array<size_t,ndim> &uniform_shape, double epsilon_, \
       size_t nthreads_, double sigma_min, double sigma_max, \
-      const vector<double> &periodicity_, bool fft_order_) \
+      const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, npoints_, uniform_shape, epsilon_, nthreads_, \
-               sigma_min, sigma_max, periodicity_, fft_order_) \
+               sigma_min, sigma_max, fft_order_) \
       { \
-spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(npoints_, nover, krn_id, nthreads, periodicity_); \
+spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(npoints_, nover, krn_id, nthreads, periodicity); \
       } \
  \
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity, \
       const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &uniform) \
       { \
       if (prep_nu2u(points, uniform)) return; \
-      MR_assert(coords_sorted.size()!=0, "bad call"); \
       if (verbosity>0) report(true); \
-      nonuni2uni(forward, coords_sorted, points, uniform); \
+      auto dummy = cmav<Tcoord,2>::build_empty(); \
+      nonuni2uni(forward, dummy, points, uniform); \
       if (verbosity>0) timers.report(cout); \
       } \
     template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity, \
       const cmav<complex<Tgrid>,ndim> &uniform, const vmav<complex<Tpoints>,1> &points) \
       { \
       if (prep_u2nu(points, uniform)) return; \
-      MR_assert(coords_sorted.size()!=0, "bad call"); \
       if (verbosity>0) report(false); \
-      uni2nonuni(forward, uniform, coords_sorted, points); \
+      auto dummy = cmav<Tcoord,2>::build_empty(); \
+      uni2nonuni(forward, uniform, dummy, points); \
       if (verbosity>0) timers.report(cout); \
       } \
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity, \
@@ -320,9 +247,7 @@ spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(np
       const vmav<complex<Tgrid>,ndim> &uniform) \
       { \
       if (prep_nu2u(points, uniform)) return; \
-      MR_assert(coords_sorted.size()==0, "bad call"); \
       if (verbosity>0) report(true); \
-      build_index(coords); \
       nonuni2uni(forward, coords, points, uniform); \
       if (verbosity>0) timers.report(cout); \
       } \
@@ -331,9 +256,7 @@ spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(np
       const vmav<complex<Tpoints>,1> &points) \
       { \
       if (prep_u2nu(points, uniform)) return; \
-      MR_assert(coords_sorted.size()==0, "bad call"); \
       if (verbosity>0) report(false); \
-      build_index(coords); \
       uni2nonuni(forward, uniform, coords, points); \
       if (verbosity>0) timers.report(cout); \
       }
@@ -371,7 +294,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("spreading");
 //      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
 //      spreading_helper<maxsupp>(supp, coords, points, grid);
-(coords_sorted.size()>0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
+(coords.size()==0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
 
       timers.poppush("FFT");
       auto fgrid(grid.to_fmav());
@@ -413,26 +336,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("interpolation");
 //      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
 //      interpolation_helper<maxsupp>(supp, grid, coords, points);
-(coords_sorted.size()>0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
+(coords.size()==0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
 
       timers.pop();
-      timers.pop();
-      }
-
-    void build_index(const cmav<Tcoord,2> &coords)
-      {
-      timers.push("building index");
-      MR_assert(coords.shape(0)==npoints, "number of coords mismatch");
-      MR_assert(coords.shape(1)==ndim, "ndim mismatch");
-      size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          key[i] = parent::template get_tile<Tcoord>({coords(i,0)})[0];
-        });
-      bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       timers.pop();
       }
   };
@@ -456,7 +362,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("spreading");
 //      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
 //      spreading_helper<maxsupp>(supp, coords, points, grid);
-(coords_sorted.size()>0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
+(coords.size()==0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
 
       timers.poppush("FFT");
       {
@@ -531,29 +437,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("interpolation");
 //      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
 //      interpolation_helper<maxsupp>(supp, grid, coords, points);
-(coords_sorted.size()>0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
+(coords.size()==0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
       timers.pop();
       timers.pop();
       }
 
-    void build_index(const cmav<Tcoord,2> &coords)
-      {
-      timers.push("building index");
-      size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      size_t ntiles_v = (nover[1]>>log2tile) + 3;
-      coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          {
-          auto tile = parent::template get_tile<Tcoord>({coords(i,0), coords(i,1)});
-          key[i] = tile[0]*ntiles_v + tile[1];
-          }
-        });
-      bucket_sort2(key, coord_idx, ntiles_u*ntiles_v, nthreads);
-      timers.pop();
-      }
   };
 
 template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc, Tcoord, 3>: public Nufft_ancestor<Tcalc, Tacc, 3>
@@ -575,7 +463,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("spreading");
 //      constexpr size_t maxsupp = is_same<Tacc, float>::value ? 8 : 16;
 //      spreading_helper<maxsupp>(supp, coords, points, grid);
-(coords_sorted.size()>0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
+(coords.size()==0) ? spreadinterp->spread(points, grid) : spreadinterp->spread(coords, points, grid);
       timers.poppush("FFT");
       {
       auto fgrid(grid.to_fmav());
@@ -691,40 +579,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("interpolation");
 //      constexpr size_t maxsupp = is_same<Tcalc, float>::value ? 8 : 16;
 //      interpolation_helper<maxsupp>(supp, grid, coords, points);
-(coords_sorted.size()>0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
+(coords.size()==0) ?  spreadinterp->interp(grid, points) : spreadinterp->interp(grid, coords, points);
       timers.pop();
-      timers.pop();
-      }
-
-    void build_index(const cmav<Tcoord,2> &coords)
-      {
-      timers.push("building index");
-      size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      size_t ntiles_v = (nover[1]>>log2tile) + 3;
-      size_t ntiles_w = (nover[2]>>log2tile) + 3;
-      size_t lsq2 = log2tile;
-      while ((lsq2>=1) && (((ntiles_u*ntiles_v*ntiles_w)<<(3*(log2tile-lsq2)))<(size_t(1)<<28)))
-        --lsq2;
-      auto ssmall = log2tile-lsq2;
-      auto msmall = (size_t(1)<<ssmall) - 1;
-
-      coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
-        {
-        for (size_t i=lo; i<hi; ++i)
-          {
-          auto tile = parent::template get_tile<Tcoord>({coords(i,0),coords(i,1),coords(i,2)},lsq2);
-          auto lowkey = ((tile[0]&msmall)<<(2*ssmall))
-                      | ((tile[1]&msmall)<<   ssmall)
-                      |  (tile[2]&msmall);
-          auto hikey = ((tile[0]>>ssmall)*ntiles_v*ntiles_w)
-                     + ((tile[1]>>ssmall)*ntiles_w)
-                     +  (tile[2]>>ssmall);
-          key[i] = (hikey<<(3*ssmall)) | lowkey;
-          }
-        });
-      bucket_sort2(key, coord_idx, (ntiles_u*ntiles_v*ntiles_w)<<(3*ssmall), nthreads);
       timers.pop();
       }
   };

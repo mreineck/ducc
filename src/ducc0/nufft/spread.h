@@ -174,14 +174,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
       const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &grid) \
       { \
       if (points.size()==0) return; \
-      MR_assert(coords_sorted.size()!=0, "bad call"); \
+      MR_assert(coords_sorted.shape(0)==points.shape(0), "bad call"); \
       spreading_helper<16>(supp, coords_sorted, points, grid); \
       } \
     template<typename Tpoints, typename Tgrid> void interp( \
       const cmav<complex<Tgrid>,ndim> &grid, const vmav<complex<Tpoints>,1> &points) \
       { \
       if (points.size()==0) return; \
-      MR_assert(coords_sorted.size()!=0, "bad call"); \
+      MR_assert(coords_sorted.shape(0)==points.shape(0), "bad call"); \
       interpolation_helper<16>(supp, grid, coords_sorted, points); \
       } \
     template<typename Tpoints, typename Tgrid> void spread( \
