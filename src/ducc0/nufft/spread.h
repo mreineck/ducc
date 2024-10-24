@@ -24,7 +24,7 @@ namespace ducc0 {
 
 namespace detail_nufft {
 
-template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
+template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spreadinterp_ancestor
   {
   protected:
     // number of threads to use for this transform.
@@ -41,15 +41,15 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
 
     // holds the indices of the nonuniform points in the order in which they
     // should be processed
-// FIXME: change to Tidx at some point
-    quick_array<uint32_t> coord_idx;
+
+    quick_array<Tidx> coord_idx;
 
     shared_ptr<PolynomialKernel> krn;
 
     size_t supp, nsafe;
     array<double, ndim> shift;
 
-    array<int, ndim> maxi0;
+    array<int64_t, ndim> maxi0;
 
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile = log2tile_<Tacc,ndim>;
@@ -60,7 +60,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
     /*! Compute minimum index in the oversampled grid touched by the kernel
         around coordinate \a in. */
     template<typename Tcoord> [[gnu::always_inline]] void getpix(array<double,ndim> in,
-      array<double,ndim> &out, array<int,ndim> &out0) const
+      array<double,ndim> &out, array<int64_t,ndim> &out0) const
       {
       // do range reduction in long double when Tcoord is double,
       // to avoid inaccuracies with very large grids
@@ -69,30 +69,30 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
         {
         auto tmp = in[i]*coordfct[i];
         auto tmp2 = Tbig(tmp-floor(tmp))*nover[i];
-        out0[i] = min(int(tmp2+shift[i])-int(nover[i]), maxi0[i]);
+        out0[i] = min(int64_t(tmp2+shift[i])-int64_t(nover[i]), maxi0[i]);
         out[i] = double(tmp2-out0[i]);
         }
       }
 
     /*! Compute index of the tile into which \a in falls. */
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in) const
+    template<typename Tcoord> [[gnu::always_inline]] array<Tidx,ndim> get_tile(const array<double,ndim> &in) const
       {
       array<double,ndim> dum;
-      array<int,ndim> i0;
+      array<int64_t,ndim> i0;
       getpix<Tcoord>(in, dum, i0);
-      array<uint32_t,ndim> res;
+      array<Tidx,ndim> res;
       for (size_t i=0; i<ndim; ++i)
-        res[i] = uint32_t((i0[i]+nsafe)>>log2tile);
+        res[i] = Tidx((i0[i]+nsafe)>>log2tile);
       return res;
       }
-    template<typename Tcoord> [[gnu::always_inline]] array<uint32_t,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
+    template<typename Tcoord> [[gnu::always_inline]] array<Tidx,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
       {
       array<double,ndim> dum;
-      array<int,ndim> i0;
+      array<int64_t,ndim> i0;
       getpix<Tcoord>(in, dum, i0);
-      array<uint32_t,ndim> res;
+      array<Tidx,ndim> res;
       for (size_t i=0; i<ndim; ++i)
-        res[i] = uint32_t((i0[i]+nsafe)>>lsq2);
+        res[i] = Tidx((i0[i]+nsafe)>>lsq2);
       return res;
       }
 
@@ -117,7 +117,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
       }
 
   public:
-    Spreadinterp_ancestor(bool gridding, size_t npoints_,
+    Spreadinterp_ancestor(size_t npoints_,
       const array<size_t,ndim> &over_shape, size_t kidx,
       size_t nthreads_,
       const vector<double> &periodicity)
@@ -125,7 +125,7 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
         npoints(npoints_), nover(over_shape)
       {
 //FIXME
-      MR_assert(npoints<=(~uint32_t(0)), "too many nonuniform points");
+      MR_assert(npoints<=(~Tidx(0)), "too many nonuniform points");
 
       for (size_t i=0; i<ndim; ++i)
         MR_assert((nover[i]>>log2tile)<=max_ntile<ndim>, "oversampled grid too large");
@@ -145,11 +145,11 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Spreadinterp_ancestor
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Spreadinterp;
+template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t ndim> class Spreadinterp;
 
 #define DUCC0_SPREADINTERP_BOILERPLATE \
   private: \
-    using parent=Spreadinterp_ancestor<Tcalc, Tacc, ndim>; \
+    using parent=Spreadinterp_ancestor<Tcalc, Tacc, Tidx, ndim>; \
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp, \
           parent::krn, \
           parent::nover, parent::shift, parent::maxi0, \
@@ -159,10 +159,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Spre
  \
   public: \
     using parent::parent; /* inherit constructor */ \
-    Spreadinterp(bool gridding, const cmav<Tcoord,2> &coords, \
+    Spreadinterp(const cmav<Tcoord,2> &coords, \
           const array<size_t, ndim> &over_shape_, size_t kidx,  \
           size_t nthreads_, const vector<double> &periodicity) \
-      : parent(gridding, coords.shape(0), over_shape_, kidx, nthreads_, \
+      : parent(coords.shape(0), over_shape_, kidx, nthreads_, \
                periodicity), \
         coords_sorted({npoints,ndim},UNINITIALIZED) \
       { \
@@ -191,7 +191,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Spre
       if (points.size()==0) return; \
       MR_assert(coords_sorted.size()==0, "bad call"); \
       build_index(coords); \
-      spreading_helper(supp, coords, points, grid); \
+      spreading_helper<16>(supp, coords, points, grid); \
       } \
     template<typename Tpoints, typename Tgrid> void interp( \
       const cmav<complex<Tgrid>,ndim> &grid, const cmav<Tcoord,2> &coords, \
@@ -200,7 +200,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Spre
       if (points.size()==0) return; \
       MR_assert(coords_sorted.size()==0, "bad call"); \
       build_index(coords); \
-      interpolation_helper(supp, grid, coords, points); \
+      interpolation_helper<16>(supp, grid, coords, points); \
       }
 
 /*! Helper class for carrying out 1D nonuniform FFTs of types 1 and 2.
@@ -216,7 +216,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Spre
     Tcoord: the floating-point type used for storing the coordinates of the
            non-uniform points.
  */
-template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcalc, Tacc, Tcoord, 1>: public Spreadinterp_ancestor<Tcalc, Tacc, 1>
+template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>: public Spreadinterp_ancestor<Tcalc, Tacc, Tidx, 1>
   {
   private:
     static constexpr size_t ndim=1;
@@ -237,8 +237,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         static constexpr double xsupp=2./supp;
         const Spreadinterp *parent;
         const vmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the current nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 
         vmav<Tacc,ndim> bufr, bufi;
         Tacc *px0r, *px0i;
@@ -248,10 +248,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         DUCC0_NOINLINE void dump()
           {
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
-          int inu = int(parent->nover[0]);
+          int64_t inu = int(parent->nover[0]);
           {
           LockGuard lock(mylock);
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
             bufr(iu) = bufi(iu) = 0;
@@ -270,7 +270,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
             px0r(bufr.data()), px0i(bufi.data()), mylock(mylock_) {}
         ~HelperNu2u() { dump(); }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int,ndim> ind)
+        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -299,8 +299,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         const Spreadinterp *parent;
 
         const cmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the current nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 
         vmav<Tcalc,ndim> bufr, bufi;
         const Tcalc *px0r, *px0i;
@@ -308,8 +308,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         // load a tile from the global oversampled grid into local buffer
         DUCC0_NOINLINE void load()
           {
-          int inu = int(parent->nover[0]);
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+          int64_t inu = int(parent->nover[0]);
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             { bufr(iu) = grid(idxu).real(); bufi(iu) = grid(idxu).imag(); }
           }
 
@@ -322,7 +322,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
             bufr({size_t(suvec)}), bufi({size_t(suvec)}),
             px0r(bufr.data()), px0i(bufi.data()) {}
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int,ndim> ind)
+        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -358,7 +358,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         HelperNu2u<SUPP> hlp(this, grid, mylock);
 
         constexpr size_t batchsize=3;
-        array<array<int,1>,batchsize> index;
+        array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
         mysimd<Tacc> kubuf[batchsize*hlp.nvec];
 
@@ -458,7 +458,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         HelperU2nu<SUPP> hlp(this, grid);
 
         constexpr size_t batchsize=3;
-        array<array<int,1>,batchsize> index;
+        array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
         mysimd<Tcalc> kubuf[batchsize*hlp.nvec];
 
@@ -540,7 +540,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
       MR_assert(coords.shape(1)==ndim, "ndim mismatch");
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
       coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
+      quick_array<Tidx> key(npoints);
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -549,8 +549,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
       bucket_sort2(key, coord_idx, ntiles_u, nthreads);
       }
   };
-#if 0
-template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcalc, Tacc, Tcoord, 2>: public Spreadinterp_ancestor<Tcalc, Tacc, 2>
+
+template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>: public Spreadinterp_ancestor<Tcalc, Tacc, Tidx, 2>
   {
   private:
     static constexpr size_t ndim=2;
@@ -570,8 +570,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         const Spreadinterp *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         const vmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the current nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 
         vmav<complex<Tacc>,ndim> gbuf;
         complex<Tacc> *px0;
@@ -580,14 +580,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         DUCC0_NOINLINE void dump()
           {
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
-          int inu = int(parent->nover[0]);
-          int inv = int(parent->nover[1]);
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
 
-          int idxv0 = (b0[1]+inv)%inv;
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             LockGuard lock(locks[idxu]);
-            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
               gbuf(iu,iv) = 0;
@@ -650,19 +650,19 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the current nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 
         vmav<Tcalc,ndim> bufri;
         const Tcalc *px0r, *px0i;
 
         DUCC0_NOINLINE void load()
           {
-          int inu = int(parent->nover[0]);
-          int inv = int(parent->nover[1]);
-          int idxv0 = (b0[1]+inv)%inv;
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
-            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               bufri(2*iu  ,iv) = grid(idxu, idxv).real();
               bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
@@ -845,7 +845,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
       size_t ntiles_v = (nover[1]>>log2tile) + 3;
       coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
+      quick_array<Tidx> key(npoints);
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -858,7 +858,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcalc, Tacc, Tcoord, 3>: public Spreadinterp_ancestor<Tcalc, Tacc, 3>
+template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>: public Spreadinterp_ancestor<Tcalc, Tacc, Tidx, 3>
   {
   private:
     static constexpr size_t ndim=3;
@@ -878,10 +878,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         const Spreadinterp *parent;
         TemplateKernel<supp, mysimd<Tacc>> tkrn;
         const vmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the current nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 #ifdef NEW_DUMP
-        array<int,ndim> imin,imax;
+        array<int64_t,ndim> imin,imax;
 #endif
 
         vmav<complex<Tacc>,ndim> gbuf;
@@ -891,18 +891,18 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
         DUCC0_NOINLINE void dump()
           {
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
-          int inu = int(parent->nover[0]);
-          int inv = int(parent->nover[1]);
-          int inw = int(parent->nover[2]);
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t inw = int(parent->nover[2]);
 
 #ifdef NEW_DUMP
-          int idxv0 = (imin[1]+b0[1]+inv)%inv;
-          int idxw0 = (imin[2]+b0[2]+inw)%inw;
-          for (int iu=imin[0], idxu=(imin[0]+b0[0]+inu)%inu; iu<imax[0]; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+          int64_t idxv0 = (imin[1]+b0[1]+inv)%inv;
+          int64_t idxw0 = (imin[2]+b0[2]+inw)%inw;
+          for (int64_t iu=imin[0], idxu=(imin[0]+b0[0]+inu)%inu; iu<imax[0]; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             LockGuard lock(locks[idxu]);
-            for (int iv=imin[1], idxv=idxv0; iv<imax[1]; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
-              for (int iw=imin[2], idxw=idxw0; iw<imax[2]; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+            for (int64_t iv=imin[1], idxv=idxv0; iv<imax[1]; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int64_t iw=imin[2], idxw=idxw0; iw<imax[2]; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 auto t=gbuf(iu,iv,iw);
                 grid(idxu,idxv,idxw) += complex<Tcalc>(t);
@@ -911,13 +911,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
             }
           imin={1000,1000,1000}; imax={-1000,-1000,-1000};
 #else
-          int idxv0 = (b0[1]+inv)%inv;
-          int idxw0 = (b0[2]+inw)%inw;
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw)%inw;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             LockGuard lock(locks[idxu]);
-            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
-              for (int iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 auto t=gbuf(iu,iv,iw);
                 grid(idxu,idxv,idxw) += complex<Tcalc>(t);
@@ -997,22 +997,22 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
 
         TemplateKernel<supp, mysimd<Tcalc>> tkrn;
         const cmav<complex<Tcalc>,ndim> &grid;
-        array<int,ndim> i0; // start index of the nonuniform point
-        array<int,ndim> b0; // start index of the current buffer
+        array<int64_t,ndim> i0; // start index of the nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
 
         vmav<Tcalc,ndim> bufri;
         const Tcalc *px0r, *px0i;
 
         DUCC0_NOINLINE void load()
           {
-          int inu = int(parent->nover[0]);
-          int inv = int(parent->nover[1]);
-          int inw = int(parent->nover[2]);
-          int idxv0 = (b0[1]+inv)%inv;
-          int idxw0 = (b0[2]+inw)%inw;
-          for (int iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
-            for (int iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
-              for (int iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t inw = int(parent->nover[2]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw)%inw;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 bufri(iu,2*iv,iw) = grid(idxu, idxv, idxw).real();
                 bufri(iu,2*iv+1,iw) = grid(idxu, idxv, idxw).imag();
@@ -1217,7 +1217,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
       auto msmall = (size_t(1)<<ssmall) - 1;
 
       coord_idx.resize(npoints);
-      quick_array<uint32_t> key(npoints);
+      quick_array<Tidx> key(npoints);
       execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -1237,7 +1237,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Spreadinterp<Tcal
   };
 
 #undef DUCC0_SPREADINTERP_BOILERPLATE
-
+#if 0
 /* Possibilities:
 - doing transforms in multiple steps (many cumulative spread calls, only one FFT)
 - batched transforms (including SIMD-based sub-batching)
@@ -1269,6 +1269,37 @@ void interp(const vmav<Tpoint,2> &points, const cmav<Tcoord,2> &coords,
             const cfmav<Tgrid> &grid, size_t kernel_id,
             const vector<double> &periodicity, size_t nthreads);
 #endif
+
+template<typename Tpoint, typename Tcoord, typename Tgrid, typename Tidx, typename Tacc>
+void spread(const cmav<complex<Tpoint>,1> &points, const cmav<Tcoord,2> &coords,
+//            const vector<double> &origin,
+//            bool coords_sorted, const cmav<Tidx,1> &idx,
+            const vfmav<complex<Tgrid>> &grid /* inout! */, size_t kernel_id,
+            const vector<double> &periodicity, size_t nthreads)
+  {
+  auto ndim = grid.ndim();
+  if (ndim==1)
+    {
+array<size_t,1> shp{grid.shape(0)};
+    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 1> worker
+      (points.shape(0), shp, kernel_id, nthreads, periodicity);
+    worker.spread(coords, points, vmav<complex<Tgrid>,1>(grid));
+    }
+  else if (ndim==2)
+    {
+array<size_t,2> shp{grid.shape(0),grid.shape(1)};
+    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 2> worker
+      (points.shape(0), shp, kernel_id, nthreads, periodicity);
+    worker.spread(coords, points, vmav<complex<Tgrid>,2>(grid));
+    }
+  else if (ndim==3)
+    {
+array<size_t,3> shp{grid.shape(0),grid.shape(1),grid.shape(2)};
+    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 3> worker
+      (points.shape(0), shp, kernel_id, nthreads, periodicity);
+    worker.spread(coords, points, vmav<complex<Tgrid>,3>(grid));
+    }
+  }
 
 }}
 
