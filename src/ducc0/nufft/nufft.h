@@ -52,7 +52,7 @@
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/nufft/nufft_common.h"
-#include "ducc0/nufft/spread.h"
+#include "ducc0/nufft/spreadinterp.h"
 
 namespace ducc0 {
 

@@ -803,6 +803,12 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
       }
+    static cmav build_empty()
+      {
+      shape_t nshp;
+      nshp.fill(0);
+      return cmav(static_cast<T *>(nullptr), nshp);
+      }
     cmav transpose() const
       {
       return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));

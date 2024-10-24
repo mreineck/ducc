@@ -17,8 +17,8 @@
 /* Copyright (C) 2019-2024 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef DUCC0_NUFFT_SPREAD_H
-#define DUCC0_NUFFT_SPREAD_H
+#ifndef DUCC0_NUFFT_SPREADINTERP_H
+#define DUCC0_NUFFT_SPREADINTERP_H
 
 namespace ducc0 {
 
