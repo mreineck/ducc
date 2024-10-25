@@ -58,6 +58,46 @@ namespace ducc0 {
 
 namespace detail_nufft {
 
+template<typename Tgrid> void nufft_FFT(bool gridding, bool forward,
+  const vfmav<complex<Tgrid>> &grid, const vector<size_t> &nuni, size_t nthreads)
+  {
+  size_t ndim = grid.ndim();
+
+  for (size_t iter=0; iter<ndim; ++iter)
+    {
+    auto idim = gridding ? ndim-1-iter : iter;
+    if (idim+1==ndim)
+      c2c(grid, grid, {idim}, forward, Tgrid(1), nthreads);
+    else if (idim+2==ndim)
+      {
+      vector<slice> slices(ndim);
+      vector<slice> sub {{0,(nuni[idim+1]+1)/2}, {grid.shape(idim+1)-nuni[idim+1]/2,MAXIDX}};
+      for (size_t i=0; i<((nuni[idim+1]==1)?1:2); ++i)
+        {
+        slices[idim+1] = sub[i];
+        auto subgrid=grid.subarray(slices);
+        c2c(subgrid, subgrid, {idim}, forward, Tgrid(1), nthreads);
+        }
+      }
+    else if (idim+3==ndim)
+      {
+      vector<slice> slices(ndim);
+      vector<slice> sub1 {{0,(nuni[idim+1]+1)/2}, {grid.shape(idim+1)-nuni[idim+1]/2,MAXIDX}};
+      vector<slice> sub2 {{0,(nuni[idim+2]+1)/2}, {grid.shape(idim+2)-nuni[idim+2]/2,MAXIDX}};
+      for (size_t i=0; i<((nuni[idim+1]==1)?1:2); ++i)
+        {
+        slices[idim+1] = sub1[i];
+        for (size_t j=0; j<((nuni[idim+2]==1)?1:2); ++j)
+          {
+          slices[idim+2] = sub2[j];
+          auto subgrid=grid.subarray(slices);
+          c2c(subgrid, subgrid, {idim}, forward, Tgrid(1), nthreads);
+          }
+        }
+      }
+    }
+  }
+
 template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
   {
   protected:
@@ -190,7 +230,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
           parent::corfac, \
           parent::prep_nu2u, parent::prep_u2nu; \
  \
-    unique_ptr<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>> spreadinterp; \
+    Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim> spreadinterp; \
  \
   public: \
     using parent::parent; /* inherit constructor */ \
@@ -199,19 +239,17 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
           size_t nthreads_, double sigma_min, double sigma_max, \
           const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_, \
-               sigma_min, sigma_max, fft_order_) \
-      { \
-spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(coords, nover, krn_id, nthreads, periodicity); \
-      } \
+               sigma_min, sigma_max, fft_order_), \
+        spreadinterp(coords, nover, krn_id, nthreads, periodicity) \
+      {} \
     Nufft (bool gridding, size_t npoints_, \
       const array<size_t,ndim> &uniform_shape, double epsilon_, \
       size_t nthreads_, double sigma_min, double sigma_max, \
       const vector<double> &periodicity, bool fft_order_) \
       : parent(gridding, npoints_, uniform_shape, epsilon_, nthreads_, \
-               sigma_min, sigma_max, fft_order_) \
-      { \
-spreadinterp = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim>>(npoints_, nover, krn_id, nthreads, periodicity); \
-      } \
+               sigma_min, sigma_max, fft_order_), \
+        spreadinterp(npoints_, nover, krn_id, nthreads, periodicity) \
+      {} \
  \
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity, \
       const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &uniform) \
@@ -281,12 +319,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      (coords.size()==0) ? spreadinterp->spread(points, grid)
-                         : spreadinterp->spread(coords, points, grid);
+      (coords.size()==0) ? spreadinterp.spread(points, grid)
+                         : spreadinterp.spread(coords, points, grid);
 
       timers.poppush("FFT");
-      auto fgrid(grid.to_fmav());
-      c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
+      nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[1]), nthreads);
+
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
@@ -319,11 +357,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       timers.poppush("FFT");
-      auto fgrid(grid.to_fmav());
-      c2c(fgrid, fgrid, {0}, forward, Tcalc(1), nthreads);
+      nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[1]), nthreads);
+
       timers.poppush("interpolation");
-      (coords.size()==0) ?  spreadinterp->interp(grid, points)
-                         : spreadinterp->interp(grid, coords, points);
+      (coords.size()==0) ? spreadinterp.interp(grid, points)
+                         : spreadinterp.interp(grid, coords, points);
 
       timers.pop();
       timers.pop();
@@ -347,21 +385,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      (coords.size()==0) ? spreadinterp->spread(points, grid)
-                         : spreadinterp->spread(coords, points, grid);
+      (coords.size()==0) ? spreadinterp.spread(points, grid)
+                         : spreadinterp.spread(coords, points, grid);
 
       timers.poppush("FFT");
-      {
-      auto fgrid(grid.to_fmav());
-      c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
-      auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
-      c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      if (nuni[1]>1)
-        {
-        auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
-        c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
-        }
-      }
+      nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[2]), nthreads);
+
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
@@ -409,20 +438,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       timers.poppush("FFT");
-      {
-      auto fgrid(grid.to_fmav());
-      auto fgridl=fgrid.subarray({{},{0,(nuni[1]+1)/2}});
-      c2c(fgridl, fgridl, {0}, forward, Tcalc(1), nthreads);
-      if (nuni[1]>1)
-        {
-        auto fgridh=fgrid.subarray({{},{fgrid.shape(1)-nuni[1]/2,MAXIDX}});
-        c2c(fgridh, fgridh, {0}, forward, Tcalc(1), nthreads);
-        }
-      c2c(fgrid, fgrid, {1}, forward, Tcalc(1), nthreads);
-      }
+      nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[2]), nthreads);
+
       timers.poppush("interpolation");
-      (coords.size()==0) ?  spreadinterp->interp(grid, points)
-                         : spreadinterp->interp(grid, coords, points);
+      (coords.size()==0) ? spreadinterp.interp(grid, points)
+                         : spreadinterp.interp(grid, coords, points);
       timers.pop();
       timers.pop();
       }
@@ -446,39 +466,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
-      (coords.size()==0) ? spreadinterp->spread(points, grid)
-                         : spreadinterp->spread(coords, points, grid);
+      (coords.size()==0) ? spreadinterp.spread(points, grid)
+                         : spreadinterp.spread(coords, points, grid);
       timers.poppush("FFT");
-      {
-      auto fgrid(grid.to_fmav());
-      slice slz{0,(nuni[2]+1)/2}, shz{fgrid.shape(2)-nuni[2]/2,MAXIDX};
-      slice sly{0,(nuni[1]+1)/2}, shy{fgrid.shape(1)-nuni[1]/2,MAXIDX};
-      c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
-      auto fgridl=fgrid.subarray({{},{},slz});
-      c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
-      if (nuni[2]>1)
-        {
-        auto fgridh=fgrid.subarray({{},{},shz});
-        c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
-        }
-      auto fgridll=fgrid.subarray({{},sly,slz});
-      c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
-      if (nuni[2]>1)
-        {
-        auto fgridlh=fgrid.subarray({{},sly,shz});
-        c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
-        }
-      if (nuni[1]>1)
-        {
-        auto fgridhl=fgrid.subarray({{},shy,slz});
-        c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
-        if (nuni[2]>1)
-          {
-          auto fgridhh=fgrid.subarray({{},shy,shz});
-          c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
-          }
-        }
-      }
+      nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[3]), nthreads);
+
       timers.poppush("grid correction");
       execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
         {
@@ -530,39 +522,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
           }
         });
       timers.poppush("FFT");
-      {
-      auto fgrid(grid.to_fmav());
-      slice slz{0,(nuni[2]+1)/2}, shz{fgrid.shape(2)-nuni[2]/2,MAXIDX};
-      slice sly{0,(nuni[1]+1)/2}, shy{fgrid.shape(1)-nuni[1]/2,MAXIDX};
-      auto fgridll=fgrid.subarray({{},sly,slz});
-      c2c(fgridll, fgridll, {0}, forward, Tcalc(1), nthreads);
-      if (nuni[2]>1)
-        {
-        auto fgridlh=fgrid.subarray({{},sly,shz});
-        c2c(fgridlh, fgridlh, {0}, forward, Tcalc(1), nthreads);
-        }
-      if (nuni[1]>1)
-        {
-        auto fgridhl=fgrid.subarray({{},shy,slz});
-        c2c(fgridhl, fgridhl, {0}, forward, Tcalc(1), nthreads);
-        if (nuni[2]>1)
-          {
-          auto fgridhh=fgrid.subarray({{},shy,shz});
-          c2c(fgridhh, fgridhh, {0}, forward, Tcalc(1), nthreads);
-          }
-        }
-      auto fgridl=fgrid.subarray({{},{},slz});
-      c2c(fgridl, fgridl, {1}, forward, Tcalc(1), nthreads);
-      if (nuni[2]>1)
-        {
-        auto fgridh=fgrid.subarray({{},{},shz});
-        c2c(fgridh, fgridh, {1}, forward, Tcalc(1), nthreads);
-        }
-      c2c(fgrid, fgrid, {2}, forward, Tcalc(1), nthreads);
-      }
+      nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[3]), nthreads);
+
       timers.poppush("interpolation");
-      (coords.size()==0) ?  spreadinterp->interp(grid, points)
-                         : spreadinterp->interp(grid, coords, points);
+      (coords.size()==0) ? spreadinterp.interp(grid, points)
+                         : spreadinterp.interp(grid, coords, points);
       timers.pop();
       timers.pop();
       }
