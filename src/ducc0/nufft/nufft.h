@@ -58,8 +58,8 @@ namespace ducc0 {
 
 namespace detail_nufft {
 
-template<typename Tgrid> void nufft_FFT(bool gridding, bool forward,
-  const vfmav<complex<Tgrid>> &grid, const vector<size_t> &nuni, size_t nthreads)
+template<typename Tcalc> void nufft_FFT(bool gridding, bool forward,
+  const vfmav<complex<Tcalc>> &grid, const vector<size_t> &nuni, size_t nthreads)
   {
   size_t ndim = grid.ndim();
 
@@ -67,7 +67,7 @@ template<typename Tgrid> void nufft_FFT(bool gridding, bool forward,
     {
     auto idim = gridding ? ndim-1-iter : iter;
     if (idim+1==ndim)
-      c2c(grid, grid, {idim}, forward, Tgrid(1), nthreads);
+      c2c(grid, grid, {idim}, forward, Tcalc(1), nthreads);
     else if (idim+2==ndim)
       {
       vector<slice> slices(ndim);
@@ -76,7 +76,7 @@ template<typename Tgrid> void nufft_FFT(bool gridding, bool forward,
         {
         slices[idim+1] = sub[i];
         auto subgrid=grid.subarray(slices);
-        c2c(subgrid, subgrid, {idim}, forward, Tgrid(1), nthreads);
+        c2c(subgrid, subgrid, {idim}, forward, Tcalc(1), nthreads);
         }
       }
     else if (idim+3==ndim)
@@ -91,10 +91,153 @@ template<typename Tgrid> void nufft_FFT(bool gridding, bool forward,
           {
           slices[idim+2] = sub2[j];
           auto subgrid=grid.subarray(slices);
-          c2c(subgrid, subgrid, {idim}, forward, Tgrid(1), nthreads);
+          c2c(subgrid, subgrid, {idim}, forward, Tcalc(1), nthreads);
           }
         }
       }
+    }
+  }
+
+template<typename Tcalc, typename Tgrid> void deconv_nu2u(
+  const cfmav<complex<Tcalc>> &grid,
+  const vfmav<complex<Tgrid>> &uniform,
+  vector<vector<double>> &corfac,
+  bool fft_order,
+  size_t nthreads)
+  {
+  size_t ndim = grid.ndim();
+
+  if (ndim==1)
+    {
+    cmav<complex<Tcalc>,1> grid2(grid);
+    vmav<complex<Tgrid>,1> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iout, iin] = comp_indices(i, nuni0, nover0, fft_order);
+        uni2(iout) = complex<Tgrid>(grid2(iin)*Tcalc(corfac[0][icfu]));
+        }
+      });
+    }
+  else if (ndim==2)
+    {
+    cmav<complex<Tcalc>,2> grid2(grid);
+    vmav<complex<Tgrid>,2> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0),
+           nuni1=uni2.shape(1), nover1=grid2.shape(1);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iout, iin] = comp_indices(i, nuni0, nover0, fft_order);
+        double cf0=corfac[0][icfu];
+        for (size_t j=0; j<nuni1; ++j)
+          {
+          auto [icfv, jout, jin] = comp_indices(j, nuni1, nover1, fft_order);
+          uni2(iout,jout) = complex<Tgrid>(grid2(iin,jin)
+              *Tcalc(cf0*corfac[1][icfv]));
+          }
+        }
+      });
+    }
+  else if (ndim==3)
+    {
+    cmav<complex<Tcalc>,3> grid2(grid);
+    vmav<complex<Tgrid>,3> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0),
+           nuni1=uni2.shape(1), nover1=grid2.shape(1),
+           nuni2=uni2.shape(2), nover2=grid2.shape(2);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iout, iin] = comp_indices(i, nuni0, nover0, fft_order);
+        double cf0=corfac[0][icfu];
+        for (size_t j=0; j<nuni1; ++j)
+          {
+          auto [icfv, jout, jin] = comp_indices(j, nuni1, nover1, fft_order);
+          double cf01=cf0*corfac[1][icfv];
+          for (size_t k=0; k<nuni2; ++k)
+            {
+            auto [icfw, kout, kin] = comp_indices(k, nuni2, nover2, fft_order);
+            uni2(iout,jout,kout) = complex<Tgrid>(grid2(iin,jin,kin)
+                *Tcalc(cf01*corfac[2][icfw]));
+            }
+          }
+        }
+      });
+    }
+  }
+template<typename Tcalc, typename Tgrid> void deconv_u2nu(
+  const cfmav<complex<Tgrid>> &uniform,
+  const vfmav<complex<Tcalc>> &grid,
+  vector<vector<double>> &corfac,
+  bool fft_order,
+  size_t nthreads)
+  {
+  size_t ndim = grid.ndim();
+
+  if (ndim==1)
+    {
+    vmav<complex<Tcalc>,1> grid2(grid);
+    cmav<complex<Tgrid>,1> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iin, iout] = comp_indices(i, nuni0, nover0, fft_order);
+        grid2(iout) = complex<Tcalc>(uni2(iin))*Tcalc(corfac[0][icfu]);
+        }
+      });
+    }
+  else if (ndim==2)
+    {
+    vmav<complex<Tcalc>,2> grid2(grid);
+    cmav<complex<Tgrid>,2> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0),
+           nuni1=uni2.shape(1), nover1=grid2.shape(1);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iin, iout] = comp_indices(i, nuni0, nover0, fft_order);
+        double cf0=corfac[0][icfu];
+        for (size_t j=0; j<nuni1; ++j)
+          {
+          auto [icfv, jin, jout] = comp_indices(j, nuni1, nover1, fft_order);
+          grid2(iout,jout) = complex<Tcalc>(uni2(iin,jin))*Tcalc(cf0*corfac[1][icfv]);
+          }
+        }
+      });
+    }
+  else if (ndim==3)
+    {
+    vmav<complex<Tcalc>,3> grid2(grid);
+    cmav<complex<Tgrid>,3> uni2(uniform);
+    size_t nuni0=uni2.shape(0), nover0=grid2.shape(0),
+           nuni1=uni2.shape(1), nover1=grid2.shape(1),
+           nuni2=uni2.shape(2), nover2=grid2.shape(2);
+    execParallel(nuni0, nthreads, [&](size_t lo, size_t hi)
+      {
+      for (auto i=lo; i<hi; ++i)
+        {
+        auto [icfu, iin, iout] = comp_indices(i, nuni0, nover0, fft_order);
+        double cf0=corfac[0][icfu];
+        for (size_t j=0; j<nuni1; ++j)
+          {
+          auto [icfv, jin, jout] = comp_indices(j, nuni1, nover1, fft_order);
+          double cf01=cf0*corfac[1][icfv];
+          for (size_t k=0; k<nuni2; ++k)
+            {
+            auto [icfw, kin, kout] = comp_indices(k, nuni2, nover2, fft_order);
+            grid2(iout,jout,kout) = complex<Tcalc>(uni2(iin,jin,kin))*Tcalc(cf01*corfac[2][icfw]);
+            }
+          }
+        }
+      });
     }
   }
 
@@ -326,14 +469,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[1]), nthreads);
 
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nover[0], fft_order);
-          uniform(iout) = complex<Tgrid>(grid(iin)*Tcalc(corfac[0][icfu]));
-          }
-        });
+      deconv_nu2u(grid.to_fmav(), uniform.to_fmav(), corfac, fft_order, nthreads);
       timers.pop();
       timers.pop();
       }
@@ -348,14 +484,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nover[0], fft_order);
-          grid(iout) = complex<Tcalc>(uniform(iin))*Tcalc(corfac[0][icfu]);
-          }
-        });
+      deconv_u2nu(uniform.to_fmav(), grid.to_fmav(), corfac, fft_order, nthreads);
       timers.poppush("FFT");
       nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[1]), nthreads);
 
@@ -392,19 +521,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[2]), nthreads);
 
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nover[0], fft_order);
-          for (size_t j=0; j<nuni[1]; ++j)
-            {
-            auto [icfv, jout, jin] = comp_indices(j, nuni[1], nover[1], fft_order);
-            uniform(iout,jout) = complex<Tgrid>(grid(iin,jin)
-              *Tcalc(corfac[0][icfu]*corfac[1][icfv]));
-            }
-          }
-        });
+      deconv_nu2u(grid.to_fmav(), uniform.to_fmav(), corfac, fft_order, nthreads);
       timers.pop();
       timers.pop();
       }
@@ -424,19 +541,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       if (nuni[0]>1)
         { auto a0 = subarray<2>(grid, {{nover[0]-nuni[0]/2,MAXIDX}, {nuni[1]/2, nover[1]-nuni[1]/2+1}}); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nover[0], fft_order);
-          for (size_t j=0; j<nuni[1]; ++j)
-            {
-            auto [icfv, jin, jout] = comp_indices(j, nuni[1], nover[1], fft_order);
-            grid(iout,jout) = complex<Tcalc>(uniform(iin,jin))
-              *Tcalc(corfac[0][icfu]*corfac[1][icfv]);
-            }
-          }
-        });
+      deconv_u2nu(uniform.to_fmav(), grid.to_fmav(), corfac, fft_order, nthreads);
       timers.poppush("FFT");
       nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[2]), nthreads);
 
@@ -472,23 +577,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[3]), nthreads);
 
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iout, iin] = comp_indices(i, nuni[0], nover[0], fft_order);
-          for (size_t j=0; j<nuni[1]; ++j)
-            {
-            auto [icfv, jout, jin] = comp_indices(j, nuni[1], nover[1], fft_order);
-            for (size_t k=0; k<nuni[2]; ++k)
-              {
-              auto [icfw, kout, kin] = comp_indices(k, nuni[2], nover[2], fft_order);
-              uniform(iout,jout,kout) = complex<Tgrid>(grid(iin,jin,kin)
-                *Tcalc(corfac[0][icfu]*corfac[1][icfv]*corfac[2][icfw]));
-              }
-            }
-          }
-        });
+      deconv_nu2u(grid.to_fmav(), uniform.to_fmav(), corfac, fft_order, nthreads);
       timers.pop();
       timers.pop();
       }
@@ -504,23 +593,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft<Tcalc, Tacc
       // TODO: not all entries need to be zeroed, perhaps some time can be saved here
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      execParallel(nuni[0], nthreads, [&](size_t lo, size_t hi)
-        {
-        for (auto i=lo; i<hi; ++i)
-          {
-          auto [icfu, iin, iout] = comp_indices(i, nuni[0], nover[0], fft_order);
-          for (size_t j=0; j<nuni[1]; ++j)
-            {
-            auto [icfv, jin, jout] = comp_indices(j, nuni[1], nover[1], fft_order);
-            for (size_t k=0; k<nuni[2]; ++k)
-              {
-              auto [icfw, kin, kout] = comp_indices(k, nuni[2], nover[2], fft_order);
-              grid(iout,jout,kout) = complex<Tcalc>(uniform(iin,jin,kin))
-                *Tcalc(corfac[0][icfu]*corfac[1][icfv]*corfac[2][icfw]);
-              }
-            }
-          }
-        });
+      deconv_u2nu(uniform.to_fmav(), grid.to_fmav(), corfac, fft_order, nthreads);
       timers.poppush("FFT");
       nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[3]), nthreads);
 
