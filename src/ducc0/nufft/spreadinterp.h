@@ -116,6 +116,25 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
       return res;
       }
 
+    template<typename Tpoints> bool prep_spread
+      (const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tcalc>,ndim> &grid)
+      {
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
+        "Tcalc must be at least as accurate as Tpoints");
+      MR_assert(points.shape(0)==npoints, "number of points mismatch");
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch");
+      return npoints==0;
+      }
+    template<typename Tpoints> bool prep_interp
+      (const cmav<complex<Tpoints>,1> &points, const cmav<complex<Tcalc>,ndim> &grid)
+      {
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
+        "Tcalc must be at least as accurate as Tpoints");
+      MR_assert(points.shape(0)==npoints, "number of points mismatch");
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch");
+      return npoints==0;
+      }
+
   public:
     Spreadinterp_ancestor(size_t npoints_,
       const array<size_t,ndim> &over_shape, size_t kidx,
@@ -151,7 +170,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
   private: \
     using parent=Spreadinterp_ancestor<Tcalc, Tacc, Tidx, ndim>; \
     using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp, \
-          parent::krn, \
+          parent::krn, parent::prep_spread, parent::prep_interp, \
           parent::nover, parent::shift, parent::maxi0, \
           parent::log2tile, parent::sort_coords; \
  \
@@ -173,23 +192,20 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
     template<typename Tpoints, typename Tgrid> void spread( \
       const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &grid) \
       { \
-      if (points.size()==0) return; \
-      MR_assert(coords_sorted.shape(0)==points.shape(0), "bad call"); \
+      if (prep_spread(points, grid)) return; \
       spreading_helper<16>(supp, coords_sorted, points, grid); \
       } \
     template<typename Tpoints, typename Tgrid> void interp( \
       const cmav<complex<Tgrid>,ndim> &grid, const vmav<complex<Tpoints>,1> &points) \
       { \
-      if (points.size()==0) return; \
-      MR_assert(coords_sorted.shape(0)==points.shape(0), "bad call"); \
+      if (prep_interp(points, grid)) return; \
       interpolation_helper<16>(supp, grid, coords_sorted, points); \
       } \
     template<typename Tpoints, typename Tgrid> void spread( \
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points, \
       const vmav<complex<Tgrid>,ndim> &grid) \
       { \
-      if (points.size()==0) return; \
-      MR_assert(coords_sorted.size()==0, "bad call"); \
+      if (prep_spread(points, grid)) return; \
       build_index(coords); \
       spreading_helper<16>(supp, coords, points, grid); \
       } \
@@ -197,8 +213,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
       const cmav<complex<Tgrid>,ndim> &grid, const cmav<Tcoord,2> &coords, \
       const vmav<complex<Tpoints>,1> &points) \
       { \
-      if (points.size()==0) return; \
-      MR_assert(coords_sorted.size()==0, "bad call"); \
+      if (prep_interp(points, grid)) return; \
       build_index(coords); \
       interpolation_helper<16>(supp, grid, coords, points); \
       }
