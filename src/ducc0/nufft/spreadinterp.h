@@ -1252,6 +1252,78 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
   };
 
 #undef DUCC0_SPREADINTERP_BOILERPLATE
+
+template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Spreadinterp2
+  {
+  private:
+    unique_ptr<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>> si1;
+    unique_ptr<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>> si2;
+    unique_ptr<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>> si3;
+
+  public:
+    Spreadinterp2(size_t npoints,
+      const vector<size_t> &over_shape, size_t kidx,
+      size_t nthreads,
+      const vector<double> &periodicity)
+      {
+      size_t ndim = over_shape.size();
+      if (ndim==1)
+        si1 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>>
+          (npoints, array<size_t,1>{over_shape[0]}, kidx, nthreads, periodicity);
+      else if (ndim==2)
+        si2 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>>
+          (npoints, array<size_t,2>{over_shape[0],over_shape[1]}, kidx, nthreads, periodicity);
+      else if (ndim==3)
+        si3 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>>
+          (npoints, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, kidx, nthreads, periodicity);
+      }
+    Spreadinterp2(const cmav<Tcoord,2> &coords,
+      const vector<size_t> &over_shape, size_t kidx,
+      size_t nthreads, const vector<double> &periodicity)
+      {
+      size_t ndim = over_shape.size();
+      if (ndim==1)
+        si1 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>>
+          (coords, array<size_t,1>{over_shape[0]}, kidx, nthreads, periodicity);
+      else if (ndim==2)
+        si2 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>>
+          (coords, array<size_t,2>{over_shape[0],over_shape[1]}, kidx, nthreads, periodicity);
+      else if (ndim==3)
+        si3 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>>
+          (coords, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, kidx, nthreads, periodicity);
+      }
+    template<typename Tpoints, typename Tgrid> void spread(
+      const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &grid)
+      {
+      if (si1) si1->spread(points, vmav<complex<Tgrid>,1>(grid));
+      if (si2) si2->spread(points, vmav<complex<Tgrid>,2>(grid));
+      if (si3) si3->spread(points, vmav<complex<Tgrid>,3>(grid));
+      }
+    template<typename Tpoints, typename Tgrid> void interp(
+      const cfmav<complex<Tgrid>> &grid, const vmav<complex<Tpoints>,1> &points)
+      {
+      if (si1) si1->interp(cmav<complex<Tgrid>,1>(grid), points);
+      if (si2) si2->interp(cmav<complex<Tgrid>,2>(grid), points);
+      if (si3) si3->interp(cmav<complex<Tgrid>,3>(grid), points);
+      }
+    template<typename Tpoints, typename Tgrid> void spread(
+      const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
+      const vfmav<complex<Tgrid>> &grid)
+      {
+      if (si1) si1->spread(coords, points, vmav<complex<Tgrid>,1>(grid));
+      if (si2) si2->spread(coords, points, vmav<complex<Tgrid>,2>(grid));
+      if (si3) si3->spread(coords, points, vmav<complex<Tgrid>,3>(grid));
+      }
+    template<typename Tpoints, typename Tgrid> void interp(
+      const cfmav<complex<Tgrid>> &grid, const cmav<Tcoord,2> &coords,
+      const vmav<complex<Tpoints>,1> &points)
+      {
+      if (si1) si1->interp(cmav<complex<Tgrid>,1>(grid), coords, points);
+      if (si2) si2->interp(cmav<complex<Tgrid>,2>(grid), coords, points);
+      if (si3) si3->interp(cmav<complex<Tgrid>,3>(grid), coords, points);
+      }
+  };
+
 #if 0
 /* Possibilities:
 - doing transforms in multiple steps (many cumulative spread calls, only one FFT)

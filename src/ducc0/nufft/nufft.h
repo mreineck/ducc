@@ -105,6 +105,9 @@ template<typename Tcalc, typename Tgrid> void deconv_nu2u(
   bool fft_order,
   size_t nthreads)
   {
+  static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
+    "Tcalc must be at least as accurate as Tgrid");
+
   size_t ndim = grid.ndim();
 
   if (ndim==1)
@@ -241,7 +244,7 @@ template<typename Tcalc, typename Tgrid> void deconv_u2nu(
     }
   }
 
-template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
+template<typename Tcalc, typename Tacc> class Nufft_ancestor
   {
   protected:
     TimerHierarchy timers;
@@ -258,10 +261,10 @@ template<typename Tcalc, typename Tacc, size_t ndim> class Nufft_ancestor
     size_t npoints;
 
     // uniform grid dimensions
-    array<size_t, ndim> nuni;
+    vector<size_t> nuni;
 
     // oversampled grid dimensions
-    array<size_t, ndim> nover;
+    vector<size_t> nover;
 
 size_t krn_id;
     shared_ptr<PolynomialKernel> krn;
@@ -274,12 +277,8 @@ size_t krn_id;
       "Tacc must be at least as accurate as Tcalc");
 
     template<typename Tpoints, typename Tgrid> bool prep_nu2u
-      (const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &uniform)
+      (const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
       {
-      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tpoints");
-      static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tgrid");
       MR_assert(points.shape(0)==npoints, "number of points mismatch");
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
       if (npoints==0)
@@ -290,22 +289,18 @@ size_t krn_id;
       return false;
       }
     template<typename Tpoints, typename Tgrid> bool prep_u2nu
-      (const cmav<complex<Tpoints>,1> &points, const cmav<complex<Tgrid>,ndim> &uniform)
+      (const cmav<complex<Tpoints>,1> &points, const cfmav<complex<Tgrid>> &uniform)
       {
-      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tpoints");
-      static_assert(sizeof(Tgrid)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tgrid");
       MR_assert(points.shape(0)==npoints, "number of points mismatch");
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
       return npoints==0;
       }
 
-   static string dim2string(const array<size_t, ndim> &arr)
+   static string dim2string(const vector<size_t> &arr)
       {
       ostringstream str;
       str << arr[0];
-      for (size_t i=1; i<ndim; ++i) str << "x" << arr[i];
+      for (size_t i=1; i<arr.size(); ++i) str << "x" << arr[i];
       return str.str();
       }
 
@@ -322,7 +317,7 @@ size_t krn_id;
 
   public:
     Nufft_ancestor(bool gridding, size_t npoints_,
-      const array<size_t,ndim> &uniform_shape, double epsilon_,
+      const vector<size_t> &uniform_shape, double epsilon_,
       size_t nthreads_, double sigma_min, double sigma_max,
       bool fft_order_)
       : timers(gridding ? "nu2u" : "u2nu"), epsilon(epsilon_),
@@ -335,8 +330,7 @@ size_t krn_id;
       vector<size_t> tdims{nuni.begin(), nuni.end()};
       auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>
         (epsilon, sigma_min, sigma_max, tdims, npoints, gridding, nthreads);
-      for (size_t i=0; i<ndim; ++i)
-        nover[i] = dims[i];
+      nover = dims;
       timers.pop();
 
       krn = selectKernel(kidx);
@@ -346,7 +340,7 @@ size_t krn_id;
       MR_assert(epsilon>0, "epsilon must be positive");
 
       timers.push("correction factors");
-      for (size_t i=0; i<ndim; ++i)
+      for (size_t i=0; i<nuni.size(); ++i)
         if ((i<1) || (nuni[i]!=nuni[i-1]) || (nover[i]!=nover[i-1]))
           corfac.push_back(krn->corfunc(nuni[i]/2+1, 1./nover[i], nthreads));
         else
@@ -356,23 +350,23 @@ size_t krn_id;
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nufft:
-  public Nufft_ancestor<Tcalc, Tacc, ndim>
+template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
+  public Nufft_ancestor<Tcalc, Tacc>
   {
   private:
-    using parent=Nufft_ancestor<Tcalc, Tacc, ndim>;
+    using parent=Nufft_ancestor<Tcalc, Tacc>;
     using parent::nthreads,
           parent::timers, parent::krn_id, parent::fft_order, parent::nuni,
           parent::nover, parent::report,
           parent::corfac,
           parent::prep_nu2u, parent::prep_u2nu;
 
-    Spreadinterp<Tcalc, Tacc, Tcoord, uint32_t, ndim> spreadinterp;
+    Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp;
 
   public:
     using parent::parent; /* inherit constructor */
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
-          const array<size_t, ndim> &uniform_shape_, double epsilon_, 
+          const vector<size_t> &uniform_shape_, double epsilon_, 
           size_t nthreads_, double sigma_min, double sigma_max,
           const vector<double> &periodicity, bool fft_order_)
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_,
@@ -380,7 +374,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
         spreadinterp(coords, nover, krn_id, nthreads, periodicity)
       {}
     Nufft (bool gridding, size_t npoints_,
-      const array<size_t,ndim> &uniform_shape, double epsilon_,
+      const vector<size_t> &uniform_shape, double epsilon_,
       size_t nthreads_, double sigma_min, double sigma_max,
       const vector<double> &periodicity, bool fft_order_)
       : parent(gridding, npoints_, uniform_shape, epsilon_, nthreads_,
@@ -389,7 +383,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
       {}
 
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
-      const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &uniform)
+      const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
       {
       if (prep_nu2u(points, uniform)) return;
       if (verbosity>0) report(true);
@@ -398,7 +392,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
       if (verbosity>0) timers.report(cout);
       }
     template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity,
-      const cmav<complex<Tgrid>,ndim> &uniform, const vmav<complex<Tpoints>,1> &points)
+      const cfmav<complex<Tgrid>> &uniform, const vmav<complex<Tpoints>,1> &points)
       {
       if (prep_u2nu(points, uniform)) return;
       if (verbosity>0) report(false);
@@ -408,7 +402,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
       }
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
-      const vmav<complex<Tgrid>,ndim> &uniform)
+      const vfmav<complex<Tgrid>> &uniform)
       {
       if (prep_nu2u(points, uniform)) return;
       if (verbosity>0) report(true);
@@ -416,7 +410,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
       if (verbosity>0) timers.report(cout);
       }
     template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity,
-      const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
+      const cfmav<complex<Tgrid>> &uniform, const cmav<Tcoord,2> &coords,
       const vmav<complex<Tpoints>,1> &points)
       {
       if (prep_u2nu(points, uniform)) return;
@@ -443,11 +437,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
   private:
     template<typename Tpoints, typename Tgrid> void nonuni2uni(bool forward,
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
-      const vmav<complex<Tgrid>,ndim> &uniform)
+      const vfmav<complex<Tgrid>> &uniform)
       {
       timers.push("nu2u proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, UNINITIALIZED);
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
@@ -455,27 +449,27 @@ template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class Nuff
                          : spreadinterp.spread(coords, points, grid);
 
       timers.poppush("FFT");
-      nufft_FFT(true, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[ndim]), nthreads);
+      nufft_FFT(true, forward, grid, nuni, nthreads);
 
       timers.poppush("grid correction");
-      deconv_nu2u(grid.to_fmav(), uniform.to_fmav(), corfac, fft_order, nthreads);
+      deconv_nu2u(grid, uniform, corfac, fft_order, nthreads);
       timers.pop();
       timers.pop();
       }
 
     template<typename Tpoints, typename Tgrid> void uni2nonuni(bool forward,
-      const cmav<complex<Tgrid>,ndim> &uniform, const cmav<Tcoord,2> &coords,
+      const cfmav<complex<Tgrid>> &uniform, const cmav<Tcoord,2> &coords,
       const vmav<complex<Tpoints>,1> &points)
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
-      auto grid = vmav<complex<Tcalc>,ndim>::build_noncritical(nover, UNINITIALIZED);
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, UNINITIALIZED);
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");
-      deconv_u2nu(uniform.to_fmav(), grid.to_fmav(), corfac, fft_order, nthreads);
+      deconv_u2nu(uniform, grid, corfac, fft_order, nthreads);
       timers.poppush("FFT");
-      nufft_FFT(false, forward, grid.to_fmav(), vector<size_t>(&nuni[0], &nuni[ndim]), nthreads);
+      nufft_FFT(false, forward, grid, nuni, nthreads);
 
       timers.poppush("interpolation");
       (coords.size()==0) ? spreadinterp.interp(grid, points)
@@ -495,27 +489,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord.shape(1), "dimensionality mismatch");
-  if (ndim==1)
-    {
-    vmav<complex<Tgrid>,1> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 1> nufft(true, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-    }
-  else if (ndim==2)
-    {
-    vmav<complex<Tgrid>,2> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 2> nufft(true, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-    }
-  else if (ndim==3)
-    {
-    vmav<complex<Tgrid>,3> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 3> nufft(true, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.nu2u(forward, verbosity, coord, points, uniform2); 
-    }
+  Nufft<Tcalc, Tacc, Tcoord> nufft(true, points.shape(0), uniform.shape(),
+    epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+  nufft.nu2u(forward, verbosity, coord, points, uniform); 
   }
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
   void u2nu(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
@@ -526,27 +502,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   auto ndim = uniform.ndim();
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord.shape(1), "dimensionality mismatch");
-  if (ndim==1)
-    {
-    cmav<complex<Tgrid>,1> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 1> nufft(false, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-    }
-  else if (ndim==2)
-    {
-    cmav<complex<Tgrid>,2> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 2> nufft(false, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-    }
-  else if (ndim==3)
-    {
-    cmav<complex<Tgrid>,3> uniform2(uniform);
-    Nufft<Tcalc, Tacc, Tcoord, 3> nufft(false, points.shape(0), uniform2.shape(),
-      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-    nufft.u2nu(forward, verbosity, uniform2, coord, points); 
-    }
+  Nufft<Tcalc, Tacc, Tcoord> nufft(false, points.shape(0), uniform.shape(),
+    epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+  nufft.u2nu(forward, verbosity, uniform, coord, points); 
   }
 } // namespace detail_nufft
 
