@@ -550,17 +550,22 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, points_in.shape(0), nthreads);
 
   const auto &krn(getKernel(kidx));
+  auto krn2 = selectKernel(kidx);
+  vector<double> periodicity(ndim,2*pi);
+  auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
 
   // TMP
   cout << "kernel ofac, supp: " << krn.ofactor << " " << krn.W << endl;
+
+  Tpoints psign = forward ? 1 : -1; // ???
 
   vector<double> gamma(ndim);
   for (size_t idim=0; idim<ndim; ++idim)
     gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
 
+  { // scope to de-allocate coord_in_2 and points_in_2 as soon as possible
   vmav<Tcoord,2> coord_in_2(coord_in.shape());
   vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
-  Tpoints psign = forward ? 1 : -1;
   // shift input coordinates, prephase input values
   for (size_t i=0; i<points_in.shape(0); ++i)
     {
@@ -581,7 +586,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     cout << gamma[d] << " " << Ssafe[d] << " " << midbla[d] << " " << hdeltabla[d] << endl;
 }
 
-  vector<double> periodicity(ndim,2*pi);
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
     (coord_in_2.shape(0), dims, kidx, nthreads, periodicity/*???*/);
 
@@ -591,13 +595,11 @@ for (auto v: dims)
   cout << v << " ";
 cout << endl;
 
-  auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
   spreadinterp.spread(coord_in_2, points_in_2, grid);
+  }
 
-  Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
+  Nufft<Tcalc, Tacc, Tcoord> nufft(false/*???*/, points_out.shape(0), dims,
     epsilon, nthreads, sigma_min, sigma_max, periodicity/*???*/, false/*???*/);
-
-// free coord_in_2, points_in_2?
 
   // shift output coordinates
   vmav<Tcoord,2> coord_out_2(coord_out.shape());
@@ -605,7 +607,7 @@ cout << endl;
     for (size_t d=0; d<ndim; ++d)
       coord_out_2(i,d) = (coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]);
 
-  nufft.u2nu(forward, verbosity, grid, coord_out, points_out); 
+  nufft.u2nu(forward, verbosity, grid, coord_out_2, points_out); 
 
   // TMP
   cout << "coord_out_2: "<<endl;
@@ -615,7 +617,6 @@ cout << endl;
     cout << midbla[d] << " " << hdeltabla[d] << endl;
 }
 
-  auto krn2 = selectKernel(kidx);
   for (size_t i=0; i<points_out.shape(0); ++i)
     {
     double phihat = 1.;
