@@ -273,9 +273,6 @@ size_t krn_id;
 
     vector<vector<double>> corfac;
 
-    static_assert(sizeof(Tcalc)<=sizeof(Tacc),
-      "Tacc must be at least as accurate as Tcalc");
-
     template<typename Tpoints, typename Tgrid> bool prep_nu2u
       (const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
       {
@@ -506,12 +503,102 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
   nufft.u2nu(forward, verbosity, uniform, coord, points); 
   }
+
+template<typename T> auto get_mid_delta (const cmav<T,2> &v, size_t nthreads)
+  {
+  MR_assert(v.shape(0)>0, "at least one entry is required");
+  size_t ndim = v.shape(1);
+  vector<double> v1(ndim), v2(ndim);
+  for (size_t d=0; d<ndim; ++d)
+    v1[d] = v2[d] = v(0,d);
+//FIXME: parallelize
+  for (size_t i=0; i<v.shape(0); ++i)
+    for (size_t d=0; d<ndim; ++d)
+      {
+      v1[d] = min(v1[d], double(v(i,d)));
+      v2[d] = max(v2[d], double(v(i,d)));
+      }
+  for (size_t d=0; d<ndim; ++d)
+    {
+    T mid = T(0.5*(v1[d]+v2[d]));
+    v2[d] -= v1[d];
+    v1[d] = mid;
+    }
+  return make_tuple(v1,v2);
+  }
+
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
+  void nu2nu(const cmav<Tcoord,2> &coord_in, const cmav<complex<Tpoints>,1> &points_in,
+    bool forward, double epsilon, size_t nthreads,
+    const cmav<Tcoord,2> &coord_out, const vmav<complex<Tpoints>,1> &points_out, size_t verbosity,
+    double sigma_min, double sigma_max)
+  {
+  auto ndim = coord_in.shape(1);
+  MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
+  MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
+
+  auto [mid_in, delta_in] = get_mid_delta(coord_in, nthreads);
+  auto [mid_out, delta_out] = get_mid_delta(coord_out, nthreads);
+
+  auto [kidx, dims, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
+    (epsilon, sigma_min, sigma_max, delta_in, delta_out, points_in.shape(0), nthreads);
+
+  const auto &krn(getKernel(kidx));
+  vector<double> gamma(ndim);
+  for (size_t idim=0; idim<ndim; ++idim)
+    {
+    gamma[idim] = dims[idim]/(2*krn.W*Ssafe[idim]);
+    }
+
+  vmav<Tcoord,2> coord_in_2(coord_in.shape());
+  vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
+  // shift input coordinates, prephase input values
+  for (size_t i=0; i<points_in.shape(0); ++i)
+    {
+    Tpoints phase = 0;
+    for (size_t d=0; d<ndim; ++d)
+      {
+      coord_in_2(i,d) = (coord_in(i,d)-mid_in[d])/gamma[d];
+      phase += mid_out[d]*coord_in(i,d);
+      }
+    points_in_2(i) = points_in(i)*polar(Tpoints(1), phase);
+    }
+  vector<double> periodicity(ndim,1.);
+  Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
+    (coord_in_2.shape(0), dims, kidx, nthreads, periodicity/*???*/);
+cout << "intermediate grid: ";
+for (auto v: dims)
+  cout << v << " ";
+cout << endl;
+  auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+  spreadinterp.spread(coord_in_2, points_in_2, grid);
+
+  Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
+    epsilon, nthreads, sigma_min, sigma_max, periodicity/*???*/, false);
+  // shift output coordinates
+  vmav<Tcoord,2> coord_out_2(coord_out.shape());
+  for (size_t i=0; i<points_out.shape(0); ++i)
+    for (size_t d=0; d<ndim; ++d)
+      coord_out_2(i,d) = (coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]);
+
+  nufft.u2nu(forward, verbosity, grid, coord_out, points_out); 
+
+  auto krn2 = selectKernel(kidx);
+  for (size_t i=0; i<points_out.shape(0); ++i)
+    {
+    double phihat = 1.;
+    for (size_t d=0; d<ndim; ++d)
+      phihat *= krn2->corfunc(coord_out_2(i,d));
+    points_out(i) *= Tpoints(phihat);
+    }
+  }
 } // namespace detail_nufft
 
 // public names
 using detail_nufft::findNufftKernel;
 using detail_nufft::u2nu;
 using detail_nufft::nu2u;
+using detail_nufft::nu2nu;
 using detail_nufft::Nufft;
 
 } // namespace ducc0

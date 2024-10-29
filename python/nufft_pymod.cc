@@ -136,21 +136,60 @@ py::array Py_nu2u(const py::array &points,
   MR_fail("not yet supported");
   }
 
+template<typename Tpoints, typename Tcoord> py::array Py2_nu2nu(const py::array &points_in_,
+  const py::array &coord_in_, const py::array &coord_out_, bool forward, double epsilon, size_t nthreads,
+  py::object &points_out__, size_t verbosity, double sigma_min, double sigma_max)
+  {
+  using Tgrid = Tpoints;
+  auto coord_in = to_cmav<Tcoord,2>(coord_in_);
+  auto coord_out = to_cmav<Tcoord,2>(coord_out_);
+  auto points_in = to_cmav<complex<Tpoints>,1>(points_in_);
+  auto points_out_ = get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)});
+  auto points_out = to_vmav<complex<Tpoints>,1>(points_out_);
+  {
+  py::gil_scoped_release release;
+  nu2nu<Tgrid,Tgrid>(coord_in,points_in,forward,epsilon,nthreads,coord_out,points_out,verbosity,
+                    sigma_min,sigma_max);
+  }
+  return points_out_;
+  }
+py::array Py_nu2nu(const py::array &points_in,
+  const py::array &coord_in,  const py::array &coord_out, bool forward,
+  double epsilon, size_t nthreads,
+  py::object &points_out, size_t verbosity, double sigma_min, double sigma_max)
+  {
+  if (isPyarr<double>(coord_in))
+    {
+    if (isPyarr<complex<double>>(points_in))
+      return Py2_nu2nu<double, double>(points_in, coord_in, coord_out, forward, epsilon, nthreads,
+        points_out, verbosity, sigma_min, sigma_max);
+    else if (isPyarr<complex<float>>(points_in))
+      return Py2_nu2nu<float, double>(points_in, coord_in, coord_out, forward, epsilon, nthreads,
+        points_out, verbosity, sigma_min, sigma_max);
+    }
+  else if (isPyarr<float>(coord_in))
+    {
+    if (isPyarr<complex<double>>(points_in))
+      return Py2_nu2nu<double, float>(points_in, coord_in, coord_out, forward, epsilon, nthreads,
+        points_out, verbosity, sigma_min, sigma_max);
+    else if (isPyarr<complex<float>>(points_in))
+      return Py2_nu2nu<float, float>(points_in, coord_in, coord_out, forward, epsilon, nthreads,
+        points_out, verbosity, sigma_min, sigma_max);
+    }
+  MR_fail("not yet supported");
+  }
+
 class Py_Nufftplan
   {
   private:
     vector<size_t> uniform_shape;
     size_t npoints;
 
-    unique_ptr<Nufft< float,  float,  float, 1>> pf1;
-    unique_ptr<Nufft<double, double, double, 1>> pd1;
-    unique_ptr<Nufft< float,  float,  float, 2>> pf2;
-    unique_ptr<Nufft<double, double, double, 2>> pd2;
-    unique_ptr<Nufft< float,  float,  float, 3>> pf3;
-    unique_ptr<Nufft<double, double, double, 3>> pd3;
+    unique_ptr<Nufft< float,  float,  float>> pf;
+    unique_ptr<Nufft<double, double, double>> pd;
 
-    template<typename T, size_t ndim> void construct(
-      unique_ptr<Nufft<T,T,T,ndim>> &ptr,
+    template<typename T> void construct(
+      unique_ptr<Nufft<T,T,T>> &ptr,
       bool gridding, const py::array &coord_,
       const py::object &uniform_shape_,
       double epsilon_, 
@@ -159,34 +198,34 @@ class Py_Nufftplan
       const py::object &periodicity_, bool fft_order_)
       {
       auto coord = to_cmav<T,2>(coord_);
-      auto shp = to_array<size_t,ndim>(uniform_shape_);
+      auto shp = uniform_shape_.cast<vector<size_t>>();
       auto periodicity = get_periodicity(periodicity_, coord.shape(1));
       {
       py::gil_scoped_release release;
-      ptr = make_unique<Nufft<T,T,T,ndim>> (gridding, coord, shp,
+      ptr = make_unique<Nufft<T,T,T>> (gridding, coord, shp,
         epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
       }
       }
-    template<typename T, size_t ndim> py::array do_nu2u(
-      const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
+    template<typename T> py::array do_nu2u(
+      const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const py::array &points_,
       py::object &uniform__) const
       {
       auto points = to_cmav<complex<T>,1>(points_);
       auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape);
-      auto uniform = to_vmav<complex<T>,ndim>(uniform_);
+      auto uniform = to_vfmav<complex<T>>(uniform_);
       {
       py::gil_scoped_release release;
       ptr->nu2u(forward, verbosity, points, uniform);
       }
       return uniform_;
       }
-    template<typename T, size_t ndim> py::array do_u2nu(
-      const unique_ptr<Nufft<T,T,T,ndim>> &ptr,
+    template<typename T> py::array do_u2nu(
+      const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const py::array &uniform_,
       py::object &points__) const
       {
-      auto uniform = to_cmav<complex<T>,ndim>(uniform_);
+      auto uniform = to_cfmav<complex<T>>(uniform_);
       auto points_ = get_optional_Pyarr<complex<T>>(points__, {npoints});
       auto points = to_vmav<complex<T>,1>(points_);
       {
@@ -209,29 +248,11 @@ class Py_Nufftplan
       auto ndim = uniform_shape.size();
       MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
       if (isPyarr<double>(coord_))
-        {
-        if (ndim==1)
-          construct(pd1, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
-                    sigma_min, sigma_max, periodicity, fft_order_);
-        else if (ndim==2)
-          construct(pd2, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
-            sigma_min, sigma_max, periodicity, fft_order_);
-        else if (ndim==3)
-          construct(pd3, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
-            sigma_min, sigma_max, periodicity, fft_order_);
-        }
+        construct(pd, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+                  sigma_min, sigma_max, periodicity, fft_order_);
       else if (isPyarr<float>(coord_))
-        {
-        if (ndim==1)
-          construct(pf1, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
+        construct(pf, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
             sigma_min, sigma_max, periodicity, fft_order_);
-        else if (ndim==2)
-          construct(pf2, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
-            sigma_min, sigma_max, periodicity, fft_order_);
-        else if (ndim==3)
-          construct(pf3, gridding, coord_, uniform_shape_, epsilon_, nthreads_,
-            sigma_min, sigma_max, periodicity, fft_order_);
-        }
       else
         MR_fail("unsupported");
       }
@@ -239,23 +260,15 @@ class Py_Nufftplan
     py::array nu2u(bool forward, size_t verbosity,
       const py::array &points_, py::object &uniform_)
       {
-      if (pd1) return do_nu2u(pd1, forward, verbosity, points_, uniform_);
-      if (pf1) return do_nu2u(pf1, forward, verbosity, points_, uniform_);
-      if (pd2) return do_nu2u(pd2, forward, verbosity, points_, uniform_);
-      if (pf2) return do_nu2u(pf2, forward, verbosity, points_, uniform_);
-      if (pd3) return do_nu2u(pd3, forward, verbosity, points_, uniform_);
-      if (pf3) return do_nu2u(pf3, forward, verbosity, points_, uniform_);
+      if (pd) return do_nu2u(pd, forward, verbosity, points_, uniform_);
+      if (pf) return do_nu2u(pf, forward, verbosity, points_, uniform_);
       MR_fail("unsupported");
       }
     py::array u2nu(bool forward, size_t verbosity,
       const py::array &uniform_, py::object &points_)
       {
-      if (pd1) return do_u2nu(pd1, forward, verbosity, uniform_, points_);
-      if (pf1) return do_u2nu(pf1, forward, verbosity, uniform_, points_);
-      if (pd2) return do_u2nu(pd2, forward, verbosity, uniform_, points_);
-      if (pf2) return do_u2nu(pf2, forward, verbosity, uniform_, points_);
-      if (pd3) return do_u2nu(pd3, forward, verbosity, uniform_, points_);
-      if (pf3) return do_u2nu(pf3, forward, verbosity, uniform_, points_);
+      if (pd) return do_u2nu(pd, forward, verbosity, uniform_, points_);
+      if (pf) return do_u2nu(pf, forward, verbosity, uniform_, points_);
       MR_fail("unsupported");
       }
   };
@@ -455,6 +468,9 @@ void add_nufft(py::module_ &msup)
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
         "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
+  m.def("nu2nu", &Py_nu2nu, py::kw_only(), "points_in"_a, "coord_in"_a,
+        "coord_out"_a, "forward"_a, "epsilon"_a, "nthreads"_a=1,
+        "points_out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
         "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 

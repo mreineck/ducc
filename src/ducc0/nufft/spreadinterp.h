@@ -1357,36 +1357,6 @@ void interp(const vmav<Tpoint,2> &points, const cmav<Tcoord,2> &coords,
             const vector<double> &periodicity, size_t nthreads);
 #endif
 
-template<typename Tpoint, typename Tcoord, typename Tgrid, typename Tidx, typename Tacc>
-void spread(const cmav<complex<Tpoint>,1> &points, const cmav<Tcoord,2> &coords,
-//            const vector<double> &origin,
-//            bool coords_sorted, const cmav<Tidx,1> &idx,
-            const vfmav<complex<Tgrid>> &grid /* inout! */, size_t kernel_id,
-            const vector<double> &periodicity, size_t nthreads)
-  {
-  auto ndim = grid.ndim();
-  if (ndim==1)
-    {
-array<size_t,1> shp{grid.shape(0)};
-    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 1> worker
-      (points.shape(0), shp, kernel_id, nthreads, periodicity);
-    worker.spread(coords, points, vmav<complex<Tgrid>,1>(grid));
-    }
-  else if (ndim==2)
-    {
-array<size_t,2> shp{grid.shape(0),grid.shape(1)};
-    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 2> worker
-      (points.shape(0), shp, kernel_id, nthreads, periodicity);
-    worker.spread(coords, points, vmav<complex<Tgrid>,2>(grid));
-    }
-  else if (ndim==3)
-    {
-array<size_t,3> shp{grid.shape(0),grid.shape(1),grid.shape(2)};
-    Spreadinterp<Tgrid, Tacc, Tcoord, uint32_t, 3> worker
-      (points.shape(0), shp, kernel_id, nthreads, periodicity);
-    worker.spread(coords, points, vmav<complex<Tgrid>,3>(grid));
-    }
-  }
 
 }}
 
