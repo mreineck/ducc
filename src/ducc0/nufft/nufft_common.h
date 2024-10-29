@@ -191,17 +191,17 @@ template<typename Tcalc, typename Tacc> auto findNufftKernel(double epsilon,
 /*! Selects the most efficient combination of gridding kernel and oversampled
     grid size for the provided Type 3 problem parameters. */
 template<typename Tcalc, typename Tacc> auto findNufftParameters_type3(double epsilon,
-  double sigma_min, double sigma_max, const vector<double> &delta_in, const vector<double> &delta_out,
+  double sigma_min, double sigma_max, const vector<double> &hdelta_in, const vector<double> &hdelta_out,
   size_t npoints, size_t nthreads)
   {
   auto vlen = mysimd<Tacc>::size();
-  auto ndim = delta_in.size();
+  auto ndim = hdelta_in.size();
 
 vector<double> rawdim(ndim), vssafe(ndim);
 for (size_t idim=0; idim<ndim; ++idim)
   {
-  double Xsafe = delta_in[idim]/2,
-         Ssafe = delta_out[idim]/2;
+  double Xsafe = hdelta_in[idim],
+         Ssafe = hdelta_out[idim];
   if ((Xsafe==0) && (Ssafe==0))
     Xsafe = Ssafe = 1.0;
   else
