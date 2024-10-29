@@ -187,6 +187,84 @@ template<typename Tcalc, typename Tacc> auto findNufftKernel(double epsilon,
     (epsilon, sigma_min, sigma_max, dims, npoints, gridding, nthreads);
   return minidx;
   }
+
+/*! Selects the most efficient combination of gridding kernel and oversampled
+    grid size for the provided Type 3 problem parameters. */
+template<typename Tcalc, typename Tacc> auto findNufftParameters_type3(double epsilon,
+  double sigma_min, double sigma_max, const vector<double> &delta_in, const vector<double> &delta_out,
+  size_t npoints, size_t nthreads)
+  {
+  auto vlen = mysimd<Tacc>::size();
+  auto ndim = delta_in.size();
+
+vector<double> rawdim(ndim), vssafe(ndim);
+for (size_t idim=0; idim<ndim; ++idim)
+  {
+  double Xsafe = delta_in[idim]/2,
+         Ssafe = delta_out[idim]/2;
+  if ((Xsafe==0) && (Ssafe==0))
+    Xsafe = Ssafe = 1.0;
+  else
+    {
+    if (Xsafe==0) Xsafe = 1./Ssafe;
+    if (Ssafe==0) Ssafe = 1./Xsafe;
+    }
+  rawdim[idim] = 2*Ssafe*Xsafe/pi;
+  vssafe[idim] = Ssafe;
+  }
+
+
+  auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
+  double mincost = 1e300;
+  constexpr double nref_fft=2048;
+  constexpr double costref_fft=0.0693;
+  vector<size_t> bigdims(ndim, 0);
+  size_t minidx=~(size_t(0));
+  for (size_t i=0; i<idx.size(); ++i)
+    {
+    const auto &krn(getKernel(idx[i]));
+    auto supp = krn.W;
+    auto nvec = (supp+vlen-1)/vlen;
+    auto ofactor = krn.ofactor;
+    vector<size_t> lbigdims(ndim,0);
+    double gridsize=1;
+    for (size_t idim=0; idim<ndim; ++idim)
+      {
+// new type3 stuff here
+double tmp = rawdim[idim]*ofactor+supp+1;
+      lbigdims[idim] = 2*good_size_complex(size_t(tmp*0.5)+1);
+//      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
+lbigdims[idim] = max<size_t>(lbigdims[idim], 32);  // FINUFFT does this ... why exactly?
+      gridsize *= lbigdims[idim];
+      }
+    double logterm = log(gridsize)/log(nref_fft*nref_fft);
+    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
+    size_t kernelpoints = nvec*vlen;
+    for (size_t idim=0; idim+1<ndim; ++idim)
+      kernelpoints*=supp;
+    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
+    gridcost *= sizeof(Tacc)/sizeof(Tcalc);
+    // FIXME: heuristics could be improved
+    gridcost /= nthreads;  // assume perfect scaling for now
+    constexpr double max_fft_scaling = 6;
+    constexpr double scaling_power=2;
+    auto sigmoid = [](double x, double m, double s)
+      {
+      auto x2 = x-1;
+      auto m2 = m-1;
+      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
+      };
+    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
+    double cost = fftcost+gridcost;
+    if (cost<mincost)
+      {
+      mincost=cost;
+      bigdims=lbigdims;
+      minidx = idx[i];
+      }
+    }
+  return make_tuple(minidx, bigdims, vssafe);
+  }
 //#define NEW_DUMP
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
 template<> constexpr inline int log2tile_<long double, 1> = 9;

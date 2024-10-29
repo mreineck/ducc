@@ -546,12 +546,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   const auto &krn(getKernel(kidx));
   vector<double> gamma(ndim);
   for (size_t idim=0; idim<ndim; ++idim)
-    {
-    gamma[idim] = dims[idim]/(2*krn.W*Ssafe[idim]);
-    }
+    gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
 
   vmav<Tcoord,2> coord_in_2(coord_in.shape());
   vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
+Tpoints psign = forward ? 1 : -1;
   // shift input coordinates, prephase input values
   for (size_t i=0; i<points_in.shape(0); ++i)
     {
@@ -561,9 +560,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
       coord_in_2(i,d) = (coord_in(i,d)-mid_in[d])/gamma[d];
       phase += mid_out[d]*coord_in(i,d);
       }
-    points_in_2(i) = points_in(i)*polar(Tpoints(1), phase);
+    points_in_2(i) = points_in(i)*polar(Tpoints(1), psign*phase);
     }
-  vector<double> periodicity(ndim,1.);
+
+  auto [midbla, deltabla] = get_mid_delta(coord_in_2, nthreads);
+for (size_t d=0; d<ndim; ++d)
+  cout << midbla[d] << " " << deltabla[d] << endl;
+
+  vector<double> periodicity(ndim,pi);
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
     (coord_in_2.shape(0), dims, kidx, nthreads, periodicity/*???*/);
 cout << "intermediate grid: ";
@@ -587,9 +591,13 @@ cout << endl;
   for (size_t i=0; i<points_out.shape(0); ++i)
     {
     double phihat = 1.;
+    double phase = 0;
     for (size_t d=0; d<ndim; ++d)
+      {
       phihat *= krn2->corfunc(coord_out_2(i,d));
-    points_out(i) *= Tpoints(phihat);
+      phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
+      }
+    points_out(i) *= complex<Tpoints>(phihat*polar(1., psign*phase));
     }
   }
 } // namespace detail_nufft
