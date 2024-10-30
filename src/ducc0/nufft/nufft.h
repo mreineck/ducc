@@ -606,7 +606,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   // shift output coordinates
   timers.poppush("output coord rescaling");
   vmav<Tcoord,2> coord_out_2(coord_out.shape());
-  execStatic(coord_out.shape(0), nthreads, 0, [&,mid_out=mid_out](auto &sched)
+  execStatic(coord_out.shape(0), nthreads, 0, [&,mid_out=mid_out,dims=dims](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       for (size_t d=0; d<ndim; ++d)
