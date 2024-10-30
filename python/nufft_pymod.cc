@@ -273,6 +273,73 @@ class Py_Nufftplan
       }
   };
 
+class Py_Nufft3plan
+  {
+  private:
+    unique_ptr<Nufft3< float,  float,  float, float>> pf;
+    unique_ptr<Nufft3<double, double, double, double>> pd;
+    size_t npoints_out;
+
+    template<typename T> void construct(
+      unique_ptr<Nufft3<T,T,T,T>> &ptr,
+      const py::array &coord_in_,
+      const py::array &coord_out_,
+      double epsilon, 
+      size_t nthreads, 
+      double sigma_min, double sigma_max,
+      size_t verbosity)
+      {
+      auto coord_in = to_cmav<T,2>(coord_in_);
+      auto coord_out = to_cmav<T,2>(coord_out_);
+      npoints_out = coord_out.shape(0);
+      {
+      py::gil_scoped_release release;
+      ptr = make_unique<Nufft3<T,T,T,T>> (coord_in, epsilon, nthreads,
+        coord_out, verbosity, sigma_min, sigma_max);
+      }
+      }
+    template<typename T> py::array do_exec(
+      const unique_ptr<Nufft3<T,T,T,T>> &ptr,
+      bool forward, const py::array &points_in_,
+      py::object &points_out__) const
+      {
+      auto points_in = to_vmav<complex<T>,1>(points_in_);
+      auto points_out_ = get_optional_Pyarr<complex<T>>(points_out__, {npoints_out});
+      auto points_out = to_vmav<complex<T>,1>(points_out_);
+      {
+      py::gil_scoped_release release;
+      ptr->exec(points_in, points_out, forward);
+      }
+      return points_out_;
+      }
+
+  public:
+    Py_Nufft3plan(const py::array &coord_in,
+                  const py::array &coord_out,
+                  double epsilon, 
+                  size_t nthreads, 
+                  double sigma_min, double sigma_max,
+                  size_t verbosity)
+      {
+      if (isPyarr<double>(coord_in))
+        construct(pd, coord_in, coord_out, epsilon, nthreads,
+                  sigma_min, sigma_max, verbosity);
+      else if (isPyarr<float>(coord_in))
+        construct(pf, coord_in, coord_out, epsilon, nthreads,
+                  sigma_min, sigma_max, verbosity);
+      else
+        MR_fail("unsupported");
+      }
+
+    py::array exec(bool forward,
+      const py::array &points_in, py::object &points_out)
+      {
+      if (pd) return do_exec(pd, forward, points_in, points_out);
+      if (pf) return do_exec(pf, forward, points_in, points_out);
+      MR_fail("unsupported");
+      }
+  };
+
 
 constexpr const char *u2nu_DS = R"""(
 Type 2 non-uniform FFT (uniform to non-uniform)
@@ -484,6 +551,14 @@ void add_nufft(py::module_ &msup)
       "verbosity"_a=0, "points"_a, "out"_a=None)
     .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "grid"_a, "out"_a=None);
+  py::class_<Py_Nufft3plan> (m, "plan3", py::module_local())
+    .def(py::init<const py::array &, const py::array &,
+                  double, size_t, double, double, size_t>(),
+      py::kw_only(), "coord_in"_a, "coord_out"_a,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "verbosity"_a=0)
+    .def("exec", &Py_Nufft3plan::exec, py::kw_only(), "forward"_a,
+      "points_in"_a, "points_out"_a=None);
   }
 
 }

@@ -665,7 +665,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     double sigma_min, double sigma_max)
   {
   TimerHierarchy timers("nu2nu");
-#if 0
+
   auto ndim = coord_in.shape(1);
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
@@ -751,14 +751,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     });
 
   timers.pop();
-#else
-  timers.push("prep");
-  Nufft3<Tcalc, Tacc, Tpoints, Tcoord> nufft3(coord_in, epsilon, nthreads,
-    coord_out, verbosity, sigma_min, sigma_max);
-  timers.poppush("exec");
-  nufft3.exec(points_in, points_out, forward);
-  timers.pop();
-#endif
   if (verbosity>0) timers.report(cout);
   }
 
@@ -770,6 +762,7 @@ using detail_nufft::u2nu;
 using detail_nufft::nu2u;
 using detail_nufft::nu2nu;
 using detail_nufft::Nufft;
+using detail_nufft::Nufft3;
 
 } // namespace ducc0
 
