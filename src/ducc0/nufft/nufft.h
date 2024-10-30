@@ -520,7 +520,7 @@ template<typename T> auto get_mid_hdelta (const cmav<T,2> &v, size_t nthreads)
       }
   for (size_t d=0; d<ndim; ++d)
     {
-    T mid = T(0.5*(v1[d]+v2[d]));
+    double mid = 0.5*(v1[d]+v2[d]);
     v2[d] = 0.5*(v2[d]-v1[d]);
     v1[d] = mid;
     }
@@ -536,15 +536,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   auto ndim = coord_in.shape(1);
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
+  MR_assert(coord_in.shape(0)==points_in.shape(0));
+  MR_assert(coord_out.shape(0)==points_out.shape(0));
 
   auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);
-
-  // TMP
-  for (size_t d=0; d<ndim; ++d)
-    cout << mid_in[d] << " " << hdelta_in[d] << endl;
   auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
-  for (size_t d=0; d<ndim; ++d)
-    cout << mid_out[d] << " " << hdelta_out[d] << endl;
 
   auto [kidx, dims, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
     (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, points_in.shape(0), nthreads);
@@ -554,10 +550,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   vector<double> periodicity(ndim,2*pi);
   auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
 
-  // TMP
-  cout << "kernel ofac, supp: " << krn.ofactor << " " << krn.W << endl;
-
-  Tpoints psign = forward ? 1 : -1; // ???
+  Tpoints psign = forward ? -1 : 1; // ???
 
   vector<double> gamma(ndim);
   for (size_t idim=0; idim<ndim; ++idim)
@@ -578,44 +571,22 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     points_in_2(i) = points_in(i)*polar(Tpoints(1), psign*phase);
     }
 
-  // TMP
-{
-  auto [midbla, hdeltabla] = get_mid_hdelta(coord_in_2, nthreads);
-
-  for (size_t d=0; d<ndim; ++d)
-    cout << gamma[d] << " " << Ssafe[d] << " " << midbla[d] << " " << hdeltabla[d] << endl;
-}
-
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
     (coord_in_2.shape(0), dims, kidx, nthreads, periodicity/*???*/);
-
-  // TMP
-cout << "intermediate grid: ";
-for (auto v: dims)
-  cout << v << " ";
-cout << endl;
 
   spreadinterp.spread(coord_in_2, points_in_2, grid);
   }
 
-  Nufft<Tcalc, Tacc, Tcoord> nufft(false/*???*/, points_out.shape(0), dims,
-    epsilon, nthreads, sigma_min, sigma_max, periodicity/*???*/, false/*???*/);
+  Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
+    epsilon, nthreads, sigma_min, sigma_max, periodicity/*???*/, true);
 
   // shift output coordinates
   vmav<Tcoord,2> coord_out_2(coord_out.shape());
-  for (size_t i=0; i<points_out.shape(0); ++i)
+  for (size_t i=0; i<coord_out.shape(0); ++i)
     for (size_t d=0; d<ndim; ++d)
       coord_out_2(i,d) = (coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]);
 
   nufft.u2nu(forward, verbosity, grid, coord_out_2, points_out); 
-
-  // TMP
-  cout << "coord_out_2: "<<endl;
-{
-  auto [midbla, hdeltabla] = get_mid_hdelta(coord_out_2, nthreads);
-  for (size_t d=0; d<ndim; ++d)
-    cout << midbla[d] << " " << hdeltabla[d] << endl;
-}
 
   for (size_t i=0; i<points_out.shape(0); ++i)
     {
@@ -626,10 +597,6 @@ cout << endl;
       phihat *= krn2->corfunc(coord_out_2(i,d)/(2*pi));
       phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
       }
-
-  // TMP
-cout << coord_out_2(i,0) << " " << phihat << endl;
-
     points_out(i) *= complex<Tpoints>(phihat*polar(1., psign*phase));
     }
   }

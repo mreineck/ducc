@@ -233,8 +233,8 @@ for (size_t idim=0; idim<ndim; ++idim)
 // new type3 stuff here
 double tmp = rawdim[idim]*ofactor+supp+1;
       lbigdims[idim] = 2*good_size_complex(size_t(tmp*0.5)+1);
-//      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
-lbigdims[idim] = max<size_t>(lbigdims[idim], 32);  // FINUFFT does this ... why exactly?
+lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
+lbigdims[idim] = max<size_t>(lbigdims[idim], 2*supp);  // FINUFFT does this ... why exactly?
       gridsize *= lbigdims[idim];
       }
     double logterm = log(gridsize)/log(nref_fft*nref_fft);
