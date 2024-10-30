@@ -582,7 +582,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   vmav<Tcoord,2> coord_in_2(coord_in.shape());
   vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
   // shift input coordinates, prephase input values
-  execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
+  execStatic(points_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       {
@@ -606,7 +606,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   // shift output coordinates
   timers.poppush("output coord rescaling");
   vmav<Tcoord,2> coord_out_2(coord_out.shape());
-  execStatic(coord_out.shape(0), nthreads, 0, [&](auto &sched)
+  execStatic(coord_out.shape(0), nthreads, 0, [&,mid_out=mid_out](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       for (size_t d=0; d<ndim; ++d)
@@ -619,7 +619,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   nufft.u2nu(forward, 0, grid, coord_out_2, points_out); 
 
   timers.poppush("output post-phasing and deconvolution");
-  execStatic(points_out.shape(0), nthreads, 0, [&](auto &sched)
+  execStatic(points_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       {
@@ -637,6 +637,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   timers.pop();
   if (verbosity>0) timers.report(cout);
   }
+
 } // namespace detail_nufft
 
 // public names
