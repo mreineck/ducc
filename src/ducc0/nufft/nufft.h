@@ -543,6 +543,121 @@ template<typename T> auto get_mid_hdelta (const cmav<T,2> &v, size_t nthreads)
   return make_tuple(v1,v2);
   }
 
+template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class Nufft3
+  {
+  private:
+    vmav<complex<Tpoints>,1> fact_in, fact_out;
+    vector<size_t> dims;
+
+    size_t kidx;
+    size_t nthreads;
+    unique_ptr<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>> spreadinterp;
+    unique_ptr<Nufft<Tcalc, Tacc, Tcoord>> nufft;
+
+  public:
+    Nufft3(const cmav<Tcoord,2> &coord_in, double epsilon, size_t nthreads_,
+    const cmav<Tcoord,2> &coord_out, size_t /*verbosity*/,
+    double sigma_min, double sigma_max)
+      : nthreads(nthreads_)
+      {
+      auto ndim = coord_in.shape(1);
+      MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
+      MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
+
+      auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);
+      auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
+
+      auto [kidx_, dims_, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
+        (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, coord_in.shape(0), nthreads);
+      kidx = kidx_;
+      dims = dims_;
+
+      const auto &krn(getKernel(kidx));
+      auto krn2 = selectKernel(kidx);
+      vector<double> periodicity(ndim,2*pi);
+
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+
+      vector<double> gamma(ndim);
+      for (size_t idim=0; idim<ndim; ++idim)
+        gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
+
+      vmav<complex<Tpoints>,1> fact_in_({coord_in.shape(0)});
+      fact_in.assign(fact_in_);
+      {
+      vmav<Tcoord,2> coord_in_2(coord_in.shape());
+      execStatic(coord_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          {
+          double phase = 0;
+          for (size_t d=0; d<ndim; ++d)
+            {
+            coord_in_2(i,d) = Tcoord((coord_in(i,d)-mid_in[d])/gamma[d]);
+            phase += mid_out[d]*coord_in(i,d);
+            }
+          fact_in(i) = complex<Tpoints>(polar(1., phase));
+          }
+        });
+
+      spreadinterp = make_unique<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>>
+        (coord_in_2, dims, kidx, nthreads, periodicity);
+      }
+
+      vmav<Tcoord,2> coord_out_2(coord_out.shape());
+      execStatic(coord_out.shape(0), nthreads, 0, [&,mid_out=mid_out,dims=dims](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          for (size_t d=0; d<ndim; ++d)
+            coord_out_2(i,d) = Tcoord((coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]));
+        });
+
+      nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out_2, dims,
+        epsilon, nthreads, sigma_min, sigma_max, periodicity, true);
+
+      vmav<complex<Tpoints>,1> fact_out_({coord_out.shape(0)});
+      fact_out.assign(fact_out_);
+      execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          {
+          double phihat = 1.;
+          double phase = 0;
+          for (size_t d=0; d<ndim; ++d)
+            {
+            phihat *= krn2->corfunc(coord_out_2(i,d)/(2*pi));
+            phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
+            }
+          fact_out(i) = complex<Tpoints>(phihat*polar(1., phase));
+          }
+        });
+      }
+
+    void exec(const cmav<complex<Tpoints>,1> &points_in,
+              const vmav<complex<Tpoints>,1> &points_out,
+              bool forward)
+      {
+      MR_assert(fact_in.shape()==points_in.shape());
+      MR_assert(fact_out.shape()==points_out.shape());
+
+      vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
+      execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          points_in_2(i) = points_in(i)* (forward ? conj(fact_in(i)) : fact_in(i));
+        });
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+      spreadinterp->spread(points_in_2, grid);
+      nufft->u2nu(forward, 0, grid, points_out); 
+
+      execStatic(points_out.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          points_out(i) *= forward ? conj(fact_out(i)) : fact_out(i);
+        });
+      }
+  };
+
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   void nu2nu(const cmav<Tcoord,2> &coord_in, const cmav<complex<Tpoints>,1> &points_in,
     bool forward, double epsilon, size_t nthreads,
@@ -550,6 +665,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     double sigma_min, double sigma_max)
   {
   TimerHierarchy timers("nu2nu");
+#if 0
   auto ndim = coord_in.shape(1);
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
@@ -635,6 +751,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     });
 
   timers.pop();
+#else
+  timers.push("prep");
+  Nufft3<Tcalc, Tacc, Tpoints, Tcoord> nufft3(coord_in, epsilon, nthreads,
+    coord_out, verbosity, sigma_min, sigma_max);
+  timers.poppush("exec");
+  nufft3.exec(points_in, points_out, forward);
+  timers.pop();
+#endif
   if (verbosity>0) timers.report(cout);
   }
 
