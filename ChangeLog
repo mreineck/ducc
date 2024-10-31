@@ -1,3 +1,8 @@
+0.36.0:
+- nufft:
+  - Type 3 transforms are now supported
+
+
 0.35.0:
 - general:
   - Cmake-based build machinery contributed by Marco Barbone

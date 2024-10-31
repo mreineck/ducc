@@ -558,7 +558,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
     Nufft3(const cmav<Tcoord,2> &coord_in, double epsilon, size_t nthreads_,
     const cmav<Tcoord,2> &coord_out, size_t /*verbosity*/,
     double sigma_min, double sigma_max)
-      : nthreads(nthreads_)
+      : nthreads(adjust_nthreads(nthreads_))
       {
       auto ndim = coord_in.shape(1);
       MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -574,7 +574,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
 
       const auto &krn(getKernel(kidx));
       auto krn2 = selectKernel(kidx);
-      vector<double> periodicity(ndim,2*pi);
+      const auto &corr(krn2->Corr()); 
 
       auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
 
@@ -593,15 +593,21 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
           double phase = 0;
           for (size_t d=0; d<ndim; ++d)
             {
-            coord_in_2(i,d) = Tcoord((coord_in(i,d)-mid_in[d])/gamma[d]);
+            coord_in_2(i,d) = Tcoord(coord_in(i,d)-mid_in[d]);
             phase += mid_out[d]*coord_in(i,d);
             }
+// instead of storing fact_in, we could also store the phase, but we should
+// definitely range-reduce it before converting to Tcoord for better accuracy!
           fact_in(i) = complex<Tpoints>(polar(1., phase));
           }
         });
 
+      vector<double> period_in;
+      for (size_t d=0; d<ndim; ++d)
+        period_in.push_back(2*pi*gamma[d]);
+
       spreadinterp = make_unique<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>>
-        (coord_in_2, dims, kidx, nthreads, periodicity);
+        (coord_in_2, dims, kidx, nthreads, period_in);
       }
 
       vmav<Tcoord,2> coord_out_2(coord_out.shape());
@@ -609,26 +615,30 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           for (size_t d=0; d<ndim; ++d)
-            coord_out_2(i,d) = Tcoord((coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]));
+            coord_out_2(i,d) = Tcoord(coord_out(i,d)-mid_out[d]);
         });
 
+      vector<double> period_out;
+      for (size_t d=0; d<ndim; ++d)
+        period_out.push_back(dims[d]/gamma[d]);
+
       nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out_2, dims,
-        epsilon, nthreads, sigma_min, sigma_max, periodicity, true);
+        epsilon, nthreads, sigma_min, sigma_max, period_out, true);
 
       vmav<complex<Tpoints>,1> fact_out_({coord_out.shape(0)});
       fact_out.assign(fact_out_);
+
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           {
-          double phihat = 1.;
-          double phase = 0;
+          double phihat=1, phase=0;
           for (size_t d=0; d<ndim; ++d)
             {
-            phihat *= krn2->corfunc(coord_out_2(i,d)/(2*pi));
+            phihat *= corr.corfunc((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
             phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
             }
-          fact_out(i) = complex<Tpoints>(phihat*polar(1., phase));
+          fact_out(i) = complex<Tpoints>(polar(phihat, phase));
           }
         });
       }
@@ -665,6 +675,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     double sigma_min, double sigma_max)
   {
   TimerHierarchy timers("nu2nu");
+  nthreads = adjust_nthreads(nthreads);
 
   auto ndim = coord_in.shape(1);
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
@@ -680,9 +691,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   auto [kidx, dims, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
     (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, points_in.shape(0), nthreads);
 
+  //if (verbosity>0)
+    //{
+    //cout << "nu2nu: grid(";
+    //for (size_t i=0; i+1<ndim; ++i) cout <<dims[i]<<"x";
+    //cout << dims.back() << ")" << endl;
+    //}
+
   const auto &krn(getKernel(kidx));
   auto krn2 = selectKernel(kidx);
-  vector<double> periodicity(ndim,2*pi);
+  const auto &corr(krn2->Corr()); 
 
   timers.poppush("grid allocation");
   auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
@@ -702,10 +720,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       {
-      double phase = 0;
+      double phase=0;
       for (size_t d=0; d<ndim; ++d)
         {
-        coord_in_2(i,d) = Tcoord((coord_in(i,d)-mid_in[d])/gamma[d]);
+        coord_in_2(i,d) = Tcoord(coord_in(i,d)-mid_in[d]);
         phase += mid_out[d]*coord_in(i,d);
         }
       points_in_2(i) = points_in(i)*complex<Tpoints>(polar(1., psign*phase));
@@ -713,8 +731,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     });
 
   timers.poppush("spreading");
+  vector<double> period_in;
+  for (size_t d=0; d<ndim; ++d)
+    period_in.push_back(2*pi*gamma[d]);
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
-    (coord_in_2.shape(0), dims, kidx, nthreads, periodicity);
+    (coord_in_2.shape(0), dims, kidx, nthreads, period_in);
 
   spreadinterp.spread(coord_in_2, points_in_2, grid);
   }
@@ -726,12 +747,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       for (size_t d=0; d<ndim; ++d)
-        coord_out_2(i,d) = Tcoord((coord_out(i,d)-mid_out[d])*gamma[d]*(2*pi/dims[d]));
+        coord_out_2(i,d) = Tcoord(coord_out(i,d)-mid_out[d]);
     });
 
   timers.poppush("u2nu");
+  vector<double> period_out;
+  for (size_t d=0; d<ndim; ++d)
+    period_out.push_back(dims[d]/gamma[d]);
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
-    epsilon, nthreads, sigma_min, sigma_max, periodicity, true);
+    epsilon, nthreads, sigma_min, sigma_max, period_out, true);
   nufft.u2nu(forward, 0, grid, coord_out_2, points_out); 
 
   timers.poppush("output post-phasing and deconvolution");
@@ -739,14 +763,13 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
       {
-      double phihat = 1.;
-      double phase = 0;
+      double phihat=1, phase=0;
       for (size_t d=0; d<ndim; ++d)
         {
-        phihat *= krn2->corfunc(coord_out_2(i,d)/(2*pi));
+        phihat *= corr.corfunc((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
         phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
         }
-      points_out(i) *= complex<Tpoints>(phihat*polar(1., psign*phase));
+      points_out(i) *= complex<Tpoints>(polar(phihat, psign*phase));
       }
     });
 
