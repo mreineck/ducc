@@ -81,7 +81,7 @@ class KernelCorrection
       {
       T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
-        tmp += wgtpsi[i]*cos(x[i]*v);
+        tmp += T(wgtpsi[i])*cos(T(x[i])*v);
       return T(1)/tmp;
       }
     /* Compute correction factors for gridding kernel

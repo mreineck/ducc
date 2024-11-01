@@ -582,8 +582,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       for (size_t idim=0; idim<ndim; ++idim)
         gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
 
-      vmav<complex<Tpoints>,1> fact_in_({coord_in.shape(0)});
-      fact_in.assign(fact_in_);
+      fact_in.assign(vmav<complex<Tpoints>,1>({coord_in.shape(0)}));
       {
       vmav<Tcoord,2> coord_in_2(coord_in.shape());
       execStatic(coord_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
@@ -635,7 +634,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
           double phihat=1, phase=0;
           for (size_t d=0; d<ndim; ++d)
             {
-            phihat *= corr.corfunc((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
+            phihat *= corr.template corfunc<Tpoints>((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
             phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
             }
           fact_out(i) = complex<Tpoints>(polar(phihat, phase));
@@ -650,7 +649,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       MR_assert(fact_in.shape()==points_in.shape());
       MR_assert(fact_out.shape()==points_out.shape());
 
-      vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
+      // try to use points_out for temporary points_in_2 storage
+      auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
+        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        vmav<complex<Tpoints>,1>(points_in.shape()));
+
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -711,10 +714,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   for (size_t idim=0; idim<ndim; ++idim)
     gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
 
+  // get enough storage for either coord_in_2 or coord_out_2
+  vmav<Tcoord,2> coord_inout_2({max(coord_in.shape(0),coord_out.shape(0)), ndim});
   { // scope to de-allocate coord_in_2 and points_in_2 as soon as possible
   timers.poppush("input rescaling & pre-pasing");
-  vmav<Tcoord,2> coord_in_2(coord_in.shape());
-  vmav<complex<Tpoints>,1> points_in_2(points_in.shape());
+  vmav<Tcoord,2> coord_in_2(subarray<2>(coord_inout_2, {{0,coord_in.shape(0)}, {0,ndim}}));
+  // try to use points_out for temporary points_in_2 storage
+  auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
+    subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+    vmav<complex<Tpoints>,1>(points_in.shape()));
   // shift input coordinates, prephase input values
   execStatic(points_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
     {
@@ -742,7 +750,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
 
   // shift output coordinates
   timers.poppush("output coord rescaling");
-  vmav<Tcoord,2> coord_out_2(coord_out.shape());
+  vmav<Tcoord,2> coord_out_2(subarray<2>(coord_inout_2, {{0,coord_out.shape(0)}, {0,ndim}}));
   execStatic(coord_out.shape(0), nthreads, 0, [&,mid_out=mid_out,dims=dims](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -754,9 +762,11 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   vector<double> period_out;
   for (size_t d=0; d<ndim; ++d)
     period_out.push_back(dims[d]/gamma[d]);
+  {
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
     epsilon, nthreads, sigma_min, sigma_max, period_out, true);
   nufft.u2nu(forward, 0, grid, coord_out_2, points_out); 
+  }
 
   timers.poppush("output post-phasing and deconvolution");
   execStatic(points_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out,dims=dims](auto &sched)
@@ -766,7 +776,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
       double phihat=1, phase=0;
       for (size_t d=0; d<ndim; ++d)
         {
-        phihat *= corr.corfunc((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
+        phihat *= corr.template corfunc<Tpoints>((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]);
         phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
         }
       points_out(i) *= complex<Tpoints>(polar(phihat, psign*phase));

@@ -865,13 +865,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     vmav(const vfmav<T> &inp)
       : parent(inp) {}
       
-    void assign(vmav &other)
+    void assign(const vmav &other)
       { parent::assign(other); }
-    void dealloc()
-      {
-      vmav empty;
-      assign(empty);
-      }
+    void unassign()
+      { assign(vmav()); }
     operator vfmav<T>() const
       {
       return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
