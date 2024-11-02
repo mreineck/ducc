@@ -590,7 +590,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           {
-          double phase = 0;
+          double phase=0;
           for (size_t d=0; d<ndim; ++d)
             phase += mid_out[d]*coord_in(i,d);
 // instead of storing fact_in, we could also store the phase, but we should
@@ -614,9 +614,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out, dims,
         epsilon, nthreads, sigma_min, sigma_max, period_out, true, mid_out);
 
-      vmav<complex<Tpoints>,1> fact_out_({coord_out.shape(0)});
-      fact_out.assign(fact_out_);
-
+      fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -647,7 +645,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
-          points_in_2(i) = points_in(i)* (forward ? conj(fact_in(i)) : fact_in(i));
+          points_in_2(i) = points_in(i) * (forward ? conj(fact_in(i)) : fact_in(i));
         });
       auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
       spreadinterp->spread(points_in_2, grid);
