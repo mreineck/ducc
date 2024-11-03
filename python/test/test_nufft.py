@@ -43,6 +43,19 @@ def explicit_nufft(uvw, ms, shape, forward, periodicity, fft_order):
     return res
 
 
+def explicit_nufft3(coord_in, coord_out, points_in, forward):
+    isign = -1 if forward else 1
+    points_in2 = np.atleast_2d(points_in)
+    ndim = coord_in.shape[1]
+    ntrans= points_in2.shape[0]
+    n_in = coord_in.shape[0]
+    n_out = coord_out.shape[0]
+    tmp = np.sum(coord_in.reshape((n_in,1,ndim))*coord_out.reshape((1,n_out,ndim)), axis=2)
+    tmp = np.exp((isign*1j)*tmp).reshape((1, n_in, n_out))
+    res = np.sum((points_in2.reshape((ntrans,n_in,1))*tmp), axis=1)
+    return res
+
+
 @pmp('nx', [1, 20, 21, 250, 257])
 @pmp("npoints", (1, 37, 10))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
@@ -277,3 +290,32 @@ def test_nufft_3d(nx, ny, nz, npoints, epsilon, forward, singleprec,
         if comp.ndim==0:
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=50*epsilon)
+
+
+@pmp("npoints_in", (1, 37, 10))
+@pmp("npoints_out", (1, 37, 10))
+@pmp("ndim", (1, 2, 3))
+@pmp("ntrans", (1, 2))
+@pmp("epsilon", (1e-5, 3e-5, 5e-13))
+@pmp("forward", (True, False))
+@pmp("singleprec", (True, False))
+@pmp("nthreads", (1, 2))
+def test_nufft3(npoints_in, npoints_out, ndim, ntrans, epsilon, forward, singleprec, nthreads):
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(42)
+    coord_in = (rng.random((npoints_in, ndim))-0.5) * 20
+    coord_out = (rng.random((npoints_out, ndim))-0.5) * 20
+    points_in = rng.random((ntrans, npoints_in)) + 1j*rng.random((ntrans, npoints_in)) - (0.5+0.5j)
+    ref = explicit_nufft3(coord_in, coord_out, points_in, forward)
+    if singleprec:
+        coord_in = coord_in.astype("f4")
+        coord_out = coord_out.astype("f4")
+        points_in = points_in.astype("c8")
+    res = ducc0.nufft.experimental.nu2nu(points_in=points_in, coord_in=coord_in,
+        coord_out=coord_out, forward=forward, epsilon=epsilon, verbosity=0, nthreads=nthreads)
+    assert_allclose(ducc0.misc.l2error(res, ref), 0, atol=50*epsilon)
+    plan = ducc0.nufft.experimental.plan3(coord_in=coord_in, coord_out=coord_out,
+                            epsilon=epsilon, nthreads=nthreads)
+    res = plan.exec(points_in=points_in, forward=forward)
+    assert_allclose(ducc0.misc.l2error(res, ref), 0, atol=50*epsilon)
