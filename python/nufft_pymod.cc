@@ -56,14 +56,35 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   {
   using Tpoints = Tgrid;
   auto coord = to_cmav<Tcoord,2>(coord_);
-  auto grid = to_cfmav<complex<Tgrid>>(grid_);
-  auto out_ = get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)});
-  auto out = to_vmav<complex<Tpoints>,1>(out_);
   auto periodicity = get_periodicity(periodicity_, coord.shape(1));
+  size_t ndim = coord.shape(1);
+  auto grid = to_cfmav_with_optional_leading_dimensions<complex<Tgrid>>(grid_,ndim+1);
+  MR_assert((grid.ndim()==ndim)||(grid.ndim()==ndim+1), "bad dimensionality of grid");
+  auto out_ = (ndim==size_t(grid_.ndim()))
+            ? get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)})
+            : get_optional_Pyarr<complex<Tpoints>>(out__, {grid.shape(0), coord.shape(0)});
+  auto out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(out_);
   {
   py::gil_scoped_release release;
-  u2nu<Tgrid,Tgrid>(coord,grid,forward,epsilon,nthreads,out,verbosity,
-                    sigma_min,sigma_max, periodicity, fft_order);
+  vector<slice> slices(grid.ndim(),slice());
+  if (grid.shape(0)==1)
+    {
+    slices[0] = slice(0);
+    u2nu<Tgrid,Tgrid>(coord,subarray(grid,slices),forward,epsilon,nthreads,
+                      subarray<1>(out,{{0},{}}),verbosity,
+                      sigma_min,sigma_max, periodicity, fft_order);
+    }
+  else
+    {
+    vector<size_t> shp(grid.shape().begin()+1,grid.shape().end());
+    Nufft<Tgrid, Tgrid, Tcoord> nufft (false, coord, shp,
+      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+    for (size_t i=0; i<grid.shape(0); ++i)
+      {
+      slices[0] = slice(i);
+      nufft.u2nu(forward, verbosity, subarray(grid,slices), subarray<1>(out,{{i},{}}));
+      }
+    }
   }
   return out_;
   }
@@ -100,13 +121,31 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   {
   using Tgrid = Tpoints;
   auto coord = to_cmav<Tcoord,2>(coord_);
-  auto points = to_cmav<complex<Tpoints>,1>(points_);
-  auto out = to_vfmav<complex<Tgrid>>(out_);
+  size_t ndim = coord.shape(1);
+  auto points = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_);
+  auto out = to_vfmav_with_optional_leading_dimensions<complex<Tgrid>>(out_, ndim+1);
   auto periodicity = get_periodicity(periodicity_, coord.shape(1));
   {
   py::gil_scoped_release release;
-  nu2u<Tgrid,Tgrid>(coord,points,forward,epsilon,nthreads,out,verbosity,
-                    sigma_min,sigma_max, periodicity, fft_order);
+  vector<slice> slices(out.ndim(),slice());
+  if (points.shape(0)==1)
+    {
+    slices[0] = slice(0);
+    nu2u<Tgrid,Tgrid>(coord,subarray<1>(points, {{0},{}}),forward,epsilon,
+                      nthreads,subarray(out,slices),verbosity,
+                      sigma_min,sigma_max, periodicity, fft_order);
+    }
+  else
+    {
+    vector<size_t> shp(out.shape().begin()+1,out.shape().end());
+    Nufft<Tgrid, Tgrid, Tcoord> nufft (true, coord, shp,
+      epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
+    for (size_t i=0; i<points.shape(0); ++i)
+      {
+      slices[0] = slice(i);
+      nufft.nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(out,slices));
+      }
+    }
   }
   return out_;
   }
@@ -143,18 +182,29 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2nu(const py::array 
   using Tgrid = Tpoints;
   auto coord_in = to_cmav<Tcoord,2>(coord_in_);
   auto coord_out = to_cmav<Tcoord,2>(coord_out_);
-  auto points_in = to_cmav<complex<Tpoints>,1>(points_in_);
-  auto points_out_ = get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)});
-  auto points_out = to_vmav<complex<Tpoints>,1>(points_out_);
+  auto points_in = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_in_);
+  auto points_out_ = (points_in_.ndim()==1)
+    ? get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)})
+    : get_optional_Pyarr<complex<Tpoints>>(points_out__, {points_in.shape(0),coord_out.shape(0)});
+  auto points_out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_out_);
   {
   py::gil_scoped_release release;
-  nu2nu<Tgrid,Tgrid>(coord_in,points_in,forward,epsilon,nthreads,coord_out,points_out,verbosity,
-                    sigma_min,sigma_max);
-  }
+  if (points_in.shape(0)==1)
+    nu2nu<Tgrid, Tgrid>(coord_in,subarray<1>(points_in,{{0},{}}),forward,
+      epsilon,nthreads,coord_out,subarray<1>(points_out,{{0},{}}),verbosity,
+      sigma_min,sigma_max);
+  else
+    {
+    Nufft3<Tpoints, Tpoints, Tpoints, Tcoord> nufft(coord_in, epsilon, nthreads,
+      coord_out, verbosity, sigma_min, sigma_max);
+    for (size_t i=0; i<points_in.shape(0); ++i)
+      nufft.exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+    }
   return points_out_;
   }
+  }
 py::array Py_nu2nu(const py::array &points_in,
-  const py::array &coord_in,  const py::array &coord_out, bool forward,
+  const py::array &coord_in, const py::array &coord_out, bool forward,
   double epsilon, size_t nthreads,
   py::object &points_out, size_t verbosity, double sigma_min, double sigma_max)
   {
@@ -211,12 +261,21 @@ class Py_Nufftplan
       bool forward, size_t verbosity, const py::array &points_,
       py::object &uniform__) const
       {
-      auto points = to_cmav<complex<T>,1>(points_);
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape);
-      auto uniform = to_vfmav<complex<T>>(uniform_);
+      auto points = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_);
+      vector<size_t> uni_shape;
+      if (points_.ndim()==2)
+        uni_shape.push_back(points.shape(0));
+      for(auto v:uniform_shape) uni_shape.push_back(v);
+      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uni_shape);
+      auto uniform = to_vfmav_with_optional_leading_dimensions<complex<T>>(uniform_,uniform_shape.size()+1);
       {
       py::gil_scoped_release release;
-      ptr->nu2u(forward, verbosity, points, uniform);
+      vector<slice> slices(uniform.ndim(), slice());
+      for (size_t i=0; i<points.shape(0); ++i)
+        {
+        slices[0] = slice(i);
+        ptr->nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(uniform, slices));
+        }
       }
       return uniform_;
       }
@@ -225,12 +284,19 @@ class Py_Nufftplan
       bool forward, size_t verbosity, const py::array &uniform_,
       py::object &points__) const
       {
-      auto uniform = to_cfmav<complex<T>>(uniform_);
-      auto points_ = get_optional_Pyarr<complex<T>>(points__, {npoints});
-      auto points = to_vmav<complex<T>,1>(points_);
+      auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1);
+      auto points_ = (size_t(uniform_.ndim())==uniform_shape.size())
+        ? get_optional_Pyarr<complex<T>>(points__, {npoints})
+        : get_optional_Pyarr<complex<T>>(points__, {uniform.shape(0), npoints});
+      auto points = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_);
       {
       py::gil_scoped_release release;
-      ptr->u2nu(forward, verbosity, uniform, points);
+      vector<slice> slices(uniform.ndim(), slice());
+      for (size_t i=0; i<points.shape(0); ++i)
+        {
+        slices[0] = slice(i);
+        ptr->u2nu(forward, verbosity, subarray(uniform, slices), subarray<1>(points,{{i},{}}));
+        }
       }
       return points_;
       }
@@ -276,7 +342,7 @@ class Py_Nufftplan
 class Py_Nufft3plan
   {
   private:
-    unique_ptr<Nufft3< float,  float,  float, float>> pf;
+    unique_ptr<Nufft3< float,  float,  float,  float>> pf;
     unique_ptr<Nufft3<double, double, double, double>> pd;
     size_t npoints_out;
 
@@ -303,12 +369,15 @@ class Py_Nufft3plan
       bool forward, const py::array &points_in_,
       py::object &points_out__) const
       {
-      auto points_in = to_vmav<complex<T>,1>(points_in_);
-      auto points_out_ = get_optional_Pyarr<complex<T>>(points_out__, {npoints_out});
-      auto points_out = to_vmav<complex<T>,1>(points_out_);
+      auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_);
+      auto points_out_ = (points_in_.ndim()==1)
+        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_out})
+        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_out});
+      auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_);
       {
       py::gil_scoped_release release;
-      ptr->exec(points_in, points_out, forward);
+      for (size_t i=0; i<points_in.shape(0); ++i)
+        ptr->exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
       return points_out_;
       }
@@ -346,11 +415,11 @@ Type 2 non-uniform FFT (uniform to non-uniform)
 
 Parameters
 ----------
-grid : numpy.ndarray(1D/2D/3D, dtype=complex)
-    the grid of input data
+grid : numpy.ndarray(([ntrans], nx, [ny, [nz]]), dtype=complex)
+    the grid(s) of input data
 coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
     the coordinates of the npoints non-uniform points.
-    ndim must be the same as grid.ndim
+    ndim must be 1, 2, or 3 and match the shape of `grid`
     Periodicity is assumed; the coordinates don't have to lie inside a
     particular interval, but smaller absolute coordinate values help accuracy
 forward : bool
@@ -362,7 +431,7 @@ epsilon : float
 nthreads : int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
-out : numpy.ndarray((npoints,), same data type as grid), optional
+out : numpy.ndarray(([ntrans], npoints,), same data type as grid), optional
     if provided, this will be used to store the result
 verbosity: int
     0: no console output
@@ -377,7 +446,7 @@ fft_order: bool
 
 Returns
 -------
-numpy.ndarray((npoints,), same data type as grid)
+numpy.ndarray(([ntrans], npoints,), same data type as grid)
     the computed values at the specified non-uniform grid points.
     Identical to `out` if it was provided
 )""";
@@ -387,7 +456,7 @@ Type 1 non-uniform FFT (non-uniform to uniform)
 
 Parameters
 ----------
-points : numpy.ndarray((npoints,), dtype=numpy.complex)
+points : numpy.ndarray(([ntrans], npoints,), dtype=numpy.complex)
     The input values at the specified non-uniform grid points
 coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
     the coordinates of the npoints non-uniform points.
@@ -403,8 +472,8 @@ epsilon : float
 nthreads : int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
-out : numpy.ndarray(1D/2D/3D, same dtype as points)
-    the grid of output data
+out : numpy.ndarray(([ntrans], nx, [ny, [nz]]), same dtype as points)
+    the grid(s) of output data
     Note: this is a mandatory parameter, since its shape defines the grid dimensions!
 verbosity: int
     0: no console output
@@ -420,7 +489,7 @@ fft_order: bool
 
 Returns
 -------
-numpy.ndarray(1D/2D/3D, same dtype as points)
+numpy.ndarray(([ntrans], nx, [ny, [nz]]), same dtype as points)
     the computed grid values.
     Identical to `out`.
 )""";
@@ -468,14 +537,14 @@ forward : bool
 verbosity: int
     0: no console output
     1: some diagnostic console output
-points : numpy.ndarray((npoints,), dtype=numpy.complex)
+points : numpy.ndarray(([ntrans], npoints,), dtype=numpy.complex)
     The input values at the specified non-uniform grid points
-out : numpy.ndarray(1D/2D/3D, same dtype as points)
+out : numpy.ndarray(([ntrans], nx, [ny, [nz]]), same dtype as points)
     if provided, this will be used to store he result.
 
 Returns
 -------
-numpy.ndarray(1D/2D/3D, same dtype as points)
+numpy.ndarray(([ntrans], nx, [ny, [nz]]), same dtype as points)
     the computed grid values.
     Identical to `out` if it was provided.
 )""";
@@ -490,14 +559,14 @@ forward : bool
 verbosity: int
     0: no console output
     1: some diagnostic console output
-grid : numpy.ndarray(1D/2D/3D, dtype=complex)
+grid : numpy.ndarray(([ntrans], nx, [ny, [nz]]), dtype=complex)
     the grid of input data
-out : numpy.ndarray((npoints,), same data type as grid), optional
+out : numpy.ndarray(([ntrans], npoints,), same data type as grid), optional
     if provided, this will be used to store the result
 
 Returns
 -------
-numpy.ndarray((npoints,), same data type as grid)
+numpy.ndarray(([ntrans], npoints,), same data type as grid)
     the computed values at the specified non-uniform grid points.
     Identical to `out` if it was provided.
 )""";
@@ -522,10 +591,88 @@ float
 )""";
 
 
+constexpr const char *nu2nu_DS = R"""(
+Type 3 non-uniform FFT (non-uniform to non-uniform)
+
+Parameters
+----------
+points_in : numpy.ndarray(([ntrans], npoints_in,), dtype=numpy.complex)
+    The input values at the specified non-uniform grid points
+coord_in : numpy.ndarray((npoints_in, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the non-uniform input points.
+coord_out : numpy.ndarray((npoints_out, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the non-uniform output points.
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads : int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+points_out : numpy.ndarray(([ntrans], npoints_out,), dtype=numpy.complex), optional
+    The output values at the specified non-uniform grid points
+verbosity: int
+    0: no console output
+    1: some diagnostic console output
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+
+Returns
+-------
+numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
+    the computed grid values.
+    Identical to `points_out`, if it was provided.
+)""";
+
+constexpr const char *plan3_init_DS = R"""(
+Nufft3 plan constructor
+
+Parameters
+----------
+coord_in : numpy.ndarray((npoints_in, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the non-uniform input points.
+coord_out : numpy.ndarray((npoints_out, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the non-uniform output points.
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads : int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+)""";
+
+constexpr const char *plan3_exec_DS = R"""(
+Perform a pre-planned nu2nu transform.
+
+Parameters
+----------
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+points_in : numpy.ndarray(([ntrans], npoints_in,), dtype=numpy.complex)
+    The input values at the specified non-uniform grid points
+points_out : numpy.ndarray(([ntrans], npoints_out,), dtype=numpy.complex), optional
+    The output values at the specified non-uniform grid points.
+    if provided, this will be used to store he result.
+
+Returns
+-------
+numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
+    the computed nonuniform values.
+    Identical to `points_out` if it was provided.
+)""";
+
 void add_nufft(py::module_ &msup)
   {
   using namespace pybind11::literals;
   auto m = msup.def_submodule("nufft");
+  auto m2 = m.def_submodule("experimental");
 
   m.def("u2nu", &Py_u2nu, u2nu_DS,  py::kw_only(), "grid"_a, "coord"_a,
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
@@ -535,7 +682,7 @@ void add_nufft(py::module_ &msup)
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
         "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
-  m.def("nu2nu", &Py_nu2nu, py::kw_only(), "points_in"_a, "coord_in"_a,
+  m2.def("nu2nu", &Py_nu2nu, nu2nu_DS, py::kw_only(), "points_in"_a, "coord_in"_a,
         "coord_out"_a, "forward"_a, "epsilon"_a, "nthreads"_a=1,
         "points_out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
@@ -551,13 +698,14 @@ void add_nufft(py::module_ &msup)
       "verbosity"_a=0, "points"_a, "out"_a=None)
     .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "grid"_a, "out"_a=None);
-  py::class_<Py_Nufft3plan> (m, "plan3", py::module_local())
+
+  py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local())
     .def(py::init<const py::array &, const py::array &,
                   double, size_t, double, double, size_t>(),
-      py::kw_only(), "coord_in"_a, "coord_out"_a,
+      plan3_init_DS, py::kw_only(), "coord_in"_a, "coord_out"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "verbosity"_a=0)
-    .def("exec", &Py_Nufft3plan::exec, py::kw_only(), "forward"_a,
+    .def("exec", &Py_Nufft3plan::exec, plan3_exec_DS, py::kw_only(), "forward"_a,
       "points_in"_a, "points_out"_a=None);
   }
 
