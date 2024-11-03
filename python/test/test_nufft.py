@@ -103,6 +103,55 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
 
+@pmp('nx', [1, 20, 257])
+@pmp("npoints", (1, 37))
+@pmp("epsilon", (1e-1, 3e-5, 2e-13))
+@pmp("forward", (True, False))
+@pmp("singleprec", (True, False))
+@pmp("periodicity", ([1.], 2*np.pi))
+@pmp("fft_order", (False, True))
+@pmp("nthreads", (1, 2))
+@pmp("ntrans", (1, 3))
+def test_nufft_1d_batched(nx, npoints, epsilon, forward, singleprec, periodicity,
+                  fft_order, nthreads, ntrans):
+    if singleprec and epsilon < 1e-6:
+        pytest.skip()
+    rng = np.random.default_rng(42)
+    uvw = (rng.random((npoints,1))-0.5)*periodicity
+    ms = rng.random((ntrans,npoints))-0.5 + 1j*(rng.random((ntrans,npoints))-0.5)
+    dirty = rng.random((ntrans,nx))-0.5
+    dirty = dirty +  1j*(rng.random((ntrans,nx))-0.5)
+    nu = 0
+    if singleprec:
+        ms = ms.astype("c8")
+        dirty = dirty.astype("c8")
+
+    def check(d2, m2):
+        ref = max(ducc0.misc.vdot(ms, ms).real, ducc0.misc.vdot(m2, m2).real,
+                  ducc0.misc.vdot(dirty, dirty).real, ducc0.misc.vdot(d2, d2).real)
+        tol = 3e-5*ref if singleprec else 2e-13*ref
+        assert_allclose(ducc0.misc.vdot(ms, m2), ducc0.misc.vdot(d2, dirty), rtol=tol)
+
+    dirty2 = np.empty((ntrans, nx,), dtype=dirty.dtype)
+    dirty2 = ducc0.nufft.nu2u(points=ms, coord=uvw, forward=forward,
+                              epsilon=epsilon, nthreads=nthreads, out=dirty2,
+                              periodicity=periodicity, fft_order=fft_order).astype("c16")
+    ms2 = ducc0.nufft.u2nu(grid=dirty, coord=uvw, forward=not forward,
+                           epsilon=epsilon, nthreads=nthreads,
+                           periodicity=periodicity, fft_order=fft_order).astype("c16")
+    check(dirty2, ms2)
+
+    if not singleprec:
+        plan = ducc0.nufft.plan(nu2u=True, coord=uvw, grid_shape=(nx,),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        dirty2 = plan.nu2u(points=ms, forward=forward)
+        plan = ducc0.nufft.plan(nu2u=False, coord=uvw, grid_shape=(nx,),
+                                epsilon=epsilon, nthreads=nthreads,
+                                periodicity=periodicity, fft_order=fft_order)
+        ms2 = plan.u2nu(grid=dirty, forward=not forward)
+        check(dirty2, ms2)
+
 @pmp('nx', [1, 20, 21, 250, 257])
 @pmp('ny', [1, 21, 32, 257])
 @pmp("npoints", (1, 37, 10))
