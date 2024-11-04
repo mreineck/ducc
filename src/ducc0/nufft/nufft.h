@@ -273,27 +273,7 @@ size_t krn_id;
 
     vector<vector<double>> corfac;
 
-    template<typename Tpoints, typename Tgrid> bool prep_nu2u
-      (const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
-      {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
-      if (npoints==0)
-        {
-        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
-        return true;
-        }
-      return false;
-      }
-    template<typename Tpoints, typename Tgrid> bool prep_u2nu
-      (const cmav<complex<Tpoints>,1> &points, const cfmav<complex<Tgrid>> &uniform)
-      {
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
-      return npoints==0;
-      }
-
-   static string dim2string(const vector<size_t> &arr)
+    static string dim2string(const vector<size_t> &arr)
       {
       ostringstream str;
       str << arr[0];
@@ -344,6 +324,8 @@ size_t krn_id;
           corfac.push_back(corfac.back());
       timers.pop();
       }
+
+    const vector<size_t> &get_gridsize() const { return nover; }
   };
 
 
@@ -355,13 +337,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
     using parent::nthreads,
           parent::timers, parent::krn_id, parent::fft_order, parent::nuni,
           parent::nover, parent::report,
-          parent::corfac,
-          parent::prep_nu2u, parent::prep_u2nu;
+          parent::corfac;
 
     Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp;
 
   public:
     using parent::parent; /* inherit constructor */
+    using parent::get_gridsize;
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
           const vector<size_t> &uniform_shape_, double epsilon_, 
           size_t nthreads_, double sigma_min, double sigma_max,
@@ -384,7 +366,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
       const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
       {
-      if (prep_nu2u(points, uniform)) return;
+      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
+      if (points.shape(0)==0)
+        {
+        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
+        return;
+        }
       if (verbosity>0) report(true);
       auto dummy = cmav<Tcoord,2>::build_empty();
       nonuni2uni(forward, dummy, points, uniform);
@@ -393,7 +380,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
     template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity,
       const cfmav<complex<Tgrid>> &uniform, const vmav<complex<Tpoints>,1> &points)
       {
-      if (prep_u2nu(points, uniform)) return;
+      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
+      if(points.shape(0)==0) return;
       if (verbosity>0) report(false);
       auto dummy = cmav<Tcoord,2>::build_empty();
       uni2nonuni(forward, uniform, dummy, points);
@@ -403,7 +391,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       const vfmav<complex<Tgrid>> &uniform)
       {
-      if (prep_nu2u(points, uniform)) return;
+      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
+      if (points.shape(0)==0)
+        {
+        mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
+        return;
+        }
       if (verbosity>0) report(true);
       nonuni2uni(forward, coords, points, uniform);
       if (verbosity>0) timers.report(cout);
@@ -412,10 +405,27 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const cfmav<complex<Tgrid>> &uniform, const cmav<Tcoord,2> &coords,
       const vmav<complex<Tpoints>,1> &points)
       {
-      if (prep_u2nu(points, uniform)) return;
+      MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
+      if(points.shape(0)==0) return;
       if (verbosity>0) report(false);
       uni2nonuni(forward, uniform, coords, points);
       if (verbosity>0) timers.report(cout);
+      }
+    template<typename Tpoints, typename Tgrid> void spread(
+      const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
+      const vfmav<complex<Tgrid>> &grid)
+      {
+      MR_assert(grid.shape()==nover, "grid dimensions mismatch");
+      if(points.shape(0)==0) return;;
+      spreadinterp.spread(coords, points, grid);
+      }
+    template<typename Tgrid> void spread_rest(bool forward,
+      const vfmav<complex<Tgrid>> &grid, const vfmav<complex<Tgrid>> &uniform)
+      {
+      MR_assert(grid.shape()==nover, "grid dimensions mismatch");
+      MR_assert(uniform.shape()==nuni, "grid dimensions mismatch");
+      nufft_FFT(true, forward, grid, nuni, nthreads);
+      deconv_nu2u(grid, uniform, corfac, fft_order, nthreads);
       }
 
 /*! Helper class for carrying out nonuniform FFTs of types 1 and 2.

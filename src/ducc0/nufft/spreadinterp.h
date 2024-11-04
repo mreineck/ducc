@@ -33,15 +33,11 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
     // 1./<periodicity of coordinates>
     array<double, ndim> coordfct;
 
-    // number of non-uniform points
-    size_t npoints;
-
     // oversampled grid dimensions
     array<size_t, ndim> nover;
 
     // holds the indices of the nonuniform points in the order in which they
     // should be processed
-
     quick_array<Tidx> coord_idx;
 
     shared_ptr<PolynomialKernel> krn;
@@ -102,7 +98,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
     template<typename Tcoord> void sort_coords(const cmav<Tcoord,2> &coords,
       const vmav<Tcoord,2> &coords_sorted)
       {
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           for (size_t d=0; d<ndim; ++d)
@@ -119,33 +115,14 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
       return res;
       }
 
-    template<typename Tpoints> bool prep_spread
-      (const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tcalc>,ndim> &grid)
-      {
-      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tpoints");
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch");
-      return npoints==0;
-      }
-    template<typename Tpoints> bool prep_interp
-      (const cmav<complex<Tpoints>,1> &points, const cmav<complex<Tcalc>,ndim> &grid)
-      {
-      static_assert(sizeof(Tpoints)<=sizeof(Tcalc),
-        "Tcalc must be at least as accurate as Tpoints");
-      MR_assert(points.shape(0)==npoints, "number of points mismatch");
-      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch");
-      return npoints==0;
-      }
-
   public:
-    Spreadinterp_ancestor(size_t npoints_,
+    Spreadinterp_ancestor(size_t npoints,
       const array<size_t,ndim> &over_shape, size_t kidx,
       size_t nthreads_,
       const vector<double> &periodicity,
       const vector<double> &corigin_)
       : nthreads(adjust_nthreads(nthreads_)), coordfct(get_coordfct(periodicity)),
-        npoints(npoints_), nover(over_shape)
+        nover(over_shape)
       {
 //FIXME
       MR_assert(npoints<=(~Tidx(0)), "too many nonuniform points");
@@ -181,8 +158,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
 #define DUCC0_SPREADINTERP_BOILERPLATE \
   private: \
     using parent=Spreadinterp_ancestor<Tcalc, Tacc, Tidx, ndim>; \
-    using parent::coord_idx, parent::nthreads, parent::npoints, parent::supp, \
-          parent::krn, parent::prep_spread, parent::prep_interp, \
+    using parent::coord_idx, parent::nthreads, parent::supp, \
+          parent::krn, \
           parent::nover, parent::shift, parent::corigin, parent::maxi0, \
           parent::log2tile, parent::sort_coords; \
  \
@@ -196,7 +173,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
           const vector<double> &corigin_=vector<double>()) \
       : parent(coords.shape(0), over_shape_, kidx, nthreads_, \
                periodicity, corigin_), \
-        coords_sorted({npoints,ndim},UNINITIALIZED) \
+        coords_sorted({coords.shape(0),ndim},UNINITIALIZED) \
       { \
       build_index(coords); \
       sort_coords(coords, coords_sorted); \
@@ -205,20 +182,33 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
     template<typename Tpoints, typename Tgrid> void spread( \
       const cmav<complex<Tpoints>,1> &points, const vmav<complex<Tgrid>,ndim> &grid) \
       { \
-      if (prep_spread(points, grid)) return; \
+      MR_assert(coords_sorted.shape(0)==points.shape(0), "npoints mismatch"); \
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc), \
+        "Tcalc must be at least as accurate as Tpoints"); \
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch"); \
+      if (coords_sorted.size()==0) return; \
       spreading_helper<16>(supp, coords_sorted, points, grid); \
       } \
     template<typename Tpoints, typename Tgrid> void interp( \
       const cmav<complex<Tgrid>,ndim> &grid, const vmav<complex<Tpoints>,1> &points) \
       { \
-      if (prep_interp(points, grid)) return; \
+      MR_assert(coords_sorted.shape(0)==points.shape(0), "npoints mismatch"); \
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc), \
+        "Tcalc must be at least as accurate as Tpoints"); \
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch"); \
+      if (coords_sorted.size()==0) return; \
       interpolation_helper<16>(supp, grid, coords_sorted, points); \
       } \
     template<typename Tpoints, typename Tgrid> void spread( \
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points, \
       const vmav<complex<Tgrid>,ndim> &grid) \
       { \
-      if (prep_spread(points, grid)) return; \
+      MR_assert(coords.shape(0)==points.shape(0), "npoints mismatch"); \
+      MR_assert(coords_sorted.size()==0, "bad usage"); \
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc), \
+        "Tcalc must be at least as accurate as Tpoints"); \
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch"); \
+      if (coords.size()==0) return; \
       build_index(coords); \
       spreading_helper<16>(supp, coords, points, grid); \
       } \
@@ -226,7 +216,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t n
       const cmav<complex<Tgrid>,ndim> &grid, const cmav<Tcoord,2> &coords, \
       const vmav<complex<Tpoints>,1> &points) \
       { \
-      if (prep_interp(points, grid)) return; \
+      MR_assert(coords.shape(0)==points.shape(0), "npoints mismatch"); \
+      MR_assert(coords_sorted.size()==0, "bad usage"); \
+      static_assert(sizeof(Tpoints)<=sizeof(Tcalc), \
+        "Tcalc must be at least as accurate as Tpoints"); \
+      MR_assert(grid.shape()==nover, "oversampled grid dimensions mismatch"); \
+      if (coords.size()==0) return; \
       build_index(coords); \
       interpolation_helper<16>(supp, grid, coords, points); \
       }
@@ -378,6 +373,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       bool sorted = coords_sorted.size()!=0;
 
       Mutex mylock;
+      size_t npoints = points.shape(0);
 
       TemplateKernel<SUPP, mysimd<Tacc>> tkrn(*parent::krn);
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
@@ -478,6 +474,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
 
       TemplateKernel<SUPP, mysimd<Tcalc>> tkrn(*parent::krn);
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
@@ -564,12 +561,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
     void build_index(const cmav<Tcoord,2> &coords)
       {
-      MR_assert(coords.shape(0)==npoints, "number of coords mismatch");
       MR_assert(coords.shape(1)==ndim, "ndim mismatch");
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      coord_idx.resize(npoints);
-      quick_array<Tidx> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(coords.shape(0));
+      quick_array<Tidx> key(coords.shape(0));
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           key[i] = parent::template get_tile<Tcoord>({coords(i,0)})[0];
@@ -812,6 +808,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
 
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
@@ -872,9 +869,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       {
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
       size_t ntiles_v = (nover[1]>>log2tile) + 3;
-      coord_idx.resize(npoints);
-      quick_array<Tidx> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(coords.shape(0));
+      quick_array<Tidx> key(coords.shape(0));
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
@@ -1102,6 +1099,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
 
       vector<Mutex> locks(nover[0]);
 
@@ -1163,6 +1161,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
 
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
@@ -1244,9 +1243,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
-      coord_idx.resize(npoints);
-      quick_array<Tidx> key(npoints);
-      execParallel(npoints, nthreads, [&](size_t lo, size_t hi)
+      coord_idx.resize(coords.shape(0));
+      quick_array<Tidx> key(coords.shape(0));
+      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
           {
