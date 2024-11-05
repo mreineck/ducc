@@ -769,7 +769,7 @@ void add_nufft(py::module_ &msup)
   py::class_<Py_Nufftplan> (m, "plan", py::module_local())
     .def(py::init<bool, const py::array &, const py::object &,
                   double, size_t, double, double, const py::object &, bool>(),
-      plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
+      plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "uniform_shape"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false)
     .def(py::init<bool, size_t, const py::object &,
