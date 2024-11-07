@@ -416,7 +416,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const vfmav<complex<Tgrid>> &grid)
       {
       MR_assert(grid.shape()==nover, "grid dimensions mismatch");
-      if(points.shape(0)==0) return;;
+      if(points.shape(0)==0) return;
       spreadinterp.spread(coords, points, grid);
       }
     template<typename Tgrid> void spread_rest(bool forward,
@@ -426,6 +426,22 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       MR_assert(uniform.shape()==nuni, "grid dimensions mismatch");
       nufft_FFT(true, forward, grid, nuni, nthreads);
       deconv_nu2u(grid, uniform, corfac, fft_order, nthreads);
+      }
+    template<typename Tpoints, typename Tgrid> void interp(
+      const cmav<Tcoord,2> &coords, const vmav<complex<Tpoints>,1> &points,
+      const cfmav<complex<Tgrid>> &grid)
+      {
+      MR_assert(grid.shape()==nover, "grid dimensions mismatch");
+      if(points.shape(0)==0) return;
+      spreadinterp.interp(grid, coords, points);
+      }
+    template<typename Tgrid> void interp_prep(bool forward,
+      const vfmav<complex<Tgrid>> &grid, const cfmav<complex<Tgrid>> &uniform)
+      {
+      MR_assert(grid.shape()==nover, "grid dimensions mismatch");
+      MR_assert(uniform.shape()==nuni, "grid dimensions mismatch");
+      deconv_u2nu(uniform, grid, corfac, fft_order, nthreads);
+      nufft_FFT(false, forward, grid, nuni, nthreads);
       }
 
 /*! Helper class for carrying out nonuniform FFTs of types 1 and 2.
