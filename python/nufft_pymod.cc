@@ -256,23 +256,6 @@ class Py_Nufftplan
         epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
       }
       }
-    template<typename T> void construct(
-      unique_ptr<Nufft<T,T,T>> &ptr,
-      bool gridding, size_t npoints_,
-      const py::object &uniform_shape_,
-      double epsilon_, 
-      size_t nthreads_, 
-      double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order_)
-      {
-      auto shp = uniform_shape_.cast<vector<size_t>>();
-      auto periodicity = get_periodicity(periodicity_, shp.size());
-      {
-      py::gil_scoped_release release;
-      ptr = make_unique<Nufft<T,T,T>> (gridding, npoints_, shp,
-        epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
-      }
-      }
     template<typename T> py::array do_nu2u(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const py::array &points_,
@@ -317,36 +300,6 @@ class Py_Nufftplan
       }
       return points_;
       }
-    template<typename T> py::array do_nu2u_grid(
-      const unique_ptr<Nufft<T,T,T>> &ptr,
-      const py::array &coord_, const py::array &values_,
-      py::object &grid__)
-      {
-      auto coord = to_cmav<T,2>(coord_);
-      auto values = to_cmav<complex<T>,1>(values_);
-      auto grid_ = get_optional_Pyarr<complex<T>>(grid__, ptr->get_gridsize(), true);
-      auto grid = to_vfmav<complex<T>>(grid_);
-      {
-      py::gil_scoped_release release;
-      ptr->spread(coord, values, grid);
-      }
-      return grid_;
-      }
-    template<typename T> py::array do_nu2u_rest(
-      const unique_ptr<Nufft<T,T,T>> &ptr,
-      bool forward,
-      const py::array &grid_,
-      py::object &uniform__)
-      {
-      auto grid = to_vfmav<complex<T>>(grid_);
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, false);
-      auto uniform = to_vfmav<complex<T>>(uniform_);
-      {
-      py::gil_scoped_release release;
-      ptr->spread_rest(forward, grid, uniform);
-      }
-      return uniform_;
-      }
 
   public:
     Py_Nufftplan(bool gridding, const py::array &coord_,
@@ -369,24 +322,6 @@ class Py_Nufftplan
       else
         MR_fail("unsupported");
       }
-    Py_Nufftplan(bool gridding, size_t npoints_,
-                 const py::object &uniform_shape_,
-                 double epsilon_, 
-                 size_t nthreads_, 
-                 double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order_, bool singleprec)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
-        npoints(npoints_)
-      {
-      auto ndim = uniform_shape.size();
-      MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
-      if (!singleprec)
-        construct(pd, gridding, npoints_, uniform_shape_, epsilon_, nthreads_,
-                  sigma_min, sigma_max, periodicity, fft_order_);
-      else
-        construct(pf, gridding, npoints_, uniform_shape_, epsilon_, nthreads_,
-                  sigma_min, sigma_max, periodicity, fft_order_);
-      }
 
     py::array nu2u(bool forward, size_t verbosity,
       const py::array &points_, py::object &uniform_)
@@ -402,17 +337,93 @@ class Py_Nufftplan
       if (pf) return do_u2nu(pf, forward, verbosity, uniform_, points_);
       MR_fail("unsupported");
       }
-    py::array nu2u_grid(const py::array &coord, const py::array &values,
-      py::object &grid)
+  };
+class Py_incremental_nu2u
+  {
+  private:
+    vector<size_t> uniform_shape;
+    vfmav<complex< float>> gridf;
+    vfmav<complex<double>> gridd;
+    size_t nthreads;
+
+    unique_ptr<Nufft< float,  float,  float>> pf;
+    unique_ptr<Nufft<double, double, double>> pd;
+
+    template<typename T> void construct(
+      unique_ptr<Nufft<T,T,T>> &ptr,
+      vfmav<complex<T>> &grid,
+      size_t npoints_estimate,
+      const py::object &uniform_shape_,
+      double epsilon_, 
+      double sigma_min, double sigma_max,
+      const py::object &periodicity_, bool fft_order_)
       {
-      if (pd) return do_nu2u_grid(pd, coord, values, grid);
-      if (pf) return do_nu2u_grid(pf, coord, values, grid);
+      auto shp = uniform_shape_.cast<vector<size_t>>();
+      auto periodicity = get_periodicity(periodicity_, shp.size());
+      {
+      py::gil_scoped_release release;
+      ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, shp,
+        epsilon_, nthreads, sigma_min, sigma_max, periodicity, fft_order_);
+      grid.assign(vfmav<complex<T>>(ptr->get_gridsize()));
+      }
+      }
+    template<typename T> void do_add_points(
+      const unique_ptr<Nufft<T,T,T>> &ptr,
+      const py::array &coord_, const py::array &values_,
+      vfmav<complex<T>> &grid)
+      {
+      auto coord = to_cmav<T,2>(coord_);
+      auto values = to_cmav<complex<T>,1>(values_);
+      {
+      py::gil_scoped_release release;
+      ptr->spread(coord, values, grid);
+      }
+      }
+    template<typename T> py::array do_evaluate_and_reset(
+      const unique_ptr<Nufft<T,T,T>> &ptr,
+      bool forward,
+      vfmav<complex<T>> &grid,
+      py::object &uniform__)
+      {
+      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, false);
+      auto uniform = to_vfmav<complex<T>>(uniform_);
+      {
+      py::gil_scoped_release release;
+      ptr->spread_rest(forward, grid, uniform);
+      mav_apply([](auto &v){v=0;}, nthreads, grid);
+      }
+      return uniform_;
+      }
+
+  public:
+    Py_incremental_nu2u(size_t npoints_estimate,
+                 const py::object &uniform_shape_,
+                 double epsilon_, 
+                 size_t nthreads_, 
+                 double sigma_min, double sigma_max,
+                 const py::object &periodicity, bool fft_order_, bool singleprec)
+      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)), nthreads(nthreads_)
+      {
+      auto ndim = uniform_shape.size();
+      MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
+      if (!singleprec)
+        construct(pd, gridd, npoints_estimate, uniform_shape_, epsilon_,
+                  sigma_min, sigma_max, periodicity, fft_order_);
+      else
+        construct(pf, gridf, npoints_estimate, uniform_shape_, epsilon_,
+                  sigma_min, sigma_max, periodicity, fft_order_);
+      }
+
+    void add_points(const py::array &coord, const py::array &values)
+      {
+      if (pd) return do_add_points(pd, coord, values, gridd);
+      if (pf) return do_add_points(pf, coord, values, gridf);
       MR_fail("unsupported");
       }
-    py::array nu2u_rest(bool forward, const py::array &grid, py::object &uniform)
+    py::array evaluate_and_reset(bool forward, py::object &uniform)
       {
-      if (pd) return do_nu2u_rest(pd, forward, grid, uniform);
-      if (pf) return do_nu2u_rest(pf, forward, grid, uniform);
+      if (pd) return do_evaluate_and_reset(pd, forward, gridd, uniform);
+      if (pf) return do_evaluate_and_reset(pf, forward, gridf, uniform);
       MR_fail("unsupported");
       }
   };
@@ -772,19 +783,21 @@ void add_nufft(py::module_ &msup)
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false)
-    .def(py::init<bool, size_t, const py::object &,
-                  double, size_t, double, double, const py::object &, bool, bool>(),
-      py::kw_only(), "nu2u"_a, "npoints_estimate"_a=1000000000, "grid_shape"_a,
-        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
-        "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
     .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "points"_a, "out"_a=None)
     .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a,
-      "verbosity"_a=0, "grid"_a, "out"_a=None)
-    .def("nu2u_grid", &Py_Nufftplan::nu2u_grid, py::kw_only(),
-      "coord"_a, "points"_a, "grid"_a=None)
-    .def("nu2u_rest", &Py_Nufftplan::nu2u_rest, py::kw_only(),
-      "forward"_a, "grid"_a, "uniform"_a=None);
+      "verbosity"_a=0, "grid"_a, "out"_a=None);
+
+  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local())
+    .def(py::init<size_t, const py::object &,
+                  double, size_t, double, double, const py::object &, bool, bool>(),
+      py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
+    .def("add_points", &Py_incremental_nu2u::add_points, py::kw_only(),
+      "coord"_a, "points"_a)
+    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, py::kw_only(),
+      "forward"_a, "uniform"_a=None);
 
   py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local())
     .def(py::init<const py::array &, const py::array &,
