@@ -345,6 +345,7 @@ class Py_incremental_nu2u
     vfmav<complex< float>> gridf;
     vfmav<complex<double>> gridd;
     size_t nthreads;
+    bool forward;
 
     unique_ptr<Nufft< float,  float,  float>> pf;
     unique_ptr<Nufft<double, double, double>> pd;
@@ -379,7 +380,6 @@ class Py_incremental_nu2u
       }
     template<typename T> py::array do_evaluate_and_reset(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      bool forward,
       vfmav<complex<T>> &grid,
       py::object &uniform__)
       {
@@ -396,11 +396,14 @@ class Py_incremental_nu2u
   public:
     Py_incremental_nu2u(size_t npoints_estimate,
                  const py::object &uniform_shape_,
+                 bool forward_,
                  double epsilon, 
                  size_t nthreads_, 
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order, bool singleprec)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)), nthreads(nthreads_)
+      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
+        nthreads(nthreads_),
+        forward(forward_)
       {
       auto ndim = uniform_shape.size();
       MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
@@ -418,10 +421,10 @@ class Py_incremental_nu2u
       if (pf) return do_add_points(pf, coord, values, gridf);
       MR_fail("unsupported");
       }
-    py::array evaluate_and_reset(bool forward, py::object &uniform)
+    py::array evaluate_and_reset(py::object &uniform)
       {
-      if (pd) return do_evaluate_and_reset(pd, forward, gridd, uniform);
-      if (pf) return do_evaluate_and_reset(pf, forward, gridf, uniform);
+      if (pd) return do_evaluate_and_reset(pd, gridd, uniform);
+      if (pf) return do_evaluate_and_reset(pf, gridf, uniform);
       MR_fail("unsupported");
       }
   };
@@ -861,15 +864,15 @@ void add_nufft(py::module_ &msup)
       "verbosity"_a=0, "grid"_a, "out"_a=None);
 
   py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local())
-    .def(py::init<size_t, const py::object &,
+    .def(py::init<size_t, const py::object &, bool,
                   double, size_t, double, double, const py::object &, bool, bool>(),
-      py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a,
+      py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
     .def("add_points", &Py_incremental_nu2u::add_points, py::kw_only(),
       "coord"_a, "points"_a)
     .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, py::kw_only(),
-      "forward"_a, "uniform"_a=None);
+      "uniform"_a=None);
 
   py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local())
     .def(py::init<size_t, const py::array &, bool,
