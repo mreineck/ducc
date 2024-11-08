@@ -392,7 +392,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const vfmav<complex<Tgrid>> &uniform)
       {
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
-      if (points.shape(0)==0)
+      if ((points.shape(0)==0)&&(coords.shape(0)==0))
         {
         mav_apply([](complex<Tgrid> &v){v=complex<Tgrid>(0);}, nthreads, uniform);
         return;
@@ -406,7 +406,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const vmav<complex<Tpoints>,1> &points)
       {
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
-      if(points.shape(0)==0) return;
+      if((points.shape(0)==0)&&(coords.shape(0)==0)) return;
       if (verbosity>0) report(false);
       uni2nonuni(forward, uniform, coords, points);
       if (verbosity>0) timers.report(cout);
@@ -416,10 +416,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const vfmav<complex<Tgrid>> &grid)
       {
       MR_assert(grid.shape()==nover, "grid dimensions mismatch");
-      if(points.shape(0)==0) return;
       spreadinterp.spread(coords, points, grid);
       }
-    template<typename Tgrid> void spread_rest(bool forward,
+    template<typename Tgrid> void spread_finish(bool forward,
       const vfmav<complex<Tgrid>> &grid, const vfmav<complex<Tgrid>> &uniform)
       {
       MR_assert(grid.shape()==nover, "grid dimensions mismatch");
@@ -432,7 +431,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       const cfmav<complex<Tgrid>> &grid)
       {
       MR_assert(grid.shape()==nover, "grid dimensions mismatch");
-      if(points.shape(0)==0) return;
       spreadinterp.interp(grid, coords, points);
       }
     template<typename Tgrid> void interp_prep(bool forward,

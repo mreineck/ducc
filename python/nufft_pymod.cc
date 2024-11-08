@@ -353,17 +353,15 @@ class Py_incremental_nu2u
       unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
       size_t npoints_estimate,
-      const py::object &uniform_shape_,
-      double epsilon_, 
+      double epsilon, 
       double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order_)
+      const py::object &periodicity_, bool fft_order)
       {
-      auto shp = uniform_shape_.cast<vector<size_t>>();
-      auto periodicity = get_periodicity(periodicity_, shp.size());
+      auto periodicity = get_periodicity(periodicity_, uniform_shape.size());
       {
       py::gil_scoped_release release;
-      ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, shp,
-        epsilon_, nthreads, sigma_min, sigma_max, periodicity, fft_order_);
+      ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, uniform_shape,
+        epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       grid.assign(vfmav<complex<T>>(ptr->get_gridsize()));
       }
       }
@@ -389,7 +387,7 @@ class Py_incremental_nu2u
       auto uniform = to_vfmav<complex<T>>(uniform_);
       {
       py::gil_scoped_release release;
-      ptr->spread_rest(forward, grid, uniform);
+      ptr->spread_finish(forward, grid, uniform);
       mav_apply([](auto &v){v=0;}, nthreads, grid);
       }
       return uniform_;
@@ -398,20 +396,20 @@ class Py_incremental_nu2u
   public:
     Py_incremental_nu2u(size_t npoints_estimate,
                  const py::object &uniform_shape_,
-                 double epsilon_, 
+                 double epsilon, 
                  size_t nthreads_, 
                  double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order_, bool singleprec)
+                 const py::object &periodicity, bool fft_order, bool singleprec)
       : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)), nthreads(nthreads_)
       {
       auto ndim = uniform_shape.size();
       MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
       if (!singleprec)
-        construct(pd, gridd, npoints_estimate, uniform_shape_, epsilon_,
-                  sigma_min, sigma_max, periodicity, fft_order_);
+        construct(pd, gridd, npoints_estimate, epsilon,
+                  sigma_min, sigma_max, periodicity, fft_order);
       else
-        construct(pf, gridf, npoints_estimate, uniform_shape_, epsilon_,
-                  sigma_min, sigma_max, periodicity, fft_order_);
+        construct(pf, gridf, npoints_estimate, epsilon,
+                  sigma_min, sigma_max, periodicity, fft_order);
       }
 
     void add_points(const py::array &coord, const py::array &values)
@@ -444,9 +442,9 @@ class Py_incremental_u2nu
       size_t npoints_estimate,
       const py::array &uniform_,
       bool forward,
-      double epsilon_, 
+      double epsilon, 
       double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order_)
+      const py::object &periodicity_, bool fft_order)
       {
       auto uniform = to_cfmav<complex<T>>(uniform_);
       auto shp = uniform.shape();
@@ -454,7 +452,7 @@ class Py_incremental_u2nu
       {
       py::gil_scoped_release release;
       ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, shp,
-        epsilon_, nthreads, sigma_min, sigma_max, periodicity, fft_order_);
+        epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
       grid.assign(vfmav<complex<T>>(ptr->get_gridsize()));
       ptr->interp_prep(forward, grid, uniform);
       }
@@ -478,7 +476,7 @@ class Py_incremental_u2nu
     Py_incremental_u2nu(size_t npoints_estimate,
                  const py::array &uniform,
                  bool forward,
-                 double epsilon_, 
+                 double epsilon, 
                  size_t nthreads_, 
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order_, bool singleprec)
@@ -487,10 +485,10 @@ class Py_incremental_u2nu
       auto ndim = uniform.ndim();
       MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
       if (!singleprec)
-        construct(pd, gridd, npoints_estimate, uniform, forward, epsilon_,
+        construct(pd, gridd, npoints_estimate, uniform, forward, epsilon,
                   sigma_min, sigma_max, periodicity, fft_order_);
       else
-        construct(pf, gridf, npoints_estimate, uniform, forward, epsilon_,
+        construct(pf, gridf, npoints_estimate, uniform, forward, epsilon,
                   sigma_min, sigma_max, periodicity, fft_order_);
       }
 
