@@ -482,12 +482,12 @@ class Py_incremental_u2nu
                  double epsilon, 
                  size_t nthreads_, 
                  double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order_, bool singleprec)
+                 const py::object &periodicity, bool fft_order_)
       : nthreads(nthreads_)
       {
       auto ndim = uniform.ndim();
       MR_assert((ndim>=1)&&(ndim<=3), "unsupported dimensionality");
-      if (!singleprec)
+      if (isPyarr<complex<double>>(uniform))
         construct(pd, gridd, npoints_estimate, uniform, forward, epsilon,
                   sigma_min, sigma_max, periodicity, fft_order_);
       else
@@ -832,6 +832,115 @@ numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
     Identical to `points_out` if it was provided.
 )""";
 
+constexpr const char *incremental_nu2u_init_DS = R"""(
+Incremental nu2u constructor
+
+Parameters
+----------
+npoints_estimate : int
+    estimated total number of nonuniform points
+    This is only used for performance optimization; an order-of-magnitude guess
+    should be fine, the default should also be OK in most situations
+grid_shape : tuple(int) of length ndim
+    the shape of the uniform grid
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+nthreads : int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+periodicity: float or sequence of floats
+    periodicity of the coordinates
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+fft_order: bool
+    if False, grids start with the most negative Fourier node
+    if True, grids start with the zero Fourier mode
+singleprec : bool
+    True if np.float32/np.complex64 are used, otherwise False
+)""";
+constexpr const char *incremental_nu2u_add_points_DS = R"""(
+Adds nonunifom points to the transform
+
+Parameters
+----------
+coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the added non-uniform points.
+points : numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
+    The input values at the specified non-uniform grid points
+)""";
+constexpr const char *incremental_nu2u_evaluate_and_reset_DS = R"""(
+Finishes the transform and resets it to empty
+
+Parameters
+----------
+uniform : numpy.ndarray(uniform_shape), dtype=numpy.complex64 or numpy.complex128)
+    if provided, this will be used to store he result.
+
+Returns
+-------
+numpy.ndarray(uniform_shape), dtype=numpy.complex64 or numpy.complex128)
+    The result of the transform
+)""";
+
+constexpr const char *incremental_u2nu_init_DS = R"""(
+Incremental u2nu constructor
+
+Parameters
+----------
+npoints_estimate : int
+    estimated total number of nonuniform points
+    This is only used for performance optimization; an order-of-magnitude guess
+    should be fine, the default should also be OK in most situations
+grid: numpy.ndarray((nx, [ny, [nz]]), dtype=numpy.complex64 or numpy.complex128)
+    the grid of input data
+forward : bool
+    if True, perform the FFT with exponent -1, else +1.
+nthreads : int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors
+    1.2 <= sigma_min < sigma_max <= 2.5
+periodicity: float or sequence of floats
+    periodicity of the coordinates
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+fft_order: bool
+    if False, grids start with the most negative Fourier node
+    if True, grids start with the zero Fourier mode
+)""";
+constexpr const char *incremental_u2nu_get_points_DS = R"""(
+Returns the result of the transfom at the specified nonunifom points.
+
+Parameters
+----------
+coord : numpy.ndarray((npoints, ndim), dtype=numpy.float32 or numpy.float64)
+    the coordinates of the added non-uniform points.
+points : numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
+    if provided, this will be used to store he result.
+    The input values at the specified non-uniform grid points
+
+Returns
+-------
+numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
+    The result of the transform at the specified non-uniform grid points
+)""";
+
 void add_nufft(py::module_ &msup)
   {
   using namespace pybind11::literals;
@@ -866,22 +975,25 @@ void add_nufft(py::module_ &msup)
   py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local())
     .def(py::init<size_t, const py::object &, bool,
                   double, size_t, double, double, const py::object &, bool, bool>(),
+      incremental_nu2u_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
-    .def("add_points", &Py_incremental_nu2u::add_points, py::kw_only(),
-      "coord"_a, "points"_a)
-    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, py::kw_only(),
-      "uniform"_a=None);
+    .def("add_points", &Py_incremental_nu2u::add_points,
+      incremental_nu2u_add_points_DS, py::kw_only(), "coord"_a, "points"_a)
+    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, 
+      incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
   py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local())
     .def(py::init<size_t, const py::array &, bool,
-                  double, size_t, double, double, const py::object &, bool, bool>(),
+                  double, size_t, double, double, const py::object &, bool>(),
+      incremental_u2nu_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
-        "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
-    .def("get_points", &Py_incremental_u2nu::get_points, py::kw_only(),
-      "coord"_a, "values"_a=None);
+        "periodicity"_a=2*pi, "fft_order"_a=false)
+    .def("get_points", &Py_incremental_u2nu::get_points,
+      incremental_u2nu_get_points_DS, py::kw_only(),
+      "coord"_a, "points"_a=None);
 
   py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local())
     .def(py::init<const py::array &, const py::array &,
