@@ -658,8 +658,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
               const vmav<complex<Tpoints>,1> &points_out,
               bool forward)
       {
-      MR_assert(fact_in.shape()==points_in.shape());
-      MR_assert(fact_out.shape()==points_out.shape());
+      MR_assert(fact_in.shape()==points_in.shape(), "points_in shape mismatch");
+      MR_assert(fact_out.shape()==points_out.shape(), "points_out shape mismatch");
 
       // try to use points_out for temporary points_in_2 storage
       auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
