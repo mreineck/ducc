@@ -695,8 +695,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   auto ndim = coord_in.shape(1);
   MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
   MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
-  MR_assert(coord_in.shape(0)==points_in.shape(0));
-  MR_assert(coord_out.shape(0)==points_out.shape(0));
+  MR_assert(coord_in.shape(0)==points_in.shape(0), "points_in shape mismatch");
+  MR_assert(coord_out.shape(0)==points_out.shape(0), "points_out shape mismatch");
 
   timers.push("coord min/max");
   auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);
