@@ -1338,40 +1338,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       }
   };
 
-#if 0
-/* Possibilities:
-- doing transforms in multiple steps (many cumulative spread calls, only one FFT)
-- batched transforms (including SIMD-based sub-batching)
-- treating complex transforms as batched real transforms
-- re-using this code for totalconvolve/sphere_interpol
-- easier addition of type 3?
-
-*/
-
-template<typename Tcalc, typename Tacc> auto findNufftParameters(double epsilon,
-  double sigma_min, double sigma_max, const vector<size_t> &dims,
-  size_t npoints, bool gridding, size_t nthreads);
-
-template<typename Tacc> vector<size_t> getTileAndChunksize(size_t ncomp, size_t ndim, size_t kernel_id);
-
-template<typename Tcoord, typename Tidx>
-void getIdx(const cmav<Tcoord,2> &coords, size_t kernel_id, const vector<size_t> &gridsize,
-            const vmav<Tidx,1> &idx, const vector<double> &periodicity, size_t nthreads);
-template<typename Tpoint, typename Tcoord, typename Tgrid, typename Tidx, typename Tacc>
-void spread(const cmav<Tpoint,2> &points, const cmav<Tcoord,2> &coords,
-            const vector<double> &origin,
-            bool coords_sorted, const cmav<Tidx,1> &idx,
-            const vfmav<Tgrid> &grid /* inout! */, size_t kernel_id,
-            const vector<double> &periodicity, size_t nthreads);
-template<typename Tpoint, typename Tcoord, typename Tidx, typename Tgrid>
-void interp(const vmav<Tpoint,2> &points, const cmav<Tcoord,2> &coords,
-            const vector<double> &origin,
-            bool coords_sorted, const cmav<Tidx,1> &idx,
-            const cfmav<Tgrid> &grid, size_t kernel_id,
-            const vector<double> &periodicity, size_t nthreads);
-#endif
-
-
 }}
 
 #endif

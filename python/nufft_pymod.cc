@@ -866,6 +866,7 @@ fft_order: bool
     if True, grids start with the zero Fourier mode
 singleprec : bool
     True if np.float32/np.complex64 are used, otherwise False
+    All variable dtypes in member functions must be consistent with this.
 )""";
 constexpr const char *incremental_nu2u_add_points_DS = R"""(
 Adds nonunifom points to the transform
@@ -902,6 +903,8 @@ npoints_estimate : int
     should be fine, the default should also be OK in most situations
 grid: numpy.ndarray((nx, [ny, [nz]]), dtype=numpy.complex64 or numpy.complex128)
     the grid of input data
+    All variable dtypes in member functions must be consistent with the dtype
+    of `grid`.
 forward : bool
     if True, perform the FFT with exponent -1, else +1.
 nthreads : int >= 0
