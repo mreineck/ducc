@@ -20,9 +20,80 @@
 #ifndef DUCC0_NUFFT_SPREADINTERP_H
 #define DUCC0_NUFFT_SPREADINTERP_H
 
+#include <algorithm>
+#include "ducc0/infra/simd.h"
+#include "ducc0/math/gridding_kernel.h"
+
 namespace ducc0 {
 
 namespace detail_nufft {
+
+using namespace std;
+
+// the next line is necessary to address some sloppy name choices in AdaptiveCpp
+using std::min, std::max;
+
+template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
+  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
+
+#if (!defined(DUCC0_NO_SIMD))
+#if (!defined(__AVX512F__))
+#if (defined(__AVX__))
+static_assert(mysimd<float>::size()==8, "must not happen");
+#if 1
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
+  {
+  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
+  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
+  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
+  return complex<float>(t2[0], t2[1]);
+  }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return complex<float>(t5[0], t5[1]);
+  }
+#endif
+#elif defined(__SSE3__)
+static_assert(mysimd<float>::size()==4, "must not happen");
+template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
+  {
+  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
+  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
+  return complex<float>(t1[0], t1[2]);
+  }
+#endif
+#endif
+#endif
+
+
+template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
+template<> constexpr inline int log2tile_<long double, 1> = 9;
+template<> constexpr inline int log2tile_<double, 1> = 9;
+template<> constexpr inline int log2tile_<float , 1> = 9;
+template<> constexpr inline int log2tile_<long double, 2> = 4;
+template<> constexpr inline int log2tile_<double, 2> = 4;
+template<> constexpr inline int log2tile_<float , 2> = 5;
+#ifdef NEW_DUMP
+template<> constexpr inline int log2tile_<double, 3> = 5;
+template<> constexpr inline int log2tile_<float , 3> = 5;
+#else
+template<> constexpr inline int log2tile_<double, 3> = 4;
+template<> constexpr inline int log2tile_<float , 3> = 4;
+#endif
+template<> constexpr inline int log2tile_<long double, 3> = 4;
+
+template<size_t ndim> constexpr inline size_t max_ntile=-1;
+template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
+template<> constexpr inline size_t max_ntile<2> = (uint32_t(1<<16))-10;
+template<> constexpr inline size_t max_ntile<3> = (uint32_t(1<<10))-10;
 
 template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spreadinterp_ancestor
   {
