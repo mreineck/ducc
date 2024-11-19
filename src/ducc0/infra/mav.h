@@ -347,6 +347,8 @@ class fmav_info
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
+// FIXME: this doesn't work when working on dimensions of size 0.
+// Do we want to fix this?
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)
@@ -505,6 +507,8 @@ template<size_t ndim> class mav_info
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
+// FIXME: this doesn't work when working on dimensions of size 0.
+// Do we want to fix this?
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)

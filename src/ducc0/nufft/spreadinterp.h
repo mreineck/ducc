@@ -854,6 +854,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                  SUPP*sizeof(complex<Tacc>));
 
           Tacc * DUCC0_RESTRICT xpx = reinterpret_cast<Tacc *>(hlp.p0);
+// It seems that performance is slightly better if we don't work in
+// memory-contiguous fashion, probably due to the unaligned accesses.
+#if 0  // old version, leaving it in for now
           for (size_t cu=0; cu<SUPP; ++cu)
             {
             Tacc tmpx=ku[cu];
@@ -865,6 +868,19 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               tval.copy_to(px,element_aligned_tag());
               }
             }
+#else
+          for (size_t cv=0; cv<NVEC2; ++cv)
+            {
+            auto tmpx=vdata[cv];
+            for (size_t cu=0; cu<SUPP; ++cu)
+              {
+              auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
+              auto tval = mysimd<Tacc>(px,element_aligned_tag());
+              tval += tmpx*ku[cu];
+              tval.copy_to(px,element_aligned_tag());
+              }
+            }
+#endif
           }
         });
       }
@@ -917,6 +933,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             }
           else
             {
+// The repeated addition to tmpr and tmpi may be a bottleneck ...
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tcalc> tmpr(0), tmpi(0);
@@ -1211,6 +1228,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const auto j1 = 2*ljump;
           const auto j2 = 2*(pjump-SUPP*ljump);
+// We might want to try the 2D non-contiguous approach here at some point,
+// but it doesn't work if we use the current unvectorized loops.
           for (size_t cu=0; cu<SUPP; ++cu, fptr2+=j2)
             for (size_t cv=0; cv<SUPP; ++cv, fptr2+=j1)
               {
@@ -1278,6 +1297,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             }
           else
             {
+// The repeated addition to tmp2r and tmp2i may be a bottleneck ...
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               mysimd<Tcalc> tmpr(0), tmpi(0);
