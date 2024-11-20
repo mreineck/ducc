@@ -1200,10 +1200,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
         const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*hlp.vlen*hlp.nvec;
+        using Tsimd = mysimd<Tacc>;
+        constexpr size_t vlen = Tsimd::size();
+        constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
         union Txdata{
           array<complex<Tacc>,SUPP> c;
           array<Tacc,2*SUPP> f;
-          Txdata(){for (size_t i=0; i<f.size(); ++i) f[i]=0;}
+          array<Tsimd,nvec2> v;
+          Txdata(){for (size_t i=0; i<v.size(); ++i) v[i]=0;}
           };
         Txdata xdata;
 
@@ -1224,8 +1228,26 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
 
           for (size_t cw=0; cw<SUPP; ++cw)
             xdata.c[cw]=kw[cw]*v;
-          const Tacc * DUCC0_RESTRICT fptr1=xdata.f.data();
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
+// this is quite voodoo, but helps a lot, at least on my machine
+if constexpr(SUPP<=8)
+  {
+          const Tsimd * DUCC0_RESTRICT fptr1=xdata.v.data();
+          for (size_t cu=0; cu<SUPP; ++cu)
+            for (size_t cw=0; cw<nvec2; ++cw)
+              {
+              auto tmp2x=ku[cu]*fptr1[cw];
+              for (size_t cv=0; cv<SUPP; ++cv)
+                {
+                Tsimd tmp(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
+                tmp += tmp2x*kv[cv];
+                tmp.copy_to(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
+                }
+              }
+  }
+else
+  {
+          const Tacc * DUCC0_RESTRICT fptr1=xdata.f.data();
           const auto j1 = 2*ljump;
           const auto j2 = 2*(pjump-SUPP*ljump);
 // We might want to try the 2D non-contiguous approach here at some point,
@@ -1237,6 +1259,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               for (size_t cw=0; cw<2*SUPP; ++cw)
                 fptr2[cw] += tmp2x*fptr1[cw];
               }
+  }
           }
         });
       }
