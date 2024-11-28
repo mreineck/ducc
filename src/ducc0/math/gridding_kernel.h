@@ -438,7 +438,9 @@ template<typename T> auto getAvailableKernels(double epsilon,
   vector<size_t> res;
   for (auto v: idx)
     if (v<KernelDB.size()) res.push_back(v);
-  MR_assert(!res.empty(), "no appropriate kernel found");
+  MR_assert(!res.empty(),
+    "No appropriate kernel found for the specified combination of parameters\n"
+    "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
   return res;
   }
 

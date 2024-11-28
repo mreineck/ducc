@@ -1569,7 +1569,9 @@ double bestEpsilon(size_t ndim, bool singleprec,
       && (krn.epsilon<=res)
       && (krn.ofactor<=ofactor_max) && (krn.ofactor>=ofactor_min))
       res = krn.epsilon;
-  MR_assert(res<1000., "no appropriate kernel found");
+  MR_assert(res<1000.,
+    "No appropriate kernel found for the specified combination of parameters\n"
+    "(sigma_min, sigma_max, ndim, floating point precision).");
   return res;
   }
 
