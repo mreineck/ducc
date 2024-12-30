@@ -347,6 +347,8 @@ class fmav_info
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
+// FIXME: this doesn't work when working on dimensions of size 0.
+// Do we want to fix this?
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)
@@ -505,6 +507,8 @@ template<size_t ndim> class mav_info
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
+// FIXME: this doesn't work when working on dimensions of size 0.
+// Do we want to fix this?
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)
@@ -803,6 +807,12 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nstr.fill(0);
       return cmav(tmp, shape, nstr);
       }
+    static cmav build_empty()
+      {
+      shape_t nshp;
+      nshp.fill(0);
+      return cmav(static_cast<T *>(nullptr), nshp);
+      }
     cmav transpose() const
       {
       return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
@@ -859,13 +869,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     vmav(const vfmav<T> &inp)
       : parent(inp) {}
       
-    void assign(vmav &other)
+    void assign(const vmav &other)
       { parent::assign(other); }
-    void dealloc()
-      {
-      vmav empty;
-      assign(empty);
-      }
+    void unassign()
+      { assign(vmav()); }
     operator vfmav<T>() const
       {
       return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
