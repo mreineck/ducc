@@ -31,6 +31,7 @@
 #include <limits>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
+#include "ducc0/infra/simd.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -68,6 +69,8 @@ class GriddingKernel
 class KernelCorrection
   {
   protected:
+    using Tsimd = native_simd<double>;
+    static constexpr size_t vlen=Tsimd::size();
     vector<double> x, wgtpsi;
     size_t supp;
 
@@ -78,7 +81,7 @@ class KernelCorrection
       {
       T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
-        tmp += wgtpsi[i]*cos((pi*supp*x[i])*v);
+        tmp += T(wgtpsi[i])*cos(T(x[i])*v);
       return T(1)/tmp;
       }
     /* Compute correction factors for gridding kernel
@@ -86,31 +89,24 @@ class KernelCorrection
     vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       {
       vector<double> res(n);
-// The commented lines would add vectorization support,
-// but this doesn't appear beneficial.
-//      constexpr size_t vlen = native_simd<double>::size();
-//      native_simd<double> itimesdx;
-//      for (size_t i=0; i<vlen; ++i) itimesdx[i]=i*dx;
+      Tsimd itimesdx;
+      for (size_t i=0; i<vlen; ++i) itimesdx[i]=i*dx;
       execStatic(n, nthreads, 0, [&](auto &sched)
         {
         while (auto rng=sched.getNext())
           {
           auto i = rng.lo;
-          //for (; i+vlen<=rng.hi; i+=vlen)
-            //{
-            //auto v = corfunc(itimesdx+i*dx);
-            //v.copy_to(&res[i],element_aligned_tag());
-            //}
+          for (; i+vlen<=rng.hi; i+=vlen)
+            {
+            auto v = corfunc(itimesdx+i*dx);
+            v.copy_to(&res[i],element_aligned_tag());
+            }
           for(; i<rng.hi; ++i)
             res[i] = corfunc(i*dx);
           }
         });
       return res;
       }
-
-    const vector<double> &X() const { return x; }
-    const vector<double> &Wgtpsi() const { return wgtpsi; }
-    size_t Supp() const { return supp; }
   };
 
 class GLFullCorrection: public KernelCorrection
@@ -124,7 +120,10 @@ class GLFullCorrection: public KernelCorrection
       x = integ.coordsSymmetric();
       wgtpsi = integ.weightsSymmetric();
       for (size_t i=0; i<x.size(); ++i)
+        {
         wgtpsi[i] *= func(x[i])*supp*0.5;
+        x[i] *= pi*supp;
+        }
       }
   };
 
@@ -439,7 +438,9 @@ template<typename T> auto getAvailableKernels(double epsilon,
   vector<size_t> res;
   for (auto v: idx)
     if (v<KernelDB.size()) res.push_back(v);
-  MR_assert(!res.empty(), "no appropriate kernel found");
+  MR_assert(!res.empty(),
+    "No appropriate kernel found for the specified combination of parameters\n"
+    "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
   return res;
   }
 

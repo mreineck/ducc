@@ -14,6 +14,7 @@
 # Copyright(C) 2019-2020 Max-Planck-Society
 
 import os
+from os.path import join
 from time import time
 
 import ducc0.wgridder as wgridder
@@ -39,14 +40,13 @@ def load_ms(ms):
 
 
 def main():
-#    ms, fov_deg = '/home/martin/ms/supernovashell.55.7+3.4.spw0.npz', 2.
-#    ms, fov_deg = '/home/martin/ms/1052736496-averaged.npz', 25.
-    ms, fov_deg = '/home/martin/ms/1052735056.npz', 45.
-#    ms, fov_deg = '/home/martin/ms/G330.89-0.36.npz', 2.
-#    ms, fov_deg = '/home/martin/ms/bigms.npz', 0.0005556*1800
-#    ms, fov_deg = '/home/martin/ms/L_UV_DATA-IF1.npz', 1.
-#    ms, fov_deg = '/data/CYG-ALL-13360-8MHZ.npz', 0.08
-#    ms, fov_deg = '/data/L_UV_DATA-IF1.npz', 1.
+    direc = "/home/martin/ms"
+    # ms, fov_deg = join(direc, 'supernovashell.55.7+3.4.spw0.npz'), 2.
+    # ms, fov_deg = join(direc, '1052736496-averaged.npz'), 25.
+    ms, fov_deg = join(direc, '1052735056.npz'), 45.
+    # ms, fov_deg = join(direc, 'G330.89-0.36.npz'), 2.
+    # ms, fov_deg = join(direc, 'bigms.npz'), 0.0005556*1800
+    # ms, fov_deg = join(direc, 'L_UV_DATA-IF1.npz'), 1.
 
     if os.path.splitext(ms)[1] == ".ms":
         data = load_ms(ms)

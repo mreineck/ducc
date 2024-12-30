@@ -75,7 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/math/unity_roots.h"
 #include "ducc0/fft/fft1d_impl.h"
 
-/** \file fft.h
+/** \file fftnd_impl.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms
  *  \copyright Copyright (C) 2010-2021 Max-Planck-Society
  *  \copyright Copyright (C) 2019 Peter Bell

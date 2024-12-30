@@ -1,6 +1,9 @@
 # never store the git version file
 git_version.py
 _build
+.direnv
+.nix-venv
+result
 
 # custom
 setup.cfg

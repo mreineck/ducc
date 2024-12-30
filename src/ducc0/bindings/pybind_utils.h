@@ -141,6 +141,19 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dim
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return cmav<T,ndim>(tmp.data(), newshape, newstride);
   }
+template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim)
+  {
+  auto tmp = to_cfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename cfmav<T>::shape_t newshape(ndim);
+  typename cfmav<T>::stride_t newstride(ndim);
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return cfmav<T>(tmp.data(), newshape, newstride);
+  }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
   {
   auto arr = toPyarr<T>(obj);
@@ -159,6 +172,19 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
   for (size_t i=0; i<tmp.ndim(); ++i)
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return vmav<T,ndim>(tmp.data(), newshape, newstride);
+  }
+template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim)
+  {
+  auto tmp = to_vfmav<T>(obj); 
+  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  typename vfmav<T>::shape_t newshape(ndim);
+  typename vfmav<T>::stride_t newstride(ndim);
+  size_t add=ndim-tmp.ndim();
+  for (size_t i=0; i<add; ++i)
+    { newshape[i]=1; newstride[i]=0; }
+  for (size_t i=0; i<tmp.ndim(); ++i)
+    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
+  return vfmav<T>(tmp.data(), newshape, newstride);
   }
 
 template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj)
@@ -265,8 +291,10 @@ using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
 using detail_pybind::to_cmav;
 using detail_pybind::to_cmav_with_optional_leading_dimensions;
+using detail_pybind::to_cfmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
 using detail_pybind::to_vmav_with_optional_leading_dimensions;
+using detail_pybind::to_vfmav_with_optional_leading_dimensions;
 using detail_pybind::to_array;
 using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;

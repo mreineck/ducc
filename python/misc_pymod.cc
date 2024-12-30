@@ -1458,6 +1458,43 @@ numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
 )""";
 
 
+void print_diagnostics()
+  {
+#define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
+#define DUCC0_STRINGIFY(s) #s
+  const char *version = DUCC0_XSTRINGIFY(PKGVERSION);
+#undef DUCC0_STRINGIFY
+#undef DUCC0_XSTRINGIFY
+  cout << "ducc0 v" << version << endl;
+  cout << "sizeof(int): " << sizeof(int) << endl;
+  cout << "sizeof(size_t): " << sizeof(size_t) << endl;
+  cout << "sizeof(float): " << sizeof(float) << endl;
+  cout << "alignment of float: " << alignof(float) << endl;
+  cout << "sizeof(double): " << sizeof(double) << endl;
+  cout << "alignment of double: " << alignof(double) << endl;
+  if constexpr (vectorizable<float>)
+    {
+    cout << "simdlen<float>: " << native_simd<float>::size() << endl;
+    cout << "alignment of native_simd<float>: " << alignof(native_simd<float>) << endl;
+    }
+  else
+    cout << "float is not vectorizable" << endl;
+  if constexpr (vectorizable<double>)
+    {
+    cout << "simdlen<double>: " << native_simd<double>::size() << endl;
+    cout << "alignment of native_simd<double>: " << alignof(native_simd<double>) << endl;
+    }
+  else
+    cout << "double is not vectorizable" << endl;
+  cout << "thread pool size: " << thread_pool_size() << endl;
+  }
+
+const char *print_diagnostics_DS = R"""(
+Writes miscellaneous diagnostics (type sizes, SIMD lengths, alignments,
+thread pool size) to standard output; useful for debugging in CI on exotic
+hard- and software.
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -1520,6 +1557,8 @@ void add_misc(py::module_ &msup)
 
   m.def("quat2ptg", quat2ptg, quat2ptg_DS, "quat"_a, "nthreads"_a=1, "out"_a=None);
   m.def("ptg2quat", ptg2quat, ptg2quat_DS, "ptg"_a, "nthreads"_a=1, "out"_a=None);
+
+  m.def("print_diagnostics", print_diagnostics, print_diagnostics_DS);
   }
 
 }

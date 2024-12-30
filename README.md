@@ -68,7 +68,7 @@ Additionally, pre-compiled binaries are distributed for the following systems:
 <img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
 </a>
 
-### Building only the C++ part 
+### Building only the C++ part
 
 If you want to use ducc's algorithms in a C++ code, there is a CMakeLists.txt
 file to help you integrate the library into your project. Please use the C++

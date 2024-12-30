@@ -56,8 +56,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DUCC0_SIMD_H
 
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
-// so we don't use the standard library SIMD support on MacOS. 
-#if __has_include(<experimental/simd>) && (!__APPLE__)
+// so we don't use the standard library SIMD support on MacOS.
+// In fact, we only trust libstdc++ at the moment to implement this fully.
+#if (!defined (DUCC0_NO_SIMD)) && __has_include(<experimental/simd>) && defined(__GLIBCXX__)
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>

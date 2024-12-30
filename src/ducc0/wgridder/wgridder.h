@@ -865,7 +865,7 @@ timers.poppush("building blockstart");
             }
           }
         }
-      lmask.dealloc();
+      lmask.unassign();
 timers.pop();
 
       // compute which grid regions are required
