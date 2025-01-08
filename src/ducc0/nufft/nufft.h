@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_H
@@ -679,6 +679,33 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           points_out(i) *= forward ? conj(fact_out(i)) : fact_out(i);
+        });
+      }
+    void exec_adjoint(const cmav<complex<Tpoints>,1> &points_in,
+                      const vmav<complex<Tpoints>,1> &points_out,
+                      bool forward)
+      {
+      MR_assert(fact_out.shape()==points_in.shape(), "points_in shape mismatch");
+      MR_assert(fact_in.shape()==points_out.shape(), "points_out shape mismatch");
+
+      // try to use points_out for temporary points_in_2 storage
+      auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
+        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        vmav<complex<Tpoints>,1>(points_in.shape()));
+
+      execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          points_in_2(i) = points_in(i) * (forward ? fact_out(i) : conj(fact_out(i)));
+        });
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+      nufft->nu2u(!forward, 0, points_in_2, grid); 
+      spreadinterp->interp(grid, points_out);
+
+      execStatic(points_out.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          points_out(i) *= forward ? fact_in(i) : conj(fact_in(i));
         });
       }
   };

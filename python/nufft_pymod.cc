@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 #include <pybind11/pybind11.h>
@@ -508,7 +508,7 @@ class Py_Nufft3plan
   private:
     unique_ptr<Nufft3< float,  float,  float,  float>> pf;
     unique_ptr<Nufft3<double, double, double, double>> pd;
-    size_t npoints_out;
+    size_t npoints_in, npoints_out;
 
     template<typename T> void construct(
       unique_ptr<Nufft3<T,T,T,T>> &ptr,
@@ -520,6 +520,7 @@ class Py_Nufft3plan
       size_t verbosity)
       {
       auto coord_in = to_cmav<T,2>(coord_in_);
+      npoints_in = coord_in.shape(0);
       auto coord_out = to_cmav<T,2>(coord_out_);
       npoints_out = coord_out.shape(0);
       {
@@ -542,6 +543,23 @@ class Py_Nufft3plan
       py::gil_scoped_release release;
       for (size_t i=0; i<points_in.shape(0); ++i)
         ptr->exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+      }
+      return points_out_;
+      }
+    template<typename T> py::array do_exec_adjoint(
+      const unique_ptr<Nufft3<T,T,T,T>> &ptr,
+      bool forward, const py::array &points_in_,
+      py::object &points_out__) const
+      {
+      auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_);
+      auto points_out_ = (points_in_.ndim()==1)
+        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_in})
+        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_in});
+      auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_);
+      {
+      py::gil_scoped_release release;
+      for (size_t i=0; i<points_in.shape(0); ++i)
+        ptr->exec_adjoint(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
       return points_out_;
       }
@@ -569,6 +587,13 @@ class Py_Nufft3plan
       {
       if (pd) return do_exec(pd, forward, points_in, points_out);
       if (pf) return do_exec(pf, forward, points_in, points_out);
+      MR_fail("unsupported");
+      }
+    py::array exec_adjoint(bool forward,
+      const py::array &points_in, py::object &points_out)
+      {
+      if (pd) return do_exec_adjoint(pd, forward, points_in, points_out);
+      if (pf) return do_exec_adjoint(pf, forward, points_in, points_out);
       MR_fail("unsupported");
       }
   };
@@ -831,6 +856,26 @@ numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
     the computed nonuniform values.
     Identical to `points_out` if it was provided.
 )""";
+constexpr const char *plan3_exec_adjoint_DS = R"""(
+Perform the adjoint operation of `exec`.
+
+Parameters
+----------
+forward : bool
+    must be the same value as in the corresponding `exec` call to obtain
+    the adjoint operation
+points_in : numpy.ndarray(([ntrans], npoints_out,), dtype=numpy.complex)
+    The input values at the specified non-uniform grid points
+points_out : numpy.ndarray(([ntrans], npoints_in,), dtype=numpy.complex), optional
+    The output values at the specified non-uniform grid points.
+    if provided, this will be used to store he result.
+
+Returns
+-------
+numpy.ndarray(([ntrans], npoints_in,), same dtype as points_in)
+    the computed nonuniform values.
+    Identical to `points_out` if it was provided.
+)""";
 
 constexpr const char *incremental_nu2u_init_DS = R"""(
 Incremental nu2u constructor
@@ -1005,6 +1050,8 @@ void add_nufft(py::module_ &msup)
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "verbosity"_a=0)
     .def("exec", &Py_Nufft3plan::exec, plan3_exec_DS, py::kw_only(), "forward"_a,
+      "points_in"_a, "points_out"_a=None)
+    .def("exec_adjoint", &Py_Nufft3plan::exec_adjoint, plan3_exec_adjoint_DS, py::kw_only(), "forward"_a,
       "points_in"_a, "points_out"_a=None);
   }
 

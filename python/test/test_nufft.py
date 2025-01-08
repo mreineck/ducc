@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2024 Max-Planck-Society
+# Copyright(C) 2020-2025 Max-Planck-Society
 
 from itertools import product
 
@@ -319,3 +319,8 @@ def test_nufft3(npoints_in, npoints_out, ndim, ntrans, epsilon, forward, singlep
                             epsilon=epsilon, nthreads=nthreads)
     res = plan.exec(points_in=points_in, forward=forward)
     assert_allclose(ducc0.misc.l2error(res, ref), 0, atol=50*epsilon)
+    # check adjointness
+    res2 = plan.exec_adjoint(points_in=res, forward=forward)
+    res3 = ducc0.nufft.experimental.nu2nu(points_in=res, coord_in=coord_out,
+        coord_out=coord_in, forward=not forward, epsilon=epsilon, verbosity=0, nthreads=nthreads)
+    assert_allclose(ducc0.misc.l2error(res2, res3), 0, atol=50*epsilon)
