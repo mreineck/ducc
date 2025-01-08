@@ -1,3 +1,9 @@
+0.37.0:
+- nufft
+  - add `exec_adjoint` method to the type 3 NUFFT class, to allow adjoint
+    transforms without the need for an additional plan
+
+
 0.36.0:
 - nufft:
   - experimental: Type 3 (nu2nu) transforms are now supported
