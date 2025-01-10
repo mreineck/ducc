@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2023 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -174,9 +174,9 @@ template<typename T> class Py_Interpolator
       : Py_Interpolator(lmax, kmax, ncomp_, 1000000000,
                         ofactor-0.05, ofactor+0.05, epsilon, nthreads) {}
 
-    py::array Py_Interpol(const py::array &ptg) const
+    template<typename Tloc> py::array Py_Interpol2(const py::array &ptg) const
       {
-      auto ptg2 = to_cmav<T,2>(ptg);
+      auto ptg2 = to_cmav<Tloc,2>(ptg);
       auto ptheta = subarray<1>(ptg2, {{},{0}});
       auto pphi = subarray<1>(ptg2, {{},{1}});
       auto ppsi = subarray<1>(ptg2, {{},{2}});
@@ -191,10 +191,18 @@ template<typename T> class Py_Interpolator
       }
       return res;
       }
-
-    void Py_deinterpol(const py::array &ptg, const py::array &data)
+    py::array Py_Interpol(const py::array &ptg) const
       {
-      auto ptg2 = to_cmav<T,2>(ptg);
+      if (isPyarr<float>(ptg))
+        return Py_Interpol2<float>(ptg);
+      if (isPyarr<double>(ptg))
+        return Py_Interpol2<double>(ptg);
+      MR_fail("type matching failed: 'ptg' has neither type 'f4' nor 'f8'");
+      }
+
+    template<typename Tloc> void Py_deinterpol2(const py::array &ptg, const py::array &data)
+      {
+      auto ptg2 = to_cmav<Tloc,2>(ptg);
       auto ptheta = subarray<1>(ptg2, {{},{0}});
       auto pphi = subarray<1>(ptg2, {{},{1}});
       auto ppsi = subarray<1>(ptg2, {{},{2}});
@@ -206,6 +214,14 @@ template<typename T> class Py_Interpolator
         conv.deinterpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
           ptheta, pphi, ppsi, subarray<1>(data2, {{i},{}}));
       }
+      }
+    void Py_deinterpol(const py::array &ptg, const py::array &data)
+      {
+      if (isPyarr<float>(ptg))
+        return Py_deinterpol2<float>(ptg, data);
+      else if (isPyarr<double>(ptg))
+        return Py_deinterpol2<double>(ptg, data);
+      MR_fail("type matching failed: 'ptg' has neither type 'f4' nor 'f8'");
       }
     py::array Py_getSlm(const py::array &blm_)
       {
@@ -463,7 +479,7 @@ cube : numpy.ndarray((Npsi(), :, :), dtype=numpy.float64)
 itheta0, iphi0 : int
     starting indices in theta and phi direction of the provided cube relative
     to the full cube.
-theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float64)
+theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float64 or numpy.float32)
     angle triplets at which the interpolated values will be computed
     Theta and phi must lie inside the ranges covered by the supplied cube.
     No constraints on psi.
@@ -486,7 +502,7 @@ cube : numpy.ndarray((Npsi(), :, :), dtype=numpy.float32)
 itheta0, iphi0 : int
     starting indices in theta and phi direction of the provided cube relative
     to the full cube.
-theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float32)
+theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float32 or numpy.float64)
     angle triplets at which the interpolated values will be computed
     Theta and phi must lie inside the ranges covered by the supplied cube.
     No constraints on psi.
@@ -511,7 +527,7 @@ cube : numpy.ndarray((Npsi(), :, :), dtype=numpy.float64)
 itheta0, iphi0 : int
     starting indices in theta and phi direction of the provided cube relative
     to the full cube.
-theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float64)
+theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float64 or numpy.float32)
     angle triplets at which the interpolated values will be computed
     Theta and phi must lie inside the ranges covered by the supplied cube.
     No constraints on psi.
@@ -536,7 +552,7 @@ cube : numpy.ndarray((Npsi(), :, :), dtype=numpy.float32)
 itheta0, iphi0 : int
     starting indices in theta and phi direction of the provided cube relative
     to the full cube.
-theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float32)
+theta, phi, psi : numpy.ndarray(nptg, dtype=numpy.float32 or numpy.float64)
     angle triplets at which the interpolated values will be computed
     Theta and phi must lie inside the ranges covered by the supplied cube.
     No constraints on psi.
@@ -550,7 +566,7 @@ number of pointings passed per call should be as large as possible.
 )""";
 
 constexpr const char *Py_ConvolverPlan_updateSlm_DS = R"""(
-Updates a set of sky spherical hamonic coefficients resulting from adjoint
+Updates a set of sky spherical harmonic coefficients resulting from adjoint
 interpolation.
 
 Parameters
@@ -576,7 +592,7 @@ computed in a fashion that is adjoint to `getPlane`.
 )""";
 
 constexpr const char *Py_ConvolverPlan_f_updateSlm_DS = R"""(
-Updates a set of sky spherical hamonic coefficients resulting from adjoint
+Updates a set of sky spherical harmonic coefficients resulting from adjoint
 interpolation.
 
 Parameters
@@ -751,7 +767,7 @@ Notes
 )""";
 
 constexpr const char *getSlm_DS = R"""(
-Returns a set of sky spherical hamonic coefficients resulting from adjoint
+Returns a set of sky spherical harmonic coefficients resulting from adjoint
 interpolation
 
 Parameters
