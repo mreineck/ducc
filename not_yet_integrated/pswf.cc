@@ -3,20 +3,11 @@
   is in turn based on the work by Shanjie Zhang and Jianming Jin in
   their book "Computation of Special Functions", 1996, John Wiley &
   Sons, Inc.
-
-  This file has three parts:
-  * Declarations to make f2c code work
-  * f2c-converted routine aswfa, sdmn, sckb, segv
-  * Routines for external usage
  */
 
-#include <cassert>
-#include <complex>
-#include <cinttypes>
 #include <cmath>
-#include <cstdlib>
-
-using std::complex;
+#include <vector>
+#include <iostream>
 
 double sdp_pswf_cipow(double base, int exp)
   {
@@ -41,8 +32,6 @@ static inline void pswf_sdmn(
         double* df
 )
   {
-  double a[200], d_[200], g[200];
-
 /*       ===================================================== */
 /*       Purpose: Compute the expansion coefficients of the */
 /*                prolate and oblate spheroidal functions, dk */
@@ -69,21 +58,22 @@ static inline void pswf_sdmn(
   double cs = c * c * kd;
   int ip = 1;
   int k = 0;
-  if (n - m == (n - m) / 2 << 1)
+  if (n-m == (n-m)/2<<1)
     ip = 0;
-  for (int i=1; i<=nm+2; ++i)
+  std::vector<double> a(nm+2), d_(nm+2), g(nm+2);
+  for (int i=0; i<nm+2; ++i)
     {
     if (ip==0)
-      k = (i-1) << 1;
+      k = i << 1;
     if (ip==1)
-      k = (i<<1) - 1;
+      k = (i<<1) + 1;
     double dk0 = double (m + k);
     double dk1 = double (m + k + 1);
     double dk2 = double ((m + k) << 1);
     double d2k = double ((m << 1) + k);
-    a[i-1] = (d2k+2.) * (d2k+1.) / ((dk2+3.) * (dk2+5.)) * cs;
-    d_[i-1] = dk0 * dk1 + (dk0*2.*dk1 - m*2.*m - 1.) / ((dk2-1.) * (dk2+3.)) * cs;
-    g[i-1] = k * (k-1.) / ((dk2-3.) * (dk2-1.)) * cs;
+    a[i] = (d2k+2.) * (d2k+1.) / ((dk2+3.) * (dk2+5.)) * cs;
+    d_[i] = dk0 * dk1 + (dk0*2.*dk1 - m*2.*m - 1.) / ((dk2-1.) * (dk2+3.)) * cs;
+    g[i] = k * (k-1.) / ((dk2-3.) * (dk2-1.)) * cs;
     }
   double fs = 1.;
   double f1 = 0.;
@@ -141,10 +131,10 @@ static inline void pswf_sdmn(
           }
         fs = f;
         }
-      goto L35;
+      break;
       }
     }
-L35:
+
   double r1 = 1.;
   for (int j=m+ip+1; j<=(m+ip)<<1; ++j)
     r1 *= j;
@@ -162,10 +152,10 @@ L35:
       r1 = -r1 * (k + m + ip - 1.5) / (k-1.);
     su2 += r1 * df[k-1];
     if (std::abs(sw-su2) < std::abs(su2) * 1e-14)
-      goto L55;
+      break;
     sw = su2;
     }
-L55:
+
   double r3 = 1.;
   for (int j=1; j <= (m+n+ip) / 2; ++j)
     r3 *= j + (n+m+ip) * .5;
@@ -199,10 +189,7 @@ static inline void pswf_sckb(
   /*                          CK(1), CK(2), ... correspond to */
   /*                          c0, c2, ... */
   /*       ====================================================== */
-
-  /* Parameter adjustments */
-  --ck;
-
+// df[nm+1], ck[nm]
   if (c <= 1e-10) c = 1e-10;
   int nm = int ((n-m) * .5 + c) + 25;
   int ip = 1;
@@ -232,14 +219,14 @@ static inline void pswf_sckb(
       r = r * d2 * (d2-1.) * i * (d3+k) / (d1 * (d1-1.) * (i-k) * d3);
       sum += r * df[i];
       if (std::abs(sw-sum) < std::abs(sum) * 1e-14)
-        goto L25;
+        break;
       sw = sum;
       }
-L25:
+
     double r1 = reg;
     for (int i=2; i<= m+k; ++i)
       r1 *= i;
-    ck[k+1] = fac*sum/r1;
+    ck[k] = fac*sum/r1;
     }
   }
 
@@ -252,8 +239,8 @@ static inline void pswf_segv(
         double* eg
 )
 {
-  double a[300], b[100], d_[300], e[300], f[300], g[300], h_[100];
-  double cv0[100];
+  std::vector<double> a(300), b(100), d_(300), e(300), f(300), g(300), h_(100);
+  std::vector<double> cv0(100);
 
 /*       ========================================================= */
 /*       Purpose: Compute the characteristic values of spheroidal */
@@ -295,30 +282,25 @@ static inline void pswf_segv(
       d_[i-1] = dk0*dk1 + (dk0*2.*dk1 - m*2.*m - 1.) / ((dk2-1.) * (dk2+3.)) * cs;
       g[i-1] = k * (k-1.) / ((dk2-3.) * (dk2-1.)) * cs;
       }
-    for (k=2; k<=nm; ++k)
+    for (k=1; k<nm; ++k)
       {
-      e[k-1] = sqrt(a[k-2] * g[k-1]);
-      f[k-1] = e[k-1] * e[k-1];
+      e[k] = sqrt(a[k-1] * g[k]);
+      f[k] = e[k] * e[k];
       }
-    f[0] = 0.;
-    e[0] = 0.;
+    f[0] = e[0] = 0.;
     double xa = d_[nm-1] + std::abs(e[nm-1]);
     double xb = d_[nm-1] - std::abs(e[nm-1]);
     int nm1 = nm-1;
-    for (int i=1; i<=nm1; ++i)
+    for (int i=0; i<nm1; ++i)
       {
-      double t = std::abs(e[i-1]) + std::abs(e[i]);
-      double t1 = d_[i-1] + t;
-      if (xa<t1)
-        xa = t1;
-      t1 = d_[i-1] - t;
-      if (t1<xb)
-        xb = t1;
+      double t = std::abs(e[i]) + std::abs(e[i+1]);
+      xa = std::max(xa, d_[i]+t);
+      xb = std::min(xb, d_[i]-t);
       }
-    for (int i=1; i<=icm; ++i)
+    for (int i=0; i<icm; ++i)
       {
-      b[i-1] = xa;
-      h_[i-1] = xb;
+      b[i] = xa;
+      h_[i] = xb;
       }
     for (k=1; k<=icm; ++k)
       {
@@ -326,45 +308,46 @@ static inline void pswf_segv(
         if (b[k1-1] < b[k-1])
           {
           b[k-1] = b[k1-1];
-          goto L35;
+          break;
           }
-L35:
+
       if (k!=1)
         if (h_[k-1] < h_[k-2])
           h_[k-1] = h_[k-2];
-L40:
-      double x1 = (b[k-1] + h_[k-1]) / 2.;
-      cv0[k-1] = x1;
-      if (std::abs((b[k-1] - h_[k-1]) / x1) < 1e-14)
-        goto L50;
-      {
-      int j = 0;
-      double s = 1.;
-      for (int i=1; i<=nm; ++i)
+
+      double x1;
+      while(true)
         {
-        if (s==0.)
-          s += 1e-30;
-        double t = f[i-1] / s;
-        s = d_[i-1] - t - x1;
-        if (s<0.)
-          ++j;
-        }
-      if (j<k)
-        h_[k-1] = x1;
-      else
-        {
-        b[k-1] = x1;
-        if (j>=icm)
-          b[icm-1] = x1;
+        x1 = (b[k-1] + h_[k-1]) / 2.;
+        cv0[k-1] = x1;
+        if (std::abs((b[k-1] - h_[k-1]) / x1) < 1e-14)
+          break;
+
+        int j = 0;
+        double s = 1.;
+        for (int i=1; i<=nm; ++i)
+          {
+          if (s==0.)
+            s += 1e-30;
+          s = d_[i-1] - f[i-1]/s - x1;
+          if (s<0.)
+            ++j;
+          }
+        if (j<k)
+          h_[k-1] = x1;
         else
           {
-          h_[j] = std::max(h_[j], x1);
-          b[j-1] = std::min(b[j-1], x1);
+          b[k-1] = x1;
+          if (j>=icm)
+            b[icm-1] = x1;
+          else
+            {
+            h_[j] = std::max(h_[j], x1);
+            b[j-1] = std::min(b[j-1], x1);
+            }
           }
         }
-      goto L40;
-      }
-L50:
+
       cv0[k-1] = x1;
       if (l==0)
         eg[k*2-2] = cv0[k-1];
@@ -400,18 +383,19 @@ double sdp_pswf_aswfa(int m, int n, double c, const double* ck, double x)
 
   double su1 = ck[0];
   double x1p = x1;
-  for (int k = 1; k <= nm2; ++k, x1p *= x1)
+  for (int k=1; k<=nm2; ++k, x1p*=x1)
     {
-    const double r_ = ck[k] * x1p;
-    su1 += r_;
-    const double t_ = r_ / su1;
-    if (k >= 10 && abs(t_) < 1e-14) break;
+    const double r = ck[k] * x1p;
+    su1 += r;
+    const double t = r/su1;
+    if (k >= 10 && abs(t) < 1e-14) break;
     }
   return ((n - m) % 2 == 0) ? (a0 * su1) : (a0 * x * su1);
   }
 
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
 using namespace std;
 
@@ -419,15 +403,15 @@ int main()
   {
   int m=5;
   double c=0.8;
-  vector<double> coeff(200);
-  vector<double> df(200);
+  vector<double> coeff(2000);
+  vector<double> df(2000);
   
   int n = m+2;
-  int kd = -1; // prolate
-  double cv = 0.0, eg[2] = {0.0, 0.0};
+  int kd = 1; // prolate
+  double cv = 0.0, eg[200] = {0.0, 0.0};
   pswf_segv(m, n, c, kd, &cv, eg);
-  cout << cv<< endl;
+ // cout  << setprecision(15)<< cv<< endl;
   pswf_sdmn(m, n, c, cv, kd, df.data());
   pswf_sckb(m, n, c, df.data(), coeff.data());
-  cout << sdp_pswf_aswfa(m, n, c, coeff.data(), 0.3) << endl;
+  cout << setprecision(15) << sdp_pswf_aswfa(m, n, c, coeff.data(), 0.3) << endl;
   }
