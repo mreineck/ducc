@@ -36,7 +36,7 @@ def get_best_kernel(kernelfunc, D, mach_eps, W, ofactor, par_min, par_max, nthre
     dpar = [pmax-pmin for pmin, pmax in zip(par_min, par_max)]
     res = [0.5*(pmax+pmin) for pmin, pmax in zip(par_min, par_max)]
     err = 1e30
-    # shring the parameter region of interest successively
+    # shrink the parameter region of interest successively
     while any([d>tol for d in dpar]):
         err_tmp, res_tmp = ducc0.misc.scan_kernel(
             kernelfunc, par_min, par_max, W, M, N,
@@ -115,6 +115,21 @@ for ofactor in ofactors:
     for W in Ws:
         par_min=[1.3, 0.45, W]
         par_max=[2.4, 0.6, W]
+        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        print(W, ofactor, err, res)
+
+# PSWF kernel (m=n=0)
+def kernel(x, par):
+    import scipy
+    x=np.array(x)
+    c = par[0]
+    return scipy.special.pro_ang1(0,0,c,x)[0]
+
+print("Table for PSWF(m=n=0) kernels")
+for ofactor in ofactors:
+    for W in Ws:
+        par_min=[0]
+        par_max=[50]
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
