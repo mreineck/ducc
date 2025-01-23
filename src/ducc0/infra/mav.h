@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2024 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2025 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
