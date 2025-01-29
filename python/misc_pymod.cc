@@ -159,6 +159,8 @@ template<typename T1, typename T2, typename T3> py::array Py2_mul_conj(
 py::object Py_mul_conj(const py::array &a, const py::array &b, py::object &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
+  MR_assert(b_single || isPyarr<complex<double>>(b),
+    "type matching failed: b must be of type c8 or c16");
   if (isPyarr<float>(a))
     return b_single ? Py2_mul_conj<float , float , float >(a,b,out)
                     : Py2_mul_conj<float , double, double>(a,b,out);
@@ -171,7 +173,7 @@ py::object Py_mul_conj(const py::array &a, const py::array &b, py::object &out)
   if (isPyarr<complex<double>>(a))
     return b_single ? Py2_mul_conj<complex<double>, float , double>(a,b,out)
                     : Py2_mul_conj<complex<double>, double, double>(a,b,out);
-  MR_fail("type matching failed");
+  MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 constexpr const char *Py_div_conj_DS = R"""(
 Compute a/conj(b).
@@ -206,6 +208,8 @@ template<typename T1, typename T2, typename T3> py::array Py2_div_conj(
 py::object Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
+  MR_assert(b_single || isPyarr<complex<double>>(b),
+    "type matching failed: b must be of type c8 or c16");
   if (isPyarr<float>(a))
     return b_single ? Py2_div_conj<float , float , float >(a,b,out)
                     : Py2_div_conj<float , double, double>(a,b,out);
@@ -218,7 +222,7 @@ py::object Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   if (isPyarr<complex<double>>(a))
     return b_single ? Py2_div_conj<complex<double>, float , double>(a,b,out)
                     : Py2_div_conj<complex<double>, double, double>(a,b,out);
-  MR_fail("type matching failed");
+  MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 
 constexpr const char *Py_l2error_DS = R"""(
