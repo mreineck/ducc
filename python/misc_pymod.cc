@@ -126,6 +126,101 @@ py::object Py_vdot(const py::object &a, const py::object &b)
   MR_fail("type matching failed");
   }
 
+constexpr const char *Py_mul_conj_DS = R"""(
+Compute a*conj(b).
+
+Parameters
+----------
+a : numpy.ndarray of any shape; dtype must be a float or complex type
+b : numpy.ndarray of the same shape as `a`; dtype must be a complex type
+out : numpy.ndarray of the same shape as `a`: dtype must be the result dtype of a*b
+
+Returns
+-------
+numpy.ndarray : a*conj(b)
+    identical to `out` if `out` was provided
+)""";
+template<typename T1, typename T2, typename T3> py::array Py2_mul_conj(
+  const py::array &a_, const py::array &b_, py::object &out__)
+  {
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<complex<T2>>(b_);
+  const auto out_ = get_optional_Pyarr<complex<T3>>(out__, a.shape());
+  const auto out = to_vfmav<complex<T3>>(out_);
+  {
+  py::gil_scoped_release release;
+  mav_apply([](const T1 &v1, const complex<T2> &v2, complex<T3> &v3)
+    {
+    v3 = complex<T3>(v1)*complex<T3>(conj(v2));
+    }, 1, a, b, out);
+  }
+  return out_;
+  }
+py::object Py_mul_conj(const py::array &a, const py::array &b, py::object &out)
+  {
+  bool b_single = isPyarr<complex<float>>(b);
+  if (isPyarr<float>(a))
+    return b_single ? Py2_mul_conj<float , float , float >(a,b,out)
+                    : Py2_mul_conj<float , double, double>(a,b,out);
+  if (isPyarr<double>(a))
+    return b_single ? Py2_mul_conj<double, float , double>(a,b,out)
+                    : Py2_mul_conj<double, double, double>(a,b,out);
+  if (isPyarr<complex<float>>(a))
+    return b_single ? Py2_mul_conj<complex<float >, float , float >(a,b,out)
+                    : Py2_mul_conj<complex<float >, double, double>(a,b,out);
+  if (isPyarr<complex<double>>(a))
+    return b_single ? Py2_mul_conj<complex<double>, float , double>(a,b,out)
+                    : Py2_mul_conj<complex<double>, double, double>(a,b,out);
+  MR_fail("type matching failed");
+  }
+constexpr const char *Py_div_conj_DS = R"""(
+Compute a/conj(b).
+
+Parameters
+----------
+a : numpy.ndarray of any shape; dtype must be a float or complex type
+b : numpy.ndarray of the same shape as `a`; dtype must be a complex type
+out : numpy.ndarray of the same shape as `a`: dtype must be the result dtype of a/b
+
+Returns
+-------
+numpy.ndarray : a/conj(b)
+    identical to `out` if `out` was provided
+)""";
+template<typename T1, typename T2, typename T3> py::array Py2_div_conj(
+  const py::array &a_, const py::array &b_, py::object &out__)
+  {
+  const auto a = to_cfmav<T1>(a_);
+  const auto b = to_cfmav<complex<T2>>(b_);
+  const auto out_ = get_optional_Pyarr<complex<T3>>(out__, a.shape());
+  const auto out = to_vfmav<complex<T3>>(out_);
+  {
+  py::gil_scoped_release release;
+  mav_apply([](const T1 &v1, const complex<T2> &v2, complex<T3> &v3)
+    {
+    v3 = complex<T3>(v1)/complex<T3>(conj(v2));
+    }, 1, a, b, out);
+  }
+  return out_;
+  }
+py::object Py_div_conj(const py::array &a, const py::array &b, py::object &out)
+  {
+  bool b_single = isPyarr<complex<float>>(b);
+  if (isPyarr<float>(a))
+    return b_single ? Py2_div_conj<float , float , float >(a,b,out)
+                    : Py2_div_conj<float , double, double>(a,b,out);
+  if (isPyarr<double>(a))
+    return b_single ? Py2_div_conj<double, float , double>(a,b,out)
+                    : Py2_div_conj<double, double, double>(a,b,out);
+  if (isPyarr<complex<float>>(a))
+    return b_single ? Py2_div_conj<complex<float >, float , float >(a,b,out)
+                    : Py2_div_conj<complex<float >, double, double>(a,b,out);
+  if (isPyarr<complex<double>>(a))
+    return b_single ? Py2_div_conj<complex<double>, float , double>(a,b,out)
+                    : Py2_div_conj<complex<double>, double, double>(a,b,out);
+  MR_fail("type matching failed");
+  }
+
 constexpr const char *Py_l2error_DS = R"""(
 Compute the L2 error between two arrays or scalars.
 More specifically, compute
@@ -1516,6 +1611,9 @@ void add_misc(py::module_ &msup)
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
+
+  m.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
+  m.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
 
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
