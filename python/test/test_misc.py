@@ -40,6 +40,6 @@ def test_gaussenergy(shape, dtype_cov, cplx, broadcast, nthreads):
     if broadcast:
         a = np.broadcast_to(a[2:3], b.shape)
     res = ducc0.misc.LogUnnormalizedGaussProbability(a, b, c, nthreads)
-    ref = 0.5*ducc0.misc.vdot((a-b)/c, a-b).real
+    ref = 0.5*ducc0.misc.vdot((a-b)*c, a-b).real
     rtol = 1e-5 if dtype_cov == np.float32 else 1e-12
     assert_allclose(res, ref, rtol=rtol)

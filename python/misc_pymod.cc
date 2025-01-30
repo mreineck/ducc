@@ -226,7 +226,7 @@ py::array Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   }
 
 constexpr const char *Py_LogUnnormalizedGaussProbability_DS = R"""(
-Compute 0.5*sum(norm(a-b)/c).
+Compute 0.5*sum(norm(a-b)*c).
 
 This function computes the logarithm of a unnormalized multivariate Gaussian
 probability distribution with diagonal covariance. It is unnormalized in the
@@ -260,7 +260,7 @@ template<typename T> py::object Py2_LogUnnormalizedGaussProbability
   py::gil_scoped_release release;
   mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
     {
-    res += norm(v1-v2)/v3;
+    res += norm(v1-v2)*v3;
     }, 1, a, b, c);
   }
   return py::cast(0.5*res);
@@ -277,7 +277,7 @@ template<typename T> py::object Py3_LogUnnormalizedGaussProbability
   mav_apply([&res](const T &v1, const T &v2, const T &v3)
     {
     auto diff = v1-v2;
-    res += diff*diff/v3;
+    res += diff*diff*v3;
     }, 1, a, b, c);
   }
   return py::cast(0.5*res);
