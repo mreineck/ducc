@@ -711,7 +711,7 @@ Notes
 Subsequent calls to this method will continue the same noise stream; i.e. it
 is possible to generate a very long noise time stream chunk by chunk.
 To generate multiple independent noise streams, use different `OofaNoise`
-objects (and supply them with independent Gaussian noise streams)! 
+objects (and supply them with independent Gaussian noise streams)!
 )""";
 
 class PolynomialFunctionApproximator
@@ -1083,9 +1083,9 @@ inp : numpy.ndarray(any shape, dtype=float or complex)
 out : numpy.ndarray(any shape, same dimensionality and dtype as `in`)
     output array
 roll_inp : tuple(int), length=inp.ndim
-    amount of rolling for the input array 
+    amount of rolling for the input array
 roll_out : tuple(int), length=out.ndim
-    amount of rolling for the output array 
+    amount of rolling for the output array
 nthreads : int
     Number of threads to use. If 0, use the system default (typically the number
     of hardware threads on the compute node).
@@ -1110,7 +1110,7 @@ phi0 : numpy.ndarray((nrings,), dtype=numpy.float64)
     longitude of the first pixel in each ring
 ringstart : numpy.ndarray((nrings,), dtype=numpy.uint64)
     index of the first pixel of each ring in output map
-deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64) 
+deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64)
     Spin-1 deflection field, with real and imaginary comp in first and second entry
     (typically, the output of a spin-1 alm2map_spin transform)
     The array layout and npix must be consistent with the given geometry
@@ -1163,7 +1163,7 @@ template<typename Tout> py::array Py2_get_deflected_angles(const py::array &thet
     while (auto rng=sched.getNext())
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)
         {
-        vec3 e_r(sin(theta(iring)), 0, cos(theta(iring))); 
+        vec3 e_r(sin(theta(iring)), 0, cos(theta(iring)));
         for (size_t iphi=0; iphi<nphi(iring); ++iphi)
           {
           double phi = phi0(iring) + iphi*dphi(iring);
@@ -1175,7 +1175,7 @@ template<typename Tout> py::array Py2_get_deflected_angles(const py::array &thet
           if (d < 0.0025) // largely covers all CMB-lensing relevant cases to double precision
             {
             sin_aoa = 1. - d/6. * (1. - d/20. * (1. - d/42.));         // sin(a) / a
-            twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a) (also needed for rotation)      
+            twohav_aod = -0.5 + d/24. * (1. - d/30. * (1. - d/56.));   // (cos a - 1) / (a* a) (also needed for rotation)
             cos_a = 1. + d * twohav_aod;                               // cos(a)
             }
           else
@@ -1185,19 +1185,19 @@ template<typename Tout> py::array Py2_get_deflected_angles(const py::array &thet
             cos_a = cos(a);
             twohav_aod = (cos_a -1.) / d;
             }
-          vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta); 
+          vec3 e_a(e_r.z * a_theta, a_phi, -e_r.x * a_theta);
           pointing n_prime(e_r*cos_a + e_a*sin_aoa);
           double phinew = n_prime.phi+phi;
           phinew = (phinew>=2*pi) ? (phinew-2*pi) : phinew;
           res(i,0) = Tout(n_prime.theta);
           res(i,1) = Tout(phinew);
           if (calc_rotation)
-            { 
+            {
             if (d > 0.)
               {
               double temp = e_r.x * a_theta * twohav_aod + e_r.z * sin_aoa;
               res(i, 2) = Tout(atan2(a_phi * temp, e_r.x + a_theta * temp));
-              } 
+              }
             else
               res(i, 2) = Tout(0);
             }
