@@ -156,7 +156,7 @@ template<typename T1, typename T2, typename T3> py::array Py2_mul_conj(
   }
   return out_;
   }
-py::object Py_mul_conj(const py::array &a, const py::array &b, py::object &out)
+py::array Py_mul_conj(const py::array &a, const py::array &b, py::object &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
   MR_assert(b_single || isPyarr<complex<double>>(b),
@@ -205,7 +205,7 @@ template<typename T1, typename T2, typename T3> py::array Py2_div_conj(
   }
   return out_;
   }
-py::object Py_div_conj(const py::array &a, const py::array &b, py::object &out)
+py::array Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
   MR_assert(b_single || isPyarr<complex<double>>(b),
@@ -222,6 +222,54 @@ py::object Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   if (isPyarr<complex<double>>(a))
     return b_single ? Py2_div_conj<complex<double>, float , double>(a,b,out)
                     : Py2_div_conj<complex<double>, double, double>(a,b,out);
+  MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
+  }
+
+template<typename T> py::object Py2_LogUnnormalizedGaussProbability
+  (const py::array &a_, const py::array &b_, const py::array &c_, size_t /*nthreads*/)
+  {
+  const auto a = to_cfmav<complex<T>>(a_);
+  const auto b = to_cfmav<complex<T>>(b_);
+  const auto c = to_cfmav<T>(c_);
+  double res = 0;
+  {
+  py::gil_scoped_release release;
+  mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
+    {
+    res += norm(v1-v2)/v3;
+    }, 1, a, b, c);
+  }
+  return py::cast(0.5*res);
+  }
+template<typename T> py::object Py3_LogUnnormalizedGaussProbability
+  (const py::array &a_, const py::array &b_, const py::array &c_, size_t /*nthreads*/)
+  {
+  const auto a = to_cfmav<T>(a_);
+  const auto b = to_cfmav<T>(b_);
+  const auto c = to_cfmav<T>(c_);
+  double res = 0;
+  {
+  py::gil_scoped_release release;
+  mav_apply([&res](const T &v1, const T &v2, const T &v3)
+    {
+    auto diff = v1-v2;
+    res += diff*diff/v3;
+    }, 1, a, b, c);
+  }
+  return py::cast(0.5*res);
+  }
+
+py::object Py_LogUnnormalizedGaussProbability(const py::array &a, const py::array &b,
+  const py::array &c, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(a))
+    return Py2_LogUnnormalizedGaussProbability<float>(a,b,c,nthreads);
+  if (isPyarr<complex<double>>(a))
+    return Py2_LogUnnormalizedGaussProbability<double>(a,b,c,nthreads);
+  if (isPyarr<float>(a))
+    return Py3_LogUnnormalizedGaussProbability<float>(a,b,c,nthreads);
+  if (isPyarr<double>(a))
+    return Py3_LogUnnormalizedGaussProbability<double>(a,b,c,nthreads);
   MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 
@@ -1618,6 +1666,9 @@ void add_misc(py::module_ &msup)
 
   m.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
   m.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
+
+  m.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
+    "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
 
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
