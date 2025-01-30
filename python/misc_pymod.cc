@@ -225,6 +225,30 @@ py::array Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 
+constexpr const char *Py_LogUnnormalizedGaussProbability_DS = R"""(
+Compute 0.5*sum(norm(a-b)/c).
+
+This function computes the logarithm of a unnormalized multivariate Gaussian
+probability distribution with diagonal covariance. It is unnormalized in the
+sense that the term log(det(covariance)) is omitted.
+
+Parameters
+----------
+a : numpy.ndarray
+    Can have any shape; dtype must be a float or complex type
+b : numpy.ndarray
+    Must have the same shape and dtype as `a`
+c : numpy.ndarray
+    Must have the same shape as `a`, dtype must be float and of same precision
+    as the dtype of `a`
+nthreads: int
+    Number of threads to use for the calculation. Ignored for now.
+
+Returns
+-------
+float :
+    Output value
+)""";
 template<typename T> py::object Py2_LogUnnormalizedGaussProbability
   (const py::array &a_, const py::array &b_, const py::array &c_, size_t /*nthreads*/)
   {
@@ -1668,7 +1692,7 @@ void add_misc(py::module_ &msup)
   m.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
 
   m.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
-    "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
+        Py_LogUnnormalizedGaussProbability_DS, "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
 
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
