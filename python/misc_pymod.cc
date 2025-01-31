@@ -1773,12 +1773,12 @@ void add_misc(py::module_ &msup)
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
 
-  m.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
-  m.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
+  m2.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
+  m2.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
 
-  m.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
+  m2.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
         Py_LogUnnormalizedGaussProbability_DS, "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
-  m.def("LogUnnormalizedGaussProbabilityWithDeriv", Py_LogUnnormalizedGaussProbabilityWithDeriv,
+  m2.def("LogUnnormalizedGaussProbabilityWithDeriv", Py_LogUnnormalizedGaussProbabilityWithDeriv,
         Py_LogUnnormalizedGaussProbabilityWithDeriv_DS, "a"_a, "b"_a, "c"_a, "out"_a=None, "nthreads"_a=1);
 
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
