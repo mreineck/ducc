@@ -225,6 +225,30 @@ py::array Py_div_conj(const py::array &a, const py::array &b, py::object &out)
   MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 
+constexpr const char *Py_LogUnnormalizedGaussProbability_DS = R"""(
+Compute 0.5*sum(norm(a-b)*c).
+
+This function computes the logarithm of a unnormalized multivariate Gaussian
+probability distribution with diagonal covariance. It is unnormalized in the
+sense that the term log(det(covariance)) is omitted.
+
+Parameters
+----------
+a : numpy.ndarray
+    Can have any shape; dtype must be a float or complex type
+b : numpy.ndarray
+    Must have the same shape and dtype as `a`
+c : numpy.ndarray
+    Must have the same shape as `a`, dtype must be float and of same precision
+    as the dtype of `a`
+nthreads: int
+    Number of threads to use for the calculation. Ignored for now.
+
+Returns
+-------
+float :
+    Output value
+)""";
 template<typename T> py::object Py2_LogUnnormalizedGaussProbability
   (const py::array &a_, const py::array &b_, const py::array &c_, size_t /*nthreads*/)
   {
@@ -236,7 +260,7 @@ template<typename T> py::object Py2_LogUnnormalizedGaussProbability
   py::gil_scoped_release release;
   mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
     {
-    res += norm(v1-v2)/v3;
+    res += norm(v1-v2)*v3;
     }, 1, a, b, c);
   }
   return py::cast(0.5*res);
@@ -253,7 +277,7 @@ template<typename T> py::object Py3_LogUnnormalizedGaussProbability
   mav_apply([&res](const T &v1, const T &v2, const T &v3)
     {
     auto diff = v1-v2;
-    res += diff*diff/v3;
+    res += diff*diff*v3;
     }, 1, a, b, c);
   }
   return py::cast(0.5*res);
@@ -270,6 +294,91 @@ py::object Py_LogUnnormalizedGaussProbability(const py::array &a, const py::arra
     return Py3_LogUnnormalizedGaussProbability<float>(a,b,c,nthreads);
   if (isPyarr<double>(a))
     return Py3_LogUnnormalizedGaussProbability<double>(a,b,c,nthreads);
+  MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
+  }
+constexpr const char *Py_LogUnnormalizedGaussProbabilityWithDeriv_DS = R"""(
+Compute 0.5*sum(norm(a-b)*c) and simultaneously (a-b)*c.
+
+This function computes the logarithm of a unnormalized multivariate Gaussian
+probability distribution with diagonal covariance. It is unnormalized in the
+sense that the term log(det(covariance)) is omitted.
+
+Parameters
+----------
+a : numpy.ndarray
+    Can have any shape; dtype must be a float or complex type
+b : numpy.ndarray
+    Must have the same shape and dtype as `a`
+c : numpy.ndarray
+    Must have the same shape as `a`, dtype must be float and of same precision
+    as the dtype of `a`
+nthreads: int
+    Number of threads to use for the calculation. Ignored for now.
+
+Returns
+-------
+list of float and numpy.ndarray :
+    Output value and derivative. The derivative has the same shape and dtype as
+    `a`.
+)""";
+template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
+  (const py::array &a_, const py::array &b_, const py::array &c_, py::object &out__, size_t /*nthreads*/)
+  {
+  const auto a = to_cfmav<complex<T>>(a_);
+  const auto b = to_cfmav<complex<T>>(b_);
+  const auto c = to_cfmav<T>(c_);
+  const auto out_ = get_optional_Pyarr<complex<T>>(out__, a.shape());
+  const auto out = to_vfmav<complex<T>>(out_);
+  double res = 0;
+  {
+  py::gil_scoped_release release;
+  mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3, complex<T> &o)
+    {
+    const auto diff = v1-v2;
+    res += norm(diff)*v3;
+    o = diff*v3;
+    }, 1, a, b, c, out);
+  }
+  py::list lst;
+  lst.append(py::cast(0.5*res));
+  lst.append(out_);
+  return lst;
+  }
+template<typename T> py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
+  (const py::array &a_, const py::array &b_, const py::array &c_, py::object &out__, size_t /*nthreads*/)
+  {
+  const auto a = to_cfmav<T>(a_);
+  const auto b = to_cfmav<T>(b_);
+  const auto c = to_cfmav<T>(c_);
+  const auto out_ = get_optional_Pyarr<T>(out__, a.shape());
+  const auto out = to_vfmav<T>(out_);
+  double res = 0;
+  {
+  py::gil_scoped_release release;
+  mav_apply([&res](const T &v1, const T &v2, const T &v3, T &o)
+    {
+    const auto diff = v1-v2;
+    res += diff*diff*v3;
+    o = diff*v3;
+    }, 1, a, b, c, out);
+  }
+  py::list lst;
+  lst.append(py::cast(0.5*res));
+  lst.append(out_);
+  return lst;
+  }
+
+py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const py::array &a, const py::array &b,
+  const py::array &c, py::object &out, size_t nthreads)
+  {
+  if (isPyarr<complex<float>>(a))
+    return Py2_LogUnnormalizedGaussProbabilityWithDeriv<float>(a,b,c,out,nthreads);
+  if (isPyarr<complex<double>>(a))
+    return Py2_LogUnnormalizedGaussProbabilityWithDeriv<double>(a,b,c,out,nthreads);
+  if (isPyarr<float>(a))
+    return Py3_LogUnnormalizedGaussProbabilityWithDeriv<float>(a,b,c,out,nthreads);
+  if (isPyarr<double>(a))
+    return Py3_LogUnnormalizedGaussProbabilityWithDeriv<double>(a,b,c,out,nthreads);
   MR_fail("type matching failed: a must be of type f4, f8, c8 or c16");
   }
 
@@ -1664,11 +1773,13 @@ void add_misc(py::module_ &msup)
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
 
-  m.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
-  m.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
+  m2.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
+  m2.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
 
-  m.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
-    "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
+  m2.def("LogUnnormalizedGaussProbability", Py_LogUnnormalizedGaussProbability,
+        Py_LogUnnormalizedGaussProbability_DS, "a"_a, "b"_a, "c"_a, "nthreads"_a=1);
+  m2.def("LogUnnormalizedGaussProbabilityWithDeriv", Py_LogUnnormalizedGaussProbabilityWithDeriv,
+        Py_LogUnnormalizedGaussProbabilityWithDeriv_DS, "a"_a, "b"_a, "c"_a, "out"_a=None, "nthreads"_a=1);
 
   m.def("GL_weights", Py_GL_weights, "nlat"_a, "nlon"_a);
   m.def("GL_thetas", Py_GL_thetas, "nlat"_a);
