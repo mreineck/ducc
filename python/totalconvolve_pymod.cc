@@ -272,7 +272,7 @@ following format:
     (these values can be fully complex)
   - values for m=2, l going from 2 to lmax
   - ...
-  - values for m=mmax, l going from mmax to lmax 
+  - values for m=mmax, l going from mmax to lmax
 
 Error conditions are reported by raising exceptions.
 )""";

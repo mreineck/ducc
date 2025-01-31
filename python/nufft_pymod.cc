@@ -242,8 +242,8 @@ class Py_Nufftplan
       unique_ptr<Nufft<T,T,T>> &ptr,
       bool gridding, const py::array &coord_,
       const py::object &uniform_shape_,
-      double epsilon_, 
-      size_t nthreads_, 
+      double epsilon_,
+      size_t nthreads_,
       double sigma_min, double sigma_max,
       const py::object &periodicity_, bool fft_order_)
       {
@@ -304,8 +304,8 @@ class Py_Nufftplan
   public:
     Py_Nufftplan(bool gridding, const py::array &coord_,
                  const py::object &uniform_shape_,
-                 double epsilon_, 
-                 size_t nthreads_, 
+                 double epsilon_,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order_)
       : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
@@ -354,7 +354,7 @@ class Py_incremental_nu2u
       unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
       size_t npoints_estimate,
-      double epsilon, 
+      double epsilon,
       double sigma_min, double sigma_max,
       const py::object &periodicity_, bool fft_order)
       {
@@ -397,8 +397,8 @@ class Py_incremental_nu2u
     Py_incremental_nu2u(size_t npoints_estimate,
                  const py::object &uniform_shape_,
                  bool forward_,
-                 double epsilon, 
-                 size_t nthreads_, 
+                 double epsilon,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order, bool singleprec)
       : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
@@ -445,7 +445,7 @@ class Py_incremental_u2nu
       size_t npoints_estimate,
       const py::array &uniform_,
       bool forward,
-      double epsilon, 
+      double epsilon,
       double sigma_min, double sigma_max,
       const py::object &periodicity_, bool fft_order)
       {
@@ -479,8 +479,8 @@ class Py_incremental_u2nu
     Py_incremental_u2nu(size_t npoints_estimate,
                  const py::array &uniform,
                  bool forward,
-                 double epsilon, 
-                 size_t nthreads_, 
+                 double epsilon,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order_)
       : nthreads(nthreads_)
@@ -514,8 +514,8 @@ class Py_Nufft3plan
       unique_ptr<Nufft3<T,T,T,T>> &ptr,
       const py::array &coord_in_,
       const py::array &coord_out_,
-      double epsilon, 
-      size_t nthreads, 
+      double epsilon,
+      size_t nthreads,
       double sigma_min, double sigma_max,
       size_t verbosity)
       {
@@ -567,8 +567,8 @@ class Py_Nufft3plan
   public:
     Py_Nufft3plan(const py::array &coord_in,
                   const py::array &coord_out,
-                  double epsilon, 
-                  size_t nthreads, 
+                  double epsilon,
+                  size_t nthreads,
                   double sigma_min, double sigma_max,
                   size_t verbosity)
       {
@@ -1029,7 +1029,7 @@ void add_nufft(py::module_ &msup)
         "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
     .def("add_points", &Py_incremental_nu2u::add_points,
       incremental_nu2u_add_points_DS, py::kw_only(), "coord"_a, "points"_a)
-    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, 
+    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset,
       incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
   py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local())

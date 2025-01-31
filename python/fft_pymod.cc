@@ -933,7 +933,7 @@ nthreads : int
 
 Returns
 -------
-numpy.ndarray (identical to `out`) 
+numpy.ndarray (identical to `out`)
     The convolved input
 
 Notes

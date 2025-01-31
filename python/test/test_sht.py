@@ -250,7 +250,7 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
     slm2 = ducc0.sht.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads)
     v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
                 for c in range(ncomp)])
-    v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
+    v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag)
     assert_allclose(v1, v2, rtol=1e-9)
 
     if spin > 0:
@@ -258,7 +258,7 @@ def test_adjointness_general(lmmax, npix, spin, nthreads):
         slm2 = ducc0.sht.adjoint_synthesis_general(lmax=lmax, mmax=mmax, map=points2, loc=loc, spin=spin, epsilon=epsilon, nthreads=nthreads, mode="GRAD_ONLY")
         v1 = np.sum([myalmdot(slm1[c, :], slm2[c, :], lmax)
                     for c in range(1)])
-        v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag) 
+        v2 = ducc0.misc.vdot(points2.real, points1.real) + ducc0.misc.vdot(points2.imag, points1.imag)
         assert_allclose(v1, v2, rtol=1e-9)
 
 @pmp('spin', (0, 1, 2))
