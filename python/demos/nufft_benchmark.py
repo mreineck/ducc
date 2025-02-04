@@ -390,9 +390,19 @@ if True:
     runbench12((64,64,64,), 64*64*64, 1, "bench_3d.png", singleprec)
 # some preliminary type 3 benchmarks
 if True:
-    runbench3(1000000,  1000000, np.array([[-1.],[1.]]),np.array([[-1.],[1.]]), 1, "finufft_1d_type3.png"  , singleprec)
-    runbench3(1000000,  1000000, np.array([[-1.,-1.],[1.,1.]]),np.array([[-1.,-1.],[1.,1.]]), 1, "finufft_2d_type3.png"  , singleprec)
-    runbench3(1000000,  1000000, np.array([[-1.,-1.,-1.],[1.,1.,1.]]),np.array([[-1.,-1.,-1.],[1.,1.,1.]]), 1, "finufft_3d_type3.png"  , singleprec)
-    runbench3(10000000,  10000000, np.array([[-1.],[1.]]),np.array([[-1.],[1.]]), 8, "finufft_1d_type3_parallel.png"  , singleprec)
-    runbench3(10000000,  10000000, np.array([[-1.,-1.],[1.,1.]]),np.array([[-1.,-1.],[1.,1.]]), 8, "finufft_2d_type3_parallel.png"  , singleprec)
-    runbench3(10000000,  10000000, np.array([[-1.,-1.,-1.],[1.,1.,1.]]),np.array([[-1.,-1.,-1.],[1.,1.,1.]]), 8, "finufft_3d_type3_parallel.png"  , singleprec)
+    # helper function to create coordinate ranges fpr NU points
+    def make_ranges(xmin, xmax, ymin=None, ymax=None, zmin=None, zmax=None):
+        if ymin is None:
+            return np.array([[xmin], [xmax]])
+        if zmin is None:
+            return np.array([[xmin, ymin], [xmax, ymax]])
+        return np.array([[xmin, ymin, zmin], [xmax, ymax, zmax]])
+    minmax = make_ranges(-1., 1.)
+    runbench3(1000000,  1000000, minmax, minmax, 1, "finufft_1d_type3_serial.png", singleprec)
+    runbench3(10000000,  10000000, minmax, minmax, 8, "finufft_1d_type3_parallel.png"  , singleprec)
+    minmax = make_ranges(-1., 1., -1., 1.)
+    runbench3(1000000,  1000000, minmax, minmax, 1, "finufft_2d_type3_serial.png", singleprec)
+    runbench3(10000000,  10000000, minmax, minmax, 8, "finufft_2d_type3_parallel.png"  , singleprec)
+    minmax = make_ranges(-1., 1., -1., 1., -1., 1.)
+    runbench3(1000000,  1000000, minmax, minmax, 1, "finufft_3d_type3_serial.png", singleprec)
+    runbench3(10000000,  10000000, minmax, minmax, 8, "finufft_3d_type3_parallel.png"  , singleprec)
