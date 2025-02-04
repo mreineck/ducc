@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2024 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -1557,13 +1557,15 @@ Notes
 -----
 The default value is determined according to the following pseudo code:
 
-res = available_hardware_threads();
-if (DUCC0_NUM_THREADS defined)
-  res = min(res, $DUCC0_NUM_THREADS)
-else
-  if (OMP_NUM_THREADS defined)
-    res = min(res, $OMP_NUM_THREADS)
-return max(1, res)
+.. code-block:: none
+
+  res = available_hardware_threads();
+  if (DUCC0_NUM_THREADS defined)
+    res = min(res, $DUCC0_NUM_THREADS)
+  else
+    if (OMP_NUM_THREADS defined)
+      res = min(res, $OMP_NUM_THREADS)
+  return max(1, res)
 )""";
 
 constexpr const char *resize_thread_pool_DS = R"""(
