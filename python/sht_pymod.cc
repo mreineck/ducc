@@ -2298,7 +2298,7 @@ void add_pythonfuncs(py::module_ &m)
 
   m.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
-  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None, "verbose"_a=false);
+  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a=1, "maxiter"_a, "epsilon"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None, "verbose"_a=false);
 
   m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "geometry"_a, "ntheta"_a);
 
