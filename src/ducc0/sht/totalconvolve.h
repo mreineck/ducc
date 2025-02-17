@@ -57,6 +57,7 @@ template<typename T> class ConvolverPlan
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
+    constexpr static size_t cellsize = 32;
     using Tsimd = typename simd_select<T, vlen>::type;
 
     size_t nthreads;
@@ -86,7 +87,6 @@ template<typename T> class ConvolverPlan
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       size_t nptg = theta.shape(0);
-      constexpr size_t cellsize=8;
       size_t nct = patch_ntheta/cellsize+1,
              ncp = patch_nphi/cellsize+1,
              ncpsi = npsi_b/cellsize+1;
@@ -270,7 +270,6 @@ template<typename T> class ConvolverPlan
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
       auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
-      constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
              ncp = cube.shape(2)/cellsize+10;
       vmav<Mutex,2> locks({nct,ncp});
