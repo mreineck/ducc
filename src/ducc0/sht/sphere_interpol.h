@@ -172,12 +172,12 @@ template<typename T> class SphereInterpol
 
     template<size_t supp, typename Tloc> void interpolx(size_t supp_, const cmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const vmav<T,2> &signal) const
+      const vmav<T,2> &signal, TimerHierarchy &timers) const
       {
       if constexpr (supp>=8)
-        if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       if constexpr (supp>4)
-        if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
@@ -187,7 +187,9 @@ template<typename T> class SphereInterpol
       MR_assert(signal.shape(0)==ncomp, "array shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      timers.push("index sorting");
       auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      timers.poppush("actual interpolation");
 
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
@@ -271,15 +273,16 @@ template<typename T> class SphereInterpol
             }
           }
         });
+      timers.pop();
       }
     template<size_t supp, typename Tloc> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const cmav<T,2> &signal) const
+      const cmav<T,2> &signal, TimerHierarchy &timers) const
       {
       if constexpr (supp>=8)
-        if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       if constexpr (supp>4)
-        if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
@@ -289,7 +292,9 @@ template<typename T> class SphereInterpol
       MR_assert(signal.shape(0)==ncomp, "array shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
+      timers.push("index sorting");
       auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      timers.poppush("actual deinterpolation");
 
       constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
@@ -412,6 +417,7 @@ template<typename T> class SphereInterpol
           locks(b_theta+1,b_phi+1).unlock();
           }
         });
+      timers.pop();
       }
 
   public:
@@ -553,18 +559,18 @@ template<typename T> class SphereInterpol
 
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const vmav<T,2> &signal) const
+      const vmav<T,2> &signal, TimerHierarchy &timers) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
-      interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
+      interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal, timers);
       }
 
     template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const cmav<T,2> &signal) const
+      const cmav<T,2> &signal, TimerHierarchy &timers) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
-      deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
+      deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal, timers);
       }
 
     void updateAlm(const vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const

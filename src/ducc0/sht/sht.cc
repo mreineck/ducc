@@ -2948,7 +2948,7 @@ template<typename T, typename Tloc> void synthesis_general(
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   timers.poppush("interpol (u2nu)");
-  inter.interpol(planes, 0, 0, xtheta, xphi, map);
+  inter.interpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.pop();
   if (verbose) timers.report(cerr);
   }
@@ -2985,7 +2985,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   timers.poppush("deinterpol (nu2u)");
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
-  inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
+  inter.deinterpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.poppush("updateAlm");
   inter.updateAlm(alm, mstart, lstride, planes, mode, timers);
   timers.pop();
