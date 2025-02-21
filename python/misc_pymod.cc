@@ -1371,6 +1371,7 @@ py::array Py_coupling_matrix_spin0and2_pure
 constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
 This is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
 differences:
+
 - the l values in the output matrix go from 0 to lmax (inclusive) instead of
   2 to lmax (exclusive)
 - the input power spectra are multiplied by (2*l+1)
@@ -1446,6 +1447,7 @@ py::array Py_coupling_matrix_spin0and2_tri
 constexpr const char *Py_coupling_matrix_spin0and2_tri_DS = R"""(
 This is similar to pspy's calc_coupling_spin0and2() method, with the following
 differences:
+
 - the l values in the output matrix go from 0 to lmax (inclusive) instead of
   2 to lmax (exclusive)
 - the input power spectra are multiplied by (2*l+1)/(4*pi)
@@ -1467,19 +1469,21 @@ lmax : int
     assumed to be zero.
 spec_index : tuple of int, length 4
     Contains the index in spec for each possible input spectrum
-        Pos 0: index of the wcl_00 spectrum
-        Pos 1: index of the wcl_02 spectrum
-        Pos 2: index of the wcl_20 spectrum
-        Pos 3: index of the wcl_22 spectrum
+        | Pos 0: index of the wcl_00 spectrum
+        | Pos 1: index of the wcl_02 spectrum
+        | Pos 2: index of the wcl_20 spectrum
+        | Pos 3: index of the wcl_22 spectrum
+
     The second dimension of `spec` must have the size `np.max(spec_index)+1`
     All indices in the range `(0; np.max(spec_index))` must occur at least once.
 mat_index : tuple of int, length 5
     Contains the index in the result for each possible coupling matrix
-        Pos 0: index of the 00 matrix
-        Pos 1: index of the 02 matrix
-        Pos 2: index of the 20 matrix
-        Pos 3: index of the ++ matrix
-        Pos 4: index of the -- matrix
+        | Pos 0: index of the 00 matrix
+        | Pos 1: index of the 02 matrix
+        | Pos 2: index of the 20 matrix
+        | Pos 3: index of the ++ matrix
+        | Pos 4: index of the -- matrix
+
     If any of the indices is -1, this matrix will not be computed.
     The second dimension of `res` must have the size `np.max(mat_index)+1.`
     All indices in the range `(0; np.max(mat_index))` must occur exactly once.
@@ -1498,13 +1502,14 @@ numpy.ndarray((nspec, 1<=x<=5, ((lmax+1)*(lmax+2))/2)), dtype=np.float32 or np.f
 Notes
 -----
 The currently supported combinations of `spec_index` and `mat_index` are:
-  (0,1,2,3), ( 0, 1, 2, 3, 4)   # full computation
-  (0,0,0,0), ( 0,-1,-1,-1,-1)   # just spin 0
-  (0,1,1,2), ( 0, 1,-1, 2,-1)
-  (0,1,1,2), ( 0, 1,-1, 2, 3)
-  (0,1,2,3), ( 0, 1, 2, 3,-1)
-  (0,0,0,0), (-1,-1,-1, 0, 1)   # only ++ and --
-  (0,0,0,0), ( 0, 1, 2, 3, 4)   # for testing purposes
+   | (0,1,2,3), ( 0, 1, 2, 3, 4)   # full computation
+   | (0,0,0,0), ( 0,-1,-1,-1,-1)   # just spin 0
+   | (0,1,1,2), ( 0, 1,-1, 2,-1)
+   | (0,1,1,2), ( 0, 1,-1, 2, 3)
+   | (0,1,2,3), ( 0, 1, 2, 3,-1)
+   | (0,0,0,0), (-1,-1,-1, 0, 1)   # only ++ and --
+   | (0,0,0,0), ( 0, 1, 2, 3, 4)   # for testing purposes
+
 )""";
 
 
