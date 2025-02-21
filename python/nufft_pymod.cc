@@ -1009,7 +1009,8 @@ void add_nufft(py::module_ &msup)
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
         "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 
-  py::class_<Py_Nufftplan> (m, "plan", py::module_local())
+  py::class_<Py_Nufftplan> (m, "plan", py::module_local(),
+                            "Class for repeated execution of type 1/2 NUFFTs")
     .def(py::init<bool, const py::array &, const py::object &,
                   double, size_t, double, double, const py::object &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
@@ -1020,7 +1021,8 @@ void add_nufft(py::module_ &msup)
     .def("u2nu", &Py_Nufftplan::u2nu, plan_u2nu_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "grid"_a, "out"_a=None);
 
-  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local())
+  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local(),
+                                   "Class for incremental execution of a type 1 NUFFT")
     .def(py::init<size_t, const py::object &, bool,
                   double, size_t, double, double, const py::object &, bool, bool>(),
       incremental_nu2u_init_DS,
@@ -1032,7 +1034,8 @@ void add_nufft(py::module_ &msup)
     .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset,
       incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
-  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local())
+  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local(),
+                                   "Class for incremental execution of a type 2 NUFFT")
     .def(py::init<size_t, const py::array &, bool,
                   double, size_t, double, double, const py::object &, bool>(),
       incremental_u2nu_init_DS,
@@ -1043,7 +1046,8 @@ void add_nufft(py::module_ &msup)
       incremental_u2nu_get_points_DS, py::kw_only(),
       "coord"_a, "points"_a=None);
 
-  py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local())
+  py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local(),
+                             "Class for repeated execution of type 3 NUFFTs")
     .def(py::init<const py::array &, const py::array &,
                   double, size_t, double, double, size_t>(),
       plan3_init_DS, py::kw_only(), "coord_in"_a, "coord_out"_a,

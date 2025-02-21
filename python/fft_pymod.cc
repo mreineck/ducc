@@ -529,6 +529,7 @@ For one-dimensional arrays of length :math:`N`, this function computes:
 
 .. math::
     Y_k = \frac{1}{\sqrt{n}^{\textrm{inorm}}} \sum_{j=0}^{n-1}  X_j  e^{s 2\pi i \frac{j k}{N}}
+
 where
 
 .. math::

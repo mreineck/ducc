@@ -77,7 +77,9 @@ if do_native:
 python_module_link_args = []
 
 define_macros = [("PKGNAME", pkgname),
-                 ("PKGVERSION", version)]
+                 ("PKGVERSION", version),
+#                 ("PYBIND11_DETAILED_ERROR_MESSAGES", None)
+]
 
 if sys.platform == 'darwin':
     extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
