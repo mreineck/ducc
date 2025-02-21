@@ -6,6 +6,8 @@ needs_sphinx = '3.2.0'
 extensions = [
     # 'sphinx.ext.autodoc',
     # 'sphinx.ext.autosummary',
+    'sphinx.ext.mathjax',
+    # 'sphinx.ext.imgmath',
     'sphinx.ext.napoleon',
 ]
 

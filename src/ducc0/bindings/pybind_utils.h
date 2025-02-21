@@ -22,6 +22,7 @@
 #define DUCC0_PYBIND_UTILS_H
 
 #include <cstddef>
+#include <string>
 #include <array>
 #include <vector>
 #include <pybind11/pybind11.h>
@@ -40,6 +41,9 @@ using stride_t=fmav_info::stride_t;
 
 namespace py = pybind11;
 
+static inline string makeSpec(const string &name)
+  { return (name=="") ? "" : name+": "; }
+
 py::object normalizeDtype(const py::object &dtype)
   {
   static py::object converter = py::module_::import("numpy").attr("dtype");
@@ -52,14 +56,15 @@ bool isPyarr(const py::object &obj)
 template<typename T> bool isPyarr(const py::object &obj)
   { return py::isinstance<py::array_t<T>>(obj); }
 
-template<typename T> py::array_t<T> toPyarr(const py::object &obj)
+template<typename T> py::array_t<T> toPyarr(const py::object &obj,
+  const string &spec="")
   {
   auto tmp = obj.cast<py::array_t<T>>();
-  MR_assert(tmp.is(obj), "error during array conversion");
+  MR_assert(tmp.is(obj), spec, "error during array conversion");
   return tmp;
   }
 
-shape_t copy_shape(const py::array &arr)
+shape_t copy_shape(const py::array &arr, const string &/*spec*/="")
   {
   shape_t res(size_t(arr.ndim()));
   for (size_t i=0; i<res.size(); ++i)
@@ -67,7 +72,8 @@ shape_t copy_shape(const py::array &arr)
   return res;
   }
 
-template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
+template<typename T> stride_t copy_strides(const py::array &arr, bool rw,
+  const string &spec="")
   {
   stride_t res(size_t(arr.ndim()));
   constexpr auto st = ptrdiff_t(sizeof(T));
@@ -75,17 +81,18 @@ template<typename T> stride_t copy_strides(const py::array &arr, bool rw)
     {
     auto tmp = arr.strides(int(i));
     MR_assert((!rw) || (arr.shape(int(i))==1) || (tmp!=0),
-      "detected zero stride in writable array");
-    MR_assert((tmp/st)*st==tmp, "bad stride");
+      spec, "detected zero stride in writable array");
+    MR_assert((tmp/st)*st==tmp, spec, "bad stride");
     res[i] = tmp/st;
     }
   return res;
   }
 
 template<size_t ndim>
-  std::array<size_t, ndim> copy_fixshape(const py::array &arr)
+  std::array<size_t, ndim> copy_fixshape(const py::array &arr,
+  const string &spec="")
   {
-  MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
+  MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
   std::array<size_t, ndim> res;
   for (size_t i=0; i<ndim; ++i)
     res[i] = size_t(arr.shape(int(i)));
@@ -93,45 +100,54 @@ template<size_t ndim>
   }
 
 template<typename T, size_t ndim>
-  std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw)
+  std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw,
+  const string &spec="")
   {
-  MR_assert(size_t(arr.ndim())==ndim, "incorrect number of dimensions");
+  MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
   std::array<ptrdiff_t, ndim> res;
   constexpr auto st = ptrdiff_t(sizeof(T));
   for (size_t i=0; i<ndim; ++i)
     {
     auto tmp = arr.strides(int(i));
     MR_assert((!rw) || (arr.shape(int(i))==1) || (tmp!=0),
-      "detected zero stride in writable array");
-    MR_assert((tmp/st)*st==tmp, "bad stride");
+      spec, "detected zero stride in writable array");
+    MR_assert((tmp/st)*st==tmp, spec, "bad stride");
     res[i] = tmp/st;
     }
   return res;
   }
 
-template<typename T> cfmav<T> to_cfmav(const py::object &obj)
+template<typename T> cfmav<T> to_cfmav(const py::object &obj,
+  const string &name="")
   {
-  auto arr = toPyarr<T>(obj);
+  const auto spec = makeSpec(name);
+  auto arr = toPyarr<T>(obj, spec);
   return cfmav<T>(reinterpret_cast<const T *>(arr.data()),
-    copy_shape(arr), copy_strides<T>(arr, false));
+    copy_shape(arr, spec), copy_strides<T>(arr, false, spec));
   }
-template<typename T> vfmav<T> to_vfmav(const py::object &obj)
+template<typename T> vfmav<T> to_vfmav(const py::object &obj,
+  const string &name="")
   {
-  auto arr = toPyarr<T>(obj);
+  const auto spec = makeSpec(name);
+  auto arr = toPyarr<T>(obj, spec);
   return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_shape(arr), copy_strides<T>(arr, true));
+    copy_shape(arr, spec), copy_strides<T>(arr, true, spec));
   }
 
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj)
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj,
+  const string &name="")
   {
-  auto arr = toPyarr<T>(obj);
+  const auto spec = makeSpec(name);
+  auto arr = toPyarr<T>(obj, spec);
   return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
-    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, false));
+    copy_fixshape<ndim>(arr, spec), copy_fixstrides<T,ndim>(arr, false, spec));
   }
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const py::array &obj)
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const py::array &obj,
+  const string &name="")
   {
-  auto tmp = to_cfmav<T>(obj); 
-  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  const auto spec = makeSpec(name);
+  auto tmp = to_cfmav<T>(obj, name); 
+  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
   typename cmav<T,ndim>::shape_t newshape;
   typename cmav<T,ndim>::stride_t newstride;
   size_t add=ndim-tmp.ndim();
@@ -141,10 +157,12 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dim
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return cmav<T,ndim>(tmp.data(), newshape, newstride);
   }
-template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim)
+template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim,
+  const string &name="")
   {
-  auto tmp = to_cfmav<T>(obj); 
-  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  const auto spec = makeSpec(name);
+  auto tmp = to_cfmav<T>(obj, name); 
+  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
   typename cfmav<T>::shape_t newshape(ndim);
   typename cfmav<T>::stride_t newstride(ndim);
   size_t add=ndim-tmp.ndim();
@@ -154,16 +172,20 @@ template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return cfmav<T>(tmp.data(), newshape, newstride);
   }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj)
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj,
+  const string &name="")
   {
-  auto arr = toPyarr<T>(obj);
+  const auto spec = makeSpec(name);
+  auto arr = toPyarr<T>(obj, spec);
   return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_fixshape<ndim>(arr), copy_fixstrides<T,ndim>(arr, true));
+    copy_fixshape<ndim>(arr, spec), copy_fixstrides<T,ndim>(arr, true, spec));
   }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::array &obj)
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::array &obj,
+  const string &name="")
   {
-  auto tmp = to_vfmav<T>(obj); 
-  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  const auto spec = makeSpec(name);
+  auto tmp = to_vfmav<T>(obj, name); 
+  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
   typename vmav<T,ndim>::shape_t newshape;
   typename vmav<T,ndim>::stride_t newstride;
   size_t add=ndim-tmp.ndim();
@@ -173,10 +195,12 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return vmav<T,ndim>(tmp.data(), newshape, newstride);
   }
-template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim)
+template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim,
+  const string &name="")
   {
-  auto tmp = to_vfmav<T>(obj); 
-  MR_assert(tmp.ndim()<=ndim, "array has too many dimensions");
+  const auto spec = makeSpec(name);
+  auto tmp = to_vfmav<T>(obj, name); 
+  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
   typename vfmav<T>::shape_t newshape(ndim);
   typename vfmav<T>::stride_t newstride(ndim);
   size_t add=ndim-tmp.ndim();
@@ -187,10 +211,12 @@ template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py
   return vfmav<T>(tmp.data(), newshape, newstride);
   }
 
-template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj)
+template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj,
+  const string &name="")
   {
+  const auto spec = makeSpec(name);
   auto vec = py::cast<std::vector<T>>(obj);
-  MR_assert(vec.size()==len, "unexpected number of elements");
+  MR_assert(vec.size()==len, spec, "unexpected number of elements");
   std::array<T,len> res;
   for (size_t i=0;i<len; ++i) res[i] = vec[i];
   return res;
@@ -229,47 +255,52 @@ template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
   return sub;
   }
 
-template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims)
+template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims,
+  const string &name="")
   {
-  MR_assert(isPyarr<T>(arr_), "incorrect data type");
-  auto tmp = toPyarr<T>(arr_);
-  MR_assert(ndims==size_t(tmp.ndim()), "dimension mismatch");
+  const auto spec = makeSpec(name);
+  MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
+  auto tmp = toPyarr<T>(arr_, spec);
+  MR_assert(ndims==size_t(tmp.ndim()), spec, "dimension mismatch");
   return tmp;
   }
 
 template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
-  const shape_t &dims, bool zero_if_new=false)
+  const shape_t &dims, const string &name="")
   {
-  if (arr_.is_none()) return make_Pyarr<T>(dims, zero_if_new);
-  MR_assert(isPyarr<T>(arr_), "incorrect data type");
-  auto tmp = toPyarr<T>(arr_);
-  MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
+  if (arr_.is_none()) return make_Pyarr<T>(dims, false);
+  const auto spec = makeSpec(name);
+  MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
+  auto tmp = toPyarr<T>(arr_, spec);
+  MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
-    MR_assert(dims[i]==size_t(tmp.shape(int(i))), "dimension mismatch");
+    MR_assert(dims[i]==size_t(tmp.shape(int(i))), spec, "dimension mismatch");
   return tmp;
   }
 
 template<typename T> py::array_t<T> get_optional_Pyarr_minshape
-  (py::object &arr_, const shape_t &dims)
+  (py::object &arr_, const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(dims);
-  MR_assert(isPyarr<T>(arr_), "incorrect data type");
-  auto tmp = toPyarr<T>(arr_);
-  MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
+  const auto spec = makeSpec(name);
+  MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
+  auto tmp = toPyarr<T>(arr_, spec);
+  MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
-    MR_assert(dims[i]<=size_t(tmp.shape(int(i))), "array shape too small");
+    MR_assert(dims[i]<=size_t(tmp.shape(int(i))), spec, "array shape too small");
   return tmp;
   }
 
 template<typename T> py::array_t<T> get_optional_const_Pyarr(
-  const py::object &arr_, const shape_t &dims)
+  const py::object &arr_, const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return py::array_t<T>(shape_t(dims.size(), 0));
-  MR_assert(isPyarr<T>(arr_), "incorrect data type");
-  auto tmp = toPyarr<T>(arr_);
-  MR_assert(dims.size()==size_t(tmp.ndim()), "dimension mismatch");
+  const auto spec = makeSpec(name);
+  MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
+  auto tmp = toPyarr<T>(arr_, spec);
+  MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
-    MR_assert(dims[i]==size_t(tmp.shape(int(i))), "dimension mismatch");
+    MR_assert(dims[i]==size_t(tmp.shape(int(i))), spec, "dimension mismatch");
   return tmp;
   }
 

@@ -124,9 +124,9 @@ template<typename T> py::array c2c_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<std::complex<T>>(in);
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
-  auto aout = to_vfmav<std::complex<T>>(out);
+  auto ain = to_cfmav<std::complex<T>>(in, "a");
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<std::complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -140,9 +140,9 @@ template<typename T> py::array c2c_sym_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape());
-  auto aout = to_vfmav<std::complex<T>>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<std::complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -177,11 +177,11 @@ template<typename T> py::array r2c_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
+  auto ain = to_cfmav<T>(in, "a");
   auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, dims_out);
-  auto aout = to_vfmav<std::complex<T>>(out);
+  auto out = get_optional_Pyarr<std::complex<T>>(out_, dims_out, "out");
+  auto aout = to_vfmav<std::complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -202,9 +202,9 @@ template<typename T> py::array r2r_fftpack_internal(const py::array &in,
   py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -226,9 +226,9 @@ template<typename T> py::array r2r_fftw_internal(const py::array &in,
   py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -249,9 +249,9 @@ template<typename T> py::array dct_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
@@ -275,9 +275,9 @@ template<typename T> py::array dst_internal(const py::array &in,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
@@ -302,18 +302,18 @@ template<typename T> py::array c2r_internal(const py::array &in,
   {
   auto axes = makeaxes(in, axes_);
   size_t axis = axes.back();
-  auto ain_c = to_cfmav<std::complex<T>>(in);
+  auto ain_c = to_cfmav<std::complex<T>>(in, "a");
   shape_t dims_out(ain_c.shape());
   if (lastsize==0) lastsize=2*ain_c.shape(axis)-1;
   if ((lastsize/2) + 1 != ain_c.shape(axis))
     throw std::invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
-  auto out = get_optional_Pyarr<T>(out_, dims_out);
-  auto aout = to_vfmav<T>(out);
+  auto out = get_optional_Pyarr<T>(out_, dims_out, "out");
+  auto aout = to_vfmav<T>(out, "out");
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
   if (allow_overwriting_input)
     {
-    auto ain = to_vfmav<std::complex<T>>(in);
+    auto ain = to_vfmav<std::complex<T>>(in, "a");
     {
     py::gil_scoped_release release;
     ducc0::c2r_mut(ain, aout, axes, forward, fct, nthreads);
@@ -339,9 +339,9 @@ template<typename T> py::array separable_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -361,9 +361,9 @@ template<typename T> py::array genuine_hartley_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -383,9 +383,9 @@ template<typename T> py::array separable_fht_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -405,9 +405,9 @@ template<typename T> py::array genuine_fht_internal(const py::array &in,
   const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<T>(in);
-  auto out = get_optional_Pyarr<T>(out_, ain.shape());
-  auto aout = to_vfmav<T>(out);
+  auto ain = to_cfmav<T>(in, "a");
+  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<T>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -451,9 +451,9 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
 template<typename T> py::array convolve_axis_internal(const py::array &in_,
   py::array &out_, size_t axis, const py::array &kernel_, size_t nthreads)
   {
-  auto in = to_cfmav<T>(in_);
-  auto out = to_vfmav<T>(out_);
-  auto kernel = to_cmav<T,1>(kernel_);
+  auto in = to_cfmav<T>(in_, "in");
+  auto out = to_vfmav<T>(out_, "out");
+  auto kernel = to_cmav<T,1>(kernel_, "kernel");
   {
   py::gil_scoped_release release;
   ducc0::convolve_axis(in, out, axis, kernel, nthreads);
@@ -498,7 +498,7 @@ a : numpy.ndarray (any complex or real type)
     The input data. If its type is real, a more efficient real-to-complex
     transform will be used.
 axes : list of integers
-    The axes along which the FFT is carried out.
+    The axes along which the FFT is carried out (first axis has number 0).
     If not set, all axes will be transformed.
 forward : bool
     If `True`, a negative sign is used in the exponent, else a positive one.
@@ -520,6 +520,33 @@ Returns
 -------
 numpy.ndarray (same shape as `a`, complex type with same accuracy as `a`)
     The transformed data.
+
+Notes
+-----
+
+For one-dimensional arrays of length :math:`N`, this function computes:
+:math:`\forall\ k = 0 \dots n-1`
+
+.. math::
+    Y_k = \frac{1}{\sqrt{n}^{\textrm{inorm}}} \sum_{j=0}^{n-1}  X_j  e^{s 2\pi i \frac{j k}{N}}
+where
+
+.. math::
+    s = \left\{
+    \begin{align}
+    -1 & \quad \text{if forward} \\
+    +1 & \quad \text{else}
+    \end{align}
+    \right.
+
+For multi-dimensional arrays, the function computes one-dimensional transforms
+on each of the specified axes sequentially. For instance, for a two-dimensional
+array :math:`X` of shape :math:`(N,M)` (with ``axes=(0,1)``), this function
+computes the two-dimensional array of the same shape :math:`Z` as:
+
+.. math::
+    Y_{k,p} = \frac{1}{\sqrt{N}^{\textrm{inorm}}} \sum_{j=0}^{N-1} X_{j,p} e^{s 2\pi i \frac{j k}{N}} \\
+    Z_{k,q} = \frac{1}{\sqrt{M}^{\textrm{inorm}}} \sum_{p=0}^{M-1} Y_{k,p} e^{s 2\pi i \frac{p q}{M}} 
 )""";
 
 const char *r2c_DS = R"""(Performs an FFT whose input is strictly real.
@@ -556,6 +583,12 @@ numpy.ndarray (complex type with same accuracy as `a`)
     The transformed data. The shape is identical to that of the input array,
     except for `axes[-1]`. If the length of that axis was n on input,
     it is n//2+1 on output.
+
+Notes
+-----
+Mathematically this function performs exactly the same operations as
+:func:`c2c`, but since the resulting array has Hermitian symmetry, the output
+array will be cut from ``n`` entries to ``n//2+1`` entries along ``axes[-1]``.
 )""";
 
 const char *c2r_DS = R"""(Performs an FFT whose output is strictly real.
@@ -666,80 +699,18 @@ numpy.ndarray (same shape and data type as `a`)
     The transformed data. The shape is identical to that of the input array.
 )""";
 
-const char *separable_hartley_DS = R"""(Performs a separable Hartley-like transform.
-For every requested axis, a 1D forward Fourier transform is carried out, and
-the real and imaginary parts of the result are added before the next axis is
-processed.
-
-Parameters
-----------
-a : numpy.ndarray (any real type)
-    The input data
-axes : list of integers
-    The axes along which the transform is carried out.
-    If not set, this is assumed to be `list(range(a.ndim))`.
-    Axes will be transformed in the specified order.
-inorm : int
-    Normalization type
-      | 0 : no normalization
-      | 1 : divide by sqrt(N)
-      | 2 : divide by N
-
-    where N is the product of the lengths of the transformed axes.
-out : numpy.ndarray (same shape and data type as `a`)
-    May be identical to `a`, but if it isn't, it must not overlap with `a`.
-    If None, a new array is allocated to store the output.
-nthreads : int
-    Number of threads to use. If 0, use the system default (typically the number
-    of hardware threads on the compute node).
-
-Returns
--------
-numpy.ndarray (same shape and data type as `a`)
-    The transformed data
-
+const char *separable_hartley_DS = R"""(
 Notes
 -----
-This function uses a nonstandard Hartley convention.
-Only use if you know exactly what you are doing!
+This function uses a nonstandard Hartley convention and is deprecated.
+Do not use in newly written code!
 )""";
 
-const char *genuine_hartley_DS = R"""(Performs a full Hartley-like transform.
-A full forward Fourier transform is carried out over the requested axes, and the
-sum of real and imaginary parts of the result is stored in the output
-array. For a single transformed axis, this is identical to `separable_hartley`,
-but when transforming multiple axes, the results are different.
-
-Parameters
-----------
-a : numpy.ndarray (any real type)
-    The input data
-axes : list of integers
-    The axes along which the transform is carried out.
-    If not set, all axes will be transformed.
-inorm : int
-    Normalization type
-      | 0 : no normalization
-      | 1 : divide by sqrt(N)
-      | 2 : divide by N
-
-    where N is the product of the lengths of the transformed axes.
-out : numpy.ndarray (same shape and data type as `a`)
-    May be identical to `a`, but if it isn't, it must not overlap with `a`.
-    If None, a new array is allocated to store the output.
-nthreads : int
-    Number of threads to use. If 0, use the system default (typically the number
-    of hardware threads on the compute node).
-
-Returns
--------
-numpy.ndarray (same shape and data type as `a`)
-    The transformed data
-
+const char *genuine_hartley_DS = R"""(
 Notes
 -----
-This function uses a nonstandard Hartley convention.
-Only use if you know exactly what you are doing!
+This function uses a nonstandard Hartley convention and is deprecated.
+Do not use in newly written code!
 )""";
 
 const char *separable_fht_DS = R"""(Performs a separable Hartley transform.
@@ -806,6 +777,12 @@ Returns
 -------
 numpy.ndarray (same shape and data type as `a`)
     The transformed data
+
+Notes
+-----
+Mathematically this function performs exactly the same operations as
+:func:`c2c` (with ``forward=True``), but returns a real-valued array containing
+:math:`\Re(a)-\Im(a)`, where :math:`a` is the :func:`c2c` output.
 )""";
 
 const char *dct_DS = R"""(Performs a discrete cosine transform.

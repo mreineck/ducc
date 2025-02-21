@@ -1603,7 +1603,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return get_optional_Pyarr<T2>(out, oshp, false);
+  return get_optional_Pyarr<T2>(out, oshp);
   }
 
 template<typename Tin> py::array quat2ptg2 (const py::array &in, size_t nthreads,
