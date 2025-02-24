@@ -1,5 +1,12 @@
 0.37.0:
-- nufft
+- general:
+  - slightly improved messages for (non-pybind11-generated) errors detected at
+    the Python/C++ interface: error message is now preceded by variable name.
+  - beginnings of a more mathematical description of ducc0's functions
+    in the docstrings; the goal is to provide more clarity about
+    "what ducc0 really computes".
+
+- nufft:
   - add `exec_adjoint` method to the type 3 NUFFT class, to allow adjoint
     transforms without the need for an additional plan
 
