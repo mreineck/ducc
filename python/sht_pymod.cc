@@ -61,27 +61,52 @@ size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
 size_t get_nalm(size_t spin, SHT_mode mode)
   { return (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1); }
 
-template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
-  size_t lmax, double psi, double theta, double phi, size_t nthreads)
+template<typename T> py::array Py2_rotate_alm(const py::array &alm_in_,
+  size_t lmax, double psi, double theta, double phi, size_t nthreads,
+  const py::object &mmax_in_, const py::object &mmax_out_, py::object &alm_out__)
   {
-  auto a1 = to_cmav<complex<T>,1>(alm_, "alm");
-  auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
-  auto a2 = to_vmav<complex<T>,1>(alm);
+  size_t mmax_in  = mmax_in_.is_none()  ? lmax : mmax_in_.cast<size_t>();
+  size_t mmax_out = mmax_out_.is_none() ? lmax : mmax_out_.cast<size_t>();
+  Alm_Base base_in(lmax,mmax_in);
+  auto alm_in = to_cmav<complex<T>,1>(alm_in_, "alm");
+  MR_assert(alm_in.shape(0)==base_in.n_entries(),
+    "alm: array size doesn't match lmax, mmax_in.");
+  Alm_Base base_out(lmax,mmax_out);
+  auto alm_out_ = get_optional_Pyarr<complex<T>>(alm_out__, {base_out.n_entries()}, "out");
+  auto alm_out = to_vmav<complex<T>,1>(alm_out_, "out");
   {
   py::gil_scoped_release release;
-  for (size_t i=0; i<a1.shape(0); ++i) a2(i)=a1(i);
+  // if the output is a full a_lm set, we can do the rotation directly in there
+  bool work_in_output = mmax_out==lmax;
   Alm_Base base(lmax,lmax);
-  rotate_alm(base, a2, psi, theta, phi, nthreads);
+  auto alm = work_in_output ? alm_out : vmav<complex<T>,1>({base.n_entries()}, UNINITIALIZED);
+  // copy input to work array (and fill up with zeros), if necessary
+  if (alm_in.data()!=alm.data())
+    {
+    for (size_t m=0; m<=mmax_in; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm(base.index(l,m)) = alm_in(base_in.index(l,m));
+    for (size_t m=mmax_in+1; m<=lmax; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm(base.index(l,m)) = 0;
+    }
+  rotate_alm(base, alm, psi, theta, phi, nthreads);
+  // copy relevant parts of the work array to output if necessary
+  if (!work_in_output)
+    for (size_t m=0; m<=mmax_out; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm_out(base_out.index(l,m)) = alm(base.index(l,m));
   }
-  return alm;
+  return alm_out_;
   }
-py::array Py_rotate_alm(const py::array &alm, size_t lmax,
-  double psi, double theta, double phi, size_t nthreads)
+py::array Py_rotate_alm(const py::array &alm_in, size_t lmax,
+  double psi, double theta, double phi, size_t nthreads,
+  const py::object &mmax_in, const py::object &mmax_out, py::object &alm_out)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_rotate_alm<float>(alm, lmax, psi, theta, phi, nthreads);
-  if (isPyarr<complex<double>>(alm))
-    return Py2_rotate_alm<double>(alm, lmax, psi, theta, phi, nthreads);
+  if (isPyarr<complex<float>>(alm_in))
+    return Py2_rotate_alm<float>(alm_in, lmax, psi, theta, phi, nthreads, mmax_in, mmax_out, alm_out);
+  if (isPyarr<complex<double>>(alm_in))
+    return Py2_rotate_alm<double>(alm_in, lmax, psi, theta, phi, nthreads, mmax_in, mmax_out, alm_out);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
 
@@ -1185,9 +1210,10 @@ Rotates a set of spherical harmonic coefficients according to the given Euler an
 
 Parameters
 ----------
-alm: numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
+alm: numpy.ndarray((ncoeff_in,), dtype=numpy complex64 or numpy.complex128)
     the spherical harmonic coefficients, in the order
-    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, lmax)
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, mmax_in)
+    ncoeff_in = ((mmax_in+1)*(mmax_in+2))//2 + (mmax_in+1)*(lmax-mmax_in)
 lmax : int >= 0
     Maximum multipole order l of the data set.
 psi : float
@@ -1201,10 +1227,24 @@ phi : float
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mmax_in : None or int >= 0, <= lmax
+    The maximum m order in the input
+    Coefficients with higher m are assumed to be zero. 
+    If not provided, this is set to lmax.
+mmax_out : None or int >= 0, <= lmax
+    The maximum m order in the output
+    Coefficients with higher m are not provided in the output. 
+    If not provided, this is set to lmax.
+out : None or numpy.ndarray((ncoeff_out,), same dtype as `alm`)
+    ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
 
 Returns
 -------
-numpy.ndarray(same shape and dtype as alm)
+numpy.ndarray((ncoeff_out,), same dtype as `alm`)
+    The rotated a_lm cofficients, in the order
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, mmax_out)
+    Identical to `out`, if it was provided
+    ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
 )""";
 
 constexpr const char *alm2leg_DS = R"""(
@@ -2323,7 +2363,7 @@ void add_sht(py::module_ &msup)
   add_pythonfuncs(m2);
 
   m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
-    "phi"_a, "nthreads"_a=1);
+    "phi"_a, "nthreads"_a=1, py::kw_only(), "mmax_in"_a=None, "mmax_out"_a=None, "out"_a=None);
 
   py::class_<Py_sharpjob<double>> (m, "sharpjob_d", py::module_local(),sharpjob_d_DS)
     .def(py::init<>())
