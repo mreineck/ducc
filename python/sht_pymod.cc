@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2017-2023 Max-Planck-Society
+ *  Copyright (C) 2017-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -1237,6 +1237,8 @@ mmax_out : None or int >= 0, <= lmax
     If not provided, this is set to lmax.
 out : None or numpy.ndarray((ncoeff_out,), same dtype as `alm`)
     ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
+    `out` must not overlap with `alm`, or it must be identical to `alm`
+    (in which case `mmax_in` must be he same as `mmax_out`).
 
 Returns
 -------

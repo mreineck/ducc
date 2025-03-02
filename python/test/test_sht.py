@@ -202,10 +202,18 @@ def test_rotation(lmax, nthreads):
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     assert_allclose(ducc0.misc.l2error(alm,alm2), 0, atol=1e-12)
+    alm3 = alm.copy()
+    alm3 = ducc0.sht.rotate_alm(alm3, lmax, phi, theta, psi, nthreads, out=alm3)
+    alm3 = ducc0.sht.rotate_alm(alm3, lmax, -psi, -theta, -phi, nthreads, out=alm3)
+    assert_allclose(ducc0.misc.l2error(alm,alm3), 0, atol=1e-12)
     alm = alm.astype(np.complex64)
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     assert_allclose(ducc0.misc.l2error(alm,alm2), 0, atol=1e-6)
+    alm3 = alm.copy()
+    alm3 = ducc0.sht.rotate_alm(alm3, lmax, phi, theta, psi, nthreads, out=alm3)
+    alm3 = ducc0.sht.rotate_alm(alm3, lmax, -psi, -theta, -phi, nthreads, out=alm3)
+    assert_allclose(ducc0.misc.l2error(alm,alm3), 0, atol=1e-6)
 
 
 @pmp('spin', (0, 2))
