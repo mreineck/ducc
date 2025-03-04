@@ -41,6 +41,9 @@ using stride_t=fmav_info::stride_t;
 
 namespace py = pybind11;
 
+using NpArr = py::array;
+template<typename T> using NpArrT = py::array_t<T>;
+
 static inline string makeSpec(const string &name)
   { return (name=="") ? "" : name+": "; }
 
@@ -51,20 +54,20 @@ py::object normalizeDtype(const py::object &dtype)
   }
 
 bool isPyarr(const py::object &obj)
-  { return py::isinstance<py::array>(obj); }
+  { return py::isinstance<NpArr>(obj); }
 
 template<typename T> bool isPyarr(const py::object &obj)
-  { return py::isinstance<py::array_t<T>>(obj); }
+  { return py::isinstance<NpArrT<T>>(obj); }
 
-template<typename T> py::array_t<T> toPyarr(const py::object &obj,
+template<typename T> NpArrT<T> toPyarr(const py::object &obj,
   const string &spec="")
   {
-  auto tmp = obj.cast<py::array_t<T>>();
+  auto tmp = obj.cast<NpArrT<T>>();
   MR_assert(tmp.is(obj), spec, "error during array conversion");
   return tmp;
   }
 
-shape_t copy_shape(const py::array &arr, const string &/*spec*/="")
+shape_t copy_shape(const NpArr &arr, const string &/*spec*/="")
   {
   shape_t res(size_t(arr.ndim()));
   for (size_t i=0; i<res.size(); ++i)
@@ -72,7 +75,7 @@ shape_t copy_shape(const py::array &arr, const string &/*spec*/="")
   return res;
   }
 
-template<typename T> stride_t copy_strides(const py::array &arr, bool rw,
+template<typename T> stride_t copy_strides(const NpArr &arr, bool rw,
   const string &spec="")
   {
   stride_t res(size_t(arr.ndim()));
@@ -89,7 +92,7 @@ template<typename T> stride_t copy_strides(const py::array &arr, bool rw,
   }
 
 template<size_t ndim>
-  std::array<size_t, ndim> copy_fixshape(const py::array &arr,
+  std::array<size_t, ndim> copy_fixshape(const NpArr &arr,
   const string &spec="")
   {
   MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
@@ -100,7 +103,7 @@ template<size_t ndim>
   }
 
 template<typename T, size_t ndim>
-  std::array<ptrdiff_t, ndim> copy_fixstrides(const py::array &arr, bool rw,
+  std::array<ptrdiff_t, ndim> copy_fixstrides(const NpArr &arr, bool rw,
   const string &spec="")
   {
   MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
@@ -134,7 +137,7 @@ template<typename T> vfmav<T> to_vfmav(const py::object &obj,
     copy_shape(arr, spec), copy_strides<T>(arr, true, spec));
   }
 
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj,
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const NpArr &obj,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -142,7 +145,7 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::array &obj,
   return cmav<T,ndim>(reinterpret_cast<const T *>(arr.data()),
     copy_fixshape<ndim>(arr, spec), copy_fixstrides<T,ndim>(arr, false, spec));
   }
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const py::array &obj,
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const NpArr &obj,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -157,7 +160,7 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dim
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return cmav<T,ndim>(tmp.data(), newshape, newstride);
   }
-template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim,
+template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const NpArr &obj, size_t ndim,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -172,7 +175,7 @@ template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const py
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return cfmav<T>(tmp.data(), newshape, newstride);
   }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj,
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const NpArr &obj,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -180,7 +183,7 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::array &obj,
   return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
     copy_fixshape<ndim>(arr, spec), copy_fixstrides<T,ndim>(arr, true, spec));
   }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::array &obj,
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const NpArr &obj,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -195,7 +198,7 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return vmav<T,ndim>(tmp.data(), newshape, newstride);
   }
-template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::array &obj, size_t ndim,
+template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const NpArr &obj, size_t ndim,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -222,40 +225,40 @@ template<typename T, size_t len> std::array<T,len> to_array(const py::object &ob
   return res;
   }
 
-template<typename T> void zero_Pyarr(py::array_t<T> &arr, size_t nthreads=1)
+template<typename T> void zero_Pyarr(NpArrT<T> &arr, size_t nthreads=1)
   {
   auto arr2 = to_vfmav<T>(arr);
   mav_apply([](T &v){ v=T(0); }, nthreads, arr2);
   }
 
-template<typename T> py::array_t<T> make_Pyarr(const shape_t &dims, bool zero=false)
+template<typename T> NpArrT<T> make_Pyarr(const shape_t &dims, bool zero=false)
   {
-  auto res=py::array_t<T>(dims);
+  auto res=NpArrT<T>(dims);
   if (zero) zero_Pyarr(res);
   return res;
   }
-template<typename T, size_t ndim> py::array_t<T> make_Pyarr
+template<typename T, size_t ndim> NpArrT<T> make_Pyarr
   (const std::array<size_t,ndim> &dims, bool zero=false)
   {
-  auto res=py::array_t<T>(shape_t(dims.begin(), dims.end()));
+  auto res=NpArrT<T>(shape_t(dims.begin(), dims.end()));
   if (zero) zero_Pyarr(res);
   return res;
   }
 
-template<typename T> py::array_t<T> make_noncritical_Pyarr(const shape_t &shape)
+template<typename T> NpArrT<T> make_noncritical_Pyarr(const shape_t &shape)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
   auto shape2 = noncritical_shape(shape, sizeof(T));
-  py::array_t<T> tarr(shape2);
+  NpArrT<T> tarr(shape2);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array_t<T> sub(tarr[py::tuple(slices)]);
+  NpArrT<T> sub(tarr[py::tuple(slices)]);
   return sub;
   }
 
-template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims,
+template<typename T> NpArrT<T> get_Pyarr(py::object &arr_, size_t ndims,
   const string &name="")
   {
   const auto spec = makeSpec(name);
@@ -265,7 +268,7 @@ template<typename T> py::array_t<T> get_Pyarr(py::object &arr_, size_t ndims,
   return tmp;
   }
 
-template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
+template<typename T> NpArrT<T> get_optional_Pyarr(py::object &arr_,
   const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(dims, false);
@@ -278,7 +281,7 @@ template<typename T> py::array_t<T> get_optional_Pyarr(py::object &arr_,
   return tmp;
   }
 
-template<typename T> py::array_t<T> get_optional_Pyarr_minshape
+template<typename T> NpArrT<T> get_optional_Pyarr_minshape
   (py::object &arr_, const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(dims);
@@ -291,10 +294,10 @@ template<typename T> py::array_t<T> get_optional_Pyarr_minshape
   return tmp;
   }
 
-template<typename T> py::array_t<T> get_optional_const_Pyarr(
+template<typename T> NpArrT<T> get_optional_const_Pyarr(
   const py::object &arr_, const shape_t &dims, const string &name="")
   {
-  if (arr_.is_none()) return py::array_t<T>(shape_t(dims.size(), 0));
+  if (arr_.is_none()) return NpArrT<T>(shape_t(dims.size(), 0));
   const auto spec = makeSpec(name);
   MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
   auto tmp = toPyarr<T>(arr_, spec);
@@ -311,6 +314,8 @@ template<typename T> bool isDtype(const py::object &dtype)
 
 }
 
+using detail_pybind::NpArr;
+using detail_pybind::NpArrT;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;
