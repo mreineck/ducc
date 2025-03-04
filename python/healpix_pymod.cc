@@ -23,12 +23,10 @@
  */
 
 /*
- *  Copyright (C) 2017-2022 Max-Planck-Society
+ *  Copyright (C) 2017-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -44,8 +42,6 @@ namespace ducc0 {
 namespace detail_pymodule_healpix {
 
 using namespace std;
-
-namespace py = pybind11;
 
 using shape_t = fmav_info::shape_t;
 
@@ -542,7 +538,7 @@ The employed algorithm is highly accurate, even for angles close to 0 or pi.
 
 void add_healpix(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("healpix");
   m.doc() = healpix_DS;
 

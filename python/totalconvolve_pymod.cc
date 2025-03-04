@@ -19,8 +19,6 @@
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/sht/totalconvolve.h"
 
@@ -30,7 +28,6 @@ namespace detail_pymodule_totalconvolve {
 
 using namespace std;
 
-namespace py = pybind11;
 auto None = py::none();
 
 template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
@@ -791,7 +788,7 @@ Notes
 
 void add_totalconvolve(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("totalconvolve");
 
   m.doc() = totalconvolve_DS;

@@ -1,7 +1,7 @@
 /*
 This file is part of pocketfft.
 
-Copyright (C) 2010-2023 Max-Planck-Society
+Copyright (C) 2010-2025 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -36,9 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Python interface.
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
 #include <complex>
 
 #include "ducc0/fft/fft.h"
@@ -55,8 +52,6 @@ namespace {
 using shape_t = ducc0::fmav_info::shape_t;
 using std::size_t;
 using std::ptrdiff_t;
-
-namespace py = pybind11;
 
 // Only instantiate long double transforms if they offer more precision
 using ldbl_t = typename std::conditional<
@@ -947,7 +942,7 @@ out : int
 
 void add_fft(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("fft");
   m.doc() = fft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,

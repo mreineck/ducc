@@ -25,8 +25,6 @@
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include <vector>
 #include <complex>
 
@@ -42,8 +40,6 @@ namespace ducc0 {
 namespace detail_pymodule_sht {
 
 using namespace std;
-
-namespace py = pybind11;
 
 auto None = py::none();
 
@@ -2334,7 +2330,7 @@ lmax : int>=0
 
 void add_pythonfuncs(py::module_ &m)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
 
   m.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
@@ -2372,7 +2368,7 @@ void add_pythonfuncs(py::module_ &m)
 
 void add_sht(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");

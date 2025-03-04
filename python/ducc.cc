@@ -12,7 +12,6 @@
 #include "ducc0/healpix/healpix_base.cc"
 #include "ducc0/wgridder/wgridder.cc"
 
-#include <pybind11/pybind11.h>
 #include "python/sht_pymod.cc"
 #include "python/fft_pymod.cc"
 #include "python/totalconvolve_pymod.cc"

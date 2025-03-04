@@ -25,10 +25,6 @@
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
-#include <pybind11/functional.h>
 #include <vector>
 #include <cmath>
 #include <complex>
@@ -46,7 +42,6 @@ namespace ducc0 {
 namespace detail_pymodule_misc {
 
 using namespace std;
-namespace py = pybind11;
 auto None = py::none();
 
 constexpr const char *Py_vdot_DS = R"""(
@@ -1771,7 +1766,7 @@ to adjust your code at some point in the future!
 
 void add_misc(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 

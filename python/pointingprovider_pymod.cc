@@ -15,12 +15,10 @@
  */
 
 /*
- *  Copyright (C) 2020-2024 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include "ducc0/infra/threading.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/math/quaternion.h"
@@ -33,8 +31,6 @@ using namespace std;
 
 // the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
-
-namespace py = pybind11;
 
 template<typename T> class PointingProvider
   {
@@ -301,7 +297,7 @@ numpy.ndarray((nval, 4), same dtype as `out`) : the output quaternions
 
 void add_pointingprovider(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("pointingprovider");
   m.doc() = pointingprovider_DS;
 

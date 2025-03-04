@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020-2023 Max-Planck-Society
+/* Copyright (C) 2020-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 
@@ -27,6 +27,8 @@
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+#include <pybind11/functional.h>
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/mav.h"
@@ -34,12 +36,12 @@
 
 namespace ducc0 {
 
+namespace py = pybind11;
+
 namespace detail_pybind {
 
 using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
-
-namespace py = pybind11;
 
 using NpArr = py::array;
 template<typename T> using NpArrT = py::array_t<T>;

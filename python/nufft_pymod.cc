@@ -17,9 +17,6 @@
 /* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/nufft/nufft.h"
 
@@ -28,8 +25,6 @@ namespace ducc0 {
 namespace detail_pymodule_nufft {
 
 using namespace std;
-
-namespace py = pybind11;
 
 auto None = py::none();
 
@@ -991,7 +986,7 @@ numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
 
 void add_nufft(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("nufft");
   auto m2 = m.def_submodule("experimental");
 
