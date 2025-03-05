@@ -65,7 +65,7 @@ Notes
 The accumulation is performed in long double precision for good accuracy.
 )""";
 
-template<typename T1, typename T2> py::object Py3_vdot(const py::object &a_, const py::object &b_)
+template<typename T1, typename T2> py::object Py3_vdot(const NpArr &a_, const NpArr &b_)
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<T2>(b_);
@@ -81,7 +81,7 @@ template<typename T1, typename T2> py::object Py3_vdot(const py::object &a_, con
   }
   return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
   }
-template<typename T1> py::object Py2_vdot(const py::object &a, const py::object &b)
+template<typename T1> py::object Py2_vdot(const NpArr &a, const NpArr &b)
   {
   if (isPyarr<float>(b))
     return Py3_vdot<T1,float>(a,b);
@@ -97,15 +97,8 @@ template<typename T1> py::object Py2_vdot(const py::object &a, const py::object 
 //    return Py3_vdot<T1,complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
-py::object Py_vdot(const py::object &a, const py::object &b)
+py::object Py_vdot(const NpArr &a, const NpArr &b)
   {
-  if ((!isPyarr(a)) || (toArr(a).ndim()==0)) // scalars
-    {
-    auto xa = dcScalar(a),
-         xb = dcScalar(b);
-    auto res = conj(xa)*xb;
-    return (res.imag()==0) ? py::cast(res.real()) : py::cast(res);
-    }
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
   if (isPyarr<double>(a))
@@ -399,7 +392,7 @@ Notes
 -----
 The accumulations are performed in long double precision for good accuracy.
 )""";
-template<typename T1, typename T2> double Py3_l2error(const py::object &a_, const py::object &b_)
+template<typename T1, typename T2> double Py3_l2error(const NpArr &a_, const NpArr &b_)
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<T2>(b_);
@@ -419,7 +412,7 @@ template<typename T1, typename T2> double Py3_l2error(const py::object &a_, cons
   if (maxval==Tacc(0)) return 0.;
   return double(sqrt(acc3/maxval));
   }
-template<typename T1> double Py2_l2error(const py::object &a, const py::object &b)
+template<typename T1> double Py2_l2error(const NpArr &a, const NpArr &b)
   {
   if (isPyarr<float>(b))
     return Py3_l2error<float,T1>(b,a);
@@ -435,15 +428,8 @@ template<typename T1> double Py2_l2error(const py::object &a, const py::object &
 //    return Py3_l2error<T1,complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
-double Py_l2error(const py::object &a, const py::object &b)
+double Py_l2error(const NpArr &a, const NpArr &b)
   {
-  if ((!isPyarr(a)) || (toArr(a).ndim()==0)) // scalars
-    {
-    auto xa = castFromPython<complex<long double>>(a),
-         xb = castFromPython<complex<long double>>(b);
-    auto res = abs(xa-xb)/max(abs(xa), abs(xb));
-    return double(res);
-    }
   if (isPyarr<float>(a))
     return Py2_l2error<float>(a,b);
   if (isPyarr<double>(a))
@@ -457,6 +443,11 @@ double Py_l2error(const py::object &a, const py::object &b)
 //  if (isPyarr<complex<long double>>(a))
 //    return Py2_l2error<complex<long double>>(a,b);
   MR_fail("type matching failed");
+  }
+double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
+  {
+  auto res = abs(a-b)/max(abs(a), abs(b));
+  return double(res);
   }
 
 NpArr Py_GL_weights(size_t nlat, size_t nlon)
@@ -1508,7 +1499,7 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 )""";
 
 
-py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
+py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
   size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
   auto res_ = make_Pyarr<double>({ncoef});
@@ -1774,6 +1765,7 @@ void add_misc(py::module_ &msup)
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
+  m.def("l2error",  Py_l2error_scalar, Py_l2error_DS, "a"_a, "b"_a);
 
   m2.def("mul_conj", Py_mul_conj, Py_mul_conj_DS, "a"_a, "b"_a, "out"_a=None);
   m2.def("div_conj", Py_div_conj, Py_div_conj_DS, "a"_a, "b"_a, "out"_a=None);
