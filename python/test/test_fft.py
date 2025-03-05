@@ -105,8 +105,8 @@ on_arm = ("arm" in platform.machine().lower())
 on_ppc64le = ("ppc64le" in platform.machine().lower())
 true_long_double = (np.longdouble != np.float64 and not (on_windows or on_arm or on_ppc64le))
 dtypes = [np.float32, np.float64]
-#if true_long_double:
-#    dtypes += [np.longdouble]
+if true_long_double:
+    dtypes += [np.longdouble]
 
 
 @pmp("len", len1D)

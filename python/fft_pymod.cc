@@ -92,23 +92,13 @@ shape_t makeaxes(const CNpArr &in, const std::optional<std::vector<ptrdiff_t>> &
   return shape_t(tmp.begin(), tmp.end());
   }
 
-#ifdef DUCC0_USE_NANOBIND
 #define DISPATCH(arr, T1, T2, T3, func, args) \
   { \
-  if (arr.dtype()==py::dtype<T1>()) return func<double> args; \
-  if (arr.dtype()==py::dtype<T2>()) return func<float> args;  \
-  if (arr.dtype()==py::dtype<T3>()) return func<ldbl_t> args; \
+  if (isPyarr<T1>(arr)) return func<double> args; \
+  if (isPyarr<T2>(arr)) return func<float> args;  \
+  if (isPyarr<T3>(arr)) return func<ldbl_t> args; \
   throw std::runtime_error("unsupported data type"); \
   }
-#else
-#define DISPATCH(arr, T1, T2, T3, func, args) \
-  { \
-  if (py::isinstance<py::array_t<T1>>(arr)) return func<double> args; \
-  if (py::isinstance<py::array_t<T2>>(arr)) return func<float> args;  \
-  if (py::isinstance<py::array_t<T3>>(arr)) return func<ldbl_t> args; \
-  throw std::runtime_error("unsupported data type"); \
-  }
-#endif
 
 template<typename T> T norm_fct(int inorm, size_t N)
   {
@@ -173,13 +163,7 @@ template<typename T> NpArr c2c_sym_internal(const CNpArr &in,
 NpArr c2c(const CNpArr &a, const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward,
   int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
-#ifdef DUCC0_USE_NANOBIND
-  if ((a.dtype() == py::dtype<c64>())
-      ||(a.dtype() == py::dtype<c128>())
-      ||(a.dtype() == py::dtype<clong>()))
-#else
-  if (a.dtype().kind() == 'c')
-#endif
+  if (isPyarr<c64>(a)||isPyarr<c128>(a)||isPyarr<clong>(a))
     DISPATCH(a, c128, c64, clong, c2c_internal, (a, axes_, forward,
              inorm, out_, nthreads))
 
@@ -485,11 +469,7 @@ template<typename T> NpArr convolve_axis_internal_c(const CNpArr &in_,
 NpArr convolve_axis(const CNpArr &in, NpArr &out, size_t axis,
   const CNpArr &kernel, size_t nthreads)
   {
-#ifdef DUCC0_USE_NANOBIND
-  if (in.dtype() == py::dtype<c128>() || in.dtype() == py::dtype<c64>() || in.dtype() == py::dtype<clong>())
-#else
-  if (in.dtype().kind() == 'c')
-#endif
+  if (isPyarr<c64>(in)||isPyarr<c128>(in)||isPyarr<clong>(in))
     DISPATCH(in, c128, c64, clong, convolve_axis_internal_c, (in, out, axis,
       kernel, nthreads))
   else

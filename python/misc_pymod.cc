@@ -425,8 +425,10 @@ template<typename T1> double Py2_l2error(const CNpArr &a, const CNpArr &b)
     return Py3_l2error<T1,complex<float>>(a,b);
   if (isPyarr<complex<double>>(b))
     return Py3_l2error<T1,complex<double>>(a,b);
-//  if (isPyarr<complex<long double>>(b))
-//    return Py3_l2error<T1,complex<long double>>(a,b);
+#ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<complex<long double>>(b))
+    return Py3_l2error<T1,complex<long double>>(a,b);
+#endif
   MR_fail("type matching failed");
   }
 double Py_l2error(const CNpArr &a, const CNpArr &b)
@@ -441,8 +443,10 @@ double Py_l2error(const CNpArr &a, const CNpArr &b)
     return Py2_l2error<complex<float>>(a,b);
   if (isPyarr<complex<double>>(a))
     return Py2_l2error<complex<double>>(a,b);
-//  if (isPyarr<complex<long double>>(a))
-//    return Py2_l2error<complex<long double>>(a,b);
+#ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<complex<long double>>(a))
+    return Py2_l2error<complex<long double>>(a,b);
+#endif
   MR_fail("type matching failed");
   }
 double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
@@ -555,11 +559,14 @@ NpArr Py_make_noncritical(const CNpArr &in)
     return Py2_make_noncritical<complex<float>>(in);
   if (isPyarr<complex<double>>(in))
     return Py2_make_noncritical<complex<double>>(in);
-//  if (isPyarr<complex<long double>>(in))
-//    return Py2_make_noncritical<complex<long double>>(in);
+#ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<complex<long double>>(in))
+    return Py2_make_noncritical<complex<long double>>(in);
+#endif
   MR_fail("unsupported datatype");
   }
 
+#ifndef DUCC0_USE_NANOBIND
 constexpr const char *Py_empty_noncritical_DS = R"""(
 Creates an uninitialized array of the requested shape and data type,
 with a memory layout that avoids critical strides.
@@ -587,24 +594,25 @@ Returns
 numpy.ndarray (shape, dtype=dtype)
     An uninitialized numpy array with the requested properties
 )""";
-//NpArr Py_empty_noncritical(const vector<size_t> &shape,
-  //const py::object &dtype_)
-  //{
-  //auto dtype = normalizeDtype(dtype_);
-  //if (isDtype<float>(dtype))
-    //return toArr(make_noncritical_Pyarr<float>(shape));
-  //if (isDtype<double>(dtype))
-    //return toArr(make_noncritical_Pyarr<double>(shape));
-  //if (isDtype<long double>(dtype))
-    //return toArr(make_noncritical_Pyarr<long double>(shape));
-  //if (isDtype<complex<float>>(dtype))
-    //return toArr(make_noncritical_Pyarr<complex<float>>(shape));
-  //if (isDtype<complex<double>>(dtype))
-    //return toArr(make_noncritical_Pyarr<complex<double>>(shape));
-////  if (isDtype<complex<long double>>(dtype))
-////    return toArr(make_noncritical_Pyarr<complex<long double>>(shape));
-  //MR_fail("unsupported datatype");
-  //}
+NpArr Py_empty_noncritical(const vector<size_t> &shape,
+  const py::object &dtype_)
+  {
+  auto dtype = normalizeDtype(dtype_);
+    if (isDtype<float>(dtype))
+  return make_noncritical_Pyarr<float>(shape);
+  if (isDtype<double>(dtype))
+    return make_noncritical_Pyarr<double>(shape);
+  if (isDtype<long double>(dtype))
+    return make_noncritical_Pyarr<long double>(shape);
+  if (isDtype<complex<float>>(dtype))
+    return make_noncritical_Pyarr<complex<float>>(shape);
+  if (isDtype<complex<double>>(dtype))
+    return make_noncritical_Pyarr<complex<double>>(shape);
+  if (isDtype<complex<long double>>(dtype))
+    return make_noncritical_Pyarr<complex<long double>>(shape);
+  MR_fail("unsupported datatype");
+  }
+#endif
 
 /*! A numeric filter which produces noise with the power spectrum
 
@@ -1782,7 +1790,9 @@ void add_misc(py::module_ &msup)
   m.def("transpose", Py_transpose, "in"_a, "out"_a, "nthreads"_a=1);
 
   m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
-//  m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);
+#ifndef DUCC0_USE_NANOBIND
+  m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);
+#endif
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
