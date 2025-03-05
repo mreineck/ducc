@@ -65,7 +65,7 @@ Notes
 The accumulation is performed in long double precision for good accuracy.
 )""";
 
-template<typename T1, typename T2> py::object Py3_vdot(const NpArr &a_, const NpArr &b_)
+template<typename T1, typename T2> variant<double,complex<double>> Py3_vdot(const CNpArr &a_, const CNpArr &b_)
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<T2>(b_);
@@ -79,9 +79,10 @@ template<typename T1, typename T2> py::object Py3_vdot(const NpArr &a_, const Np
     acc += conj(cv1) * cv2;
     }, 1, a, b);
   }
-  return (acc.imag()==0) ? py::cast(acc.real()) : py::cast(acc);
+  return (acc.imag()==0) ? variant<double,complex<double>>(double(acc.real()))
+                         : variant<double,complex<double>>(complex<double>(acc));
   }
-template<typename T1> py::object Py2_vdot(const NpArr &a, const NpArr &b)
+template<typename T1> variant<double,complex<double>> Py2_vdot(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(b))
     return Py3_vdot<T1,float>(a,b);
@@ -97,7 +98,7 @@ template<typename T1> py::object Py2_vdot(const NpArr &a, const NpArr &b)
 //    return Py3_vdot<T1,complex<long double>>(a,b);
   MR_fail("type matching failed");
   }
-py::object Py_vdot(const NpArr &a, const NpArr &b)
+variant<double,complex<double>> Py_vdot(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
@@ -237,8 +238,8 @@ Returns
 float :
     Output value
 )""";
-template<typename T> py::object Py2_LogUnnormalizedGaussProbability
-  (const NpArr &a_, const NpArr &b_, const NpArr &c_, size_t /*nthreads*/)
+template<typename T> double Py2_LogUnnormalizedGaussProbability
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<complex<T>>(a_);
   const auto b = to_cfmav<complex<T>>(b_);
@@ -251,10 +252,10 @@ template<typename T> py::object Py2_LogUnnormalizedGaussProbability
     res += norm(v1-v2)*v3;
     }, 1, a, b, c);
   }
-  return py::cast(0.5*res);
+  return 0.5*res;
   }
-template<typename T> py::object Py3_LogUnnormalizedGaussProbability
-  (const NpArr &a_, const NpArr &b_, const NpArr &c_, size_t /*nthreads*/)
+template<typename T> double Py3_LogUnnormalizedGaussProbability
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<T>(a_);
   const auto b = to_cfmav<T>(b_);
@@ -268,11 +269,11 @@ template<typename T> py::object Py3_LogUnnormalizedGaussProbability
     res += diff*diff*v3;
     }, 1, a, b, c);
   }
-  return py::cast(0.5*res);
+  return 0.5*res;
   }
 
-py::object Py_LogUnnormalizedGaussProbability(const NpArr &a, const NpArr &b,
-  const NpArr &c, size_t nthreads)
+double Py_LogUnnormalizedGaussProbability(const CNpArr &a, const CNpArr &b,
+  const CNpArr &c, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
     return Py2_LogUnnormalizedGaussProbability<float>(a,b,c,nthreads);
@@ -310,7 +311,7 @@ list of float and numpy.ndarray :
     `a`.
 )""";
 template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
-  (const NpArr &a_, const NpArr &b_, const NpArr &c_, optional<NpArr> &out__, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, optional<NpArr> &out__, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<complex<T>>(a_);
   const auto b = to_cfmav<complex<T>>(b_);
@@ -333,7 +334,7 @@ template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
   return lst;
   }
 template<typename T> py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
-  (const NpArr &a_, const NpArr &b_, const NpArr &c_, optional<NpArr> &out__, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, optional<NpArr> &out__, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<T>(a_);
   const auto b = to_cfmav<T>(b_);
@@ -356,8 +357,8 @@ template<typename T> py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
   return lst;
   }
 
-py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const NpArr &a, const NpArr &b,
-  const NpArr &c, optional<NpArr> &out, size_t nthreads)
+py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
+  const CNpArr &c, optional<NpArr> &out, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
     return Py2_LogUnnormalizedGaussProbabilityWithDeriv<float>(a,b,c,out,nthreads);
@@ -932,7 +933,7 @@ double get_max_kernel_error(const function<vector<double>(const vector<double> &
   return err;
   }
 
-py::object scan_kernel(const function<vector<double>(const vector<double> &,
+py::tuple scan_kernel(const function<vector<double>(const vector<double> &,
   const vector<double> &)> &func, const vector<double> &par_min,
   const vector<double> &par_max,
   size_t W, size_t M, size_t N, double x0,
@@ -987,7 +988,7 @@ py::object scan_kernel(const function<vector<double>(const vector<double> &,
   for (const auto &p: par_best) parlist.append(p);
   res.append(err_best);
   res.append(parlist);
-  return res;
+  return py::tuple(res);
   }
 
 template<typename To> void fill_zero(

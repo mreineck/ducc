@@ -26,6 +26,7 @@
 #include <array>
 #include <vector>
 #include <optional>
+#include <variant>
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -33,6 +34,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 #else
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -59,18 +61,15 @@ using stride_t=fmav_info::stride_t;
 
 #ifdef DUCC0_USE_NANOBIND
 using NpArr = py::ndarray<py::numpy>;
-//using CNpArr = py::ndarray<py::numpy, py::ro>;
+using CNpArr = py::ndarray<py::numpy, py::ro>;
 template<typename T> using NpArrT = py::ndarray<py::numpy,T>;
 //template<typename T> using CNpArrT = py::ndarray<py::numpy,const T>;
 #else
 using NpArr = py::array;
-//using CNpArr = py::array;
+using CNpArr = py::array;
 template<typename T> using NpArrT = py::array_t<T>;
 //template<typename T> using CNpArrT = py::array_t<T>;
 #endif
-
-template<typename Tout> Tout castFromPython(const py::object &obj)
-  { return py::cast<Tout>(obj); }
 
 static inline string makeSpec(const string &name)
   { return (name=="") ? "" : name+": "; }
@@ -82,9 +81,13 @@ static inline string makeSpec(const string &name)
 //  return converter(dtype);
 //  }
 
-bool isPyarr(const py::object &obj)
-  { return py::isinstance<NpArr>(obj); }
+//bool isPyarr(const py::object &obj)
+//  { return py::isinstance<NpArr>(obj); }
 
+#ifdef DUCC0_USE_NANOBIND
+template<typename T> bool isPyarr(const CNpArr &obj)
+  { return obj.dtype()==py::dtype<T>(); }
+#endif
 template<typename T> bool isPyarr(const NpArr &obj)
 #ifdef DUCC0_USE_NANOBIND
   { return obj.dtype()==py::dtype<T>(); }
@@ -93,7 +96,7 @@ template<typename T> bool isPyarr(const NpArr &obj)
 #endif
 
 NpArr toArr(const py::object &obj)
-  { return castFromPython<NpArr>(obj); }
+  { return py::cast<NpArr>(obj); }
 
 shape_t copy_shape(const NpArr &arr, const string &/*spec*/="")
   {
@@ -104,6 +107,13 @@ shape_t copy_shape(const NpArr &arr, const string &/*spec*/="")
   }
 
 #ifdef DUCC0_USE_NANOBIND
+shape_t copy_shape(const CNpArr &arr, const string &/*spec*/="")
+  {
+  shape_t res(size_t(arr.ndim()));
+  for (size_t i=0; i<res.size(); ++i)
+    res[i] = size_t(arr.shape(int(i)));
+  return res;
+  }
 template<typename T> stride_t copy_strides(const NpArr &arr, bool rw,
   const string &spec="")
   {
@@ -113,6 +123,17 @@ template<typename T> stride_t copy_strides(const NpArr &arr, bool rw,
     auto tmp = arr.stride(int(i));
     MR_assert((!rw) || (arr.shape(int(i))==1) || (tmp!=0),
       spec, "detected zero stride in writable array");
+    res[i] = tmp;
+    }
+  return res;
+  }
+template<typename T> stride_t copy_strides(const CNpArr &arr,
+  const string &/*spec*/="")
+  {
+  stride_t res(size_t(arr.ndim()));
+  for (size_t i=0; i<res.size(); ++i)
+    {
+    auto tmp = arr.stride(int(i));
     res[i] = tmp;
     }
   return res;
@@ -182,6 +203,17 @@ template<typename T, size_t ndim>
   }
 #endif
 
+#ifdef DUCC0_USE_NANOBIND
+template<typename T> cfmav<T> to_cfmav(const CNpArr &obj,
+  const string &name="")
+  {
+  const auto spec = makeSpec(name);
+  MR_assert(isPyarr<const T>(obj), "data type mismatch");
+//  auto arr = NpArrT<T>(obj);
+  return cfmav<T>(reinterpret_cast<const T *>(obj.data()),
+    copy_shape(obj, spec), copy_strides<T>(obj, spec));
+  }
+#endif
 template<typename T> cfmav<T> to_cfmav(const NpArr &obj,
   const string &name="")
   {
@@ -352,33 +384,27 @@ template<typename T, size_t ndim> NpArr make_Pyarr
   return res;
   }
 
-#ifdef DUCC0_USE_NANOBIND
 template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
   auto shape2 = noncritical_shape(shape, sizeof(T));
+#ifdef DUCC0_USE_NANOBIND
   auto *res = new vfmav<T>(shape2);
   py::capsule owner(res, [](void *p) noexcept {
        delete reinterpret_cast<vfmav<T> *>(p);
     });
   NpArrT<T> res_(res->data(), shape.size(), shape.data(), owner, res->stride().data());
   return NpArr(res_);
-  }
 #else
-template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape)
-  {
-  auto ndim = shape.size();
-  if (ndim==1) return make_Pyarr<T>(shape);
-  auto shape2 = noncritical_shape(shape, sizeof(T));
   NpArrT<T> tarr(shape2);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
   NpArrT<T> sub(tarr[py::tuple(slices)]);
   return NpArr(sub);
-  }
 #endif
+  }
 
 template<typename T> NpArr get_Pyarr(const NpArr &arr_, size_t ndims,
   const string &name="")
@@ -436,30 +462,10 @@ template<typename T> NpArr get_optional_const_Pyarr(
 //template<typename T> bool isDtype(const py::object &dtype)
 //  { return Dtype<T>().equal(dtype); }
 
-#ifdef DUCC0_USE_NANOBIND
-complex<double> dcScalar(const py::object &obj)
-  {
-  complex<double> res;
-  if (py::try_cast<complex<double>>(obj, res))
-    return res;
-  res = py::cast<double>(obj);
-  return res;
-  }
-#else
-complex<double> dcScalar(const py::object &obj)
-  {
-  try
-    {
-    return py::cast<complex<double>>(obj);
-    }
-  catch(...) {}
-  return py::cast<double>(obj);
-  }
-#endif
 }
 
 using detail_pybind::NpArr;
-using detail_pybind::castFromPython;
+using detail_pybind::CNpArr;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;
@@ -479,7 +485,6 @@ using detail_pybind::to_array;
 //using detail_pybind::normalizeDtype;
 //using detail_pybind::isDtype;
 //using detail_pybind::Dtype;
-using detail_pybind::dcScalar;
 
 }
 

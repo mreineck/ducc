@@ -681,7 +681,7 @@ NpArr Py_adjoint_synthesis(const NpArr &map, const NpArr &theta,
       phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode, theta_interpol);
   MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
   }
-template<typename T> py::object Py2_pseudo_analysis(optional<NpArr> &alm__,
+template<typename T> py::tuple Py2_pseudo_analysis(optional<NpArr> &alm__,
   size_t lmax, const optional<NpArr> &mstart_, ptrdiff_t lstride,
   const NpArr &map_, const NpArr &theta_, const NpArr &phi0_,
   const NpArr &nphi_, const NpArr &ringstart_, size_t spin,
@@ -742,9 +742,9 @@ template<typename T> py::object Py2_pseudo_analysis(optional<NpArr> &alm__,
     res.append(rnorm);
     res.append(sqnorm);
     }
-  return res;
+  return py::tuple(res);
   }
-py::object Py_pseudo_analysis(const NpArr &map, const NpArr &theta,
+py::tuple Py_pseudo_analysis(const NpArr &map, const NpArr &theta,
  size_t lmax,
   const optional<NpArr> &mstart,
   const NpArr &nphi,
