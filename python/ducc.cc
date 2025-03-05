@@ -23,7 +23,11 @@
 
 using namespace ducc0;
 
+#ifdef DUCC0_USE_NANOBIND
+NB_MODULE(PKGNAME, m)
+#else
 PYBIND11_MODULE(PKGNAME, m)
+#endif
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
 #define DUCC0_STRINGIFY(s) #s

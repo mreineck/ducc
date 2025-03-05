@@ -186,7 +186,7 @@ template<typename T> class Py_Interpolator
         conv.interpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
           ptheta, pphi, ppsi, subarray<1>(res2, {{i},{}}));
       }
-      return res;
+      return toArr(res);
       }
     NpArr Py_Interpol(const NpArr &ptg) const
       {
@@ -253,7 +253,7 @@ template<typename T> class Py_Interpolator
           conv.updateSlm(vslm, vblm, k, subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}}));
         }
       }
-      return res;
+      return toArr(res);
       }
   };
 
@@ -794,7 +794,7 @@ void add_totalconvolve(py::module_ &msup)
   m.doc() = totalconvolve_DS;
 
   using conv_d = Py_ConvolverPlan<double>;
-  py::class_<conv_d> (m, "ConvolverPlan", py::module_local(), Py_ConvolverPlan_DS)
+  py::class_<conv_d> (m, "ConvolverPlan", /*py::module_local(), */Py_ConvolverPlan_DS)
     .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_init_DS,
       "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
 // for backwards compatibility
@@ -816,7 +816,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("updateSlm", &conv_d::Py_updateSlm, Py_ConvolverPlan_updateSlm_DS,
       "slm"_a, "blm"_a, "mbeam"_a, "planes"_a);
   using conv_f = Py_ConvolverPlan<float>;
-  py::class_<conv_f> (m, "ConvolverPlan_f", py::module_local(), Py_ConvolverPlan_f_DS)
+  py::class_<conv_f> (m, "ConvolverPlan_f", /*py::module_local(), */Py_ConvolverPlan_f_DS)
     .def(py::init<size_t, size_t, size_t, double, double, double, size_t>(), Py_ConvolverPlan_f_init_DS,
       "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
 // for backwards compatibility
@@ -839,7 +839,7 @@ void add_totalconvolve(py::module_ &msup)
       "slm"_a, "blm"_a, "mbeam"_a, "planes"_a);
 
   using inter_d = Py_Interpolator<double>;
-  py::class_<inter_d> (m, "Interpolator", py::module_local(), Py_Interpolator_DS)
+  py::class_<inter_d> (m, "Interpolator", /*py::module_local(), */Py_Interpolator_DS)
     .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
@@ -854,7 +854,7 @@ void add_totalconvolve(py::module_ &msup)
     .def ("deinterpol", &inter_d::Py_deinterpol, deinterpol_DS, "ptg"_a, "data"_a)
     .def ("getSlm", &inter_d::Py_getSlm, getSlm_DS, "beam"_a);
   using inter_f = Py_Interpolator<float>;
-  py::class_<inter_f> (m, "Interpolator_f", py::module_local(), Py_Interpolator_DS)
+  py::class_<inter_f> (m, "Interpolator_f", /*py::module_local(), */Py_Interpolator_DS)
     .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,

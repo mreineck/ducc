@@ -32,21 +32,21 @@ vector<double> get_periodicity(const py::object &inp, size_t ndim)
   {
   try
     {
-    auto val = inp.cast<double>();
+    auto val = castFromPython<double>(inp);
     vector<double> res;
     for (size_t i=0; i<ndim; ++i) res.push_back(val);
     return res;
     }
   catch(...)
     {}
-  auto res = inp.cast<vector<double>>();
+  auto res = castFromPython<vector<double>>(inp);
   MR_assert(res.size()==ndim, "bad size of periodicity argument");
   return res;
   }
 
 template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const NpArr &grid_,
   const NpArr &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
+  optional<NpArr> &out__, size_t verbosity, double sigma_min, double sigma_max,
   const py::object &periodicity_, bool fft_order)
   {
   using Tpoints = Tgrid;
@@ -81,11 +81,11 @@ template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const NpArr &grid_,
       }
     }
   }
-  return out_;
+  return toArr(out_);
   }
 NpArr Py_u2nu(const NpArr &grid,
   const NpArr &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out, size_t verbosity, double sigma_min, double sigma_max,
+  optional<NpArr> &out, size_t verbosity, double sigma_min, double sigma_max,
   const py::object &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
@@ -172,7 +172,7 @@ NpArr Py_nu2u(const NpArr &points,
 
 template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const NpArr &points_in_,
   const NpArr &coord_in_, const NpArr &coord_out_, bool forward, double epsilon, size_t nthreads,
-  py::object &points_out__, size_t verbosity, double sigma_min, double sigma_max)
+  optional<NpArr> &points_out__, size_t verbosity, double sigma_min, double sigma_max)
   {
   using Tgrid = Tpoints;
   auto coord_in = to_cmav<Tcoord,2>(coord_in_, "coord_in");
@@ -195,13 +195,13 @@ template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const NpArr &points_
     for (size_t i=0; i<points_in.shape(0); ++i)
       nufft.exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
     }
-  return points_out_;
+  return toArr(points_out_);
   }
   }
 NpArr Py_nu2nu(const NpArr &points_in,
   const NpArr &coord_in, const NpArr &coord_out, bool forward,
   double epsilon, size_t nthreads,
-  py::object &points_out, size_t verbosity, double sigma_min, double sigma_max)
+  optional<NpArr> &points_out, size_t verbosity, double sigma_min, double sigma_max)
   {
   if (isPyarr<double>(coord_in))
     {
@@ -243,7 +243,7 @@ class Py_Nufftplan
       const py::object &periodicity_, bool fft_order_)
       {
       auto coord = to_cmav<T,2>(coord_, "coord");
-      auto shp = uniform_shape_.cast<vector<size_t>>();
+      auto shp = castFromPython<vector<size_t>>(uniform_shape_);
       auto periodicity = get_periodicity(periodicity_, coord.shape(1));
       {
       py::gil_scoped_release release;
@@ -254,7 +254,7 @@ class Py_Nufftplan
     template<typename T> NpArr do_nu2u(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const NpArr &points_,
-      py::object &uniform__) const
+      optional<NpArr> &uniform__) const
       {
       auto points = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_, "points");
       vector<size_t> uni_shape;
@@ -272,12 +272,12 @@ class Py_Nufftplan
         ptr->nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(uniform, slices));
         }
       }
-      return uniform_;
+      return toArr(uniform_);
       }
     template<typename T> NpArr do_u2nu(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const NpArr &uniform_,
-      py::object &points__) const
+      optional<NpArr> &points__) const
       {
       auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1, "grid");
       auto points_ = (size_t(uniform_.ndim())==uniform_shape.size())
@@ -293,7 +293,7 @@ class Py_Nufftplan
         ptr->u2nu(forward, verbosity, subarray(uniform, slices), subarray<1>(points,{{i},{}}));
         }
       }
-      return points_;
+      return toArr(points_);
       }
 
   public:
@@ -319,14 +319,14 @@ class Py_Nufftplan
       }
 
     NpArr nu2u(bool forward, size_t verbosity,
-      const NpArr &points_, py::object &uniform_)
+      const NpArr &points_, optional<NpArr> &uniform_)
       {
       if (pd) return do_nu2u(pd, forward, verbosity, points_, uniform_);
       if (pf) return do_nu2u(pf, forward, verbosity, points_, uniform_);
       MR_fail("unsupported");
       }
     NpArr u2nu(bool forward, size_t verbosity,
-      const NpArr &uniform_, py::object &points_)
+      const NpArr &uniform_, optional<NpArr> &points_)
       {
       if (pd) return do_u2nu(pd, forward, verbosity, uniform_, points_);
       if (pf) return do_u2nu(pf, forward, verbosity, uniform_, points_);
@@ -376,7 +376,7 @@ class Py_incremental_nu2u
     template<typename T> NpArr do_evaluate_and_reset(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
-      py::object &uniform__)
+      optional<NpArr> &uniform__)
       {
       auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, "uniform");
       auto uniform = to_vfmav<complex<T>>(uniform_, "uniform");
@@ -385,7 +385,7 @@ class Py_incremental_nu2u
       ptr->spread_finish(forward, grid, uniform);
       mav_apply([](auto &v){v=0;}, nthreads, grid);
       }
-      return uniform_;
+      return toArr(uniform_);
       }
 
   public:
@@ -416,7 +416,7 @@ class Py_incremental_nu2u
       if (pf) return do_add_points(pf, coord, values, gridf);
       MR_fail("unsupported");
       }
-    NpArr evaluate_and_reset(py::object &uniform)
+    NpArr evaluate_and_reset(optional<NpArr> &uniform)
       {
       if (pd) return do_evaluate_and_reset(pd, gridd, uniform);
       if (pf) return do_evaluate_and_reset(pf, gridf, uniform);
@@ -457,7 +457,7 @@ class Py_incremental_u2nu
       }
     template<typename T> NpArr do_get_points(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      const NpArr &coord_, py::object &values__,
+      const NpArr &coord_, optional<NpArr> &values__,
       const cfmav<complex<T>> &grid) const
       {
       auto coord = to_cmav<T,2>(coord_, "coord");
@@ -467,7 +467,7 @@ class Py_incremental_u2nu
       py::gil_scoped_release release;
       ptr->interp(coord, values, grid);
       }
-      return values_;
+      return toArr(values_);
       }
 
   public:
@@ -490,7 +490,7 @@ class Py_incremental_u2nu
                   sigma_min, sigma_max, periodicity, fft_order_);
       }
 
-    NpArr get_points(const NpArr &coord, py::object &values) const
+    NpArr get_points(const NpArr &coord, optional<NpArr> &values) const
       {
       if (pd) return do_get_points(pd, coord, values, gridd);
       if (pf) return do_get_points(pf, coord, values, gridf);
@@ -527,7 +527,7 @@ class Py_Nufft3plan
     template<typename T> NpArr do_exec(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
       bool forward, const NpArr &points_in_,
-      py::object &points_out__) const
+      optional<NpArr> &points_out__) const
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
@@ -539,12 +539,12 @@ class Py_Nufft3plan
       for (size_t i=0; i<points_in.shape(0); ++i)
         ptr->exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
-      return points_out_;
+      return toArr(points_out_);
       }
     template<typename T> NpArr do_exec_adjoint(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
       bool forward, const NpArr &points_in_,
-      py::object &points_out__) const
+      optional<NpArr> &points_out__) const
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
@@ -556,7 +556,7 @@ class Py_Nufft3plan
       for (size_t i=0; i<points_in.shape(0); ++i)
         ptr->exec_adjoint(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
-      return points_out_;
+      return toArr(points_out_);
       }
 
   public:
@@ -578,14 +578,14 @@ class Py_Nufft3plan
       }
 
     NpArr exec(bool forward,
-      const NpArr &points_in, py::object &points_out)
+      const NpArr &points_in, optional<NpArr> &points_out)
       {
       if (pd) return do_exec(pd, forward, points_in, points_out);
       if (pf) return do_exec(pf, forward, points_in, points_out);
       MR_fail("unsupported");
       }
     NpArr exec_adjoint(bool forward,
-      const NpArr &points_in, py::object &points_out)
+      const NpArr &points_in, optional<NpArr> &points_out)
       {
       if (pd) return do_exec_adjoint(pd, forward, points_in, points_out);
       if (pf) return do_exec_adjoint(pf, forward, points_in, points_out);
@@ -1004,7 +1004,7 @@ void add_nufft(py::module_ &msup)
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
         "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 
-  py::class_<Py_Nufftplan> (m, "plan", py::module_local(),
+  py::class_<Py_Nufftplan> (m, "plan", /*py::module_local(),*/
                             "Class for repeated execution of type 1/2 NUFFTs")
     .def(py::init<bool, const NpArr &, const py::object &,
                   double, size_t, double, double, const py::object &, bool>(),
@@ -1016,7 +1016,7 @@ void add_nufft(py::module_ &msup)
     .def("u2nu", &Py_Nufftplan::u2nu, plan_u2nu_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "grid"_a, "out"_a=None);
 
-  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local(),
+  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", /*py::module_local(),*/
                                    "Class for incremental execution of a type 1 NUFFT")
     .def(py::init<size_t, const py::object &, bool,
                   double, size_t, double, double, const py::object &, bool, bool>(),
@@ -1029,7 +1029,7 @@ void add_nufft(py::module_ &msup)
     .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset,
       incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
-  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local(),
+  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", /*py::module_local(),*/
                                    "Class for incremental execution of a type 2 NUFFT")
     .def(py::init<size_t, const NpArr &, bool,
                   double, size_t, double, double, const py::object &, bool>(),
@@ -1041,7 +1041,7 @@ void add_nufft(py::module_ &msup)
       incremental_u2nu_get_points_DS, py::kw_only(),
       "coord"_a, "points"_a=None);
 
-  py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local(),
+  py::class_<Py_Nufft3plan> (m2, "plan3", /*py::module_local(),*/
                              "Class for repeated execution of type 3 NUFFTs")
     .def(py::init<const NpArr &, const NpArr &,
                   double, size_t, double, double, size_t>(),

@@ -53,9 +53,13 @@ using shape_t = ducc0::fmav_info::shape_t;
 using std::size_t;
 using std::ptrdiff_t;
 
+#ifdef DUCC0_USE_NANOBIND
+using ldbl_t = double;
+#else
 // Only instantiate long double transforms if they offer more precision
 using ldbl_t = typename std::conditional<
   sizeof(long double)==sizeof(double), double, long double>::type;
+#endif
 
 using c64 = std::complex<float>;
 using c128 = std::complex<double>;
@@ -65,16 +69,16 @@ using f64 = double;
 using flong = ldbl_t;
 auto None = py::none();
 
-shape_t makeaxes(const NpArr &in, const py::object &axes)
+shape_t makeaxes(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes)
   {
-  if (axes.is_none())
+  if (!axes)
     {
     shape_t res(size_t(in.ndim()));
     for (size_t i=0; i<res.size(); ++i)
       res[i]=i;
     return res;
     }
-  auto tmp=axes.cast<std::vector<ptrdiff_t>>();
+  auto tmp=axes.value();
   auto ndim = in.ndim();
   if ((tmp.size()>size_t(ndim)) || (tmp.size()==0))
     throw std::runtime_error("bad axes argument");
@@ -82,19 +86,29 @@ shape_t makeaxes(const NpArr &in, const py::object &axes)
     {
     if (sz<0)
       sz += ndim;
-    if ((sz>=ndim) || (sz<0))
+    if ((sz>=int(ndim)) || (sz<0))
       throw std::invalid_argument("axes exceeds dimensionality of output");
     }
   return shape_t(tmp.begin(), tmp.end());
   }
 
+#ifdef DUCC0_USE_NANOBIND
 #define DISPATCH(arr, T1, T2, T3, func, args) \
   { \
-  if (py::isinstance<NpArrT<T1>>(arr)) return func<double> args; \
-  if (py::isinstance<NpArrT<T2>>(arr)) return func<float> args;  \
-  if (py::isinstance<NpArrT<T3>>(arr)) return func<ldbl_t> args; \
+  if (arr.dtype()==py::dtype<T1>()) return func<double> args; \
+  if (arr.dtype()==py::dtype<T2>()) return func<float> args;  \
+  if (arr.dtype()==py::dtype<T3>()) return func<ldbl_t> args; \
   throw std::runtime_error("unsupported data type"); \
   }
+#else
+#define DISPATCH(arr, T1, T2, T3, func, args) \
+  { \
+  if (py::isinstance<py::array_t<T1>>(arr)) return func<double> args; \
+  if (py::isinstance<py::array_t<T2>>(arr)) return func<float> args;  \
+  if (py::isinstance<py::array_t<T3>>(arr)) return func<ldbl_t> args; \
+  throw std::runtime_error("unsupported data type"); \
+  }
+#endif
 
 template<typename T> T norm_fct(int inorm, size_t N)
   {
@@ -115,7 +129,7 @@ template<typename T> T norm_fct(int inorm, const shape_t &shape,
   }
 
 template<typename T> NpArr c2c_internal(const NpArr &in,
-  const py::object &axes_, bool forward, int inorm, py::object &out_,
+  const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -127,11 +141,11 @@ template<typename T> NpArr c2c_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
 template<typename T> NpArr c2c_sym_internal(const NpArr &in,
-  const py::object &axes_, bool forward, int inorm, py::object &out_,
+  const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -153,13 +167,19 @@ template<typename T> NpArr c2c_sym_internal(const NpArr &in,
     c1 = conj(c);
     }, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr c2c(const NpArr &a, const py::object &axes_, bool forward,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr c2c(const NpArr &a, const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
+#ifdef DUCC0_USE_NANOBIND
+  if ((a.dtype() == py::dtype<c64>())
+      ||(a.dtype() == py::dtype<c128>())
+      ||(a.dtype() == py::dtype<clong>()))
+#else
   if (a.dtype().kind() == 'c')
+#endif
     DISPATCH(a, c128, c64, clong, c2c_internal, (a, axes_, forward,
              inorm, out_, nthreads))
 
@@ -168,7 +188,7 @@ NpArr c2c(const NpArr &a, const py::object &axes_, bool forward,
   }
 
 template<typename T> NpArr r2c_internal(const NpArr &in,
-  const py::object &axes_, bool forward, int inorm, py::object &out_,
+  const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -182,19 +202,19 @@ template<typename T> NpArr r2c_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr r2c(const NpArr &in, const py::object &axes_, bool forward,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr r2c(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, r2c_internal, (in, axes_, forward, inorm, out_,
     nthreads))
   }
 
 template<typename T> NpArr r2r_fftpack_internal(const NpArr &in,
-  const py::object &axes_, bool real2hermitian, bool forward, int inorm,
-  py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, bool real2hermitian, bool forward, int inorm,
+  std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -205,11 +225,11 @@ template<typename T> NpArr r2r_fftpack_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr r2r_fftpack(const NpArr &in, const py::object &axes_,
-  bool real2hermitian, bool forward, int inorm, py::object &out_,
+NpArr r2r_fftpack(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  bool real2hermitian, bool forward, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, r2r_fftpack_internal, (in, axes_,
@@ -217,8 +237,8 @@ NpArr r2r_fftpack(const NpArr &in, const py::object &axes_,
   }
 
 template<typename T> NpArr r2r_fftw_internal(const NpArr &in,
-  const py::object &axes_, bool forward, int inorm,
-  py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward, int inorm,
+  std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -229,18 +249,18 @@ template<typename T> NpArr r2r_fftw_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr r2r_fftw(const NpArr &in, const py::object &axes_,
-  bool forward, int inorm, py::object &out_, size_t nthreads)
+NpArr r2r_fftw(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  bool forward, int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, r2r_fftw_internal, (in, axes_,
     forward, inorm, out_, nthreads))
   }
 
 template<typename T> NpArr dct_internal(const NpArr &in,
-  const py::object &axes_, int type, int inorm, py::object &out_,
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int type, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -254,11 +274,11 @@ template<typename T> NpArr dct_internal(const NpArr &in,
   bool ortho = inorm == true;
   ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr dct(const NpArr &in, int type, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr dct(const NpArr &in, int type, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
   DISPATCH(in, f64, f32, flong, dct_internal, (in, axes_, type, inorm, out_,
@@ -266,7 +286,7 @@ NpArr dct(const NpArr &in, int type, const py::object &axes_,
   }
 
 template<typename T> NpArr dst_internal(const NpArr &in,
-  const py::object &axes_, int type, int inorm, py::object &out_,
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int type, int inorm, std::optional<NpArr> &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -280,11 +300,11 @@ template<typename T> NpArr dst_internal(const NpArr &in,
   bool ortho = inorm == true;
   ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr dst(const NpArr &in, int type, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr dst(const NpArr &in, int type, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
   DISPATCH(in, f64, f32, flong, dst_internal, (in, axes_, type, inorm,
@@ -292,8 +312,8 @@ NpArr dst(const NpArr &in, int type, const py::object &axes_,
   }
 
 template<typename T> NpArr c2r_internal(const NpArr &in,
-  const py::object &axes_, size_t lastsize, bool forward, int inorm,
-  py::object &out_, size_t nthreads, bool allow_overwriting_input)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, size_t lastsize, bool forward, int inorm,
+  std::optional<NpArr> &out_, size_t nthreads, bool allow_overwriting_input)
   {
   auto axes = makeaxes(in, axes_);
   size_t axis = axes.back();
@@ -319,11 +339,11 @@ template<typename T> NpArr c2r_internal(const NpArr &in,
     py::gil_scoped_release release;
     ducc0::c2r(ain_c, aout, axes, forward, fct, nthreads);
     }
-  return out;
+  return NpArr(out);
   }
 
-NpArr c2r(NpArr &in, const py::object &axes_, size_t lastsize,
-  bool forward, int inorm, py::object &out_, size_t nthreads,
+NpArr c2r(NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_, size_t lastsize,
+  bool forward, int inorm, std::optional<NpArr> &out_, size_t nthreads,
   bool allow_overwriting_input)
   {
   DISPATCH(in, c128, c64, clong, c2r_internal, (in, axes_, lastsize, forward,
@@ -331,7 +351,7 @@ NpArr c2r(NpArr &in, const py::object &axes_, size_t lastsize,
   }
 
 template<typename T> NpArr separable_hartley_internal(const NpArr &in,
-  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -342,18 +362,18 @@ template<typename T> NpArr separable_hartley_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr separable_hartley(const NpArr &in, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr separable_hartley(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, separable_hartley_internal, (in, axes_, inorm,
     out_, nthreads))
   }
 
 template<typename T> NpArr genuine_hartley_internal(const NpArr &in,
-  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -364,18 +384,18 @@ template<typename T> NpArr genuine_hartley_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr genuine_hartley(const NpArr &in, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr genuine_hartley(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, genuine_hartley_internal, (in, axes_, inorm,
     out_, nthreads))
   }
 
 template<typename T> NpArr separable_fht_internal(const NpArr &in,
-  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -386,18 +406,18 @@ template<typename T> NpArr separable_fht_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_separable_fht(ain, aout, axes, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr separable_fht(const NpArr &in, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr separable_fht(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, separable_fht_internal, (in, axes_, inorm,
     out_, nthreads))
   }
 
 template<typename T> NpArr genuine_fht_internal(const NpArr &in,
-  const py::object &axes_, int inorm, py::object &out_, size_t nthreads)
+  const std::optional<std::vector<ptrdiff_t>> &axes_, int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
@@ -408,11 +428,11 @@ template<typename T> NpArr genuine_fht_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
   }
-  return out;
+  return NpArr(out);
   }
 
-NpArr genuine_fht(const NpArr &in, const py::object &axes_,
-  int inorm, py::object &out_, size_t nthreads)
+NpArr genuine_fht(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
+  int inorm, std::optional<NpArr> &out_, size_t nthreads)
   {
   DISPATCH(in, f64, f32, flong, genuine_fht_internal, (in, axes_, inorm,
     out_, nthreads))
@@ -465,7 +485,11 @@ template<typename T> NpArr convolve_axis_internal_c(const NpArr &in_,
 NpArr convolve_axis(const NpArr &in, NpArr &out, size_t axis,
   const NpArr &kernel, size_t nthreads)
   {
+#ifdef DUCC0_USE_NANOBIND
+  if (in.dtype() == py::dtype<c128>() || in.dtype() == py::dtype<c64>() || in.dtype() == py::dtype<clong>())
+#else
   if (in.dtype().kind() == 'c')
+#endif
     DISPATCH(in, c128, c64, clong, convolve_axis_internal_c, (in, out, axis,
       kernel, nthreads))
   else

@@ -64,12 +64,12 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   }
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
-  NpArr myprep(const NpArrT<T1> &ain, const array<size_t,nd1> &a1,
+  NpArr myprep(const NpArr &ain, const array<size_t,nd1> &a1,
   const array<size_t,nd2> &a2)
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return make_Pyarr<T2>(oshp);
+  return toArr(make_Pyarr<T2>(oshp));
   }
 
 #define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
@@ -244,7 +244,7 @@ class Pyhpbase
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.ring2nest(in()); }, nthreads, ring, nest);
       }
-      return out;
+      return toArr(out);
       }
     NpArr ring2nest (const NpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
@@ -260,7 +260,7 @@ class Pyhpbase
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.nest2ring(in()); }, nthreads, nest,ring);
       }
-      return out;
+      return toArr(out);
       }
     NpArr nest2ring (const NpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
@@ -277,13 +277,13 @@ class Pyhpbase
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       }
       auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
-      auto oref=res.mutable_unchecked<2>();
+      auto oref = to_vmav<int64_t,2>(res);
       for (size_t i=0; i<pixset.nranges(); ++i)
         {
         oref(i,0)=pixset.ivbegin(i);
         oref(i,1)=pixset.ivend(i);
         }
-      return res;
+      return toArr(res);
       }
     NpArr query_disc(const NpArr &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,
@@ -542,7 +542,7 @@ void add_healpix(py::module_ &msup)
   auto m = msup.def_submodule("healpix");
   m.doc() = healpix_DS;
 
-  py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local(), Healpix_Base_DS)
+  py::class_<Pyhpbase> (m, "Healpix_Base", /*py::module_local(), */Healpix_Base_DS)
     .def(py::init<int,const string &>(), Healpix_Base_init_DS, "nside"_a,"scheme"_a)
     .def("order", [](Pyhpbase &self)
       { return self.base.Order(); }, order_DS)

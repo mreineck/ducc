@@ -1,3 +1,5 @@
+use_nanobind = False
+
 import sys
 import os.path
 import itertools
@@ -6,6 +8,7 @@ import os
 
 from setuptools import setup, Extension
 import pybind11
+import nanobind
 
 pkgname = 'ducc0'
 version = '0.36.0'
@@ -44,9 +47,11 @@ def _get_files_by_suffix(directory, suffix):
     return list(itertools.chain.from_iterable(iterable_sources))
 
 
-include_dirs = ['.', './src/',
-                pybind11.get_include(True),
-                pybind11.get_include(False)]
+include_dirs = ['.', './src/']
+if use_nanobind:
+    include_dirs += [nanobind.include_dir()]
+else:
+    include_dirs += [pybind11.get_include(True), pybind11.get_include(False)]
 
 extra_compile_args = ['-std=c++17', '-fvisibility=hidden']
 
@@ -80,6 +85,8 @@ define_macros = [("PKGNAME", pkgname),
                  ("PKGVERSION", version),
 #                 ("PYBIND11_DETAILED_ERROR_MESSAGES", None)
 ]
+if use_nanobind:
+    define_macros += [("DUCC0_USE_NANOBIND", None)]
 
 if sys.platform == 'darwin':
     extra_compile_args += ['-mmacosx-version-min=10.14', '-pthread']
@@ -112,6 +119,9 @@ else:
 
 extra_compile_args += user_cflags
 python_module_link_args += user_lflags
+
+if use_nanobind:  # FIXME: terrible hack, don't have a good solution yet
+    python_module_link_args += ['/home/martin/codes/ducc/libnanobind-static.a']
 
 depfiles = (_get_files_by_suffix('.', 'h') +
             _get_files_by_suffix('.', 'cc') +

@@ -30,5 +30,5 @@ dynamic = ["version"]
 "Changelog" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/ChangeLog"
 
 [build-system]
-requires = ["setuptools >= 40.6.0", "pybind11 >= 2.6.0", "numpy >= 1.17.0"]
+requires = ["setuptools >= 40.6.0", "pybind11 >= 2.6.0", "nanobind", "numpy >= 1.17.0"]
 build-backend = "setuptools.build_meta"
