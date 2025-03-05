@@ -141,7 +141,7 @@ template<typename T> NpArr c2c_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 template<typename T> NpArr c2c_sym_internal(const NpArr &in,
@@ -167,7 +167,7 @@ template<typename T> NpArr c2c_sym_internal(const NpArr &in,
     c1 = conj(c);
     }, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr c2c(const NpArr &a, const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward,
@@ -202,7 +202,7 @@ template<typename T> NpArr r2c_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr r2c(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_, bool forward,
@@ -225,7 +225,7 @@ template<typename T> NpArr r2r_fftpack_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr r2r_fftpack(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -249,7 +249,7 @@ template<typename T> NpArr r2r_fftw_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr r2r_fftw(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -274,7 +274,7 @@ template<typename T> NpArr dct_internal(const NpArr &in,
   bool ortho = inorm == true;
   ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr dct(const NpArr &in, int type, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -300,7 +300,7 @@ template<typename T> NpArr dst_internal(const NpArr &in,
   bool ortho = inorm == true;
   ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr dst(const NpArr &in, int type, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -339,7 +339,7 @@ template<typename T> NpArr c2r_internal(const NpArr &in,
     py::gil_scoped_release release;
     ducc0::c2r(ain_c, aout, axes, forward, fct, nthreads);
     }
-  return NpArr(out);
+  return out;
   }
 
 NpArr c2r(NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_, size_t lastsize,
@@ -362,7 +362,7 @@ template<typename T> NpArr separable_hartley_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr separable_hartley(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -384,7 +384,7 @@ template<typename T> NpArr genuine_hartley_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr genuine_hartley(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -406,7 +406,7 @@ template<typename T> NpArr separable_fht_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_separable_fht(ain, aout, axes, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr separable_fht(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,
@@ -428,7 +428,7 @@ template<typename T> NpArr genuine_fht_internal(const NpArr &in,
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   ducc0::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
   }
-  return NpArr(out);
+  return out;
   }
 
 NpArr genuine_fht(const NpArr &in, const std::optional<std::vector<ptrdiff_t>> &axes_,

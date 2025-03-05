@@ -81,7 +81,7 @@ template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const NpArr &grid_,
       }
     }
   }
-  return toArr(out_);
+  return out_;
   }
 NpArr Py_u2nu(const NpArr &grid,
   const NpArr &coord, bool forward, double epsilon, size_t nthreads,
@@ -195,7 +195,7 @@ template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const NpArr &points_
     for (size_t i=0; i<points_in.shape(0); ++i)
       nufft.exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
     }
-  return toArr(points_out_);
+  return points_out_;
   }
   }
 NpArr Py_nu2nu(const NpArr &points_in,
@@ -272,7 +272,7 @@ class Py_Nufftplan
         ptr->nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(uniform, slices));
         }
       }
-      return toArr(uniform_);
+      return uniform_;
       }
     template<typename T> NpArr do_u2nu(
       const unique_ptr<Nufft<T,T,T>> &ptr,
@@ -293,7 +293,7 @@ class Py_Nufftplan
         ptr->u2nu(forward, verbosity, subarray(uniform, slices), subarray<1>(points,{{i},{}}));
         }
       }
-      return toArr(points_);
+      return points_;
       }
 
   public:
@@ -385,7 +385,7 @@ class Py_incremental_nu2u
       ptr->spread_finish(forward, grid, uniform);
       mav_apply([](auto &v){v=0;}, nthreads, grid);
       }
-      return toArr(uniform_);
+      return uniform_;
       }
 
   public:
@@ -467,7 +467,7 @@ class Py_incremental_u2nu
       py::gil_scoped_release release;
       ptr->interp(coord, values, grid);
       }
-      return toArr(values_);
+      return values_;
       }
 
   public:
@@ -539,7 +539,7 @@ class Py_Nufft3plan
       for (size_t i=0; i<points_in.shape(0); ++i)
         ptr->exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
-      return toArr(points_out_);
+      return points_out_;
       }
     template<typename T> NpArr do_exec_adjoint(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
@@ -556,7 +556,7 @@ class Py_Nufft3plan
       for (size_t i=0; i<points_in.shape(0); ++i)
         ptr->exec_adjoint(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
       }
-      return toArr(points_out_);
+      return points_out_;
       }
 
   public:

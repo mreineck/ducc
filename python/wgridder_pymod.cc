@@ -61,7 +61,7 @@ template<typename T> NpArr Py2_vis2dirty_tuning(const NpArr &uvw_,
       do_wgridding,nthreads,dirty2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
       sigma_max, center_x, center_y);
   }
-  return toArr(dirty);
+  return dirty;
   }
 NpArr Py_vis2dirty_tuning(const NpArr &uvw,
   const NpArr &freq, const NpArr &vis, const py::object &wgt,
@@ -189,7 +189,7 @@ template<typename T> NpArr Py2_vis2dirty(const NpArr &uvw_,
         do_wgridding,nthreads,dirty2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
         sigma_max, center_x, center_y, allow_nshift);
   }
-  return toArr(dirty);
+  return dirty;
   }
 NpArr Py_vis2dirty(const NpArr &uvw,
   const NpArr &freq, const NpArr &vis, const py::object &wgt,
@@ -296,7 +296,7 @@ template<typename T> NpArr Py2_dirty2vis_tuning(const NpArr &uvw_,
     do_wgridding,nthreads,vis2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
     sigma_max, center_x, center_y);
   }
-  return toArr(vis);
+  return vis;
   }
 NpArr Py_dirty2vis_tuning(const NpArr &uvw,
   const NpArr &freq, const NpArr &dirty, const py::object &wgt,
@@ -400,7 +400,7 @@ template<typename T> NpArr Py2_dirty2vis(const NpArr &uvw_,
       do_wgridding,nthreads,vis2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
       sigma_max, center_x, center_y, allow_nshift);
   }
-  return toArr(vis);
+  return vis;
   }
 NpArr Py_dirty2vis(const NpArr &uvw,
   const NpArr &freq, const NpArr &dirty, const py::object &wgt,

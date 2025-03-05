@@ -93,7 +93,7 @@ template<typename T> NpArr Py2_rotate_alm(const NpArr &alm_in_,
       for (size_t l=m; l<=lmax; ++l)
         alm_out(base_out.index(l,m)) = alm(base.index(l,m));
   }
-  return toArr(alm_out_);
+  return alm_out_;
   }
 NpArr Py_rotate_alm(const NpArr &alm_in, size_t lmax,
   double psi, double theta, double phi, size_t nthreads,
@@ -168,7 +168,7 @@ NpArr Py_get_gridweights(const string &type, size_t ntheta)
   py::gil_scoped_release release;
   get_gridweights(type, wgt);
   }
-  return toArr(wgt_);
+  return wgt_;
   }
 
 size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
@@ -257,7 +257,7 @@ template<typename T> NpArr Py2_alm2flm(const NpArr &alm_, int spin,
     ofs += lmax+1-m;
     mfac=-mfac;
     }
-  return toArr(flm_);
+  return flm_;
   }
 NpArr Py_alm2flm(const NpArr &alm, int spin, optional<NpArr> &flm)
   {
@@ -305,7 +305,7 @@ template<typename T> NpArr Py2_flm2alm(const NpArr &flm_, int spin,
     ofs += lmax+1-m;
     mfac=-mfac;
     }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_flm2alm(const NpArr &flm, int spin, optional<NpArr> &alm, bool real)
   {
@@ -335,7 +335,7 @@ template<typename T> NpArr Py2_alm2leg(const NpArr &alm_, size_t spin,
   py::gil_scoped_release release;
   alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
   }
-  return toArr(leg_);
+  return leg_;
   }
 NpArr Py_alm2leg(const NpArr &alm, size_t lmax, const NpArr &theta,
   size_t spin, const py::object &mval, const py::object &mstart,
@@ -375,7 +375,7 @@ template<typename T> NpArr Py2_leg2alm(const NpArr &leg_,
   py::gil_scoped_release release;
   leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
   }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_leg2alm(const NpArr &leg, size_t lmax, const NpArr &theta,
   size_t spin, const py::object &mval, const py::object &mstart,
@@ -406,7 +406,7 @@ template<typename T> NpArr Py2_map2leg(const NpArr &map_,
   py::gil_scoped_release release;
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
-  return toArr(leg_);
+  return leg_;
   }
 NpArr Py_map2leg(const NpArr &map, const NpArr &nphi,
   const NpArr &phi0, const NpArr &ringstart, size_t mmax,
@@ -437,7 +437,7 @@ template<typename T> NpArr Py2_leg2map(const NpArr &leg_,
   py::gil_scoped_release release;
   leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
-  return toArr(map_);
+  return map_;
   }
 NpArr Py_leg2map(const NpArr &leg, const NpArr &nphi,
   const NpArr &phi0, const NpArr &ringstart, ptrdiff_t pixstride,
@@ -493,7 +493,7 @@ template<typename T> NpArr Py2_synthesis(const NpArr &alm_,
           phi0, ringstart, pixstride, nthreads, mode, theta_interpol);
     });
   }
-  return toArr(map_);
+  return map_;
   }
 NpArr Py_synthesis(const NpArr &alm, const NpArr &theta,
   size_t lmax, const py::object &mstart,
@@ -521,7 +521,7 @@ NpArr Py_synthesis_deriv1(const NpArr &alm, const NpArr &theta,
   }
 
 
-template<typename T> NpArrT<T> check_build_map(const optional<NpArr> &map,
+template<typename T> NpArr check_build_map(const optional<NpArr> &map,
   size_t ncomp, const py::object &ntheta, const py::object &nphi)
   {
   if (!map)
@@ -532,7 +532,7 @@ template<typename T> NpArrT<T> check_build_map(const optional<NpArr> &map,
     }
   else
     {
-    NpArrT<T> tmap = toArrT<T>(map.value());
+    NpArr tmap = map.value();
     MR_assert((size_t(tmap.ndim())==3) && (size_t(tmap.shape(0))==ncomp),
       "map size mismatch");
     if (!ntheta.is_none())
@@ -542,7 +542,7 @@ template<typename T> NpArrT<T> check_build_map(const optional<NpArr> &map,
     return tmap;
     }
   }
-template<typename T> NpArrT<complex<T>> check_build_alm
+template<typename T> NpArr check_build_alm
   (const optional<NpArr> &alm, size_t ncomp, size_t lmax, size_t mmax)
   {
   size_t nalm = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
@@ -574,7 +574,7 @@ template<typename T> NpArr Py2_synthesis_2d(const NpArr &alm_,
   py::gil_scoped_release release;
   synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
-  return toArr(map_);
+  return map_;
   }
 NpArr Py_synthesis_2d(const NpArr &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
@@ -604,7 +604,7 @@ template<typename T> NpArr Py2_adjoint_synthesis_2d(
   py::gil_scoped_release release;
   adjoint_synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_adjoint_synthesis_2d(
   const NpArr &map, size_t spin, size_t lmax, const string &geometry,
@@ -661,7 +661,7 @@ template<typename T> NpArr Py2_adjoint_synthesis(optional<NpArr> &alm__,
           nphi, phi0, ringstart, pixstride, nthreads, mode, theta_interpol);
     });
   }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_adjoint_synthesis(const NpArr &map, const NpArr &theta,
   size_t lmax,
@@ -778,7 +778,7 @@ template<typename T> NpArr Py2_analysis_2d(
   py::gil_scoped_release release;
   analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads);
   }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_analysis_2d(
   const NpArr &map, size_t spin, size_t lmax, const string &geometry,
@@ -806,7 +806,7 @@ template<typename T> NpArr Py2_adjoint_analysis_2d(const NpArr &alm_,
   py::gil_scoped_release release;
   adjoint_analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads);
   }
-  return toArr(map_);
+  return map_;
   }
 NpArr Py_adjoint_analysis_2d(const NpArr &alm, size_t spin, size_t lmax,
   const string &geometry, const py::object &ntheta, const py::object &nphi,
@@ -839,7 +839,7 @@ template<typename T, typename Tloc> NpArr Py2_synthesis_general(const NpArr &alm
   py::gil_scoped_release release;
   synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
   }
-  return toArr(map_);
+  return map_;
   }
 NpArr Py_synthesis_general(const NpArr &alm, size_t spin, size_t lmax,
   const NpArr &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
@@ -882,7 +882,7 @@ template<typename T, typename Tloc> NpArr Py2_adjoint_synthesis_general(const Np
   py::gil_scoped_release release;
   adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
   }
-  return toArr(alm_);
+  return alm_;
   }
 NpArr Py_adjoint_synthesis_general(const NpArr &map, size_t spin, size_t lmax,
   const NpArr &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
@@ -1072,7 +1072,7 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
-      return toArr(map_);
+      return map_;
       }
     NpArr alm2map_adjoint (const NpArrT<double> &map_) const
       {
@@ -1113,7 +1113,7 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         adjoint_synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
-      return toArr(alm_);
+      return alm_;
       }
     NpArr map2alm (const NpArrT<double> &map_) const
       {
@@ -1127,7 +1127,7 @@ template<typename T> class Py_sharpjob
         {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
       auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
       analysis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads);
-      return toArr(alm_);
+      return alm_;
       }
     NpArr alm2map_spin (const NpArrT<complex<double>> &alm_, size_t spin) const
       {
@@ -1167,7 +1167,7 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
         synthesis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
-      return toArr(map_);
+      return map_;
       }
     NpArr map2alm_spin (const NpArrT<double> &map_, size_t spin) const
       {
@@ -1180,7 +1180,7 @@ template<typename T> class Py_sharpjob
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
       auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
       analysis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads);
-      return toArr(alm_);
+      return alm_;
       }
   };
 

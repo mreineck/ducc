@@ -7,8 +7,11 @@ from glob import iglob
 import os
 
 from setuptools import setup, Extension
-import pybind11
-import nanobind
+
+if use_nanobind:
+    import nanobind
+else:
+    import pybind11
 
 pkgname = 'ducc0'
 version = '0.36.0'

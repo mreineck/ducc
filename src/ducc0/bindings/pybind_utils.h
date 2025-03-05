@@ -96,12 +96,6 @@ template<typename T> bool isPyarr(const NpArr &obj)
 
 NpArr toArr(const py::object &obj)
   { return castFromPython<NpArr>(obj); }
-template<typename T> NpArr toArr(const NpArrT<T> &obj)
-  { return NpArr(obj); }
-template<typename T> NpArrT<T> toArrT(const NpArr &obj)
-  { return NpArrT<T>(obj); }
-template<typename T> NpArrT<T> toArrT(const py::object &obj)
-  { return castFromPython<NpArrT<T>>(obj); }
 
 template<typename T> NpArrT<T> toPyarr(const py::object &obj,
   const string &/*spec*/="")
@@ -211,7 +205,7 @@ template<typename T> cfmav<T> to_cfmav(const NpArr &obj,
   { return to_cfmav<T>(NpArrT<T>(obj), name); }
 template<typename T> cfmav<T> to_cfmav(const py::object &obj,
   const string &name="")
-  { return to_cfmav<T>(toArrT<T>(obj), name); }
+  { return to_cfmav<T>(toArr(obj), name); }
 template<typename T> vfmav<T> to_vfmav(const NpArrT<T> &obj,
   const string &name="")
   {
@@ -245,7 +239,7 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const NpArr &obj,
   { return to_cmav<T,ndim>(NpArrT<T>(obj), name); }
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::object &obj,
   const string &name="")
-  { return to_cmav<T,ndim>(toArrT<T>(obj), name); }
+  { return to_cmav<T,ndim>(toArr(obj), name); }
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const NpArr &obj,
   const string &name="")
   {
@@ -294,7 +288,7 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const NpArr &obj,
   { return to_vmav<T,ndim>(NpArrT<T>(obj), name); }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::object &obj,
   const string &name="")
-  { return to_vmav<T,ndim>(toArrT<T>(obj), name); }
+  { return to_vmav<T,ndim>(toArr(obj), name); }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const NpArrT<T> &obj,
   const string &name="")
   {
@@ -315,7 +309,7 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
   { return to_vmav_with_optional_leading_dimensions<T, ndim>(NpArrT<T>(obj), name); }
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::object &obj,
   const string &name="")
-  { return to_vmav_with_optional_leading_dimensions<T, ndim>(toArrT<T>(obj), name); }
+  { return to_vmav_with_optional_leading_dimensions<T, ndim>(toArr(obj), name); }
 template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const NpArrT<T> &obj, size_t ndim,
   const string &name="")
   {
@@ -336,7 +330,7 @@ template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const Np
   { return to_vfmav_with_optional_leading_dimensions<T>(NpArrT<T>(obj), ndim, name); }
 template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::object &obj, size_t ndim,
   const string &name="")
-  { return to_vfmav_with_optional_leading_dimensions<T>(toArrT<T>(obj), ndim, name); }
+  { return to_vfmav_with_optional_leading_dimensions<T>(toArr(obj), ndim, name); }
 
 template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj,
   const string &name="")
@@ -356,7 +350,7 @@ template<typename T> void zero_Pyarr(NpArrT<T> &arr, size_t nthreads=1)
   }
 
 #ifdef DUCC0_USE_NANOBIND
-template<typename T> NpArrT<T> make_Pyarr(const shape_t &dims, bool zero=false)
+template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   {
   auto *res = new vfmav<T>(dims);
   py::capsule owner(res, [](void *p) noexcept {
@@ -364,26 +358,26 @@ template<typename T> NpArrT<T> make_Pyarr(const shape_t &dims, bool zero=false)
     });
   NpArrT<T> res_(res->data(), dims.size(), dims.data(), owner);
   if (zero) zero_Pyarr(res_);
-  return res_;
+  return NpArr(res_);
   }
 #else
-template<typename T> NpArrT<T> make_Pyarr(const shape_t &dims, bool zero=false)
+template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   {
   auto res=NpArrT<T>(dims);
   if (zero) zero_Pyarr(res);
-  return res;
+  return NpArr(res);
   }
 #endif
-template<typename T, size_t ndim> NpArrT<T> make_Pyarr
+template<typename T, size_t ndim> NpArr make_Pyarr
   (const std::array<size_t,ndim> &dims, bool zero=false)
   {
   auto res=NpArrT<T>(shape_t(dims.begin(), dims.end()));
   if (zero) zero_Pyarr(res);
-  return res;
+  return NpArr(res);
   }
 
 #ifdef DUCC0_USE_NANOBIND
-template<typename T> NpArrT<T> make_noncritical_Pyarr(const shape_t &shape)
+template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
@@ -393,10 +387,10 @@ template<typename T> NpArrT<T> make_noncritical_Pyarr(const shape_t &shape)
        delete reinterpret_cast<vfmav<T> *>(p);
     });
   NpArrT<T> res_(res->data(), shape.size(), shape.data(), owner, res->stride().data());
-  return res_;
+  return NpArr(res_);
   }
 #else
-template<typename T> NpArrT<T> make_noncritical_Pyarr(const shape_t &shape)
+template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
@@ -406,21 +400,21 @@ template<typename T> NpArrT<T> make_noncritical_Pyarr(const shape_t &shape)
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
   NpArrT<T> sub(tarr[py::tuple(slices)]);
-  return sub;
+  return NpArr(sub);
   }
 #endif
 
-template<typename T> NpArrT<T> get_Pyarr(py::object &arr_, size_t ndims,
+template<typename T> NpArr get_Pyarr(py::object &arr_, size_t ndims,
   const string &name="")
   {
   const auto spec = makeSpec(name);
   MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
   auto tmp = toPyarr<T>(arr_, spec);
   MR_assert(ndims==size_t(tmp.ndim()), spec, "dimension mismatch");
-  return tmp;
+  return NpArr(tmp);
   }
 
-template<typename T> NpArrT<T> get_optional_Pyarr(py::object &arr_,
+template<typename T> NpArr get_optional_Pyarr(py::object &arr_,
   const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(dims, false);
@@ -430,9 +424,9 @@ template<typename T> NpArrT<T> get_optional_Pyarr(py::object &arr_,
   MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
     MR_assert(dims[i]==size_t(tmp.shape(int(i))), spec, "dimension mismatch");
-  return tmp;
+  return NpArr(tmp);
   }
-template<typename T> NpArrT<T> get_optional_Pyarr(optional<NpArr> &arr_,
+template<typename T> NpArr get_optional_Pyarr(optional<NpArr> &arr_,
   const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims, false);
@@ -443,10 +437,10 @@ template<typename T> NpArrT<T> get_optional_Pyarr(optional<NpArr> &arr_,
   MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
     MR_assert(dims[i]==size_t(tmp.shape(int(i))), spec, "dimension mismatch");
-  return tmp;
+  return NpArr(tmp);
   }
 
-template<typename T> NpArrT<T> get_optional_Pyarr_minshape
+template<typename T> NpArr get_optional_Pyarr_minshape
   (py::object &arr_, const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(dims);
@@ -456,9 +450,9 @@ template<typename T> NpArrT<T> get_optional_Pyarr_minshape
   MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
     MR_assert(dims[i]<=size_t(tmp.shape(int(i))), spec, "array shape too small");
-  return tmp;
+  return NpArr(tmp);
   }
-template<typename T> NpArrT<T> get_optional_Pyarr_minshape
+template<typename T> NpArr get_optional_Pyarr_minshape
   (optional<NpArr> &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims);
@@ -469,10 +463,10 @@ template<typename T> NpArrT<T> get_optional_Pyarr_minshape
   MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
     MR_assert(dims[i]<=size_t(tmp.shape(int(i))), spec, "array shape too small");
-  return tmp;
+  return NpArr(tmp);
   }
 
-template<typename T> NpArrT<T> get_optional_const_Pyarr(
+template<typename T> NpArr get_optional_const_Pyarr(
   const py::object &arr_, const shape_t &dims, const string &name="")
   {
   if (arr_.is_none()) return make_Pyarr<T>(shape_t(dims.size(), 0));
@@ -482,7 +476,7 @@ template<typename T> NpArrT<T> get_optional_const_Pyarr(
   MR_assert(dims.size()==size_t(tmp.ndim()), spec, "dimension mismatch");
   for (size_t i=0; i<dims.size(); ++i)
     MR_assert(dims[i]==size_t(tmp.shape(int(i))), spec, "dimension mismatch");
-  return tmp;
+  return NpArr(tmp);
   }
 
 //template<typename T> py::object Dtype()
@@ -517,7 +511,6 @@ using detail_pybind::NpArrT;
 using detail_pybind::castFromPython;
 using detail_pybind::isPyarr;
 using detail_pybind::toArr;
-using detail_pybind::toArrT;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;
 using detail_pybind::get_Pyarr;

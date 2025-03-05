@@ -69,7 +69,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return toArr(make_Pyarr<T2>(oshp));
+  return make_Pyarr<T2>(oshp);
   }
 
 #define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
@@ -244,7 +244,7 @@ class Pyhpbase
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.ring2nest(in()); }, nthreads, ring, nest);
       }
-      return toArr(out);
+      return out;
       }
     NpArr ring2nest (const NpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
@@ -260,7 +260,7 @@ class Pyhpbase
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
         { out() = base.nest2ring(in()); }, nthreads, nest,ring);
       }
-      return toArr(out);
+      return out;
       }
     NpArr nest2ring (const NpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
@@ -283,7 +283,7 @@ class Pyhpbase
         oref(i,0)=pixset.ivbegin(i);
         oref(i,1)=pixset.ivend(i);
         }
-      return toArr(res);
+      return res;
       }
     NpArr query_disc(const NpArr &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,

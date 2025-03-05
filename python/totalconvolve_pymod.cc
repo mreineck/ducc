@@ -186,7 +186,7 @@ template<typename T> class Py_Interpolator
         conv.interpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
           ptheta, pphi, ppsi, subarray<1>(res2, {{i},{}}));
       }
-      return toArr(res);
+      return res;
       }
     NpArr Py_Interpol(const NpArr &ptg) const
       {
@@ -253,7 +253,7 @@ template<typename T> class Py_Interpolator
           conv.updateSlm(vslm, vblm, k, subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}}));
         }
       }
-      return toArr(res);
+      return res;
       }
   };
 

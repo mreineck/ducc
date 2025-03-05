@@ -149,7 +149,7 @@ template<typename T1, typename T2, typename T3> NpArr Py2_mul_conj(
     v3 = complex<T3>(v1)*complex<T3>(conj(v2));
     }, 1, a, b, out);
   }
-  return toArr(out_);
+  return out_;
   }
 NpArr Py_mul_conj(const NpArr &a, const NpArr &b, optional<NpArr> &out)
   {
@@ -198,7 +198,7 @@ template<typename T1, typename T2, typename T3> NpArr Py2_div_conj(
     v3 = complex<T3>(v1)/complex<T3>(conj(v2));
     }, 1, a, b, out);
   }
-  return toArr(out_);
+  return out_;
   }
 NpArr Py_div_conj(const NpArr &a, const NpArr &b, optional<NpArr> &out)
   {
@@ -470,7 +470,7 @@ NpArr Py_GL_weights(size_t nlat, size_t nlon)
   for (size_t i=0; i<res2.shape(0); ++i)
     res2(i) = wgt[i]*twopi/nlon;
   }
-  return toArr(res);
+  return res;
   }
 
 NpArr Py_GL_thetas(size_t nlat)
@@ -485,7 +485,7 @@ NpArr Py_GL_thetas(size_t nlat)
   for (size_t i=0; i<nlat; ++i)
     res2(i) = th[nlat-1-i];
   }
-  return toArr(res);
+  return res;
   }
 
 template<typename T> NpArr Py2_transpose(const NpArr &in,
@@ -548,7 +548,7 @@ template<typename T> NpArr Py2_make_noncritical(const NpArr &in)
   auto out = make_noncritical_Pyarr<T>(in2.shape());
   auto out2 = to_vfmav<T>(out);
   mav_apply([](T &v1, const T &v2) { v1=v2; }, 1, out2, in2);
-  return toArr(out);
+  return out;
   }
 
 NpArr Py_make_noncritical(const NpArr &in)
@@ -741,7 +741,7 @@ class Py_OofaNoise
       mav_apply([](double &out, double in) {out=in;}, 1, res, rnd);
       gen.filterGaussian(res);
       }
-      return toArr(res_);
+      return res_;
       }
   };
 
@@ -1285,7 +1285,7 @@ template<typename Tout> NpArr Py2_get_deflected_angles(const NpArr &theta_,
         }
     });
   }
-  return toArr(res_);
+  return res_;
   }
 NpArr Py_get_deflected_angles(const NpArr &theta_,
   const NpArr &phi0_, const NpArr &nphi_, const NpArr &ringstart_,
@@ -1348,7 +1348,7 @@ template<typename Tout> NpArr Py2_coupling_matrix_spin0and2_pure(const NpArr &sp
   py::gil_scoped_release release;
   coupling_matrix_spin0and2_pure<Tout>(spec, lmax, mat, nthreads);
   }
-  return toArr(mat_);
+  return mat_;
   }
 
 NpArr Py_coupling_matrix_spin0and2_pure
@@ -1414,7 +1414,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   py::gil_scoped_release release;
   coupling_matrix_spin0and2_tri<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
   }
-  return toArr(mat_);
+  return mat_;
   }
 
 NpArr Py_coupling_matrix_spin0and2_tri
@@ -1603,7 +1603,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return toArr(get_optional_Pyarr<T2>(out, oshp));
+  return get_optional_Pyarr<T2>(out, oshp);
   }
 
 template<typename Tin> NpArr quat2ptg2 (const NpArr &in, size_t nthreads,
