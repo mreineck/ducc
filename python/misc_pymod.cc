@@ -335,7 +335,7 @@ template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
     }, 1, a, b, c, out);
   }
   py::list lst;
-  lst.append(py::cast(0.5*res));
+  lst.append(0.5*res);
   lst.append(out_);
   return lst;
   }
@@ -358,7 +358,7 @@ template<typename T> py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
     }, 1, a, b, c, out);
   }
   py::list lst;
-  lst.append(py::cast(0.5*res));
+  lst.append(0.5*res);
   lst.append(out_);
   return lst;
   }
@@ -1515,7 +1515,7 @@ py::object Py_wigner3j_int(int l2, int l3, int m2, int m3)
   auto res = to_vmav<double,1>(res_);
   int l1min;
   wigner3j_int (l2, l3, m2, m3, l1min, res);
-  return py::make_tuple(py::cast(l1min), res_);
+  return py::make_tuple(l1min, res_);
   }
 
 constexpr const char *Py_wigner3j_int_DS = R"""(

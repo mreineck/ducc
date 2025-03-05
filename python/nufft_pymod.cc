@@ -236,14 +236,14 @@ class Py_Nufftplan
     template<typename T> void construct(
       unique_ptr<Nufft<T,T,T>> &ptr,
       bool gridding, const NpArr &coord_,
-      const py::object &uniform_shape_,
+      const vector<size_t> &uniform_shape_,
       double epsilon_,
       size_t nthreads_,
       double sigma_min, double sigma_max,
       const py::object &periodicity_, bool fft_order_)
       {
       auto coord = to_cmav<T,2>(coord_, "coord");
-      auto shp = castFromPython<vector<size_t>>(uniform_shape_);
+      auto shp = uniform_shape_;
       auto periodicity = get_periodicity(periodicity_, coord.shape(1));
       {
       py::gil_scoped_release release;
@@ -298,12 +298,12 @@ class Py_Nufftplan
 
   public:
     Py_Nufftplan(bool gridding, const NpArr &coord_,
-                 const py::object &uniform_shape_,
+                 const vector<size_t> &uniform_shape_,
                  double epsilon_,
                  size_t nthreads_,
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order_)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
+      : uniform_shape(uniform_shape_),
         npoints(coord_.shape(0))
       {
       auto ndim = uniform_shape.size();
@@ -390,13 +390,13 @@ class Py_incremental_nu2u
 
   public:
     Py_incremental_nu2u(size_t npoints_estimate,
-                 const py::object &uniform_shape_,
+                 const vector<size_t> &uniform_shape_,
                  bool forward_,
                  double epsilon,
                  size_t nthreads_,
                  double sigma_min, double sigma_max,
                  const py::object &periodicity, bool fft_order, bool singleprec)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
+      : uniform_shape(uniform_shape_),
         nthreads(nthreads_),
         forward(forward_)
       {
@@ -1006,7 +1006,7 @@ void add_nufft(py::module_ &msup)
 
   py::class_<Py_Nufftplan> (m, "plan", /*py::module_local(),*/
                             "Class for repeated execution of type 1/2 NUFFTs")
-    .def(py::init<bool, const NpArr &, const py::object &,
+    .def(py::init<bool, const NpArr &, const vector<size_t> &,
                   double, size_t, double, double, const py::object &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
@@ -1018,7 +1018,7 @@ void add_nufft(py::module_ &msup)
 
   py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", /*py::module_local(),*/
                                    "Class for incremental execution of a type 1 NUFFT")
-    .def(py::init<size_t, const py::object &, bool,
+    .def(py::init<size_t, const vector<size_t> &, bool,
                   double, size_t, double, double, const py::object &, bool, bool>(),
       incremental_nu2u_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a, "forward"_a,

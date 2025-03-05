@@ -59,14 +59,14 @@ using stride_t=fmav_info::stride_t;
 
 #ifdef DUCC0_USE_NANOBIND
 using NpArr = py::ndarray<py::numpy>;
-using CNpArr = py::ndarray<py::numpy, py::ro>;
+//using CNpArr = py::ndarray<py::numpy, py::ro>;
 template<typename T> using NpArrT = py::ndarray<py::numpy,T>;
-template<typename T> using CNpArrT = py::ndarray<py::numpy,const T>;
+//template<typename T> using CNpArrT = py::ndarray<py::numpy,const T>;
 #else
 using NpArr = py::array;
-using CNpArr = py::array;
+//using CNpArr = py::array;
 template<typename T> using NpArrT = py::array_t<T>;
-template<typename T> using CNpArrT = py::array_t<T>;
+//template<typename T> using CNpArrT = py::array_t<T>;
 #endif
 
 template<typename Tout> Tout castFromPython(const py::object &obj)
@@ -507,7 +507,6 @@ complex<double> dcScalar(const py::object &obj)
 }
 
 using detail_pybind::NpArr;
-using detail_pybind::NpArrT;
 using detail_pybind::castFromPython;
 using detail_pybind::isPyarr;
 using detail_pybind::toArr;
