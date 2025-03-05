@@ -54,7 +54,7 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
                          sigma-0.05, sigma+0.05, epsilon, nthreads_) {}
     vector<size_t> Py_getPatchInfo(T theta_lo, T theta_hi, T phi_lo, T phi_hi)
       { return getPatchInfo(theta_lo, theta_hi, phi_lo, phi_hi); }
-    void Py_getPlane(const NpArr &slm_, const NpArr &blm_,
+    void Py_getPlane(const CNpArr &slm_, const CNpArr &blm_,
       size_t mbeam, NpArr &planes_) const
       {
       auto slm = to_cmav<complex<T>,1>(slm_);
@@ -81,8 +81,8 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       deprepPsi(subcube);
       }
       }
-    void Py_interpol(const NpArr &cube_, size_t itheta0, size_t iphi0,
-      const NpArr &theta_, const NpArr &phi_, const NpArr &psi_,
+    void Py_interpol(const CNpArr &cube_, size_t itheta0, size_t iphi0,
+      const CNpArr &theta_, const CNpArr &phi_, const CNpArr &psi_,
       NpArr &signal_)
       {
       auto cube = to_cmav<T,3>(cube_);
@@ -96,8 +96,8 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       }
       }
     void Py_deinterpol(NpArr &cube_, size_t itheta0, size_t iphi0,
-      const NpArr &theta_, const NpArr &phi_, const NpArr &psi_,
-      const NpArr &signal_)
+      const CNpArr &theta_, const CNpArr &phi_, const CNpArr &psi_,
+      const CNpArr &signal_)
       {
       auto cube = to_vmav<T,3>(cube_);
       auto theta = to_cmav<T,1>(theta_);
@@ -109,7 +109,7 @@ template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
       deinterpol(cube, itheta0, iphi0, theta, phi, psi, signal);
       }
       }
-    void Py_updateSlm(NpArr &slm_, const NpArr &blm_,
+    void Py_updateSlm(NpArr &slm_, const CNpArr &blm_,
       size_t mbeam, NpArr &planes_) const
       {
       auto slm = to_vmav<complex<T>,1>(slm_);
@@ -130,7 +130,7 @@ template<typename T> class Py_Interpolator
     vmav<T,4> cube;
 
   public:
-    Py_Interpolator(const NpArr &slm_, const NpArr &blm_,
+    Py_Interpolator(const CNpArr &slm_, const CNpArr &blm_,
       bool separate, size_t lmax, size_t kmax, size_t npoints, double sigma_min, double sigma_max, double epsilon, int nthreads)
       : conv(lmax, kmax, npoints, sigma_min, sigma_max, epsilon, nthreads),
         cube(conv.buildCube(separate ? size_t(slm_.shape(0)) : 1u))
@@ -163,7 +163,7 @@ template<typename T> class Py_Interpolator
         cube({size_t(ncomp_), conv.Npsi(), conv.Ntheta(), conv.Nphi()})
       {}
     //for backwards compatibility
-    Py_Interpolator(const NpArr &slm_, const NpArr &blm_,
+    Py_Interpolator(const CNpArr &slm_, const CNpArr &blm_,
       bool separate, size_t lmax, size_t kmax, T epsilon, T ofactor, int nthreads)
       : Py_Interpolator(slm_, blm_,separate, lmax, kmax, 1000000000,
                         ofactor-0.05, ofactor+0.05, epsilon, nthreads) {}
@@ -171,7 +171,7 @@ template<typename T> class Py_Interpolator
       : Py_Interpolator(lmax, kmax, ncomp_, 1000000000,
                         ofactor-0.05, ofactor+0.05, epsilon, nthreads) {}
 
-    template<typename Tloc> NpArr Py_Interpol2(const NpArr &ptg) const
+    template<typename Tloc> NpArr Py_Interpol2(const CNpArr &ptg) const
       {
       auto ptg2 = to_cmav<Tloc,2>(ptg);
       auto ptheta = subarray<1>(ptg2, {{},{0}});
@@ -188,7 +188,7 @@ template<typename T> class Py_Interpolator
       }
       return res;
       }
-    NpArr Py_Interpol(const NpArr &ptg) const
+    NpArr Py_Interpol(const CNpArr &ptg) const
       {
       if (isPyarr<float>(ptg))
         return Py_Interpol2<float>(ptg);
@@ -197,7 +197,7 @@ template<typename T> class Py_Interpolator
       MR_fail("type matching failed: 'ptg' has neither type 'f4' nor 'f8'");
       }
 
-    template<typename Tloc> void Py_deinterpol2(const NpArr &ptg, const NpArr &data)
+    template<typename Tloc> void Py_deinterpol2(const CNpArr &ptg, const CNpArr &data)
       {
       auto ptg2 = to_cmav<Tloc,2>(ptg);
       auto ptheta = subarray<1>(ptg2, {{},{0}});
@@ -212,7 +212,7 @@ template<typename T> class Py_Interpolator
           ptheta, pphi, ppsi, subarray<1>(data2, {{i},{}}));
       }
       }
-    void Py_deinterpol(const NpArr &ptg, const NpArr &data)
+    void Py_deinterpol(const CNpArr &ptg, const CNpArr &data)
       {
       if (isPyarr<float>(ptg))
         return Py_deinterpol2<float>(ptg, data);
@@ -220,7 +220,7 @@ template<typename T> class Py_Interpolator
         return Py_deinterpol2<double>(ptg, data);
       MR_fail("type matching failed: 'ptg' has neither type 'f4' nor 'f8'");
       }
-    NpArr Py_getSlm(const NpArr &blm_)
+    NpArr Py_getSlm(const CNpArr &blm_)
       {
       size_t lmax=conv.Lmax(), kmax=conv.Kmax();
       auto vblm = to_cmav<complex<T>,2>(blm_);
@@ -840,12 +840,12 @@ void add_totalconvolve(py::module_ &msup)
 
   using inter_d = Py_Interpolator<double>;
   py::class_<inter_d> (m, "Interpolator", /*py::module_local(), */Py_Interpolator_DS)
-    .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
+    .def(py::init<const CNpArr &, const CNpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
 // for backwards compatibility
-    .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, double, double, int>(),
+    .def(py::init<const CNpArr &, const CNpArr &, bool, size_t, size_t, double, double, int>(),
       "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
       "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, double, double, int>(),
@@ -855,12 +855,12 @@ void add_totalconvolve(py::module_ &msup)
     .def ("getSlm", &inter_d::Py_getSlm, getSlm_DS, "beam"_a);
   using inter_f = Py_Interpolator<float>;
   py::class_<inter_f> (m, "Interpolator_f", /*py::module_local(), */Py_Interpolator_DS)
-    .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
+    .def(py::init<const CNpArr &, const CNpArr &, bool, size_t, size_t, size_t, double, double, double, int>(),
       initnormal_DS, "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "epsilon"_a, "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, size_t, double, double, double, int>(), initadjoint_DS,
       "lmax"_a, "kmax"_a, "ncomp"_a, "npoints"_a=1000000000, "sigma_min"_a=1.1, "sigma_max"_a=2.6,"epsilon"_a, "nthreads"_a=0)
 // for backwards compatibility
-    .def(py::init<const NpArr &, const NpArr &, bool, size_t, size_t, float, float, int>(),
+    .def(py::init<const CNpArr &, const CNpArr &, bool, size_t, size_t, float, float, int>(),
       "sky"_a, "beam"_a, "separate"_a, "lmax"_a, "kmax"_a, "epsilon"_a, "ofactor"_a=1.5,
       "nthreads"_a=0)
     .def(py::init<size_t, size_t, size_t, float, float, int>(),
