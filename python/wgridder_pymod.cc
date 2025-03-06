@@ -48,7 +48,7 @@ template<typename T> NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
-  auto dirty = (npix_x==0) ? get_Pyarr<T>(dirty_.value(), 2)
+  auto dirty = (npix_x==0) ? dirty_.value()
                            : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {
@@ -167,7 +167,7 @@ template<typename T> NpArr Py2_vis2dirty(const CNpArr &uvw_,
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
-  auto dirty = (npix_x==0) ? get_Pyarr<T>(dirty_.value(), 2)
+  auto dirty = (npix_x==0) ? dirty_.value()
                            : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {

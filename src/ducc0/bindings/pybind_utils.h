@@ -288,15 +288,6 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape)
 #endif
   }
 
-template<typename T> NpArr get_Pyarr(const NpArr &arr_, size_t ndims,
-  const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  MR_assert(isPyarr<T>(arr_), spec, "incorrect data type");
-  MR_assert(ndims==size_t(arr_.ndim()), spec, "dimension mismatch");
-  return arr_;
-  }
-
 template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
   const shape_t &dims, const string &name="")
   {
@@ -323,24 +314,10 @@ template<typename T> NpArr get_optional_Pyarr_minshape
   return val;
   }
 
-#ifdef DUCC0_USE_NANOBIND
 template<typename T> CNpArr get_optional_const_Pyarr(
   const OptCNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return CNpArr(make_Pyarr<T>(shape_t(dims.size(), 0)));
-  const auto spec = makeSpec(name);
-  auto val = arr_.value();
-  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
-  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
-  for (size_t i=0; i<dims.size(); ++i)
-    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
-  return val;
-  }
-#endif
-template<typename T> NpArr get_optional_const_Pyarr(
-  const OptNpArr &arr_, const shape_t &dims, const string &name="")
-  {
-  if (!arr_) return make_Pyarr<T>(shape_t(dims.size(), 0));
   const auto spec = makeSpec(name);
   auto val = arr_.value();
   MR_assert(isPyarr<T>(val), spec, "incorrect data type");
