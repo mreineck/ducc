@@ -35,6 +35,7 @@
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/variant.h>
+#include <nanobind/stl/function.h>
 #else
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
