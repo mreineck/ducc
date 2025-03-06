@@ -86,7 +86,7 @@ shape_t makeaxes(const CNpArr &in, const std::optional<std::vector<ptrdiff_t>> &
     {
     if (sz<0)
       sz += ndim;
-    if ((sz>=int(ndim)) || (sz<0))
+    if ((sz>=ptrdiff_t(ndim)) || (sz<0))
       throw std::invalid_argument("axes exceeds dimensionality of output");
     }
   return shape_t(tmp.begin(), tmp.end());
