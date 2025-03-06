@@ -64,12 +64,10 @@ using stride_t=fmav_info::stride_t;
 using NpArr = py::ndarray<py::numpy>;
 using CNpArr = py::ndarray<py::numpy, py::ro>;
 template<typename T> using NpArrT = py::ndarray<py::numpy,T>;
-//template<typename T> using CNpArrT = py::ndarray<py::numpy,const T>;
 #else
 using NpArr = py::array;
 using CNpArr = py::array;
 template<typename T> using NpArrT = py::array_t<T>;
-//template<typename T> using CNpArrT = py::array_t<T>;
 #endif
 
 using OptNpArr = std::optional<NpArr>;
@@ -96,21 +94,9 @@ shape_t copy_shape(const CNpArr &arr, const string &/*spec*/="")
     res[i] = size_t(arr.shape(int(i)));
   return res;
   }
-template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const CNpArr &arr,
-  const string &spec="")
-  {
-  MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
-  std::array<size_t, ndim> res;
-  for (size_t i=0; i<ndim; ++i)
-    res[i] = size_t(arr.shape(int(i)));
-  return res;
-  }
 #ifdef DUCC0_USE_NANOBIND
 shape_t copy_shape(const NpArr &arr, const string &spec="")
   { return copy_shape(CNpArr(arr), spec); }
-template<size_t ndim> std::array<size_t, ndim> copy_fixshape(const NpArr &arr,
-  const string &spec="")
-  { return copy_fixshape<ndim>(CNpArr(arr), spec); }
 #endif
 
 template<typename T> stride_t copy_strides_rw(const NpArr &arr,
@@ -135,33 +121,13 @@ template<typename T> stride_t copy_strides_rw(const NpArr &arr,
     }
   return res;
   }
-template<typename T, size_t ndim>
-  std::array<ptrdiff_t, ndim> copy_fixstrides_rw(const NpArr &arr,
-  const string &spec="")
-  {
-  MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
-  std::array<ptrdiff_t, ndim> res;
-  for (size_t i=0; i<ndim; ++i)
-    {
-#ifdef DUCC0_USE_NANOBIND
-    auto tmp = arr.stride(int(i));
-    MR_assert((arr.shape(int(i))==1) || (tmp!=0),
-      spec, "detected zero stride in writable array");
-    res[i] = tmp;
-#else
-    auto tmp = arr.strides(int(i));
-    MR_assert((arr.shape(int(i))==1) || (tmp!=0),
-      spec, "detected zero stride in writable array");
-    constexpr auto st = ptrdiff_t(sizeof(T));
-    MR_assert((tmp/st)*st==tmp, spec, "bad stride");
-    res[i] = tmp/st;
-#endif
-    }
-  return res;
-  }
 
 template<typename T> stride_t copy_strides_ro(const CNpArr &arr,
+#ifdef DUCC0_USE_NANOBIND
   const string &/*spec*/="")
+#else
+  const string &spec="")
+#endif
   {
   stride_t res(size_t(arr.ndim()));
   for (size_t i=0; i<res.size(); ++i)
@@ -178,34 +144,10 @@ template<typename T> stride_t copy_strides_ro(const CNpArr &arr,
     }
   return res;
   }
-template<typename T, size_t ndim>
-  std::array<ptrdiff_t, ndim> copy_fixstrides_ro(const CNpArr &arr,
-  const string &spec="")
-  {
-  MR_assert(size_t(arr.ndim())==ndim, spec, "incorrect number of dimensions");
-  std::array<ptrdiff_t, ndim> res;
-  for (size_t i=0; i<ndim; ++i)
-    {
-#ifdef DUCC0_USE_NANOBIND
-    auto tmp = arr.stride(int(i));
-    res[i] = tmp;
-#else
-    auto tmp = arr.strides(int(i));
-    constexpr auto st = ptrdiff_t(sizeof(T));
-    MR_assert((tmp/st)*st==tmp, spec, "bad stride");
-    res[i] = tmp/st;
-#endif
-    }
-  return res;
-  }
 #ifdef DUCC0_USE_NANOBIND
 template<typename T> stride_t copy_strides_ro(const NpArr &arr,
   const string &spec="")
   { return copy_strides_ro<T>(CNpArr(arr), spec); }
-template<typename T, size_t ndim>
-  std::array<ptrdiff_t, ndim> copy_fixstrides_ro(const NpArr &arr,
-  const string &spec="")
-  { return copy_fixstrides_ro<T, ndim>(CNpArr(arr), spec); }
 #endif
 
 template<typename T> cfmav<T> to_cfmav(const CNpArr &obj, const string &name="")
@@ -219,8 +161,6 @@ template<typename T> cfmav<T> to_cfmav(const CNpArr &obj, const string &name="")
 template<typename T> cfmav<T> to_cfmav(const NpArr &obj, const string &name="")
   { return to_cfmav<T>(CNpArr(obj), name); }
 #endif
-template<typename T> cfmav<T> to_cfmav(const py::object &obj, const string &name="")
-  { return to_cfmav<T>(py::cast<CNpArr>(obj), name); }
 
 template<typename T> vfmav<T> to_vfmav(const NpArr &obj,
   const string &name="")
@@ -236,46 +176,16 @@ template<typename T> vfmav<T> to_vfmav(const NpArr &obj,
     copy_shape(obj, spec), copy_strides_rw<T>(obj, spec));
 #endif
   }
-template<typename T> vfmav<T> to_vfmav(const py::object &obj, const string &name="")
-  { return to_vfmav<T>(py::cast<NpArr>(obj), name); }
 
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const CNpArr &obj,
   const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  MR_assert(isPyarr<T>(obj), "data type mismatch");
-  return cmav<T,ndim>(reinterpret_cast<const T *>(obj.data()),
-    copy_fixshape<ndim>(obj, spec), copy_fixstrides_ro<T,ndim>(obj, spec));
-  }
+  { return cmav<T,ndim>(to_cfmav<T>(obj, name)); }
 #ifdef DUCC0_USE_NANOBIND
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const NpArr &obj,
   const string &name="")
   { return to_cmav<T,ndim>(CNpArr(obj), name); }
 #endif
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const py::object &obj,
-  const string &name="")
-  { return to_cmav<T,ndim>(py::cast<CNpArr>(obj), name); }
 
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const CNpArr &obj,
-  const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  auto tmp = to_cfmav<T>(obj, name); 
-  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
-  typename cmav<T,ndim>::shape_t newshape;
-  typename cmav<T,ndim>::stride_t newstride;
-  size_t add=ndim-tmp.ndim();
-  for (size_t i=0; i<add; ++i)
-    { newshape[i]=1; newstride[i]=0; }
-  for (size_t i=0; i<tmp.ndim(); ++i)
-    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
-  return cmav<T,ndim>(tmp.data(), newshape, newstride);
-  }
-#ifdef DUCC0_USE_NANOBIND
-template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const NpArr &obj,
-  const string &name="")
-  { return to_cmav_with_optional_leading_dimensions<T, ndim>(CNpArr(obj), name); }
-#endif
 template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const CNpArr &obj, size_t ndim,
   const string &name="")
   {
@@ -296,41 +206,17 @@ template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const Np
   const string &name="")
   { return to_cfmav_with_optional_leading_dimensions<T>(CNpArr(obj), name); }
 #endif
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const CNpArr &obj,
+  const string &name="")
+  { return cmav<T,ndim>(to_cfmav_with_optional_leading_dimensions<T>(obj, ndim, name)); }
+#ifdef DUCC0_USE_NANOBIND
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const NpArr &obj,
+  const string &name="")
+  { return to_cmav_with_optional_leading_dimensions<T, ndim>(CNpArr(obj), name); }
+#endif
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const NpArr &obj,
   const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  MR_assert(isPyarr<T>(obj), "data type mismatch");
-#ifdef DUCC0_USE_NANOBIND
-  return vmav<T,ndim>(reinterpret_cast<T *>(obj.data()),
-    copy_fixshape<ndim>(obj, spec), copy_fixstrides_rw<T,ndim>(obj, spec));
-#else
-  auto arr = NpArrT<T>(obj);
-  return vmav<T,ndim>(reinterpret_cast<T *>(arr.mutable_data()),
-    copy_fixshape<ndim>(obj, spec), copy_fixstrides_rw<T,ndim>(obj, spec));
-#endif
-  }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const py::object &obj,
-  const string &name="")
-  { return to_vmav<T,ndim>(py::cast<NpArr>(obj), name); }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const NpArr &obj,
-  const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  auto tmp = to_vfmav<T>(obj, name); 
-  MR_assert(tmp.ndim()<=ndim, spec, "array has too many dimensions");
-  typename vmav<T,ndim>::shape_t newshape;
-  typename vmav<T,ndim>::stride_t newstride;
-  size_t add=ndim-tmp.ndim();
-  for (size_t i=0; i<add; ++i)
-    { newshape[i]=1; newstride[i]=0; }
-  for (size_t i=0; i<tmp.ndim(); ++i)
-    { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
-  return vmav<T,ndim>(tmp.data(), newshape, newstride);
-  }
-template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const py::object &obj,
-  const string &name="")
-  { return to_vmav_with_optional_leading_dimensions<T, ndim>(py::cast<NpArr>(obj), name); }
+  { return vmav<T,ndim>(to_vfmav<T>(obj, name)); }
 
 template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const NpArr &obj, size_t ndim,
   const string &name="")
@@ -347,20 +233,9 @@ template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const Np
     { newshape[i+add]=tmp.shape(i); newstride[i+add]=tmp.stride(i); }
   return vfmav<T>(tmp.data(), newshape, newstride);
   }
-template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const py::object &obj, size_t ndim,
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dimensions(const NpArr &obj,
   const string &name="")
-  { return to_vfmav_with_optional_leading_dimensions<T>(py::cast<NpArr>(obj), ndim, name); }
-
-template<typename T, size_t len> std::array<T,len> to_array(const py::object &obj,
-  const string &name="")
-  {
-  const auto spec = makeSpec(name);
-  auto vec = py::cast<std::vector<T>>(obj);
-  MR_assert(vec.size()==len, spec, "unexpected number of elements");
-  std::array<T,len> res;
-  for (size_t i=0;i<len; ++i) res[i] = vec[i];
-  return res;
-  }
+  { return vmav<T,ndim>(to_vfmav_with_optional_leading_dimensions<T>(obj, ndim, name)); }
 
 template<typename T> void zero_Pyarr(NpArr &arr, size_t nthreads=1)
   {
@@ -368,25 +243,21 @@ template<typename T> void zero_Pyarr(NpArr &arr, size_t nthreads=1)
   mav_apply([](T &v){ v=T(0); }, nthreads, arr2);
   }
 
-#ifdef DUCC0_USE_NANOBIND
 template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   {
+#ifdef DUCC0_USE_NANOBIND
   auto *res = new vfmav<T>(dims);
   py::capsule owner(res, [](void *p) noexcept {
        delete reinterpret_cast<vfmav<T> *>(p);
     });
   NpArr res_(NpArrT<T>(res->data(), dims.size(), dims.data(), owner));
+#else
+  auto res_=NpArr(NpArrT<T>(dims));
+#endif
   if (zero) zero_Pyarr<T>(res_);
   return res_;
   }
-#else
-template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
-  {
-  auto res=NpArr(NpArrT<T>(dims));
-  if (zero) zero_Pyarr<T>(res);
-  return res;
-  }
-#endif
+
 template<typename T, size_t ndim> NpArr make_Pyarr
   (const std::array<size_t,ndim> &dims, bool zero=false)
   {
@@ -511,7 +382,6 @@ using detail_pybind::to_cfmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
 using detail_pybind::to_vmav_with_optional_leading_dimensions;
 using detail_pybind::to_vfmav_with_optional_leading_dimensions;
-using detail_pybind::to_array;
 #ifndef DUCC0_USE_NANOBIND
 using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;
