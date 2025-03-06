@@ -1,5 +1,8 @@
 0.37.0:
 - general:
+  - rework of the Python interface to allow an (optional) switch from pybind11
+    to nanobind. As a consequence, function signatures in docstrings have
+    become much more precise.
   - slightly improved messages for (non-pybind11-generated) errors detected at
     the Python/C++ interface: error message is now preceded by variable name.
   - beginnings of a more mathematical description of ducc0's functions

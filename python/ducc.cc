@@ -32,8 +32,14 @@ PYBIND11_MODULE(PKGNAME, m)
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
 #define DUCC0_STRINGIFY(s) #s
   m.attr("__version__") = DUCC0_XSTRINGIFY(PKGVERSION);
+  m.attr("__version__") = DUCC0_XSTRINGIFY(PKGVERSION);
 #undef DUCC0_STRINGIFY
 #undef DUCC0_XSTRINGIFY
+#ifdef DUCC0_USE_NANOBIND
+  m.attr("__wrapper__") = "nanobind";
+#else
+  m.attr("__wrapper__") = "pybind11";
+#endif
 
   add_fft(m);
   add_sht(m);
