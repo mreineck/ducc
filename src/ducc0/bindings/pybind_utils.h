@@ -71,6 +71,9 @@ template<typename T> using NpArrT = py::array_t<T>;
 //template<typename T> using CNpArrT = py::array_t<T>;
 #endif
 
+using OptNpArr = std::optional<NpArr>;
+using OptCNpArr = std::optional<CNpArr>;
+
 static inline string makeSpec(const string &name)
   { return (name=="") ? "" : name+": "; }
 
@@ -471,7 +474,7 @@ template<typename T> NpArr get_Pyarr(const NpArr &arr_, size_t ndims,
   return arr_;
   }
 
-template<typename T> NpArr get_optional_Pyarr(const optional<NpArr> &arr_,
+template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
   const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims, false);
@@ -485,7 +488,7 @@ template<typename T> NpArr get_optional_Pyarr(const optional<NpArr> &arr_,
   }
 
 template<typename T> NpArr get_optional_Pyarr_minshape
-  (optional<NpArr> &arr_, const shape_t &dims, const string &name="")
+  (OptNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims);
   const auto spec = makeSpec(name);
@@ -499,7 +502,7 @@ template<typename T> NpArr get_optional_Pyarr_minshape
 
 #ifdef DUCC0_USE_NANOBIND
 template<typename T> CNpArr get_optional_const_Pyarr(
-  const optional<CNpArr> &arr_, const shape_t &dims, const string &name="")
+  const OptCNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return CNpArr(make_Pyarr<T>(shape_t(dims.size(), 0)));
   const auto spec = makeSpec(name);
@@ -512,7 +515,7 @@ template<typename T> CNpArr get_optional_const_Pyarr(
   }
 #endif
 template<typename T> NpArr get_optional_const_Pyarr(
-  const optional<NpArr> &arr_, const shape_t &dims, const string &name="")
+  const OptNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(shape_t(dims.size(), 0));
   const auto spec = makeSpec(name);
@@ -538,7 +541,9 @@ template<typename T> bool isDtype(const py::object &dtype)
 }
 
 using detail_pybind::NpArr;
+using detail_pybind::OptNpArr;
 using detail_pybind::CNpArr;
+using detail_pybind::OptCNpArr;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;

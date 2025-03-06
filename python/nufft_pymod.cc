@@ -48,7 +48,7 @@ vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
 
 template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const CNpArr &grid_,
   const CNpArr &coord_, bool forward, double epsilon, size_t nthreads,
-  optional<NpArr> &out__, size_t verbosity, double sigma_min, double sigma_max,
+  OptNpArr &out__, size_t verbosity, double sigma_min, double sigma_max,
   const Periodicity &periodicity_, bool fft_order)
   {
   using Tpoints = Tgrid;
@@ -87,7 +87,7 @@ template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const CNpArr &grid_,
   }
 NpArr Py_u2nu(const CNpArr &grid,
   const CNpArr &coord, bool forward, double epsilon, size_t nthreads,
-  optional<NpArr> &out, size_t verbosity, double sigma_min, double sigma_max,
+  OptNpArr &out, size_t verbosity, double sigma_min, double sigma_max,
   const Periodicity &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
@@ -174,7 +174,7 @@ NpArr Py_nu2u(const CNpArr &points,
 
 template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const CNpArr &points_in_,
   const CNpArr &coord_in_, const CNpArr &coord_out_, bool forward, double epsilon, size_t nthreads,
-  optional<NpArr> &points_out__, size_t verbosity, double sigma_min, double sigma_max)
+  OptNpArr &points_out__, size_t verbosity, double sigma_min, double sigma_max)
   {
   using Tgrid = Tpoints;
   auto coord_in = to_cmav<Tcoord,2>(coord_in_, "coord_in");
@@ -203,7 +203,7 @@ template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const CNpArr &points
 NpArr Py_nu2nu(const CNpArr &points_in,
   const CNpArr &coord_in, const CNpArr &coord_out, bool forward,
   double epsilon, size_t nthreads,
-  optional<NpArr> &points_out, size_t verbosity, double sigma_min, double sigma_max)
+  OptNpArr &points_out, size_t verbosity, double sigma_min, double sigma_max)
   {
   if (isPyarr<double>(coord_in))
     {
@@ -256,7 +256,7 @@ class Py_Nufftplan
     template<typename T> NpArr do_nu2u(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const CNpArr &points_,
-      optional<NpArr> &uniform__) const
+      OptNpArr &uniform__) const
       {
       auto points = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_, "points");
       vector<size_t> uni_shape;
@@ -279,7 +279,7 @@ class Py_Nufftplan
     template<typename T> NpArr do_u2nu(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       bool forward, size_t verbosity, const CNpArr &uniform_,
-      optional<NpArr> &points__) const
+      OptNpArr &points__) const
       {
       auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1, "grid");
       auto points_ = (size_t(uniform_.ndim())==uniform_shape.size())
@@ -321,14 +321,14 @@ class Py_Nufftplan
       }
 
     NpArr nu2u(bool forward, size_t verbosity,
-      const CNpArr &points_, optional<NpArr> &uniform_)
+      const CNpArr &points_, OptNpArr &uniform_)
       {
       if (pd) return do_nu2u(pd, forward, verbosity, points_, uniform_);
       if (pf) return do_nu2u(pf, forward, verbosity, points_, uniform_);
       MR_fail("unsupported");
       }
     NpArr u2nu(bool forward, size_t verbosity,
-      const CNpArr &uniform_, optional<NpArr> &points_)
+      const CNpArr &uniform_, OptNpArr &points_)
       {
       if (pd) return do_u2nu(pd, forward, verbosity, uniform_, points_);
       if (pf) return do_u2nu(pf, forward, verbosity, uniform_, points_);
@@ -378,7 +378,7 @@ class Py_incremental_nu2u
     template<typename T> NpArr do_evaluate_and_reset(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
-      optional<NpArr> &uniform__)
+      OptNpArr &uniform__)
       {
       auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, "uniform");
       auto uniform = to_vfmav<complex<T>>(uniform_, "uniform");
@@ -418,7 +418,7 @@ class Py_incremental_nu2u
       if (pf) return do_add_points(pf, coord, values, gridf);
       MR_fail("unsupported");
       }
-    NpArr evaluate_and_reset(optional<NpArr> &uniform)
+    NpArr evaluate_and_reset(OptNpArr &uniform)
       {
       if (pd) return do_evaluate_and_reset(pd, gridd, uniform);
       if (pf) return do_evaluate_and_reset(pf, gridf, uniform);
@@ -459,7 +459,7 @@ class Py_incremental_u2nu
       }
     template<typename T> NpArr do_get_points(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      const CNpArr &coord_, optional<NpArr> &values__,
+      const CNpArr &coord_, OptNpArr &values__,
       const cfmav<complex<T>> &grid) const
       {
       auto coord = to_cmav<T,2>(coord_, "coord");
@@ -492,7 +492,7 @@ class Py_incremental_u2nu
                   sigma_min, sigma_max, periodicity, fft_order_);
       }
 
-    NpArr get_points(const CNpArr &coord, optional<NpArr> &values) const
+    NpArr get_points(const CNpArr &coord, OptNpArr &values) const
       {
       if (pd) return do_get_points(pd, coord, values, gridd);
       if (pf) return do_get_points(pf, coord, values, gridf);
@@ -529,7 +529,7 @@ class Py_Nufft3plan
     template<typename T> NpArr do_exec(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
       bool forward, const CNpArr &points_in_,
-      optional<NpArr> &points_out__) const
+      OptNpArr &points_out__) const
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
@@ -546,7 +546,7 @@ class Py_Nufft3plan
     template<typename T> NpArr do_exec_adjoint(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
       bool forward, const CNpArr &points_in_,
-      optional<NpArr> &points_out__) const
+      OptNpArr &points_out__) const
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
@@ -580,14 +580,14 @@ class Py_Nufft3plan
       }
 
     NpArr exec(bool forward,
-      const CNpArr &points_in, optional<NpArr> &points_out)
+      const CNpArr &points_in, OptNpArr &points_out)
       {
       if (pd) return do_exec(pd, forward, points_in, points_out);
       if (pf) return do_exec(pf, forward, points_in, points_out);
       MR_fail("unsupported");
       }
     NpArr exec_adjoint(bool forward,
-      const CNpArr &points_in, optional<NpArr> &points_out)
+      const CNpArr &points_in, OptNpArr &points_out)
       {
       if (pd) return do_exec_adjoint(pd, forward, points_in, points_out);
       if (pf) return do_exec_adjoint(pf, forward, points_in, points_out);
