@@ -347,7 +347,6 @@ using detail_pybind::OptCNpArr;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;
-using detail_pybind::get_Pyarr;
 using detail_pybind::get_optional_Pyarr;
 using detail_pybind::get_optional_Pyarr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
