@@ -1,20 +1,16 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 
-# Set the package name
+if(DEFINED ENV{DUCC0_OPTIMIZATION})
+    set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
+else()
+    set (OPTFLAGS "native-strip")
+endif()
+
 set(PKGNAME ${SKBUILD_PROJECT_NAME})
-# Set the version
 set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
-
-execute_process(
-        COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        OUTPUT_VARIABLE NB_DIR)
-list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
-
-find_package(nanobind CONFIG REQUIRED)
 
 set(CXX_SOURCES
         src/ducc0/healpix/healpix_base.cc
@@ -43,19 +39,35 @@ set(PYMOD_SOURCES
         python/wgridder_pymod.cc
 )
 
-nanobind_add_module(ducc0 NB_SUPPRESS_WARNINGS NOMINSIZE ${CXX_SOURCES} ${PYMOD_SOURCES})
+if (DEFINED ENV{DUCC0_USE_NANOBIND})
+    execute_process(
+            COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            OUTPUT_VARIABLE NB_DIR)
+    list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
+    find_package(nanobind CONFIG REQUIRED)
+    nanobind_add_module(ducc0 NB_SUPPRESS_WARNINGS NOMINSIZE ${CXX_SOURCES} ${PYMOD_SOURCES})
+    target_compile_definitions(ducc0 PRIVATE DUCC0_USE_NANOBIND)
+else()
+    find_package(pybind11 REQUIRED)
+    pybind11_add_module(ducc0 ${CXX_SOURCES} ${PYMOD_SOURCES})
+endif()
 
-target_compile_definitions(ducc0 PRIVATE DUCC0_USE_NANOBIND)
 target_compile_definitions(ducc0 PRIVATE PKGNAME=${PKGNAME} PKGVERSION=${PKGVERSION})
 
 if (NOT MSVC)
     if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc|ppc64|powerpc|powerpc64" OR (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "ppc|ppc64"))
         # PowerPC arch does not have -march flag.
-        set(DUCC_ARCH_FLAGS "-mtune=native" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "-mtune=native" CACHE STRING "Compiler flags for specifying target architecture.")
     else ()
-        set(DUCC_ARCH_FLAGS "-march=native" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "-march=native" CACHE STRING "Compiler flags for specifying target architecture.")
     endif ()
-    message(STATUS "Using GCC/Clang flags: ${DUCC_ARCH_FLAGS}")
+#    set (DUCC0_OPT_FLAGS -O3 -ffp-contract=fast -fexcess-precision=fast -fno-math-errno -fno-signed-zeros -fno-trapping-math -fassociative-math -freciprocal-math)
+    set (DUCC0_OPT_FLAGS -O3 -ffast-math)
+    set (DUCC0_NOOPT_FLAGS -O0)
+    set (DUCC0_DEBUG_FLAGS -g)
+    set (DUCC0_STRIP_FLAGS -g0 -s)
+    message(STATUS "Using GCC/Clang flags: ${DUCC0_ARCH_FLAGS}")
 else ()
     # Check for AVX, AVX512 and SSE support
     message(STATUS "Checking for AVX, AVX512 and SSE support")
@@ -65,23 +77,45 @@ else ()
             COMPILE_OUTPUT_VARIABLE COMPILE_OUTPUT
             RUN_OUTPUT_VARIABLE RUN_OUTPUT)
     if (RUN_OUTPUT MATCHES "AVX512")
-        set(DUCC_ARCH_FLAGS "/arch:AVX512" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "/arch:AVX512" CACHE STRING "Compiler flags for specifying target architecture.")
     elseif (RUN_OUTPUT MATCHES "AVX")
-        set(DUCC_ARCH_FLAGS "/arch:AVX" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "/arch:AVX" CACHE STRING "Compiler flags for specifying target architecture.")
     elseif (RUN_OUTPUT MATCHES "SSE")
-        set(DUCC_ARCH_FLAGS "/arch:SSE" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "/arch:SSE" CACHE STRING "Compiler flags for specifying target architecture.")
     else ()
-        set(DUCC_ARCH_FLAGS "" CACHE STRING "Compiler flags for specifying target architecture.")
+        set(DUCC0_ARCH_FLAGS "" CACHE STRING "Compiler flags for specifying target architecture.")
     endif ()
     message(STATUS "CPU supports: ${RUN_OUTPUT}")
-    message(STATUS "Using MSVC flags: ${DUCC_ARCH_FLAGS}")
+    message(STATUS "Using MSVC flags: ${DUCC0_ARCH_FLAGS}")
+    set (DUCC0_OPT_FLAGS )
+    set (DUCC0_NOOPT_FLAGS )
+    set (DUCC0_DEBUG_FLAGS )
+    set (DUCC0_STRIP_FLAGS )
 endif ()
 
-option(DUCC_USE_THREADS "Use threads for parallelization" ON)
+option(DUCC0_USE_THREADS "Use threads for parallelization" ON)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-target_compile_options(ducc0 PRIVATE ${DUCC_ARCH_FLAGS})
+if (OPTFLAGS STREQUAL "native-debug")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
+elseif (OPTFLAGS STREQUAL "native-strip")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS} ${DUCC0_STRIP_FLAGS})
+elseif (OPTFLAGS STREQUAL "native")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS})
+elseif (OPTFLAGS STREQUAL "portable-debug")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
+elseif (OPTFLAGS STREQUAL "portable-strip")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS} ${DUCC0_STRIP_FLAGS})
+elseif (OPTFLAGS STREQUAL "portable")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
+elseif (OPTFLAGS STREQUAL "none-debug")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
+elseif (OPTFLAGS STREQUAL "none-strip")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS} ${DUCC0_STRIP_FLAGS})
+elseif (OPTFLAGS STREQUAL "none")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS})
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ducc0 PRIVATE
@@ -101,7 +135,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
     )
 endif()
 
-if (DUCC_USE_THREADS)
+if (DUCC0_USE_THREADS)
     find_package(Threads REQUIRED)
     target_link_libraries(ducc0 PRIVATE Threads::Threads)
 endif ()
