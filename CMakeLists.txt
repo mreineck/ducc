@@ -28,15 +28,16 @@ set(CXX_SOURCES
         src/ducc0/sht/sht.cc
 )
 set(PYMOD_SOURCES
-        python/ducc.cc
-        python/fft_pymod.cc
-        python/healpix_pymod.cc
-        python/misc_pymod.cc
         python/nufft_pymod.cc
-        python/pointingprovider_pymod.cc
+        python/fft_pymod.cc
         python/sht_pymod.cc
+        python/misc_pymod.cc
         python/totalconvolve_pymod.cc
         python/wgridder_pymod.cc
+        python/misc_pymod.cc
+        python/healpix_pymod.cc
+        python/pointingprovider_pymod.cc
+        python/ducc.cc
 )
 
 if (DEFINED ENV{DUCC0_USE_NANOBIND})
@@ -46,12 +47,12 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
             OUTPUT_VARIABLE NB_DIR)
     list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
     find_package(nanobind CONFIG REQUIRED)
-    nanobind_add_module(ducc0 NB_SUPPRESS_WARNINGS NOMINSIZE ${CXX_SOURCES} ${PYMOD_SOURCES})
+    nanobind_add_module(ducc0 NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
     target_compile_definitions(ducc0 PRIVATE DUCC0_USE_NANOBIND)
 else()
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
     find_package(pybind11 REQUIRED)
-    pybind11_add_module(ducc0 ${CXX_SOURCES} ${PYMOD_SOURCES})
+    pybind11_add_module(ducc0 ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
 
 target_compile_definitions(ducc0 PRIVATE PKGNAME=${PKGNAME} PKGVERSION=${PKGVERSION})
@@ -98,24 +99,18 @@ option(DUCC0_USE_THREADS "Use threads for parallelization" ON)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-if (OPTFLAGS STREQUAL "native-debug")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
-elseif (OPTFLAGS STREQUAL "native-strip")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS} ${DUCC0_STRIP_FLAGS})
-elseif (OPTFLAGS STREQUAL "native")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS} ${DUCC0_OPT_FLAGS})
-elseif (OPTFLAGS STREQUAL "portable-debug")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
-elseif (OPTFLAGS STREQUAL "portable-strip")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS} ${DUCC0_STRIP_FLAGS})
-elseif (OPTFLAGS STREQUAL "portable")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
-elseif (OPTFLAGS STREQUAL "none-debug")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS} ${DUCC0_DEBUG_FLAGS})
-elseif (OPTFLAGS STREQUAL "none-strip")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS} ${DUCC0_STRIP_FLAGS})
-elseif (OPTFLAGS STREQUAL "none")
+if (OPTFLAGS MATCHES "native")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS})
+endif()
+if (OPTFLAGS MATCHES "debug")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_DEBUG_FLAGS})
+elseif (OPTFLAGS MATCHES "strip")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_STRIP_FLAGS})
+endif()
+if (OPTFLAGS MATCHES "none")
   target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS})
+else()
+  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

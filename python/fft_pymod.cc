@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/fft/fft.h"
 #include "ducc0/fft/fft1d_impl.h"
 #include "ducc0/fft/fftnd_impl.h"
@@ -67,7 +68,6 @@ using clong = std::complex<ldbl_t>;
 using f32 = float;
 using f64 = double;
 using flong = ldbl_t;
-auto None = py::none();
 
 using OptAxes = std::optional<std::vector<ptrdiff_t>>;
 

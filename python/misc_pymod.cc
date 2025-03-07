@@ -29,6 +29,7 @@
 #include <cmath>
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
@@ -44,7 +45,6 @@ namespace ducc0 {
 namespace detail_pymodule_misc {
 
 using namespace std;
-auto None = py::none();
 
 constexpr const char *Py_vdot_DS = R"""(
 Compute the scalar product of two arrays or scalars., i.e. sum_i(conj(a_i)*b_i)
@@ -1816,7 +1816,7 @@ void add_misc(py::module_ &msup)
 
   m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
-    "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1, "dphi"_a=None);
+    "calc_rotation"_a=false, "res"_a=None, "nthreads"_a=1, "dphi"_a=None);
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 

@@ -28,6 +28,7 @@
 #include <vector>
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
 #include "ducc0/healpix/healpix_base.h"
@@ -41,8 +42,6 @@ namespace ducc0 {
 namespace detail_pymodule_sht {
 
 using namespace std;
-
-auto None = py::none();
 
 using OptSizeT = optional<size_t>;
 

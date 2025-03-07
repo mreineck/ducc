@@ -59,6 +59,8 @@ namespace detail_pybind {
 using shape_t=fmav_info::shape_t;
 using stride_t=fmav_info::stride_t;
 
+static const auto None = py::none();
+
 #ifdef DUCC0_USE_NANOBIND
 using NpArr = py::ndarray<py::numpy>;
 using CNpArr = py::ndarray<py::numpy, py::ro>;
@@ -286,6 +288,7 @@ using detail_pybind::NpArr;
 using detail_pybind::OptNpArr;
 using detail_pybind::CNpArr;
 using detail_pybind::OptCNpArr;
+using detail_pybind::None;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_noncritical_Pyarr;

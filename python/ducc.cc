@@ -1,28 +1,5 @@
-//#include "ducc0/infra/string_utils.cc"
-//#include "ducc0/infra/threading.cc"
-//#include "ducc0/infra/mav.cc"
-//#include "ducc0/math/pointing.cc"
-//#include "ducc0/math/geom_utils.cc"
-//#include "ducc0/math/space_filling.cc"
-//#include "ducc0/math/gl_integrator.cc"
-//#include "ducc0/math/gridding_kernel.cc"
-//#include "ducc0/math/wigner3j.cc"
-//#include "ducc0/sht/sht.cc"
-//#include "ducc0/healpix/healpix_tables.cc"
-//#include "ducc0/healpix/healpix_base.cc"
-//#include "ducc0/wgridder/wgridder.cc"
-
-//#include "python/sht_pymod.cc"
-//#include "python/fft_pymod.cc"
-//#include "python/totalconvolve_pymod.cc"
-//#include "python/wgridder_pymod.cc"
-//#include "python/healpix_pymod.cc"
-//#include "python/misc_pymod.cc"
-//#include "python/pointingprovider_pymod.cc"
-//#include "python/nufft_pymod.cc"
-
 #include "ducc0/bindings/pybind_utils.h"
-#include "../python/module_adders.h"
+#include "ducc0/../../python/module_adders.h"
 
 using namespace ducc0;
 

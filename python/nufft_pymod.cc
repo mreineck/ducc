@@ -17,6 +17,7 @@
 /* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/nufft/nufft.h"
 
@@ -25,8 +26,6 @@ namespace ducc0 {
 namespace detail_pymodule_nufft {
 
 using namespace std;
-
-auto None = py::none();
 
 using Periodicity = variant<double, vector<double>>;
 

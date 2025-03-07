@@ -19,6 +19,7 @@
  *  Author: Martin Reinecke
  */
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/sht/totalconvolve.h"
 
@@ -27,8 +28,6 @@ namespace ducc0 {
 namespace detail_pymodule_totalconvolve {
 
 using namespace std;
-
-auto None = py::none();
 
 template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
   {

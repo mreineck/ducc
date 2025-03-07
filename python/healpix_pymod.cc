@@ -31,6 +31,7 @@
 #include <vector>
 #include <string>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/healpix/healpix_base.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/string_utils.h"
