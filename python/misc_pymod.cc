@@ -33,6 +33,8 @@
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gl_integrator.h"
+#include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/pointing.h"
 #include "ducc0/math/mcm.h"
 #include "ducc0/math/quaternion.h"
 #include "ducc0/bindings/pybind_utils.h"
