@@ -43,7 +43,7 @@ set(PYMOD_SOURCES
         python/wgridder_pymod.cc
 )
 
-nanobind_add_module(ducc0 NOMINSIZE ${CXX_SOURCES} ${PYMOD_SOURCES})
+nanobind_add_module(ducc0 NB_SUPPRESS_WARNINGS NOMINSIZE ${CXX_SOURCES} ${PYMOD_SOURCES})
 
 target_compile_definitions(ducc0 PRIVATE DUCC0_USE_NANOBIND)
 target_compile_definitions(ducc0 PRIVATE PKGNAME=${PKGNAME} PKGVERSION=${PKGVERSION})
@@ -79,7 +79,7 @@ endif ()
 
 option(DUCC_USE_THREADS "Use threads for parallelization" ON)
 
-include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/src)
 
 target_compile_options(ducc0 PRIVATE ${DUCC_ARCH_FLAGS})
 
