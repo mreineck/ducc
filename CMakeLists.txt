@@ -64,11 +64,6 @@ if (NOT MSVC)
     else ()
         set(DUCC0_ARCH_FLAGS "-march=native" CACHE STRING "Compiler flags for specifying target architecture.")
     endif ()
-#    set (DUCC0_OPT_FLAGS -O3 -ffp-contract=fast -fexcess-precision=fast -fno-math-errno -fno-signed-zeros -fno-trapping-math -fassociative-math -freciprocal-math)
-    set (DUCC0_OPT_FLAGS -O3 -ffast-math)
-    set (DUCC0_NOOPT_FLAGS -O0)
-    set (DUCC0_DEBUG_FLAGS -g)
-    set (DUCC0_STRIP_FLAGS -g0 -s)
     message(STATUS "Using GCC/Clang flags: ${DUCC0_ARCH_FLAGS}")
 else ()
     # Check for AVX, AVX512 and SSE support
@@ -89,32 +84,14 @@ else ()
     endif ()
     message(STATUS "CPU supports: ${RUN_OUTPUT}")
     message(STATUS "Using MSVC flags: ${DUCC0_ARCH_FLAGS}")
-    set (DUCC0_OPT_FLAGS )
-    set (DUCC0_NOOPT_FLAGS )
-    set (DUCC0_DEBUG_FLAGS )
-    set (DUCC0_STRIP_FLAGS )
 endif ()
 
 option(DUCC0_USE_THREADS "Use threads for parallelization" ON)
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-if (OPTFLAGS MATCHES "native")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS})
-endif()
-if (OPTFLAGS MATCHES "debug")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_DEBUG_FLAGS})
-elseif (OPTFLAGS MATCHES "strip")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_STRIP_FLAGS})
-endif()
-if (OPTFLAGS MATCHES "none")
-  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS})
-else()
-  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
-endif()
-
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(ducc0 PRIVATE
+    SET(DUCC0_WARN_FLAGS
             -Wfatal-errors
             -Wfloat-conversion
             -W
@@ -129,6 +106,26 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
             -Wnon-virtual-dtor
             -Wzero-as-null-pointer-constant
     )
+#    set (DUCC0_OPT_FLAGS -O3 -ffp-contract=fast -fexcess-precision=fast -fno-math-errno -fno-signed-zeros -fno-trapping-math -fassociative-math -freciprocal-math)
+    set (DUCC0_OPT_FLAGS -O3 -ffast-math)
+    set (DUCC0_NOOPT_FLAGS -O0)
+    set (DUCC0_DEBUG_FLAGS -g)
+    set (DUCC0_STRIP_FLAGS -g0 -s)
+endif()
+
+target_compile_options(ducc0 PRIVATE ${DUCC0_WARN_FLAGS})
+if (OPTFLAGS MATCHES "native")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS})
+endif()
+if (OPTFLAGS MATCHES "debug")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_DEBUG_FLAGS})
+elseif (OPTFLAGS MATCHES "strip")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_STRIP_FLAGS})
+endif()
+if (OPTFLAGS MATCHES "none")
+  target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS})
+else()
+  target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
 endif()
 
 if (DUCC0_USE_THREADS)
