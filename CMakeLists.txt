@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 
+#set (CMAKE_BUILD_TYPE Debug)
+
 if(DEFINED ENV{DUCC0_OPTIMIZATION})
     set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
 else()
@@ -47,11 +49,13 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
             OUTPUT_VARIABLE NB_DIR)
     list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
     find_package(nanobind CONFIG REQUIRED)
+# NB_STATIC?
     nanobind_add_module(ducc0 NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
     target_compile_definitions(ducc0 PRIVATE DUCC0_USE_NANOBIND)
 else()
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
     find_package(pybind11 REQUIRED)
+# NO_EXTRAS?
     pybind11_add_module(ducc0 ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
 
@@ -114,15 +118,15 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
 endif()
 
 target_compile_options(ducc0 PRIVATE ${DUCC0_WARN_FLAGS})
-if (OPTFLAGS MATCHES "native")
+if (OPTFLAGS MATCHES "^native")
   target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS})
 endif()
-if (OPTFLAGS MATCHES "debug")
+if (OPTFLAGS MATCHES "-debug$")
   target_compile_options(ducc0 PRIVATE ${DUCC0_DEBUG_FLAGS})
-elseif (OPTFLAGS MATCHES "strip")
+elseif (OPTFLAGS MATCHES "-strip$")
   target_compile_options(ducc0 PRIVATE ${DUCC0_STRIP_FLAGS})
 endif()
-if (OPTFLAGS MATCHES "none")
+if (OPTFLAGS MATCHES "^none")
   target_compile_options(ducc0 PRIVATE ${DUCC0_NOOPT_FLAGS})
 else()
   target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
