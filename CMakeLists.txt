@@ -75,6 +75,8 @@ option(DUCC_USE_THREADS "Use threads for parallelization" ON)
 
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/src)
 
+target_compile_options(ducc0 PRIVATE ${DUCC_ARCH_FLAGS})
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ducc0 PRIVATE
             -Wfatal-errors
