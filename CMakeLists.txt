@@ -73,7 +73,7 @@ endif ()
 
 option(DUCC_USE_THREADS "Use threads for parallelization" ON)
 
-include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/src)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ducc0 PRIVATE
