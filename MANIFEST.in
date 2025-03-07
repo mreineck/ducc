@@ -5,7 +5,7 @@ exclude *
 include LICENSE
 include ChangeLog
 include pyproject.toml
-include setup.py
+include CMakeLists.txt
 
 include src/ducc0/infra/aligned_array.h
 include src/ducc0/infra/bucket_sort.h
@@ -72,6 +72,7 @@ include src/ducc0/wgridder/wgridder.h
 include src/ducc0/wgridder/wgridder_sycl.h
 include src/ducc0/wgridder/wgridder.cc
 
+include python/module_adders.h
 include python/ducc.cc
 include python/fft_pymod.cc
 include python/nufft_pymod.cc
