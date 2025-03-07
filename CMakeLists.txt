@@ -2,17 +2,11 @@ cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 
 # Set the package name
-set(PKGNAME "ducc0")
+set(PKGNAME ${SKBUILD_PROJECT_NAME})
 # Set the version
-set(PKGVERSION "0.36.0")
+set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
-
-execute_process(
-        COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        OUTPUT_VARIABLE NB_DIR)
-list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 
 find_package(nanobind CONFIG REQUIRED)
 
