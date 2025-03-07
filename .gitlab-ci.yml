@@ -27,7 +27,7 @@ test_gcc:
 test_clang:
   stage: testing
   script:
-    - python3 -m build sdist
+    - python3 -m build --sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
     - 'cd ducc0-* && CC=clang CXX=clang++ python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
 
