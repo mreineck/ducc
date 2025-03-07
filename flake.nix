@@ -17,13 +17,21 @@
           version = "0.35.0";
           inherit src;
           pyproject = true;
-          build-system = with py-pkgs; [ setuptools ];
-          dependencies = with py-pkgs; [ numpy scipy pybind11 ];
+          build-system = with py-pkgs; [
+            pkgs.cmake
+            nanobind
+            ninja
+            scikit-build-core
+            setuptools-scm
+          ];
+          dontUseCmakeConfigure = true;
+
+          dependencies = with py-pkgs; [ numpy scipy ];
 
           checkInputs = [ py-pkgs.pytestCheckHook ];
           pythonImportsCheck = [ "ducc0" ];
 
-          DUCC0_OPTIMIZATION = "portable-strip";
+          DUCC0_OPTIMIZATION = "none";
 
           postInstall = ''
             mkdir -p $out/include/ducc0
