@@ -270,7 +270,7 @@ template<typename T> CNpArr get_optional_const_Pyarr(
   }
 
 #ifndef DUCC0_USE_NANOBIND
-py::dtype normalizeDtype(const py::object &dtype)
+inline py::dtype normalizeDtype(const py::object &dtype)
   {
   static py::object converter = py::module_::import("numpy").attr("dtype");
   return converter(dtype);
