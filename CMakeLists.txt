@@ -8,6 +8,12 @@ set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
 
+execute_process(
+        COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_VARIABLE NB_DIR)
+list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
+
 find_package(nanobind CONFIG REQUIRED)
 
 set(CXX_SOURCES
