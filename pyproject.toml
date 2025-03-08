@@ -131,4 +131,3 @@ sdist.include = [
     "python/demos/sht_analysis_demo.py",
     "python/demos/nufft_benchmark.py"
 ]
-sdist.exclude = ["*", "*.README.md"]
