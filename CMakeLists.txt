@@ -15,32 +15,17 @@ set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
 
 set(CXX_SOURCES
-        src/ducc0/healpix/healpix_base.cc
-        src/ducc0/healpix/healpix_tables.cc
-        src/ducc0/math/gl_integrator.cc
-        src/ducc0/math/pointing.cc
-        src/ducc0/math/gridding_kernel.cc
-        src/ducc0/math/geom_utils.cc
-        src/ducc0/math/wigner3j.cc
-        src/ducc0/math/space_filling.cc
-        src/ducc0/wgridder/wgridder.cc
-        src/ducc0/infra/string_utils.cc
-        src/ducc0/infra/threading.cc
-        src/ducc0/infra/mav.cc
-        src/ducc0/sht/sht.cc
-)
+    src/ducc0/healpix/healpix_base.cc src/ducc0/healpix/healpix_tables.cc
+    src/ducc0/math/gl_integrator.cc src/ducc0/math/pointing.cc
+    src/ducc0/math/gridding_kernel.cc src/ducc0/math/geom_utils.cc
+    src/ducc0/math/wigner3j.cc src/ducc0/math/space_filling.cc
+    src/ducc0/wgridder/wgridder.cc src/ducc0/infra/string_utils.cc
+    src/ducc0/infra/threading.cc src/ducc0/infra/mav.cc src/ducc0/sht/sht.cc)
 set(PYMOD_SOURCES
-        python/nufft_pymod.cc
-        python/fft_pymod.cc
-        python/sht_pymod.cc
-        python/misc_pymod.cc
-        python/totalconvolve_pymod.cc
-        python/wgridder_pymod.cc
-        python/misc_pymod.cc
-        python/healpix_pymod.cc
-        python/pointingprovider_pymod.cc
-        python/ducc.cc
-)
+    python/nufft_pymod.cc python/fft_pymod.cc python/sht_pymod.cc
+    python/misc_pymod.cc python/totalconvolve_pymod.cc python/wgridder_pymod.cc
+    python/misc_pymod.cc python/healpix_pymod.cc
+    python/pointingprovider_pymod.cc python/ducc.cc)
 
 if (DEFINED ENV{DUCC0_USE_NANOBIND})
     execute_process(
@@ -90,34 +75,23 @@ else ()
     message(STATUS "Using MSVC flags: ${DUCC0_ARCH_FLAGS}")
 endif ()
 
-option(DUCC0_USE_THREADS "Use threads for parallelization" ON)
-
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     SET(DUCC0_WARN_FLAGS
-            -Wfatal-errors
-            -Wfloat-conversion
-            -W
-            -Wall
-            -Wstrict-aliasing
-            -Wwrite-strings
-            -Wredundant-decls
-            -Woverloaded-virtual
-            -Wcast-qual
-            -Wcast-align
-            -Wpointer-arith
-            -Wnon-virtual-dtor
-            -Wzero-as-null-pointer-constant
-    )
+        -Wfatal-errors -Wfloat-conversion -W -Wall -Wstrict-aliasing
+        -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual
+        -Wcast-align -Wpointer-arith -Wnon-virtual-dtor
+        -Wzero-as-null-pointer-constant)
 #    set (DUCC0_OPT_FLAGS -O3 -ffp-contract=fast -fexcess-precision=fast -fno-math-errno -fno-signed-zeros -fno-trapping-math -fassociative-math -freciprocal-math)
+    # we can use -ffast-math here because the flags will not be used for linking
     set (DUCC0_OPT_FLAGS -O3 -ffast-math)
     set (DUCC0_NOOPT_FLAGS -O0)
     set (DUCC0_DEBUG_FLAGS -g)
     set (DUCC0_STRIP_FLAGS -g0 -s)
 endif()
-
 target_compile_options(ducc0 PRIVATE ${DUCC0_WARN_FLAGS})
+
 if (OPTFLAGS MATCHES "^native")
   target_compile_options(ducc0 PRIVATE ${DUCC0_ARCH_FLAGS})
 endif()
@@ -132,10 +106,8 @@ else()
   target_compile_options(ducc0 PRIVATE ${DUCC0_OPT_FLAGS})
 endif()
 
-if (DUCC0_USE_THREADS)
-    find_package(Threads REQUIRED)
-    target_link_libraries(ducc0 PRIVATE Threads::Threads)
-endif ()
+find_package(Threads REQUIRED)
+target_link_libraries(ducc0 PRIVATE Threads::Threads)
 
 target_compile_features(ducc0 PRIVATE cxx_std_17)
 

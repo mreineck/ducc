@@ -20,14 +20,14 @@ build_docker:
 test_gcc:
   stage: testing
   script:
-    - python3 -m build --sdist
+    - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
     - 'cd ducc0-* && python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
 
 test_clang:
   stage: testing
   script:
-    - python3 -m build --sdist
+    - python3 setup.py sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
     - 'cd ducc0-* && CC=clang CXX=clang++ python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
 
@@ -45,7 +45,7 @@ test_rust:
 release:
   stage: release
   script:
-    - python3 -m build --sdist
+    - python3 setup.py sdist
     - 'mv dist/*.tar.gz .'
   artifacts:
     paths:
