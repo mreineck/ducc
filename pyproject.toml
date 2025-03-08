@@ -32,6 +32,8 @@ version = "0.36.0"
 [build-system]
 requires = ["scikit-build-core>0.5", "nanobind>=2.5.0", "pybind11>=2.6.0", "numpy>=1.17.0"]
 build-backend = "scikit_build_core.build"
+
 [tool.scikit-build]
 minimum-version = "build-system.requires"
 build-dir = "build/{wheel_tag}"
+install.strip = false
