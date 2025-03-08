@@ -336,8 +336,8 @@ def plot3(res, fname):
     plt.plot(educc3,tducc3,label="ducc unplanned, type 3")
     plt.plot(educct3,tducct3,label="ducc planned, type 3")
     if have_finufft:
-        plt.plot(efinufftt3,tfinufftt3,label="finufft planned, type 3")
         plt.plot(efinufft3,tfinufft3,label="finufft unplanned, type 3")
+        plt.plot(efinufftt3,tfinufftt3,label="finufft planned, type 3")
     plt.title("npoints_in={}, npoint_out={}, nthreads={}".format(res[0]["npoints_in"], res[0]["npoints_out"], res[0]["nthreads"]))
     plt.xlabel("real error")
     plt.ylabel("ns per nonuniform point")
