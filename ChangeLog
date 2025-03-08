@@ -1,5 +1,6 @@
 0.37.0:
 - general:
+  - build system switched to CMake, allowing parallel compilation
   - rework of the Python interface to allow an (optional) switch from pybind11
     to nanobind. As a consequence, function signatures in docstrings have
     become much more precise.

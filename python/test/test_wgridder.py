@@ -193,10 +193,9 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2))
-@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
-                              use_mask, gpu):
+                              use_mask):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -237,13 +236,13 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask, gpu=gpu).astype("f8")
+                                     mask=mask).astype("f8")
     ms2 = dirty2vis_with_faceting(nfacets_x=nxfacets, nfacets_y=nyfacets,
                                   uvw=uvw, freq=freq,
                                   dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
                                   pixsize_y=pixsizey, epsilon=epsilon,
                                   do_wgridding=wstacking, nthreads=nthreads,
-                                  mask=mask, gpu=gpu).astype("c16")
+                                  mask=mask).astype("c16")
     check(dirty2, ms2)
 
 
@@ -258,10 +257,9 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2))
 @pmp("fov", (0.001, 0.1, 20.))
-@pmp("gpu", (False, True) if ng.experimental.sycl_active() else (False,))
 def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
-                                nthreads, gpu):
+                                nthreads):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -293,7 +291,7 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                      npix_y=nydirty, pixsize_x=pixsizex,
                                      pixsize_y=pixsizey, epsilon=epsilon,
                                      do_wgridding=wstacking, nthreads=nthreads,
-                                     mask=mask,gpu=gpu).astype("f8")
+                                     mask=mask).astype("f8")
     assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
 
     if wstacking or (not have_finufft):
