@@ -155,7 +155,7 @@ template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const NpArr &obj, const s
   { return to_cmav<T,ndim>(CNpArr(obj), name); }
 template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const NpArr &obj, size_t ndim,
   const std::string &name="")
-  { return to_cfmav_with_optional_leading_dimensions<T>(CNpArr(obj), name); }
+  { return to_cfmav_with_optional_leading_dimensions<T>(CNpArr(obj), ndim, name); }
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav_with_optional_leading_dimensions(const NpArr &obj,
   const std::string &name="")
   { return to_cmav_with_optional_leading_dimensions<T, ndim>(CNpArr(obj), name); }

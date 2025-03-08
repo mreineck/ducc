@@ -40,8 +40,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/fft/fft.h"
-#include "ducc0/fft/fft1d_impl.h"
-#include "ducc0/fft/fftnd_impl.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {

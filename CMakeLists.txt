@@ -15,6 +15,8 @@ set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
 
 set(CXX_SOURCES
+    src/ducc0/fft/fft_inst1.cc src/ducc0/fft/fft_inst2.cc
+    src/ducc0/nufft/spreadinterp_inst1.cc src/ducc0/nufft/spreadinterp_inst2.cc
     src/ducc0/healpix/healpix_base.cc src/ducc0/healpix/healpix_tables.cc
     src/ducc0/math/gl_integrator.cc src/ducc0/math/pointing.cc
     src/ducc0/math/gridding_kernel.cc src/ducc0/math/geom_utils.cc
