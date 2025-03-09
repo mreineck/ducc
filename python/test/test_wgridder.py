@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2023 Max-Planck-Society
+# Copyright(C) 2020-2025 Max-Planck-Society
 
 from itertools import product
 
