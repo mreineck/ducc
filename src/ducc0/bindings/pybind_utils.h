@@ -271,7 +271,24 @@ template<typename T> CNpArr get_optional_const_Pyarr(
   return val;
   }
 
-#ifndef DUCC0_USE_NANOBIND
+#ifdef DUCC0_USE_NANOBIND
+inline py::object normalizeDtype(const py::object &dtype)
+  {
+  static py::object converter = py::module_::import_("numpy").attr("dtype");
+  return converter(dtype);
+  }
+template<typename T> inline py::object Dtype();
+template<> inline py::object Dtype<float>()
+  { static auto res = normalizeDtype(py::cast("f4")); return res; }
+template<> inline py::object Dtype<double>()
+  { static auto res = normalizeDtype(py::cast("f8")); return res; }
+template<> inline py::object Dtype<std::complex<float>>()
+  { static auto res = normalizeDtype(py::cast("c8")); return res; }
+template<> inline py::object Dtype<std::complex<double>>()
+  { static auto res = normalizeDtype(py::cast("c16")); return res; }
+template<typename T> bool isDtype(const py::object &dtype)
+  { return Dtype<T>().equal(dtype); }
+#else
 inline py::dtype normalizeDtype(const py::object &dtype)
   {
   static py::object converter = py::module_::import("numpy").attr("dtype");
@@ -303,10 +320,8 @@ using detail_pybind::to_cfmav_with_optional_leading_dimensions;
 using detail_pybind::to_vmav;
 using detail_pybind::to_vmav_with_optional_leading_dimensions;
 using detail_pybind::to_vfmav_with_optional_leading_dimensions;
-#ifndef DUCC0_USE_NANOBIND
 using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;
-#endif
 
 }
 

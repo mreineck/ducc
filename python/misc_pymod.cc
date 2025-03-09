@@ -574,7 +574,6 @@ NpArr Py_make_noncritical(const CNpArr &in)
   MR_fail("unsupported datatype");
   }
 
-#ifndef DUCC0_USE_NANOBIND
 constexpr const char *Py_empty_noncritical_DS = R"""(
 Creates an uninitialized array of the requested shape and data type,
 with a memory layout that avoids critical strides.
@@ -610,17 +609,20 @@ NpArr Py_empty_noncritical(const vector<size_t> &shape,
   return make_noncritical_Pyarr<float>(shape);
   if (isDtype<double>(dtype))
     return make_noncritical_Pyarr<double>(shape);
+#ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
     return make_noncritical_Pyarr<long double>(shape);
+#endif
   if (isDtype<complex<float>>(dtype))
     return make_noncritical_Pyarr<complex<float>>(shape);
   if (isDtype<complex<double>>(dtype))
     return make_noncritical_Pyarr<complex<double>>(shape);
+#ifndef DUCC0_USE_NANOBIND
   if (isDtype<complex<long double>>(dtype))
     return make_noncritical_Pyarr<complex<long double>>(shape);
+#endif
   MR_fail("unsupported datatype");
   }
-#endif
 
 /*! A numeric filter which produces noise with the power spectrum
 
@@ -1798,9 +1800,7 @@ void add_misc(py::module_ &msup)
   m.def("transpose", Py_transpose, "in"_a, "out"_a, "nthreads"_a=1);
 
   m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
-#ifndef DUCC0_USE_NANOBIND
   m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);
-#endif
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
