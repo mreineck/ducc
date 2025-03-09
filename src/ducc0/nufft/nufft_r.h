@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_R_H
@@ -27,8 +27,6 @@ namespace ducc0 {
 namespace detail_nufft {
 
 using namespace std;
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
 
 template<typename Tcalc, typename Tacc, typename Tcoord, size_t ndim> class RNufft;
 

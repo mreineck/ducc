@@ -83,9 +83,6 @@ namespace detail_fft {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
-
 template<typename T> constexpr inline size_t fft1d_simdlen
   = min<size_t>(8, native_simd<T>::size());
 template<> constexpr inline size_t fft1d_simdlen<double>
@@ -94,11 +91,6 @@ template<> constexpr inline size_t fft1d_simdlen<float>
   = min<size_t>(8, native_simd<float>::size());
 template<typename T> using fft1d_simd = typename simd_select<T,fft1d_simdlen<T>>::type;
 template<typename T> constexpr inline bool fft1d_simd_exists = (fft1d_simdlen<T> > 1);
-
-// Always use std:: for <cmath> functions
-template <typename T> T cos(T) = delete;
-template <typename T> T sin(T) = delete;
-template <typename T> T sqrt(T) = delete;
 
 template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
   { auto tmp_= fwd ? -a.r : a.r; a.r = fwd ? a.i : -a.i; a.i=tmp_; }

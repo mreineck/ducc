@@ -19,25 +19,25 @@
 
 // helper file for ducc0 FFT template instantiations
 
-template void c2c(const cfmav<std::complex<T>> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+template void c2c(const cfmav<complex<T>> &in,
+  const vfmav<complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads);
 template void dct(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads);
 template void dst(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads);
 template void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads);
 template void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads);
-template void c2r(const cfmav<std::complex<T>> &in,
+template void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads);
-template void c2r(const cfmav<std::complex<T>> &in,
+template void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads);
-template void c2r_mut(const vfmav<std::complex<T>> &in,
+template void c2r_mut(const vfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads);
 template void r2r_fftpack(const cfmav<T> &in,

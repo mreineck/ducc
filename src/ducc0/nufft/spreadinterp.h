@@ -29,9 +29,6 @@ namespace detail_nufft {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
-
 template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx, size_t ndim> class Spreadinterp;
 
 template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Spreadinterp2

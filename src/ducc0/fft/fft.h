@@ -206,7 +206,7 @@ template <typename Tfs> class cfftpass
         N>>=1;
         // factor 2 should be at the front of the factor list
         factors.push_back(2);
-        swap(factors[0], factors.back());
+        std::swap(factors[0], factors.back());
         }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
@@ -250,7 +250,7 @@ template <typename Tfs> class rfftpass
         N>>=1;
         // factor 2 should be at the front of the factor list
         factors.push_back(2);
-        swap(factors[0], factors.back());
+        std::swap(factors[0], factors.back());
         }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
@@ -490,7 +490,7 @@ template<typename Tfs> class pocketfft_fftw
           }
         if (i<N)
           res2[i] = fct*res[i1];
-        swap(res, res2);
+        std::swap(res, res2);
         }
       res = static_cast<Tfd *>(plan->exec(tifd,
         res, res2, buf+N, fwd, nthreads));
@@ -615,7 +615,7 @@ template<typename T0> class T_dcst23
   {
   private:
     pocketfft_r<T0> fftplan;
-    std::vector<T0> twiddle;
+    vector<T0> twiddle;
 
   public:
     DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
@@ -709,8 +709,8 @@ template<typename T0> class T_dcst4
   {
   private:
     size_t N;
-    std::unique_ptr<pocketfft_c<T0>> fft;
-    std::unique_ptr<pocketfft_r<T0>> rfft;
+    unique_ptr<pocketfft_c<T0>> fft;
+    unique_ptr<pocketfft_r<T0>> rfft;
     aligned_array<Cmplx<T0>> C2;
     size_t bufsz;
 
@@ -845,8 +845,8 @@ constexpr bool FORWARD  = true,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
+  const vfmav<complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1);
 
 /// Fast Discrete Cosine Transform
@@ -898,21 +898,21 @@ template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> 
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 

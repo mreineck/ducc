@@ -33,9 +33,6 @@ namespace detail_nufft {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
-
 template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
   { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
 
