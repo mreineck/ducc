@@ -19,6 +19,7 @@
           pyproject = true;
           build-system = with py-pkgs; [
             pkgs.cmake
+            pybind11
             nanobind
             ninja
             scikit-build-core
@@ -31,7 +32,12 @@
           checkInputs = [ py-pkgs.pytestCheckHook ];
           pythonImportsCheck = [ "ducc0" ];
 
-          DUCC0_OPTIMIZATION = "none";
+          # Uncomment to specify optimization levels. Note: need to pass
+          # --impure to `nix build` to enable all optimizations
+          # DUCC0_OPTIMIZATION = "none";
+
+          # Uncomment the next line to enable build via nanobind
+          # DUCC0_USE_NANOBIND = "";
 
           postInstall = ''
             mkdir -p $out/include/ducc0
