@@ -15,12 +15,10 @@
  */
 
 /*
- *  Copyright (C) 2020-2024 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include "ducc0/infra/threading.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/math/quaternion.h"
@@ -33,8 +31,6 @@ using namespace std;
 
 // the next line is necessary to address some sloppy name choices in AdaptiveCpp
 using std::min, std::max;
-
-namespace py = pybind11;
 
 template<typename T> class PointingProvider
   {
@@ -174,11 +170,11 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
     using PointingProvider<T>::get_rotated_quaternions;
 
   public:
-    PyPointingProvider(double t0, double freq, const py::array &quat, size_t nthreads_=1)
+    PyPointingProvider(double t0, double freq, const CNpArr &quat, size_t nthreads_=1)
       : PointingProvider<T>(t0, freq, to_cmav<T,2>(quat), nthreads_) {}
 
-    template<typename T2> py::array py2get_rotated_quaternions_out(double t0, double freq,
-      const py::array &quat, bool rot_left, py::array &out)
+    template<typename T2> NpArr py2get_rotated_quaternions_out(double t0, double freq,
+      const CNpArr &quat, bool rot_left, NpArr &out)
       {
       auto res2 = to_vmav<T2,2>(out);
       auto quat2 = to_cmav<T,1>(quat);
@@ -188,8 +184,8 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       }
       return out;
       }
-    py::array pyget_rotated_quaternions_out(double t0, double freq,
-      const py::array &quat, bool rot_left, py::array &out)
+    NpArr pyget_rotated_quaternions_out(double t0, double freq,
+      const CNpArr &quat, bool rot_left, NpArr &out)
       {
       if (isPyarr<double>(out))
         return py2get_rotated_quaternions_out<double>(t0, freq, quat, rot_left, out);
@@ -197,8 +193,8 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
         return py2get_rotated_quaternions_out<float>(t0, freq, quat, rot_left, out);
       MR_fail("type matching failed: 'out' has neither type 'r4' nor 'r8'");
       }
-    py::array pyget_rotated_quaternions(double t0, double freq,
-      const py::array &quat, size_t nval, bool rot_left)
+    NpArr pyget_rotated_quaternions(double t0, double freq,
+      const CNpArr &quat, size_t nval, bool rot_left)
       {
       auto res = make_Pyarr<T>({nval,4});
       return pyget_rotated_quaternions_out(t0, freq, quat, rot_left, res);
@@ -301,13 +297,13 @@ numpy.ndarray((nval, 4), same dtype as `out`) : the output quaternions
 
 void add_pointingprovider(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("pointingprovider");
   m.doc() = pointingprovider_DS;
 
   using pp_d = PyPointingProvider<double>;
-  py::class_<pp_d>(m, "PointingProvider", py::module_local())
-    .def(py::init<double, double, const py::array &, size_t>(),
+  py::class_<pp_d>(m, "PointingProvider"/*, py::module_local()*/)
+    .def(py::init<double, double, const CNpArr &, size_t>(),
          PointingProvider_init_DS, "t0"_a, "freq"_a, "quat"_a, "nthreads"_a=1)
     .def ("get_rotated_quaternions", &pp_d::pyget_rotated_quaternions,
        get_rotated_quaternions_DS,"t0"_a, "freq"_a, "rot"_a, "nval"_a,

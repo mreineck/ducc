@@ -16,11 +16,9 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/wgridder/wgridder.h"
 #include "ducc0/wgridder/wgridder_sycl.h"
@@ -31,15 +29,13 @@ namespace detail_pymodule_wgridder {
 
 using namespace std;
 
-namespace py = pybind11;
-
 auto None = py::none();
 
-template<typename T> py::array Py2_vis2dirty_tuning(const py::array &uvw_,
-  const py::array &freq_, const py::array &vis_, const py::object &wgt_, const py::object &mask_,
+template<typename T> NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
+  const CNpArr &freq_, const CNpArr &vis_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, py::object &dirty_, double sigma_min,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, OptNpArr &dirty_, double sigma_min,
   double sigma_max, double center_x, double center_y,
   bool double_precision_accumulation)
   {
@@ -52,7 +48,7 @@ template<typename T> py::array Py2_vis2dirty_tuning(const py::array &uvw_,
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
-  auto dirty = (npix_x==0) ? get_Pyarr<T>(dirty_, 2)
+  auto dirty = (npix_x==0) ? dirty_.value()
                            : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {
@@ -67,12 +63,12 @@ template<typename T> py::array Py2_vis2dirty_tuning(const py::array &uvw_,
   }
   return dirty;
   }
-py::array Py_vis2dirty_tuning(const py::array &uvw,
-  const py::array &freq, const py::array &vis, const py::object &wgt,
+NpArr Py_vis2dirty_tuning(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &vis, const OptCNpArr &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, const py::object &mask, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  py::object &dirty, double sigma_min, double sigma_max,
+  size_t verbosity, const OptCNpArr &mask, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+  OptNpArr &dirty, double sigma_min, double sigma_max,
   double center_x, double center_y,
   bool double_precision_accumulation)
   {
@@ -154,11 +150,11 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
-  const py::array &freq_, const py::array &vis_, const py::object &wgt_, const py::object &mask_,
+template<typename T> NpArr Py2_vis2dirty(const CNpArr &uvw_,
+  const CNpArr &freq_, const CNpArr &vis_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, py::object &dirty_, double sigma_min,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, const OptNpArr &dirty_, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift,
   bool gpu, bool double_precision_accumulation)
   {
@@ -171,7 +167,7 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
-  auto dirty = (npix_x==0) ? get_Pyarr<T>(dirty_, 2)
+  auto dirty = (npix_x==0) ? dirty_.value()
                            : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {
@@ -195,12 +191,12 @@ template<typename T> py::array Py2_vis2dirty(const py::array &uvw_,
   }
   return dirty;
   }
-py::array Py_vis2dirty(const py::array &uvw,
-  const py::array &freq, const py::array &vis, const py::object &wgt,
+NpArr Py_vis2dirty(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &vis, const OptCNpArr &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, const py::object &mask, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  py::object &dirty, double sigma_min, double sigma_max,
+  size_t verbosity, const OptCNpArr &mask, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+  const OptNpArr &dirty, double sigma_min, double sigma_max,
   double center_x, double center_y, bool allow_nshift,
   bool gpu, bool double_precision_accumulation)
   {
@@ -279,11 +275,11 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-template<typename T> py::array Py2_dirty2vis_tuning(const py::array &uvw_,
-  const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
+template<typename T> NpArr Py2_dirty2vis_tuning(const CNpArr &uvw_,
+  const CNpArr &freq_, const CNpArr &dirty_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  py::object &vis_, double sigma_min, double sigma_max, double center_x, double center_y)
+  OptNpArr &vis_, double sigma_min, double sigma_max, double center_x, double center_y)
   {
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
@@ -302,11 +298,11 @@ template<typename T> py::array Py2_dirty2vis_tuning(const py::array &uvw_,
   }
   return vis;
   }
-py::array Py_dirty2vis_tuning(const py::array &uvw,
-  const py::array &freq, const py::array &dirty, const py::object &wgt,
+NpArr Py_dirty2vis_tuning(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &dirty, const OptCNpArr &wgt,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
-  size_t nthreads, size_t verbosity, const py::object &mask,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, py::object &vis, double sigma_min,
+  size_t nthreads, size_t verbosity, const OptCNpArr &mask,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, OptNpArr &vis, double sigma_min,
   double sigma_max, double center_x, double center_y)
   {
   if (isPyarr<float>(dirty))
@@ -377,11 +373,11 @@ Notes
 The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
-template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
-  const py::array &freq_, const py::array &dirty_, const py::object &wgt_, const py::object &mask_,
+template<typename T> NpArr Py2_dirty2vis(const CNpArr &uvw_,
+  const CNpArr &freq_, const CNpArr &dirty_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  py::object &vis_, double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift,
+  const OptNpArr &vis_, double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift,
   bool gpu)
   {
   auto uvw = to_cmav<double,2>(uvw_);
@@ -406,11 +402,11 @@ template<typename T> py::array Py2_dirty2vis(const py::array &uvw_,
   }
   return vis;
   }
-py::array Py_dirty2vis(const py::array &uvw,
-  const py::array &freq, const py::array &dirty, const py::object &wgt,
+NpArr Py_dirty2vis(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &dirty, const OptCNpArr &wgt,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
-  size_t nthreads, size_t verbosity, const py::object &mask,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, py::object &vis, double sigma_min,
+  size_t nthreads, size_t verbosity, const OptCNpArr &mask,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, const OptNpArr &vis, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift,
   bool gpu)
   {
@@ -480,15 +476,15 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-py::array Py_ms2dirty(const py::array &uvw,
-  const py::array &freq, const py::array &ms, const py::object &wgt,
+NpArr Py_ms2dirty(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &ms, const OptCNpArr &wgt,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y, size_t /*nu*/,
   size_t /*nv*/, double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, const py::object &mask,
+  size_t verbosity, const OptCNpArr &mask,
   bool double_precision_accumulation, bool gpu)
   {
   return Py_vis2dirty(uvw, freq, ms, wgt, npix_x, npix_y, pixsize_x, pixsize_y,
-    epsilon, do_wgridding, nthreads, verbosity, mask, false, false, false, true, None, 1.1,
+    epsilon, do_wgridding, nthreads, verbosity, mask, false, false, false, true, OptNpArr(), 1.1,
     2.6, 0., 0., true, gpu, double_precision_accumulation);
   }
 
@@ -541,12 +537,12 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-py::array Py_dirty2ms(const py::array &uvw,
-  const py::array &freq, const py::array &dirty, const py::object &wgt,
+NpArr Py_dirty2ms(const CNpArr &uvw,
+  const CNpArr &freq, const CNpArr &dirty, const OptCNpArr &wgt,
   double pixsize_x, double pixsize_y, size_t /*nu*/, size_t /*nv*/, double epsilon,
-  bool do_wgridding, size_t nthreads, size_t verbosity, const py::object &mask, bool gpu)
+  bool do_wgridding, size_t nthreads, size_t verbosity, const OptCNpArr &mask, bool gpu)
   {
-  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, false, false, true, None, 1.1, 2.6, 0, 0, true, gpu);
+  return Py_dirty2vis(uvw, freq, dirty, wgt, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, verbosity, mask, false, false, false, true, OptNpArr(), 1.1, 2.6, 0, 0, true, gpu);
   }
 
 constexpr auto dirty2ms_DS = R"""(
@@ -607,7 +603,7 @@ to adjust your code at some point ion the future!
 
 void add_pythonfuncs(py::module_ &m)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
 
   m.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
@@ -624,7 +620,7 @@ void add_pythonfuncs(py::module_ &m)
 
 void add_wgridder(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("wgridder");
   auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 

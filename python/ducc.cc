@@ -12,7 +12,6 @@
 #include "ducc0/healpix/healpix_base.cc"
 #include "ducc0/wgridder/wgridder.cc"
 
-#include <pybind11/pybind11.h>
 #include "python/sht_pymod.cc"
 #include "python/fft_pymod.cc"
 #include "python/totalconvolve_pymod.cc"
@@ -24,13 +23,22 @@
 
 using namespace ducc0;
 
+#ifdef DUCC0_USE_NANOBIND
+NB_MODULE(PKGNAME, m)
+#else
 PYBIND11_MODULE(PKGNAME, m)
+#endif
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
 #define DUCC0_STRINGIFY(s) #s
   m.attr("__version__") = DUCC0_XSTRINGIFY(PKGVERSION);
 #undef DUCC0_STRINGIFY
 #undef DUCC0_XSTRINGIFY
+#ifdef DUCC0_USE_NANOBIND
+  m.attr("__wrapper__") = "nanobind";
+#else
+  m.attr("__wrapper__") = "pybind11";
+#endif
 
   add_fft(m);
   add_sht(m);
