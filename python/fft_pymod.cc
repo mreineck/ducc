@@ -38,40 +38,38 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/fft/fft.h"
-#include "ducc0/fft/fft1d_impl.h"
-#include "ducc0/fft/fftnd_impl.h"
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace ducc0 {
 
 namespace detail_pymodule_fft {
 
+using namespace std;
+
 namespace {
 
 using shape_t = ducc0::fmav_info::shape_t;
-using std::size_t;
-using std::ptrdiff_t;
 
 #ifdef DUCC0_USE_NANOBIND
 using ldbl_t = double;
 #else
 // Only instantiate long double transforms if they offer more precision
-using ldbl_t = typename std::conditional<
+using ldbl_t = typename conditional<
   sizeof(long double)==sizeof(double), double, long double>::type;
 #endif
 
-using c64 = std::complex<float>;
-using c128 = std::complex<double>;
-using clong = std::complex<ldbl_t>;
+using c64 = complex<float>;
+using c128 = complex<double>;
+using clong = complex<ldbl_t>;
 using f32 = float;
 using f64 = double;
 using flong = ldbl_t;
-auto None = py::none();
 
-using OptAxes = std::optional<std::vector<ptrdiff_t>>;
+using OptAxes = optional<vector<ptrdiff_t>>;
 
-shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
+static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   {
   if (!axes)
     {
@@ -83,13 +81,13 @@ shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   auto tmp=axes.value();
   auto ndim = in.ndim();
   if ((tmp.size()>size_t(ndim)) || (tmp.size()==0))
-    throw std::runtime_error("bad axes argument");
+    throw runtime_error("bad axes argument");
   for (auto& sz: tmp)
     {
     if (sz<0)
       sz += ndim;
     if ((sz>=ptrdiff_t(ndim)) || (sz<0))
-      throw std::invalid_argument("axes exceeds dimensionality of output");
+      throw invalid_argument("axes exceeds dimensionality of output");
     }
   return shape_t(tmp.begin(), tmp.end());
   }
@@ -99,18 +97,18 @@ shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   if (isPyarr<T1>(arr)) return func<double> args; \
   if (isPyarr<T2>(arr)) return func<float> args;  \
   if (isPyarr<T3>(arr)) return func<ldbl_t> args; \
-  throw std::runtime_error("unsupported data type"); \
+  throw runtime_error("unsupported data type"); \
   }
 
-template<typename T> T norm_fct(int inorm, size_t N)
+template<typename T> static T norm_fct(int inorm, size_t N)
   {
   if (inorm==0) return T(1);
   if (inorm==2) return T(1/ldbl_t(N));
   if (inorm==1) return T(1/sqrt(ldbl_t(N)));
-  throw std::invalid_argument("invalid value for inorm (must be 0, 1, or 2)");
+  throw invalid_argument("invalid value for inorm (must be 0, 1, or 2)");
   }
 
-template<typename T> T norm_fct(int inorm, const shape_t &shape,
+template<typename T> static T norm_fct(int inorm, const shape_t &shape,
   const shape_t &axes, size_t fct=1, int delta=0)
   {
   if (inorm==0) return T(1);
@@ -120,14 +118,14 @@ template<typename T> T norm_fct(int inorm, const shape_t &shape,
   return norm_fct<T>(inorm, N);
   }
 
-template<typename T> NpArr c2c_internal(const CNpArr &in,
+template<typename T> static NpArr c2c_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
-  auto ain = to_cfmav<std::complex<T>>(in, "a");
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<std::complex<T>>(out, "out");
+  auto ain = to_cfmav<complex<T>>(in, "a");
+  auto out = get_optional_Pyarr<complex<T>>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -136,25 +134,25 @@ template<typename T> NpArr c2c_internal(const CNpArr &in,
   return out;
   }
 
-template<typename T> NpArr c2c_sym_internal(const CNpArr &in,
+template<typename T> static NpArr c2c_sym_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<std::complex<T>>(out, "out");
+  auto out = get_optional_Pyarr<complex<T>>(out_, ain.shape(), "out");
+  auto aout = to_vfmav<complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
   // select proper sub-array for FFT
   auto shp_half = aout.shape();
   shp_half[axes.back()] = shp_half[axes.back()]/2+1;
-  vfmav<std::complex<T>> aout_half(aout, shp_half, aout.stride());
+  vfmav<complex<T>> aout_half(aout, shp_half, aout.stride());
   ducc0::r2c(ain, aout_half, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace ducc0::detail_fft;
-  hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const std::complex<T> &c, complex<T> &, complex<T> &c1)
+  hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const complex<T> &c, complex<T> &, complex<T> &c1)
     {
     c1 = conj(c);
     }, nthreads);
@@ -173,7 +171,7 @@ NpArr c2c(const CNpArr &a, const OptAxes &axes_, bool forward,
            inorm, out_, nthreads))
   }
 
-template<typename T> NpArr r2c_internal(const CNpArr &in,
+template<typename T> static NpArr r2c_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -181,8 +179,8 @@ template<typename T> NpArr r2c_internal(const CNpArr &in,
   auto ain = to_cfmav<T>(in, "a");
   auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
-  auto out = get_optional_Pyarr<std::complex<T>>(out_, dims_out, "out");
-  auto aout = to_vfmav<std::complex<T>>(out, "out");
+  auto out = get_optional_Pyarr<complex<T>>(out_, dims_out, "out");
+  auto aout = to_vfmav<complex<T>>(out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -198,7 +196,7 @@ NpArr r2c(const CNpArr &in, const OptAxes &axes_, bool forward,
     nthreads))
   }
 
-template<typename T> NpArr r2r_fftpack_internal(const CNpArr &in,
+template<typename T> static NpArr r2r_fftpack_internal(const CNpArr &in,
   const OptAxes &axes_, bool real2hermitian, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads)
   {
@@ -222,7 +220,7 @@ NpArr r2r_fftpack(const CNpArr &in, const OptAxes &axes_,
     real2hermitian, forward, inorm, out_, nthreads))
   }
 
-template<typename T> NpArr r2r_fftw_internal(const CNpArr &in,
+template<typename T> static NpArr r2r_fftw_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads)
   {
@@ -245,7 +243,7 @@ NpArr r2r_fftw(const CNpArr &in, const OptAxes &axes_,
     forward, inorm, out_, nthreads))
   }
 
-template<typename T> NpArr dct_internal(const CNpArr &in,
+template<typename T> static NpArr dct_internal(const CNpArr &in,
   const OptAxes &axes_, int type, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -266,12 +264,12 @@ template<typename T> NpArr dct_internal(const CNpArr &in,
 NpArr dct(const CNpArr &in, int type, const OptAxes &axes_,
   int inorm, OptNpArr &out_, size_t nthreads)
   {
-  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
+  if ((type<1) || (type>4)) throw invalid_argument("invalid DCT type");
   DISPATCH(in, f64, f32, flong, dct_internal, (in, axes_, type, inorm, out_,
     nthreads))
   }
 
-template<typename T> NpArr dst_internal(const CNpArr &in,
+template<typename T> static NpArr dst_internal(const CNpArr &in,
   const OptAxes &axes_, int type, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -292,29 +290,29 @@ template<typename T> NpArr dst_internal(const CNpArr &in,
 NpArr dst(const CNpArr &in, int type, const OptAxes &axes_,
   int inorm, OptNpArr &out_, size_t nthreads)
   {
-  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
+  if ((type<1) || (type>4)) throw invalid_argument("invalid DST type");
   DISPATCH(in, f64, f32, flong, dst_internal, (in, axes_, type, inorm,
     out_, nthreads))
   }
 
-template<typename T> NpArr c2r_internal(const NpArr &in,
+template<typename T> static NpArr c2r_internal(const NpArr &in,
   const OptAxes &axes_, size_t lastsize, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads, bool allow_overwriting_input)
   {
   auto axes = makeaxes(CNpArr(in), axes_);
   size_t axis = axes.back();
-  auto ain_c = to_cfmav<std::complex<T>>(in, "a");
+  auto ain_c = to_cfmav<complex<T>>(in, "a");
   shape_t dims_out(ain_c.shape());
   if (lastsize==0) lastsize=2*ain_c.shape(axis)-1;
   if ((lastsize/2) + 1 != ain_c.shape(axis))
-    throw std::invalid_argument("bad lastsize");
+    throw invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
   auto out = get_optional_Pyarr<T>(out_, dims_out, "out");
   auto aout = to_vfmav<T>(out, "out");
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
   if (allow_overwriting_input)
     {
-    auto ain = to_vfmav<std::complex<T>>(in, "a");
+    auto ain = to_vfmav<complex<T>>(in, "a");
     {
     py::gil_scoped_release release;
     ducc0::c2r_mut(ain, aout, axes, forward, fct, nthreads);
@@ -336,7 +334,7 @@ NpArr c2r(NpArr &in, const OptAxes &axes_, size_t lastsize,
     inorm, out_, nthreads, allow_overwriting_input))
   }
 
-template<typename T> NpArr separable_hartley_internal(const CNpArr &in,
+template<typename T> static NpArr separable_hartley_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -358,7 +356,7 @@ NpArr separable_hartley(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr genuine_hartley_internal(const CNpArr &in,
+template<typename T> static NpArr genuine_hartley_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -380,7 +378,7 @@ NpArr genuine_hartley(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr separable_fht_internal(const CNpArr &in,
+template<typename T> static NpArr separable_fht_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -402,7 +400,7 @@ NpArr separable_fht(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr genuine_fht_internal(const CNpArr &in,
+template<typename T> static NpArr genuine_fht_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -437,7 +435,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     PyErr_SetString(PyExc_ValueError, "Target length must be positive");
     return nullptr;
     }
-  if ((n_-1) > static_cast<Py_ssize_t>(std::numeric_limits<size_t>::max() / 11))
+  if ((n_-1) > static_cast<Py_ssize_t>(numeric_limits<size_t>::max() / 11))
     {
     PyErr_Format(PyExc_ValueError,
                  "Target length is too large to perform an FFT: %zi", n_);
@@ -449,7 +447,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
 
-template<typename T> NpArr convolve_axis_internal(const CNpArr &in_,
+template<typename T> static NpArr convolve_axis_internal(const CNpArr &in_,
   NpArr &out_, size_t axis, const CNpArr &kernel_, size_t nthreads)
   {
   auto in = to_cfmav<T>(in_, "in");
@@ -462,10 +460,10 @@ template<typename T> NpArr convolve_axis_internal(const CNpArr &in_,
   return out_;
   }
 
-template<typename T> NpArr convolve_axis_internal_c(const CNpArr &in_,
+template<typename T> static NpArr convolve_axis_internal_c(const CNpArr &in_,
   NpArr &out_, size_t axis, const CNpArr &kernel_, size_t nthreads)
   {
-  return convolve_axis_internal<std::complex<T>>(in_, out_, axis, kernel_, nthreads);
+  return convolve_axis_internal<complex<T>>(in_, out_, axis, kernel_, nthreads);
   }
 
 NpArr convolve_axis(const CNpArr &in, NpArr &out, size_t axis,

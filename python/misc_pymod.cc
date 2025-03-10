@@ -29,6 +29,7 @@
 #include <cmath>
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
@@ -44,7 +45,6 @@ namespace ducc0 {
 namespace detail_pymodule_misc {
 
 using namespace std;
-auto None = py::none();
 
 constexpr const char *Py_vdot_DS = R"""(
 Compute the scalar product of two arrays or scalars., i.e. sum_i(conj(a_i)*b_i)
@@ -69,7 +69,7 @@ The accumulation is performed in long double precision for good accuracy.
 
 using FloatOrComplex = variant<double,complex<double>>;
 
-template<typename T1, typename T2> FloatOrComplex Py3_vdot(const CNpArr &a_, const CNpArr &b_)
+template<typename T1, typename T2> static FloatOrComplex Py3_vdot(const CNpArr &a_, const CNpArr &b_)
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<T2>(b_);
@@ -86,7 +86,7 @@ template<typename T1, typename T2> FloatOrComplex Py3_vdot(const CNpArr &a_, con
   return (acc.imag()==0) ? FloatOrComplex(double(acc.real()))
                          : FloatOrComplex(complex<double>(acc));
   }
-template<typename T1> FloatOrComplex Py2_vdot(const CNpArr &a, const CNpArr &b)
+template<typename T1> static FloatOrComplex Py2_vdot(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(b))
     return Py3_vdot<T1,float>(a,b);
@@ -137,7 +137,7 @@ Returns
 numpy.ndarray : a*conj(b)
     identical to `out` if `out` was provided
 )""";
-template<typename T1, typename T2, typename T3> NpArr Py2_mul_conj(
+template<typename T1, typename T2, typename T3> static NpArr Py2_mul_conj(
   const CNpArr &a_, const CNpArr &b_, OptNpArr &out__)
   {
   const auto a = to_cfmav<T1>(a_);
@@ -186,7 +186,7 @@ Returns
 numpy.ndarray : a/conj(b)
     identical to `out` if `out` was provided
 )""";
-template<typename T1, typename T2, typename T3> NpArr Py2_div_conj(
+template<typename T1, typename T2, typename T3> static NpArr Py2_div_conj(
   const CNpArr &a_, const CNpArr &b_, OptNpArr &out__)
   {
   const auto a = to_cfmav<T1>(a_);
@@ -246,7 +246,7 @@ Returns
 float :
     Output value
 )""";
-template<typename T> double Py2_LogUnnormalizedGaussProbability
+template<typename T> static double Py2_LogUnnormalizedGaussProbability
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<complex<T>>(a_);
@@ -262,7 +262,7 @@ template<typename T> double Py2_LogUnnormalizedGaussProbability
   }
   return 0.5*res;
   }
-template<typename T> double Py3_LogUnnormalizedGaussProbability
+template<typename T> static double Py3_LogUnnormalizedGaussProbability
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<T>(a_);
@@ -318,7 +318,7 @@ list of float and numpy.ndarray :
     Output value and derivative. The derivative has the same shape and dtype as
     `a`.
 )""";
-template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, OptNpArr &out__, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<complex<T>>(a_);
@@ -341,7 +341,7 @@ template<typename T> py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
   lst.append(out_);
   return lst;
   }
-template<typename T> py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, OptNpArr &out__, size_t /*nthreads*/)
   {
   const auto a = to_cfmav<T>(a_);
@@ -401,7 +401,7 @@ Notes
 -----
 The accumulations are performed in long double precision for good accuracy.
 )""";
-template<typename T1, typename T2> double Py3_l2error(const CNpArr &a_, const CNpArr &b_)
+template<typename T1, typename T2> static double Py3_l2error(const CNpArr &a_, const CNpArr &b_)
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<T2>(b_);
@@ -421,7 +421,7 @@ template<typename T1, typename T2> double Py3_l2error(const CNpArr &a_, const CN
   if (maxval==Tacc(0)) return 0.;
   return double(sqrt(acc3/maxval));
   }
-template<typename T1> double Py2_l2error(const CNpArr &a, const CNpArr &b)
+template<typename T1> static double Py2_l2error(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(b))
     return Py3_l2error<float,T1>(b,a);
@@ -492,7 +492,7 @@ NpArr Py_GL_thetas(size_t nlat)
   return res;
   }
 
-template<typename T> NpArr Py2_transpose(const CNpArr &in,
+template<typename T> static NpArr Py2_transpose(const CNpArr &in,
   NpArr &out, size_t nthreads)
   {
   auto in2 = to_cfmav<T>(in);
@@ -546,7 +546,7 @@ Returns
 numpy.ndarray (same dtype and content as `in`)
     A copy of the array with noncritical strides
 )""";
-template<typename T> NpArr Py2_make_noncritical(const CNpArr &in)
+template<typename T> static NpArr Py2_make_noncritical(const CNpArr &in)
   {
   auto in2 = to_cfmav<T>(in);
   auto out = make_noncritical_Pyarr<T>(in2.shape());
@@ -574,7 +574,6 @@ NpArr Py_make_noncritical(const CNpArr &in)
   MR_fail("unsupported datatype");
   }
 
-#ifndef DUCC0_USE_NANOBIND
 constexpr const char *Py_empty_noncritical_DS = R"""(
 Creates an uninitialized array of the requested shape and data type,
 with a memory layout that avoids critical strides.
@@ -606,21 +605,24 @@ NpArr Py_empty_noncritical(const vector<size_t> &shape,
   const py::object &dtype_)
   {
   auto dtype = normalizeDtype(dtype_);
-    if (isDtype<float>(dtype))
-  return make_noncritical_Pyarr<float>(shape);
+  if (isDtype<float>(dtype))
+    return make_noncritical_Pyarr<float>(shape);
   if (isDtype<double>(dtype))
     return make_noncritical_Pyarr<double>(shape);
+#ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
     return make_noncritical_Pyarr<long double>(shape);
+#endif
   if (isDtype<complex<float>>(dtype))
     return make_noncritical_Pyarr<complex<float>>(shape);
   if (isDtype<complex<double>>(dtype))
     return make_noncritical_Pyarr<complex<double>>(shape);
+#ifndef DUCC0_USE_NANOBIND
   if (isDtype<complex<long double>>(dtype))
     return make_noncritical_Pyarr<complex<long double>>(shape);
+#endif
   MR_fail("unsupported datatype");
   }
-#endif
 
 /*! A numeric filter which produces noise with the power spectrum
 
@@ -885,7 +887,7 @@ class PolynomialFunctionApproximator
       }
   };
 
-double get_max_kernel_error(const function<vector<double>(const vector<double> &,
+static double get_max_kernel_error(const function<vector<double>(const vector<double> &,
     const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
   {
@@ -1007,7 +1009,7 @@ py::tuple scan_kernel(const function<vector<double>(const vector<double> &,
   return py::tuple(res);
   }
 
-template<typename To> void fill_zero(
+template<typename To> static void fill_zero(
   To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   size_t idim, size_t ndim)
   {
@@ -1026,7 +1028,7 @@ template<typename To> void fill_zero(
     for (size_t i=0; i<lszo; ++i)
       fill_zero(out+i*lstro, szo+1, stro+1, idim+1, ndim);
   }
-template<typename Ti, typename To> void roll_resize_roll(
+template<typename Ti, typename To> static void roll_resize_roll(
   const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
   To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   const size_t *ri, const size_t *ro, size_t idim, size_t ndim)
@@ -1081,7 +1083,7 @@ template<typename Ti, typename To> void roll_resize_roll(
       }
     }
   }
-template<typename Ti, typename To> void roll_resize_roll_threaded(
+template<typename Ti, typename To> static void roll_resize_roll_threaded(
   const Ti *DUCC0_RESTRICT inp, const size_t *szi, const ptrdiff_t *stri,
   To *DUCC0_RESTRICT out, const size_t *szo, const ptrdiff_t *stro,
   const size_t *ri, const size_t *ro, size_t ndim, size_t nthreads)
@@ -1106,7 +1108,7 @@ template<typename Ti, typename To> void roll_resize_roll_threaded(
     });
   }
 
-template<typename Ti, typename To> NpArr roll_resize_roll(const CNpArr &inp_,
+template<typename Ti, typename To> static NpArr roll_resize_roll(const CNpArr &inp_,
   NpArr &out_, const vector<int64_t> &ri_, const vector<int64_t> &ro_, size_t nthreads)
   {
   auto inp(to_cfmav<Ti>(inp_));
@@ -1217,14 +1219,14 @@ numpy.ndarray : identical to res
 
 )""";
 
-cmav<double,1> get_dphi_default(const cmav<size_t,1> &nphi)
+static cmav<double,1> get_dphi_default(const cmav<size_t,1> &nphi)
   {
   vmav<double,1> res(nphi.shape());
   mav_apply([](auto np, auto &dp){dp=2.*pi/np;}, 1, nphi, res);
   return res;
   }
 
-template<typename Tout> NpArr Py2_get_deflected_angles(const CNpArr &theta_,
+template<typename Tout> static NpArr Py2_get_deflected_angles(const CNpArr &theta_,
   const CNpArr &phi0_, const CNpArr &nphi_, const CNpArr &ringstart_,
   const CNpArr &deflect_, bool calc_rotation, OptNpArr &res__,
   size_t nthreads, const OptCNpArr &dphi_)
@@ -1309,7 +1311,7 @@ NpArr Py_get_deflected_angles(const CNpArr &theta_,
   MR_fail("type matching failed: 'deflect' has neither type 'f4' nor 'f8'");
   }
 
-template<typename T> void Py2_lensing_rotate(NpArr &values_,
+template<typename T> static void Py2_lensing_rotate(NpArr &values_,
   const CNpArr &gamma_, int spin, size_t nthreads)
   {
   auto values = to_vfmav<complex<T>>(values_);
@@ -1344,7 +1346,7 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
-template<typename Tout> NpArr Py2_coupling_matrix_spin0and2_pure(const CNpArr &spec_, size_t lmax, size_t nthreads, OptNpArr &mat__)
+template<typename Tout> static NpArr Py2_coupling_matrix_spin0and2_pure(const CNpArr &spec_, size_t lmax, size_t nthreads, OptNpArr &mat__)
   {
   auto spec = to_cmav<double,3>(spec_);
   auto nspec = spec.shape(0);
@@ -1408,7 +1410,7 @@ numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
 )""";
 
 
-template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> NpArr Py2_coupling_matrix_spin0and2_tri(const CNpArr &spec_, size_t lmax, size_t nthreads, OptNpArr &mat__)
+template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_tri(const CNpArr &spec_, size_t lmax, size_t nthreads, OptNpArr &mat__)
   {
   constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
   constexpr size_t ncomp_out = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
@@ -1587,7 +1589,7 @@ nthreads_new : int >=1
 )""";
 
 using shape_t = fmav_info::shape_t;
-template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
+template<size_t nd1, size_t nd2> static shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
   if constexpr (nd1>0)
@@ -1606,7 +1608,7 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   }
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
-  NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
+  static NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
   const array<size_t,nd2> &a2, OptNpArr &out)
   {
   auto in = to_cfmav<T1>(ain);
@@ -1614,7 +1616,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   return get_optional_Pyarr<T2>(out, oshp);
   }
 
-template<typename Tin> NpArr quat2ptg2 (const CNpArr &in, size_t nthreads,
+template<typename Tin> static NpArr quat2ptg2 (const CNpArr &in, size_t nthreads,
   OptNpArr &out)
   {
   auto in_ = to_cfmav<Tin>(in);
@@ -1643,7 +1645,7 @@ NpArr quat2ptg (const CNpArr &in, size_t nthreads, OptNpArr &out)
     return quat2ptg2<double> (in, nthreads, out);
   MR_fail("type matching failed: 'quat' has neither type 'r4' nor 'r8'");
   }
-template<typename Tin> NpArr ptg2quat2 (const CNpArr &in, size_t nthreads,
+template<typename Tin> static NpArr ptg2quat2 (const CNpArr &in, size_t nthreads,
   OptNpArr &out)
   {
   auto in_ = to_cfmav<Tin>(in);
@@ -1798,9 +1800,7 @@ void add_misc(py::module_ &msup)
   m.def("transpose", Py_transpose, "in"_a, "out"_a, "nthreads"_a=1);
 
   m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
-#ifndef DUCC0_USE_NANOBIND
   m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);
-#endif
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
@@ -1816,7 +1816,7 @@ void add_misc(py::module_ &msup)
 
   m.def("get_deflected_angles", Py_get_deflected_angles, Py_get_deflected_angles_DS,
     "theta"_a, "phi0"_a, "nphi"_a, "ringstart"_a, "deflect"_a,
-    "calc_rotation"_a=false, "res"_a=py::none(), "nthreads"_a=1, "dphi"_a=None);
+    "calc_rotation"_a=false, "res"_a=None, "nthreads"_a=1, "dphi"_a=None);
   m.def("lensing_rotate", Py_lensing_rotate, Py_lensing_rotate_DS,
     "values"_a, "gamma"_a, "spin"_a, "nthreads"_a=1);
 

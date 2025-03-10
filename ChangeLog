@@ -1,10 +1,16 @@
 0.37.0:
 - general:
-  - rework of the Python interface to allow an (optional) switch from pybind11
-    to nanobind. As a consequence, function signatures in docstrings have
-    become much more precise.
-  - slightly improved messages for (non-pybind11-generated) errors detected at
-    the Python/C++ interface: error message is now preceded by variable name.
+  - build system switched to CMake, allowing parallel compilation.
+    This should reduce compile times substantially.
+  - rework of the interfacing code to allow an (optional) switch
+    from pybind11 to nanobind. As a consequence, function signatures in
+    docstrings have become more precise.
+    The Python interface for pybind11 should not have changed at all;
+    the one for nanobind is identical, except that support for
+    `longdouble` accuracy is missing.
+  - slightly improved messages for (non-pybind11/nanobind-generated) errors
+    detected at the Python/C++ interface:
+    error message is now preceded by variable name.
   - beginnings of a more mathematical description of ducc0's functions
     in the docstrings; the goal is to provide more clarity about
     "what ducc0 really computes".

@@ -17,7 +17,7 @@
 /* Copyright (C) 2019-2023 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include "ducc0/wgridder/wgridder.h"
+#include "ducc0/wgridder/wgridder_impl.h"
 
 namespace ducc0 {
 

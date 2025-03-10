@@ -19,7 +19,7 @@
 /** \file ducc0/infra/timers.h
  *  High precision wallclock timers.
  *
- *  \copyright Copyright (C) 2019-2022 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2025 Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -262,7 +262,7 @@ class TimerHierarchy
     void report(ostream &os) const
       { ostringstream oss; root.report(oss); os<<oss.str(); }
     /// Returns a string containing a fancy timing report.
-    std::string report() const
+    string report() const
       { ostringstream oss; root.report(oss); return oss.str(); }
   };
 

@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2024 Max-Planck-Society
+Copyright (C) 2010-2025 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -91,8 +91,7 @@ namespace ducc0 {
 
 namespace detail_fft {
 
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
+using namespace std;
 
 template<typename T> constexpr inline size_t fft_simdlen
   = min<size_t>(8, native_simd<T>::size());
@@ -110,15 +109,15 @@ struct util // hack to avoid duplicate symbols
     if (ndim==1)
       {
       if ((axes.size()!=1) || (axes[0]!=0))
-        throw std::invalid_argument("bad axes");
+        throw invalid_argument("bad axes");
       return;
       }
     shape_t tmp(ndim,0);
-    if (axes.empty()) throw std::invalid_argument("no axes specified");
+    if (axes.empty()) throw invalid_argument("no axes specified");
     for (auto ax : axes)
       {
-      if (ax>=ndim) throw std::invalid_argument("bad axis number");
-      if (++tmp[ax]>1) throw std::invalid_argument("axis specified repeatedly");
+      if (ax>=ndim) throw invalid_argument("bad axis number");
+      if (++tmp[ax]>1) throw invalid_argument("axis specified repeatedly");
       }
     }
 
@@ -141,7 +140,7 @@ struct util // hack to avoid duplicate symbols
   DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, const size_t axis)
     {
-    if (axis>=ac.ndim()) throw std::invalid_argument("bad axis number");
+    if (axis>=ac.ndim()) throw invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
       MR_assert(ac.shape(i) == ((i==axis) ? (ar.shape(i)/2+1) : ar.shape(i)),
@@ -164,19 +163,19 @@ struct util // hack to avoid duplicate symbols
 // multi-D infrastructure
 //
 
-template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=false)
+template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   {
 #ifdef DUCC0_NO_FFT_CACHE
-  return std::make_shared<T>(length, vectorize);
+  return make_shared<T>(length, vectorize);
 #else
   constexpr size_t nmax=10;
-  struct entry { size_t n; bool vectorize; std::shared_ptr<T> ptr; };
-  static std::array<entry, nmax> cache{{{0,0,nullptr}}};
-  static std::array<size_t, nmax> last_access{{0}};
+  struct entry { size_t n; bool vectorize; shared_ptr<T> ptr; };
+  static array<entry, nmax> cache{{{0,0,nullptr}}};
+  static array<size_t, nmax> last_access{{0}};
   static size_t access_counter = 0;
   static Mutex mut;
 
-  auto find_in_cache = [&]() -> std::shared_ptr<T>
+  auto find_in_cache = [&]() -> shared_ptr<T>
     {
     for (size_t i=0; i<nmax; ++i)
       if (cache[i].ptr && (cache[i].n==length) && (cache[i].vectorize==vectorize))
@@ -201,7 +200,7 @@ template<typename T> std::shared_ptr<T> get_plan(size_t length, bool vectorize=f
   auto p = find_in_cache();
   if (p) return p;
   }
-  auto plan = std::make_shared<T>(length, vectorize);
+  auto plan = make_shared<T>(length, vectorize);
   {
   LockGuard lock(mut);
 
@@ -254,7 +253,7 @@ template<size_t N> class multi_iter
       // this should improve overall cache re-use and avoid clashes between
       // threads as much as possible.
       shape_t idx(iarr.ndim());
-      std::iota(idx.begin(), idx.end(), 0);
+      iota(idx.begin(), idx.end(), 0);
       sort(idx.begin(), idx.end(),
         [&oarr](size_t i1, size_t i2) {return oarr.stride(i1) < oarr.stride(i2);});
       for (auto i: idx)
@@ -296,8 +295,8 @@ template<size_t N> class multi_iter
         }
 
       if (nshares==1) return;
-      if (nshares==0) throw std::runtime_error("can't run with zero threads");
-      if (myshare>=nshares) throw std::runtime_error("impossible share requested");
+      if (nshares==0) throw runtime_error("can't run with zero threads");
+      if (myshare>=nshares) throw runtime_error("impossible share requested");
       auto [lo, hi] = calcShare(nshares, myshare, rem);
       size_t todo = hi-lo;
 
@@ -320,7 +319,7 @@ template<size_t N> class multi_iter
       }
     void advance(size_t n)
       {
-      if (rem<n) throw std::runtime_error("underrun");
+      if (rem<n) throw runtime_error("underrun");
       for (size_t i=0; i<n; ++i)
         {
         p_i[i] = p_ii;
@@ -600,7 +599,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
     exec.exec_simple(in.data(), out.data(), *plan, fct, nthreads);
     return;
     }
-  std::shared_ptr<Tplan> plan, vplan;
+  shared_ptr<Tplan> plan, vplan;
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
 
   for (size_t iax=0; iax<axes.size(); ++iax)
@@ -1013,7 +1012,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = std::make_unique<pocketfft_r<T>>(in.shape(axis));
+  auto plan = make_unique<pocketfft_r<T>>(in.shape(axis));
   size_t len=in.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1131,7 +1130,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = std::make_unique<pocketfft_r<T>>(out.shape(axis));
+  auto plan = make_unique<pocketfft_r<T>>(out.shape(axis));
   size_t len=out.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1353,8 +1352,8 @@ template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
       : UnityRoots<T,complex<T>>(length) {}
   };
 
-template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
+  const vfmav<complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
@@ -1376,9 +1375,9 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
       {
       auto istr=in.stride(0);
       auto ostr=out.stride(0);
-      cmav<std::complex<T>,2> in2 (in.data(), {f1,f2}, {ptrdiff_t(f2)*istr, istr});
-      auto tmp (vmav<std::complex<T>,2>::build_noncritical({f1,f2}));
-      vmav<std::complex<T>,2> out2 (out.data(), {f1,f2}, {ostr, ptrdiff_t(f1)*ostr});
+      cmav<complex<T>,2> in2 (in.data(), {f1,f2}, {ptrdiff_t(f2)*istr, istr});
+      auto tmp (vmav<complex<T>,2>::build_noncritical({f1,f2}));
+      vmav<complex<T>,2> out2 (out.data(), {f1,f2}, {ostr, ptrdiff_t(f1)*ostr});
       auto fin2(in2.to_fmav());
       auto ftmp(tmp.to_fmav());
       auto fout2(out2.to_fmav());
@@ -1430,7 +1429,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
 template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads)
   {
-  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DCT type");
+  if ((type<1) || (type>4)) throw invalid_argument("invalid DCT type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, true};
@@ -1445,7 +1444,7 @@ template<typename T> DUCC0_NOINLINE void dct(const cfmav<T> &in, const vfmav<T> 
 template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> &out,
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads)
   {
-  if ((type<1) || (type>4)) throw std::invalid_argument("invalid DST type");
+  if ((type<1) || (type>4)) throw invalid_argument("invalid DST type");
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
   const ExecDcst exec{ortho, type, false};
@@ -1458,7 +1457,7 @@ template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> 
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   util::sanity_check_cr(out, in, axis);
@@ -1468,7 +1467,7 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   }
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads)
   {
   util::sanity_check_cr(out, in, axes);
@@ -1480,7 +1479,7 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   c2c(out, out, newaxes, forward, T(1), nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads)
   {
   util::sanity_check_cr(in, out, axis);
@@ -1489,7 +1488,7 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
   general_c2r(in2, out, axis, forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads)
   {
@@ -1497,13 +1496,13 @@ template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
     return c2r(in, out, axes[0], forward, fct, nthreads);
   util::sanity_check_cr(in, out, axes);
   if (in.size()==0) return;
-  auto atmp(vfmav<std::complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
+  auto atmp(vfmav<complex<T>>::build_noncritical(in.shape(), UNINITIALIZED));
   auto newaxes = shape_t{axes.begin(), --axes.end()};
   c2c(in, atmp, newaxes, forward, T(1), nthreads);
   c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
-template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads)
   {
@@ -1554,71 +1553,6 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
     ExecFHT{}, false);
   }
 
-template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
-  ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
-  const vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
-  {
-  auto cstr=c.stride(idim), str=r.stride(idim);
-  auto len=r.shape(idim);
-
-  if (idim+1==c.ndim())  // last dimension, not much gain in parallelizing
-    {
-    if (idim==axes.back())  // halfcomplex axis
-      for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
-        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
-    else if (find(axes.begin(), axes.end(), idim) != axes.end())  // FFT axis
-      for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
-        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
-    else  // non-FFT axis
-      for (size_t i=0; i<len; ++i)
-        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+i*str));
-    }
-  else
-    {
-    if (idim==axes.back())
-      {
-      if (nthreads==1)
-        for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
-          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
-      else
-        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
-          {
-          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
-            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
-          });
-      }
-    else if (find(axes.begin(), axes.end(), idim) != axes.end())
-      {
-      if (nthreads==1)
-        for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
-          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
-      else
-        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
-          {
-          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
-            {
-            size_t io0=iout0+i*str, io1=iout1+ic*str;
-            hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
-            if (i!=ic)
-              hermiteHelper(idim+1, iin+ic*cstr, io1, io0, c, r, axes, func, 1);
-            }
-          });
-      }
-    else
-      {
-      if (nthreads==1)
-        for (size_t i=0; i<len; ++i)
-          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
-      else
-        execParallel(0, len, nthreads, [&](size_t lo, size_t hi)
-          {
-          for (size_t i=lo; i<hi; ++i)
-            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
-          });
-      }
-    }
-  }
-
 template<typename T> void oscarize(const vfmav<T> &data, size_t ax0, size_t ax1,
   size_t nthreads)
   {
@@ -1660,9 +1594,9 @@ template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   if (in.size()==0) return;
   shape_t tshp(in.shape());
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  auto atmp(vfmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
+  auto atmp(vfmav<complex<T>>::build_noncritical(tshp, UNINITIALIZED));
   r2c(in, atmp, axes, true, fct, nthreads);
-  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
+  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const complex<T> &c, T &r0, T &r1)
     {
     auto ccopy = c;
     r0 = ccopy.real()+ccopy.imag();
@@ -1685,9 +1619,9 @@ template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
   if (in.size()==0) return;
   shape_t tshp(in.shape());
   tshp[axes.back()] = tshp[axes.back()]/2+1;
-  auto atmp(vfmav<std::complex<T>>::build_noncritical(tshp, UNINITIALIZED));
+  auto atmp(vfmav<complex<T>>::build_noncritical(tshp, UNINITIALIZED));
   r2c(in, atmp, axes, true, fct, nthreads);
-  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const std::complex<T> &c, T &r0, T &r1)
+  hermiteHelper(0, 0, 0, 0, atmp, out, axes, [](const complex<T> &c, T &r0, T &r1)
     {
     auto ccopy = c;
     r0 = ccopy.real()-ccopy.imag();
@@ -1700,12 +1634,12 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, const vfmav<T> &ou
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
-  std::unique_ptr<Tplan> plan1, plan2;
+  unique_ptr<Tplan> plan1, plan2;
 
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
   MR_assert(kernel.size()==l_in, "bad kernel size");
-  plan1 = std::make_unique<Tplan>(l_in);
-  plan2 = std::make_unique<Tplan>(l_out);
+  plan1 = make_unique<Tplan>(l_in);
+  plan2 = make_unique<Tplan>(l_out);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
   vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);

@@ -19,6 +19,7 @@
  *  Author: Martin Reinecke
  */
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/sht/totalconvolve.h"
 
@@ -27,8 +28,6 @@ namespace ducc0 {
 namespace detail_pymodule_totalconvolve {
 
 using namespace std;
-
-auto None = py::none();
 
 template<typename T> class Py_ConvolverPlan: public ConvolverPlan<T>
   {
@@ -808,7 +807,7 @@ void add_totalconvolve(py::module_ &msup)
     .def("getPlane", &conv_d::Py_getPlane, Py_ConvolverPlan_getPlane_DS,
       "slm"_a, "blm"_a, "mbeam"_a, "planes"_a)
     .def("prepPsi", &conv_d::Py_prepPsi, Py_ConvolverPlan_prepPsi_DS, "subcube"_a)
-    .def("deprepPsi", &conv_d::Py_deprepPsi, Py_ConvolverPlan_prepPsi_DS, "subcube"_a)
+    .def("deprepPsi", &conv_d::Py_deprepPsi, Py_ConvolverPlan_deprepPsi_DS, "subcube"_a)
     .def("interpol", &conv_d::Py_interpol, Py_ConvolverPlan_interpol_DS,
       "cube"_a, "itheta0"_a, "iphi0"_a, "theta"_a, "phi"_a, "psi"_a, "signal"_a)
     .def("deinterpol", &conv_d::Py_deinterpol, Py_ConvolverPlan_deinterpol_DS,

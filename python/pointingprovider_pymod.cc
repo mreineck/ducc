@@ -19,6 +19,7 @@
  *  Author: Martin Reinecke
  */
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/math/quaternion.h"
@@ -28,9 +29,6 @@ namespace ducc0 {
 namespace detail_pymodule_pointingprovider {
 
 using namespace std;
-
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
 
 template<typename T> class PointingProvider
   {

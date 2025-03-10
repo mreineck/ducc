@@ -72,9 +72,6 @@ namespace detail_mav {
 
 using namespace std;
 
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
-
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 

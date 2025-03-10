@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library
 
-Copyright (C) 2010-2023 Max-Planck-Society
+Copyright (C) 2010-2025 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -206,7 +206,7 @@ template <typename Tfs> class cfftpass
         N>>=1;
         // factor 2 should be at the front of the factor list
         factors.push_back(2);
-        swap(factors[0], factors.back());
+        std::swap(factors[0], factors.back());
         }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
@@ -250,7 +250,7 @@ template <typename Tfs> class rfftpass
         N>>=1;
         // factor 2 should be at the front of the factor list
         factors.push_back(2);
-        swap(factors[0], factors.back());
+        std::swap(factors[0], factors.back());
         }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
@@ -490,7 +490,7 @@ template<typename Tfs> class pocketfft_fftw
           }
         if (i<N)
           res2[i] = fct*res[i1];
-        swap(res, res2);
+        std::swap(res, res2);
         }
       res = static_cast<Tfd *>(plan->exec(tifd,
         res, res2, buf+N, fwd, nthreads));
@@ -615,7 +615,7 @@ template<typename T0> class T_dcst23
   {
   private:
     pocketfft_r<T0> fftplan;
-    std::vector<T0> twiddle;
+    vector<T0> twiddle;
 
   public:
     DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
@@ -709,8 +709,8 @@ template<typename T0> class T_dcst4
   {
   private:
     size_t N;
-    std::unique_ptr<pocketfft_c<T0>> fft;
-    std::unique_ptr<pocketfft_r<T0>> rfft;
+    unique_ptr<pocketfft_c<T0>> fft;
+    unique_ptr<pocketfft_r<T0>> rfft;
     aligned_array<Cmplx<T0>> C2;
     size_t bufsz;
 
@@ -845,8 +845,8 @@ constexpr bool FORWARD  = true,
  *  If the underlying array has more than one dimension, the computation will
  *  be distributed over \a nthreads threads.
  */
-template<typename T> DUCC0_NOINLINE void c2c(const cfmav<std::complex<T>> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes, bool forward,
+template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
+  const vfmav<complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads=1);
 
 /// Fast Discrete Cosine Transform
@@ -898,21 +898,21 @@ template<typename T> DUCC0_NOINLINE void dst(const cfmav<T> &in, const vfmav<T> 
   const shape_t &axes, int type, T fct, bool ortho, size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, size_t axis, bool forward, T fct,
+  const vfmav<complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads=1);
 
 template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
-  const vfmav<std::complex<T>> &out, const shape_t &axes,
+  const vfmav<complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 
-template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<std::complex<T>> &in,
+template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<complex<T>> &in,
   const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
   size_t nthreads=1);
 
@@ -964,6 +964,72 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &in,
   const vfmav<complex<T>> &out, size_t axis, const cmav<complex<T>,1> &kernel,
   size_t nthreads=1);
+
+template<typename T0, typename T1, typename Func> void hermiteHelper(size_t idim, ptrdiff_t iin,
+  ptrdiff_t iout0, ptrdiff_t iout1, const cfmav<T0> &c,
+  const vfmav<T1> &r, const shape_t &axes, Func func, size_t nthreads)
+  {
+  auto cstr=c.stride(idim), str=r.stride(idim);
+  auto len=r.shape(idim);
+
+  if (idim+1==c.ndim())  // last dimension, not much gain in parallelizing
+    {
+    if (idim==axes.back())  // halfcomplex axis
+      for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
+    else if (find(axes.begin(), axes.end(), idim) != axes.end())  // FFT axis
+      for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+ic*str));
+    else  // non-FFT axis
+      for (size_t i=0; i<len; ++i)
+        func (c.raw(iin+i*cstr), r.raw(iout0+i*str), r.raw(iout1+i*str));
+    }
+  else
+    {
+    if (idim==axes.back())
+      {
+      if (nthreads==1)
+        for (size_t i=0,ic=0; i<len/2+1; ++i,ic=len-i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
+      else
+        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
+            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
+          });
+      }
+    else if (find(axes.begin(), axes.end(), idim) != axes.end())
+      {
+      if (nthreads==1)
+        for (size_t i=0,ic=0; i<len; ++i,ic=len-i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+ic*str, c, r, axes, func, 1);
+      else
+        execParallel(0, len/2+1, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo,ic=(i==0?0:len-i); i<hi; ++i,ic=len-i)
+            {
+            size_t io0=iout0+i*str, io1=iout1+ic*str;
+            hermiteHelper(idim+1, iin+i*cstr, io0, io1, c, r, axes, func, 1);
+            if (i!=ic)
+              hermiteHelper(idim+1, iin+ic*cstr, io1, io0, c, r, axes, func, 1);
+            }
+          });
+      }
+    else
+      {
+      if (nthreads==1)
+        for (size_t i=0; i<len; ++i)
+          hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+      else
+        execParallel(0, len, nthreads, [&](size_t lo, size_t hi)
+          {
+          for (size_t i=lo; i<hi; ++i)
+            hermiteHelper(idim+1, iin+i*cstr, iout0+i*str, iout1+i*str, c, r, axes, func, 1);
+          });
+      }
+    }
+  }
+
 }
 
 using detail_fft::pocketfft_c;
