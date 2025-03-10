@@ -69,7 +69,7 @@ using flong = ldbl_t;
 
 using OptAxes = optional<vector<ptrdiff_t>>;
 
-shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
+static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   {
   if (!axes)
     {
@@ -100,7 +100,7 @@ shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   throw runtime_error("unsupported data type"); \
   }
 
-template<typename T> T norm_fct(int inorm, size_t N)
+template<typename T> static T norm_fct(int inorm, size_t N)
   {
   if (inorm==0) return T(1);
   if (inorm==2) return T(1/ldbl_t(N));
@@ -108,7 +108,7 @@ template<typename T> T norm_fct(int inorm, size_t N)
   throw invalid_argument("invalid value for inorm (must be 0, 1, or 2)");
   }
 
-template<typename T> T norm_fct(int inorm, const shape_t &shape,
+template<typename T> static T norm_fct(int inorm, const shape_t &shape,
   const shape_t &axes, size_t fct=1, int delta=0)
   {
   if (inorm==0) return T(1);
@@ -118,7 +118,7 @@ template<typename T> T norm_fct(int inorm, const shape_t &shape,
   return norm_fct<T>(inorm, N);
   }
 
-template<typename T> NpArr c2c_internal(const CNpArr &in,
+template<typename T> static NpArr c2c_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -134,7 +134,7 @@ template<typename T> NpArr c2c_internal(const CNpArr &in,
   return out;
   }
 
-template<typename T> NpArr c2c_sym_internal(const CNpArr &in,
+template<typename T> static NpArr c2c_sym_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -171,7 +171,7 @@ NpArr c2c(const CNpArr &a, const OptAxes &axes_, bool forward,
            inorm, out_, nthreads))
   }
 
-template<typename T> NpArr r2c_internal(const CNpArr &in,
+template<typename T> static NpArr r2c_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -196,7 +196,7 @@ NpArr r2c(const CNpArr &in, const OptAxes &axes_, bool forward,
     nthreads))
   }
 
-template<typename T> NpArr r2r_fftpack_internal(const CNpArr &in,
+template<typename T> static NpArr r2r_fftpack_internal(const CNpArr &in,
   const OptAxes &axes_, bool real2hermitian, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads)
   {
@@ -220,7 +220,7 @@ NpArr r2r_fftpack(const CNpArr &in, const OptAxes &axes_,
     real2hermitian, forward, inorm, out_, nthreads))
   }
 
-template<typename T> NpArr r2r_fftw_internal(const CNpArr &in,
+template<typename T> static NpArr r2r_fftw_internal(const CNpArr &in,
   const OptAxes &axes_, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads)
   {
@@ -243,7 +243,7 @@ NpArr r2r_fftw(const CNpArr &in, const OptAxes &axes_,
     forward, inorm, out_, nthreads))
   }
 
-template<typename T> NpArr dct_internal(const CNpArr &in,
+template<typename T> static NpArr dct_internal(const CNpArr &in,
   const OptAxes &axes_, int type, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -269,7 +269,7 @@ NpArr dct(const CNpArr &in, int type, const OptAxes &axes_,
     nthreads))
   }
 
-template<typename T> NpArr dst_internal(const CNpArr &in,
+template<typename T> static NpArr dst_internal(const CNpArr &in,
   const OptAxes &axes_, int type, int inorm, OptNpArr &out_,
   size_t nthreads)
   {
@@ -295,7 +295,7 @@ NpArr dst(const CNpArr &in, int type, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr c2r_internal(const NpArr &in,
+template<typename T> static NpArr c2r_internal(const NpArr &in,
   const OptAxes &axes_, size_t lastsize, bool forward, int inorm,
   OptNpArr &out_, size_t nthreads, bool allow_overwriting_input)
   {
@@ -334,7 +334,7 @@ NpArr c2r(NpArr &in, const OptAxes &axes_, size_t lastsize,
     inorm, out_, nthreads, allow_overwriting_input))
   }
 
-template<typename T> NpArr separable_hartley_internal(const CNpArr &in,
+template<typename T> static NpArr separable_hartley_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -356,7 +356,7 @@ NpArr separable_hartley(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr genuine_hartley_internal(const CNpArr &in,
+template<typename T> static NpArr genuine_hartley_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -378,7 +378,7 @@ NpArr genuine_hartley(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr separable_fht_internal(const CNpArr &in,
+template<typename T> static NpArr separable_fht_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -400,7 +400,7 @@ NpArr separable_fht(const CNpArr &in, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> NpArr genuine_fht_internal(const CNpArr &in,
+template<typename T> static NpArr genuine_fht_internal(const CNpArr &in,
   const OptAxes &axes_, int inorm, OptNpArr &out_, size_t nthreads)
   {
   auto axes = makeaxes(in, axes_);
@@ -447,7 +447,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
 
-template<typename T> NpArr convolve_axis_internal(const CNpArr &in_,
+template<typename T> static NpArr convolve_axis_internal(const CNpArr &in_,
   NpArr &out_, size_t axis, const CNpArr &kernel_, size_t nthreads)
   {
   auto in = to_cfmav<T>(in_, "in");
@@ -460,7 +460,7 @@ template<typename T> NpArr convolve_axis_internal(const CNpArr &in_,
   return out_;
   }
 
-template<typename T> NpArr convolve_axis_internal_c(const CNpArr &in_,
+template<typename T> static NpArr convolve_axis_internal_c(const CNpArr &in_,
   NpArr &out_, size_t axis, const CNpArr &kernel_, size_t nthreads)
   {
   return convolve_axis_internal<complex<T>>(in_, out_, axis, kernel_, nthreads);

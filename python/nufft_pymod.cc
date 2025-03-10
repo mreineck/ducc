@@ -29,7 +29,7 @@ using namespace std;
 
 using Periodicity = variant<double, vector<double>>;
 
-vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
+static vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
   {
   try
     {
@@ -45,7 +45,7 @@ vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
   return res;
   }
 
-template<typename Tgrid, typename Tcoord> NpArr Py2_u2nu(const CNpArr &grid_,
+template<typename Tgrid, typename Tcoord> static NpArr Py2_u2nu(const CNpArr &grid_,
   const CNpArr &coord_, bool forward, double epsilon, size_t nthreads,
   OptNpArr &out__, size_t verbosity, double sigma_min, double sigma_max,
   const Periodicity &periodicity_, bool fft_order)
@@ -110,7 +110,7 @@ NpArr Py_u2nu(const CNpArr &grid,
   MR_fail("not yet supported");
   }
 
-template<typename Tpoints, typename Tcoord> NpArr Py2_nu2u(const CNpArr &points_,
+template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2u(const CNpArr &points_,
   const CNpArr &coord_, bool forward, double epsilon, size_t nthreads,
   NpArr &out_, size_t verbosity, double sigma_min, double sigma_max,
   const Periodicity &periodicity_, bool fft_order)
@@ -171,7 +171,7 @@ NpArr Py_nu2u(const CNpArr &points,
   MR_fail("not yet supported");
   }
 
-template<typename Tpoints, typename Tcoord> NpArr Py2_nu2nu(const CNpArr &points_in_,
+template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2nu(const CNpArr &points_in_,
   const CNpArr &coord_in_, const CNpArr &coord_out_, bool forward, double epsilon, size_t nthreads,
   OptNpArr &points_out__, size_t verbosity, double sigma_min, double sigma_max)
   {

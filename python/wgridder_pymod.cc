@@ -29,7 +29,7 @@ namespace detail_pymodule_wgridder {
 
 using namespace std;
 
-template<typename T> NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
+template<typename T> static NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &vis_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
@@ -148,7 +148,7 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-template<typename T> NpArr Py2_vis2dirty(const CNpArr &uvw_,
+template<typename T> static NpArr Py2_vis2dirty(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &vis_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
@@ -264,7 +264,7 @@ The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
 
-template<typename T> NpArr Py2_dirty2vis_tuning(const CNpArr &uvw_,
+template<typename T> static NpArr Py2_dirty2vis_tuning(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &dirty_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
@@ -362,7 +362,7 @@ Notes
 The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
-template<typename T> NpArr Py2_dirty2vis(const CNpArr &uvw_,
+template<typename T> static NpArr Py2_dirty2vis(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &dirty_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,

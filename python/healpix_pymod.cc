@@ -46,7 +46,7 @@ using namespace std;
 
 using shape_t = fmav_info::shape_t;
 
-template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
+template<size_t nd1, size_t nd2> static shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
   if constexpr (nd1>0)
@@ -65,7 +65,7 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   }
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
-  NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
+  static NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
   const array<size_t,nd2> &a2)
   {
   auto in = to_cfmav<T1>(ain);
@@ -327,7 +327,7 @@ class Pyhpbase
       }
   };
 
-template<typename Tin> NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
+template<typename Tin> static NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
   {
   auto ang = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {2}, {3});
@@ -345,7 +345,7 @@ template<typename Tin> NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
 NpArr ang2vec (const CNpArr &in, size_t nthreads)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2vec2,
     (in, nthreads))
-template<typename Tin> NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
+template<typename Tin> static NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
   {
   auto vec = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {3}, {2});
@@ -363,7 +363,7 @@ template<typename Tin> NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
 NpArr vec2ang (const CNpArr &in, size_t nthreads)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2ang2,
     (in, nthreads))
-template<typename Ti1, typename Ti2> NpArr local_v_angle2
+template<typename Ti1, typename Ti2> static NpArr local_v_angle2
   (const CNpArr &in1, const CNpArr &in2, size_t nthreads)
   {
   auto vec1 = to_cfmav<Ti1>(in1);
