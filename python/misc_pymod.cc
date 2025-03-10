@@ -605,8 +605,8 @@ NpArr Py_empty_noncritical(const vector<size_t> &shape,
   const py::object &dtype_)
   {
   auto dtype = normalizeDtype(dtype_);
-    if (isDtype<float>(dtype))
-  return make_noncritical_Pyarr<float>(shape);
+  if (isDtype<float>(dtype))
+    return make_noncritical_Pyarr<float>(shape);
   if (isDtype<double>(dtype))
     return make_noncritical_Pyarr<double>(shape);
 #ifndef DUCC0_USE_NANOBIND

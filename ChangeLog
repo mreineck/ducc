@@ -1,9 +1,10 @@
 0.37.0:
 - general:
-  - build system switched to CMake, allowing parallel compilation
+  - build system switched to CMake, allowing parallel compilation.
+    This should reduce compile times substantially.
   - rework of the interfacing code to allow an (optional) switch
     from pybind11 to nanobind. As a consequence, function signatures in
-    docstrings have become much more precise.
+    docstrings have become more precise.
     The Python interface for pybind11 should not have changed at all;
     the one for nanobind is identical, except that support for
     `longdouble` accuracy is missing.
