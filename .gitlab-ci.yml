@@ -45,6 +45,7 @@ test_rust:
 release:
   stage: release
   script:
+    - rm -rf rust .pytest_cache  # kludge
     - python3 -m build --sdist
     - 'mv dist/*.tar.gz .'
   artifacts:
