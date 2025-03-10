@@ -47,6 +47,8 @@ namespace ducc0 {
 
 namespace detail_healpix {
 
+using namespace std;
+
 template<typename I> struct Orderhelper__ {};
 template<> struct Orderhelper__<int> {enum{omax=13};};
 template<> struct Orderhelper__<int64_t> {enum{omax=29};};
@@ -69,11 +71,11 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
     inline I ring_above (double z) const;
     void in_ring (I iz, double phi0, double dphi, rangeset<I> &pixset) const;
 
-    template<typename I2> void query_multidisc (const std::vector<vec3> &norm,
-      const std::vector<double> &rad, int fact, rangeset<I2> &pixset) const;
+    template<typename I2> void query_multidisc (const vector<vec3> &norm,
+      const vector<double> &rad, int fact, rangeset<I2> &pixset) const;
 
-    void query_multidisc_general (const std::vector<vec3> &norm, const std::vector<double> &rad,
-      bool inclusive, const std::vector<int> &cmds, rangeset<I> &pixset) const;
+    void query_multidisc_general (const vector<vec3> &norm, const vector<double> &rad,
+      bool inclusive, const vector<int> &cmds, rangeset<I> &pixset) const;
 
     void query_strip_internal (double theta1, double theta2, bool inclusive,
       rangeset<I> &pixset) const;
@@ -282,7 +284,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
 
     /*! \deprecated Please use the version based on \a rangeset */
     void query_disc (const pointing &dir, double radius,
-      std::vector<I> &listpix) const
+      vector<I> &listpix) const
       {
       rangeset<I> pixset;
       query_disc(dir,radius,pixset);
@@ -290,7 +292,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
       }
     /*! \deprecated Please use the version based on \a rangeset */
     void query_disc_inclusive (const pointing &dir, double radius,
-      std::vector<I> &listpix, int fact=1) const
+      vector<I> &listpix, int fact=1) const
       {
       rangeset<I> pixset;
       query_disc_inclusive(dir,radius,pixset,fact);
@@ -298,7 +300,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
       }
 
     template<typename I2> void query_polygon_internal
-      (const std::vector<pointing> &vertex, int fact,
+      (const vector<pointing> &vertex, int fact,
       rangeset<I2> &pixset) const;
 
     /*! Returns a range set of pixels whose centers lie within the convex
@@ -307,13 +309,13 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
         \param pixset a \a rangeset object containing the indices of all pixels
            whose centers lie inside the polygon
         \note This method is more efficient in the RING scheme. */
-    void query_polygon (const std::vector<pointing> &vertex,
+    void query_polygon (const vector<pointing> &vertex,
       rangeset<I> &pixset) const;
     /*! Returns a range set of pixels whose centers lie within the convex
         polygon defined by the \a vertex array.
         \param vertex array containing the vertices of the polygon.
         \note This method is more efficient in the RING scheme. */
-    rangeset<I> query_polygon (const std::vector<pointing> &vertex) const
+    rangeset<I> query_polygon (const vector<pointing> &vertex) const
       {
       rangeset<I> res;
       query_polygon(vertex, res);
@@ -332,7 +334,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
            the polygon at all. The higher \a fact is chosen, the fewer false
            positives are returned, at the cost of increased run time.
         \note This method is more efficient in the RING scheme. */
-    void query_polygon_inclusive (const std::vector<pointing> &vertex,
+    void query_polygon_inclusive (const vector<pointing> &vertex,
       rangeset<I> &pixset, int fact=1) const;
     /*! Returns a range set of pixels which overlap with the convex
         polygon defined by the \a vertex array.
@@ -344,7 +346,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
            the polygon at all. The higher \a fact is chosen, the fewer false
            positives are returned, at the cost of increased run time.
         \note This method is more efficient in the RING scheme. */
-    rangeset<I> query_polygon_inclusive (const std::vector<pointing> &vertex,
+    rangeset<I> query_polygon_inclusive (const vector<pointing> &vertex,
       int fact=1) const
       {
       rangeset<I> res;
@@ -419,14 +421,14 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
 
         \note This method works in both RING and NEST schemes, but is
           considerably faster in the NEST scheme. */
-    void neighbors (I pix, std::array<I,8> &result) const;
+    void neighbors (I pix, array<I,8> &result) const;
     /*! Returns interpolation information for the direction \a ptg.
         The surrounding pixels are returned in \a pix, their corresponding
         weights in \a wgt.
         \note This method works in both RING and NEST schemes, but is
           considerably faster in the RING scheme. */
-    void get_interpol (const pointing &ptg, std::array<I,4> &pix,
-                       std::array<double,4> &wgt) const;
+    void get_interpol (const pointing &ptg, array<I,4> &pix,
+                       array<double,4> &wgt) const;
 
     /*! Returns the order parameter of the object. */
     int Order() const { return order_; }
@@ -459,9 +461,9 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
         boundary through west, south and east corners.
         \param pix pixel index number
         \param step the number of returned points is 4*step. */
-    void boundaries (I pix, size_t step, std::vector<vec3> &out) const;
+    void boundaries (I pix, size_t step, vector<vec3> &out) const;
 
-    std::vector<int> swap_cycles() const;
+    vector<int> swap_cycles() const;
   };
 
 /*! T_Healpix_Base for Nside up to 2^13. */

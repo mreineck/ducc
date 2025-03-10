@@ -115,6 +115,8 @@ class GLFullCorrection: public KernelCorrection
     GLFullCorrection(size_t W, const function<double(double)> &func)
       {
       supp = W;
+      // 1.5*W is safe according to FINUFFT. It may even be posible to reduce
+      // to 1*W. 
       size_t p = size_t(1.5*W)+2;
       GL_Integrator integ(2*p);
       x = integ.coordsSymmetric();

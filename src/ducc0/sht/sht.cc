@@ -17,7 +17,7 @@
 /*! \file sht.cc
  *  Functionality related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2023 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -44,9 +44,6 @@ namespace ducc0 {
 namespace detail_sht {
 
 using namespace std;
-
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
 
 static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
 static constexpr double sharp_fbighalf=0x1p+400;
@@ -2948,7 +2945,7 @@ template<typename T, typename Tloc> void synthesis_general(
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
   timers.poppush("interpol (u2nu)");
-  inter.interpol(planes, 0, 0, xtheta, xphi, map);
+  inter.interpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.pop();
   if (verbose) timers.report(cerr);
   }
@@ -2985,7 +2982,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   timers.poppush("deinterpol (nu2u)");
   auto xtheta = subarray<1>(loc, {{},{0}});
   auto xphi = subarray<1>(loc, {{},{1}});
-  inter.deinterpol(planes, 0, 0, xtheta, xphi, map);
+  inter.deinterpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.poppush("updateAlm");
   inter.updateAlm(alm, mstart, lstride, planes, mode, timers);
   timers.pop();

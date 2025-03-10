@@ -23,16 +23,15 @@
  */
 
 /*
- *  Copyright (C) 2017-2022 Max-Planck-Society
+ *  Copyright (C) 2017-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include <iostream>
 #include <vector>
 #include <string>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/healpix/healpix_base.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/string_utils.h"
@@ -45,11 +44,9 @@ namespace detail_pymodule_healpix {
 
 using namespace std;
 
-namespace py = pybind11;
-
 using shape_t = fmav_info::shape_t;
 
-template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
+template<size_t nd1, size_t nd2> static shape_t repl_dim(const shape_t &s,
   const array<size_t,nd1> &si, const array<size_t,nd2> &so)
   {
   if constexpr (nd1>0)
@@ -68,7 +65,7 @@ template<size_t nd1, size_t nd2> shape_t repl_dim(const shape_t &s,
   }
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
-  py::array myprep(const py::array_t<T1> &ain, const array<size_t,nd1> &a1,
+  static NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
   const array<size_t,nd2> &a2)
   {
   auto in = to_cfmav<T1>(ain);
@@ -103,7 +100,7 @@ class Pyhpbase
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 
-    template<typename Tin> py::array pix2ang2 (const py::array &in,
+    template<typename Tin> NpArr pix2ang2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto pix = to_cfmav<Tin>(in);
@@ -120,11 +117,11 @@ class Pyhpbase
       }
       return out;
       }
-    py::array pix2ang (const py::array &in, size_t nthreads) const
+    NpArr pix2ang (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         pix2ang2, (in, nthreads))
 
-    template<typename Tin> py::array ang2pix2 (const py::array &in,
+    template<typename Tin> NpArr ang2pix2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto ang = to_cfmav<Tin>(in);
@@ -139,10 +136,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array ang2pix (const py::array &in, size_t nthreads) const
+    NpArr ang2pix (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2pix2,
         (in, nthreads))
-    template<typename Tin> py::array pix2vec2 (const py::array &in,
+    template<typename Tin> NpArr pix2vec2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto pix = to_cfmav<Tin>(in);
@@ -158,10 +155,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array pix2vec (const py::array &in, size_t nthreads) const
+    NpArr pix2vec (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         pix2vec2, (in, nthreads))
-    template<typename Tin> py::array vec2pix2 (const py::array &in,
+    template<typename Tin> NpArr vec2pix2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto vec = to_cfmav<Tin>(in);
@@ -176,10 +173,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array vec2pix (const py::array &in, size_t nthreads) const
+    NpArr vec2pix (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2pix2,
         (in, nthreads))
-    template<typename Tin> py::array pix2xyf2 (const py::array &in,
+    template<typename Tin> NpArr pix2xyf2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto pix = to_cfmav<Tin>(in);
@@ -196,10 +193,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array pix2xyf (const py::array &in, size_t nthreads) const
+    NpArr pix2xyf (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         pix2xyf2, (in, nthreads))
-    template<typename Tin> py::array xyf2pix2 (const py::array &in,
+    template<typename Tin> NpArr xyf2pix2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto xyf = to_cfmav<Tin>(in);
@@ -214,10 +211,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array xyf2pix (const py::array &in, size_t nthreads) const
+    NpArr xyf2pix (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         xyf2pix2, (in, nthreads))
-    template<typename Tin> py::array neighbors2 (const py::array &in,
+    template<typename Tin> NpArr neighbors2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto pix = to_cfmav<Tin>(in);
@@ -234,10 +231,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array neighbors (const py::array &in, size_t nthreads) const
+    NpArr neighbors (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         neighbors2, (in, nthreads))
-    template<typename Tin> py::array ring2nest2 (const py::array &in,
+    template<typename Tin> NpArr ring2nest2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto ring = to_cfmav<Tin>(in);
@@ -250,10 +247,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array ring2nest (const py::array &in, size_t nthreads) const
+    NpArr ring2nest (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         ring2nest2, (in, nthreads))
-    template<typename Tin> py::array nest2ring2 (const py::array &in,
+    template<typename Tin> NpArr nest2ring2 (const CNpArr &in,
       size_t nthreads) const
       {
       const auto nest = to_cfmav<Tin>(in);
@@ -266,10 +263,10 @@ class Pyhpbase
       }
       return out;
       }
-    py::array nest2ring (const py::array &in, size_t nthreads) const
+    NpArr nest2ring (const CNpArr &in, size_t nthreads) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
         nest2ring2, (in, nthreads))
-    template<typename Tin> py::array query_disc2(const py::array &ptg,
+    template<typename Tin> NpArr query_disc2(const CNpArr &ptg,
       double radius) const
       {
       MR_assert((ptg.ndim()==1)&&(ptg.shape(0)==2),
@@ -281,7 +278,7 @@ class Pyhpbase
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       }
       auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
-      auto oref=res.mutable_unchecked<2>();
+      auto oref = to_vmav<int64_t,2>(res);
       for (size_t i=0; i<pixset.nranges(); ++i)
         {
         oref(i,0)=pixset.ivbegin(i);
@@ -289,7 +286,7 @@ class Pyhpbase
         }
       return res;
       }
-    py::array query_disc(const py::array &ptg, double radius) const
+    NpArr query_disc(const CNpArr &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,
         query_disc2, (ptg, radius))
     py::dict sht_info() const
@@ -330,7 +327,7 @@ class Pyhpbase
       }
   };
 
-template<typename Tin> py::array ang2vec2 (const py::array &in, size_t nthreads)
+template<typename Tin> static NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
   {
   auto ang = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {2}, {3});
@@ -345,10 +342,10 @@ template<typename Tin> py::array ang2vec2 (const py::array &in, size_t nthreads)
   }
   return out;
   }
-py::array ang2vec (const py::array &in, size_t nthreads)
+NpArr ang2vec (const CNpArr &in, size_t nthreads)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2vec2,
     (in, nthreads))
-template<typename Tin> py::array vec2ang2 (const py::array &in, size_t nthreads)
+template<typename Tin> static NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
   {
   auto vec = to_cfmav<Tin>(in);
   auto out = myprep<Tin, double, 1, 1>(in, {3}, {2});
@@ -363,11 +360,11 @@ template<typename Tin> py::array vec2ang2 (const py::array &in, size_t nthreads)
   }
   return out;
   }
-py::array vec2ang (const py::array &in, size_t nthreads)
+NpArr vec2ang (const CNpArr &in, size_t nthreads)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2ang2,
     (in, nthreads))
-template<typename Ti1, typename Ti2> py::array local_v_angle2
-  (const py::array &in1, const py::array &in2, size_t nthreads)
+template<typename Ti1, typename Ti2> static NpArr local_v_angle2
+  (const CNpArr &in1, const CNpArr &in2, size_t nthreads)
   {
   auto vec1 = to_cfmav<Ti1>(in1);
   auto vec2 = to_cfmav<Ti2>(in2);
@@ -384,7 +381,7 @@ template<typename Ti1, typename Ti2> py::array local_v_angle2
   }
   return out;
   }
-py::array local_v_angle (const py::array &in1, const py::array &in2,
+NpArr local_v_angle (const CNpArr &in1, const CNpArr &in2,
   size_t nthreads)
   {
   if (isPyarr<double>(in1) && isPyarr<double>(in2))
@@ -542,11 +539,11 @@ The employed algorithm is highly accurate, even for angles close to 0 or pi.
 
 void add_healpix(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("healpix");
   m.doc() = healpix_DS;
 
-  py::class_<Pyhpbase> (m, "Healpix_Base", py::module_local(), Healpix_Base_DS)
+  py::class_<Pyhpbase> (m, "Healpix_Base", /*py::module_local(), */Healpix_Base_DS)
     .def(py::init<int,const string &>(), Healpix_Base_init_DS, "nside"_a,"scheme"_a)
     .def("order", [](Pyhpbase &self)
       { return self.base.Order(); }, order_DS)

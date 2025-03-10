@@ -14,12 +14,10 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/nufft/nufft.h"
 
@@ -29,41 +27,39 @@ namespace detail_pymodule_nufft {
 
 using namespace std;
 
-namespace py = pybind11;
+using Periodicity = variant<double, vector<double>>;
 
-auto None = py::none();
-
-vector<double> get_periodicity(const py::object &inp, size_t ndim)
+static vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
   {
   try
     {
-    auto val = inp.cast<double>();
+    auto val = get<double>(inp);
     vector<double> res;
     for (size_t i=0; i<ndim; ++i) res.push_back(val);
     return res;
     }
   catch(...)
     {}
-  auto res = inp.cast<vector<double>>();
+  auto res = get<vector<double>>(inp);
   MR_assert(res.size()==ndim, "bad size of periodicity argument");
   return res;
   }
 
-template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &grid_,
-  const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::object &out__, size_t verbosity, double sigma_min, double sigma_max,
-  const py::object &periodicity_, bool fft_order)
+template<typename Tgrid, typename Tcoord> static NpArr Py2_u2nu(const CNpArr &grid_,
+  const CNpArr &coord_, bool forward, double epsilon, size_t nthreads,
+  OptNpArr &out__, size_t verbosity, double sigma_min, double sigma_max,
+  const Periodicity &periodicity_, bool fft_order)
   {
   using Tpoints = Tgrid;
-  auto coord = to_cmav<Tcoord,2>(coord_);
+  auto coord = to_cmav<Tcoord,2>(coord_, "coord");
   auto periodicity = get_periodicity(periodicity_, coord.shape(1));
   size_t ndim = coord.shape(1);
   auto grid = to_cfmav_with_optional_leading_dimensions<complex<Tgrid>>(grid_,ndim+1);
   MR_assert((grid.ndim()==ndim)||(grid.ndim()==ndim+1), "bad dimensionality of grid");
   auto out_ = (ndim==size_t(grid_.ndim()))
-            ? get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)})
-            : get_optional_Pyarr<complex<Tpoints>>(out__, {grid.shape(0), coord.shape(0)});
-  auto out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(out_);
+            ? get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)}, "out")
+            : get_optional_Pyarr<complex<Tpoints>>(out__, {grid.shape(0), coord.shape(0)}, "out");
+  auto out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(out_, "out");
   {
   py::gil_scoped_release release;
   vector<slice> slices(grid.ndim(),slice());
@@ -88,10 +84,10 @@ template<typename Tgrid, typename Tcoord> py::array Py2_u2nu(const py::array &gr
   }
   return out_;
   }
-py::array Py_u2nu(const py::array &grid,
-  const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::object &out, size_t verbosity, double sigma_min, double sigma_max,
-  const py::object &periodicity, bool fft_order)
+NpArr Py_u2nu(const CNpArr &grid,
+  const CNpArr &coord, bool forward, double epsilon, size_t nthreads,
+  OptNpArr &out, size_t verbosity, double sigma_min, double sigma_max,
+  const Periodicity &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
@@ -114,16 +110,16 @@ py::array Py_u2nu(const py::array &grid,
   MR_fail("not yet supported");
   }
 
-template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &points_,
-  const py::array &coord_, bool forward, double epsilon, size_t nthreads,
-  py::array &out_, size_t verbosity, double sigma_min, double sigma_max,
-  const py::object &periodicity_, bool fft_order)
+template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2u(const CNpArr &points_,
+  const CNpArr &coord_, bool forward, double epsilon, size_t nthreads,
+  NpArr &out_, size_t verbosity, double sigma_min, double sigma_max,
+  const Periodicity &periodicity_, bool fft_order)
   {
   using Tgrid = Tpoints;
-  auto coord = to_cmav<Tcoord,2>(coord_);
+  auto coord = to_cmav<Tcoord,2>(coord_, "coord");
   size_t ndim = coord.shape(1);
-  auto points = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_);
-  auto out = to_vfmav_with_optional_leading_dimensions<complex<Tgrid>>(out_, ndim+1);
+  auto points = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_, "points");
+  auto out = to_vfmav_with_optional_leading_dimensions<complex<Tgrid>>(out_, ndim+1, "out");
   auto periodicity = get_periodicity(periodicity_, coord.shape(1));
   {
   py::gil_scoped_release release;
@@ -149,10 +145,10 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2u(const py::array &
   }
   return out_;
   }
-py::array Py_nu2u(const py::array &points,
-  const py::array &coord, bool forward, double epsilon, size_t nthreads,
-  py::array &out, size_t verbosity, double sigma_min, double sigma_max,
-  const py::object &periodicity, bool fft_order)
+NpArr Py_nu2u(const CNpArr &points,
+  const CNpArr &coord, bool forward, double epsilon, size_t nthreads,
+  NpArr &out, size_t verbosity, double sigma_min, double sigma_max,
+  const Periodicity &periodicity, bool fft_order)
   {
   if (isPyarr<double>(coord))
     {
@@ -175,18 +171,18 @@ py::array Py_nu2u(const py::array &points,
   MR_fail("not yet supported");
   }
 
-template<typename Tpoints, typename Tcoord> py::array Py2_nu2nu(const py::array &points_in_,
-  const py::array &coord_in_, const py::array &coord_out_, bool forward, double epsilon, size_t nthreads,
-  py::object &points_out__, size_t verbosity, double sigma_min, double sigma_max)
+template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2nu(const CNpArr &points_in_,
+  const CNpArr &coord_in_, const CNpArr &coord_out_, bool forward, double epsilon, size_t nthreads,
+  OptNpArr &points_out__, size_t verbosity, double sigma_min, double sigma_max)
   {
   using Tgrid = Tpoints;
-  auto coord_in = to_cmav<Tcoord,2>(coord_in_);
-  auto coord_out = to_cmav<Tcoord,2>(coord_out_);
-  auto points_in = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_in_);
+  auto coord_in = to_cmav<Tcoord,2>(coord_in_, "coord_in");
+  auto coord_out = to_cmav<Tcoord,2>(coord_out_, "coord_out");
+  auto points_in = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_in_, "points_in");
   auto points_out_ = (points_in_.ndim()==1)
-    ? get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)})
-    : get_optional_Pyarr<complex<Tpoints>>(points_out__, {points_in.shape(0),coord_out.shape(0)});
-  auto points_out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_out_);
+    ? get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)}, "points_out")
+    : get_optional_Pyarr<complex<Tpoints>>(points_out__, {points_in.shape(0),coord_out.shape(0)}, "points_out");
+  auto points_out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_out_, "points_out");
   {
   py::gil_scoped_release release;
   if (points_in.shape(0)==1)
@@ -203,10 +199,10 @@ template<typename Tpoints, typename Tcoord> py::array Py2_nu2nu(const py::array 
   return points_out_;
   }
   }
-py::array Py_nu2nu(const py::array &points_in,
-  const py::array &coord_in, const py::array &coord_out, bool forward,
+NpArr Py_nu2nu(const CNpArr &points_in,
+  const CNpArr &coord_in, const CNpArr &coord_out, bool forward,
   double epsilon, size_t nthreads,
-  py::object &points_out, size_t verbosity, double sigma_min, double sigma_max)
+  OptNpArr &points_out, size_t verbosity, double sigma_min, double sigma_max)
   {
   if (isPyarr<double>(coord_in))
     {
@@ -240,15 +236,15 @@ class Py_Nufftplan
 
     template<typename T> void construct(
       unique_ptr<Nufft<T,T,T>> &ptr,
-      bool gridding, const py::array &coord_,
-      const py::object &uniform_shape_,
-      double epsilon_, 
-      size_t nthreads_, 
+      bool gridding, const CNpArr &coord_,
+      const vector<size_t> &uniform_shape_,
+      double epsilon_,
+      size_t nthreads_,
       double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order_)
+      const Periodicity &periodicity_, bool fft_order_)
       {
-      auto coord = to_cmav<T,2>(coord_);
-      auto shp = uniform_shape_.cast<vector<size_t>>();
+      auto coord = to_cmav<T,2>(coord_, "coord");
+      auto shp = uniform_shape_;
       auto periodicity = get_periodicity(periodicity_, coord.shape(1));
       {
       py::gil_scoped_release release;
@@ -256,18 +252,18 @@ class Py_Nufftplan
         epsilon_, nthreads_, sigma_min, sigma_max, periodicity, fft_order_);
       }
       }
-    template<typename T> py::array do_nu2u(
+    template<typename T> NpArr do_nu2u(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      bool forward, size_t verbosity, const py::array &points_,
-      py::object &uniform__) const
+      bool forward, size_t verbosity, const CNpArr &points_,
+      OptNpArr &uniform__) const
       {
-      auto points = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_);
+      auto points = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_, "points");
       vector<size_t> uni_shape;
       if (points_.ndim()==2)
         uni_shape.push_back(points.shape(0));
       for(auto v:uniform_shape) uni_shape.push_back(v);
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uni_shape);
-      auto uniform = to_vfmav_with_optional_leading_dimensions<complex<T>>(uniform_,uniform_shape.size()+1);
+      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uni_shape, "out");
+      auto uniform = to_vfmav_with_optional_leading_dimensions<complex<T>>(uniform_,uniform_shape.size()+1, "out");
       {
       py::gil_scoped_release release;
       vector<slice> slices(uniform.ndim(), slice());
@@ -279,16 +275,16 @@ class Py_Nufftplan
       }
       return uniform_;
       }
-    template<typename T> py::array do_u2nu(
+    template<typename T> NpArr do_u2nu(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      bool forward, size_t verbosity, const py::array &uniform_,
-      py::object &points__) const
+      bool forward, size_t verbosity, const CNpArr &uniform_,
+      OptNpArr &points__) const
       {
-      auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1);
+      auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1, "grid");
       auto points_ = (size_t(uniform_.ndim())==uniform_shape.size())
-        ? get_optional_Pyarr<complex<T>>(points__, {npoints})
-        : get_optional_Pyarr<complex<T>>(points__, {uniform.shape(0), npoints});
-      auto points = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_);
+        ? get_optional_Pyarr<complex<T>>(points__, {npoints}, "out")
+        : get_optional_Pyarr<complex<T>>(points__, {uniform.shape(0), npoints}, "out");
+      auto points = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_, "out");
       {
       py::gil_scoped_release release;
       vector<slice> slices(uniform.ndim(), slice());
@@ -302,13 +298,13 @@ class Py_Nufftplan
       }
 
   public:
-    Py_Nufftplan(bool gridding, const py::array &coord_,
-                 const py::object &uniform_shape_,
-                 double epsilon_, 
-                 size_t nthreads_, 
+    Py_Nufftplan(bool gridding, const CNpArr &coord_,
+                 const vector<size_t> &uniform_shape_,
+                 double epsilon_,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order_)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
+                 const Periodicity &periodicity, bool fft_order_)
+      : uniform_shape(uniform_shape_),
         npoints(coord_.shape(0))
       {
       auto ndim = uniform_shape.size();
@@ -323,15 +319,15 @@ class Py_Nufftplan
         MR_fail("unsupported");
       }
 
-    py::array nu2u(bool forward, size_t verbosity,
-      const py::array &points_, py::object &uniform_)
+    NpArr nu2u(bool forward, size_t verbosity,
+      const CNpArr &points_, OptNpArr &uniform_)
       {
       if (pd) return do_nu2u(pd, forward, verbosity, points_, uniform_);
       if (pf) return do_nu2u(pf, forward, verbosity, points_, uniform_);
       MR_fail("unsupported");
       }
-    py::array u2nu(bool forward, size_t verbosity,
-      const py::array &uniform_, py::object &points_)
+    NpArr u2nu(bool forward, size_t verbosity,
+      const CNpArr &uniform_, OptNpArr &points_)
       {
       if (pd) return do_u2nu(pd, forward, verbosity, uniform_, points_);
       if (pf) return do_u2nu(pf, forward, verbosity, uniform_, points_);
@@ -354,9 +350,9 @@ class Py_incremental_nu2u
       unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
       size_t npoints_estimate,
-      double epsilon, 
+      double epsilon,
       double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order)
+      const Periodicity &periodicity_, bool fft_order)
       {
       auto periodicity = get_periodicity(periodicity_, uniform_shape.size());
       {
@@ -368,23 +364,23 @@ class Py_incremental_nu2u
       }
     template<typename T> void do_add_points(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      const py::array &coord_, const py::array &values_,
+      const CNpArr &coord_, const CNpArr &values_,
       vfmav<complex<T>> &grid)
       {
-      auto coord = to_cmav<T,2>(coord_);
-      auto values = to_cmav<complex<T>,1>(values_);
+      auto coord = to_cmav<T,2>(coord_, "coord");
+      auto values = to_cmav<complex<T>,1>(values_, "points");
       {
       py::gil_scoped_release release;
       ptr->spread(coord, values, grid);
       }
       }
-    template<typename T> py::array do_evaluate_and_reset(
+    template<typename T> NpArr do_evaluate_and_reset(
       const unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
-      py::object &uniform__)
+      OptNpArr &uniform__)
       {
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, false);
-      auto uniform = to_vfmav<complex<T>>(uniform_);
+      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, "uniform");
+      auto uniform = to_vfmav<complex<T>>(uniform_, "uniform");
       {
       py::gil_scoped_release release;
       ptr->spread_finish(forward, grid, uniform);
@@ -395,13 +391,13 @@ class Py_incremental_nu2u
 
   public:
     Py_incremental_nu2u(size_t npoints_estimate,
-                 const py::object &uniform_shape_,
+                 const vector<size_t> &uniform_shape_,
                  bool forward_,
-                 double epsilon, 
-                 size_t nthreads_, 
+                 double epsilon,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order, bool singleprec)
-      : uniform_shape(py::cast<vector<size_t>>(uniform_shape_)),
+                 const Periodicity &periodicity, bool fft_order, bool singleprec)
+      : uniform_shape(uniform_shape_),
         nthreads(nthreads_),
         forward(forward_)
       {
@@ -415,13 +411,13 @@ class Py_incremental_nu2u
                   sigma_min, sigma_max, periodicity, fft_order);
       }
 
-    void add_points(const py::array &coord, const py::array &values)
+    void add_points(const CNpArr &coord, const CNpArr &values)
       {
       if (pd) return do_add_points(pd, coord, values, gridd);
       if (pf) return do_add_points(pf, coord, values, gridf);
       MR_fail("unsupported");
       }
-    py::array evaluate_and_reset(py::object &uniform)
+    NpArr evaluate_and_reset(OptNpArr &uniform)
       {
       if (pd) return do_evaluate_and_reset(pd, gridd, uniform);
       if (pf) return do_evaluate_and_reset(pf, gridf, uniform);
@@ -443,13 +439,13 @@ class Py_incremental_u2nu
       unique_ptr<Nufft<T,T,T>> &ptr,
       vfmav<complex<T>> &grid,
       size_t npoints_estimate,
-      const py::array &uniform_,
+      const CNpArr &uniform_,
       bool forward,
-      double epsilon, 
+      double epsilon,
       double sigma_min, double sigma_max,
-      const py::object &periodicity_, bool fft_order)
+      const Periodicity &periodicity_, bool fft_order)
       {
-      auto uniform = to_cfmav<complex<T>>(uniform_);
+      auto uniform = to_cfmav<complex<T>>(uniform_, "grid");
       auto shp = uniform.shape();
       auto periodicity = get_periodicity(periodicity_, shp.size());
       {
@@ -460,14 +456,14 @@ class Py_incremental_u2nu
       ptr->interp_prep(forward, grid, uniform);
       }
       }
-    template<typename T> py::array do_get_points(
+    template<typename T> NpArr do_get_points(
       const unique_ptr<Nufft<T,T,T>> &ptr,
-      const py::array &coord_, py::object &values__,
+      const CNpArr &coord_, OptNpArr &values__,
       const cfmav<complex<T>> &grid) const
       {
-      auto coord = to_cmav<T,2>(coord_);
-      auto values_ = get_optional_Pyarr<complex<T>>(values__, {coord.shape(0)}, false);
-      auto values = to_vmav<complex<T>,1>(values_);
+      auto coord = to_cmav<T,2>(coord_, "coord");
+      auto values_ = get_optional_Pyarr<complex<T>>(values__, {coord.shape(0)}, "points");
+      auto values = to_vmav<complex<T>,1>(values_, "points");
       {
       py::gil_scoped_release release;
       ptr->interp(coord, values, grid);
@@ -477,12 +473,12 @@ class Py_incremental_u2nu
 
   public:
     Py_incremental_u2nu(size_t npoints_estimate,
-                 const py::array &uniform,
+                 const CNpArr &uniform,
                  bool forward,
-                 double epsilon, 
-                 size_t nthreads_, 
+                 double epsilon,
+                 size_t nthreads_,
                  double sigma_min, double sigma_max,
-                 const py::object &periodicity, bool fft_order_)
+                 const Periodicity &periodicity, bool fft_order_)
       : nthreads(nthreads_)
       {
       auto ndim = uniform.ndim();
@@ -495,7 +491,7 @@ class Py_incremental_u2nu
                   sigma_min, sigma_max, periodicity, fft_order_);
       }
 
-    py::array get_points(const py::array &coord, py::object &values) const
+    NpArr get_points(const CNpArr &coord, OptNpArr &values) const
       {
       if (pd) return do_get_points(pd, coord, values, gridd);
       if (pf) return do_get_points(pf, coord, values, gridf);
@@ -508,19 +504,20 @@ class Py_Nufft3plan
   private:
     unique_ptr<Nufft3< float,  float,  float,  float>> pf;
     unique_ptr<Nufft3<double, double, double, double>> pd;
-    size_t npoints_out;
+    size_t npoints_in, npoints_out;
 
     template<typename T> void construct(
       unique_ptr<Nufft3<T,T,T,T>> &ptr,
-      const py::array &coord_in_,
-      const py::array &coord_out_,
-      double epsilon, 
-      size_t nthreads, 
+      const CNpArr &coord_in_,
+      const CNpArr &coord_out_,
+      double epsilon,
+      size_t nthreads,
       double sigma_min, double sigma_max,
       size_t verbosity)
       {
-      auto coord_in = to_cmav<T,2>(coord_in_);
-      auto coord_out = to_cmav<T,2>(coord_out_);
+      auto coord_in = to_cmav<T,2>(coord_in_, "coord_in");
+      npoints_in = coord_in.shape(0);
+      auto coord_out = to_cmav<T,2>(coord_out_, "coord_out");
       npoints_out = coord_out.shape(0);
       {
       py::gil_scoped_release release;
@@ -528,16 +525,16 @@ class Py_Nufft3plan
         coord_out, verbosity, sigma_min, sigma_max);
       }
       }
-    template<typename T> py::array do_exec(
+    template<typename T> NpArr do_exec(
       const unique_ptr<Nufft3<T,T,T,T>> &ptr,
-      bool forward, const py::array &points_in_,
-      py::object &points_out__) const
+      bool forward, const CNpArr &points_in_,
+      OptNpArr &points_out__) const
       {
-      auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_);
+      auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
-        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_out})
-        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_out});
-      auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_);
+        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_out}, "points_out")
+        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_out}, "points_out");
+      auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_, "points_out");
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<points_in.shape(0); ++i)
@@ -545,12 +542,29 @@ class Py_Nufft3plan
       }
       return points_out_;
       }
+    template<typename T> NpArr do_exec_adjoint(
+      const unique_ptr<Nufft3<T,T,T,T>> &ptr,
+      bool forward, const CNpArr &points_in_,
+      OptNpArr &points_out__) const
+      {
+      auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
+      auto points_out_ = (points_in_.ndim()==1)
+        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_in}, "points_out")
+        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_in}, "points_out");
+      auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_);
+      {
+      py::gil_scoped_release release;
+      for (size_t i=0; i<points_in.shape(0); ++i)
+        ptr->exec_adjoint(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+      }
+      return points_out_;
+      }
 
   public:
-    Py_Nufft3plan(const py::array &coord_in,
-                  const py::array &coord_out,
-                  double epsilon, 
-                  size_t nthreads, 
+    Py_Nufft3plan(const CNpArr &coord_in,
+                  const CNpArr &coord_out,
+                  double epsilon,
+                  size_t nthreads,
                   double sigma_min, double sigma_max,
                   size_t verbosity)
       {
@@ -564,11 +578,18 @@ class Py_Nufft3plan
         MR_fail("unsupported");
       }
 
-    py::array exec(bool forward,
-      const py::array &points_in, py::object &points_out)
+    NpArr exec(bool forward,
+      const CNpArr &points_in, OptNpArr &points_out)
       {
       if (pd) return do_exec(pd, forward, points_in, points_out);
       if (pf) return do_exec(pf, forward, points_in, points_out);
+      MR_fail("unsupported");
+      }
+    NpArr exec_adjoint(bool forward,
+      const CNpArr &points_in, OptNpArr &points_out)
+      {
+      if (pd) return do_exec_adjoint(pd, forward, points_in, points_out);
+      if (pf) return do_exec_adjoint(pf, forward, points_in, points_out);
       MR_fail("unsupported");
       }
   };
@@ -831,6 +852,26 @@ numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
     the computed nonuniform values.
     Identical to `points_out` if it was provided.
 )""";
+constexpr const char *plan3_exec_adjoint_DS = R"""(
+Perform the adjoint operation of `exec`.
+
+Parameters
+----------
+forward : bool
+    must be the same value as in the corresponding `exec` call to obtain
+    the adjoint operation
+points_in : numpy.ndarray(([ntrans], npoints_out,), dtype=numpy.complex)
+    The input values at the specified non-uniform grid points
+points_out : numpy.ndarray(([ntrans], npoints_in,), dtype=numpy.complex), optional
+    The output values at the specified non-uniform grid points.
+    if provided, this will be used to store he result.
+
+Returns
+-------
+numpy.ndarray(([ntrans], npoints_in,), same dtype as points_in)
+    the computed nonuniform values.
+    Identical to `points_out` if it was provided.
+)""";
 
 constexpr const char *incremental_nu2u_init_DS = R"""(
 Incremental nu2u constructor
@@ -946,7 +987,7 @@ numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
 
 void add_nufft(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("nufft");
   auto m2 = m.def_submodule("experimental");
 
@@ -964,32 +1005,35 @@ void add_nufft(py::module_ &msup)
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
         "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
 
-  py::class_<Py_Nufftplan> (m, "plan", py::module_local())
-    .def(py::init<bool, const py::array &, const py::object &,
-                  double, size_t, double, double, const py::object &, bool>(),
+  py::class_<Py_Nufftplan> (m, "plan", /*py::module_local(),*/
+                            "Class for repeated execution of type 1/2 NUFFTs")
+    .def(py::init<bool, const CNpArr &, const vector<size_t> &,
+                  double, size_t, double, double, const Periodicity &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false)
     .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "points"_a, "out"_a=None)
-    .def("u2nu", &Py_Nufftplan::u2nu, py::kw_only(), "forward"_a,
+    .def("u2nu", &Py_Nufftplan::u2nu, plan_u2nu_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "grid"_a, "out"_a=None);
 
-  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", py::module_local())
-    .def(py::init<size_t, const py::object &, bool,
-                  double, size_t, double, double, const py::object &, bool, bool>(),
+  py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", /*py::module_local(),*/
+                                   "Class for incremental execution of a type 1 NUFFT")
+    .def(py::init<size_t, const vector<size_t> &, bool,
+                  double, size_t, double, double, const Periodicity &, bool, bool>(),
       incremental_nu2u_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
     .def("add_points", &Py_incremental_nu2u::add_points,
       incremental_nu2u_add_points_DS, py::kw_only(), "coord"_a, "points"_a)
-    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset, 
+    .def("evaluate_and_reset", &Py_incremental_nu2u::evaluate_and_reset,
       incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
-  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", py::module_local())
-    .def(py::init<size_t, const py::array &, bool,
-                  double, size_t, double, double, const py::object &, bool>(),
+  py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", /*py::module_local(),*/
+                                   "Class for incremental execution of a type 2 NUFFT")
+    .def(py::init<size_t, const CNpArr &, bool,
+                  double, size_t, double, double, const Periodicity &, bool>(),
       incremental_u2nu_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid"_a, "forward"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
@@ -998,13 +1042,16 @@ void add_nufft(py::module_ &msup)
       incremental_u2nu_get_points_DS, py::kw_only(),
       "coord"_a, "points"_a=None);
 
-  py::class_<Py_Nufft3plan> (m2, "plan3", py::module_local())
-    .def(py::init<const py::array &, const py::array &,
+  py::class_<Py_Nufft3plan> (m2, "plan3", /*py::module_local(),*/
+                             "Class for repeated execution of type 3 NUFFTs")
+    .def(py::init<const CNpArr &, const CNpArr &,
                   double, size_t, double, double, size_t>(),
       plan3_init_DS, py::kw_only(), "coord_in"_a, "coord_out"_a,
         "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
         "verbosity"_a=0)
     .def("exec", &Py_Nufft3plan::exec, plan3_exec_DS, py::kw_only(), "forward"_a,
+      "points_in"_a, "points_out"_a=None)
+    .def("exec_adjoint", &Py_Nufft3plan::exec_adjoint, plan3_exec_adjoint_DS, py::kw_only(), "forward"_a,
       "points_in"_a, "points_out"_a=None);
   }
 

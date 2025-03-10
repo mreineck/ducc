@@ -17,7 +17,7 @@
 /*! \file sht_utils.cc
  *  Utility functions related to spherical harmonic transforms
  *
- *  Copyright (C) 2020-2023 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -36,9 +36,6 @@ namespace ducc0 {
 namespace detail_sht {
 
 using namespace std;
-
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
 
 inline bool even_odd_m(const cmav<size_t,1> &mval)
   {

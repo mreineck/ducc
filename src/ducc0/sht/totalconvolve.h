@@ -15,7 +15,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2023 Max-Planck-Society
+ *  Copyright (C) 2020-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -57,6 +57,7 @@ template<typename T> class ConvolverPlan
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
+    constexpr static size_t cellsize = 32;
     using Tsimd = typename simd_select<T, vlen>::type;
 
     size_t nthreads;
@@ -81,11 +82,11 @@ template<typename T> class ConvolverPlan
       return fct;
       }
 
-    quick_array<uint32_t> getIdx(const cmav<T,1> &theta, const cmav<T,1> &phi, const cmav<T,1> &psi,
+    template<typename Tloc> quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta,
+      const cmav<Tloc,1> &phi, const cmav<Tloc,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
       size_t nptg = theta.shape(0);
-      constexpr size_t cellsize=8;
       size_t nct = patch_ntheta/cellsize+1,
              ncp = patch_nphi/cellsize+1,
              ncpsi = npsi_b/cellsize+1;
@@ -180,9 +181,9 @@ template<typename T> class ConvolverPlan
     // prefetching distance
     static constexpr size_t pfdist=2;
 
-    template<size_t supp> void interpolx(size_t supp_, const cmav<T,3> &cube,
-      size_t itheta0, size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, const vmav<T,1> &signal) const
+    template<size_t supp, typename Tloc> void interpolx(size_t supp_, const cmav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
+      const cmav<Tloc,1> &psi, const vmav<T,1> &signal) const
       {
       if constexpr (supp>=8)
         if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
@@ -250,9 +251,9 @@ template<typename T> class ConvolverPlan
           }
         });
       }
-    template<size_t supp> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
-      size_t itheta0, size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, const cmav<T,1> &signal) const
+    template<size_t supp, typename Tloc> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
+      size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
+      const cmav<Tloc,1> &psi, const cmav<T,1> &signal) const
       {
       if constexpr (supp>=8)
         if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, psi, signal);
@@ -269,7 +270,6 @@ template<typename T> class ConvolverPlan
       MR_assert(cube.shape(0)==npsi_b, "bad psi dimension");
       auto idx = getIdx(theta, phi, psi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
 
-      constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
              ncp = cube.shape(2)/cellsize+10;
       vmav<Mutex,2> locks({nct,ncp});
@@ -539,17 +539,17 @@ template<typename T> class ConvolverPlan
       getPlane(vslm, vblm, mbeam, planes);
       }
 
-    void interpol(const cmav<T,3> &cube, size_t itheta0,
-      size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, const vmav<T,1> &signal) const
+    template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
+      size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
+      const cmav<Tloc,1> &psi, const vmav<T,1> &signal) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
       interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
-    void deinterpol(const vmav<T,3> &cube, size_t itheta0,
-      size_t iphi0, const cmav<T,1> &theta, const cmav<T,1> &phi,
-      const cmav<T,1> &psi, const cmav<T,1> &signal) const
+    template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
+      size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
+      const cmav<Tloc,1> &psi, const cmav<T,1> &signal) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
       deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);

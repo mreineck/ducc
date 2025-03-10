@@ -58,6 +58,7 @@ template<typename T> class SphereInterpol
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
+    constexpr static size_t cellsize = 32;
     using Tsimd = typename simd_select<T, vlen>::type;
 
     size_t nthreads;
@@ -84,10 +85,9 @@ template<typename T> class SphereInterpol
       }
 
     template<typename Tloc>quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
+      size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp, TimerHierarchy &timers) const
       {
       size_t nptg = theta.shape(0);
-      constexpr size_t cellsize=8;
       size_t nct = patch_ntheta/cellsize+1,
              ncp = patch_nphi/cellsize+1;
       double theta0 = (int(itheta0)-int(nbtheta))*dtheta,
@@ -97,7 +97,9 @@ template<typename T> class SphereInterpol
       MR_assert(uint64_t(nct)*uint64_t(ncp)<(uint64_t(1)<<32),
         "key space too large");
 
+      timers.push("allocation");
       quick_array<uint32_t> key(nptg);
+      timers.poppush("index generation");
       execParallel(nptg, nthreads, [&](size_t lo, size_t hi)
         {
         for (size_t i=lo; i<hi; ++i)
@@ -115,8 +117,11 @@ template<typename T> class SphereInterpol
           key[i] = itheta*ncp+iphi;
           }
         });
+      timers.poppush("index generation");
       quick_array<uint32_t> res(key.size());
+      timers.poppush("bucket sort");
       bucket_sort2(key, res, ncp*nct, nthreads);
+      timers.pop();
       return res;
       }
 
@@ -172,12 +177,12 @@ template<typename T> class SphereInterpol
 
     template<size_t supp, typename Tloc> void interpolx(size_t supp_, const cmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const vmav<T,2> &signal) const
+      const vmav<T,2> &signal, TimerHierarchy &timers) const
       {
       if constexpr (supp>=8)
-        if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<=supp/2) return interpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       if constexpr (supp>4)
-        if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<supp) return interpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
@@ -187,7 +192,9 @@ template<typename T> class SphereInterpol
       MR_assert(signal.shape(0)==ncomp, "array shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      timers.push("index sorting");
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp, timers);
+      timers.poppush("actual interpolation");
 
       execStatic(idx.size(), nthreads, 0, [&](Scheduler &sched)
         {
@@ -271,15 +278,16 @@ template<typename T> class SphereInterpol
             }
           }
         });
+      timers.pop();
       }
     template<size_t supp, typename Tloc> void deinterpolx(size_t supp_, const vmav<T,3> &cube,
       size_t itheta0, size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const cmav<T,2> &signal) const
+      const cmav<T,2> &signal, TimerHierarchy &timers) const
       {
       if constexpr (supp>=8)
-        if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<=supp/2) return deinterpolx<supp/2>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       if constexpr (supp>4)
-        if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal);
+        if (supp_<supp) return deinterpolx<supp-1>(supp_, cube, itheta0, iphi0, theta, phi, signal, timers);
       MR_assert(supp_==supp, "requested support out of range");
 
       MR_assert(cube.stride(2)==1, "last axis of cube must be contiguous");
@@ -289,9 +297,10 @@ template<typename T> class SphereInterpol
       MR_assert(signal.shape(0)==ncomp, "array shape mismatch");
       static constexpr size_t vlen = Tsimd::size();
       static constexpr size_t nvec = (supp+vlen-1)/vlen;
-      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp);
+      timers.push("index sorting");
+      auto idx = getIdx(theta, phi, cube.shape(1), cube.shape(2), itheta0, iphi0, supp, timers);
+      timers.poppush("actual deinterpolation");
 
-      constexpr size_t cellsize=16;
       size_t nct = cube.shape(1)/cellsize+10,
              ncp = cube.shape(2)/cellsize+10;
       vmav<Mutex,2> locks({nct,ncp});
@@ -412,6 +421,7 @@ template<typename T> class SphereInterpol
           locks(b_theta+1,b_phi+1).unlock();
           }
         });
+      timers.pop();
       }
 
   public:
@@ -553,18 +563,18 @@ template<typename T> class SphereInterpol
 
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const vmav<T,2> &signal) const
+      const vmav<T,2> &signal, TimerHierarchy &timers) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
-      interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
+      interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal, timers);
       }
 
     template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
-      const cmav<T,2> &signal) const
+      const cmav<T,2> &signal, TimerHierarchy &timers) const
       {
       constexpr size_t maxsupp = is_same<T, double>::value ? 16 : 8;
-      deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal);
+      deinterpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, signal, timers);
       }
 
     void updateAlm(const vmav<complex<T>,2> &valm, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const vmav<T,3> &planes, SHT_mode mode, TimerHierarchy &timers) const

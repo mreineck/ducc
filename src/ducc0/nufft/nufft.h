@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_H
@@ -599,11 +599,6 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       dims = dims_;
 
       const auto &krn(getKernel(kidx));
-      auto krn2 = selectKernel(kidx);
-      const auto &corr(krn2->Corr()); 
-
-      auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
-
       vector<double> gamma(ndim);
       for (size_t idim=0; idim<ndim; ++idim)
         gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
@@ -614,11 +609,9 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           {
-          double phase=0;
-          for (size_t d=0; d<ndim; ++d)
-            phase += mid_out[d]*coord_in(i,d);
-// instead of storing fact_in, we could also store the phase, but we should
-// definitely range-reduce it before converting to Tcoord/Tpoints for better accuracy!
+          double phase=mid_out[0]*coord_in(i,0);
+          if (ndim>1) phase += mid_out[1]*coord_in(i,1);
+          if (ndim>2) phase += mid_out[2]*coord_in(i,2);
           fact_in(i) = complex<Tpoints>(polar(1., phase));
           }
         });
@@ -638,6 +631,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out, dims,
         epsilon, nthreads, sigma_min, sigma_max, period_out, true, mid_out);
 
+      auto krn2 = selectKernel(kidx);
+      const auto &corr(krn2->Corr()); 
       fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
@@ -661,24 +656,59 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       MR_assert(fact_in.shape()==points_in.shape(), "points_in shape mismatch");
       MR_assert(fact_out.shape()==points_out.shape(), "points_out shape mismatch");
 
+      {
       // try to use points_out for temporary points_in_2 storage
-      auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
+      auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
+        points_in.shape(0)<=points_out.shape(0) ?
         subarray<1>(points_out, {{0,points_in.shape(0)}}) :
         vmav<complex<Tpoints>,1>(points_in.shape()));
 
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
-          points_in_2(i) = points_in(i) * (forward ? conj(fact_in(i)) : fact_in(i));
+          (*points_in_2)(i) = points_in(i) * (forward ? conj(fact_in(i)) : fact_in(i));
         });
       auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
-      spreadinterp->spread(points_in_2, grid);
-      nufft->u2nu(forward, 0, grid, points_out); 
+      spreadinterp->spread(*points_in_2, grid);
+      points_in_2.reset();
+      nufft->u2nu(forward, 0, grid, points_out);
+      }
 
       execStatic(points_out.shape(0), nthreads, 0, [&](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
           points_out(i) *= forward ? conj(fact_out(i)) : fact_out(i);
+        });
+      }
+    void exec_adjoint(const cmav<complex<Tpoints>,1> &points_in,
+                      const vmav<complex<Tpoints>,1> &points_out,
+                      bool forward)
+      {
+      MR_assert(fact_out.shape()==points_in.shape(), "points_in shape mismatch");
+      MR_assert(fact_in.shape()==points_out.shape(), "points_out shape mismatch");
+
+      {
+      // try to use points_out for temporary points_in_2 storage
+      auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
+        points_in.shape(0)<=points_out.shape(0) ?
+        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        vmav<complex<Tpoints>,1>(points_in.shape()));
+
+      execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          (*points_in_2)(i) = points_in(i) * (forward ? fact_out(i) : conj(fact_out(i)));
+        });
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+      nufft->nu2u(!forward, 0, *points_in_2, grid); 
+      points_in_2.reset();
+      spreadinterp->interp(grid, points_out);
+      }
+
+      execStatic(points_out.shape(0), nthreads, 0, [&](auto &sched)
+        {
+        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
+          points_out(i) *= forward ? fact_in(i) : conj(fact_in(i));
         });
       }
   };
@@ -717,19 +747,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   auto krn2 = selectKernel(kidx);
   const auto &corr(krn2->Corr()); 
 
-  timers.poppush("grid allocation");
-  auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
-
   Tpoints psign = forward ? -1 : 1;
 
   vector<double> gamma(ndim);
   for (size_t idim=0; idim<ndim; ++idim)
     gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
 
-  { // scope to de-allocate coord_in_2 and points_in_2 as soon as possible
   timers.poppush("input rescaling & pre-pasing");
   // try to use points_out for temporary points_in_2 storage
-  auto points_in_2(points_in.shape(0)<=points_out.shape(0) ?
+  auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
+    points_in.shape(0)<=points_out.shape(0) ?
     subarray<1>(points_out, {{0,points_in.shape(0)}}) :
     vmav<complex<Tpoints>,1>(points_in.shape()));
   // prephase input values
@@ -740,25 +767,25 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
       double phase=0;
       for (size_t d=0; d<ndim; ++d)
         phase += mid_out[d]*coord_in(i,d);
-      points_in_2(i) = points_in(i)*complex<Tpoints>(polar(1., psign*phase));
+      (*points_in_2)(i) = points_in(i)*complex<Tpoints>(polar(1., psign*phase));
       }
     });
 
+  {
   timers.poppush("spreading");
   vector<double> period_in;
   for (size_t d=0; d<ndim; ++d)
     period_in.push_back(2*pi*gamma[d]);
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
     (coord_in.shape(0), dims, kidx, nthreads, period_in, mid_in);
-
-  spreadinterp.spread(coord_in, points_in_2, grid);
-  }
+  auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
+  spreadinterp.spread(coord_in, *points_in_2, grid);
+  points_in_2.reset();
 
   timers.poppush("u2nu");
   vector<double> period_out;
   for (size_t d=0; d<ndim; ++d)
     period_out.push_back(dims[d]/gamma[d]);
-  {
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
     epsilon, nthreads, sigma_min, sigma_max, period_out, true, mid_out);
   nufft.u2nu(forward, 0, grid, coord_out, points_out); 

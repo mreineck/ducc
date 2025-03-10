@@ -11,9 +11,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2023 Max-Planck-Society
+# Copyright(C) 2020-2025 Max-Planck-Society
 
 
+import ducc0
 import ducc0.fft as fft
 from ducc0.misc import l2error as l2error
 # import pyfftw
@@ -108,7 +109,7 @@ on_arm = ("arm" in platform.machine().lower())
 on_ppc64le = ("ppc64le" in platform.machine().lower())
 true_long_double = (np.longdouble != np.float64 and not (on_windows or on_arm or on_ppc64le))
 dtypes = [np.float32, np.float64]
-if true_long_double:
+if true_long_double and ducc0.__wrapper__ != "nanobind":
     dtypes += [np.longdouble]
 
 

@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2024 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2025 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
@@ -71,9 +71,6 @@ namespace ducc0 {
 namespace detail_mav {
 
 using namespace std;
-
-// the next line is necessary to address some sloppy name choices in AdaptiveCpp
-using std::min, std::max;
 
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
@@ -631,7 +628,7 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(info, d_, buf) {}
 
   public:
-    using tbuf::raw, tbuf::data, tinfo::ndim;
+    using tbuf::data, tinfo::ndim;
     vfmav() {}
     vfmav(T *d_, const fmav_info &info)
       : cfmav<T>(d_, info) {}
@@ -845,7 +842,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
-    using tbuf::raw, tbuf::data;
+    using tbuf::data;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
@@ -881,7 +878,6 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using cmav<T, ndim>::to_fmav;
     vfmav<T> to_fmav() const { return operator vfmav<T>(); }
 
-    using parent::operator();
     template<typename... Ns> T &operator()(Ns... ns) const
       { return const_cast<T &>(parent::operator()(ns...)); }
 

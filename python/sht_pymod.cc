@@ -21,17 +21,17 @@
  */
 
 /*
- *  Copyright (C) 2017-2023 Max-Planck-Society
+ *  Copyright (C) 2017-2025 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include <vector>
 #include <complex>
 
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
+#include "ducc0/healpix/healpix_base.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -43,11 +43,20 @@ namespace detail_pymodule_sht {
 
 using namespace std;
 
-namespace py = pybind11;
+using OptSizeT = optional<size_t>;
+#define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
+#define DUCC0_STRINGIFY(s) #s
 
-auto None = py::none();
+#define DISPATCH_R(arr, func, args) { \
+  if (isPyarr<float>(arr)) return func<float> args; \
+  if (isPyarr<double>(arr)) return func<double> args; \
+  MR_fail("type matching failed: '" DUCC0_XSTRINGIFY(arr) "' has neither type 'f4' nor 'f8'"); }
+#define DISPATCH_C(arr, func, args) { \
+  if (isPyarr<complex<float>>(arr)) return func<float> args; \
+  if (isPyarr<complex<double>>(arr)) return func<double> args; \
+  MR_fail("type matching failed: '" DUCC0_XSTRINGIFY(arr) "' has neither type 'c8' nor 'c16'"); }
 
-SHT_mode get_mode(const string &smode)
+static SHT_mode get_mode(const string &smode)
   {
   if (smode=="STANDARD") return STANDARD;
   if (smode=="GRAD_ONLY") return GRAD_ONLY;
@@ -55,42 +64,63 @@ SHT_mode get_mode(const string &smode)
   MR_fail("unknown SHT mode");
   }
 
-size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
+static size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
   { return 1+(spin>0); }
 
-size_t get_nalm(size_t spin, SHT_mode mode)
+static size_t get_nalm(size_t spin, SHT_mode mode)
   { return (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1); }
 
-template<typename T> py::array Py2_rotate_alm(const py::array &alm_,
-  size_t lmax, double psi, double theta, double phi, size_t nthreads)
+template<typename T> static NpArr Py2_rotate_alm(const CNpArr &alm_in_,
+  size_t lmax, double psi, double theta, double phi, size_t nthreads,
+  const OptSizeT &mmax_in_, const OptSizeT &mmax_out_, OptNpArr &alm_out__)
   {
-  auto a1 = to_cmav<complex<T>,1>(alm_);
-  auto alm = make_Pyarr<complex<T>>({a1.shape(0)});
-  auto a2 = to_vmav<complex<T>,1>(alm);
+  size_t mmax_in  = mmax_in_  ? mmax_in_.value() : lmax;
+  size_t mmax_out = mmax_out_ ? mmax_out_.value() : lmax;
+  Alm_Base base_in(lmax,mmax_in);
+  auto alm_in = to_cmav<complex<T>,1>(alm_in_, "alm");
+  MR_assert(alm_in.shape(0)==base_in.n_entries(),
+    "alm: array size doesn't match lmax, mmax_in.");
+  Alm_Base base_out(lmax,mmax_out);
+  auto alm_out_ = get_optional_Pyarr<complex<T>>(alm_out__, {base_out.n_entries()}, "out");
+  auto alm_out = to_vmav<complex<T>,1>(alm_out_, "out");
   {
   py::gil_scoped_release release;
-  for (size_t i=0; i<a1.shape(0); ++i) a2(i)=a1(i);
+  // if the output is a full a_lm set, we can do the rotation directly in there
+  bool work_in_output = mmax_out==lmax;
   Alm_Base base(lmax,lmax);
-  rotate_alm(base, a2, psi, theta, phi, nthreads);
+  auto alm = work_in_output ? alm_out : vmav<complex<T>,1>({base.n_entries()}, UNINITIALIZED);
+  // copy input to work array (and fill up with zeros), if necessary
+  if (alm_in.data()!=alm.data())
+    {
+    for (size_t m=0; m<=mmax_in; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm(base.index(l,m)) = alm_in(base_in.index(l,m));
+    for (size_t m=mmax_in+1; m<=lmax; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm(base.index(l,m)) = 0;
+    }
+  rotate_alm(base, alm, psi, theta, phi, nthreads);
+  // copy relevant parts of the work array to output if necessary
+  if (!work_in_output)
+    for (size_t m=0; m<=mmax_out; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        alm_out(base_out.index(l,m)) = alm(base.index(l,m));
   }
-  return alm;
+  return alm_out_;
   }
-py::array Py_rotate_alm(const py::array &alm, size_t lmax,
-  double psi, double theta, double phi, size_t nthreads)
+NpArr Py_rotate_alm(const CNpArr &alm, size_t lmax,
+  double psi, double theta, double phi, size_t nthreads,
+  const OptSizeT &mmax_in, const OptSizeT &mmax_out, OptNpArr &alm_out)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_rotate_alm<float>(alm, lmax, psi, theta, phi, nthreads);
-  if (isPyarr<complex<double>>(alm))
-    return Py2_rotate_alm<double>(alm, lmax, psi, theta, phi, nthreads);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(alm, Py2_rotate_alm, (alm, lmax, psi, theta, phi, nthreads, mmax_in, mmax_out, alm_out))
   }
 
-void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
+static void getmstuff(size_t lmax, const OptCNpArr &mval_, const OptCNpArr &mstart_,
   vmav<size_t,1> &mval, vmav<size_t,1> &mstart)
   {
-  MR_assert(mval_.is_none()==mstart_.is_none(),
+  MR_assert(bool(mval_)==bool(mstart_),
     "mval and mstart must be supplied together");
-  if (mval_.is_none())
+  if (!mval_)
     {
     vmav<size_t,1> tmv({lmax+1}, UNINITIALIZED);
     mval.assign(tmv);
@@ -104,8 +134,8 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
     }
   else
     {
-    auto tmval = to_cmav<int64_t,1>(mval_);
-    auto tmstart = to_cmav<int64_t,1>(mstart_);
+    auto tmval = to_cmav<int64_t,1>(mval_.value(), "mval");
+    auto tmstart = to_cmav<int64_t,1>(mstart_.value(), "mstart");
     size_t nm = tmval.shape(0);
     MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
     vmav<size_t,1> tmv({nm}, UNINITIALIZED);
@@ -121,25 +151,25 @@ void getmstuff(size_t lmax, const py::object &mval_, const py::object &mstart_,
       }
     }
   }
-cmav<size_t,1> get_mstart(size_t lmax, const py::object &mmax_, const py::object &mstart_)
+static cmav<size_t,1> get_mstart(size_t lmax, const OptSizeT &mmax_, const OptCNpArr &mstart_)
   {
-  if (mstart_.is_none())
+  if (!mstart_)
     {
-    size_t mmax = mmax_.is_none() ? lmax : mmax_.cast<size_t>();
+    size_t mmax = (!mmax_) ? lmax : mmax_.value();
     MR_assert(mmax<=lmax, "mmax>lmax");
     vmav<size_t,1> mstart({mmax+1}, UNINITIALIZED);
     for (size_t m=0, idx=0; m<=mmax; ++m, idx+=lmax+1-m)
       mstart(m) = idx;
     return mstart;
     }
-  auto mstart = to_cmav<size_t,1>(mstart_);
-  MR_assert(mmax_.is_none() || ((mmax_.cast<size_t>()+1)==mstart.shape(0)),
+  auto mstart = to_cmav<size_t,1>(mstart_.value());
+  MR_assert((!mmax_) || (mmax_.value()+1==mstart.shape(0)),
     "mmax and mstart size mismatch");
   MR_assert(mstart.shape(0)<=lmax+1, "mmax>lmax");
   return mstart;
   }
 
-py::array Py_get_gridweights(const string &type, size_t ntheta)
+NpArr Py_get_gridweights(const string &type, size_t ntheta)
   {
   auto wgt_ = make_Pyarr<double>({ntheta});
   auto wgt = to_vmav<double,1>(wgt_);
@@ -150,7 +180,7 @@ py::array Py_get_gridweights(const string &type, size_t ntheta)
   return wgt_;
   }
 
-size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
+static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride)
   {
   size_t res=0;
@@ -165,7 +195,7 @@ size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
   return res+1;
   }
 // same as above, but assuming mval(i)==i
-size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride)
+static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride)
   {
   size_t res=0;
   for (size_t i=0; i<mstart.shape(0); ++i)
@@ -178,7 +208,7 @@ size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride)
     }
   return res+1;
   }
-size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart,
+static size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart,
   ptrdiff_t pixstride)
   {
   size_t res=0;
@@ -191,10 +221,10 @@ size_t min_mapdim(const cmav<size_t,1> &nphi, const cmav<size_t,1> &ringstart,
   return res+1;
   }
 
-template<typename T> py::array Py2_alm2flm(const py::array &alm_, int spin,
-  py::object &flm__)
+template<typename T> static NpArr Py2_alm2flm(const CNpArr &alm_, int spin,
+  OptNpArr &flm__)
   {
-  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
   auto nalm = alm.shape(1);
   MR_assert(nalm>0, "degenerate number of alm");
   auto lmax = size_t(sqrt(2*nalm))-1;
@@ -204,8 +234,8 @@ template<typename T> py::array Py2_alm2flm(const py::array &alm_, int spin,
     MR_assert((ncomp==1)||(ncomp==2), "need one or two components for spin 0");
   else
     MR_assert(ncomp==2, "need two components for spin >0");
-  auto flm_ = get_optional_Pyarr<complex<T>>(flm__, {lmax+1, 2*lmax+1});
-  auto flm = to_vmav<complex<T>,2>(flm_);
+  auto flm_ = get_optional_Pyarr<complex<T>>(flm__, {lmax+1, 2*lmax+1}, "flm");
+  auto flm = to_vmav<complex<T>,2>(flm_, "flm");
   mav_apply([&](auto &v){v=0;},1,flm);
   size_t ofs=0;
   T mfac=T(1.);
@@ -238,26 +268,20 @@ template<typename T> py::array Py2_alm2flm(const py::array &alm_, int spin,
     }
   return flm_;
   }
-py::array Py_alm2flm(const py::array &alm, int spin, py::object &flm)
+NpArr Py_alm2flm(const CNpArr &alm, int spin, OptNpArr &flm)
+  { DISPATCH_C(alm, Py2_alm2flm, (alm, spin, flm)) }
+template<typename T> static NpArr Py2_flm2alm(const CNpArr &flm_, int spin,
+  OptNpArr &alm__, bool real)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_alm2flm<float>(alm, spin, flm);
-  if (isPyarr<complex<double>>(alm))
-    return Py2_alm2flm<double>(alm, spin, flm);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
-  }
-template<typename T> py::array Py2_flm2alm(const py::array &flm_, int spin,
-  py::object &alm__, bool real)
-  {
-  auto flm = to_cmav<complex<T>,2>(flm_);
+  auto flm = to_cmav<complex<T>,2>(flm_, "flm");
   MR_assert(flm.shape(0)>0, "degenerate shape of flm");
   size_t lmax = flm.shape(0)-1;
   MR_assert(flm.shape(1)==2*lmax+1, "bad shape of flm");
   size_t nalm = ((lmax+1)*(lmax+2))/2;
   if (spin!=0) MR_assert(!real, "no real fields at nonzero spins");
   size_t ncomp = real ? 1 : 2;
-  auto alm_ = get_optional_Pyarr<complex<T>>(alm__, {ncomp, nalm});
-  auto alm = to_vmav<complex<T>,2>(alm_);
+  auto alm_ = get_optional_Pyarr<complex<T>>(alm__, {ncomp, nalm}, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   size_t ofs=0;
   T mfac=T(1);
   T sfac = (abs(spin)&1) ? -T(1) : T(1);
@@ -286,68 +310,57 @@ template<typename T> py::array Py2_flm2alm(const py::array &flm_, int spin,
     }
   return alm_;
   }
-py::array Py_flm2alm(const py::array &flm, int spin, py::object &alm, bool real)
-  {
-  if (isPyarr<complex<float>>(flm))
-    return Py2_flm2alm<float>(flm, spin, alm, real);
-  if (isPyarr<complex<double>>(flm))
-    return Py2_flm2alm<double>(flm, spin, alm, real);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
-  }
+NpArr Py_flm2alm(const CNpArr &flm, int spin, OptNpArr &alm, bool real)
+  { DISPATCH_C(flm, Py2_flm2alm, (flm, spin, alm, real)) }
 
-template<typename T> py::array Py2_alm2leg(const py::array &alm_, size_t spin,
-  size_t lmax, const py::object &mval_, const py::object &mstart_,
-  ptrdiff_t lstride, const py::array &theta_, size_t nthreads,
-  py::object &leg__, const string &mode_, bool theta_interpol=false)
+template<typename T> static NpArr Py2_alm2leg(const CNpArr &alm_, size_t spin,
+  size_t lmax, const OptCNpArr &mval_, const OptCNpArr &mstart_,
+  ptrdiff_t lstride, const CNpArr &theta_, size_t nthreads,
+  OptNpArr &leg__, const string &mode_, bool theta_interpol=false)
   {
   auto mode = get_mode(mode_);
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto theta = to_cmav<double,1>(theta_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto theta = to_cmav<double,1>(theta_, "theta");
   vmav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
   MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride),
     "bad a_lm array size");
   auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
-    {get_nmaps(spin,mode),theta.shape(0),mval.shape(0)});
-  auto leg = to_vmav<complex<T>,3>(leg_);
+    {get_nmaps(spin,mode),theta.shape(0),mval.shape(0)}, "leg");
+  auto leg = to_vmav<complex<T>,3>(leg_, "leg");
   {
   py::gil_scoped_release release;
   alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
   }
   return leg_;
   }
-py::array Py_alm2leg(const py::array &alm, size_t lmax, const py::array &theta,
-  size_t spin, const py::object &mval, const py::object &mstart,
-  ptrdiff_t lstride, size_t nthreads, py::object &leg, const string &mode, bool theta_interpol=false)
+NpArr Py_alm2leg(const CNpArr &alm, size_t lmax, const CNpArr &theta,
+  size_t spin, const OptCNpArr &mval, const OptCNpArr &mstart,
+  ptrdiff_t lstride, size_t nthreads, OptNpArr &leg, const string &mode, bool theta_interpol=false)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_alm2leg<float>(alm, spin, lmax, mval, mstart, lstride, theta,
-      nthreads, leg, mode, theta_interpol);
-  if (isPyarr<complex<double>>(alm))
-    return Py2_alm2leg<double>(alm, spin, lmax, mval, mstart, lstride, theta,
-      nthreads, leg, mode, theta_interpol);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(alm, Py2_alm2leg, (alm, spin, lmax, mval, mstart, lstride, theta,
+      nthreads, leg, mode, theta_interpol))
   }
-py::array Py_alm2leg_deriv1(const py::array &alm, size_t lmax,
-  const py::array &theta, const py::object &mval, const py::object &mstart,
-  ptrdiff_t lstride, size_t nthreads, py::object &leg, bool theta_interpol=false)
+NpArr Py_alm2leg_deriv1(const CNpArr &alm, size_t lmax,
+  const CNpArr &theta, const OptCNpArr &mval, const OptCNpArr &mstart,
+  ptrdiff_t lstride, size_t nthreads, OptNpArr &leg, bool theta_interpol=false)
   {
   return Py_alm2leg(alm, lmax, theta, 1, mval, mstart, lstride, nthreads, leg, "DERIV1", theta_interpol);
   }
-template<typename T> py::array Py2_leg2alm(const py::array &leg_,
-  const py::array &theta_, size_t spin, size_t lmax, const py::object &mval_,
-  const py::object &mstart_, ptrdiff_t lstride, size_t nthreads,
-  py::object &alm__,const string &mode_, bool theta_interpol=false)
+template<typename T> static NpArr Py2_leg2alm(const CNpArr &leg_,
+  const CNpArr &theta_, size_t spin, size_t lmax, const OptCNpArr &mval_,
+  const OptCNpArr &mstart_, ptrdiff_t lstride, size_t nthreads,
+  OptNpArr &alm__,const string &mode_, bool theta_interpol=false)
   {
   auto mode = get_mode(mode_);
-  auto leg = to_cmav<complex<T>,3>(leg_);
-  auto theta = to_cmav<double,1>(theta_);
+  auto leg = to_cmav<complex<T>,3>(leg_, "leg");
+  auto theta = to_cmav<double,1>(theta_, "theta");
   MR_assert(leg.shape(1)==theta.shape(0), "bad leg array size");
   vmav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
   auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__,
-    {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)});
-  auto alm = to_vmav<complex<T>,2>(alm_);
+    {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)}, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   MR_assert(leg.shape(0)==1+(spin>0),
     "bad number of components in leg array");
   {
@@ -356,60 +369,50 @@ template<typename T> py::array Py2_leg2alm(const py::array &leg_,
   }
   return alm_;
   }
-py::array Py_leg2alm(const py::array &leg, size_t lmax, const py::array &theta,
-  size_t spin, const py::object &mval, const py::object &mstart,
-  ptrdiff_t lstride, size_t nthreads, py::object &alm, const string &mode, bool theta_interpol=false)
+NpArr Py_leg2alm(const CNpArr &leg, size_t lmax, const CNpArr &theta,
+  size_t spin, const OptCNpArr &mval, const OptCNpArr &mstart,
+  ptrdiff_t lstride, size_t nthreads, OptNpArr &alm, const string &mode, bool theta_interpol=false)
   {
-  if (isPyarr<complex<float>>(leg))
-    return Py2_leg2alm<float>(leg, theta, spin, lmax, mval, mstart, lstride,
-      nthreads, alm, mode, theta_interpol);
-  if (isPyarr<complex<double>>(leg))
-    return Py2_leg2alm<double>(leg, theta, spin, lmax, mval, mstart, lstride,
-      nthreads, alm, mode, theta_interpol);
-  MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(leg, Py2_leg2alm, (leg, theta, spin, lmax, mval, mstart, lstride,
+      nthreads, alm, mode, theta_interpol))
   }
-template<typename T> py::array Py2_map2leg(const py::array &map_,
-  const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_,
-  size_t mmax, ptrdiff_t pixstride, size_t nthreads, py::object &leg__)
+template<typename T> static NpArr Py2_map2leg(const CNpArr &map_,
+  const CNpArr &nphi_, const CNpArr &phi0_, const CNpArr &ringstart_,
+  size_t mmax, ptrdiff_t pixstride, size_t nthreads, OptNpArr &leg__)
   {
-  auto map = to_cmav<T,2>(map_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto map = to_cmav<T,2>(map_, "map");
+  auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
+  auto phi0 = to_cmav<double,1>(phi0_, "phi0");
+  auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride),
     "bad map array size");
   auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
-    {map.shape(0),nphi.shape(0),mmax+1});
-  auto leg = to_vmav<complex<T>,3>(leg_);
+    {map.shape(0),nphi.shape(0),mmax+1}, "leg");
+  auto leg = to_vmav<complex<T>,3>(leg_, "leg");
   {
   py::gil_scoped_release release;
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
   }
   return leg_;
   }
-py::array Py_map2leg(const py::array &map, const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t mmax,
-  ptrdiff_t pixstride, size_t nthreads, py::object &leg)
+NpArr Py_map2leg(const CNpArr &map, const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, size_t mmax,
+  ptrdiff_t pixstride, size_t nthreads, OptNpArr &leg)
   {
-  if (isPyarr<float>(map))
-    return Py2_map2leg<float>(map, nphi, phi0, ringstart, mmax, pixstride,
-      nthreads, leg);
-  if (isPyarr<double>(map))
-    return Py2_map2leg<double>(map, nphi, phi0, ringstart, mmax, pixstride,
-      nthreads, leg);
-  MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
+  DISPATCH_R(map, Py2_map2leg, (map, nphi, phi0, ringstart, mmax, pixstride,
+      nthreads, leg))
   }
-template<typename T> py::array Py2_leg2map(const py::array &leg_,
-  const py::array &nphi_, const py::array &phi0_, const py::array &ringstart_,
-  ptrdiff_t pixstride, size_t nthreads, py::object &map__)
+template<typename T> static NpArr Py2_leg2map(const CNpArr &leg_,
+  const CNpArr &nphi_, const CNpArr &phi0_, const CNpArr &ringstart_,
+  ptrdiff_t pixstride, size_t nthreads, OptNpArr &map__)
   {
-  auto leg = to_cmav<complex<T>,3>(leg_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto leg = to_cmav<complex<T>,3>(leg_, "leg");
+  auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
+  auto phi0 = to_cmav<double,1>(phi0_, "phi0");
+  auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   auto map_ = get_optional_Pyarr_minshape<T>(map__,
-    {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)});
-  auto map = to_vmav<T,2>(map_);
+    {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)}, "map");
+  auto map = to_vmav<T,2>(map_, "map");
   MR_assert(map.shape(0)==leg.shape(0),
     "bad number of components in map array");
   {
@@ -418,44 +421,40 @@ template<typename T> py::array Py2_leg2map(const py::array &leg_,
   }
   return map_;
   }
-py::array Py_leg2map(const py::array &leg, const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, ptrdiff_t pixstride,
-  size_t nthreads, py::object &map)
+NpArr Py_leg2map(const CNpArr &leg, const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, ptrdiff_t pixstride,
+  size_t nthreads, OptNpArr &map)
   {
-  if (isPyarr<complex<float>>(leg))
-    return Py2_leg2map<float>(leg, nphi, phi0, ringstart, pixstride, nthreads, map);
-  if (isPyarr<complex<double>>(leg))
-    return Py2_leg2map<double>(leg, nphi, phi0, ringstart, pixstride, nthreads, map);
-  MR_fail("type matching failed: 'leg' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(leg, Py2_leg2map, (leg, nphi, phi0, ringstart, pixstride, nthreads, map))
   }
 
 // FIXME: open questions
 // - do we build mstart automatically and just take mmax?
 // - phi0, ringstart = None => build assuming phi0=0, rings sequential?
 // - accept scalar nphi, phi0?
-template<typename T> py::array Py2_synthesis(const py::array &alm_,
-  py::object &map__, size_t spin, size_t lmax,
-  const py::object &mstart_, ptrdiff_t lstride,
-  const py::array &theta_,
-  const py::array &nphi_,
-  const py::array &phi0_, const py::array &ringstart_,
-  ptrdiff_t pixstride, size_t nthreads, const py::object &mmax_,
+template<typename T> static NpArr Py2_synthesis(const CNpArr &alm_,
+  OptNpArr &map__, size_t spin, size_t lmax,
+  const OptCNpArr &mstart_, ptrdiff_t lstride,
+  const CNpArr &theta_,
+  const CNpArr &nphi_,
+  const CNpArr &phi0_, const CNpArr &ringstart_,
+  ptrdiff_t pixstride, size_t nthreads, const OptSizeT &mmax_,
   const string &mode_, bool theta_interpol=false)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto theta = to_cmav<double,1>(theta_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto theta = to_cmav<double,1>(theta_, "theta");
+  auto phi0 = to_cmav<double,1>(phi0_, "phi0");
+  auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
+  auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   MR_assert((alm_.ndim()>=2)&&(alm_.ndim()<=3), "alm must be a 2D or 3D array");
-  auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  auto alm = to_cmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   vector<size_t> mapshp(alm_.ndim());
-  for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape()[i];
+  for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape(i);
   mapshp[mapshp.size()-1] = min_mapdim(nphi, ringstart, pixstride);
   mapshp[mapshp.size()-2] = get_nmaps(spin, mode);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp);
-  auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_);
+  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp, "map");
+  auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_, "map");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   nthreads = adjust_nthreads(nthreads);
   size_t nthreads_outer=1;
@@ -474,156 +473,141 @@ template<typename T> py::array Py2_synthesis(const py::array &alm_,
   }
   return map_;
   }
-py::array Py_synthesis(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart,
-  const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t spin,
-  ptrdiff_t lstride, ptrdiff_t pixstride, size_t nthreads, py::object &map,
-  const py::object &mmax_, const string &mode, bool theta_interpol=false)
+NpArr Py_synthesis(const CNpArr &alm, const CNpArr &theta,
+  size_t lmax, const OptCNpArr &mstart,
+  const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, size_t spin,
+  ptrdiff_t lstride, ptrdiff_t pixstride, size_t nthreads, OptNpArr &map,
+  const OptSizeT &mmax_, const string &mode, bool theta_interpol=false)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis<float>(alm, map, spin, lmax, mstart, lstride, theta,
-      nphi, phi0, ringstart, pixstride, nthreads, mmax_, mode, theta_interpol);
-  else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis<double>(alm, map, spin, lmax, mstart, lstride, theta,
-      nphi, phi0, ringstart, pixstride, nthreads, mmax_, mode, theta_interpol);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(alm, Py2_synthesis, (alm, map, spin, lmax, mstart, lstride, theta,
+      nphi, phi0, ringstart, pixstride, nthreads, mmax_, mode, theta_interpol))
   }
-py::array Py_synthesis_deriv1(const py::array &alm, const py::array &theta,
-  size_t lmax, const py::object &mstart,
-  const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
-  size_t nthreads, py::object &map, const py::object &mmax_, bool theta_interpol=false)
+NpArr Py_synthesis_deriv1(const CNpArr &alm, const CNpArr &theta,
+  size_t lmax, const OptCNpArr &mstart,
+  const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, ptrdiff_t lstride, ptrdiff_t pixstride,
+  size_t nthreads, OptNpArr &map, const OptSizeT &mmax_, bool theta_interpol=false)
   {
   return Py_synthesis(alm, theta, lmax, mstart, nphi, phi0, ringstart, 1, lstride,
     pixstride, nthreads, map, mmax_, "DERIV1", theta_interpol);
   }
 
 
-template<typename T> py::array_t<T> check_build_map(const py::object &map,
-  size_t ncomp, const py::object &ntheta, const py::object &nphi)
+template<typename T> static NpArr check_build_map(const OptNpArr &map,
+  size_t ncomp, const OptSizeT &ntheta, const OptSizeT &nphi)
   {
-  if (map.is_none())
+  if (!map)
     {
-    MR_assert((!ntheta.is_none()) && (!nphi.is_none()),
+    MR_assert(bool(ntheta) && bool(nphi),
       "you need to specify either 'map' or 'ntheta' and 'nphi'");
-    return make_Pyarr<T>({ncomp, ntheta.cast<size_t>(), nphi.cast<size_t>()});
+    return make_Pyarr<T>({ncomp, ntheta.value(), nphi.value()});
     }
   else
     {
-    py::array_t<T> tmap = map;
+    NpArr tmap = map.value();
     MR_assert((size_t(tmap.ndim())==3) && (size_t(tmap.shape(0))==ncomp),
       "map size mismatch");
-    if (!ntheta.is_none())
-      MR_assert(size_t(tmap.shape(1))==ntheta.cast<size_t>(), "ntheta mismatch");
-    if (!nphi.is_none())
-      MR_assert(size_t(tmap.shape(2))==nphi.cast<size_t>(), "nphi mismatch");
+    if (ntheta)
+      MR_assert(size_t(tmap.shape(1))==ntheta.value(), "ntheta mismatch");
+    if (nphi)
+      MR_assert(size_t(tmap.shape(2))==nphi.value(), "nphi mismatch");
     return tmap;
     }
   }
-template<typename T> py::array_t<complex<T>> check_build_alm
-  (const py::object &alm, size_t ncomp, size_t lmax, size_t mmax)
+template<typename T> static NpArr check_build_alm
+  (const OptNpArr &alm, size_t ncomp, size_t lmax, size_t mmax)
   {
   size_t nalm = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
-  if (alm.is_none())
+  if (!alm)
     {
     MR_assert(lmax>=mmax, "mmax must not be larger than lmax");
     return make_Pyarr<complex<T>>({ncomp, nalm});
     }
   else
     {
-    py::array_t<complex<T>> talm = alm;
+    NpArr talm = alm.value();
     MR_assert((size_t(talm.ndim())==2) && (size_t(talm.shape(0))==ncomp)
       && (size_t(talm.shape(1))==nalm), "alm size mismatch");
     return talm;
     }
   }
 
-template<typename T> py::array Py2_synthesis_2d(const py::array &alm_,
-  size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map__,
-  const string &mode_, double phi0, const py::object &mstart_, ptrdiff_t lstride)
+template<typename T> static NpArr Py2_synthesis_2d(const CNpArr &alm_,
+  size_t spin, size_t lmax, const string &geometry, const OptSizeT &ntheta,
+  const OptSizeT &nphi, const OptSizeT &mmax_, size_t nthreads, OptNpArr &map__,
+  const string &mode_, double phi0, const OptCNpArr &mstart_, ptrdiff_t lstride)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
   auto map_ = check_build_map<T>(map__, get_nmaps(spin,mode), ntheta, nphi);
-  auto map = to_vmav<T,3>(map_);
+  auto map = to_vmav<T,3>(map_, "map");
   {
   py::gil_scoped_release release;
   synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
   return map_;
   }
-py::array Py_synthesis_2d(const py::array &alm, size_t spin, size_t lmax,
-  const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax, size_t nthreads, py::object &map, const string &mode,
-  double phi0, const py::object &mstart, ptrdiff_t lstride)
+NpArr Py_synthesis_2d(const CNpArr &alm, size_t spin, size_t lmax,
+  const string &geometry, const OptSizeT &ntheta, const OptSizeT &nphi,
+  const OptSizeT &mmax, size_t nthreads, OptNpArr &map, const string &mode,
+  double phi0, const OptCNpArr &mstart, ptrdiff_t lstride)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_synthesis_2d<float>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode, phi0, mstart, lstride);
-  else if (isPyarr<complex<double>>(alm))
-    return Py2_synthesis_2d<double>(alm, spin, lmax, geometry, ntheta, nphi,
-      mmax, nthreads, map, mode, phi0, mstart, lstride);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(alm, Py2_synthesis_2d, (alm, spin, lmax, geometry, ntheta, nphi,
+      mmax, nthreads, map, mode, phi0, mstart, lstride))
   }
-template<typename T> py::array Py2_adjoint_synthesis_2d(
-  const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  const py::object &mmax_, size_t nthreads, py::object &alm__, const string &mode_,
-  double phi0, const py::object &mstart_, ptrdiff_t lstride)
+template<typename T> static NpArr Py2_adjoint_synthesis_2d(
+  const CNpArr &map_, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax_, size_t nthreads, OptNpArr &alm__, const string &mode_,
+  double phi0, const OptCNpArr &mstart_, ptrdiff_t lstride)
   {
   auto mode = get_mode(mode_);
-  auto map = to_cmav<T,3>(map_);
+  auto map = to_cmav<T,3>(map_, "map");
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   vector<size_t> almshp{get_nalm(spin,mode), min_almdim(lmax, mstart, lstride)};
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
-  auto alm = to_vmav<complex<T>,2>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   {
   py::gil_scoped_release release;
   adjoint_synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0, nthreads, mode);
   }
   return alm_;
   }
-py::array Py_adjoint_synthesis_2d(
-  const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  const py::object &mmax, size_t nthreads, py::object &alm, const string &mode, double phi0,
-  const py::object &mstart, ptrdiff_t lstride)
+NpArr Py_adjoint_synthesis_2d(
+  const CNpArr &map, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax, size_t nthreads, OptNpArr &alm, const string &mode, double phi0,
+  const OptCNpArr &mstart, ptrdiff_t lstride)
   {
-  if (isPyarr<float>(map))
-    return Py2_adjoint_synthesis_2d<float>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode, phi0, mstart, lstride);
-  else if (isPyarr<double>(map))
-    return Py2_adjoint_synthesis_2d<double>(map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode, phi0, mstart, lstride);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_R(map, Py2_adjoint_synthesis_2d, (map, spin, lmax, geometry, mmax,
+      nthreads, alm, mode, phi0, mstart, lstride))
   }
-py::array Py_synthesis_2d_deriv1(const py::array &alm, size_t lmax,
-  const string &geometry, const py::object &ntheta, const py::object &nphi, const py::object &mmax, size_t nthreads, py::object &map, double phi0, const py::object &mstart, ptrdiff_t lstride)
+NpArr Py_synthesis_2d_deriv1(const CNpArr &alm, size_t lmax,
+  const string &geometry, const OptSizeT &ntheta, const OptSizeT &nphi, const OptSizeT &mmax, size_t nthreads, OptNpArr &map, double phi0, const OptCNpArr &mstart, ptrdiff_t lstride)
   {
   return Py_synthesis_2d(alm, 1, lmax, geometry, ntheta, nphi, mmax, nthreads, map, "DERIV1", phi0, mstart, lstride);
   }
 
-template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
-  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
-  const py::array &map_, const py::array &theta_, const py::array &phi0_,
-  const py::array &nphi_, const py::array &ringstart_, size_t spin,
-  ptrdiff_t pixstride, size_t nthreads, const py::object &mmax_, const string &mode_, bool theta_interpol=false)
+template<typename T> static NpArr Py2_adjoint_synthesis(OptNpArr &alm__,
+  size_t lmax, const OptCNpArr &mstart_, ptrdiff_t lstride,
+  const CNpArr &map_, const CNpArr &theta_, const CNpArr &phi0_,
+  const CNpArr &nphi_, const CNpArr &ringstart_, size_t spin,
+  ptrdiff_t pixstride, size_t nthreads, const OptSizeT &mmax_, const string &mode_, bool theta_interpol=false)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto theta = to_cmav<double,1>(theta_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto theta = to_cmav<double,1>(theta_, "theta");
+  auto phi0 = to_cmav<double,1>(phi0_, "phi0");
+  auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
+  auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
-  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
+  auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_, "map");
   vector<size_t> almshp(map_.ndim());
-  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape(i);
   almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
   almshp[almshp.size()-2] = get_nalm(spin, mode);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
-  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
   nthreads = adjust_nthreads(nthreads);
   size_t nthreads_outer=1;
@@ -642,43 +626,38 @@ template<typename T> py::array Py2_adjoint_synthesis(py::object &alm__,
   }
   return alm_;
   }
-py::array Py_adjoint_synthesis(const py::array &map, const py::array &theta,
+NpArr Py_adjoint_synthesis(const CNpArr &map, const CNpArr &theta,
   size_t lmax,
-  const py::object &mstart,
-  const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t spin,
+  const OptCNpArr &mstart,
+  const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, size_t spin,
   ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads,
-  py::object &alm, const py::object &mmax_,
+  OptNpArr &alm, const OptSizeT &mmax_,
   const string &mode, bool theta_interpol=false)
   {
-  if (isPyarr<float>(map))
-    return Py2_adjoint_synthesis<float>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode, theta_interpol);
-  else if (isPyarr<double>(map))
-    return Py2_adjoint_synthesis<double>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode, theta_interpol);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_R(map, Py2_adjoint_synthesis, (alm, lmax, mstart, lstride, map, theta,
+    phi0, nphi, ringstart, spin, pixstride, nthreads, mmax_, mode, theta_interpol))
   }
-template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
-  size_t lmax, const py::object &mstart_, ptrdiff_t lstride,
-  const py::array &map_, const py::array &theta_, const py::array &phi0_,
-  const py::array &nphi_, const py::array &ringstart_, size_t spin,
+template<typename T> static py::tuple Py2_pseudo_analysis(OptNpArr &alm__,
+  size_t lmax, const OptCNpArr &mstart_, ptrdiff_t lstride,
+  const CNpArr &map_, const CNpArr &theta_, const CNpArr &phi0_,
+  const CNpArr &nphi_, const CNpArr &ringstart_, size_t spin,
   ptrdiff_t pixstride, size_t nthreads, size_t maxiter, double epsilon,
-  const py::object &mmax_, bool theta_interpol=false)
+  const OptSizeT &mmax_, bool theta_interpol=false)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto theta = to_cmav<double,1>(theta_);
-  auto phi0 = to_cmav<double,1>(phi0_);
-  auto nphi = to_cmav<size_t,1>(nphi_);
-  auto ringstart = to_cmav<size_t,1>(ringstart_);
+  auto theta = to_cmav<double,1>(theta_, "theta");
+  auto phi0 = to_cmav<double,1>(phi0_, "phi0");
+  auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
+  auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   MR_assert((map_.ndim()>=2)&&(map_.ndim()<=3), "map must be a 2D or 3D array");
   auto map = to_cmav_with_optional_leading_dimensions<T,3>(map_);
   vector<size_t> almshp(map_.ndim());
-  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape()[i];
+  for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape(i);
   almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
-  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
   MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
   nthreads = adjust_nthreads(nthreads);
@@ -709,49 +688,44 @@ template<typename T> py::object Py2_pseudo_analysis(py::object &alm__,
   res.append(alm_);
   if (map_.ndim()<=2) // just a single transform
     {
-    res.append(py::cast(istop[0]));
-    res.append(py::cast(itn[0]));
-    res.append(py::cast(rnorm[0]));
-    res.append(py::cast(sqnorm[0]));
+    res.append(istop[0]);
+    res.append(itn[0]);
+    res.append(rnorm[0]);
+    res.append(sqnorm[0]);
     }
   else
     {
-    res.append(py::cast(istop));
-    res.append(py::cast(itn));
-    res.append(py::cast(rnorm));
-    res.append(py::cast(sqnorm));
+    res.append(istop);
+    res.append(itn);
+    res.append(rnorm);
+    res.append(sqnorm);
     }
-  return res;
+  return py::tuple(res);
   }
-py::object Py_pseudo_analysis(const py::array &map, const py::array &theta,
+py::tuple Py_pseudo_analysis(const CNpArr &map, const CNpArr &theta,
  size_t lmax,
-  const py::object &mstart,
-  const py::array &nphi,
-  const py::array &phi0, const py::array &ringstart, size_t spin,
+  const OptCNpArr &mstart,
+  const CNpArr &nphi,
+  const CNpArr &phi0, const CNpArr &ringstart, size_t spin,
   ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads,
-  py::object &alm, size_t maxiter, double epsilon, const py::object &mmax_,
+  OptNpArr &alm, size_t maxiter, double epsilon, const OptSizeT &mmax_,
   bool theta_interpol=false)
   {
-  if (isPyarr<float>(map))
-    return Py2_pseudo_analysis<float>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon, mmax_, theta_interpol);
-  else if (isPyarr<double>(map))
-    return Py2_pseudo_analysis<double>(alm, lmax, mstart, lstride, map, theta,
-      phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon, mmax_, theta_interpol);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_R(map, Py2_pseudo_analysis, (alm, lmax, mstart, lstride, map, theta,
+    phi0, nphi, ringstart, spin, pixstride, nthreads, maxiter, epsilon, mmax_, theta_interpol))
   }
 
-template<typename T> py::array Py2_analysis_2d(
-  const py::array &map_, size_t spin, size_t lmax, const string &geometry,
-  const py::object &mmax_, size_t nthreads, py::object &alm__, double phi0,
-  const py::object &mstart_, ptrdiff_t lstride)
+template<typename T> static NpArr Py2_analysis_2d(
+  const CNpArr &map_, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax_, size_t nthreads, OptNpArr &alm__, double phi0,
+  const OptCNpArr &mstart_, ptrdiff_t lstride)
   {
-  auto map = to_cmav<T,3>(map_);
+  auto map = to_cmav<T,3>(map_, "map");
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   vector<size_t> almshp{map.shape(0), min_almdim(lmax, mstart, lstride)};
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp);
-  auto alm = to_vmav<complex<T>,2>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
@@ -759,27 +733,23 @@ template<typename T> py::array Py2_analysis_2d(
   }
   return alm_;
   }
-py::array Py_analysis_2d(
-  const py::array &map, size_t spin, size_t lmax, const string &geometry,
-  py::object &mmax, size_t nthreads, py::object &alm, double phi0,
-  const py::object &mstart, ptrdiff_t lstride)
+NpArr Py_analysis_2d(
+  const CNpArr &map, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax, size_t nthreads, OptNpArr &alm, double phi0,
+  const OptCNpArr &mstart, ptrdiff_t lstride)
   {
-  if (isPyarr<float>(map))
-    return Py2_analysis_2d<float>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0, mstart,lstride);
-  else if (isPyarr<double>(map))
-    return Py2_analysis_2d<double>(map, spin, lmax, geometry, mmax, nthreads, alm, phi0, mstart, lstride);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_R(map, Py2_analysis_2d, (map, spin, lmax, geometry, mmax, nthreads, alm, phi0, mstart,lstride))
   }
 
-template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
-  size_t spin, size_t lmax, const string &geometry, const py::object & ntheta,
-  const py::object &nphi, const py::object &mmax_, size_t nthreads, py::object &map__, double phi0,
-  const py::object &mstart_, ptrdiff_t lstride)
+template<typename T> static NpArr Py2_adjoint_analysis_2d(const CNpArr &alm_,
+  size_t spin, size_t lmax, const string &geometry, const OptSizeT &ntheta,
+  const OptSizeT &nphi, const OptSizeT &mmax_, size_t nthreads, OptNpArr &map__, double phi0,
+  const OptCNpArr &mstart_, ptrdiff_t lstride)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto alm = to_cmav<complex<T>,2>(alm_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
   auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
-  auto map = to_vmav<T,3>(map_);
+  auto map = to_vmav<T,3>(map_, "map");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
   py::gil_scoped_release release;
@@ -787,75 +757,54 @@ template<typename T> py::array Py2_adjoint_analysis_2d(const py::array &alm_,
   }
   return map_;
   }
-py::array Py_adjoint_analysis_2d(const py::array &alm, size_t spin, size_t lmax,
-  const string &geometry, const py::object &ntheta, const py::object &nphi,
-  const py::object &mmax, size_t nthreads, py::object &map, double phi0,
-  const py::object &mstart, ptrdiff_t lstride)
+NpArr Py_adjoint_analysis_2d(const CNpArr &alm, size_t spin, size_t lmax,
+  const string &geometry, const OptSizeT &ntheta, const OptSizeT &nphi,
+  const OptSizeT &mmax, size_t nthreads, OptNpArr &map, double phi0,
+  const OptCNpArr &mstart, ptrdiff_t lstride)
   {
-  if (isPyarr<complex<float>>(alm))
-    return Py2_adjoint_analysis_2d<float>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map, phi0, mstart, lstride);
-  else if (isPyarr<complex<double>>(alm))
-    return Py2_adjoint_analysis_2d<double>(alm, spin, lmax, geometry, ntheta,
-      nphi, mmax, nthreads, map, phi0, mstart, lstride);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_C(alm, Py2_adjoint_analysis_2d, (alm, spin, lmax, geometry, ntheta,
+    nphi, mmax, nthreads, map, phi0, mstart, lstride))
   }
 
 
-template<typename T, typename Tloc> py::array Py2_synthesis_general(const py::array &alm_,
-  size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &map__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
+template<typename T> static NpArr Py2_synthesis_general(const CNpArr &alm_,
+  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon, const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, OptNpArr &map__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto alm = to_cmav<complex<T>,2>(alm_);
-  auto loc = to_cmav<Tloc,2>(loc_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto loc = to_cmav<double,2>(loc_, "loc");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(alm.shape(0)==get_nalm(spin,mode), "number of components mismatch in alm");
-  auto map_ = get_optional_Pyarr<T>(map__, {get_nmaps(spin,mode), loc.shape(0)});
-  auto map = to_vmav<T,2>(map_);
+  auto map_ = get_optional_Pyarr<T>(map__, {get_nmaps(spin,mode), loc.shape(0)}, "map");
+  auto map = to_vmav<T,2>(map_, "map");
   {
   py::gil_scoped_release release;
   synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
   }
   return map_;
   }
-py::array Py_synthesis_general(const py::array &alm, size_t spin, size_t lmax,
-  const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &map, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
+NpArr Py_synthesis_general(const CNpArr &alm, size_t spin, size_t lmax,
+  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, OptNpArr &map, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
   {
-  if (isPyarr<double>(loc))
-    {
-    if (isPyarr<complex<float>>(alm))
-      return Py2_synthesis_general<float,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
-    else if (isPyarr<complex<double>>(alm))
-      return Py2_synthesis_general<double,double>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
-   }
-#if 0
-  else if (isPyarr<float>(loc))
-    {
-    if (isPyarr<complex<float>>(alm))
-      return Py2_synthesis_general<float,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
-    else if (isPyarr<complex<double>>(alm))
-      return Py2_synthesis_general<double,float>(alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose);
-   }
-#endif
-  MR_fail("unsupported combination of data types");
+  DISPATCH_C(alm, Py2_synthesis_general, (alm, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose));
   }
 
 
-template<typename T, typename Tloc> py::array Py2_adjoint_synthesis_general(const py::array &map_,
-  size_t spin, size_t lmax, const py::array &loc_, double epsilon, const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &alm__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
+template<typename T> static NpArr Py2_adjoint_synthesis_general(const CNpArr &map_,
+  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon, const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, OptNpArr &alm__, double sigma_min, double sigma_max, const string &mode_, bool verbose)
   {
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto map = to_cmav<T,2>(map_);
-  auto loc = to_cmav<Tloc,2>(loc_);
+  auto map = to_cmav<T,2>(map_, "map");
+  auto loc = to_cmav<double,2>(loc_, "loc");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(map.shape(0)==get_nmaps(spin,mode), "number of components mismatch in map");
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, mode), min_almdim(lmax, mstart, lstride)});
-  auto alm = to_vmav<complex<T>,2>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, mode), min_almdim(lmax, mstart, lstride)}, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_,"alm");
 
   {
   py::gil_scoped_release release;
@@ -863,42 +812,26 @@ template<typename T, typename Tloc> py::array Py2_adjoint_synthesis_general(cons
   }
   return alm_;
   }
-py::array Py_adjoint_synthesis_general(const py::array &map, size_t spin, size_t lmax,
-  const py::array &loc, double epsilon, const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_,
-  size_t nthreads, py::object &alm, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
+NpArr Py_adjoint_synthesis_general(const CNpArr &map, size_t spin, size_t lmax,
+  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, OptNpArr &alm, double sigma_min, double sigma_max, const string &mode, bool verbose=false)
   {
-  if (isPyarr<double>(loc))
-    {
-    if (isPyarr<float>(map))
-      return Py2_adjoint_synthesis_general<float,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
-    else if (isPyarr<double>(map))
-      return Py2_adjoint_synthesis_general<double,double>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
-    }
-#if 0
-  else if (isPyarr<float>(loc))
-    {
-    if (isPyarr<float>(map))
-      return Py2_adjoint_synthesis_general<float,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
-    else if (isPyarr<double>(map))
-      return Py2_adjoint_synthesis_general<double,float>(map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose);
-    }
-#endif
-  MR_fail("type matching failed: 'map' has neither type 'f4' nor 'f8'");
+  DISPATCH_R(map, Py2_adjoint_synthesis_general, (map, spin, lmax, loc, epsilon, mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose))
   }
-template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
+template<typename T> static py::tuple Py2_pseudo_analysis_general(OptNpArr &alm__,
   size_t lmax,
-  const py::array &map_, const py::array &loc_, size_t spin,
+  const CNpArr &map_, const CNpArr &loc_, size_t spin,
   size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
-  const py::object &mstart_, ptrdiff_t lstride, const py::object &mmax_, bool verbose)
+  const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_, bool verbose)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto map = to_cmav<T,2>(map_);
-  auto loc = to_cmav<double,2>(loc_);
+  auto map = to_cmav<T,2>(map_, "map");
+  auto loc = to_cmav<double,2>(loc_, "loc");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   size_t ncomp = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)});
-  auto alm = to_vmav<complex<T>,2>(alm_);
+  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)}, "alm");
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
 
   size_t itn, istop;
   double rnorm, sqnorm;
@@ -910,21 +843,16 @@ template<typename T> py::object Py2_pseudo_analysis_general(py::object &alm__,
   rnorm = xrnorm;
   sqnorm = xsqnorm;
   }
-  return py::make_tuple(alm_, py::cast(istop), py::cast(itn), py::cast(rnorm), py::cast(sqnorm));
+  return py::make_tuple(alm_, istop, itn, rnorm, sqnorm);
   }
 py::tuple Py_pseudo_analysis_general(
   size_t lmax,
-  const py::array &map, const py::array &loc, size_t spin,
+  const CNpArr &map, const CNpArr &loc, size_t spin,
   size_t nthreads, size_t maxiter, double epsilon, double sigma_min, double sigma_max,
-  const py::object &mstart, ptrdiff_t lstride, const py::object &mmax_, py::object &alm=None, bool verbose=false)
+  const OptCNpArr &mstart, ptrdiff_t lstride, const OptSizeT &mmax_, OptNpArr &alm, bool verbose=false)
   {
-  if (isPyarr<float>(map))
-    return Py2_pseudo_analysis_general<float>(alm, lmax, map, loc,
-       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose);
-  else if (isPyarr<double>(map))
-    return Py2_pseudo_analysis_general<double>(alm, lmax, map, loc,
-       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose);
-  MR_fail("type matching failed: 'alm' has neither type 'c8' nor 'c16'");
+  DISPATCH_R(map, Py2_pseudo_analysis_general, (alm, lmax, map, loc,
+       spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose))
   }
 
 
@@ -1011,7 +939,7 @@ template<typename T> class Py_sharpjob
     size_t n_alm() const
       { return ((mmax_+1)*(mmax_+2))/2 + (mmax_+1)*(lmax_-mmax_); }
 
-    py::array alm2map (const py::array_t<complex<double>> &alm_) const
+    NpArr alm2map (const CNpArr &alm_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(alm_.size())==n_alm(),
@@ -1022,7 +950,7 @@ template<typename T> class Py_sharpjob
       auto ar(alm.prepend_1());
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -1048,12 +976,12 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
-    py::array alm2map_adjoint (const py::array_t<double> &map_) const
+    NpArr alm2map_adjoint (const CNpArr &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
@@ -1063,7 +991,7 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(map_);
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -1089,12 +1017,12 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({1, size_t(ntheta_), size_t(nphi_)},
           {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         adjoint_synthesis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return alm_;
       }
-    py::array map2alm (const py::array_t<double> &map_) const
+    NpArr map2alm (const CNpArr &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
@@ -1104,11 +1032,11 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(map_);
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
         {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
-      auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+      auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
       analysis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads);
       return alm_;
       }
-    py::array alm2map_spin (const py::array_t<complex<double>> &alm_, size_t spin) const
+    NpArr alm2map_spin (const CNpArr &alm_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       auto map_=make_Pyarr<double>({2, size_t(npix_)});
@@ -1118,7 +1046,7 @@ template<typename T> class Py_sharpjob
         "incorrect size of a_lm array");
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
         auto theta_= make_Pyarr<double>({nrings});
@@ -1143,12 +1071,12 @@ template<typename T> class Py_sharpjob
         {
         auto mr(map.template reinterpret<3>({2, ntheta_, nphi_},
           {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-        auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         synthesis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads, STANDARD);
         }
       return map_;
       }
-    py::array map2alm_spin (const py::array_t<double> &map_, size_t spin) const
+    NpArr map2alm_spin (const CNpArr &map_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
@@ -1157,7 +1085,7 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,2>(map_);
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
-      auto mstart = get_mstart(lmax_, py::cast(mmax_), None);
+      auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
       analysis_2d(alm, mr, spin, lmax_, mstart, 1, geom, 0., nthreads);
       return alm_;
       }
@@ -1168,6 +1096,23 @@ Python interface for spherical harmonic transforms and manipulation of
 spherical harmonic coefficients.
 
 Error conditions are reported by raising exceptions.
+
+Notes
+-----
+
+All "synthesis" functions in this module evaluate a set of spherical harmonic
+coefficients `alm` at user-defined locations `n` on the sphere, producing a set
+of pixels `p`:
+
+.. math::
+    p_i = \sum_{l=0}^{l_\text{max}} \sum_{m=-l}^{l} \vphantom{x}_s Y_{lm} (\vec n_i) \vphantom{x}_s a_{lm}
+
+Analogously, all "adjoint_synthesis" functions perform the adjoint operation
+
+.. math::
+    \vphantom{x}_s a_{lm} = \sum_{i} \vphantom{x}_s Y^*_{lm} (\vec n_i) p_i
+
+
 )""";
 constexpr const char *sht_experimental_DS = R"""(
 Experimental interface to the SHT functionality.
@@ -1185,9 +1130,10 @@ Rotates a set of spherical harmonic coefficients according to the given Euler an
 
 Parameters
 ----------
-alm: numpy.ndarray(((lmax+1)*(lmax=2)/2,), dtype=numpy complex64 or numpy.complex128)
+alm: numpy.ndarray((ncoeff_in,), dtype=numpy complex64 or numpy.complex128)
     the spherical harmonic coefficients, in the order
-    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, lmax)
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, mmax_in)
+    ncoeff_in = ((mmax_in+1)*(mmax_in+2))//2 + (mmax_in+1)*(lmax-mmax_in)
 lmax : int >= 0
     Maximum multipole order l of the data set.
 psi : float
@@ -1201,10 +1147,26 @@ phi : float
 nthreads: int >= 0
     the number of threads to use for the computation
     if 0, use as many threads as there are hardware threads available on the system
+mmax_in : None or int >= 0, <= lmax
+    The maximum m order in the input
+    Coefficients with higher m are assumed to be zero. 
+    If not provided, this is set to lmax.
+mmax_out : None or int >= 0, <= lmax
+    The maximum m order in the output
+    Coefficients with higher m are not provided in the output. 
+    If not provided, this is set to lmax.
+out : None or numpy.ndarray((ncoeff_out,), same dtype as `alm`)
+    ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
+    `out` must not overlap with `alm`, or it must be identical to `alm`
+    (in which case `mmax_in` must be he same as `mmax_out`).
 
 Returns
 -------
-numpy.ndarray(same shape and dtype as alm)
+numpy.ndarray((ncoeff_out,), same dtype as `alm`)
+    The rotated a_lm cofficients, in the order
+    (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, mmax_out)
+    Identical to `out`, if it was provided
+    ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
 )""";
 
 constexpr const char *alm2leg_DS = R"""(
@@ -2275,7 +2237,7 @@ lmax : int>=0
 
 void add_pythonfuncs(py::module_ &m)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
 
   m.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a, "theta"_a,
     "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a, "spin"_a,
@@ -2298,7 +2260,7 @@ void add_pythonfuncs(py::module_ &m)
 
   m.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS, py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
   m.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general, adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
-  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a, "maxiter"_a, "epsilon"_a=1e-5, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None, "verbose"_a=false);
+  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general, pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a, "spin"_a, "nthreads"_a=1, "maxiter"_a, "epsilon"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "alm"_a=None, "verbose"_a=false);
 
   m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS, "geometry"_a, "ntheta"_a);
 
@@ -2313,7 +2275,7 @@ void add_pythonfuncs(py::module_ &m)
 
 void add_sht(py::module_ &msup)
   {
-  using namespace pybind11::literals;
+  using namespace py::literals;
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");
@@ -2323,9 +2285,9 @@ void add_sht(py::module_ &msup)
   add_pythonfuncs(m2);
 
   m.def("rotate_alm", &Py_rotate_alm, rotate_alm_DS, "alm"_a, "lmax"_a, "psi"_a, "theta"_a,
-    "phi"_a, "nthreads"_a=1);
+    "phi"_a, "nthreads"_a=1, py::kw_only(), "mmax_in"_a=None, "mmax_out"_a=None, "out"_a=None);
 
-  py::class_<Py_sharpjob<double>> (m, "sharpjob_d", py::module_local(),sharpjob_d_DS)
+  py::class_<Py_sharpjob<double>> (m, "sharpjob_d", /*py::module_local(),*/sharpjob_d_DS)
     .def(py::init<>())
     .def("set_nthreads", &Py_sharpjob<double>::set_nthreads, "nthreads"_a)
     .def("set_gauss_geometry", &Py_sharpjob<double>::set_gauss_geometry,
