@@ -19,7 +19,9 @@ set(CXX_SOURCES
     src/ducc0/math/gl_integrator.cc src/ducc0/math/pointing.cc
     src/ducc0/math/gridding_kernel.cc src/ducc0/math/geom_utils.cc
     src/ducc0/math/wigner3j.cc src/ducc0/math/space_filling.cc
-    src/ducc0/wgridder/wgridder.cc src/ducc0/infra/string_utils.cc
+    src/ducc0/wgridder/wgridder.cc src/ducc0/wgridder/wgridder_inst1.cc
+    src/ducc0/wgridder/wgridder_inst2.cc src/ducc0/wgridder/wgridder_inst3.cc
+    src/ducc0/infra/string_utils.cc
     src/ducc0/infra/threading.cc src/ducc0/infra/mav.cc src/ducc0/sht/sht.cc)
 set(PYMOD_SOURCES
     python/nufft_pymod.cc python/fft_pymod.cc python/sht_pymod.cc
@@ -108,5 +110,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(ducc0 PRIVATE Threads::Threads)
 
 target_compile_features(ducc0 PRIVATE cxx_std_17)
+
+set_property(TARGET ducc0 PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 install(TARGETS ducc0 LIBRARY DESTINATION .)
