@@ -45,13 +45,14 @@ and that it should not be considered stable.
 
 ### Installation
 
-For best performance, it is recommended to compile DUCC from source, optimizing
-for the specific CPU on the system. This can be done using the command
+For best performance (especially on x86 platforms), it is recommended to
+compile DUCC from source, optimizing for the specific CPU on the system.
+This can be done using the command
 
     pip3 install --no-binary ducc0 --user ducc0
 
 NOTE: compilation requires the appropriate compilers to be installed (see above)
-and can take a significant amount of time (several minutes).
+and can take a few minutes.
 
 Alternatively, a simple
 
@@ -70,11 +71,14 @@ Additionally, pre-compiled binaries are distributed for the following systems:
 
 ### Building only the C++ part
 
-If you want to use ducc's algorithms in a C++ code, there is a CMakeLists.txt
-file to help you integrate the library into your project. Please use the C++
-interface only as an internal dependency of your projects and do not install
-the ducc0 C++ library system-wide, since its interface is not guaranteed to
-be stable and in fact expected to change significantly in the future.
+If you want to use ducc's algorithms in a C++ code, there is  template file
+CMakeLists-C++.txt in the repository to help you integrate the library into
+your project; this will probably be revised and improved soon.
+
+Please use the C++ interface only as an internal dependency of your projects
+and do not install the ducc0 C++ library system-wide, since its interface is
+not guaranteed to be stable and in fact expected to change significantly
+in the future.
 
 <!---
 Installing multiple major versions simultaneously
