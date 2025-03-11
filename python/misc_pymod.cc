@@ -92,8 +92,10 @@ template<typename T1> static FloatOrComplex Py2_vdot(const CNpArr &a, const CNpA
     return Py3_vdot<T1,float>(a,b);
   if (isPyarr<double>(b))
     return Py3_vdot<T1,double>(a,b);
+#ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(b))
     return Py3_vdot<T1,long double>(a,b);
+#endif
   if (isPyarr<complex<float>>(b))
     return Py3_vdot<T1,complex<float>>(a,b);
   if (isPyarr<complex<double>>(b))
@@ -110,8 +112,10 @@ FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
     return Py2_vdot<float>(a,b);
   if (isPyarr<double>(a))
     return Py2_vdot<double>(a,b);
+#ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(a))
     return Py2_vdot<long double>(a,b);
+#endif
   if (isPyarr<complex<float>>(a))
     return Py2_vdot<complex<float>>(a,b);
   if (isPyarr<complex<double>>(a))
@@ -427,8 +431,10 @@ template<typename T1> static double Py2_l2error(const CNpArr &a, const CNpArr &b
     return Py3_l2error<float,T1>(b,a);
   if (isPyarr<double>(b))
     return Py3_l2error<double,T1>(b,a);
+#ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(b))
     return Py3_l2error<long double,T1>(b,a);
+#endif
   if (isPyarr<complex<float>>(b))
     return Py3_l2error<T1,complex<float>>(a,b);
   if (isPyarr<complex<double>>(b))
@@ -445,8 +451,10 @@ double Py_l2error(const CNpArr &a, const CNpArr &b)
     return Py2_l2error<float>(a,b);
   if (isPyarr<double>(a))
     return Py2_l2error<double>(a,b);
+#ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(a))
     return Py2_l2error<long double>(a,b);
+#endif
   if (isPyarr<complex<float>>(a))
     return Py2_l2error<complex<float>>(a,b);
   if (isPyarr<complex<double>>(a))
@@ -561,8 +569,10 @@ NpArr Py_make_noncritical(const CNpArr &in)
     return Py2_make_noncritical<float>(in);
   if (isPyarr<double>(in))
     return Py2_make_noncritical<double>(in);
+#ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(in))
     return Py2_make_noncritical<long double>(in);
+#endif
   if (isPyarr<complex<float>>(in))
     return Py2_make_noncritical<complex<float>>(in);
   if (isPyarr<complex<double>>(in))
