@@ -227,7 +227,9 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   py::capsule owner(tmp, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
-  py::ndarray<py::numpy,T> res(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
+  std::vector<int64_t> stmp;
+  for (auto x: tmp->stride()) stmp.push_back(x);
+  py::ndarray<py::numpy,T> res(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
 #else
   py::array_t<T> tmp(shape2);
   py::list slices;
