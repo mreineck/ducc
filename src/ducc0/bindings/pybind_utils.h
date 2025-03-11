@@ -169,7 +169,7 @@ static inline auto extend_axes(fmav_info &info, size_t ndim, const string &name=
 template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const CNpArr &obj, size_t ndim,
   const string &name="")
   {
-  auto tmp = to_cfmav<T>(obj, name); 
+  auto tmp = to_cfmav<T>(obj, name);
   auto [newshape, newstride] = extend_axes(tmp, ndim, name);
   return cfmav<T>(tmp.data(), newshape, newstride);
   }
