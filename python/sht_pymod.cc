@@ -939,14 +939,14 @@ template<typename T> class Py_sharpjob
     size_t n_alm() const
       { return ((mmax_+1)*(mmax_+2))/2 + (mmax_+1)*(lmax_-mmax_); }
 
-    NpArr alm2map (const CNpArr &alm_) const
+    NpArr alm2map (const CNpArrT<complex<double>> &alm_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(alm_.size())==n_alm(),
         "incorrect size of a_lm array");
       auto map_=make_Pyarr<double>({size_t(npix_)});
       auto map=to_vmav<double,1>(map_);
-      auto alm=to_cmav<complex<double>,1>(alm_);
+      auto alm=to_cmav<complex<double>,1>(NpArr(alm_));
       auto ar(alm.prepend_1());
       if (geom=="HP")
         {
@@ -981,14 +981,14 @@ template<typename T> class Py_sharpjob
         }
       return map_;
       }
-    NpArr alm2map_adjoint (const CNpArr &map_) const
+    NpArr alm2map_adjoint (const CNpArrT<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
       auto ar(alm.prepend_1());
-      auto map=to_cmav<double,1>(map_);
+      auto map=to_cmav<double,1>(NpArr(map_));
       if (geom=="HP")
         {
         auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
@@ -1022,26 +1022,26 @@ template<typename T> class Py_sharpjob
         }
       return alm_;
       }
-    NpArr map2alm (const CNpArr &map_) const
+    NpArr map2alm (const CNpArrT<double> &map_) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
       auto alm=to_vmav<complex<double>,1>(alm_);
       auto ar(alm.prepend_1());
-      auto map=to_cmav<double,1>(map_);
+      auto map=to_cmav<double,1>(NpArr(map_));
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
         {0, ptrdiff_t(map.stride(0)*nphi_), map.stride(0)}));
       auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
       analysis_2d(ar, mr, 0, lmax_, mstart, 1, geom, 0., nthreads);
       return alm_;
       }
-    NpArr alm2map_spin (const CNpArr &alm_, size_t spin) const
+    NpArr alm2map_spin (const CNpArrT<complex<double>> &alm_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       auto map_=make_Pyarr<double>({2, size_t(npix_)});
       auto map=to_vmav<double,2>(map_);
-      auto alm=to_cmav<complex<double>,2>(alm_);
+      auto alm=to_cmav<complex<double>,2>(NpArr(alm_));
       MR_assert((alm.shape(0)==2)&&(alm.shape(1)==size_t(n_alm())),
         "incorrect size of a_lm array");
       if (geom=="HP")
@@ -1076,13 +1076,13 @@ template<typename T> class Py_sharpjob
         }
       return map_;
       }
-    NpArr map2alm_spin (const CNpArr &map_, size_t spin) const
+    NpArr map2alm_spin (const CNpArrT<double> &map_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_vmav<complex<double>,2>(alm_);
-      auto map=to_cmav<double,2>(map_);
+      auto map=to_cmav<double,2>(NpArr(map_));
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
       auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
