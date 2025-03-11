@@ -71,7 +71,7 @@ Additionally, pre-compiled binaries are distributed for the following systems:
 
 ### Building only the C++ part
 
-If you want to use ducc's algorithms in a C++ code, there is  template file
+If you want to use ducc's algorithms in a C++ code, there is a template file
 CMakeLists-C++.txt in the repository to help you integrate the library into
 your project; this will probably be revised and improved soon.
 
