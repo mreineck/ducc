@@ -93,10 +93,10 @@ using stride_t=fmav_info::stride_t;
 static const auto None = py::none();
 
 #ifdef DUCC0_USE_NANOBIND
-using NpArr = py::ndarray<py::numpy>;
-using CNpArr = py::ndarray<py::numpy, py::ro>;
-template<typename T> using NpArrT = py::ndarray<py::numpy, T>;
-template<typename T> using CNpArrT = py::ndarray<py::numpy, py::ro, T>;
+using NpArr = py::ndarray<py::numpy, py::device::cpu>;
+using CNpArr = py::ndarray<py::numpy, py::ro, py::device::cpu>;
+template<typename T> using NpArrT = py::ndarray<py::numpy, py::device::cpu, T>;
+template<typename T> using CNpArrT = py::ndarray<py::numpy, py::ro, py::device::cpu, T>;
 #else
 using NpArr = py::array;
 using CNpArr = py::array;
@@ -235,7 +235,7 @@ template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   py::capsule owner(res, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
-  NpArr res_(py::ndarray<py::numpy,T>(res->data(), dims.size(), dims.data(), owner));
+  NpArr res_(NpArrT<T>(res->data(), dims.size(), dims.data(), owner));
 #else
   auto res_=NpArr(py::array_t<T>(dims));
 #endif
@@ -261,14 +261,14 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   // different type, so we must be careful
   if constexpr(is_same<ptrdiff_t, int64_t>::value)
     {
-    py::ndarray<py::numpy,T> res_(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
+    NpArrT<T> res_(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
     res = NpArr(res_);
     }
   else
     {
     std::vector<int64_t> stmp;
     for (auto x: tmp->stride()) stmp.push_back(int64_t(x));
-    py::ndarray<py::numpy,T> res_(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
+    NpArrT<T> res_(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
     res = NpArr(res_);
     }
 #else
