@@ -93,10 +93,10 @@ using stride_t=fmav_info::stride_t;
 static const auto None = py::none();
 
 #ifdef DUCC0_USE_NANOBIND
-using NpArr = py::ndarray<py::numpy>;
-using CNpArr = py::ndarray<py::numpy, py::ro>;
-template<typename T> using NpArrT = py::ndarray<py::numpy, T>;
-template<typename T> using CNpArrT = py::ndarray<py::numpy, py::ro, T>;
+using NpArr = py::ndarray<py::numpy, py::device::cpu>;
+using CNpArr = py::ndarray<py::numpy, py::ro, py::device::cpu>;
+template<typename T> using NpArrT = py::ndarray<py::numpy, py::device::cpu, T>;
+template<typename T> using CNpArrT = py::ndarray<py::numpy, py::ro, py::device::cpu, T>;
 #else
 using NpArr = py::array;
 using CNpArr = py::array;
