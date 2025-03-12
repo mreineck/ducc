@@ -14,30 +14,34 @@
 
         ducc = py-pkgs.buildPythonPackage {
           pname = "ducc0";
-          version = "0.35.0";
-          inherit src;
+          version = "0.37.0";
           pyproject = true;
+
+          inherit src;
+          postPatch = ''
+            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.6.0", ' ""
+          '';
+
+          DUCC0_USE_NANOBIND = "";
+          DUCC0_OPTIMIZATION = "portable";
           build-system = with py-pkgs; [
             pkgs.cmake
-            pybind11
             nanobind
             ninja
             scikit-build-core
             setuptools-scm
           ];
           dontUseCmakeConfigure = true;
+          dependencies = with py-pkgs; [ numpy ];
 
-          dependencies = with py-pkgs; [ numpy scipy ];
-
-          checkInputs = [ py-pkgs.pytestCheckHook ];
+          nativeCheckInputs = with py-pkgs; [
+            pytestCheckHook
+            scipy
+            pytest-xdist
+          ];
+          pytestFlagsArray = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
 
-          # Uncomment to specify optimization levels. Note: need to pass
-          # --impure to `nix build` to enable all optimizations
-          # DUCC0_OPTIMIZATION = "none";
-
-          # Uncomment the next line to enable build via nanobind
-          # DUCC0_USE_NANOBIND = "";
 
           postInstall = ''
             mkdir -p $out/include/ducc0
