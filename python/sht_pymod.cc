@@ -1082,7 +1082,7 @@ template<typename T> class Py_sharpjob
       MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
       auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
       auto alm=to_vmav<complex<double>,2>(alm_);
-      auto map=to_cmav<double,2>(NpArr(map_));
+      auto map=to_cmav<double,2>(CNpArr(map_));
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
       auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
