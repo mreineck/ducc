@@ -90,15 +90,15 @@ template<typename T1> static FloatOrComplex Py2_vdot(const CNpArr &a, const CNpA
   {
   if (isPyarr<float>(b))
     return Py3_vdot<T1,float>(a,b);
-  if (isPyarr<double>(b))
-    return Py3_vdot<T1,double>(a,b);
-  if (isPyarr<long double>(b))
-    return Py3_vdot<T1,long double>(a,b);
   if (isPyarr<complex<float>>(b))
     return Py3_vdot<T1,complex<float>>(a,b);
+  if (isPyarr<double>(b))
+    return Py3_vdot<T1,double>(a,b);
   if (isPyarr<complex<double>>(b))
     return Py3_vdot<T1,complex<double>>(a,b);
 #ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<long double>(b))
+    return Py3_vdot<T1,long double>(a,b);
   if (isPyarr<complex<long double>>(b))
     return Py3_vdot<T1,complex<long double>>(a,b);
 #endif
@@ -108,15 +108,15 @@ FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
-  if (isPyarr<double>(a))
-    return Py2_vdot<double>(a,b);
-  if (isPyarr<long double>(a))
-    return Py2_vdot<long double>(a,b);
   if (isPyarr<complex<float>>(a))
     return Py2_vdot<complex<float>>(a,b);
+  if (isPyarr<double>(a))
+    return Py2_vdot<double>(a,b);
   if (isPyarr<complex<double>>(a))
     return Py2_vdot<complex<double>>(a,b);
 #ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<long double>(a))
+    return Py2_vdot<long double>(a,b);
   if (isPyarr<complex<long double>>(a))
     return Py2_vdot<complex<long double>>(a,b);
 #endif
@@ -425,15 +425,15 @@ template<typename T1> static double Py2_l2error(const CNpArr &a, const CNpArr &b
   {
   if (isPyarr<float>(b))
     return Py3_l2error<float,T1>(b,a);
-  if (isPyarr<double>(b))
-    return Py3_l2error<double,T1>(b,a);
-  if (isPyarr<long double>(b))
-    return Py3_l2error<long double,T1>(b,a);
   if (isPyarr<complex<float>>(b))
     return Py3_l2error<T1,complex<float>>(a,b);
+  if (isPyarr<double>(b))
+    return Py3_l2error<double,T1>(b,a);
   if (isPyarr<complex<double>>(b))
     return Py3_l2error<T1,complex<double>>(a,b);
 #ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<long double>(b))
+    return Py3_l2error<long double,T1>(b,a);
   if (isPyarr<complex<long double>>(b))
     return Py3_l2error<T1,complex<long double>>(a,b);
 #endif
@@ -443,15 +443,15 @@ double Py_l2error(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(a))
     return Py2_l2error<float>(a,b);
-  if (isPyarr<double>(a))
-    return Py2_l2error<double>(a,b);
-  if (isPyarr<long double>(a))
-    return Py2_l2error<long double>(a,b);
   if (isPyarr<complex<float>>(a))
     return Py2_l2error<complex<float>>(a,b);
+  if (isPyarr<double>(a))
+    return Py2_l2error<double>(a,b);
   if (isPyarr<complex<double>>(a))
     return Py2_l2error<complex<double>>(a,b);
 #ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<long double>(a))
+    return Py2_l2error<long double>(a,b);
   if (isPyarr<complex<long double>>(a))
     return Py2_l2error<complex<long double>>(a,b);
 #endif
@@ -559,15 +559,15 @@ NpArr Py_make_noncritical(const CNpArr &in)
   {
   if (isPyarr<float>(in))
     return Py2_make_noncritical<float>(in);
-  if (isPyarr<double>(in))
-    return Py2_make_noncritical<double>(in);
-  if (isPyarr<long double>(in))
-    return Py2_make_noncritical<long double>(in);
   if (isPyarr<complex<float>>(in))
     return Py2_make_noncritical<complex<float>>(in);
+  if (isPyarr<double>(in))
+    return Py2_make_noncritical<double>(in);
   if (isPyarr<complex<double>>(in))
     return Py2_make_noncritical<complex<double>>(in);
 #ifndef DUCC0_USE_NANOBIND
+  if (isPyarr<long double>(in))
+    return Py2_make_noncritical<long double>(in);
   if (isPyarr<complex<long double>>(in))
     return Py2_make_noncritical<complex<long double>>(in);
 #endif
@@ -607,15 +607,15 @@ NpArr Py_empty_noncritical(const vector<size_t> &shape,
   auto dtype = normalizeDtype(dtype_);
   if (isDtype<float>(dtype))
     return make_noncritical_Pyarr<float>(shape);
-  if (isDtype<double>(dtype))
-    return make_noncritical_Pyarr<double>(shape);
-  if (isDtype<long double>(dtype))
-    return make_noncritical_Pyarr<long double>(shape);
   if (isDtype<complex<float>>(dtype))
     return make_noncritical_Pyarr<complex<float>>(shape);
+  if (isDtype<double>(dtype))
+    return make_noncritical_Pyarr<double>(shape);
   if (isDtype<complex<double>>(dtype))
     return make_noncritical_Pyarr<complex<double>>(shape);
 #ifndef DUCC0_USE_NANOBIND
+  if (isDtype<long double>(dtype))
+    return make_noncritical_Pyarr<long double>(shape);
   if (isDtype<complex<long double>>(dtype))
     return make_noncritical_Pyarr<complex<long double>>(shape);
 #endif

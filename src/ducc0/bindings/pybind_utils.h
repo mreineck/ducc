@@ -333,8 +333,6 @@ template<> inline py::object Dtype<float>()
   { static auto res = normalizeDtype(py::cast("f4")); return res; }
 template<> inline py::object Dtype<double>()
   { static auto res = normalizeDtype(py::cast("f8")); return res; }
-template<> inline py::object Dtype<long double>()
-  { static auto res = normalizeDtype(py::cast("longdouble")); return res; }
 template<> inline py::object Dtype<complex<float>>()
   { static auto res = normalizeDtype(py::cast("c8")); return res; }
 template<> inline py::object Dtype<complex<double>>()
