@@ -150,7 +150,7 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
 template<typename T> cfmav<T> to_cfmav(const CNpArr &obj, const string &name="")
   {
   const auto spec = makeSpec(name);
-  MR_assert(isPyarr<T>(obj), "data type mismatch");
+  MR_assert(isPyarr<const T>(obj), "data type mismatch");
   return cfmav<T>(reinterpret_cast<const T *>(obj.data()),
     copy_shape(obj, spec), copy_strides<T,false>(obj, spec));
   }
@@ -251,23 +251,36 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
   auto shape2 = noncritical_shape(shape, sizeof(T));
+  NpArr res;
 #ifdef DUCC0_USE_NANOBIND
   auto *tmp = new vfmav<T>(shape2, UNINITIALIZED);
   py::capsule owner(tmp, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
-  std::vector<int64_t> stmp;
-  for (auto x: tmp->stride()) stmp.push_back(x);
-  py::ndarray<py::numpy,T> res(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
+  // nanobind strides are always int64_t, but on some platforms ptrdiff_t is a
+  // different type, so we must be careful
+  if constexpr(is_same<ptrdiff_t, int64_t>::value)
+    {
+    py::ndarray<py::numpy,T> res_(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
+    res = NpArr(res_);
+    }
+  else
+    {
+    std::vector<int64_t> stmp;
+    for (auto x: tmp->stride()) stmp.push_back(int64_t(x));
+    py::ndarray<py::numpy,T> res_(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
+    res = NpArr(res_);
+    }
 #else
   py::array_t<T> tmp(shape2);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array_t<T> res(tmp[py::tuple(slices)]);
+  py::array_t<T> res_(tmp[py::tuple(slices)]);
+  res = NpArr(res_);
 #endif
-  if (zero) zero_Pyarr<T>(NpArr(res));
-  return NpArr(res);
+  if (zero) zero_Pyarr<T>(res);
+  return res;
   }
 
 template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
@@ -320,6 +333,8 @@ template<> inline py::object Dtype<float>()
   { static auto res = normalizeDtype(py::cast("f4")); return res; }
 template<> inline py::object Dtype<double>()
   { static auto res = normalizeDtype(py::cast("f8")); return res; }
+template<> inline py::object Dtype<long double>()
+  { static auto res = normalizeDtype(py::cast("longdouble")); return res; }
 template<> inline py::object Dtype<complex<float>>()
   { static auto res = normalizeDtype(py::cast("c8")); return res; }
 template<> inline py::object Dtype<complex<double>>()
