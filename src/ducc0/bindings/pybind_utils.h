@@ -297,7 +297,7 @@ template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
   }
 
 template<typename T> NpArr get_optional_Pyarr_minshape
-  (OptNpArr &arr_, const shape_t &dims, const string &name="")
+  (const OptNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims, false);
   const auto spec = makeSpec(name);
