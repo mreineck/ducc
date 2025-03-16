@@ -66,11 +66,11 @@ template<size_t nd1, size_t nd2> static shape_t repl_dim(const shape_t &s,
 
 template<typename T1, typename T2, size_t nd1, size_t nd2>
   static NpArr myprep(const CNpArr &ain, const array<size_t,nd1> &a1,
-  const array<size_t,nd2> &a2)
+  const array<size_t,nd2> &a2, const OptNpArr &out)
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return make_Pyarr<T2>(oshp);
+  return get_optional_Pyarr<T2>(out, oshp);
   }
 
 #define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
@@ -101,10 +101,10 @@ class Pyhpbase
       }
 
     template<typename Tin> NpArr pix2ang2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto pix = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, double, 0, 1>(in, {}, {2});
+      auto out = myprep<Tin, double, 0, 1>(in, {}, {2}, out_);
       auto ang = to_vfmav<double>(out);
       {
       py::gil_scoped_release release;
@@ -117,15 +117,15 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr pix2ang (const CNpArr &in, size_t nthreads) const
+    NpArr pix2ang (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        pix2ang2, (in, nthreads))
+        pix2ang2, (in, nthreads, out))
 
     template<typename Tin> NpArr ang2pix2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto ang = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, int64_t, 1, 0>(in, {2}, {});
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {2}, {}, out_);
       auto pix = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -136,14 +136,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr ang2pix (const CNpArr &in, size_t nthreads) const
+    NpArr ang2pix (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2pix2,
-        (in, nthreads))
+        (in, nthreads, out))
     template<typename Tin> NpArr pix2vec2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto pix = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, double, 0, 1>(in, {}, {3});
+      auto out = myprep<Tin, double, 0, 1>(in, {}, {3}, out_);
       auto vec = to_vfmav<double>(out);
       {
       py::gil_scoped_release release;
@@ -155,14 +155,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr pix2vec (const CNpArr &in, size_t nthreads) const
+    NpArr pix2vec (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        pix2vec2, (in, nthreads))
+        pix2vec2, (in, nthreads, out))
     template<typename Tin> NpArr vec2pix2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto vec = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {}, out_);
       auto pix = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -173,14 +173,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr vec2pix (const CNpArr &in, size_t nthreads) const
+    NpArr vec2pix (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2pix2,
-        (in, nthreads))
+        (in, nthreads, out))
     template<typename Tin> NpArr pix2xyf2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto pix = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {3});
+      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {3}, out_);
       auto xyf = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -193,14 +193,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr pix2xyf (const CNpArr &in, size_t nthreads) const
+    NpArr pix2xyf (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        pix2xyf2, (in, nthreads))
+        pix2xyf2, (in, nthreads, out))
     template<typename Tin> NpArr xyf2pix2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto xyf = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {});
+      auto out = myprep<Tin, int64_t, 1, 0>(in, {3}, {}, out_);
       auto pix = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -211,14 +211,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr xyf2pix (const CNpArr &in, size_t nthreads) const
+    NpArr xyf2pix (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        xyf2pix2, (in, nthreads))
+        xyf2pix2, (in, nthreads, out))
     template<typename Tin> NpArr neighbors2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto pix = to_cfmav<Tin>(in);
-      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {8});
+      auto out = myprep<Tin, int64_t, 0, 1>(in, {}, {8}, out_);
       auto neigh = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -231,14 +231,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr neighbors (const CNpArr &in, size_t nthreads) const
+    NpArr neighbors (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        neighbors2, (in, nthreads))
+        neighbors2, (in, nthreads, out))
     template<typename Tin> NpArr ring2nest2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto ring = to_cfmav<Tin>(in);
-      auto out = make_Pyarr<int64_t>(ring.shape());
+      auto out = get_optional_Pyarr<int64_t>(out_, ring.shape());
       auto nest = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -247,14 +247,14 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr ring2nest (const CNpArr &in, size_t nthreads) const
+    NpArr ring2nest (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        ring2nest2, (in, nthreads))
+        ring2nest2, (in, nthreads, out))
     template<typename Tin> NpArr nest2ring2 (const CNpArr &in,
-      size_t nthreads) const
+      size_t nthreads, const OptNpArr &out_) const
       {
       const auto nest = to_cfmav<Tin>(in);
-      auto out = make_Pyarr<int64_t>(nest.shape());
+      auto out = get_optional_Pyarr<int64_t>(out_, nest.shape());
       auto ring = to_vfmav<int64_t>(out);
       {
       py::gil_scoped_release release;
@@ -263,9 +263,9 @@ class Pyhpbase
       }
       return out;
       }
-    NpArr nest2ring (const CNpArr &in, size_t nthreads) const
+    NpArr nest2ring (const CNpArr &in, size_t nthreads, const OptNpArr &out) const
       DUCC0_DISPATCH(int64_t, int32_t, int64_t, int32_t, "i8", "i4", in,
-        nest2ring2, (in, nthreads))
+        nest2ring2, (in, nthreads, out))
     template<typename Tin> NpArr query_disc2(const CNpArr &ptg,
       double radius) const
       {
@@ -327,10 +327,11 @@ class Pyhpbase
       }
   };
 
-template<typename Tin> static NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
+template<typename Tin> static NpArr ang2vec2 (const CNpArr &in, size_t nthreads,
+  const OptNpArr &out_)
   {
   auto ang = to_cfmav<Tin>(in);
-  auto out = myprep<Tin, double, 1, 1>(in, {2}, {3});
+  auto out = myprep<Tin, double, 1, 1>(in, {2}, {3}, out_);
   auto vec = to_vfmav<double>(out);
   {
   py::gil_scoped_release release;
@@ -342,13 +343,14 @@ template<typename Tin> static NpArr ang2vec2 (const CNpArr &in, size_t nthreads)
   }
   return out;
   }
-NpArr ang2vec (const CNpArr &in, size_t nthreads)
+NpArr ang2vec (const CNpArr &in, size_t nthreads, const OptNpArr &out)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, ang2vec2,
-    (in, nthreads))
-template<typename Tin> static NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
+    (in, nthreads, out))
+template<typename Tin> static NpArr vec2ang2 (const CNpArr &in, size_t nthreads,
+  const OptNpArr &out_)
   {
   auto vec = to_cfmav<Tin>(in);
-  auto out = myprep<Tin, double, 1, 1>(in, {3}, {2});
+  auto out = myprep<Tin, double, 1, 1>(in, {3}, {2}, out_);
   auto ang = to_vfmav<double>(out);
   {
   py::gil_scoped_release release;
@@ -360,15 +362,15 @@ template<typename Tin> static NpArr vec2ang2 (const CNpArr &in, size_t nthreads)
   }
   return out;
   }
-NpArr vec2ang (const CNpArr &in, size_t nthreads)
+NpArr vec2ang (const CNpArr &in, size_t nthreads, const OptNpArr &out)
   DUCC0_DISPATCH(double, float, double, float, "f8", "f4", in, vec2ang2,
-    (in, nthreads))
+    (in, nthreads, out))
 template<typename Ti1, typename Ti2> static NpArr local_v_angle2
-  (const CNpArr &in1, const CNpArr &in2, size_t nthreads)
+  (const CNpArr &in1, const CNpArr &in2, size_t nthreads, const OptNpArr &out_)
   {
   auto vec1 = to_cfmav<Ti1>(in1);
   auto vec2 = to_cfmav<Ti2>(in2);
-  auto out = myprep<Ti1, double, 1, 0>(in1, {3}, {});
+  auto out = myprep<Ti1, double, 1, 0>(in1, {3}, {}, out_);
   auto angle = to_vfmav<double>(out);
   {
   py::gil_scoped_release release;
@@ -382,16 +384,16 @@ template<typename Ti1, typename Ti2> static NpArr local_v_angle2
   return out;
   }
 NpArr local_v_angle (const CNpArr &in1, const CNpArr &in2,
-  size_t nthreads)
+  size_t nthreads, const OptNpArr &out)
   {
   if (isPyarr<double>(in1) && isPyarr<double>(in2))
-    return local_v_angle2<double, double> (in1, in2, nthreads);
+    return local_v_angle2<double, double> (in1, in2, nthreads, out);
   if (isPyarr<double>(in1) && isPyarr<float>(in2))
-    return local_v_angle2<double, float> (in1, in2, nthreads);
+    return local_v_angle2<double, float> (in1, in2, nthreads, out);
   if (isPyarr<float>(in1) && isPyarr<float>(in2))
-    return local_v_angle2<float, float> (in1, in2, nthreads);
+    return local_v_angle2<float, float> (in1, in2, nthreads, out);
   if (isPyarr<float>(in1) && isPyarr<double>(in2))
-    return local_v_angle2<double, float> (in2, in1, nthreads);
+    return local_v_angle2<double, float> (in2, in1, nthreads, out);
   MR_fail("type matching failed: input arrays have neither type 'f8' nor 'f4'");
   }
 
@@ -557,23 +559,23 @@ void add_healpix(py::module_ &msup)
       { return 4*pi/self.base.Npix(); }, pix_area_DS)
     .def("max_pixrad", [](Pyhpbase &self)
       { return self.base.max_pixrad(); }, max_pixrad_DS)
-    .def("pix2ang", &Pyhpbase::pix2ang, pix2ang_DS, "pix"_a, "nthreads"_a=1)
-    .def("ang2pix", &Pyhpbase::ang2pix, ang2pix_DS, "ang"_a, "nthreads"_a=1)
-    .def("pix2vec", &Pyhpbase::pix2vec, pix2vec_DS, "pix"_a, "nthreads"_a=1)
-    .def("vec2pix", &Pyhpbase::vec2pix, vec2pix_DS, "vec"_a, "nthreads"_a=1)
-    .def("pix2xyf", &Pyhpbase::pix2xyf, "pix"_a, "nthreads"_a=1)
-    .def("xyf2pix", &Pyhpbase::xyf2pix, "xyf"_a, "nthreads"_a=1)
-    .def("neighbors", &Pyhpbase::neighbors,"pix"_a, "nthreads"_a=1)
-    .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a, "nthreads"_a=1)
-    .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a, "nthreads"_a=1)
+    .def("pix2ang", &Pyhpbase::pix2ang, pix2ang_DS, "pix"_a, "nthreads"_a=1, "out"_a=None)
+    .def("ang2pix", &Pyhpbase::ang2pix, ang2pix_DS, "ang"_a, "nthreads"_a=1, "out"_a=None)
+    .def("pix2vec", &Pyhpbase::pix2vec, pix2vec_DS, "pix"_a, "nthreads"_a=1, "out"_a=None)
+    .def("vec2pix", &Pyhpbase::vec2pix, vec2pix_DS, "vec"_a, "nthreads"_a=1, "out"_a=None)
+    .def("pix2xyf", &Pyhpbase::pix2xyf, "pix"_a, "nthreads"_a=1, "out"_a=None)
+    .def("xyf2pix", &Pyhpbase::xyf2pix, "xyf"_a, "nthreads"_a=1, "out"_a=None)
+    .def("neighbors", &Pyhpbase::neighbors,"pix"_a, "nthreads"_a=1, "out"_a=None)
+    .def("ring2nest", &Pyhpbase::ring2nest, ring2nest_DS, "ring"_a, "nthreads"_a=1, "out"_a=None)
+    .def("nest2ring", &Pyhpbase::nest2ring, nest2ring_DS, "nest"_a, "nthreads"_a=1, "out"_a=None)
     .def("query_disc", &Pyhpbase::query_disc, query_disc_DS, "ptg"_a, "radius"_a)
     .def("sht_info", &Pyhpbase::sht_info, sht_info_DS)
     .def("__repr__", &Pyhpbase::repr)
     ;
 
-  m.def("ang2vec",&ang2vec, ang2vec_DS, "ang"_a, "nthreads"_a=1);
-  m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a, "nthreads"_a=1);
-  m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a, "nthreads"_a=1);
+  m.def("ang2vec",&ang2vec, ang2vec_DS, "ang"_a, "nthreads"_a=1, "out"_a=None);
+  m.def("vec2ang",&vec2ang, vec2ang_DS, "vec"_a, "nthreads"_a=1, "out"_a=None);
+  m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a, "nthreads"_a=1, "out"_a=None);
   }
 
 }
