@@ -1,3 +1,15 @@
+0.37.1:
+- general:
+  - disable all interface functions with `long double` parameters when
+    `nanobind` is active; it simply doesn't support the type
+  - made sure that all files needed for the FFT component have GPL *and* BSD3
+    license headers
+
+- sht:
+  - `sharpjob_d` member functions no longer implicitly converted their input
+    arrays to the expected type; this is now fixed
+
+
 0.37.0:
 - general:
   - build system switched to CMake, allowing parallel compilation.

@@ -1,3 +1,32 @@
+/* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
+
+/*
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+* Neither the name of the copyright holder nor the names of its contributors may
+  be used to endorse or promote products derived from this software without
+  specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 /*
  *  This code is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -64,11 +93,15 @@ using stride_t=fmav_info::stride_t;
 static const auto None = py::none();
 
 #ifdef DUCC0_USE_NANOBIND
-using NpArr = py::ndarray<py::numpy>;
-using CNpArr = py::ndarray<py::numpy, py::ro>;
+using NpArr = py::ndarray<py::numpy, py::device::cpu>;
+using CNpArr = py::ndarray<py::numpy, py::ro, py::device::cpu>;
+template<typename T> using NpArrT = py::ndarray<py::numpy, py::device::cpu, T>;
+template<typename T> using CNpArrT = py::ndarray<py::numpy, py::ro, py::device::cpu, T>;
 #else
 using NpArr = py::array;
 using CNpArr = py::array;
+template<typename T> using NpArrT = py::array_t<T>;
+template<typename T> using CNpArrT = py::array_t<T>;
 #endif
 
 using OptNpArr = optional<NpArr>;
@@ -140,7 +173,7 @@ static inline auto extend_axes(fmav_info &info, size_t ndim, const string &name=
 template<typename T> cfmav<T> to_cfmav_with_optional_leading_dimensions(const CNpArr &obj, size_t ndim,
   const string &name="")
   {
-  auto tmp = to_cfmav<T>(obj, name); 
+  auto tmp = to_cfmav<T>(obj, name);
   auto [newshape, newstride] = extend_axes(tmp, ndim, name);
   return cfmav<T>(tmp.data(), newshape, newstride);
   }
@@ -202,7 +235,7 @@ template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   py::capsule owner(res, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
-  NpArr res_(py::ndarray<py::numpy,T>(res->data(), dims.size(), dims.data(), owner));
+  NpArr res_(NpArrT<T>(res->data(), dims.size(), dims.data(), owner));
 #else
   auto res_=NpArr(py::array_t<T>(dims));
 #endif
@@ -218,21 +251,36 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
   auto shape2 = noncritical_shape(shape, sizeof(T));
+  NpArr res;
 #ifdef DUCC0_USE_NANOBIND
   auto *tmp = new vfmav<T>(shape2, UNINITIALIZED);
   py::capsule owner(tmp, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
-  py::ndarray<py::numpy,T> res(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
+  // nanobind strides are always int64_t, but on some platforms ptrdiff_t is a
+  // different type, so we must be careful
+  if constexpr(is_same<ptrdiff_t, int64_t>::value)
+    {
+    NpArrT<T> res_(tmp->data(), shape.size(), shape.data(), owner, tmp->stride().data());
+    res = NpArr(res_);
+    }
+  else
+    {
+    std::vector<int64_t> stmp;
+    for (auto x: tmp->stride()) stmp.push_back(int64_t(x));
+    NpArrT<T> res_(tmp->data(), shape.size(), shape.data(), owner, stmp.data());
+    res = NpArr(res_);
+    }
 #else
   py::array_t<T> tmp(shape2);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array_t<T> res(tmp[py::tuple(slices)]);
+  py::array_t<T> res_(tmp[py::tuple(slices)]);
+  res = NpArr(res_);
 #endif
-  if (zero) zero_Pyarr<T>(NpArr(res));
-  return NpArr(res);
+  if (zero) zero_Pyarr<T>(res);
+  return res;
   }
 
 template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
@@ -249,7 +297,7 @@ template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
   }
 
 template<typename T> NpArr get_optional_Pyarr_minshape
-  (OptNpArr &arr_, const shape_t &dims, const string &name="")
+  (const OptNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return make_Pyarr<T>(dims, false);
   const auto spec = makeSpec(name);
@@ -305,8 +353,10 @@ template<typename T> bool isDtype(const py::dtype &dtype)
 }
 
 using detail_pybind::NpArr;
+using detail_pybind::NpArrT;
 using detail_pybind::OptNpArr;
 using detail_pybind::CNpArr;
+using detail_pybind::CNpArrT;
 using detail_pybind::OptCNpArr;
 using detail_pybind::None;
 using detail_pybind::isPyarr;

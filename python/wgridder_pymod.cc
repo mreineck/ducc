@@ -33,7 +33,7 @@ template<typename T> static NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &vis_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, size_t verbosity,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, OptNpArr &dirty_, double sigma_min,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, const OptNpArr &dirty_, double sigma_min,
   double sigma_max, double center_x, double center_y,
   bool double_precision_accumulation)
   {
@@ -66,7 +66,7 @@ NpArr Py_vis2dirty_tuning(const CNpArr &uvw,
   size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, const OptCNpArr &mask, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  OptNpArr &dirty, double sigma_min, double sigma_max,
+  const OptNpArr &dirty, double sigma_min, double sigma_max,
   double center_x, double center_y,
   bool double_precision_accumulation)
   {
@@ -268,7 +268,7 @@ template<typename T> static NpArr Py2_dirty2vis_tuning(const CNpArr &uvw_,
   const CNpArr &freq_, const CNpArr &dirty_, const OptCNpArr &wgt_, const OptCNpArr &mask_,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  OptNpArr &vis_, double sigma_min, double sigma_max, double center_x, double center_y)
+  const OptNpArr &vis_, double sigma_min, double sigma_max, double center_x, double center_y)
   {
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
@@ -291,7 +291,7 @@ NpArr Py_dirty2vis_tuning(const CNpArr &uvw,
   const CNpArr &freq, const CNpArr &dirty, const OptCNpArr &wgt,
   double pixsize_x, double pixsize_y, double epsilon, bool do_wgridding,
   size_t nthreads, size_t verbosity, const OptCNpArr &mask,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, OptNpArr &vis, double sigma_min,
+  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, const OptNpArr &vis, double sigma_min,
   double sigma_max, double center_x, double center_y)
   {
   if (isPyarr<float>(dirty))

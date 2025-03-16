@@ -75,10 +75,8 @@ template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<floa
 
 
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
-template<> constexpr inline int log2tile_<long double, 1> = 9;
 template<> constexpr inline int log2tile_<double, 1> = 9;
 template<> constexpr inline int log2tile_<float , 1> = 9;
-template<> constexpr inline int log2tile_<long double, 2> = 4;
 template<> constexpr inline int log2tile_<double, 2> = 4;
 template<> constexpr inline int log2tile_<float , 2> = 5;
 #ifdef NEW_DUMP
@@ -88,7 +86,6 @@ template<> constexpr inline int log2tile_<float , 3> = 5;
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
 #endif
-template<> constexpr inline int log2tile_<long double, 3> = 4;
 
 template<size_t ndim> constexpr inline size_t max_ntile=-1;
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
