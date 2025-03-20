@@ -463,6 +463,33 @@ template<size_t ndim> class mav_info
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
       return getIdx(0, ns...);
       }
+    template<size_t nd2>
+    mav_info<nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
+      const vector<size_t> &axpos) const
+      {
+      MR_assert(new_shape.size()>=ndim,
+        "new shape smaller than original one");
+      MR_assert(axpos.size()==ndim, "bad axpos size");
+      stride_t new_stride(new_shape.size(), 0);
+      vector<uint8_t> used(new_shape.size(),0);
+      for (size_t i=0; i<ndim; ++i)
+        {
+        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(used[axpos[i]]==0, "repeated axis position");
+        used[axpos[i]]=1;
+        new_stride[axpos[i]] = str[i];
+        }
+      return mav_info(new_shape, new_stride);
+      }
+    template<size_t nd2>
+    mav_info<nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
+      size_t firstaxis) const
+      {
+      vector<size_t> axpos(ndim);
+      std::iota(axpos.begin(), axpos.end(), firstaxis);
+      return extend_and_broadcast(new_shape, axpos);
+      }
     mav_info transpose() const
       {
       shape_t shp2;
@@ -791,6 +818,17 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
       return cmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
+      }
+    template<size_t nd2>
+    cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
+                                     const vector<size_t> &axpos) const
+      {
+      return {mav_info<nd2>::extend_and_broadcast(new_shape, axpos), *this};
+      }
+    template<size_t nd2> cmav<T,nd2>
+    extend_and_broadcast(const array<size_t, nd2> &new_shape, size_t firstaxis) const
+      {
+      return {mav_info<nd2>::extend_and_broadcast(new_shape, firstaxis), *this};
       }
 
     static cmav build_uniform(const shape_t &shape, const T &value)
