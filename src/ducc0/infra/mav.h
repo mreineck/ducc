@@ -605,7 +605,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
   };
 
 template<typename T> cfmav<T> subarray
-  (const cfmav<T> &arr, const vector<slice> &slices)  
+  (const cfmav<T> &arr, const vector<slice> &slices)
   { return arr.subarray(slices); }
 
 template<typename T> class vfmav: public cfmav<T>
@@ -730,7 +730,7 @@ template<typename T> class vfmav: public cfmav<T>
   };
 
 template<typename T> vfmav<T> subarray
-  (const vfmav<T> &arr, const vector<slice> &slices)  
+  (const vfmav<T> &arr, const vector<slice> &slices)
   { return arr.subarray(slices); }
 
 template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmembuf<T>
@@ -826,7 +826,7 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
-  (const cmav<T, ndim> &arr, const vector<slice> &slices)  
+  (const cmav<T, ndim> &arr, const vector<slice> &slices)
   { return arr.template subarray<nd2>(slices); }
 
 template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
@@ -865,7 +865,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_, UNINITIALIZED) {}
     vmav(const vfmav<T> &inp)
       : parent(inp) {}
-      
+
     void assign(const vmav &other)
       { parent::assign(other); }
     void unassign()
@@ -938,7 +938,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
   };
 
 template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
-  (const vmav<T, ndim> &arr, const vector<slice> &slices)  
+  (const vmav<T, ndim> &arr, const vector<slice> &slices)
   { return arr.template subarray<nd2>(slices); }
 
 // various operations involving fmav objects of the same shape -- experimental
@@ -1343,7 +1343,7 @@ template<size_t nd0, typename T0, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0),
                       forward_as_tuple(Xdim<nd0>()),
-                      std::forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads);
   }
 
 template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
@@ -1351,7 +1351,7 @@ template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>()),
-                      std::forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads);
   }
 
 template<size_t nd0, size_t nd1, size_t nd2,
@@ -1360,7 +1360,7 @@ template<size_t nd0, size_t nd1, size_t nd2,
   {
   xflexible_mav_apply(forward_as_tuple(m0, m1, m2),
                       forward_as_tuple(Xdim<nd0>(), Xdim<nd1>(), Xdim<nd2>()),
-                      std::forward<Func>(func), nthreads); 
+                      std::forward<Func>(func), nthreads);
   }
 
 }
