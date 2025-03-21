@@ -470,7 +470,8 @@ template<size_t ndim> class mav_info
       MR_assert(new_shape.size()>=ndim,
         "new shape smaller than original one");
       MR_assert(axpos.size()==ndim, "bad axpos size");
-      stride_t new_stride(new_shape.size(), 0);
+      typename mav_info<nd2>::stride_t new_stride;
+      fill(new_stride.begin(), new_stride.end(), 0);
       vector<uint8_t> used(new_shape.size(),0);
       for (size_t i=0; i<ndim; ++i)
         {
@@ -480,7 +481,7 @@ template<size_t ndim> class mav_info
         used[axpos[i]]=1;
         new_stride[axpos[i]] = str[i];
         }
-      return mav_info(new_shape, new_stride);
+      return mav_info<nd2>(new_shape, new_stride);
       }
     template<size_t nd2>
     mav_info<nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
@@ -823,12 +824,12 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
                                      const vector<size_t> &axpos) const
       {
-      return {mav_info<nd2>::extend_and_broadcast(new_shape, axpos), *this};
+      return {tinfo::template extend_and_broadcast<nd2>(new_shape, axpos), *this};
       }
     template<size_t nd2> cmav<T,nd2>
     extend_and_broadcast(const array<size_t, nd2> &new_shape, size_t firstaxis) const
       {
-      return {mav_info<nd2>::extend_and_broadcast(new_shape, firstaxis), *this};
+      return {tinfo::template extend_and_broadcast<nd2>(new_shape, firstaxis), *this};
       }
 
     static cmav build_uniform(const shape_t &shape, const T &value)
