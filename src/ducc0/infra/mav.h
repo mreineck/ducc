@@ -467,15 +467,15 @@ template<size_t ndim> class mav_info
     mav_info<nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
       const vector<size_t> &axpos) const
       {
-      MR_assert(new_shape.size()>=ndim,
-        "new shape smaller than original one");
+      static_assert(nd2>=ndim, "new shape smaller than original one");
       MR_assert(axpos.size()==ndim, "bad axpos size");
-      typename mav_info<nd2>::stride_t new_stride;
+      array<ptrdiff_t, nd2> new_stride;
       fill(new_stride.begin(), new_stride.end(), 0);
-      vector<uint8_t> used(new_shape.size(),0);
+      array<uint8_t, nd2> used;
+      fill(used.begin(), used.end(), 0);
       for (size_t i=0; i<ndim; ++i)
         {
-        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+        MR_assert(axpos[i]<nd2, "bad axis number");
         MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
         MR_assert(used[axpos[i]]==0, "repeated axis position");
         used[axpos[i]]=1;
