@@ -104,7 +104,7 @@ template<typename T1> static FloatOrComplex Py2_vdot(const CNpArr &a, const CNpA
 #endif
   MR_fail("type matching failed");
   }
-FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
+static FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(a))
     return Py2_vdot<float>(a,b);
@@ -153,7 +153,7 @@ template<typename T1, typename T2, typename T3> static NpArr Py2_mul_conj(
   }
   return out_;
   }
-NpArr Py_mul_conj(const CNpArr &a, const CNpArr &b, const OptNpArr &out)
+static NpArr Py_mul_conj(const CNpArr &a, const CNpArr &b, const OptNpArr &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
   MR_assert(b_single || isPyarr<complex<double>>(b),
@@ -202,7 +202,7 @@ template<typename T1, typename T2, typename T3> static NpArr Py2_div_conj(
   }
   return out_;
   }
-NpArr Py_div_conj(const CNpArr &a, const CNpArr &b, const OptNpArr &out)
+static NpArr Py_div_conj(const CNpArr &a, const CNpArr &b, const OptNpArr &out)
   {
   bool b_single = isPyarr<complex<float>>(b);
   MR_assert(b_single || isPyarr<complex<double>>(b),
@@ -280,7 +280,7 @@ template<typename T> static double Py3_LogUnnormalizedGaussProbability
   return 0.5*res;
   }
 
-double Py_LogUnnormalizedGaussProbability(const CNpArr &a, const CNpArr &b,
+static double Py_LogUnnormalizedGaussProbability(const CNpArr &a, const CNpArr &b,
   const CNpArr &c, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
@@ -365,7 +365,7 @@ template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeri
   return lst;
   }
 
-py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
+static py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
   const CNpArr &c, const OptNpArr &out, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
@@ -439,7 +439,7 @@ template<typename T1> static double Py2_l2error(const CNpArr &a, const CNpArr &b
 #endif
   MR_fail("type matching failed");
   }
-double Py_l2error(const CNpArr &a, const CNpArr &b)
+static double Py_l2error(const CNpArr &a, const CNpArr &b)
   {
   if (isPyarr<float>(a))
     return Py2_l2error<float>(a,b);
@@ -463,7 +463,7 @@ double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
   return double(res);
   }
 
-NpArr Py_GL_weights(size_t nlat, size_t nlon)
+static NpArr Py_GL_weights(size_t nlat, size_t nlon)
   {
   auto res = make_Pyarr<double>({nlat});
   auto res2 = to_vmav<double,1>(res);
@@ -477,7 +477,7 @@ NpArr Py_GL_weights(size_t nlat, size_t nlon)
   return res;
   }
 
-NpArr Py_GL_thetas(size_t nlat)
+static NpArr Py_GL_thetas(size_t nlat)
   {
   auto res = make_Pyarr<double>({nlat});
   auto res2 = to_vmav<double,1>(res);
@@ -504,7 +504,7 @@ template<typename T> static NpArr Py2_transpose(const CNpArr &in,
   return out;
   }
 
-NpArr Py_transpose(const CNpArr &in, NpArr &out, size_t nthreads=1)
+static NpArr Py_transpose(const CNpArr &in, NpArr &out, size_t nthreads=1)
   {
   if (isPyarr<float>(in))
     return Py2_transpose<float>(in, out, nthreads);
@@ -555,7 +555,7 @@ template<typename T> static NpArr Py2_make_noncritical(const CNpArr &in)
   return out;
   }
 
-NpArr Py_make_noncritical(const CNpArr &in)
+static NpArr Py_make_noncritical(const CNpArr &in)
   {
   if (isPyarr<float>(in))
     return Py2_make_noncritical<float>(in);
@@ -601,7 +601,7 @@ Returns
 numpy.ndarray (shape, dtype=dtype)
     An uninitialized numpy array with the requested properties
 )""";
-NpArr Py_empty_noncritical(const vector<size_t> &shape,
+static NpArr Py_empty_noncritical(const vector<size_t> &shape,
   const py::object &dtype_)
   {
   auto dtype = normalizeDtype(dtype_);
@@ -949,7 +949,7 @@ static double get_max_kernel_error(const function<vector<double>(const vector<do
   return err;
   }
 
-py::tuple scan_kernel(const function<vector<double>(const vector<double> &,
+static py::tuple scan_kernel(const function<vector<double>(const vector<double> &,
   const vector<double> &)> &func, const vector<double> &par_min,
   const vector<double> &par_max,
   size_t W, size_t M, size_t N, double x0,
@@ -1138,7 +1138,7 @@ template<typename Ti, typename To> static NpArr roll_resize_roll(const CNpArr &i
   return out_;
   }
 
-NpArr Py_roll_resize_roll(const CNpArr &inp,
+static NpArr Py_roll_resize_roll(const CNpArr &inp,
   NpArr &out, const vector<int64_t> &ri, const vector<int64_t> &ro,
   size_t nthreads=1)
   {
@@ -1295,7 +1295,7 @@ template<typename Tout> static NpArr Py2_get_deflected_angles(const CNpArr &thet
   }
   return res_;
   }
-NpArr Py_get_deflected_angles(const CNpArr &theta_,
+static NpArr Py_get_deflected_angles(const CNpArr &theta_,
   const CNpArr &phi0_, const CNpArr &nphi_, const CNpArr &ringstart_,
   const CNpArr &deflect_, bool calc_rotation, const OptNpArr &res__,
   size_t nthreads, const OptCNpArr &dphi_)
@@ -1516,7 +1516,7 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 )""";
 
 
-py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
+static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
   size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
   auto res_ = make_Pyarr<double>({ncoef});
@@ -1635,7 +1635,7 @@ template<typename Tin> static NpArr quat2ptg2 (const CNpArr &in, size_t nthreads
   }
   return out__;
   }
-NpArr quat2ptg (const CNpArr &in, size_t nthreads, const OptNpArr &out)
+static NpArr quat2ptg (const CNpArr &in, size_t nthreads, const OptNpArr &out)
   {
   if (isPyarr<float>(in))
     return quat2ptg2<float> (in, nthreads, out);
@@ -1672,7 +1672,7 @@ template<typename Tin> static NpArr ptg2quat2 (const CNpArr &in, size_t nthreads
   }
   return out__;
   }
-NpArr ptg2quat (const CNpArr &in, size_t nthreads, const OptNpArr &out)
+static NpArr ptg2quat (const CNpArr &in, size_t nthreads, const OptNpArr &out)
   {
   if (isPyarr<float>(in))
     return ptg2quat2<float> (in, nthreads, out);
@@ -1724,7 +1724,7 @@ numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
 )""";
 
 
-void print_diagnostics()
+static void print_diagnostics()
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
 #define DUCC0_STRINGIFY(s) #s
