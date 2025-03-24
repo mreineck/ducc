@@ -154,7 +154,14 @@ template<typename T> cfmav<T> to_cfmav(const CNpArr &obj, const string &name="")
   return cfmav<T>(reinterpret_cast<const T *>(obj.data()),
     copy_shape(obj, spec), copy_strides<T,false>(obj, spec));
   }
+template<typename T> cfmav<T> to_cfmav(const CNpArrT<T> &obj, const string &name="")
+  { return to_cfmav<T>(CNpArr(obj), name); }
+
 template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const CNpArr &obj,
+  const string &name="")
+  { return cmav<T,ndim>(to_cfmav<T>(obj, name)); }
+
+template<typename T, size_t ndim> cmav<T,ndim> to_cmav(const CNpArrT<T> &obj,
   const string &name="")
   { return cmav<T,ndim>(to_cfmav<T>(obj, name)); }
 
@@ -209,10 +216,16 @@ template<typename T> vfmav<T> to_vfmav(const NpArr &obj, const string &name="")
     copy_shape(CNpArr(obj), spec), copy_strides<T,true>(CNpArr(obj), spec));
 #endif
   }
+  template<typename T> vfmav<T> to_vfmav(const NpArrT<T> &obj, const string &name="")
+  { return to_vfmav<T>(NpArr(obj), name); }
+
 
 template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const NpArr &obj,
   const string &name="")
   { return vmav<T,ndim>(to_vfmav<T>(obj, name)); }
+template<typename T, size_t ndim> vmav<T,ndim> to_vmav(const NpArrT<T> &obj,
+  const string &name="")
+  { return to_vmav<T,ndim>(NpArr(obj), name); }
 
 template<typename T> vfmav<T> to_vfmav_with_optional_leading_dimensions(const NpArr &obj, size_t ndim,
   const string &name="")
