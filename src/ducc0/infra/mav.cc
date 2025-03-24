@@ -188,10 +188,4 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   return make_tuple(shp, str);
   }
 
-  void test_function() {
-    vmav<double, 2> foo{{12, 13}};
-    cmav<double, 2> foo2 = foo;
-    cmav<double, 4> foo3 = foo2.extend_and_broadcast(mav_info<4>::shape_t({2, 12, 13, 99}), {1, 2});
-  }
-
 }}
