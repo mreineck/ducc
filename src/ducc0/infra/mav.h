@@ -1140,6 +1140,111 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
+template <typename ReduceType, typename Func, typename Ttuple, size_t... I>
+inline ReduceType call_reduce_with_tuple_impl(Func &&func, const Ttuple& tuple,
+  index_sequence<I...>)
+  { return func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
+template<typename ReduceType, typename Func, typename Ttuple> inline ReduceType call_reduce_with_tuple
+  (Func &&func, Ttuple &&tuple)
+  {
+  return call_reduce_with_tuple_impl<ReduceType>(std::forward<Func>(func), tuple,
+                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  }
+template<typename ReduceType, typename Ttuple, typename Func>
+  DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, size_t bsi, size_t bsj,
+    const Ttuple &ptrs, Func &&func)
+  {
+  ReduceType rt;
+  auto leni=shp[idim], lenj=shp[idim+1];
+  size_t nbi = (leni+bsi-1)/bsi;
+  size_t nbj = (lenj+bsj-1)/bsj;
+  for (size_t bi=0; bi<nbi; ++bi)
+    for (size_t bj=0; bj<nbj; ++bj)
+      {
+      auto locptrs(ptrs);
+      advance_by_n(locptrs, str, idim, bi*bsi);
+      advance_by_n(locptrs, str, idim+1, bj*bsj);
+      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, str, idim))
+        {
+        auto locptrs2(locptrs);
+        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, str, idim+1))
+          rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs2)));
+        }
+      }
+  return rt;
+  }
+template<typename ReduceType, typename Ttuple, typename Func>
+  DUCC0_NOINLINE ReduceType applyReduceHelper(size_t idim, const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, bool last_contiguous)
+  {
+  auto len = shp[idim];
+  ReduceType rt;
+  if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
+    rt.reduceWith(applyReduceHelper_block<ReduceType>(idim, shp, str, block0, block1, ptrs, func));
+  else if (idim+1<shp.size())
+    for (size_t i=0; i<len; ++i)
+      rt.reduceWith(applyReduceHelper<ReduceType>(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
+        func, last_contiguous));
+  else
+    {
+    auto locptrs(ptrs);
+    if (last_contiguous)
+      for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
+        rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+    else
+      for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+        rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+    }
+  return rt;
+  }
+template<typename ReduceType, typename Func, typename Ttuple>
+  inline ReduceType applyReduceHelper(const vector<size_t> &shp,
+    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
+    const Ttuple &ptrs, Func &&func, size_t nthreads, bool last_contiguous)
+  {
+  ReduceType rt;
+  if (shp.size()==0)
+    rt.reduceWith(call_reduce_with_tuple<ReduceType>(std::forward<Func>(func), to_ref(ptrs)));
+  else if (nthreads==1)
+    rt.reduceWith(applyReduceHelper<ReduceType>(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous));
+  else
+    {
+    Mutex mut;
+    execParallel(shp[0], nthreads, [&](size_t lo, size_t hi)
+      {
+      auto locptrs = update_pointers(ptrs, str, 0, lo);
+      auto locshp(shp);
+      locshp[0] = hi-lo;
+      auto local_rt = applyReduceHelper<ReduceType>(0, locshp, str, block0, block1, locptrs, func, last_contiguous);
+      {
+      LockGuard lock(mut);
+      rt.reduceWith(local_rt);
+      }
+      });
+    }
+  return rt;
+  }
+
+template<typename ReduceType, typename Func, typename... Targs>
+  ReduceType mav_apply_reduce(Func &&func, int nthreads, Targs... args)
+  {
+  vector<fmav_info> infos;
+  (infos.push_back(args), ...);
+  vector<size_t> tsizes;
+  (tsizes.push_back(sizeof(args.data()[0])), ...);
+  auto [shp, str, block0, block1] = multiprep(infos, tsizes);
+  bool last_contiguous = true;
+  if (shp.size()>0)
+    for (const auto &s:str)
+      last_contiguous &= (s.back()==1);
+
+  auto ptrs = tuple_transform(forward_as_tuple(args...),
+    [](auto &&arg){return arg.data();});
+  return applyReduceHelper<ReduceType>(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
+  }
+
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   multiprep_noopt(const vector<fmav_info> &info);
 
@@ -1376,6 +1481,7 @@ using detail_mav::cmav;
 using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
+using detail_mav::mav_apply_reduce;
 using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
 }
