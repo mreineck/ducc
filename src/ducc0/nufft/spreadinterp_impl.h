@@ -22,10 +22,8 @@
 
 #include <algorithm>
 #include "ducc0/infra/simd.h"
-#include "ducc0/infra/timers.h"
 #include "ducc0/infra/bucket_sort.h"
 #include "ducc0/math/gridding_kernel.h"
-#include "ducc0/math/space_filling.h"
 #include "ducc0/nufft/spreadinterp.h"
 #include "ducc0/nufft/nufft_common.h"
 
@@ -75,7 +73,6 @@ template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<floa
 #endif
 #endif
 
-//#define NEW_INDEX
 
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
 template<> constexpr inline int log2tile_<double, 1> = 9;
@@ -1076,12 +1073,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[2]<b0[2])
            || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv) || (i0[2]+int(supp)>b0[2]+sw))
             {
-//cout << ((b0[0]+nsafe)>>log2tile) << " " << ((b0[1]+nsafe)>>log2tile) << " " << ((b0[2]+nsafe)>>log2tile)<< " -> ";
             dump();
             b0[0]=((((i0[0]+nsafe)>>log2tile)<<log2tile))-nsafe;
             b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
             b0[2]=((((i0[2]+nsafe)>>log2tile)<<log2tile))-nsafe;
-//cout << ((b0[0]+nsafe)>>log2tile) << " " << ((b0[1]+nsafe)>>log2tile) << " " << ((b0[2]+nsafe)>>log2tile)<< endl;
             }
 #ifdef NEW_DUMP
           for (size_t i=0; i<ndim; ++i)
@@ -1345,43 +1340,6 @@ else
         });
       }
 
-#ifdef NEW_INDEX
-    void build_index(const cmav<Tcoord,2> &coords)
-      {
-      size_t maxdim = max(nover[0], max(nover[1], nover[2])) + 32;
-      size_t logmaxdim = ilog2(maxdim)+1;
-      size_t shift = 0;
-      if (logmaxdim>10) shift = logmaxdim-10;
-cout << "logmaxdim: " << logmaxdim << endl;
-
-      coord_idx.resize(coords.shape(0));
-      quick_array<Tidx> key(coords.shape(0));
-Tidx maxkey=0;
-SimpleTimer t0;
-      execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
-        {
-Mutex mut;
-Tidx lmaxkey=0;
-        for (size_t i=lo; i<hi; ++i)
-          {
-          auto tile = parent::template get_tile<Tcoord>({coords(i,0),coords(i,1),coords(i,2)},0);
-tile[2] &= ~0x3u;
-          auto tkey = morton2peano3D_32(coord2morton3D_32({tile[0]>>shift,tile[1]>>shift,tile[2]>>shift}), 10);
-          key[i] = tkey;
-          lmaxkey = max(lmaxkey, tkey);
-          }
-{
-LockGuard lock(mut);
-maxkey = max(maxkey, lmaxkey);
-}
-        });
-cout << nover[0] << " " << nover[1]<< " " << nover[2] << endl;
-cout << "maxkey: "<<maxkey << endl;
-cout << "key shenanigans: "<<t0() << endl;
-      bucket_sort2(key, coord_idx, maxkey, nthreads);
-cout << "sort: "<<t0() << endl;
-      }
-#else
     void build_index(const cmav<Tcoord,2> &coords)
       {
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
@@ -1411,7 +1369,6 @@ cout << "sort: "<<t0() << endl;
         });
       bucket_sort2(key, coord_idx, (ntiles_u*ntiles_v*ntiles_w)<<(3*ssmall), nthreads);
       }
-#endif
   };
 
 #undef DUCC0_SPREADINTERP_BOILERPLATE
