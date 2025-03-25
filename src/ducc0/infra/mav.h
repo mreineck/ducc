@@ -1190,9 +1190,9 @@ template<typename ReduceType, typename Func, typename Ttuple> inline ReduceType 
                        make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template<typename ReduceType, typename Ttuple, typename Func>
-  DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, size_t bsi, size_t bsj,
-    const Ttuple &ptrs, Func &&func)
+  DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim,
+    const vector<size_t> &shp, const vector<vector<ptrdiff_t>> &str,
+    size_t bsi, size_t bsj, const Ttuple &ptrs, Func &&func)
   {
   ReduceType rt;
   auto leni=shp[idim], lenj=shp[idim+1];
@@ -1221,11 +1221,12 @@ template<typename ReduceType, typename Ttuple, typename Func>
   auto len = shp[idim];
   ReduceType rt;
   if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
-    rt.reduceWith(applyReduceHelper_block<ReduceType>(idim, shp, str, block0, block1, ptrs, func));
+    rt.reduceWith(applyReduceHelper_block<ReduceType>(idim, shp, str,
+      block0, block1, ptrs, func));
   else if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
-      rt.reduceWith(applyReduceHelper<ReduceType>(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
-        func, last_contiguous));
+      rt.reduceWith(applyReduceHelper<ReduceType>(idim+1, shp, str, block0,
+        block1, update_pointers(ptrs, str, idim, i), func, last_contiguous));
   else
     {
     auto locptrs(ptrs);
@@ -1245,9 +1246,11 @@ template<typename ReduceType, typename Func, typename Ttuple>
   {
   ReduceType rt;
   if (shp.size()==0)
-    rt.reduceWith(call_reduce_with_tuple<ReduceType>(std::forward<Func>(func), to_ref(ptrs)));
+    rt.reduceWith(call_reduce_with_tuple<ReduceType>(std::forward<Func>(func),
+      to_ref(ptrs)));
   else if (nthreads==1)
-    rt.reduceWith(applyReduceHelper<ReduceType>(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous));
+    rt.reduceWith(applyReduceHelper<ReduceType>(0, shp, str, block0, block1,
+      ptrs, std::forward<Func>(func), last_contiguous));
   else
     {
     Mutex mut;
@@ -1256,7 +1259,8 @@ template<typename ReduceType, typename Func, typename Ttuple>
       auto locptrs = update_pointers(ptrs, str, 0, lo);
       auto locshp(shp);
       locshp[0] = hi-lo;
-      auto local_rt = applyReduceHelper<ReduceType>(0, locshp, str, block0, block1, locptrs, func, last_contiguous);
+      auto local_rt = applyReduceHelper<ReduceType>(0, locshp, str, block0,
+        block1, locptrs, func, last_contiguous);
       {
       LockGuard lock(mut);
       rt.reduceWith(local_rt);
@@ -1281,7 +1285,8 @@ template<typename ReduceType, typename Func, typename... Targs>
 
   auto ptrs = tuple_transform(forward_as_tuple(args...),
     [](auto &&arg){return arg.data();});
-  return applyReduceHelper<ReduceType>(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
+  return applyReduceHelper<ReduceType>(shp, str, block0, block1, ptrs,
+    std::forward<Func>(func), nthreads, last_contiguous);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
