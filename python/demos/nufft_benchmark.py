@@ -62,7 +62,7 @@ class Bench12:
             verbosity=0)
         print("done")
 
-    def run(self, epsilon, singleprec, nthreads):
+    def run(self, epsilon, singleprec, nthreads, do_planned=True, do_unplanned=True):
         rdtype = np.float32 if singleprec else np.float64
         dtype = np.complex64 if singleprec else np.complex128
 
@@ -80,43 +80,45 @@ class Bench12:
         points = self._points.astype(dtype)
         values = self._values.astype(dtype)
 
-        out = np.ones(shape, dtype=dtype)
-        t0 = time()
-        plan = ducc0.nufft.plan(nu2u=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
-        res["ducc_1_planned_time_plan"] = time()-t0
-        t0 = time()
-        out = plan.nu2u(points=points, forward=True, verbosity=0, out=out)
-        res["ducc_1_planned_time_exec"] = time()-t0
-        res["ducc_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-        print(f"ducc0,     planned, type 1: time={res["ducc_1_planned_time_exec"]}, L2 error={res["ducc_1_planned_err"]}")
-        del plan, out
+        if do_planned:
+            out = np.ones(shape, dtype=dtype)
+            t0 = time()
+            plan = ducc0.nufft.plan(nu2u=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
+            res["ducc_1_planned_time_plan"] = time()-t0
+            t0 = time()
+            out = plan.nu2u(points=points, forward=True, verbosity=0, out=out)
+            res["ducc_1_planned_time_exec"] = time()-t0
+            res["ducc_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
+            print(f"ducc0,     planned, type 1: time={res["ducc_1_planned_time_exec"]}, L2 error={res["ducc_1_planned_err"]}")
+            del plan, out
+    
+            out=np.ones(shape=(npoints,), dtype=dtype)
+            t0 = time()
+            plan = ducc0.nufft.plan(nu2u=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
+            res["ducc_2_planned_time_plan"] = time()-t0
+            t0 = time()
+            out = plan.u2nu(grid=values, forward=True, verbosity=0, out=out)
+            res["ducc_2_planned_time_exec"] = time()-t0
+            res["ducc_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
+            print(f"ducc0,     planned, type 2: time={res["ducc_2_planned_time_exec"]}, L2 error={res["ducc_2_planned_err"]}")
+            del plan, out
 
-        out=np.ones(shape=(npoints,), dtype=dtype)
-        t0 = time()
-        plan = ducc0.nufft.plan(nu2u=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
-        res["ducc_2_planned_time_plan"] = time()-t0
-        t0 = time()
-        out = plan.u2nu(grid=values, forward=True, verbosity=0, out=out)
-        res["ducc_2_planned_time_exec"] = time()-t0
-        res["ducc_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-        print(f"ducc0,     planned, type 2: time={res["ducc_2_planned_time_exec"]}, L2 error={res["ducc_2_planned_err"]}")
-        del plan, out
-
-        out = np.ones(shape, dtype=dtype)
-        t0 = time()
-        out = ducc0.nufft.nu2u(points=points, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
-        res["ducc_1_unplanned_time_full"] = time()-t0
-        res["ducc_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-        print(f"ducc0,   unplanned, type 1: time={res["ducc_1_unplanned_time_full"]}, L2 error={res["ducc_1_unplanned_err"]}")
-        del out
-
-        out=np.ones(shape=(npoints,), dtype=dtype)
-        t0 = time()
-        out = ducc0.nufft.u2nu(grid=values, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
-        res["ducc_2_unplanned_time_full"] = time()-t0
-        res["ducc_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-        print(f"ducc0,   unplanned, type 2: time={res["ducc_2_unplanned_time_full"]}, L2 error={res["ducc_2_unplanned_err"]}")
-        del out
+        if do_unplanned:
+            out = np.ones(shape, dtype=dtype)
+            t0 = time()
+            out = ducc0.nufft.nu2u(points=points, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
+            res["ducc_1_unplanned_time_full"] = time()-t0
+            res["ducc_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
+            print(f"ducc0,   unplanned, type 1: time={res["ducc_1_unplanned_time_full"]}, L2 error={res["ducc_1_unplanned_err"]}")
+            del out
+    
+            out=np.ones(shape=(npoints,), dtype=dtype)
+            t0 = time()
+            out = ducc0.nufft.u2nu(grid=values, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
+            res["ducc_2_unplanned_time_full"] = time()-t0
+            res["ducc_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
+            print(f"ducc0,   unplanned, type 2: time={res["ducc_2_unplanned_time_full"]}, L2 error={res["ducc_2_unplanned_err"]}")
+            del out
 
         if not have_finufft:
             return res
@@ -126,49 +128,51 @@ class Bench12:
         func1=[finufft.nufft1d1, finufft.nufft2d1, finufft.nufft3d1]
         func2=[finufft.nufft1d2, finufft.nufft2d2, finufft.nufft3d2]
 
-        t0 = time()
-        plan = finufft.Plan(1, self._shape, 1, eps=epsilon, isign=-1,
-                            dtype="complex64" if singleprec else "complex128",
-                            nthreads=nthreads, debug=0)
-        plan.setpts(*coord)
-        res["finufft_1_planned_time_plan"] = time()-t0
-        out = np.ones(shape, dtype=dtype)
-        t0 = time()
-        out = plan.execute(points, out=out)
-        res["finufft_1_planned_time_exec"] = time()-t0
-        res["finufft_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-        print(f"Finufft,   planned, type 1: time={res["finufft_1_planned_time_exec"]}, L2 error={res["finufft_1_planned_err"]}")
-        del plan, out
+        if do_planned:
+            t0 = time()
+            plan = finufft.Plan(1, self._shape, 1, eps=epsilon, isign=-1,
+                                dtype="complex64" if singleprec else "complex128",
+                                nthreads=nthreads, debug=0)
+            plan.setpts(*coord)
+            res["finufft_1_planned_time_plan"] = time()-t0
+            out = np.ones(shape, dtype=dtype)
+            t0 = time()
+            out = plan.execute(points, out=out)
+            res["finufft_1_planned_time_exec"] = time()-t0
+            res["finufft_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
+            print(f"Finufft,   planned, type 1: time={res["finufft_1_planned_time_exec"]}, L2 error={res["finufft_1_planned_err"]}")
+            del plan, out
+    
+            t0 = time()
+            plan = finufft.Plan(2, shape, 1, eps=epsilon, isign=-1,
+                                dtype="complex64" if singleprec else "complex128",
+                                nthreads=nthreads, debug=0)
+            plan.setpts(*coord)
+            res["finufft_2_planned_time_plan"] = time()-t0
+            out = np.ones((npoints,), dtype=dtype)
+            t0 = time()
+            out = plan.execute(values, out=out)
+            res["finufft_2_planned_time_exec"] = time()-t0
+            res["finufft_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
+            print(f"Finufft,   planned, type 2: time={res["finufft_2_planned_time_exec"]}, L2 error={res["finufft_2_planned_err"]}")
+            del plan, out
 
-        t0 = time()
-        plan = finufft.Plan(2, shape, 1, eps=epsilon, isign=-1,
-                            dtype="complex64" if singleprec else "complex128",
-                            nthreads=nthreads, debug=0)
-        plan.setpts(*coord)
-        res["finufft_2_planned_time_plan"] = time()-t0
-        out = np.ones((npoints,), dtype=dtype)
-        t0 = time()
-        out = plan.execute(values, out=out)
-        res["finufft_2_planned_time_exec"] = time()-t0
-        res["finufft_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-        print(f"Finufft,   planned, type 2: time={res["finufft_2_planned_time_exec"]}, L2 error={res["finufft_2_planned_err"]}")
-        del plan, out
-
-        out = np.ones(shape, dtype=dtype)
-        t0=time()
-        out = func1[ndim-1](*coord, points, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
-        res["finufft_1_unplanned_time_exec"] = time()-t0
-        res["finufft_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-        print(f"Finufft, unplanned, type 1: time={res["finufft_1_unplanned_time_exec"]}, L2 error={res["finufft_1_unplanned_err"]}")
-        del out
-
-        out = np.ones((npoints,), dtype=dtype)
-        t0=time()
-        out = func2[ndim-1](*coord, values, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
-        res["finufft_2_unplanned_time_exec"] = time()-t0
-        res["finufft_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-        print(f"Finufft, unplanned, type 2: time={res["finufft_2_unplanned_time_exec"]}, L2 error={res["finufft_2_unplanned_err"]}")
-        del out
+        if do_unplanned:
+            out = np.ones(shape, dtype=dtype)
+            t0=time()
+            out = func1[ndim-1](*coord, points, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
+            res["finufft_1_unplanned_time_full"] = time()-t0
+            res["finufft_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
+            print(f"Finufft, unplanned, type 1: time={res["finufft_1_unplanned_time_full"]}, L2 error={res["finufft_1_unplanned_err"]}")
+            del out
+    
+            out = np.ones((npoints,), dtype=dtype)
+            t0=time()
+            out = func2[ndim-1](*coord, values, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
+            res["finufft_2_unplanned_time_full"] = time()-t0
+            res["finufft_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
+            print(f"Finufft, unplanned, type 2: time={res["finufft_2_unplanned_time_full"]}, L2 error={res["finufft_2_unplanned_err"]}")
+            del out
 
         return res
 
@@ -207,7 +211,7 @@ class Bench3:
             forward=True, epsilon=eps, verbosity=0, nthreads=0)
         print("done")
 
-    def run(self, epsilon, singleprec, nthreads):
+    def run(self, epsilon, singleprec, nthreads, do_planned=True, do_unplanned=True):
         rdtype = np.float32 if singleprec else np.float64
         dtype = np.complex64 if singleprec else np.complex128
 
@@ -225,25 +229,27 @@ class Bench3:
         coord_out = self._coord_out.astype(rdtype)
         points = self._points.astype(dtype)
 
-        out = np.ones((npoints_out,), dtype=dtype)
-        t0 = time()
-        plan = ducc0.nufft.experimental.plan3(coord_in=coord_in,
-           coord_out=coord_out, epsilon=epsilon, verbosity=0, nthreads=nthreads)
-        res["ducc_3_planned_time_plan"] = time()-t0
-        t0 = time()
-        out = plan.exec(forward=True,points_in=points,points_out=out)
-        res["ducc_3_planned_time_exec"] = time()-t0
-        res["ducc_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-        print(f"ducc0,     planned, type 3: time={res["ducc_3_planned_time_exec"]}, L2 error={res["ducc_3_planned_err"]}")
-        del plan, out
+        if do_planned:
+            out = np.ones((npoints_out,), dtype=dtype)
+            t0 = time()
+            plan = ducc0.nufft.experimental.plan3(coord_in=coord_in,
+               coord_out=coord_out, epsilon=epsilon, verbosity=0, nthreads=nthreads)
+            res["ducc_3_planned_time_plan"] = time()-t0
+            t0 = time()
+            out = plan.exec(forward=True,points_in=points,points_out=out)
+            res["ducc_3_planned_time_exec"] = time()-t0
+            res["ducc_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
+            print(f"ducc0,     planned, type 3: time={res["ducc_3_planned_time_exec"]}, L2 error={res["ducc_3_planned_err"]}")
+            del plan, out
 
-        out = np.ones((npoints_in,), dtype=dtype)
-        t0 = time()
-        out = ducc0.nufft.experimental.nu2nu(points_in=points, coord_in=coord_in, coord_out=coord_out, forward=True, epsilon=epsilon, verbosity=0, nthreads=nthreads, points_out=out)
-        res["ducc_3_unplanned_time_full"] = time()-t0
-        res["ducc_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-        print(f"ducc0,   unplanned, type 3: time={res["ducc_3_unplanned_time_full"]}, L2 error={res["ducc_3_unplanned_err"]}")
-        del out
+        if do_unplanned:
+            out = np.ones((npoints_in,), dtype=dtype)
+            t0 = time()
+            out = ducc0.nufft.experimental.nu2nu(points_in=points, coord_in=coord_in, coord_out=coord_out, forward=True, epsilon=epsilon, verbosity=0, nthreads=nthreads, points_out=out)
+            res["ducc_3_unplanned_time_full"] = time()-t0
+            res["ducc_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
+            print(f"ducc0,   unplanned, type 3: time={res["ducc_3_unplanned_time_full"]}, L2 error={res["ducc_3_unplanned_err"]}")
+            del out
 
         if not have_finufft:
             return res
@@ -252,94 +258,108 @@ class Bench3:
         coord_in = tuple(np.ascontiguousarray(coord_in[:,i]) for i in range(coord_in.shape[1]))
         coord_out = tuple(np.ascontiguousarray(coord_out[:,i]) for i in range(coord_out.shape[1]))
 
-        out = np.ones((npoints_out,), dtype=dtype)
-        plan = finufft.Plan(3, ndim, eps=epsilon, isign=-1, dtype=dtype, nthreads=nthreads)
-        args = list(coord_in) + [None]*(3-ndim) + list(coord_out)
-        plan.setpts(*args)
-        t0 = time()
-        out = plan.execute(points, out=out)
-        res["finufft_3_planned_time_exec"] = time()-t0
-        res["finufft_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-        print(f"finufft,   planned, type 3: time={res["finufft_3_planned_time_exec"]}, L2 error={res["finufft_3_planned_err"]}")
-        del plan, out
+        if do_planned:
+            out = np.ones((npoints_out,), dtype=dtype)
+            plan = finufft.Plan(3, ndim, eps=epsilon, isign=-1, dtype=dtype, nthreads=nthreads)
+            args = list(coord_in) + [None]*(3-ndim) + list(coord_out)
+            plan.setpts(*args)
+            t0 = time()
+            out = plan.execute(points, out=out)
+            res["finufft_3_planned_time_exec"] = time()-t0
+            res["finufft_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
+            print(f"finufft,   planned, type 3: time={res["finufft_3_planned_time_exec"]}, L2 error={res["finufft_3_planned_err"]}")
+            del plan, out
 
-
-        out = np.ones((npoints_out,), dtype=dtype)
-        func=[finufft.nufft1d3, finufft.nufft2d3, finufft.nufft3d3]
-        t0 = time()
-        out = func[ndim-1](*coord_in, points, *coord_out, out=out, eps=epsilon, isign=-1, nthreads=nthreads)
-        res["finufft_3_unplanned_time_full"] = time()-t0
-        res["finufft_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-        print(f"finufft, unplanned, type 3: time={res["finufft_3_unplanned_time_full"]}, L2 error={res["finufft_3_unplanned_err"]}")
-        del out
+        if do_unplanned:
+            out = np.ones((npoints_out,), dtype=dtype)
+            func=[finufft.nufft1d3, finufft.nufft2d3, finufft.nufft3d3]
+            t0 = time()
+            out = func[ndim-1](*coord_in, points, *coord_out, out=out, eps=epsilon, isign=-1, nthreads=nthreads)
+            res["finufft_3_unplanned_time_full"] = time()-t0
+            res["finufft_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
+            print(f"finufft, unplanned, type 3: time={res["finufft_3_unplanned_time_full"]}, L2 error={res["finufft_3_unplanned_err"]}")
+            del out
 
         return res
 
 
-def plot(res, fname):
+def plot(res, fname, use_real_errors=True):
     import matplotlib.pyplot as plt
     fct = 1e9/res[0]["npoints"]
-    have_finufft = "finufft_1_planned_time_exec" in res[0]
-    tducc1 = fct*np.array([r["ducc_1_unplanned_time_full"] for r in res])
-    tducc2 = fct*np.array([r["ducc_2_unplanned_time_full"] for r in res])
-    tducct1 = fct*np.array([r["ducc_1_planned_time_exec"] for r in res])
-    tducct2 = fct*np.array([r["ducc_2_planned_time_exec"] for r in res])
-    educc1 = np.array([r["ducc_1_unplanned_err"] for r in res])
-    educc2 = np.array([r["ducc_2_unplanned_err"] for r in res])
-    educct1 = np.array([r["ducc_1_planned_err"] for r in res])
-    educct2 = np.array([r["ducc_2_planned_err"] for r in res])
-    if have_finufft:
-        tfinufftt1 = fct*np.array([r["finufft_1_planned_time_exec"] for r in res])
-        tfinufftt2 = fct*np.array([r["finufft_2_planned_time_exec"] for r in res])
-        tfinufft1 = fct*np.array([r["finufft_1_unplanned_time_exec"] for r in res])
-        tfinufft2 = fct*np.array([r["finufft_2_unplanned_time_exec"] for r in res])
-        efinufftt1 = np.array([r["finufft_1_planned_err"] for r in res])
-        efinufftt2 = np.array([r["finufft_2_planned_err"] for r in res])
-        efinufft1 = np.array([r["finufft_1_unplanned_err"] for r in res])
-        efinufft2 = np.array([r["finufft_2_unplanned_err"] for r in res])
+    have_planned = "ducc_1_planned_time_exec" in  res[0]
+    have_unplanned = "ducc_1_unplanned_time_full" in  res[0]
+    have_finufft = "finufft_1_planned_time_exec" in res[0] or "finufft_1_unplanned_time_full" in res[0]
     eps = np.array([r["epsilon"] for r in res])
     plt.xscale("log")
     plt.yscale("log")
-    plt.plot(educc1,tducc1,label="ducc unplanned, type 1")
-    plt.plot(educc2,tducc2,label="ducc unplanned, type 2")
-    plt.plot(educct1,tducct1,label="ducc planned, type 1")
-    plt.plot(educct2,tducct2,label="ducc planned, type 2")
+
+    if have_planned:
+        tducct1 = fct*np.array([r["ducc_1_planned_time_exec"] for r in res])
+        tducct2 = fct*np.array([r["ducc_2_planned_time_exec"] for r in res])
+        educct1 = np.array([r["ducc_1_planned_err"] for r in res]) if use_real_errors else eps
+        educct2 = np.array([r["ducc_2_planned_err"] for r in res]) if use_real_errors else eps
+        plt.plot(educct1,tducct1,label="ducc planned, type 1")
+        plt.plot(educct2,tducct2,label="ducc planned, type 2")
+    if have_unplanned:
+        tducc1 = fct*np.array([r["ducc_1_unplanned_time_full"] for r in res])
+        tducc2 = fct*np.array([r["ducc_2_unplanned_time_full"] for r in res])
+        educc1 = np.array([r["ducc_1_unplanned_err"] for r in res]) if use_real_errors else eps
+        educc2 = np.array([r["ducc_2_unplanned_err"] for r in res]) if use_real_errors else eps
+        plt.plot(educc1,tducc1,label="ducc unplanned, type 1")
+        plt.plot(educc2,tducc2,label="ducc unplanned, type 2")
     if have_finufft:
-        plt.plot(efinufftt1,tfinufftt1,label="finufft planned, type 1")
-        plt.plot(efinufftt2,tfinufftt2,label="finufft planned, type 2")
-        plt.plot(efinufft1,tfinufft1,label="finufft unplanned, type 1")
-        plt.plot(efinufft2,tfinufft2,label="finufft unplanned, type 2")
+        if have_planned:
+            tfinufftt1 = fct*np.array([r["finufft_1_planned_time_exec"] for r in res])
+            tfinufftt2 = fct*np.array([r["finufft_2_planned_time_exec"] for r in res])
+            efinufftt1 = np.array([r["finufft_1_planned_err"] for r in res]) if use_real_errors else eps
+            efinufftt2 = np.array([r["finufft_2_planned_err"] for r in res]) if use_real_errors else eps
+            plt.plot(efinufftt1,tfinufftt1,label="finufft planned, type 1")
+            plt.plot(efinufftt2,tfinufftt2,label="finufft planned, type 2")
+        if have_unplanned:
+            tfinufft1 = fct*np.array([r["finufft_1_unplanned_time_full"] for r in res])
+            tfinufft2 = fct*np.array([r["finufft_2_unplanned_time_full"] for r in res])
+            efinufft1 = np.array([r["finufft_1_unplanned_err"] for r in res]) if use_real_errors else eps
+            efinufft2 = np.array([r["finufft_2_unplanned_err"] for r in res]) if use_real_errors else eps
+            plt.plot(efinufft1,tfinufft1,label="finufft unplanned, type 1")
+            plt.plot(efinufft2,tfinufft2,label="finufft unplanned, type 2")
+
     plt.title("shape={}, npoints={}, nthreads={}".format(res[0]["shape"], res[0]["npoints"], res[0]["nthreads"]))
-    plt.xlabel("real error")
+    plt.xlabel("real error" if use_real_errors else "requested accuracy")
     plt.ylabel("ns per nonuniform point")
     plt.legend()
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
 
 
-def plot3(res, fname):
+def plot3(res, fname, use_real_errors=True):
     import matplotlib.pyplot as plt
     fct = 1e9/(res[0]["npoints_in"]+ res[0]["npoints_out"])
-    have_finufft = "finufft_3_planned_time_exec" in res[0]
-    tducc3 = fct*np.array([r["ducc_3_unplanned_time_full"] for r in res])
-    tducct3 = fct*np.array([r["ducc_3_planned_time_exec"] for r in res])
-    educc3 = np.array([r["ducc_3_unplanned_err"] for r in res])
-    educct3 = np.array([r["ducc_3_planned_err"] for r in res])
-    if have_finufft:
-        tfinufftt3 = fct*np.array([r["finufft_3_planned_time_exec"] for r in res])
-        tfinufft3 = fct*np.array([r["finufft_3_unplanned_time_full"] for r in res])
-        efinufftt3 = np.array([r["finufft_3_planned_err"] for r in res])
-        efinufft3 = np.array([r["finufft_3_unplanned_err"] for r in res])
+    have_finufft = "finufft_3_planned_time_exec" in res[0] or "finufft_3_unplanned_time_full" in res[0]
+    have_planned = "ducc_3_planned_time_exec" in  res[0]
+    have_unplanned = "ducc_3_unplanned_time_full" in  res[0]
     eps = np.array([r["epsilon"] for r in res])
     plt.xscale("log")
     plt.yscale("log")
-    plt.plot(educc3,tducc3,label="ducc unplanned, type 3")
-    plt.plot(educct3,tducct3,label="ducc planned, type 3")
+
+    if have_planned:
+        tducct3 = fct*np.array([r["ducc_3_planned_time_exec"] for r in res])
+        educct3 = np.array([r["ducc_3_planned_err"] for r in res]) if use_real_errors else eps
+        plt.plot(educct3,tducct3,label="ducc planned, type 3")
+    if have_unplanned:
+        tducc3 = fct*np.array([r["ducc_3_unplanned_time_full"] for r in res])
+        educc3 = np.array([r["ducc_3_unplanned_err"] for r in res]) if use_real_errors else eps
+        plt.plot(educc3,tducc3,label="ducc unplanned, type 3")
     if have_finufft:
-        plt.plot(efinufft3,tfinufft3,label="finufft unplanned, type 3")
-        plt.plot(efinufftt3,tfinufftt3,label="finufft planned, type 3")
+        if have_planned:
+            tfinufftt3 = fct*np.array([r["finufft_3_planned_time_exec"] for r in res])
+            efinufftt3 = np.array([r["finufft_3_planned_err"] for r in res]) if use_real_errors else eps
+            plt.plot(efinufftt3,tfinufftt3,label="finufft planned, type 3")
+        if have_unplanned:
+            tfinufft3 = fct*np.array([r["finufft_3_unplanned_time_full"] for r in res])
+            efinufft3 = np.array([r["finufft_3_unplanned_err"] for r in res]) if use_real_errors else eps
+            plt.plot(efinufft3,tfinufft3,label="finufft unplanned, type 3")
     plt.title("npoints_in={}, npoint_out={}, nthreads={}".format(res[0]["npoints_in"], res[0]["npoints_out"], res[0]["nthreads"]))
-    plt.xlabel("real error")
+    plt.xlabel("real error" if use_real_errors else "requested accuracy")
     plt.ylabel("ns per nonuniform point")
     plt.legend()
     plt.savefig(fname, bbox_inches='tight')
