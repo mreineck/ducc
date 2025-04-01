@@ -992,7 +992,7 @@ static py::tuple scan_kernel(const function<vector<double>(const vector<double> 
       LockGuard lock(mut);
       if (err<err_best)
         {
-        err_best=err;
+        err_best = err;
         par_best = par;
         }
       }
