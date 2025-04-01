@@ -377,7 +377,7 @@ template<size_t ndim> class mav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res;
-      if (ndim==0) return res;
+      if constexpr (ndim==0) return res;
       res[ndim-1]=1;
       for (size_t i=2; i<=ndim; ++i)
         res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
