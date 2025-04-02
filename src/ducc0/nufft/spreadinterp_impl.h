@@ -683,6 +683,37 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             }
           }
+        DUCC0_NOINLINE void dumpshift(const array<int64_t,ndim> &b0new)
+          {
+          constexpr int nshift = 1<<log2tile;
+          if (b0[0]<-nsafe) return; // nothing written into buffer yet
+          // if we have shifted by nshift in the last direction, use shortcut
+          if ((b0new[0]==b0[0]) && (b0new[1]==b0[1]+nshift))
+            {
+            int64_t inu = int(parent->nover[0]);
+            int64_t inv = int(parent->nover[1]);
+
+            int64_t idxv0 = (b0[1]+inv)%inv;
+            for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+              {
+              {
+              LockGuard lock(locks[idxu]);
+              for (int64_t iv=0, idxv=idxv0; iv<nshift; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+                {
+                grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
+                gbuf(iu,iv) = 0;
+                }
+              }
+              for (int64_t iv=nshift; iv<sv; ++iv)
+                {
+                gbuf(iu,iv-nshift) = gbuf(iu,iv);
+                gbuf(iu,iv) = 0;
+                }
+              }
+            }
+          else
+            dump();
+          }
 
       public:
         complex<Tacc> * DUCC0_RESTRICT p0;
@@ -716,9 +747,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           if (i0==i0old) return;
           if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv))
             {
-            dump();
-            b0[0]=((((i0[0]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            array<int64_t, ndim> b0new;
+            for (size_t i=0; i<ndim; ++i)
+              b0new[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            dumpshift(b0new);
+            b0 = b0new;
             }
           p0 = px0 + (i0[0]-b0[0])*sv + i0[1]-b0[1];
           }
@@ -757,6 +790,32 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
               }
           }
+        DUCC0_NOINLINE void loadshift(const array<int64_t, ndim> &b0old)
+          {
+          constexpr int nshift = 1<<log2tile;
+          // if we have shifted by nshift in the last direction, use shortcut
+          if ((b0old[0]==b0[0]) && (b0old[1]+nshift==b0[1]))
+            {
+            int64_t inu = int(parent->nover[0]);
+            int64_t inv = int(parent->nover[1]);
+            int64_t idxv0 = (b0[1]+inv+sv-nshift)%inv;
+            for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+              {
+              for (int64_t iv=0; iv+nshift<sv; ++iv)
+                {
+                bufri(2*iu  ,iv) = bufri(2*iu  ,iv+nshift);
+                bufri(2*iu+1,iv) = bufri(2*iu+1,iv+nshift);
+                }
+              for (int64_t iv=sv-nshift, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+                {
+                bufri(2*iu  ,iv) = grid(idxu, idxv).real();
+                bufri(2*iu+1,iv) = grid(idxu, idxv).imag();
+                }
+              }
+            }
+          else
+            load();
+          }
 
       public:
         const Tcalc * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
@@ -788,9 +847,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           if (i0==i0old) return;
           if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv))
             {
-            b0[0]=((((i0[0]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            load();
+            auto b0old=b0;
+            for (size_t i=0; i<ndim; ++i)
+              b0[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            loadshift(b0old);
             }
           auto ofs = (i0[0]-b0[0])*2*svvec + i0[1]-b0[1];
           p0r = px0r+ofs;
@@ -1033,6 +1093,41 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             }
 #endif
           }
+        DUCC0_NOINLINE void dumpshift(const array<int64_t,ndim> &b0new)
+          {
+          constexpr int nshift = 1<<log2tile;
+          if (b0[0]<-nsafe) return; // nothing written into buffer yet
+          if ((b0new[0]==b0[0]) && (b0new[1]==b0[1]) && (b0new[2]==b0[2]+nshift))
+            {
+            int64_t inu = int(parent->nover[0]);
+            int64_t inv = int(parent->nover[1]);
+            int64_t inw = int(parent->nover[2]);
+
+            int64_t idxv0 = (b0[1]+inv)%inv;
+            int64_t idxw0 = (b0[2]+inw)%inw;
+
+            for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+              {
+              LockGuard lock(locks[idxu]);
+              for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+                {
+                for (int64_t iw=0, idxw=idxw0; iw<nshift; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+                  {
+                  auto t=gbuf(iu,iv,iw);
+                  grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                  gbuf(iu,iv,iw) = 0;
+                  }
+                for (int64_t iw=nshift; iw<sw; ++iw)
+                  {
+                  gbuf(iu,iv,iw-nshift) = gbuf(iu,iv,iw);
+                  gbuf(iu,iv,iw) = 0;
+                  }
+                }
+              }
+            }
+          else
+            dump();
+          }
 
       public:
         complex<Tacc> * DUCC0_RESTRICT p0;
@@ -1073,10 +1168,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[2]<b0[2])
            || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv) || (i0[2]+int(supp)>b0[2]+sw))
             {
-            dump();
-            b0[0]=((((i0[0]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[2]=((((i0[2]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            array<int64_t,ndim> b0new;
+            for (size_t i=0; i<ndim; ++i)
+              b0new[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            dumpshift(b0new);
+            b0=b0new;
             }
 #ifdef NEW_DUMP
           for (size_t i=0; i<ndim; ++i)
@@ -1125,6 +1221,34 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
                 bufri(iu,2*iv+1,iw) = grid(idxu, idxv, idxw).imag();
                 }
           }
+        DUCC0_NOINLINE void loadshift(const array<int64_t, ndim> &b0old)
+          {
+          constexpr int nshift = 1<<log2tile;
+          if ((b0old[0]==b0[0]) && (b0old[1]==b0[1]) && (b0old[2]+nshift==b0[2]))
+            {
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t inw = int(parent->nover[2]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw+sw-nshift)%inw;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              {
+              for (int64_t iw=0; iw+nshift<sw; ++iw)
+                {
+                bufri(iu,2*iv,iw) = bufri(iu,2*iv,iw+nshift);
+                bufri(iu,2*iv+1,iw) = bufri(iu,2*iv+1,iw+nshift);
+                }
+              for (int64_t iw=sw-nshift, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+                {
+                bufri(iu,2*iv,iw) = grid(idxu, idxv, idxw).real();
+                bufri(iu,2*iv+1,iw) = grid(idxu, idxv, idxw).imag();
+                }
+              }
+            }
+          else
+            load();
+          }
 
       public:
         const Tcalc * DUCC0_RESTRICT p0r, * DUCC0_RESTRICT p0i;
@@ -1159,10 +1283,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[2]<b0[2])
            || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv) || (i0[2]+int(supp)>b0[2]+sw))
             {
-            b0[0]=((((i0[0]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[1]=((((i0[1]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            b0[2]=((((i0[2]+nsafe)>>log2tile)<<log2tile))-nsafe;
-            load();
+            auto b0old = b0;
+            for (size_t i=0; i<ndim; ++i)
+              b0[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            loadshift(b0old);
             }
           auto ofs = (i0[0]-b0[0])*2*sv*swvec + (i0[1]-b0[1])*2*swvec + (i0[2]-b0[2]);
           p0r = px0r+ofs;
