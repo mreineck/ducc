@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2023 Max-Planck-Society
+# Copyright(C) 2020-2025 Max-Planck-Society
 
 
 import ducc0
@@ -194,11 +194,17 @@ def test_healpix_adjoint(lmax, nside, spin, mmaxhalf, theta_interpol, nthreads):
 
 @pmp("lmax", tuple(range(0,70,3)))
 @pmp("nthreads", (0,1,2))
-def test_rotation(lmax, nthreads):
+@pmp("notheta", (False, True))
+@pmp("ncomp", (1, 3))
+def test_rotation(lmax, notheta, ncomp, nthreads):
     rng = np.random.default_rng(42)
     phi, theta, psi = rng.uniform(-2*np.pi, 2*np.pi, (3,))
+    if notheta:
+        theta = 0
 
-    alm = random_alm(lmax, lmax, 0, 1, rng)[0,:]
+    alm = random_alm(lmax, lmax, 0, ncomp, rng)
+    if ncomp == 1:
+        alm = alm[0]
     alm2 = ducc0.sht.rotate_alm(alm, lmax, phi, theta, psi, nthreads)
     alm2 = ducc0.sht.rotate_alm(alm2, lmax, -psi, -theta, -phi, nthreads)
     assert_allclose(ducc0.misc.l2error(alm,alm2), 0, atol=1e-12)
