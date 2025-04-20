@@ -138,6 +138,8 @@ class Alm_Base
       }
     bool complete() const
       { return mval.size() == lmax+1; }
+    bool complete_up_to_mmax() const
+      { return mval.size() == mval.back()+1; }
   };
 
 
@@ -211,10 +213,11 @@ struct ft_partial_sph_isometry_plan
 
     private:
       template<typename Tv, size_t N, size_t Ncomp> DUCC0_NOINLINE int eval_helper
-        (int jmin, const vector<double> &c, vector<double> &f) const
+        (int jmin, int limit_in, int limit_out, const vector<double> &c, vector<double> &f) const
         {
         constexpr double eps = 0x1p-52;
         constexpr double floatmin = 0x1p-300;
+        limit_out=min(limit_out, n);
 
         if (n<1)
           {
@@ -233,7 +236,7 @@ struct ft_partial_sph_isometry_plan
         using Tvl = Tv;
 #endif
         int j=jmin;
-        for (; j+int(step)<=n; j+=int(step))
+        for (; j+int(step)<=limit_out; j+=int(step))
           {
           Tvl vk[N], vkp1[N], nrm[N], X[N], fj[N*Ncomp];
           for (size_t i=0; i<N; ++i)
@@ -247,6 +250,38 @@ struct ft_partial_sph_isometry_plan
             }
           {
           int k=n-1;
+          for (; k>limit_in+3; k-=3)
+            {
+            Tvl maxnrm = Tv(0);
+            for (size_t i=0; i<N; ++i)
+              {
+              Tvl vkm1, vkm2, vkm3;
+              if constexpr(high_accuracy)
+                {
+                vkm1 = Tvl(Tv(A[k  ]))*((X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i]);
+                vkm2 = Tvl(Tv(A[k-1]))*((X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i]);
+                vkm3 = Tvl(Tv(A[k-2]))*((X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1);
+                }
+              else
+                {
+                vkm1 = (Tvl(Tv(A[k  ]))*X[i]+B[k  ])*vk[i] - Tvl(Tv(C[k  ]))*vkp1[i];
+                vkm2 = (Tvl(Tv(A[k-1]))*X[i]+B[k-1])*vkm1  - Tvl(Tv(C[k-1]))*vk[i];
+                vkm3 = (Tvl(Tv(A[k-2]))*X[i]+B[k-2])*vkm2  - Tvl(Tv(C[k-2]))*vkm1;
+                }
+              vkp1[i] = vkm2;
+              vk[i] = vkm3;
+              nrm[i] += vkm1*vkm1 + vkm2*vkm2 + vkm3*vkm3;
+              maxnrm = max(Tv(maxnrm), Tv(nrm[i]));
+              }
+            if (any_of(Tv(maxnrm) > eps/floatmin))
+              for (size_t i=0; i<N; ++i)
+                {
+                nrm[i] = Tv(1.0)/sqrt(Tv(nrm[i]));
+                vkp1[i] *= nrm[i];
+                vk[i] *= nrm[i];
+                nrm[i] = Tv(1.0);
+                }
+            }
           for (; k>2; k-=3)
             {
             Tvl maxnrm = Tv(0);
@@ -362,16 +397,29 @@ struct ft_partial_sph_isometry_plan
           }
         }
 
-      template<size_t Ncomp> void eval (const vector<double> &x, vector<double> &y) const
+      template<size_t Ncomp> void eval (const vector<double> &x, vector<double> &y, int limit_out) const
         {
+        limit_out=min(limit_out, n);
         int j=0;
+        int limit_in=0;
+        for (int i=n-1; i>=0; --i)
+          for (size_t icomp=0; icomp<Ncomp; ++icomp)
+            if (x[i*Ncomp+icomp]!=0)
+              {
+              limit_in=i;
+              goto bailout;
+              }
+        bailout:
         if constexpr (vectorizable<double>)
           {
-          j = eval_helper<native_simd<double>,4,Ncomp>(j, x, y);
-          j = eval_helper<native_simd<double>,2,Ncomp>(j, x, y);
-          j = eval_helper<native_simd<double>,1,Ncomp>(j, x, y);
+          j = eval_helper<native_simd<double>,4,Ncomp>(j, limit_in, limit_out, x, y);
+          j = eval_helper<native_simd<double>,2,Ncomp>(j, limit_in, limit_out, x, y);
+          j = eval_helper<native_simd<double>,1,Ncomp>(j, limit_in, limit_out, x, y);
           }
-        eval_helper<typename simd_select<double,1>::type,1,Ncomp>(j, x, y);
+        eval_helper<typename simd_select<double,1>::type,1,Ncomp>(j, limit_in, limit_out, x, y);
+        for (int i=limit_out+1; i<n; ++i)
+          for (size_t icomp=0; icomp<Ncomp; ++icomp)
+            y[i*Ncomp+icomp] = 0;
         }
     };
 
@@ -435,13 +483,15 @@ struct ft_partial_sph_isometry_plan
   };
 
 template<size_t Ncomp, typename T> void xchg_helper(vector<complex<T>> &talm,
-  const ft_partial_sph_isometry_plan &F, size_t l, vector<double> &tin, vector<double> &tout)
+  const ft_partial_sph_isometry_plan &F, size_t l, size_t mmax_out, vector<double> &tin, vector<double> &tout)
   {
+  int limit_out = int(mmax_out/2+3);
+
   int mstart = 1+(l%2);
   for (int i=0; i<F.F11.n; ++i)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       tin[i*Ncomp+icomp] = talm[(mstart+2*i)*Ncomp+icomp].imag();
-  F.F11.eval<Ncomp>(tin, tout);
+  F.F11.eval<Ncomp>(tin, tout, limit_out);
   for (int i=0; i<F.F11.n; ++i)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       talm[(mstart+2*i)*Ncomp+icomp].imag(T(tout[i*Ncomp+icomp]));
@@ -453,7 +503,7 @@ template<size_t Ncomp, typename T> void xchg_helper(vector<complex<T>> &talm,
   if (mstart==0)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       tin[icomp]/=sqrt(2.);
-  F.F22.eval<Ncomp>(tin, tout);
+  F.F22.eval<Ncomp>(tin, tout, limit_out);
   if (mstart==0)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       tout[icomp]*=sqrt(2.);
@@ -465,7 +515,7 @@ template<size_t Ncomp, typename T> void xchg_helper(vector<complex<T>> &talm,
   for (int i=0; i<F.F21.n; ++i)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       tin[i*Ncomp+icomp] = talm[(mstart+2*i)*Ncomp+icomp].imag();
-  F.F21.eval<Ncomp>(tin,tout);
+  F.F21.eval<Ncomp>(tin, tout, limit_out);
   mstart = 1-(l%2);
   for (int i=0; i<F.F12.n; ++i)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
@@ -480,22 +530,24 @@ template<size_t Ncomp, typename T> void xchg_helper(vector<complex<T>> &talm,
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       talm[(mstart+2*i)*Ncomp+icomp].real(T(tout[i*Ncomp+icomp]));
 
-  F.F12.eval<Ncomp>(tin,tout);
+  F.F12.eval<Ncomp>(tin, tout, limit_out);
   mstart = 2-(l%2);
   for (int i=0; i<F.F21.n; ++i)
     for (size_t icomp=0; icomp<Ncomp; ++icomp)
       talm[(mstart+2*i)*Ncomp+icomp].imag(T(tout[i*Ncomp+icomp]));
   }
 
-template<size_t Ncomp, typename T> void rothelper (const Alm_Base &base, const vmav<complex<T>,2> &alm,
-  size_t nthreads,
-  const MultiExp<double,complex<double>> &epsi,
-  const MultiExp<double,complex<double>> &etheta,
-  const MultiExp<double,complex<double>> &ephi)
+template<size_t Ncomp, typename T> void rothelper
+  (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+   const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out,
+   size_t nthreads,
+   const MultiExp<double,complex<double>> &epsi,
+   const MultiExp<double,complex<double>> &etheta,
+   const MultiExp<double,complex<double>> &ephi)
   {
-  auto lmax=base.Lmax();
-  MR_assert (base.complete(), "rotate_alm: need complete A_lm set");
-  MR_assert (alm.shape(1)==base.Num_Alms(), "bad size of a_lm array");
+  auto lmax = base_in.Lmax();
+  auto mmax_in = base_in.Mmax();
+  auto mmax_out = base_out.Mmax();
 
   execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
     {
@@ -508,86 +560,114 @@ template<size_t Ncomp, typename T> void rothelper (const Alm_Base &base, const v
       {
       F.Set(l);
       // make temporary copy of relevant a_lm
-      for (size_t m=0; m<=l; ++m)
+      size_t mlim_in = min(l, mmax_in);
+      size_t mlim_out = min(l, mmax_out);
+      for (size_t m=0; m<=mlim_in; ++m)
         for (size_t icomp=0; icomp<Ncomp; ++icomp)
-          talm[m*Ncomp+icomp] = alm(icomp, base.index(l,m))*complex<T>(epsi[m]);
-      xchg_helper<Ncomp>(talm, F, l, tin, tout);
+          talm[m*Ncomp+icomp] = alm_in(icomp, base_in.index(l,m))*complex<T>(epsi[m]);
+      for (size_t m=mlim_in+1; m<=l; ++m)
+        for (size_t icomp=0; icomp<Ncomp; ++icomp)
+          talm[m*Ncomp+icomp] = 0;
+      xchg_helper<Ncomp>(talm, F, l, l, tin, tout);
       for (size_t m=0; m<=l; ++m)
         for (size_t icomp=0; icomp<Ncomp; ++icomp)
           talm[m*Ncomp+icomp] *= complex<T>(etheta[m]);
-      xchg_helper<Ncomp>(talm, F, l, tin, tout);
-      for (size_t m=0; m<=l; ++m)
+      xchg_helper<Ncomp>(talm, F, l, mlim_out, tin, tout);
+      for (size_t m=0; m<=mlim_out; ++m)
         for (size_t icomp=0; icomp<Ncomp; ++icomp)
-          alm(icomp, base.index(l,m)) = talm[m*Ncomp+icomp]*complex<T>(ephi[m]);
+          alm_out(icomp, base_out.index(l,m)) = talm[m*Ncomp+icomp]*complex<T>(ephi[m]);
       }
     });
   }
 
-template<typename T> void rotate_alm (const Alm_Base &base, const vmav<complex<T>,2> &alm,
+template<typename T> void rotate_alm (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+  const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out,
   double psi, double theta, double phi, size_t nthreads)
   {
-  auto lmax=base.Lmax();
-  MR_assert (base.complete(), "rotate_alm: need complete A_lm set");
-  MR_assert (alm.shape(1)==base.Num_Alms(), "bad size of a_lm array");
-  auto ncomp = alm.shape(0);
-  MultiExp<double,complex<double>> epsi(-psi, lmax+1), etheta(-theta, lmax+1), ephi(-phi, lmax+1);
+  auto lmax=base_in.Lmax();
+  MR_assert(base_out.Lmax()==lmax, "lmax mismatch");
+  auto ncomp = alm_in.shape(0);
+  MR_assert(alm_out.shape(0)==ncomp, "number of components mismatch");
+  size_t mmax_in = base_in.Mmax();
+  MR_assert(base_in.complete_up_to_mmax(), "input a_lm not complete up to mmax");
+  size_t mmax_out = base_out.Mmax();
+  MR_assert(base_out.complete_up_to_mmax(), "output a_lm not complete up to mmax");
+  MR_assert (alm_in.shape(1)==base_in.Num_Alms(), "bad size of input a_lm array");
+  MR_assert (alm_out.shape(1)==base_out.Num_Alms(), "bad size of output a_lm array");
 
-  if (theta!=0)
+  if (theta==0)
     {
-    MR_assert(lmax==base.Mmax(), "lmax and mmax must be equal");
-  
-    if (lmax>0) // deal with l==1
-      {
-      for (size_t icomp=0; icomp<ncomp; ++icomp)
-        {
-        auto t = T(-alm(icomp, base.index(1,0)).real()/sqrt(2.));
-        alm(icomp, base.index(1,1)) *= complex<T>(epsi[1]);
-        alm(icomp, base.index(1,0)).real(T(-alm(icomp, base.index(1,1)).imag()*sqrt(2.)));
-        alm(icomp, base.index(1,1)).imag(t);
-        alm(icomp, base.index(1,1)) *= complex<T>(polar(1.,-theta));
-        t = T(-alm(icomp, base.index(1,0)).real()/sqrt(2.));
-        alm(icomp, base.index(1,0)).real(T(-alm(icomp, base.index(1,1)).imag()*sqrt(2.)));
-        alm(icomp, base.index(1,1)).imag(t);
-        alm(icomp, base.index(1,1)) *= complex<T>(ephi[1]);
-        }
-      }
-    if (lmax>1)
-      {
-      constexpr size_t bunchsize=4;
-      for (size_t istart=0; istart<ncomp; istart+=bunchsize)
-        {
-        size_t istop=min(ncomp, istart+bunchsize);
-        auto subalm = alm.template subarray<2>({{istart,istop},{}});
-        auto ntrans = istop-istart;
-        if (ntrans==1)
-          rothelper<1>(base, subalm, nthreads, epsi, etheta, ephi);
-        else if (ntrans==2)
-          rothelper<2>(base, subalm, nthreads, epsi, etheta, ephi);
-        else if (ntrans==3)
-          rothelper<3>(base, subalm, nthreads, epsi, etheta, ephi);
-        else if (ntrans==4)
-          rothelper<4>(base, subalm, nthreads, epsi, etheta, ephi);
-        else
-          MR_fail("oops",ntrans);
-        }
-      }
-    }
-  else
-    {
+    size_t mlim = min(mmax_in, mmax_out);
     double ang = phi+psi;
     if (ang!=0)
       {
-      MultiExp<double,complex<double>> eang(-ang, lmax+1);
-      for (size_t m=0; m<=lmax; ++m)
+      MultiExp<double,complex<double>> eang(-ang, mlim+1);
+      for (size_t m=0; m<=mlim; ++m)
         {
         auto expang = complex<T>(eang[m]);
         for (size_t l=m; l<=lmax; ++l)
           for (size_t icomp=0; icomp<ncomp; ++icomp)
-            alm(icomp, base.index(l,m))*=expang;
+            alm_out(icomp, base_out.index(l,m)) = alm_in(icomp, base_in.index(l,m)) * expang;
         }
+      }
+    else
+      {
+      for (size_t m=0; m<=mlim; ++m)
+        for (size_t l=m; l<=lmax; ++l)
+          for (size_t icomp=0; icomp<ncomp; ++icomp)
+            alm_out(icomp, base_out.index(l,m)) = alm_in(icomp, base_in.index(l,m));
+      }
+
+    for (size_t m=mlim+1; m<=mmax_out; ++m)
+      for (size_t l=m; l<=lmax; ++l)
+        for (size_t icomp=0; icomp<ncomp; ++icomp)
+          alm_out(icomp, base_out.index(l,m)) = 0;
+    return;
+    }
+
+  MultiExp<double,complex<double>> epsi(-psi, mmax_in+1),
+                                   etheta(-theta, lmax+1),
+                                   ephi(-phi, mmax_out+1);
+
+  // deal with l=0
+  for (size_t icomp=0; icomp<ncomp; ++icomp)
+    alm_out(icomp, base_out.index(0,0)) = alm_in(icomp, base_in.index(0,0));
+
+  if (lmax>0) // deal with l==1
+    for (size_t icomp=0; icomp<ncomp; ++icomp)
+      {
+      T ain10 = alm_in(icomp, base_in.index(1,0)).real(); // no imaginary part
+      complex<T> ain11 = (mmax_in>0) ? alm_in(icomp, base_in.index(1,1))*complex<T>(epsi[1]) : 0;
+      complex<T> x11 = complex<T>(ain11.real(), T(-ain10/sqrt(2.)))*complex<T>(etheta[1]);
+      // out l=1, m=0
+      alm_out(icomp, base_out.index(1,0)) = complex<T>(T(-x11.imag()*sqrt(2.)), T(0));
+      // out l=1, m=1
+      if (mmax_out>0)
+        alm_out(icomp, base_out.index(1,1)) = complex<T>(x11.real(), ain11.imag()) * complex<T>(ephi[1]);
+      }
+  if (lmax>1) // deal with all l>1
+    {
+    constexpr size_t bunchsize=4;
+    for (size_t istart=0; istart<ncomp; istart+=bunchsize)
+      {
+      size_t istop=min(ncomp, istart+bunchsize);
+      auto subalm_in = alm_in.template subarray<2>({{istart,istop},{}});
+      auto subalm_out = alm_out.template subarray<2>({{istart,istop},{}});
+      auto ntrans = istop-istart;
+      if (ntrans==1)
+        rothelper<1>(base_in, subalm_in, base_out, subalm_out, nthreads, epsi, etheta, ephi);
+      else if (ntrans==2)
+        rothelper<2>(base_in, subalm_in, base_out, subalm_out, nthreads, epsi, etheta, ephi);
+      else if (ntrans==3)
+        rothelper<3>(base_in, subalm_in, base_out, subalm_out, nthreads, epsi, etheta, ephi);
+      else if (ntrans==4)
+        rothelper<4>(base_in, subalm_in, base_out, subalm_out, nthreads, epsi, etheta, ephi);
+      else
+        MR_fail("oops",ntrans);
       }
     }
   }
+
 }
 
 using detail_alm::Alm_Base;

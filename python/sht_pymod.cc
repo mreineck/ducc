@@ -89,29 +89,7 @@ template<typename T> static NpArr Py2_rotate_alm(const CNpArr &alm_in_,
   auto alm_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(alm_out_, "out");
   {
   py::gil_scoped_release release;
-  // if the output is a full a_lm set, we can do the rotation directly in there
-  bool work_in_output = mmax_out==lmax;
-  Alm_Base base(lmax,lmax);
-  auto alm = work_in_output ? alm_out : vmav<complex<T>,2>({ncomp, base.n_entries()}, UNINITIALIZED);
-  // copy input to work array (and fill up with zeros), if necessary
-  if (alm_in.data()!=alm.data())
-    {
-    for (size_t m=0; m<=mmax_in; ++m)
-      for (size_t l=m; l<=lmax; ++l)
-        for (size_t icomp=0; icomp<ncomp; ++icomp)
-          alm(icomp, base.index(l,m)) = alm_in(icomp, base_in.index(l,m));
-    for (size_t m=mmax_in+1; m<=lmax; ++m)
-      for (size_t l=m; l<=lmax; ++l)
-        for (size_t icomp=0; icomp<ncomp; ++icomp)
-          alm(icomp, base.index(l,m)) = 0;
-    }
-  rotate_alm(base, alm, psi, theta, phi, nthreads);
-  // copy relevant parts of the work array to output if necessary
-  if (!work_in_output)
-    for (size_t m=0; m<=mmax_out; ++m)
-      for (size_t l=m; l<=lmax; ++l)
-        for (size_t icomp=0; icomp<ncomp; ++icomp)
-          alm_out(icomp, base_out.index(l,m)) = alm(icomp, base.index(l,m));
+  rotate_alm(base_in, alm_in, base_out, alm_out, psi, theta, phi, nthreads);
   }
   return alm_out_;
   }
