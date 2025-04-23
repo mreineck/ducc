@@ -1,3 +1,10 @@
+0.38.0:
+- sht:
+  - `rotate_alm` can now transform several sets of `a_lm` simultaneously and
+    avoids unnecessary operations if `mmax` of input and/or output is lower
+    than `lmax`.
+
+
 0.37.1:
 - general:
   - disable all interface functions with `long double` parameters when
