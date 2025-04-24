@@ -89,9 +89,9 @@ class Bench12:
             out = plan.nu2u(points=points, forward=True, verbosity=0, out=out)
             res["ducc_1_planned_time_exec"] = time()-t0
             res["ducc_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-            print(f"ducc0,     planned, type 1: time={res["ducc_1_planned_time_exec"]}, L2 error={res["ducc_1_planned_err"]}")
+            print(f"ducc0,     planned, type 1: time={res['ducc_1_planned_time_exec']}, L2 error={res['ducc_1_planned_err']}")
             del plan, out
-    
+
             out=np.ones(shape=(npoints,), dtype=dtype)
             t0 = time()
             plan = ducc0.nufft.plan(nu2u=False, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
@@ -100,7 +100,7 @@ class Bench12:
             out = plan.u2nu(grid=values, forward=True, verbosity=0, out=out)
             res["ducc_2_planned_time_exec"] = time()-t0
             res["ducc_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-            print(f"ducc0,     planned, type 2: time={res["ducc_2_planned_time_exec"]}, L2 error={res["ducc_2_planned_err"]}")
+            print(f"ducc0,     planned, type 2: time={res['ducc_2_planned_time_exec']}, L2 error={res['ducc_2_planned_err']}")
             del plan, out
 
         if do_unplanned:
@@ -109,15 +109,15 @@ class Bench12:
             out = ducc0.nufft.nu2u(points=points, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
             res["ducc_1_unplanned_time_full"] = time()-t0
             res["ducc_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-            print(f"ducc0,   unplanned, type 1: time={res["ducc_1_unplanned_time_full"]}, L2 error={res["ducc_1_unplanned_err"]}")
+            print(f"ducc0,   unplanned, type 1: time={res['ducc_1_unplanned_time_full']}, L2 error={res['ducc_1_unplanned_err']}")
             del out
-    
+
             out=np.ones(shape=(npoints,), dtype=dtype)
             t0 = time()
             out = ducc0.nufft.u2nu(grid=values, coord=coord, forward=True, epsilon=epsilon, nthreads=nthreads, verbosity=0, out=out)
             res["ducc_2_unplanned_time_full"] = time()-t0
             res["ducc_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-            print(f"ducc0,   unplanned, type 2: time={res["ducc_2_unplanned_time_full"]}, L2 error={res["ducc_2_unplanned_err"]}")
+            print(f"ducc0,   unplanned, type 2: time={res['ducc_2_unplanned_time_full']}, L2 error={res['ducc_2_unplanned_err']}")
             del out
 
         if not have_finufft:
@@ -140,9 +140,9 @@ class Bench12:
             out = plan.execute(points, out=out)
             res["finufft_1_planned_time_exec"] = time()-t0
             res["finufft_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-            print(f"Finufft,   planned, type 1: time={res["finufft_1_planned_time_exec"]}, L2 error={res["finufft_1_planned_err"]}")
+            print(f"Finufft,   planned, type 1: time={res['finufft_1_planned_time_exec']}, L2 error={res['finufft_1_planned_err']}")
             del plan, out
-    
+
             t0 = time()
             plan = finufft.Plan(2, shape, 1, eps=epsilon, isign=-1,
                                 dtype="complex64" if singleprec else "complex128",
@@ -154,7 +154,7 @@ class Bench12:
             out = plan.execute(values, out=out)
             res["finufft_2_planned_time_exec"] = time()-t0
             res["finufft_2_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-            print(f"Finufft,   planned, type 2: time={res["finufft_2_planned_time_exec"]}, L2 error={res["finufft_2_planned_err"]}")
+            print(f"Finufft,   planned, type 2: time={res['finufft_2_planned_time_exec']}, L2 error={res['finufft_2_planned_err']}")
             del plan, out
 
         if do_unplanned:
@@ -163,15 +163,15 @@ class Bench12:
             out = func1[ndim-1](*coord, points, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
             res["finufft_1_unplanned_time_full"] = time()-t0
             res["finufft_1_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
-            print(f"Finufft, unplanned, type 1: time={res["finufft_1_unplanned_time_full"]}, L2 error={res["finufft_1_unplanned_err"]}")
+            print(f"Finufft, unplanned, type 1: time={res['finufft_1_unplanned_time_full']}, L2 error={res['finufft_1_unplanned_err']}")
             del out
-    
+
             out = np.ones((npoints,), dtype=dtype)
             t0=time()
             out = func2[ndim-1](*coord, values, out=out, eps=epsilon, isign=-1, nthreads=nthreads, debug=0)
             res["finufft_2_unplanned_time_full"] = time()-t0
             res["finufft_2_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial_2)
-            print(f"Finufft, unplanned, type 2: time={res["finufft_2_unplanned_time_full"]}, L2 error={res["finufft_2_unplanned_err"]}")
+            print(f"Finufft, unplanned, type 2: time={res['finufft_2_unplanned_time_full']}, L2 error={res['finufft_2_unplanned_err']}")
             del out
 
         return res
@@ -239,7 +239,7 @@ class Bench3:
             out = plan.exec(forward=True,points_in=points,points_out=out)
             res["ducc_3_planned_time_exec"] = time()-t0
             res["ducc_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-            print(f"ducc0,     planned, type 3: time={res["ducc_3_planned_time_exec"]}, L2 error={res["ducc_3_planned_err"]}")
+            print(f"ducc0,     planned, type 3: time={res['ducc_3_planned_time_exec']}, L2 error={res['ducc_3_planned_err']}")
             del plan, out
 
         if do_unplanned:
@@ -248,7 +248,7 @@ class Bench3:
             out = ducc0.nufft.experimental.nu2nu(points_in=points, coord_in=coord_in, coord_out=coord_out, forward=True, epsilon=epsilon, verbosity=0, nthreads=nthreads, points_out=out)
             res["ducc_3_unplanned_time_full"] = time()-t0
             res["ducc_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-            print(f"ducc0,   unplanned, type 3: time={res["ducc_3_unplanned_time_full"]}, L2 error={res["ducc_3_unplanned_err"]}")
+            print(f"ducc0,   unplanned, type 3: time={res['ducc_3_unplanned_time_full']}, L2 error={res['ducc_3_unplanned_err']}")
             del out
 
         if not have_finufft:
@@ -267,7 +267,7 @@ class Bench3:
             out = plan.execute(points, out=out)
             res["finufft_3_planned_time_exec"] = time()-t0
             res["finufft_3_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-            print(f"finufft,   planned, type 3: time={res["finufft_3_planned_time_exec"]}, L2 error={res["finufft_3_planned_err"]}")
+            print(f"finufft,   planned, type 3: time={res['finufft_3_planned_time_exec']}, L2 error={res['finufft_3_planned_err']}")
             del plan, out
 
         if do_unplanned:
@@ -277,7 +277,7 @@ class Bench3:
             out = func[ndim-1](*coord_in, points, *coord_out, out=out, eps=epsilon, isign=-1, nthreads=nthreads)
             res["finufft_3_unplanned_time_full"] = time()-t0
             res["finufft_3_unplanned_err"] = ducc0.misc.l2error(out, self._res_fiducial)
-            print(f"finufft, unplanned, type 3: time={res["finufft_3_unplanned_time_full"]}, L2 error={res["finufft_3_unplanned_err"]}")
+            print(f"finufft, unplanned, type 3: time={res['finufft_3_unplanned_time_full']}, L2 error={res['finufft_3_unplanned_err']}")
             del out
 
         return res
