@@ -594,7 +594,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
 
       auto [kidx_, dims_, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
-        (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, coord_in.shape(0), nthreads);
+        (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out,
+         coord_in.shape(0), coord_out.shape(0), nthreads);
       kidx = kidx_;
       dims = dims_;
 
@@ -629,7 +630,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         period_out.push_back(dims[d]/gamma[d]);
 
       nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out, dims,
-        epsilon, nthreads, sigma_min, sigma_max, period_out, true, mid_out);
+        epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
 
       auto krn2 = selectKernel(kidx);
       const auto &corr(krn2->Corr()); 
@@ -734,7 +735,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
 
   timers.poppush("get spreading parameters");
   auto [kidx, dims, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
-    (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out, points_in.shape(0), nthreads);
+    (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out,
+     points_in.shape(0), points_out.shape(0), nthreads);
 
   //if (verbosity>0)
     //{
@@ -787,7 +789,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   for (size_t d=0; d<ndim; ++d)
     period_out.push_back(dims[d]/gamma[d]);
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
-    epsilon, nthreads, sigma_min, sigma_max, period_out, true, mid_out);
+    epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
   nufft.u2nu(forward, 0, grid, coord_out, points_out); 
   }
 
