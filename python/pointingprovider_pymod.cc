@@ -172,7 +172,7 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       : PointingProvider<T>(t0, freq, to_cmav<T,2>(quat), nthreads_) {}
 
     template<typename T2> NpArr py2get_rotated_quaternions_out(double t0, double freq,
-      const CNpArr &quat, bool rot_left, NpArr &out)
+      const CNpArr &quat, bool rot_left, const NpArr &out)
       {
       auto res2 = to_vmav<T2,2>(out);
       auto quat2 = to_cmav<T,1>(quat);
@@ -183,7 +183,7 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       return out;
       }
     NpArr pyget_rotated_quaternions_out(double t0, double freq,
-      const CNpArr &quat, bool rot_left, NpArr &out)
+      const CNpArr &quat, bool rot_left,const NpArr &out)
       {
       if (isPyarr<double>(out))
         return py2get_rotated_quaternions_out<double>(t0, freq, quat, rot_left, out);
