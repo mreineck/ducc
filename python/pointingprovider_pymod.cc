@@ -65,8 +65,8 @@ template<typename T> class PointingProvider
     template<typename T2> void get_rotated_quaternions(double t0, double freq,
       const cmav<T,1> &rot, const vmav<T2,2> &out, bool rot_left)
       {
-      double tmp = fmod(t0-t0_, nquat*freq_);
-      if (tmp<0) tmp += nquat*freq_;
+      double tmp = fmod(t0-t0_, nquat/freq_);
+      if (tmp<0) tmp += nquat/freq_;
       t0 = t0_ + tmp;
       MR_assert(rot.shape(0)==4, "need 4 entries in quaternion");
       MR_assert(out.shape(1)==4, "need 4 entries in quaternion");
@@ -142,7 +142,7 @@ template<typename T> class PointingProvider
             w2 = sin(frac*omega)*xsin;
             }
           else
-            {  // appoximate sin(x)==x
+            {  // approximate sin(x)==x
             w1 = 1.-frac;
             w2 = frac;
             }
@@ -172,30 +172,30 @@ template<typename T> class PyPointingProvider: public PointingProvider<T>
       : PointingProvider<T>(t0, freq, to_cmav<T,2>(quat), nthreads_) {}
 
     template<typename T2> NpArr py2get_rotated_quaternions_out(double t0, double freq,
-      const CNpArr &quat, bool rot_left, const NpArr &out)
+      const CNpArr &rot, bool rot_left, const NpArr &out)
       {
-      auto res2 = to_vmav<T2,2>(out);
-      auto quat2 = to_cmav<T,1>(quat);
+      auto out2 = to_vmav<T2,2>(out);
+      auto rot2 = to_cmav<T,1>(rot);
       {
       py::gil_scoped_release release;
-      get_rotated_quaternions(t0, freq, quat2, res2, rot_left);
+      get_rotated_quaternions(t0, freq, rot2, out2, rot_left);
       }
       return out;
       }
     NpArr pyget_rotated_quaternions_out(double t0, double freq,
-      const CNpArr &quat, bool rot_left,const NpArr &out)
+      const CNpArr &rot, bool rot_left, const NpArr &out)
       {
       if (isPyarr<double>(out))
-        return py2get_rotated_quaternions_out<double>(t0, freq, quat, rot_left, out);
+        return py2get_rotated_quaternions_out<double>(t0, freq, rot, rot_left, out);
       else if (isPyarr<float>(out))
-        return py2get_rotated_quaternions_out<float>(t0, freq, quat, rot_left, out);
+        return py2get_rotated_quaternions_out<float>(t0, freq, rot, rot_left, out);
       MR_fail("type matching failed: 'out' has neither type 'r4' nor 'r8'");
       }
     NpArr pyget_rotated_quaternions(double t0, double freq,
-      const CNpArr &quat, size_t nval, bool rot_left)
+      const CNpArr &rot, size_t nval, bool rot_left)
       {
       auto res = make_Pyarr<T>({nval,4});
-      return pyget_rotated_quaternions_out(t0, freq, quat, rot_left, res);
+      return pyget_rotated_quaternions_out(t0, freq, rot, rot_left, res);
       }
   };
 

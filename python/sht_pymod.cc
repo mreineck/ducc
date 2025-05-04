@@ -1152,6 +1152,11 @@ numpy.ndarray(([ncomp,] ncoeff_out,), same dtype and shape as `alm`)
     (0,0), (1,0), (2,0), ... (lmax,0), (1,1), (2,1), ..., (lmax, mmax_out)
     Identical to `out`, if it was provided
     ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
+
+Notes
+-----
+It is the user's responsibility to choose a sufficiently high value for
+mmax_out. For every mmax_out smaller than lmax, information may be lost.
 )""";
 
 constexpr const char *alm2leg_DS = R"""(

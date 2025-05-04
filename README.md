@@ -26,6 +26,12 @@ The latest version of DUCC can be obtained by cloning the repository via
 
     git clone https://gitlab.mpcdf.mpg.de/mtr/ducc.git
 
+It can be installed via
+
+    pip3 install .
+
+with optional additional flags, depending on personal preferences.
+
 ### Licensing terms
 - All source code in this package is released under the terms of the GNU
   General Public License v2 or later.
