@@ -4,6 +4,9 @@
     avoids unnecessary operations if `mmax` of input and/or output is lower
     than `lmax`.
 
+- pointingprovider:
+  - fixed a bug that was introduced in version 0.35.
+
 
 0.37.1:
 - general:
