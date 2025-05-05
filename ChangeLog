@@ -4,6 +4,10 @@
     avoids unnecessary operations if `mmax` of input and/or output is lower
     than `lmax`.
 
+- nufft:
+  - fix cost model for type 3 transforms: this should reduce memory consumption
+    and slightly improve performance
+
 - pointingprovider:
   - fixed a bug that was introduced in version 0.35.
 
