@@ -1912,6 +1912,13 @@ template<typename T> void alm2leg(  // associated Legendre transform
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 
+  // FIXME: we want to make sre here that "leg" is actually mapped to RAM
+  // (if it isn't, the parallel accesses from different threads will cause
+  // it to be paged in in a prett inefficient way.)
+  // For now, we do this by write-accessing all entries, but there is probably
+  // a better way.
+  mav_apply([](auto &v){v=1;}, nthreads, leg);
+
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
