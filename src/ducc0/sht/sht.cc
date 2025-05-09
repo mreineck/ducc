@@ -1830,6 +1830,16 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
+template<typename T> static void page_in(const vfmav<T> &arr, size_t nthreads)
+  {
+  ptrdiff_t pagestride = ptrdiff_t(4096/sizeof(T));
+  vector<slice> slc;
+  for (auto s: arr.stride())
+    slc.push_back({0,MAXIDX,max<ptrdiff_t>(1,pagestride/abs(s))});
+  auto sub = subarray(arr,slc);
+  mav_apply([](auto &v){v=1;}, nthreads, sub);
+  }
+
 template<typename T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   const vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
@@ -1912,12 +1922,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 
-  // FIXME: we want to make sre here that "leg" is actually mapped to RAM
-  // (if it isn't, the parallel accesses from different threads will cause
-  // it to be paged in in a prett inefficient way.)
-  // For now, we do this by write-accessing all entries, but there is probably
-  // a better way.
-  mav_apply([](auto &v){v=1;}, nthreads, leg);
+  page_in(leg.to_fmav(), nthreads);
 
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
@@ -2131,6 +2136,8 @@ template<typename T> void map2leg(  // FFT
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
+
+  page_in(leg.to_fmav(), nthreads);
 
 //  bool well_behaved=true;
 //  if (nrings==1) well_behaved=false;
