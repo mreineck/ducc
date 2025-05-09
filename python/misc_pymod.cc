@@ -465,31 +465,29 @@ double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
 
 static NpArr Py_GL_weights(size_t nlat, size_t nlon)
   {
-  auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_vmav<double,1>(res);
+  auto [res_, res] = make_Pyarr_and_vmav<double,1>({nlat});
   {
   py::gil_scoped_release release;
   GL_Integrator integ(nlat);
   auto wgt = integ.weights();
-  for (size_t i=0; i<res2.shape(0); ++i)
-    res2(i) = wgt[i]*twopi/nlon;
+  for (size_t i=0; i<res.shape(0); ++i)
+    res(i) = wgt[i]*twopi/nlon;
   }
-  return res;
+  return res_;
   }
 
 static NpArr Py_GL_thetas(size_t nlat)
   {
-  auto res = make_Pyarr<double>({nlat});
-  auto res2 = to_vmav<double,1>(res);
+  auto [res_, res] = make_Pyarr_and_vmav<double,1>({nlat});
   {
   py::gil_scoped_release release;
 
   GL_Integrator integ(nlat);
   auto th = integ.thetas();
   for (size_t i=0; i<nlat; ++i)
-    res2(i) = th[nlat-1-i];
+    res(i) = th[nlat-1-i];
   }
-  return res;
+  return res_;
   }
 
 template<typename T> static NpArr Py2_transpose(const CNpArr &in,
@@ -741,8 +739,7 @@ class Py_OofaNoise
     NpArr filterGaussian(const CNpArr &rnd_)
       {
       auto rnd = to_cmav<double,1>(rnd_);
-      auto res_ = make_Pyarr<double>({rnd.shape(0)});
-      auto res = to_vmav<double,1>(res_);
+      auto [res_, res] = make_Pyarr_and_vmav<double,1>({rnd.shape(0)});
       {
       py::gil_scoped_release release;
 
@@ -1519,8 +1516,7 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
   size_t ncoef = wigner3j_ncoef_int(l2, l3, m2, m3);
-  auto res_ = make_Pyarr<double>({ncoef});
-  auto res = to_vmav<double,1>(res_);
+  auto [res_, res] = make_Pyarr_and_vmav<double,1>({ncoef});
   int l1min;
   wigner3j_int (l2, l3, m2, m3, l1min, res);
   return py::make_tuple(l1min, res_);
@@ -1829,6 +1825,7 @@ void add_misc(py::module_ &msup)
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
   m.def("resize_thread_pool", resize_thread_pool, resize_thread_pool_DS, "nthreads_new"_a);
   m.def("preallocate_memory", preallocate_memory, "gbytes"_a);
+  m.def("set_heap_trim_limit", set_heap_trim_limit, "gbytes"_a);
 
   m.def("quat2ptg", quat2ptg, quat2ptg_DS, "quat"_a, "nthreads"_a=1, "out"_a=None);
   m.def("ptg2quat", ptg2quat, ptg2quat_DS, "ptg"_a, "nthreads"_a=1, "out"_a=None);
