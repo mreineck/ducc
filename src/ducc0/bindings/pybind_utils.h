@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <optional>
 #include <variant>
+#include <tuple>
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -258,6 +259,20 @@ template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
 template<typename T, size_t ndim> NpArr make_Pyarr
   (const array<size_t,ndim> &dims, bool zero=false)
   { return make_Pyarr<T>(shape_t(dims.begin(), dims.end()), zero); }
+template<typename T, size_t ndim> auto make_Pyarr_and_vmav
+  (const shape_t &dims, bool zero=false)
+  {
+  auto res_py = make_Pyarr<T>(dims, zero);
+  auto res_mav = to_vmav<T,ndim>(res_py);
+  return std::make_tuple(res_py, res_mav);
+  }
+template<typename T> auto make_Pyarr_and_vfmav
+  (const shape_t &dims, bool zero=false)
+  {
+  auto res_py = make_Pyarr<T>(dims, zero);
+  auto res_vfmav = to_vfmav<T>(res_py);
+  return std::make_tuple(res_py, res_vfmav);
+  }
 
 template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zero=false)
   {
@@ -308,6 +323,20 @@ template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
     MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
   return val;
   }
+template<typename T> auto get_OptNpArr_and_vfmav(const OptNpArr &arr_,
+  const shape_t &dims, const string &name="")
+  {
+  if (!arr_) return make_Pyarr_and_vfmav<T>(dims, false);
+  const auto spec = makeSpec(name);
+  auto val = arr_.value();
+  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
+  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
+  auto res_vfmav = to_vfmav<T>(val);
+  return std::make_tuple(val, res_vfmav);
+  }
+  
 
 template<typename T> NpArr get_optional_Pyarr_minshape
   (const OptNpArr &arr_, const shape_t &dims, const string &name="")
@@ -374,8 +403,10 @@ using detail_pybind::OptCNpArr;
 using detail_pybind::None;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
+using detail_pybind::make_Pyarr_and_vmav;
 using detail_pybind::make_noncritical_Pyarr;
 using detail_pybind::get_optional_Pyarr;
+using detail_pybind::get_OptNpArr_and_vfmav;
 using detail_pybind::get_optional_Pyarr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_cfmav;

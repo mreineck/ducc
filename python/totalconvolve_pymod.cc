@@ -177,15 +177,14 @@ template<typename T> class Py_Interpolator
       auto pphi = subarray<1>(ptg2, {{},{1}});
       auto ppsi = subarray<1>(ptg2, {{},{2}});
       size_t ncomp = cube.shape(0);
-      auto res = make_Pyarr<T>({ncomp,ptg2.shape(0)});
-      auto res2 = to_vmav<T,2>(res);
+      auto [res_, res] = make_Pyarr_and_vmav<T,2>({ncomp,ptg2.shape(0)});
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
         conv.interpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
-          ptheta, pphi, ppsi, subarray<1>(res2, {{i},{}}));
+          ptheta, pphi, ppsi, subarray<1>(res, {{i},{}}));
       }
-      return res;
+      return res_;
       }
     NpArr Py_Interpol(const CNpArr &ptg) const
       {
@@ -231,8 +230,7 @@ template<typename T> class Py_Interpolator
       for (size_t i=0; i<cube.shape(0); ++i)
         conv.deprepPsi(subarray<3>(cube, {{i},{},{},{}}));
       }
-      auto res = make_Pyarr<complex<T>>({ncomp, Alm_Base::Num_Alms(lmax, lmax)});
-      auto vslm = to_vmav<complex<T>,2>(res);
+      auto [vslm_, vslm] = make_Pyarr_and_vmav<complex<T>,2>({ncomp, Alm_Base::Num_Alms(lmax, lmax)});
       {
       py::gil_scoped_release release;
       mav_apply([](complex<T> &v){v=T(0);}, 1, vslm);
@@ -252,7 +250,7 @@ template<typename T> class Py_Interpolator
           conv.updateSlm(vslm, vblm, k, subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}}));
         }
       }
-      return res;
+      return vslm_;
       }
   };
 

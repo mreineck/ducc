@@ -277,14 +277,13 @@ class Pyhpbase
       py::gil_scoped_release release;
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       }
-      auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
-      auto oref = to_vmav<int64_t,2>(res);
+      auto [res_, res] = make_Pyarr_and_vmav<int64_t,2>({pixset.nranges(),2});
       for (size_t i=0; i<pixset.nranges(); ++i)
         {
-        oref(i,0)=pixset.ivbegin(i);
-        oref(i,1)=pixset.ivend(i);
+        res(i,0)=pixset.ivbegin(i);
+        res(i,1)=pixset.ivend(i);
         }
-      return res;
+      return res_;
       }
     NpArr query_disc(const CNpArr &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,
@@ -294,14 +293,10 @@ class Pyhpbase
       MR_assert(base.Scheme()==RING, "RING scheme required for SHTs");
       auto nside = base.Nside();
       auto nrings = size_t(4*nside-1);
-      auto theta_= make_Pyarr<double>(shape_t({nrings}));
-      auto theta = to_vmav<double,1>(theta_);
-      auto phi0_ = make_Pyarr<double>(shape_t({nrings}));
-      auto phi0 = to_vmav<double,1>(phi0_);
-      auto nphi_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto nphi = to_vmav<size_t,1>(nphi_);
-      auto ringstart_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto ringstart = to_vmav<size_t,1>(ringstart_);
+      auto [theta_, theta] = make_Pyarr_and_vmav<double,1>({nrings});
+      auto [phi0_, phi0] = make_Pyarr_and_vmav<double,1>({nrings});
+      auto [nphi_, nphi] = make_Pyarr_and_vmav<size_t,1>({nrings});
+      auto [ringstart_, ringstart] = make_Pyarr_and_vmav<size_t,1>({nrings});
       {
       py::gil_scoped_release release;
       for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)

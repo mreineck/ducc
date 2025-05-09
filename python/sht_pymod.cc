@@ -156,8 +156,7 @@ static cmav<size_t,1> get_mstart(size_t lmax, const OptSizeT &mmax_, const OptCN
 
 NpArr Py_get_gridweights(const string &type, size_t ntheta)
   {
-  auto wgt_ = make_Pyarr<double>({ntheta});
-  auto wgt = to_vmav<double,1>(wgt_);
+  auto [wgt_, wgt] = make_Pyarr_and_vmav<double,1>({ntheta});
   {
   py::gil_scoped_release release;
   get_gridweights(type, wgt);
@@ -929,8 +928,7 @@ template<typename T> class Py_sharpjob
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(alm_.size())==n_alm(),
         "incorrect size of a_lm array");
-      auto map_=make_Pyarr<double>({size_t(npix_)});
-      auto map=to_vmav<double,1>(map_);
+      auto [map_, map] = make_Pyarr_and_vmav<double,1>({size_t(npix_)});
       auto alm=to_cmav<complex<double>,1>(CNpArr(alm_));
       auto ar(alm.prepend_1());
       if (geom=="HP")
@@ -938,7 +936,6 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
-        auto theta_= make_Pyarr<double>({nrings});
         vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
         vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
@@ -970,8 +967,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
-      auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
-      auto alm=to_vmav<complex<double>,1>(alm_);
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())});
       auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(CNpArr(map_));
       if (geom=="HP")
@@ -979,7 +975,6 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
-        auto theta_= make_Pyarr<double>({nrings});
         vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
         vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
@@ -1011,8 +1006,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
-      auto alm_=make_Pyarr<complex<double>>({size_t(n_alm())});
-      auto alm=to_vmav<complex<double>,1>(alm_);
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())});
       auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(CNpArr(map_));
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
@@ -1024,8 +1018,7 @@ template<typename T> class Py_sharpjob
     NpArr alm2map_spin (const CNpArrT<complex<double>> &alm_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      auto map_=make_Pyarr<double>({2, size_t(npix_)});
-      auto map=to_vmav<double,2>(map_);
+      auto [map_,map] = make_Pyarr_and_vmav<double,2>({2, size_t(npix_)});
       auto alm=to_cmav<complex<double>,2>(CNpArr(alm_));
       MR_assert((alm.shape(0)==2)&&(alm.shape(1)==size_t(n_alm())),
         "incorrect size of a_lm array");
@@ -1034,7 +1027,6 @@ template<typename T> class Py_sharpjob
         auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
         Healpix_Base2 base(nside_, RING, SET_NSIDE);
         auto nrings = size_t(4*nside_-1);
-        auto theta_= make_Pyarr<double>({nrings});
         vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
         vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
         for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
@@ -1065,8 +1057,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
-      auto alm_=make_Pyarr<complex<double>>({2, size_t(n_alm())});
-      auto alm=to_vmav<complex<double>,2>(alm_);
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,2>({2, size_t(n_alm())});
       auto map=to_cmav<double,2>(CNpArr(map_));
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));
