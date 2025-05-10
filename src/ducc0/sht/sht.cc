@@ -1830,14 +1830,14 @@ bool downsampling_ok(const cmav<double,1> &theta, size_t lmax,
   return true;
   }
 
-template<typename T> static void page_in(const vfmav<T> &arr, size_t nthreads)
+template<typename T> static void page_in(const vfmav<T> &arr)
   {
   ptrdiff_t pagestride = ptrdiff_t(4096/sizeof(T));
   vector<slice> slc;
   for (auto s: arr.stride())
     slc.push_back({0,MAXIDX,max<ptrdiff_t>(1,pagestride/abs(s))});
   auto sub = subarray(arr,slc);
-  mav_apply([](auto &v){v=1;}, nthreads, sub);
+  mav_apply([](auto &v){v=1;}, 1, sub);
   }
 
 template<typename T> void alm2leg(  // associated Legendre transform
@@ -1922,7 +1922,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
 
-  page_in(leg.to_fmav(), nthreads);
+  page_in(leg.to_fmav());
 
   ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
@@ -2137,7 +2137,7 @@ template<typename T> void map2leg(  // FFT
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
 
-  page_in(leg.to_fmav(), nthreads);
+  page_in(leg.to_fmav());
 
 //  bool well_behaved=true;
 //  if (nrings==1) well_behaved=false;
@@ -2778,6 +2778,14 @@ template<typename T> void analysis_2d(
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+#if 1
+    vmav<T,1> xnphi({nphi.shape(0)});
+    for (size_t i=0; i<nphi.shape(0); ++i)
+      xnphi(i) = T(1./nphi(i));
+    auto xnphi2 = xnphi.template extend_and_broadcast<3>(legi.shape(), {1});
+    mav_apply([](auto &a, const auto &b){a*=b;}, nthreads, legi, xnphi2);
+#else
+    // FIXME: serial section!
     for (size_t i=0; i<legi.shape(0); ++i)
       for (size_t j=0; j<legi.shape(1); ++j)
         {
@@ -2785,6 +2793,7 @@ template<typename T> void analysis_2d(
         for (size_t k=0; k<legi.shape(2); ++k)
           legi(i,j,k) *= wgt1;
         }
+#endif
 
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
     vmav<double,1> newtheta({ntheta_leg}, UNINITIALIZED);
