@@ -11,6 +11,10 @@
 - pointingprovider:
   - fixed a bug that was introduced in version 0.35.
 
+- general:
+  - increased the minimum required version for `pybind11` to avoid problematic
+    interactions with recent C++ compilers.
+
 
 0.37.1:
 - general:
