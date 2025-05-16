@@ -246,8 +246,14 @@ Returns
 float :
     Output value
 )""";
+template <typename T> struct redSum {
+  T val;
+  redSum() : val(0) {}
+  redSum(T val0) : val(val0) {}
+  void reduceWith(const redSum &other) { val += other.val; }
+};
 template<typename T> static double Py2_LogUnnormalizedGaussProbability
-  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t nthreads)
   {
   const auto a = to_cfmav<complex<T>>(a_);
   const auto b = to_cfmav<complex<T>>(b_);
@@ -255,15 +261,15 @@ template<typename T> static double Py2_LogUnnormalizedGaussProbability
   double res = 0;
   {
   py::gil_scoped_release release;
-  mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
+  res = mav_apply_reduce<redSum<T>>([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
     {
-    res += norm(v1-v2)*v3;
-    }, 1, a, b, c);
+    return redSum(norm(v1-v2)*v3);
+    }, nthreads, a, b, c).val;
   }
   return 0.5*res;
   }
 template<typename T> static double Py3_LogUnnormalizedGaussProbability
-  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, size_t nthreads)
   {
   const auto a = to_cfmav<T>(a_);
   const auto b = to_cfmav<T>(b_);
@@ -271,11 +277,11 @@ template<typename T> static double Py3_LogUnnormalizedGaussProbability
   double res = 0;
   {
   py::gil_scoped_release release;
-  mav_apply([&res](const T &v1, const T &v2, const T &v3)
+  res = mav_apply_reduce<redSum<T>>([](const T &v1, const T &v2, const T &v3)
     {
     auto diff = v1-v2;
-    res += diff*diff*v3;
-    }, 1, a, b, c);
+    return redSum(diff*diff*v3);
+    }, nthreads, a, b, c).val;
   }
   return 0.5*res;
   }
@@ -319,7 +325,7 @@ list of float and numpy.ndarray :
     `a`.
 )""";
 template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
-  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<complex<T>>(a_);
   const auto b = to_cfmav<complex<T>>(b_);
@@ -329,12 +335,13 @@ template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeri
   double res = 0;
   {
   py::gil_scoped_release release;
-  mav_apply([&res](const complex<T> &v1, const complex<T> &v2, const T &v3, complex<T> &o)
+  res = mav_apply_reduce<redSum<T>>([](const complex<T> &v1, const complex<T> &v2,
+                                       const T &v3, complex<T> &o)
     {
     const auto diff = v1-v2;
-    res += norm(diff)*v3;
     o = diff*v3;
-    }, 1, a, b, c, out);
+    return redSum(norm(diff)*v3);
+    }, nthreads, a, b, c, out).val;
   }
   py::list lst;
   lst.append(0.5*res);
@@ -342,7 +349,7 @@ template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeri
   return lst;
   }
 template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
-  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t /*nthreads*/)
+  (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<T>(a_);
   const auto b = to_cfmav<T>(b_);
@@ -352,12 +359,12 @@ template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeri
   double res = 0;
   {
   py::gil_scoped_release release;
-  mav_apply([&res](const T &v1, const T &v2, const T &v3, T &o)
+  res = mav_apply_reduce<redSum<T>>([](const T &v1, const T &v2, const T &v3, T &o)
     {
     const auto diff = v1-v2;
-    res += diff*diff*v3;
     o = diff*v3;
-    }, 1, a, b, c, out);
+    return redSum(diff*diff*v3);
+    }, nthreads, a, b, c, out).val;
   }
   py::list lst;
   lst.append(0.5*res);
