@@ -11,6 +11,10 @@
 - pointingprovider:
   - fixed a bug that was introduced in version 0.35.
 
+- healpix:
+  - most Healpix support functions now take an optional "out" argument, which
+    will be used to store the output values if provided
+
 - general:
   - increased the minimum required version for `pybind11` to avoid problematic
     interactions with recent C++ compilers.
