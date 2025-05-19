@@ -19,7 +19,7 @@
 
           inherit src;
           postPatch = ''
-            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.6.0", ' ""
+            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6", ' ""
           '';
 
           DUCC0_USE_NANOBIND = "";
@@ -38,10 +38,10 @@
             pytestCheckHook
             scipy
             pytest-xdist
+            hypothesis
           ];
           pytestFlagsArray = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
-
 
           postInstall = ''
             mkdir -p $out/include/ducc0
@@ -57,8 +57,15 @@
         # with, e.g., `pip3 install .`
         devShells.default = pkgs.mkShell {
           buildInputs = ducc.dependencies ++ ducc.build-system
-            ++ (with py-pkgs; [ venvShellHook matplotlib ]);
+            ++ (with py-pkgs; [ venvShellHook matplotlib pip pytest pybind11 ]);
           venvDir = ".nix-venv";
+
+          shellHook = ''
+            export PIP_PREFIX=$(pwd)/_build/pip_packages
+            export PYTHONPATH="$PIP_PREFIX/${py-pkgs.python.sitePackages}:$PYTHONPATH"
+            export PATH="$PIP_PREFIX/bin:$PATH"
+            unset SOURCE_DATE_EPOCH
+          '';
         };
 
       });
