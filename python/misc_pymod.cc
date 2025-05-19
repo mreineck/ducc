@@ -164,7 +164,7 @@ template<typename T, typename I> void special_add_at
     *(&vout+idx*axstr) += vin;
     }, 1, in, idx1, out1);
   }
-template<typename T> NpArr Py2_special_add_at(NpArr &a_, size_t axis,
+template<typename T> NpArr Py2_special_add_at(const NpArr &a_, size_t axis,
                                               const CNpArrT<int64_t> &index_,
                                               const CNpArr &b_)
   {
@@ -174,7 +174,7 @@ template<typename T> NpArr Py2_special_add_at(NpArr &a_, size_t axis,
   special_add_at(b, axis, index, a);
   return a_;
   }
-NpArr Py_special_add_at(NpArr &a, size_t axis,
+NpArr Py_special_add_at(const NpArr &a, size_t axis,
                         const CNpArrT<int64_t> &index,
                         const CNpArr &b)
   {
