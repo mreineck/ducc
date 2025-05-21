@@ -87,7 +87,7 @@ template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
 #endif
 
-template<size_t ndim> constexpr inline size_t max_ntile=-1;
+template<size_t ndim> constexpr inline size_t max_ntile=~size_t(0);
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
 template<> constexpr inline size_t max_ntile<2> = (uint32_t(1<<16))-10;
 template<> constexpr inline size_t max_ntile<3> = (uint32_t(1<<10))-10;
