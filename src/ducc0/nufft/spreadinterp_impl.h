@@ -238,7 +238,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
           const vector<double> &corigin_=vector<double>()) \
       : parent(coords.shape(0), over_shape_, kidx, nthreads_, \
                periodicity, corigin_), \
-        coords_sorted({coords.shape(0),ndim},UNINITIALIZED) \
+        coords_sorted({coords.shape(0),ndim},PAGE_IN(nthreads)) \
       { \
       build_index(coords); \
       sort_coords(coords, coords_sorted); \

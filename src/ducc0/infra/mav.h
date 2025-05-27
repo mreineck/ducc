@@ -75,6 +75,28 @@ using namespace std;
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 
+static void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
+  {
+  if (sz==0) return;
+// FIXME: can we determine the real page size for the underlying chunk of memory?
+  size_t pagesize = 4096;
+  size_t npages = (sz+pagesize-1)/pagesize;
+// FIXME: perhaps reduce nthreads if number of pages is low?
+  nthreads = min(npages, max(size_t(1), npages/1024));
+  execParallel(npages, nthreads, [&](size_t lo, size_t hi) {
+  for (size_t i=lo; i<hi; ++i)
+    ptr[i*pagesize]=char(1);  // touch the memory page with a write access
+    });
+  }
+template<typename T> void page_in_memory(T *ptr, size_t sz, size_t nthreads=1)
+  { page_in_memory2(reinterpret_cast<char *>(ptr), sizeof(T)*sz, nthreads); }
+
+struct PAGE_IN
+  {
+  size_t nthreads;
+  PAGE_IN(size_t nthreads_) : nthreads(nthreads_) {}
+  };
+
 template<typename T> class cmembuf
   {
   protected:
@@ -96,10 +118,15 @@ template<typename T> class cmembuf
 #if 1
     cmembuf(size_t sz, uninitialized_dummy)
       : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
+    cmembuf(size_t sz, PAGE_IN page_in)
+      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
+      { page_in_memory(rawptr->data(), sz, page_in.nthreads); }
 # else // "poison" the array with a fixed value; use for debugging
     cmembuf(size_t sz, uninitialized_dummy)
       : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
       { for (size_t i=0; i<sz; ++i) (*rawptr)[i]=T(42000000); }
+    cmembuf(size_t sz, PAGE_IN)
+      : cmembuf(sz, UNINITIALIZED) {}
 #endif
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
@@ -555,6 +582,14 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     using tinfo = fmav_info;
     using fmav_info::idx;
 
+    void assert_compactness() const
+      {
+      ptrdiff_t ofs=0;
+      for (size_t i=0; i<ndim(); ++i)
+        ofs += (ptrdiff_t(shp[i])-1)*str[i];
+      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
+      }
+
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
@@ -566,14 +601,14 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       : tinfo(shp_), tbuf(size()) {}
     cfmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
+    cfmav(const shape_t &shp_, PAGE_IN page_in)
+      : tinfo(shp_), tbuf(size(), page_in) {}
     cfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
       : tinfo(shp_, str_), tbuf(size(), UNINITIALIZED)
-      {
-      ptrdiff_t ofs=0;
-      for (size_t i=0; i<ndim(); ++i)
-        ofs += (ptrdiff_t(shp[i])-1)*str[i];
-      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
-      }
+      { assert_compactness(); }
+    cfmav(const shape_t &shp_, const stride_t &str_, PAGE_IN page_in)
+      : tinfo(shp_, str_), tbuf(size(), page_in)
+      { assert_compactness(); }
     cfmav(const fmav_info &info, const tbuf &buf)
       : tinfo(info), tbuf(buf) {}
     cfmav(const fmav_info &info, const T *d_, const tbuf &buf)
@@ -668,14 +703,12 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(shp_) {}
     vfmav(const shape_t &shp_, uninitialized_dummy)
       : cfmav<T>(shp_, UNINITIALIZED) {}
+    vfmav(const shape_t &shp_, PAGE_IN page_in)
+      : cfmav<T>(shp_, page_in) {}
     vfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
-      : cfmav<T>(shp_, str_, UNINITIALIZED)
-      {
-      ptrdiff_t ofs=0;
-      for (size_t i=0; i<ndim(); ++i)
-        ofs += (ptrdiff_t(shp[i])-1)*str[i];
-      MR_assert(ofs+1==ptrdiff_t(size()), "array is not compact");
-      }
+      : cfmav<T>(shp_, str_, UNINITIALIZED) {}
+    vfmav(const shape_t &shp_, const stride_t &str_, PAGE_IN page_in)
+      : cfmav<T>(shp_, str_, page_in) {}
     vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : cfmav<T>(buf, shp_, str_) {}
 
@@ -743,6 +776,16 @@ template<typename T> class vfmav: public cfmav<T>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
+    static vfmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
+      {
+      auto ndim = shape.size();
+      if (ndim<=1) return vfmav(shape, page_in);
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      vfmav tmp(shape2, page_in);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray(slc);
+      }
     vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
@@ -781,6 +824,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     cmav() {}
     cmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
+    cmav(const shape_t &shp_, PAGE_IN page_in)
+      : tinfo(shp_), tbuf(size(), page_in) {}
     cmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
@@ -902,6 +947,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
+    vmav(const shape_t &shp_, PAGE_IN page_in)
+      : parent(shp_, page_in) {}
     vmav(const vfmav<T> &inp)
       : parent(inp) {}
 
@@ -956,6 +1003,15 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       if (ndim<=1) return vmav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, UNINITIALIZED);
+      vector<slice> slc(ndim);
+      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      return tmp.subarray<ndim>(slc);
+      }
+    static vmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
+      {
+      if (ndim<=1) return vmav(shape, page_in);
+      auto shape2 = noncritical_shape(shape, sizeof(T));
+      vmav tmp(shape2, page_in);
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
@@ -1515,6 +1571,8 @@ template<size_t nd0, size_t nd1, size_t nd2,
 }
 
 using detail_mav::UNINITIALIZED;
+using detail_mav::PAGE_IN;
+using detail_mav::page_in_memory;
 using detail_mav::fmav_info;
 using detail_mav::mav_info;
 using detail_mav::slice;

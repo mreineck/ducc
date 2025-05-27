@@ -212,7 +212,7 @@ template<typename T> vfmav<T> to_vfmav(const NpArr &obj, const string &name="")
   return vfmav<T>(reinterpret_cast<T *>(obj.data()),
     copy_shape(CNpArr(obj), spec), copy_strides<T,true>(CNpArr(obj), spec));
 #else
-  auto arr = py::array_t<T>(obj);
+  auto arr = NpArrT<T>(obj);
   return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
     copy_shape(CNpArr(obj), spec), copy_strides<T,true>(CNpArr(obj), spec));
 #endif
@@ -245,13 +245,14 @@ template<typename T> void zero_Pyarr(const NpArr &arr, size_t nthreads=1)
 template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
   {
 #ifdef DUCC0_USE_NANOBIND
-  auto *res = new vfmav<T>(dims);
+  auto *res = new vfmav<T>(dims, PAGE_IN(1));
   py::capsule owner(res, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
   NpArr res_(NpArrT<T>(res->data(), dims.size(), dims.data(), owner));
 #else
-  auto res_=NpArr(py::array_t<T>(dims));
+  auto res_=NpArr(NpArrT<T>(dims));
+  page_in_memory(reinterpret_cast<T *>(res_.mutable_data()), res_.size(), 1);
 #endif
   if (zero) zero_Pyarr<T>(res_);
   return res_;
@@ -281,7 +282,7 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   auto shape2 = noncritical_shape(shape, sizeof(T));
   NpArr res;
 #ifdef DUCC0_USE_NANOBIND
-  auto *tmp = new vfmav<T>(shape2, UNINITIALIZED);
+  auto *tmp = new vfmav<T>(shape2, PAGE_IN(1));
   py::capsule owner(tmp, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
@@ -300,11 +301,12 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
     res = NpArr(res_);
     }
 #else
-  py::array_t<T> tmp(shape2);
+  NpArrT<T> tmp(shape2);
+  page_in_memory(reinterpret_cast<T *>(tmp.mutable_data()), tmp.size(), 1);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array_t<T> res_(tmp[py::tuple(slices)]);
+  NpArrT<T> res_(tmp[py::tuple(slices)]);
   res = NpArr(res_);
 #endif
   if (zero) zero_Pyarr<T>(res);
