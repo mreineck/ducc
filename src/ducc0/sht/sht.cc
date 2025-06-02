@@ -876,7 +876,7 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
-#if 0
+#if 1
   size_t lsave = l;
   while (l<=lmax)
     {
