@@ -209,8 +209,7 @@ template<typename T1, typename T2, typename T3> static NpArr Py2_mul_conj(
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<complex<T2>>(b_);
-  const auto out_ = get_optional_Pyarr<complex<T3>>(out__, a.shape());
-  const auto out = to_vfmav<complex<T3>>(out_);
+  const auto [out_, out] = get_OptNpArr_and_vfmav<complex<T3>>(out__, a.shape());
   {
   py::gil_scoped_release release;
   mav_apply([](const T1 &v1, const complex<T2> &v2, complex<T3> &v3)
@@ -258,8 +257,7 @@ template<typename T1, typename T2, typename T3> static NpArr Py2_div_conj(
   {
   const auto a = to_cfmav<T1>(a_);
   const auto b = to_cfmav<complex<T2>>(b_);
-  const auto out_ = get_optional_Pyarr<complex<T3>>(out__, a.shape());
-  const auto out = to_vfmav<complex<T3>>(out_);
+  const auto [out_, out] = get_OptNpArr_and_vfmav<complex<T3>>(out__, a.shape());
   {
   py::gil_scoped_release release;
   mav_apply([](const T1 &v1, const complex<T2> &v2, complex<T3> &v3)
@@ -397,8 +395,7 @@ template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeri
   const auto a = to_cfmav<complex<T>>(a_);
   const auto b = to_cfmav<complex<T>>(b_);
   const auto c = to_cfmav<T>(c_);
-  const auto out_ = get_optional_Pyarr<complex<T>>(out__, a.shape());
-  const auto out = to_vfmav<complex<T>>(out_);
+  const auto [out_, out] = get_OptNpArr_and_vfmav<complex<T>>(out__, a.shape());
   double res = 0;
   {
   py::gil_scoped_release release;
@@ -421,8 +418,7 @@ template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeri
   const auto a = to_cfmav<T>(a_);
   const auto b = to_cfmav<T>(b_);
   const auto c = to_cfmav<T>(c_);
-  const auto out_ = get_optional_Pyarr<T>(out__, a.shape());
-  const auto out = to_vfmav<T>(out_);
+  const auto [out_, out] = get_OptNpArr_and_vfmav<T>(out__, a.shape());
   double res = 0;
   {
   py::gil_scoped_release release;
@@ -1313,8 +1309,7 @@ template<typename Tout> static NpArr Py2_get_deflected_angles(const CNpArr &thet
   MR_assert(ringstart.shape(0)==nrings, "nrings mismatch");
   MR_assert(deflect.shape(1)==2, "second dimension of deflect must be 2");
   size_t ncomp = calc_rotation ? 3 : 2;
-  auto res_ = get_optional_Pyarr<Tout>(res__, {deflect.shape(0), ncomp});
-  auto res = to_vmav<Tout,2>(res_);
+  auto [res_, res] = get_OptNpArr_and_vmav<Tout,2>(res__, {deflect.shape(0), ncomp});
   {
   py::gil_scoped_release release;
   execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
@@ -1421,8 +1416,7 @@ template<typename Tout> static NpArr Py2_coupling_matrix_spin0and2_pure(const CN
   auto nspec = spec.shape(0);
   MR_assert(spec.shape(1)==4, "bad ncomp_spec");
   MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto mat_ = get_optional_Pyarr<Tout>(mat__, {nspec, 4, lmax+1, lmax+1});
-  auto mat = to_vmav<Tout,4>(mat_);
+  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,4>(mat__, {nspec, 4, lmax+1, lmax+1});
   {
   py::gil_scoped_release release;
   coupling_matrix_spin0and2_pure<Tout>(spec, lmax, mat, nthreads);
@@ -1487,8 +1481,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   auto nspec = spec.shape(0);
   MR_assert(spec.shape(1)==ncomp_spec, "bad ncomp_spec");
   MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto mat_ = get_optional_Pyarr<Tout>(mat__, {nspec, ncomp_out, ((lmax+1)*(lmax+2))/2});
-  auto mat = to_vmav<Tout,3>(mat_);
+  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,3>(mat__, {nspec, ncomp_out, ((lmax+1)*(lmax+2))/2});
   {
   py::gil_scoped_release release;
   coupling_matrix_spin0and2_tri<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
@@ -1681,7 +1674,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return get_optional_Pyarr<T2>(out, oshp);
+  return get_OptNpArr<T2>(out, oshp);
   }
 
 template<typename Tin> static NpArr quat2ptg2 (const CNpArr &in, size_t nthreads,

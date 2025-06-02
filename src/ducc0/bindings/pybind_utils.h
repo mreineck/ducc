@@ -313,7 +313,7 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
   return res;
   }
 
-template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
+template<typename T> NpArr get_OptNpArr(const OptNpArr &arr_,
   const shape_t &dims, const string &name="", size_t nthreads=1)
   {
   if (!arr_) return make_Pyarr<T>(dims, false, nthreads);
@@ -338,9 +338,22 @@ template<typename T> auto get_OptNpArr_and_vfmav(const OptNpArr &arr_,
   auto res_vfmav = to_vfmav<T>(val);
   return std::make_tuple(val, res_vfmav);
   }
-  
+ template<typename T, size_t ndim> auto get_OptNpArr_and_vmav(const OptNpArr &arr_,
+  const shape_t &dims, const string &name="", size_t nthreads=1)
+  {
+  if (!arr_) return make_Pyarr_and_vmav<T, ndim>(dims, false, nthreads);
+  const auto spec = makeSpec(name);
+  auto val = arr_.value();
+  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
+  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
+  MR_assert(dims.size()==ndim, spec, "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
+  auto res_vmav = to_vmav<T,ndim>(val);
+  return std::make_tuple(val, res_vmav);
+  }
 
-template<typename T> NpArr get_optional_Pyarr_minshape
+template<typename T> NpArr get_OptNpArr_minshape
   (const OptNpArr &arr_, const shape_t &dims, const string &name="", size_t nthreads=1)
   {
   if (!arr_) return make_Pyarr<T>(dims, false, nthreads);
@@ -407,9 +420,10 @@ using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
 using detail_pybind::make_Pyarr_and_vmav;
 using detail_pybind::make_noncritical_Pyarr;
-using detail_pybind::get_optional_Pyarr;
+using detail_pybind::get_OptNpArr;
 using detail_pybind::get_OptNpArr_and_vfmav;
-using detail_pybind::get_optional_Pyarr_minshape;
+using detail_pybind::get_OptNpArr_and_vmav;
+using detail_pybind::get_OptNpArr_minshape;
 using detail_pybind::get_optional_const_Pyarr;
 using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
