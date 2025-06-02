@@ -75,7 +75,7 @@ using namespace std;
 struct uninitialized_dummy {};
 constexpr uninitialized_dummy UNINITIALIZED;
 
-static void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
+static inline void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
   {
   if (sz==0) return;
 // FIXME: can we determine the real page size for the underlying chunk of memory?

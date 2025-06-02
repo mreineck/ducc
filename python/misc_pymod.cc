@@ -326,7 +326,7 @@ template<typename T> static double Py2_LogUnnormalizedGaussProbability
   double res = 0;
   {
   py::gil_scoped_release release;
-  res = mav_apply_reduce<redSum<T>>([&res](const complex<T> &v1, const complex<T> &v2, const T &v3)
+  res = mav_apply_reduce<redSum<T>>([](const complex<T> &v1, const complex<T> &v2, const T &v3)
     {
     return redSum(norm(v1-v2)*v3);
     }, nthreads, a, b, c).val;
@@ -1312,7 +1312,7 @@ template<typename Tout> static NpArr Py2_get_deflected_angles(const CNpArr &thet
   auto [res_, res] = get_OptNpArr_and_vmav<Tout,2>(res__, {deflect.shape(0), ncomp});
   {
   py::gil_scoped_release release;
-  execDynamic(nrings, nthreads, 10, [&](Scheduler &sched)
+  execDynamic(nrings, nthreads, 10, [&,res=res](Scheduler &sched)
     {
     while (auto rng=sched.getNext())
       for (size_t iring=rng.lo; iring<rng.hi; ++iring)

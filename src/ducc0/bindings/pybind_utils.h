@@ -366,7 +366,7 @@ template<typename T> NpArr get_OptNpArr_minshape
   return val;
   }
 
-template<typename T> CNpArr get_optional_const_Pyarr(
+template<typename T> CNpArr get_OptCNpArr(
   const OptCNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return CNpArr(make_Pyarr<T>(shape_t(dims.size(), 0)));
@@ -424,7 +424,7 @@ using detail_pybind::get_OptNpArr;
 using detail_pybind::get_OptNpArr_and_vfmav;
 using detail_pybind::get_OptNpArr_and_vmav;
 using detail_pybind::get_OptNpArr_minshape;
-using detail_pybind::get_optional_const_Pyarr;
+using detail_pybind::get_OptCNpArr;
 using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
 using detail_pybind::to_cmav;
