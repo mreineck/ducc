@@ -2482,9 +2482,9 @@ template<typename T> void synthesis(
     }
   else
     {
-//    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),mstart.shape(0),theta.shape(0)}, PAGE_IN(nthreads)));
-    leg.swap_axes(1,2);
+    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
+//    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),mstart.shape(0),theta.shape(0)}, PAGE_IN(nthreads)));
+//    leg.swap_axes(1,2);
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
