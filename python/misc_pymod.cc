@@ -618,30 +618,30 @@ Returns
 numpy.ndarray (same dtype and content as `in`)
     A copy of the array with noncritical strides
 )""";
-template<typename T> static NpArr Py2_make_noncritical(const CNpArr &in)
+template<typename T> static NpArr Py2_make_noncritical(const CNpArr &in, size_t nthreads)
   {
   auto in2 = to_cfmav<T>(in);
-  auto out = make_noncritical_Pyarr<T>(in2.shape());
+  auto out = make_noncritical_Pyarr<T>(in2.shape(), false, nthreads);
   auto out2 = to_vfmav<T>(out);
-  mav_apply([](T &v1, const T &v2) { v1=v2; }, 1, out2, in2);
+  mav_apply([](T &v1, const T &v2) { v1=v2; }, nthreads, out2, in2);
   return out;
   }
 
-static NpArr Py_make_noncritical(const CNpArr &in)
+static NpArr Py_make_noncritical(const CNpArr &in, size_t nthreads)
   {
   if (isPyarr<float>(in))
-    return Py2_make_noncritical<float>(in);
+    return Py2_make_noncritical<float>(in, nthreads);
   if (isPyarr<complex<float>>(in))
-    return Py2_make_noncritical<complex<float>>(in);
+    return Py2_make_noncritical<complex<float>>(in, nthreads);
   if (isPyarr<double>(in))
-    return Py2_make_noncritical<double>(in);
+    return Py2_make_noncritical<double>(in, nthreads);
   if (isPyarr<complex<double>>(in))
-    return Py2_make_noncritical<complex<double>>(in);
+    return Py2_make_noncritical<complex<double>>(in, nthreads);
 #ifndef DUCC0_USE_NANOBIND
   if (isPyarr<long double>(in))
-    return Py2_make_noncritical<long double>(in);
+    return Py2_make_noncritical<long double>(in, nthreads);
   if (isPyarr<complex<long double>>(in))
-    return Py2_make_noncritical<complex<long double>>(in);
+    return Py2_make_noncritical<complex<long double>>(in, nthreads);
 #endif
   MR_fail("unsupported datatype");
   }
@@ -674,22 +674,22 @@ numpy.ndarray (shape, dtype=dtype)
     An uninitialized numpy array with the requested properties
 )""";
 static NpArr Py_empty_noncritical(const vector<size_t> &shape,
-  const py::object &dtype_)
+  const py::object &dtype_,size_t nthreads)
   {
   auto dtype = normalizeDtype(dtype_);
   if (isDtype<float>(dtype))
-    return make_noncritical_Pyarr<float>(shape);
+    return make_noncritical_Pyarr<float>(shape, nthreads);
   if (isDtype<complex<float>>(dtype))
-    return make_noncritical_Pyarr<complex<float>>(shape);
+    return make_noncritical_Pyarr<complex<float>>(shape, nthreads);
   if (isDtype<double>(dtype))
     return make_noncritical_Pyarr<double>(shape);
   if (isDtype<complex<double>>(dtype))
-    return make_noncritical_Pyarr<complex<double>>(shape);
+    return make_noncritical_Pyarr<complex<double>>(shape, nthreads);
 #ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
-    return make_noncritical_Pyarr<long double>(shape);
+    return make_noncritical_Pyarr<long double>(shape, nthreads);
   if (isDtype<complex<long double>>(dtype))
-    return make_noncritical_Pyarr<complex<long double>>(shape);
+    return make_noncritical_Pyarr<complex<long double>>(shape, nthreads);
 #endif
   MR_fail("unsupported datatype");
   }
@@ -1869,8 +1869,8 @@ void add_misc(py::module_ &msup)
 
   m.def("transpose", Py_transpose, "in"_a, "out"_a, "nthreads"_a=1);
 
-  m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a);
-  m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a);
+  m.def("make_noncritical", Py_make_noncritical, Py_make_noncritical_DS,"in"_a, "nthreads"_a=1);
+  m.def("empty_noncritical", Py_empty_noncritical, Py_empty_noncritical_DS, "shape"_a, "dtype"_a, "nthreads"_a=1);
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,

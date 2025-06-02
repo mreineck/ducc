@@ -705,6 +705,8 @@ template<typename T> class ConvolverPlan
         {nplanes, Npsi(), Ntheta(), Nphi()}, {cube_.stride(0), cube_.stride(1), cube_.stride(2), 1});
       return cube;
       }
+
+    size_t Nthreads() const { return nthreads; }    
   };
 
 }
