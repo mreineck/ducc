@@ -876,6 +876,7 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
+#if 0
   size_t lsave = l;
   while (l<=lmax)
     {
@@ -926,6 +927,44 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
       }
     l+=2;
     }
+#else
+  while (l<=lmax)
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv agr1=alm[2*l  ].real(), agi1=alm[2*l  ].imag(),
+       acr1=alm[2*l+1].real(), aci1=alm[2*l+1].imag();
+    Tv agr2=alm[2*l+2].real(), agi2=alm[2*l+2].imag(),
+       acr2=alm[2*l+3].real(), aci2=alm[2*l+3].imag();
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
+      d.p1pr[i] += agr1*d.l2p[i];
+      d.p1pi[i] += agi1*d.l2p[i];
+      d.p1mr[i] += acr1*d.l2p[i];
+      d.p1mi[i] += aci1*d.l2p[i];
+
+      d.p1pr[i] += aci2*d.l1p[i];
+      d.p1pi[i] -= acr2*d.l1p[i];
+      d.p1mr[i] -= agi2*d.l1p[i];
+      d.p1mi[i] += agr2*d.l1p[i];
+      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
+
+      d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+      d.p2pr[i] -= aci1*d.l2m[i];
+      d.p2pi[i] += acr1*d.l2m[i];
+      d.p2mr[i] += agi1*d.l2m[i];
+      d.p2mi[i] -= agr1*d.l2m[i];
+
+      d.p2pr[i] += agr2*d.l1m[i];
+      d.p2pi[i] += agi2*d.l1m[i];
+      d.p2mr[i] += acr2*d.l1m[i];
+      d.p2mi[i] += aci2*d.l1m[i];
+      d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
+      }
+    l+=2;
+    }
+#endif
   }
 
 DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
