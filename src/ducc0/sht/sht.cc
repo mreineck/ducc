@@ -406,7 +406,7 @@ using dcmplx = complex<double>;
 static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 128/VLEN;
-constexpr size_t nvx = 128/VLEN;
+constexpr size_t nvx = 64/VLEN;
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
@@ -878,6 +878,48 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   {
 #if 1
   size_t lsave = l;
+  while (l+3<=lmax)
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv fx30=fx[l+3].a,fx31=fx[l+3].b;
+    Tv fx40=fx[l+4].a,fx41=fx[l+4].b;
+    Tv agr1=alm[2*l  ].real(), agi1=alm[2*l  ].imag(),
+       acr1=alm[2*l+1].real(), aci1=alm[2*l+1].imag();
+    Tv agr2=alm[2*l+2].real(), agi2=alm[2*l+2].imag(),
+       acr2=alm[2*l+3].real(), aci2=alm[2*l+3].imag();
+    Tv agr3=alm[2*l+4].real(), agi3=alm[2*l+4].imag(),
+       acr3=alm[2*l+5].real(), aci3=alm[2*l+5].imag();
+    Tv agr4=alm[2*l+6].real(), agi4=alm[2*l+6].imag(),
+       acr4=alm[2*l+7].real(), aci4=alm[2*l+7].imag();
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
+      d.p1pr[i] += agr1*d.l2p[i];
+      d.p1pi[i] += agi1*d.l2p[i];
+      d.p1mr[i] += acr1*d.l2p[i];
+      d.p1mi[i] += aci1*d.l2p[i];
+
+      d.p1pr[i] += aci2*d.l1p[i];
+      d.p1pi[i] -= acr2*d.l1p[i];
+      d.p1mr[i] -= agi2*d.l1p[i];
+      d.p1mi[i] += agr2*d.l1p[i];
+      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
+
+      d.l1p[i] = (d.cth[i]*fx30 - fx31)*d.l2p[i] - d.l1p[i];
+      d.p1pr[i] += agr3*d.l2p[i];
+      d.p1pi[i] += agi3*d.l2p[i];
+      d.p1mr[i] += acr3*d.l2p[i];
+      d.p1mi[i] += aci3*d.l2p[i];
+
+      d.p1pr[i] += aci4*d.l1p[i];
+      d.p1pi[i] -= acr4*d.l1p[i];
+      d.p1mr[i] -= agi4*d.l1p[i];
+      d.p1mi[i] += agr4*d.l1p[i];
+      d.l2p[i] = (d.cth[i]*fx40 - fx41)*d.l1p[i] - d.l2p[i];
+      }
+    l+=4;
+    }
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
@@ -903,6 +945,48 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
     l+=2;
     }
   l=lsave;
+  while (l+3<=lmax)
+    {
+    Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+    Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+    Tv fx30=fx[l+3].a,fx31=fx[l+3].b;
+    Tv fx40=fx[l+4].a,fx41=fx[l+4].b;
+    Tv agr1=alm[2*l  ].real(), agi1=alm[2*l  ].imag(),
+       acr1=alm[2*l+1].real(), aci1=alm[2*l+1].imag();
+    Tv agr2=alm[2*l+2].real(), agi2=alm[2*l+2].imag(),
+       acr2=alm[2*l+3].real(), aci2=alm[2*l+3].imag();
+    Tv agr3=alm[2*l+4].real(), agi3=alm[2*l+4].imag(),
+       acr3=alm[2*l+5].real(), aci3=alm[2*l+5].imag();
+    Tv agr4=alm[2*l+6].real(), agi4=alm[2*l+6].imag(),
+       acr4=alm[2*l+7].real(), aci4=alm[2*l+7].imag();
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+      d.p2pr[i] -= aci1*d.l2m[i];
+      d.p2pi[i] += acr1*d.l2m[i];
+      d.p2mr[i] += agi1*d.l2m[i];
+      d.p2mi[i] -= agr1*d.l2m[i];
+
+      d.p2pr[i] += agr2*d.l1m[i];
+      d.p2pi[i] += agi2*d.l1m[i];
+      d.p2mr[i] += acr2*d.l1m[i];
+      d.p2mi[i] += aci2*d.l1m[i];
+      d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
+
+      d.l1m[i] = (d.cth[i]*fx30 + fx31)*d.l2m[i] - d.l1m[i];
+      d.p2pr[i] -= aci3*d.l2m[i];
+      d.p2pi[i] += acr3*d.l2m[i];
+      d.p2mr[i] += agi3*d.l2m[i];
+      d.p2mi[i] -= agr3*d.l2m[i];
+
+      d.p2pr[i] += agr4*d.l1m[i];
+      d.p2pi[i] += agi4*d.l1m[i];
+      d.p2mr[i] += acr4*d.l1m[i];
+      d.p2mi[i] += aci4*d.l1m[i];
+      d.l2m[i] = (d.cth[i]*fx40 + fx41)*d.l1m[i] - d.l2m[i];
+      }
+    l+=4;
+    }
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
