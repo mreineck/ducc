@@ -1,3 +1,9 @@
+0.39.0:
+- sht:
+  - various improvements in the inner loops for AVX512, mainly in the
+    synthesis direction.
+
+
 0.38.0:
 - sht:
   - `rotate_alm` can now transform several sets of `a_lm` simultaneously and
