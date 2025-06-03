@@ -518,6 +518,13 @@ template<size_t ndim> class mav_info
       std::iota(axpos.begin(), axpos.end(), firstaxis);
       return extend_and_broadcast(new_shape, axpos);
       }
+    void swap_axes(size_t ax0, size_t ax1)
+      {
+      MR_assert(ax0<=ndim && ax1<=ndim, "bad axes");
+      if (ax0==ax1) return;
+      swap(shp[ax0], shp[ax1]);
+      swap(str[ax0], str[ax1]);
+      }
     mav_info transpose() const
       {
       shape_t shp2;
@@ -956,6 +963,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       { parent::assign(other); }
     void unassign()
       { assign(vmav()); }
+    using tinfo::swap_axes;
     operator vfmav<T>() const
       {
       return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
