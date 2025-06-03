@@ -406,7 +406,7 @@ using dcmplx = complex<double>;
 static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 128/VLEN;
-constexpr size_t nvx = 64/VLEN;
+constexpr size_t nvx = 128/VLEN;
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
