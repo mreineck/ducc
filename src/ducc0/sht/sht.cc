@@ -560,7 +560,51 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
   while (below_limit)
     {
     if (l+4>gen.lmax) {l_=gen.lmax+1;return;}
-    below_limit=1;
+    below_limit=true;
+    Tv a1=gen.coef[il  ].a, b1=gen.coef[il  ].b;
+    Tv a2=gen.coef[il+1].a, b2=gen.coef[il+1].b;
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
+      d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
+      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
+        below_limit &= all_of(d.scale[i]<1);
+      }
+    l+=4; il+=2;
+    }
+  l_=l; il_=il;
+  }
+DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
+  s0data_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t & DUCC0_RESTRICT il_, size_t nv2,
+  size_t lstart, size_t lstop)
+  {
+  size_t l=lstart, il=(lstart-gen.m)/2;
+  bool below_limit = true;
+
+  if (l==gen.m)  // we are starting
+    {
+    Tv mfac = (gen.m&1) ? -gen.mfac[gen.m]:gen.mfac[gen.m];
+    for (size_t i=0; i<nv2; ++i)
+      {
+      d.lam1[i]=0;
+      mypow(d.sth[i],gen.m,gen.powlimit,d.lam2[i],d.scale[i]);
+      d.lam2[i] *= mfac;
+      Tvnormalize(d.lam2[i],d.scale[i],sharp_ftol);
+      below_limit &= all_of(d.scale[i]<1);
+      }
+    }
+  else
+    for (size_t i=0; i<nv2; ++i)
+      {
+      rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol);
+      below_limit &= all_of(d.scale[i]<1);
+      }
+
+  while (below_limit)
+    {
+    if (l+4>gen.lmax) {l_=gen.lmax+1;return;}
+    if (l==lstop) { l_=l; il_=il; return; }
+    below_limit=true;
     Tv a1=gen.coef[il  ].a, b1=gen.coef[il  ].b;
     Tv a2=gen.coef[il+1].a, b2=gen.coef[il+1].b;
     for (size_t i=0; i<nv2; ++i)
@@ -660,12 +704,13 @@ DUCC0_NOINLINE static void alm2map_kernel(s0data_v & DUCC0_RESTRICT d,
   }
 
 DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
-  const Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth)
+  const Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth, size_t lstart, size_t lstop)
   {
-  size_t l,il=0,lmax=gen.lmax;
+  size_t l,il=0;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee(gen, d, l, il, nv2);
-  if (l>lmax) return;
+  iter_to_ieee(gen, d, l, il, nv2, lstart, lstop);
+
+  if (l>=lstop) return;
 
   auto &coef = gen.coef;
   bool full_ieee=true;
@@ -675,12 +720,12 @@ DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
     full_ieee &= all_of(d.scale[i]>=0);
     }
 
-  while((!full_ieee) && (l<=lmax))
+  while((!full_ieee) && (l<lstop))
     {
     Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag();
     Tv ar2=alm[l+1].real(), ai2=alm[l+1].imag();
     Tv a=coef[il].a, b=coef[il].b;
-    full_ieee=1;
+    full_ieee=true;
     for (size_t i=0; i<nv2; ++i)
       {
       d.p1r[i] += d.lam2[i]*d.corfac[i]*ar1;
@@ -696,14 +741,16 @@ DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
       }
     l+=2; ++il;
     }
-  if (l>lmax) return;
+
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
     d.lam1[i] *= d.corfac[i];
     d.lam2[i] *= d.corfac[i];
+    d.scale[i] = 0;
     }
-  alm2map_kernel(d, coef, alm, l, il, lmax, nv2);
+  alm2map_kernel(d, coef, alm, l, il, lstop-1, nv2);
   }
 
 DUCC0_NOINLINE static void map2alm_kernel(s0data_v & DUCC0_RESTRICT d,
@@ -1474,12 +1521,17 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       }
 
     constexpr size_t nval=nv0*VLEN;
-    s0data_u d;
-    array<size_t, nval> idx, midx;
-    Tbv0 cth;
+
+    vector<s0data_u> v_d;
+    vector<array<size_t, nval>> v_idx, v_midx;
+    vector<Tbv0> v_cth;
+    vector<size_t> v_nth;
     size_t ith=0;
     while (ith<rdata.size())
       {
+      s0data_u d;
+      array<size_t, nval> idx, midx;
+      Tbv0 cth;
       size_t nth=0;
       while ((nth<nval)&&(ith<rdata.size()))
         {
@@ -1511,25 +1563,55 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           }
         for (size_t i=0; i<nvec; ++i)
           d.v.p1r[i] = d.v.p1i[i] = d.v.p2r[i] = d.v.p2i[i] = 0;
-        calc_alm2map (almtmp.data(), gen, d.v, nth);
-        for (size_t i=0; i<nvec; ++i)
-          {
-          auto t1r = d.v.p1r[i];
-          auto t2r = d.v.p2r[i]*cth[i];
-          auto t1i = d.v.p1i[i];
-          auto t2i = d.v.p2i[i]*cth[i];
-          d.v.p1r[i] = t1r+t2r;
-          d.v.p1i[i] = t1i+t2i;
-          d.v.p2r[i] = t1r-t2r;
-          d.v.p2i[i] = t1i-t2i;
-          }
-        for (size_t i=0; i<nth; ++i)
-          {
-          //adjust for new algorithm
-          phase(0, idx[i], mi) = complex<T>(T(d.s.p1r[i]),T(d.s.p1i[i]));
-          if (idx[i]!=midx[i])
-            phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
-          }
+        v_d.push_back(d);
+        v_idx.push_back(idx);
+        v_midx.push_back(midx);
+        v_nth.push_back(nth);
+        v_cth.push_back(cth);
+        }
+      }
+
+#if 1
+    size_t lstart = gen.m;
+    constexpr size_t lstep = 8192;  // MUST be divisible by 8!
+    while (lstart<=gen.lmax)
+      {
+      size_t lstop = min(gen.lmax+1, lstart+lstep);
+//cout << lstart << " " << lstop << endl;
+      for (size_t vi=0; vi<v_d.size(); ++vi)
+        calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+      lstart = lstop;
+      }
+#else
+    for (size_t vi=0; vi<v_d.size(); ++vi)
+      calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.m, gen.lmax+1);
+#endif
+
+    for (size_t vi=0; vi<v_d.size(); ++vi)
+      {
+      auto &d = v_d[vi];
+      const auto &idx = v_idx[vi];
+      const auto &midx = v_midx[vi];
+      const auto nth = v_nth[vi];
+      size_t nvec = (nth+VLEN-1)/VLEN;
+      auto cth = v_cth[vi];
+      for (size_t i=0; i<nvec; ++i)
+        {
+        auto t1r = d.v.p1r[i];
+        auto t2r = d.v.p2r[i]*cth[i];
+        auto t1i = d.v.p1i[i];
+        auto t2i = d.v.p2i[i]*cth[i];
+        d.v.p1r[i] = t1r+t2r;
+        d.v.p1i[i] = t1i+t2i;
+        d.v.p2r[i] = t1r-t2r;
+        d.v.p2i[i] = t1i-t2i;
+        }
+      for (size_t i=0; i<nth; ++i)
+        {
+        //adjust for new algorithm
+        phase(0, idx[i], mi) = complex<T>(T(d.s.p1r[i]),T(d.s.p1i[i]));
+        if (idx[i]!=midx[i])
+          phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
         }
       }
     }
