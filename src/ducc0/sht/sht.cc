@@ -1110,25 +1110,24 @@ if constexpr(Tv::size()>4)
     for (size_t i=0; i<nv2; ++i)
       {
       d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
-      agr1 += d.p2mi[i]*d.l2p[i];
-      agi1 -= d.p2mr[i]*d.l2p[i];
-      acr1 -= d.p2pi[i]*d.l2p[i];
-      aci1 += d.p2pr[i]*d.l2p[i];
-      agr2 += d.p2pr[i]*d.l1p[i];
-      agi2 += d.p2pi[i]*d.l1p[i];
-      acr2 += d.p2mr[i]*d.l1p[i];
-      aci2 += d.p2mi[i]*d.l1p[i];
-      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
-
       d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+      agr1 += d.p2mi[i]*d.l2p[i];
       agr1 += d.p1pr[i]*d.l2m[i];
+      agi1 -= d.p2mr[i]*d.l2p[i];
       agi1 += d.p1pi[i]*d.l2m[i];
+      acr1 -= d.p2pi[i]*d.l2p[i];
       acr1 += d.p1mr[i]*d.l2m[i];
+      aci1 += d.p2pr[i]*d.l2p[i];
       aci1 += d.p1mi[i]*d.l2m[i];
+      agr2 += d.p2pr[i]*d.l1p[i];
       agr2 -= d.p1mi[i]*d.l1m[i];
+      agi2 += d.p2pi[i]*d.l1p[i];
       agi2 += d.p1mr[i]*d.l1m[i];
       acr2 += d.p1pi[i]*d.l1m[i];
+      acr2 += d.p2mr[i]*d.l1p[i];
+      aci2 += d.p2mi[i]*d.l1p[i];
       aci2 -= d.p1pr[i]*d.l1m[i];
+      d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
       }
     vhsum_cmplx_special (agr1,agi1,acr1,aci1,&alm[2*l]);
