@@ -177,7 +177,7 @@ template<typename T> class Py_Interpolator
       auto pphi = subarray<1>(ptg2, {{},{1}});
       auto ppsi = subarray<1>(ptg2, {{},{2}});
       size_t ncomp = cube.shape(0);
-      auto [res_, res] = make_Pyarr_and_vmav<T,2>({ncomp,ptg2.shape(0)});
+      auto [res_, res] = make_Pyarr_and_vmav<T,2>({ncomp,ptg2.shape(0)}, false, conv.Nthreads());
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
@@ -230,7 +230,7 @@ template<typename T> class Py_Interpolator
       for (size_t i=0; i<cube.shape(0); ++i)
         conv.deprepPsi(subarray<3>(cube, {{i},{},{},{}}));
       }
-      auto [vslm_, vslm] = make_Pyarr_and_vmav<complex<T>,2>({ncomp, Alm_Base::Num_Alms(lmax, lmax)});
+      auto [vslm_, vslm] = make_Pyarr_and_vmav<complex<T>,2>({ncomp, Alm_Base::Num_Alms(lmax, lmax)}, false, conv.Nthreads());
       {
       py::gil_scoped_release release;
       mav_apply([](complex<T> &v){v=T(0);}, 1, vslm);

@@ -85,7 +85,7 @@ template<typename T> static NpArr Py2_rotate_alm(const CNpArr &alm_in_,
   vector<size_t> outshape = (alm_in_.ndim()==1) ?
     vector<size_t>{base_out.n_entries()} :
     vector<size_t>{ncomp, base_out.n_entries()};
-  auto alm_out_ = get_optional_Pyarr<complex<T>>(alm_out__, outshape, "out");
+  auto alm_out_ = get_OptNpArr<complex<T>>(alm_out__, outshape, "out", nthreads);
   auto alm_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(alm_out_, "out");
   {
   py::gil_scoped_release release;
@@ -218,8 +218,7 @@ template<typename T> static NpArr Py2_alm2flm(const CNpArr &alm_, int spin,
     MR_assert((ncomp==1)||(ncomp==2), "need one or two components for spin 0");
   else
     MR_assert(ncomp==2, "need two components for spin >0");
-  auto flm_ = get_optional_Pyarr<complex<T>>(flm__, {lmax+1, 2*lmax+1}, "flm");
-  auto flm = to_vmav<complex<T>,2>(flm_, "flm");
+  auto [flm_, flm] = get_OptNpArr_and_vmav<complex<T>,2>(flm__, {lmax+1, 2*lmax+1}, "flm");
   mav_apply([&](auto &v){v=0;},1,flm);
   size_t ofs=0;
   T mfac=T(1.);
@@ -264,8 +263,7 @@ template<typename T> static NpArr Py2_flm2alm(const CNpArr &flm_, int spin,
   size_t nalm = ((lmax+1)*(lmax+2))/2;
   if (spin!=0) MR_assert(!real, "no real fields at nonzero spins");
   size_t ncomp = real ? 1 : 2;
-  auto alm_ = get_optional_Pyarr<complex<T>>(alm__, {ncomp, nalm}, "alm");
-  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
+  auto [alm_, alm] = get_OptNpArr_and_vmav<complex<T>,2>(alm__, {ncomp, nalm}, "alm");
   size_t ofs=0;
   T mfac=T(1);
   T sfac = (abs(spin)&1) ? -T(1) : T(1);
@@ -309,9 +307,8 @@ template<typename T> static NpArr Py2_alm2leg(const CNpArr &alm_, size_t spin,
   getmstuff(lmax, mval_, mstart_, mval, mstart);
   MR_assert(alm.shape(1)>=min_almdim(lmax, mval, mstart, lstride),
     "bad a_lm array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
-    {get_nmaps(spin,mode),theta.shape(0),mval.shape(0)}, "leg");
-  auto leg = to_vmav<complex<T>,3>(leg_, "leg");
+  auto [leg_, leg] = get_OptNpArr_and_vmav<complex<T>,3>(leg__,
+    {get_nmaps(spin,mode),theta.shape(0),mval.shape(0)}, "leg", nthreads);
   {
   py::gil_scoped_release release;
   alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
@@ -342,8 +339,8 @@ template<typename T> static NpArr Py2_leg2alm(const CNpArr &leg_,
   MR_assert(leg.shape(1)==theta.shape(0), "bad leg array size");
   vmav<size_t,1> mval, mstart;
   getmstuff(lmax, mval_, mstart_, mval, mstart);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__,
-    {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)}, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__,
+    {get_nalm(spin,mode),min_almdim(lmax, mval, mstart, lstride)}, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   MR_assert(leg.shape(0)==1+(spin>0),
     "bad number of components in leg array");
@@ -370,9 +367,8 @@ template<typename T> static NpArr Py2_map2leg(const CNpArr &map_,
   auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
   MR_assert(map.shape(1)>=min_mapdim(nphi, ringstart, pixstride),
     "bad map array size");
-  auto leg_ = get_optional_Pyarr<complex<T>>(leg__,
-    {map.shape(0),nphi.shape(0),mmax+1}, "leg");
-  auto leg = to_vmav<complex<T>,3>(leg_, "leg");
+  auto [leg_, leg] = get_OptNpArr_and_vmav<complex<T>,3>(leg__,
+    {map.shape(0),nphi.shape(0),mmax+1}, "leg", nthreads);
   {
   py::gil_scoped_release release;
   map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
@@ -394,8 +390,8 @@ template<typename T> static NpArr Py2_leg2map(const CNpArr &leg_,
   auto nphi = to_cmav<size_t,1>(nphi_, "nphi");
   auto phi0 = to_cmav<double,1>(phi0_, "phi0");
   auto ringstart = to_cmav<size_t,1>(ringstart_, "ringstart");
-  auto map_ = get_optional_Pyarr_minshape<T>(map__,
-    {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)}, "map");
+  auto map_ = get_OptNpArr_minshape<T>(map__,
+    {leg.shape(0),min_mapdim(nphi, ringstart, pixstride)}, "map", nthreads);
   auto map = to_vmav<T,2>(map_, "map");
   MR_assert(map.shape(0)==leg.shape(0),
     "bad number of components in map array");
@@ -437,7 +433,7 @@ template<typename T> static NpArr Py2_synthesis(const CNpArr &alm_,
   for(size_t i=0; i<mapshp.size(); ++i) mapshp[i] = alm_.shape(i);
   mapshp[mapshp.size()-1] = min_mapdim(nphi, ringstart, pixstride);
   mapshp[mapshp.size()-2] = get_nmaps(spin, mode);
-  auto map_ = get_optional_Pyarr_minshape<T>(map__, mapshp, "map");
+  auto map_ = get_OptNpArr_minshape<T>(map__, mapshp, "map", nthreads);
   auto map = to_vmav_with_optional_leading_dimensions<T,3>(map_, "map");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   nthreads = adjust_nthreads(nthreads);
@@ -479,13 +475,13 @@ NpArr Py_synthesis_deriv1(const CNpArr &alm, const CNpArr &theta,
 
 
 template<typename T> static NpArr check_build_map(const OptNpArr &map,
-  size_t ncomp, const OptSizeT &ntheta, const OptSizeT &nphi)
+  size_t ncomp, const OptSizeT &ntheta, const OptSizeT &nphi, size_t nthreads)
   {
   if (!map)
     {
     MR_assert(bool(ntheta) && bool(nphi),
       "you need to specify either 'map' or 'ntheta' and 'nphi'");
-    return make_Pyarr<T>({ncomp, ntheta.value(), nphi.value()});
+    return make_Pyarr<T>({ncomp, ntheta.value(), nphi.value()}, false, nthreads);
     }
   else
     {
@@ -500,13 +496,13 @@ template<typename T> static NpArr check_build_map(const OptNpArr &map,
     }
   }
 template<typename T> static NpArr check_build_alm
-  (const OptNpArr &alm, size_t ncomp, size_t lmax, size_t mmax)
+  (const OptNpArr &alm, size_t ncomp, size_t lmax, size_t mmax, size_t nthreads)
   {
   size_t nalm = ((mmax+1)*(mmax+2))/2 + (mmax+1)*(lmax-mmax);
   if (!alm)
     {
     MR_assert(lmax>=mmax, "mmax must not be larger than lmax");
-    return make_Pyarr<complex<T>>({ncomp, nalm});
+    return make_Pyarr<complex<T>>({ncomp, nalm}, false, nthreads);
     }
   else
     {
@@ -525,7 +521,7 @@ template<typename T> static NpArr Py2_synthesis_2d(const CNpArr &alm_,
   auto mode = get_mode(mode_);
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto map_ = check_build_map<T>(map__, get_nmaps(spin,mode), ntheta, nphi);
+  auto map_ = check_build_map<T>(map__, get_nmaps(spin,mode), ntheta, nphi, nthreads);
   auto map = to_vmav<T,3>(map_, "map");
   {
   py::gil_scoped_release release;
@@ -550,7 +546,7 @@ template<typename T> static NpArr Py2_adjoint_synthesis_2d(
   auto map = to_cmav<T,3>(map_, "map");
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   vector<size_t> almshp{get_nalm(spin,mode), min_almdim(lmax, mstart, lstride)};
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   {
   py::gil_scoped_release release;
@@ -590,7 +586,7 @@ template<typename T> static NpArr Py2_adjoint_synthesis(const OptNpArr &alm__,
   for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape(i);
   almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
   almshp[almshp.size()-2] = get_nalm(spin, mode);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
   auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
   nthreads = adjust_nthreads(nthreads);
@@ -640,7 +636,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
   vector<size_t> almshp(map_.ndim());
   for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape(i);
   almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
   auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
   MR_assert(map.shape(1)==alm.shape(1), "bad number of components in alm array");
@@ -708,7 +704,7 @@ template<typename T> static NpArr Py2_analysis_2d(
   auto map = to_cmav<T,3>(map_, "map");
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   vector<size_t> almshp{map.shape(0), min_almdim(lmax, mstart, lstride)};
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, almshp, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
@@ -732,7 +728,7 @@ template<typename T> static NpArr Py2_adjoint_analysis_2d(const CNpArr &alm_,
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi);
+  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi, nthreads);
   auto map = to_vmav<T,3>(map_, "map");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
   {
@@ -761,8 +757,7 @@ template<typename T> static NpArr Py2_synthesis_general(const CNpArr &alm_,
   auto loc = to_cmav<double,2>(loc_, "loc");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(alm.shape(0)==get_nalm(spin,mode), "number of components mismatch in alm");
-  auto map_ = get_optional_Pyarr<T>(map__, {get_nmaps(spin,mode), loc.shape(0)}, "map");
-  auto map = to_vmav<T,2>(map_, "map");
+  auto [map_, map] = get_OptNpArr_and_vmav<T,2>(map__, {get_nmaps(spin,mode), loc.shape(0)}, "map", nthreads);
   {
   py::gil_scoped_release release;
   synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon, sigma_min, sigma_max, nthreads, mode, verbose);
@@ -787,7 +782,7 @@ template<typename T> static NpArr Py2_adjoint_synthesis_general(const CNpArr &ma
   auto loc = to_cmav<double,2>(loc_, "loc");
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   MR_assert(map.shape(0)==get_nmaps(spin,mode), "number of components mismatch in map");
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, mode), min_almdim(lmax, mstart, lstride)}, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, {get_nalm(spin, mode), min_almdim(lmax, mstart, lstride)}, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_,"alm");
 
   {
@@ -814,7 +809,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis_general(const OptNpArr
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   size_t ncomp = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
-  auto alm_ = get_optional_Pyarr_minshape<complex<T>>(alm__, {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)}, "alm");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)}, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_, "alm");
 
   size_t itn, istop;
@@ -928,7 +923,7 @@ template<typename T> class Py_sharpjob
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(alm_.size())==n_alm(),
         "incorrect size of a_lm array");
-      auto [map_, map] = make_Pyarr_and_vmav<double,1>({size_t(npix_)});
+      auto [map_, map] = make_Pyarr_and_vmav<double,1>({size_t(npix_)}, false, nthreads);
       auto alm=to_cmav<complex<double>,1>(CNpArr(alm_));
       auto ar(alm.prepend_1());
       if (geom=="HP")
@@ -967,7 +962,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
-      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())});
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())}, false, nthreads);
       auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(CNpArr(map_));
       if (geom=="HP")
@@ -1006,7 +1001,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.size())==npix_,"incorrect size of map array");
-      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())});
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,1>({size_t(n_alm())}, false, nthreads);
       auto ar(alm.prepend_1());
       auto map=to_cmav<double,1>(CNpArr(map_));
       auto mr(map.template reinterpret<3>({1, ntheta_, nphi_},
@@ -1018,7 +1013,7 @@ template<typename T> class Py_sharpjob
     NpArr alm2map_spin (const CNpArrT<complex<double>> &alm_, size_t spin) const
       {
       MR_assert(npix_>0,"no map geometry specified");
-      auto [map_,map] = make_Pyarr_and_vmav<double,2>({2, size_t(npix_)});
+      auto [map_,map] = make_Pyarr_and_vmav<double,2>({2, size_t(npix_)}, false, nthreads);
       auto alm=to_cmav<complex<double>,2>(CNpArr(alm_));
       MR_assert((alm.shape(0)==2)&&(alm.shape(1)==size_t(n_alm())),
         "incorrect size of a_lm array");
@@ -1057,7 +1052,7 @@ template<typename T> class Py_sharpjob
       {
       MR_assert(npix_>0,"no map geometry specified");
       MR_assert (size_t(map_.shape(1))==npix_,"incorrect size of map array");
-      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,2>({2, size_t(n_alm())});
+      auto [alm_, alm] = make_Pyarr_and_vmav<complex<double>,2>({2, size_t(n_alm())}, false, nthreads);
       auto map=to_cmav<double,2>(CNpArr(map_));
       auto mr(map.template reinterpret<3> ({2, ntheta_, nphi_},
         {map.stride(0), ptrdiff_t(map.stride(1)*nphi_), map.stride(1)}));

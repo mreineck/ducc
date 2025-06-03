@@ -36,7 +36,7 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform({nrow,nchan}, 1));
   checkShape(mask.shape(), {nrow,nchan});
 
-  vmav<uint8_t,2> bin({nrow,nchan}, UNINITIALIZED);
+  vmav<uint8_t,2> bin({nrow,nchan}, PAGE_IN(nthreads));
   vmav<size_t,1> hist({nbin}, UNINITIALIZED);
 
   double wmin=1e300;

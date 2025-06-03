@@ -464,7 +464,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       {
       timers.push("nu2u proper");
       timers.push("allocating grid");
-      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, UNINITIALIZED);
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, PAGE_IN(nthreads));
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("spreading");
@@ -486,7 +486,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       {
       timers.push("u2nu proper");
       timers.push("allocating grid");
-      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, UNINITIALIZED);
+      auto grid = vfmav<complex<Tcalc>>::build_noncritical(nover, PAGE_IN(nthreads));
       timers.poppush("zeroing grid");
       mav_apply([](complex<Tcalc> &v){v=complex<Tcalc>(0);},nthreads,grid);
       timers.poppush("grid correction");

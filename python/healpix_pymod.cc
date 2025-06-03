@@ -70,7 +70,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return get_optional_Pyarr<T2>(out, oshp);
+  return get_OptNpArr<T2>(out, oshp);
   }
 
 #define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
@@ -238,8 +238,7 @@ class Pyhpbase
       size_t nthreads, const OptNpArr &out_) const
       {
       const auto ring = to_cfmav<Tin>(in);
-      auto out = get_optional_Pyarr<int64_t>(out_, ring.shape());
-      auto nest = to_vfmav<int64_t>(out);
+      auto [out, nest] = get_OptNpArr_and_vfmav<int64_t>(out_, ring.shape());
       {
       py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
@@ -254,8 +253,7 @@ class Pyhpbase
       size_t nthreads, const OptNpArr &out_) const
       {
       const auto nest = to_cfmav<Tin>(in);
-      auto out = get_optional_Pyarr<int64_t>(out_, nest.shape());
-      auto ring = to_vfmav<int64_t>(out);
+      auto [out, ring] = get_OptNpArr_and_vfmav<int64_t>(out_, nest.shape());
       {
       py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
