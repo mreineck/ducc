@@ -1100,7 +1100,6 @@ DUCC0_NOINLINE static void map2alm_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
-
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
@@ -1125,7 +1124,6 @@ DUCC0_NOINLINE static void map2alm_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
     l+=2;
     }
   l=lsave;
-
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
@@ -2003,9 +2001,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
                                  Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
   YlmBase base(lmax, mmax, spin);
-size_t mstep = max<size_t>(1, min<size_t>(32, nm/(10*nthreads)));
-mstep=1;
-  ducc0::execDynamic(nm, nthreads, mstep, [&](ducc0::Scheduler &sched)
+
+  ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
     Ylmgen gen(base);
     vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
@@ -2575,8 +2572,6 @@ template<typename T> void synthesis(
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
-//    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),mstart.shape(0),theta.shape(0)}, PAGE_IN(nthreads)));
-//    leg.swap_axes(1,2);
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
     leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
     }
