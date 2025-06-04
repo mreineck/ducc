@@ -1567,7 +1567,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
+    constexpr size_t lstep = 4096;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1740,7 +1740,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
+    constexpr size_t lstep = 4096;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1813,7 +1813,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.mhi;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
+    constexpr size_t lstep = 4096;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
