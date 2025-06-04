@@ -543,38 +543,6 @@ static inline bool rescale(Tv &v1, Tv &v2, Tv &s, Tv eps)
   }
 
 DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
-  s0data_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t & DUCC0_RESTRICT il_, size_t nv2)
-  {
-  size_t l=gen.m, il=0;
-  Tv mfac = (gen.m&1) ? -gen.mfac[gen.m]:gen.mfac[gen.m];
-  bool below_limit = true;
-  for (size_t i=0; i<nv2; ++i)
-    {
-    d.lam1[i]=0;
-    mypow(d.sth[i],gen.m,gen.powlimit,d.lam2[i],d.scale[i]);
-    d.lam2[i] *= mfac;
-    Tvnormalize(d.lam2[i],d.scale[i],sharp_ftol);
-    below_limit &= all_of(d.scale[i]<1);
-    }
-
-  while (below_limit)
-    {
-    if (l+4>gen.lmax) {l_=gen.lmax+1;return;}
-    below_limit=true;
-    Tv a1=gen.coef[il  ].a, b1=gen.coef[il  ].b;
-    Tv a2=gen.coef[il+1].a, b2=gen.coef[il+1].b;
-    for (size_t i=0; i<nv2; ++i)
-      {
-      d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
-      d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
-      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
-        below_limit &= all_of(d.scale[i]<1);
-      }
-    l+=4; il+=2;
-    }
-  l_=l; il_=il;
-  }
-DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
   s0data_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t & DUCC0_RESTRICT il_, size_t nv2,
   size_t lstart, size_t lstop)
   {
@@ -847,59 +815,76 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
   }
 
 DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
-  sxdata_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t nv2)
+  sxdata_v & DUCC0_RESTRICT d, size_t & DUCC0_RESTRICT l_, size_t nv2,
+  size_t lstart, size_t lstop)
   {
   const auto &fx = gen.coef;
-  Tv prefac=gen.prefac[gen.m],
-     prescale=gen.fscale[gen.m];
-  bool below_limit=true;
-  for (size_t i=0; i<nv2; ++i)
+
+  size_t l=lstart;
+  bool below_limit = true;
+
+  if (l==gen.mhi)  // we are starting
     {
-// FIXME: can we do this better?
-    Tv cth2=max(Tv(1e-15),sqrt((1.+d.cth[i])*0.5));
-    Tv sth2=max(Tv(1e-15),sqrt((1.-d.cth[i])*0.5));
-    auto mask=d.sth[i]<0;
-    where(mask&(d.cth[i]<0),cth2)*=-1.;
-    where(mask&(d.cth[i]<0),sth2)*=-1.;
-
-    Tv ccp, ccps, ssp, ssps, csp, csps, scp, scps;
-    mypow(cth2,gen.cosPow,gen.powlimit,ccp,ccps);
-    mypow(sth2,gen.sinPow,gen.powlimit,ssp,ssps);
-    mypow(cth2,gen.sinPow,gen.powlimit,csp,csps);
-    mypow(sth2,gen.cosPow,gen.powlimit,scp,scps);
-
-    d.l1p[i] = 0;
-    d.l1m[i] = 0;
-    d.l2p[i] = prefac*ccp;
-    d.scp[i] = prescale+ccps;
-    d.l2m[i] = prefac*csp;
-    d.scm[i] = prescale+csps;
-    Tvnormalize(d.l2m[i],d.scm[i],sharp_fbighalf);
-    Tvnormalize(d.l2p[i],d.scp[i],sharp_fbighalf);
-    d.l2p[i] *= ssp;
-    d.scp[i] += ssps;
-    d.l2m[i] *= scp;
-    d.scm[i] += scps;
-    if (gen.preMinus_p)
-      d.l2p[i] = -d.l2p[i];
-    if (gen.preMinus_m)
-      d.l2m[i] = -d.l2m[i];
-    if (gen.s&1)
-      d.l2p[i] = -d.l2p[i];
-
-    Tvnormalize(d.l2m[i],d.scm[i],sharp_ftol);
-    Tvnormalize(d.l2p[i],d.scp[i],sharp_ftol);
-
-    below_limit &= all_of(d.scm[i]<1) &&
-                   all_of(d.scp[i]<1);
+    Tv prefac=gen.prefac[gen.m],
+       prescale=gen.fscale[gen.m];
+    for (size_t i=0; i<nv2; ++i)
+      {
+  // FIXME: can we do this better?
+      Tv cth2=max(Tv(1e-15),sqrt((1.+d.cth[i])*0.5));
+      Tv sth2=max(Tv(1e-15),sqrt((1.-d.cth[i])*0.5));
+      auto mask=d.sth[i]<0;
+      where(mask&(d.cth[i]<0),cth2)*=-1.;
+      where(mask&(d.cth[i]<0),sth2)*=-1.;
+  
+      Tv ccp, ccps, ssp, ssps, csp, csps, scp, scps;
+      mypow(cth2,gen.cosPow,gen.powlimit,ccp,ccps);
+      mypow(sth2,gen.sinPow,gen.powlimit,ssp,ssps);
+      mypow(cth2,gen.sinPow,gen.powlimit,csp,csps);
+      mypow(sth2,gen.cosPow,gen.powlimit,scp,scps);
+  
+      d.l1p[i] = 0;
+      d.l1m[i] = 0;
+      d.l2p[i] = prefac*ccp;
+      d.scp[i] = prescale+ccps;
+      d.l2m[i] = prefac*csp;
+      d.scm[i] = prescale+csps;
+      Tvnormalize(d.l2m[i],d.scm[i],sharp_fbighalf);
+      Tvnormalize(d.l2p[i],d.scp[i],sharp_fbighalf);
+      d.l2p[i] *= ssp;
+      d.scp[i] += ssps;
+      d.l2m[i] *= scp;
+      d.scm[i] += scps;
+      if (gen.preMinus_p)
+        d.l2p[i] = -d.l2p[i];
+      if (gen.preMinus_m)
+        d.l2m[i] = -d.l2m[i];
+      if (gen.s&1)
+        d.l2p[i] = -d.l2p[i];
+  
+      Tvnormalize(d.l2m[i],d.scm[i],sharp_ftol);
+      Tvnormalize(d.l2p[i],d.scp[i],sharp_ftol);
+  
+      below_limit &= all_of(d.scm[i]<1) &&
+                     all_of(d.scp[i]<1);
+      }
     }
+  else
+    {
+    for (size_t i=0; i<nv2; ++i)
+      {
+      rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol);
+      rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol);
 
-  size_t l=gen.mhi;
+      below_limit &= all_of(d.scm[i]<1) &&
+                     all_of(d.scp[i]<1);
+      }
+    }
 
   while (below_limit)
     {
     if (l+2>gen.lmax) {l_=gen.lmax+1;return;}
-    below_limit=1;
+    if (l==lstop) { l_=l; return; }
+    below_limit=true;
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
     Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
     for (size_t i=0; i<nv2; ++i)
@@ -1072,7 +1057,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
   {
   size_t l,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee_spin(gen, d, l, nv2);
+  iter_to_ieee_spin(gen, d, l, nv2, gen.mhi, gen.lmax+1);
   if (l>lmax) return;
 
   const auto &fx = gen.coef;
@@ -1199,12 +1184,12 @@ DUCC0_NOINLINE static void map2alm_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   }
 
 DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
-  const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
+  const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth, size_t lstart, size_t lstop)
   {
-  size_t l,lmax=gen.lmax;
+  size_t l;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee_spin(gen, d, l, nv2);
-  if (l>lmax) return;
+  iter_to_ieee_spin(gen, d, l, nv2, lstart, lstop);
+  if (l>=lstop) return;
 
   const auto &fx = gen.coef;
   bool full_ieee=true;
@@ -1215,22 +1200,25 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
     full_ieee &= all_of(d.scp[i]>=0) &&
                  all_of(d.scm[i]>=0);
     }
-  for (size_t i=0; i<nv2; ++i)
-    {
-    Tv tmp;
-    tmp = d.p1pr[i]; d.p1pr[i] -= d.p2mi[i]; d.p2mi[i] += tmp;
-    tmp = d.p1pi[i]; d.p1pi[i] += d.p2mr[i]; d.p2mr[i] -= tmp;
-    tmp = d.p1mr[i]; d.p1mr[i] += d.p2pi[i]; d.p2pi[i] -= tmp;
-    tmp = d.p1mi[i]; d.p1mi[i] -= d.p2pr[i]; d.p2pr[i] += tmp;
-    }
 
-  while((!full_ieee) && (l<=lmax))
+// OUCH! We must only do this once!
+  if (lstart==gen.mhi)
+    for (size_t i=0; i<nv2; ++i)
+      {
+      Tv tmp;
+      tmp = d.p1pr[i]; d.p1pr[i] -= d.p2mi[i]; d.p2mi[i] += tmp;
+      tmp = d.p1pi[i]; d.p1pi[i] += d.p2mr[i]; d.p2mr[i] -= tmp;
+      tmp = d.p1mr[i]; d.p1mr[i] += d.p2pi[i]; d.p2pi[i] -= tmp;
+      tmp = d.p1mi[i]; d.p1mi[i] -= d.p2pr[i]; d.p2pr[i] += tmp;
+      }
+ 
+  while((!full_ieee) && (l<lstop))
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
     Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
     Tv agr1=0, agi1=0, acr1=0, aci1=0;
     Tv agr2=0, agi2=0, acr2=0, aci2=0;
-    full_ieee=1;
+    full_ieee=true;
     for (size_t i=0; i<nv2; ++i)
       {
       d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
@@ -1259,7 +1247,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
     vhsum_cmplx_special (agr2,agi2,acr2,aci2,&alm[2*l+2]);
     l+=2;
     }
-  if (l>lmax) return;
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
@@ -1267,8 +1255,9 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
     d.l2p[i] *= d.cfp[i];
     d.l1m[i] *= d.cfm[i];
     d.l2m[i] *= d.cfm[i];
+    d.scp[i] = d.scm[i] = 0;
     }
-  map2alm_spin_kernel(d, fx, alm, l, lmax, nv2);
+  map2alm_spin_kernel(d, fx, alm, l, lstop-1, nv2);
   }
 
 
@@ -1321,7 +1310,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin_gradonly(const dcmplx * DUCC0_RESTR
   {
   size_t l,lmax=gen.lmax;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee_spin(gen, d, l, nv2);
+  iter_to_ieee_spin(gen, d, l, nv2, gen.mhi, gen.lmax+1);
   if (l>lmax) return;
 
   const auto &fx = gen.coef;
@@ -1436,12 +1425,12 @@ DUCC0_NOINLINE static void map2alm_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRIC
   }
 
 DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT alm,
-  const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth)
+  const Ylmgen &gen, sxdata_v & DUCC0_RESTRICT d, size_t nth, size_t lstart, size_t lstop)
   {
-  size_t l,lmax=gen.lmax;
+  size_t l;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee_spin(gen, d, l, nv2);
-  if (l>lmax) return;
+  iter_to_ieee_spin(gen, d, l, nv2, lstart, lstop);
+  if (l>=lstop) return;
 
   const auto &fx = gen.coef;
   bool full_ieee=true;
@@ -1452,16 +1441,18 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
     full_ieee &= all_of(d.scp[i]>=0) &&
                  all_of(d.scm[i]>=0);
     }
-  for (size_t i=0; i<nv2; ++i)
-    {
-    Tv tmp;
-    tmp = d.p1pr[i]; d.p1pr[i] -= d.p2mi[i]; d.p2mi[i] += tmp;
-    tmp = d.p1pi[i]; d.p1pi[i] += d.p2mr[i]; d.p2mr[i] -= tmp;
-    tmp = d.p1mr[i]; d.p1mr[i] += d.p2pi[i]; d.p2pi[i] -= tmp;
-    tmp = d.p1mi[i]; d.p1mi[i] -= d.p2pr[i]; d.p2pr[i] += tmp;
-    }
 
-  while((!full_ieee) && (l<=lmax))
+  if (lstart==gen.mhi)
+    for (size_t i=0; i<nv2; ++i)
+      {
+      Tv tmp;
+      tmp = d.p1pr[i]; d.p1pr[i] -= d.p2mi[i]; d.p2mi[i] += tmp;
+      tmp = d.p1pi[i]; d.p1pi[i] += d.p2mr[i]; d.p2mr[i] -= tmp;
+      tmp = d.p1mr[i]; d.p1mr[i] += d.p2pi[i]; d.p2pi[i] -= tmp;
+      tmp = d.p1mi[i]; d.p1mi[i] -= d.p2pr[i]; d.p2pr[i] += tmp;
+      }
+
+  while((!full_ieee) && (l<lstop))
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
     Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
@@ -1491,7 +1482,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
     vhsum_cmplx_special (agr1,agi1,agr2,agi2,&alm[l]);
     l+=2;
     }
-  if (l>lmax) return;
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
@@ -1499,8 +1490,9 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
     d.l2p[i] *= d.cfp[i];
     d.l1m[i] *= d.cfm[i];
     d.l2m[i] *= d.cfm[i];
+    d.scp[i] = d.scm[i] = 0;
     }
-  map2alm_spin_gradonly_kernel(d, fx, alm, l, lmax, nv2);
+  map2alm_spin_gradonly_kernel(d, fx, alm, l, lstop-1, nv2);
   }
 
 template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
@@ -1575,11 +1567,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 4096;  // MUST be divisible by 8!
+    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
-//cout << lstart << " " << lstop << endl;
       for (size_t vi=0; vi<v_d.size(); ++vi)
         calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
       lstart = lstop;
@@ -1707,8 +1698,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
     {
     constexpr size_t nval=nv0*VLEN;
     vector<s0data_u> v_d;
-//    vector<array<size_t, nval>> v_idx, v_midx;
-//    vector<Tbv0> v_cth;
     vector<size_t> v_nth;
     size_t ith=0;
     while (ith<rdata.size())
@@ -1745,20 +1734,16 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
           d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
           }
         v_d.push_back(d);
-//        v_idx.push_back(idx);
-//        v_midx.push_back(midx);
         v_nth.push_back(nth);
-//        v_cth.push_back(cth);
         }
       }
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 4096;  // MUST be divisible by 8!
+    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
-//cout << lstart << " " << lstop << endl;
       for (size_t vi=0; vi<v_d.size(); ++vi)
         calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
       lstart = lstop;
@@ -1785,6 +1770,8 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   else
     {
     constexpr size_t nval=nvx*VLEN;
+    vector<sxdata_u> v_d;
+    vector<size_t> v_nth;
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1819,12 +1806,34 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
           d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
           d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
           }
-        if (mode==STANDARD)
-          calc_map2alm_spin(almtmp.data(), gen, d.v, nth);
-        else
-          calc_map2alm_spin_gradonly(almtmp.data(), gen, d.v, nth);
+        v_d.push_back(d);
+        v_nth.push_back(nth);
         }
       }
+
+#if 1
+    size_t lstart = gen.mhi;
+    constexpr size_t lstep = 128;  // MUST be divisible by 8!
+    while (lstart<=gen.lmax)
+      {
+      size_t lstop = min(gen.lmax+1, lstart+lstep);
+      for (size_t vi=0; vi<v_d.size(); ++vi)
+        {
+        if (mode==STANDARD)
+          calc_map2alm_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+        else
+          calc_map2alm_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+        }
+      lstart = lstop;
+      }
+#else
+    for (size_t vi=0; vi<v_d.size(); ++vi)
+      if (mode==STANDARD)
+        calc_map2alm_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
+      else
+        calc_map2alm_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
+#endif
+
     //adjust the a_lm for the new algorithm
     for (size_t l=gen.mhi; l<=gen.lmax; ++l)
       for (size_t i=0; i<almtmp.shape(1); ++i)
