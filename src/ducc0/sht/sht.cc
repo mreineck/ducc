@@ -798,12 +798,13 @@ DUCC0_NOINLINE static void map2alm_kernel(s0data_v & DUCC0_RESTRICT d,
   }
 
 DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
-  const Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth)
+  const Ylmgen &gen, s0data_v & DUCC0_RESTRICT d, size_t nth, size_t lstart, size_t lstop)
   {
-  size_t l,il=0,lmax=gen.lmax;
+  size_t l,il=0;
   size_t nv2 = (nth+VLEN-1)/VLEN;
-  iter_to_ieee(gen, d, l, il, nv2);
-  if (l>lmax) return;
+  iter_to_ieee(gen, d, l, il, nv2, lstart, lstop);
+
+  if (l>=lstop) return;
 
   auto &coef = gen.coef;
   bool full_ieee=true;
@@ -813,7 +814,7 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
     full_ieee &= all_of(d.scale[i]>=0);
     }
 
-  while((!full_ieee) && (l<=lmax))
+  while((!full_ieee) && (l<lstop))
     {
     Tv a=coef[il].a, b=coef[il].b;
     Tv atmp[4] = {0,0,0,0};
@@ -834,14 +835,15 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
     vhsum_cmplx_special (atmp[0], atmp[1], atmp[2], atmp[3], &alm[l]);
     l+=2; ++il;
     }
-  if (l>lmax) return;
+
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
     d.lam1[i] *= d.corfac[i];
     d.lam2[i] *= d.corfac[i];
     }
-  map2alm_kernel(d, coef, alm, l, il, lmax, nv2);
+  map2alm_kernel(d, coef, alm, l, il, lstop-1, nv2);
   }
 
 DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
@@ -1573,7 +1575,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 8192;  // MUST be divisible by 8!
+    constexpr size_t lstep = 1024;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1704,6 +1706,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   if (gen.s==0)
     {
     constexpr size_t nval=nv0*VLEN;
+    vector<s0data_u> v_d;
+//    vector<array<size_t, nval>> v_idx, v_midx;
+//    vector<Tbv0> v_cth;
+    vector<size_t> v_nth;
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1738,9 +1744,30 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
           d.s.sth[i]=d.s.sth[nth-1];
           d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
           }
-        calc_map2alm (almtmp.data(), gen, d.v, nth);
+        v_d.push_back(d);
+//        v_idx.push_back(idx);
+//        v_midx.push_back(midx);
+        v_nth.push_back(nth);
+//        v_cth.push_back(cth);
         }
       }
+
+#if 1
+    size_t lstart = gen.m;
+    constexpr size_t lstep = 1024;  // MUST be divisible by 8!
+    while (lstart<=gen.lmax)
+      {
+      size_t lstop = min(gen.lmax+1, lstart+lstep);
+//cout << lstart << " " << lstop << endl;
+      for (size_t vi=0; vi<v_d.size(); ++vi)
+        calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+      lstart = lstop;
+      }
+#else
+    for (size_t vi=0; vi<v_d.size(); ++vi)
+      calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.m, gen.lmax+1);
+#endif
+
     //adjust the a_lm for the new algorithm
     dcmplx * DUCC0_RESTRICT alm=almtmp.data();
     dcmplx alm2 = 0.;
