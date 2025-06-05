@@ -407,7 +407,10 @@ static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
-constexpr size_t lstep = 4096;  // MUST be divisible by 8!
+#define DUCC0_SHT_LBLOCK
+#ifdef DUCC0_SHT_LBLOCK
+constexpr size_t lstep = 128;  // MUST be divisible by 8!
+#endif
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
@@ -1477,10 +1480,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
     constexpr size_t nval=nv0*VLEN;
 
+#ifdef DUCC0_SHT_LBLOCK
     vector<s0data_u> v_d;
     vector<array<size_t, nval>> v_idx, v_midx;
     vector<Tbv0> v_cth;
     vector<size_t> v_nth;
+#endif
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1521,6 +1526,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
         init_lambda(gen, d.v, nvec);
 
+#ifdef DUCC0_SHT_LBLOCK
         v_d.push_back(d);
         v_idx.push_back(idx);
         v_midx.push_back(midx);
@@ -1529,7 +1535,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         }
       }
 
-#if 1
     size_t lstart = gen.m;
     while (lstart<=gen.lmax)
       {
@@ -1538,10 +1543,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
       lstart = lstop;
       }
-#else
-    for (size_t vi=0; vi<v_d.size(); ++vi)
-      calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.m, gen.lmax+1);
-#endif
 
     for (size_t vi=0; vi<v_d.size(); ++vi)
       {
@@ -1551,6 +1552,11 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       const auto nth = v_nth[vi];
       size_t nvec = (nth+VLEN-1)/VLEN;
       auto cth = v_cth[vi];
+
+#else
+      calc_alm2map (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
+#endif
+
       for (size_t i=0; i<nvec; ++i)
         {
         auto t1r = d.v.p1r[i];
@@ -1570,6 +1576,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
         }
       }
+#ifndef DUCC0_SHT_LBLOCK
+}
+#endif
     }
   else
     {
@@ -1579,9 +1588,11 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         almtmp(l,i)*=gen.alpha[l];
 
     constexpr size_t nval=nvx*VLEN;
+#ifdef DUCC0_SHT_LBLOCK
     vector<sxdata_u> v_d;
     vector<array<size_t, nval>> v_idx, v_midx;
     vector<size_t> v_nth;
+#endif
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1619,6 +1630,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
         init_lambda_spin(gen, d.v, nvec);
 
+#ifdef DUCC0_SHT_LBLOCK
         v_d.push_back(d);
         v_idx.push_back(idx);
         v_midx.push_back(midx);
@@ -1626,7 +1638,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         }
       }
 
-#if 1
     size_t lstart = gen.mhi;
     while (lstart<=gen.lmax)
       {
@@ -1640,13 +1651,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         }
       lstart = lstop;
       }
-#else
-    for (size_t vi=0; vi<v_d.size(); ++vi)
-      if (mode==STANDARD)
-        calc_alm2map_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
-      else // GRAD_ONLY or DERIV1
-        calc_alm2map_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
-#endif
 
     for (size_t vi=0; vi<v_d.size(); ++vi)
       {
@@ -1655,6 +1659,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       const auto &midx = v_midx[vi];
       const auto nth = v_nth[vi];
       size_t nvec = (nth+VLEN-1)/VLEN;
+#else
+      if (mode==STANDARD)
+        calc_alm2map_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+      else // GRAD_ONLY or DERIV1
+        calc_alm2map_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+#endif
       double fct = ((gen.mhi-gen.m+gen.s)&1) ? -1.: 1.;
       for (size_t i=0; i<nvec; ++i)
         {
@@ -1694,6 +1704,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
           }
         }
       }
+#ifndef DUCC0_SHT_LBLOCK
+}
+#endif
     }
   }
 
@@ -1705,8 +1718,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   if (gen.s==0)
     {
     constexpr size_t nval=nv0*VLEN;
+#ifdef DUCC0_SHT_LBLOCK
     vector<s0data_u> v_d;
     vector<size_t> v_nth;
+#endif
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1745,12 +1760,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
 
         init_lambda(gen, d.v, nvec);
 
+#ifdef DUCC0_SHT_LBLOCK
         v_d.push_back(d);
         v_nth.push_back(nth);
         }
       }
 
-#if 1
     size_t lstart = gen.m;
     while (lstart<=gen.lmax)
       {
@@ -1760,8 +1775,9 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
       lstart = lstop;
       }
 #else
-    for (size_t vi=0; vi<v_d.size(); ++vi)
-      calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.m, gen.lmax+1);
+        calc_map2alm (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
+        }
+      }
 #endif
 
     //adjust the a_lm for the new algorithm
@@ -1781,8 +1797,10 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   else
     {
     constexpr size_t nval=nvx*VLEN;
+#ifdef DUCC0_SHT_LBLOCK
     vector<sxdata_u> v_d;
     vector<size_t> v_nth;
+#endif
     size_t ith=0;
     while (ith<rdata.size())
       {
@@ -1830,12 +1848,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
           tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
           }
 
+#ifdef DUCC0_SHT_LBLOCK
         v_d.push_back(d);
         v_nth.push_back(nth);
         }
       }
 
-#if 1
     size_t lstart = gen.mhi;
     while (lstart<=gen.lmax)
       {
@@ -1850,11 +1868,12 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
       lstart = lstop;
       }
 #else
-    for (size_t vi=0; vi<v_d.size(); ++vi)
-      if (mode==STANDARD)
-        calc_map2alm_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
-      else
-        calc_map2alm_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], gen.mhi, gen.lmax+1);
+    if (mode==STANDARD)
+      calc_map2alm_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+    else
+      calc_map2alm_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+    }
+    }
 #endif
 
     //adjust the a_lm for the new algorithm
@@ -2272,6 +2291,7 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads)
   {
+SimpleTimer t0;
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
@@ -2336,6 +2356,7 @@ template<typename T> void leg2map(  // FFT
           }
         }
       }); /* end of parallel region */
+cout << "map2leg time: " << t0() << endl;
   }
 
 template<typename T> void map2leg(  // FFT
