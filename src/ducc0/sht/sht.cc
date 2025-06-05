@@ -409,7 +409,7 @@ constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
 #define DUCC0_SHT_LBLOCK
 #ifdef DUCC0_SHT_LBLOCK
-constexpr size_t lstep = 128;  // MUST be divisible by 8!
+constexpr size_t lstep = 4096;  // MUST be divisible by 8!
 #endif
 
 using Tbv0 = std::array<Tv,nv0>;
@@ -2291,7 +2291,6 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads)
   {
-SimpleTimer t0;
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
@@ -2356,7 +2355,6 @@ SimpleTimer t0;
           }
         }
       }); /* end of parallel region */
-cout << "map2leg time: " << t0() << endl;
   }
 
 template<typename T> void map2leg(  // FFT
