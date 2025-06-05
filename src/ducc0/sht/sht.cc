@@ -407,10 +407,7 @@ static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
-#define DUCC0_SHT_LBLOCK
-#ifdef DUCC0_SHT_LBLOCK
-constexpr size_t lstep = 4096;  // MUST be divisible by 8!
-#endif
+constexpr size_t lstep = 8192;  // MUST be divisible by 8!
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
@@ -1459,6 +1456,158 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
   map2alm_spin_gradonly_kernel(d, fx, alm, l, lstop-1, nv2);
   }
 
+template<typename T> DUCC0_NOINLINE static void fill_a2m(const Ylmgen &gen,
+  const vector<ringdata> &rdata, const vmav<complex<T>,3> &phase,
+  size_t mi, size_t &ith, s0data_u &d, array<size_t, nv0*VLEN> &idx,
+  array<size_t, nv0*VLEN> &midx, Tbv0 &cth, size_t &nth)
+  {
+  constexpr size_t nval=nv0*VLEN;
+  nth=0;
+  while ((nth<nval)&&(ith<rdata.size()))
+    {
+    if (rdata[ith].mlim>=gen.m)
+      {
+      idx[nth] = rdata[ith].idx;
+      midx[nth] = rdata[ith].midx;
+      auto lcth = rdata[ith].cth;
+      cth[nth/VLEN][nth%VLEN] = lcth;
+      if (abs(lcth)>0.99)
+        d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
+      else
+        d.s.csq[nth]=lcth*lcth;
+      d.s.sth[nth]=rdata[ith].sth;
+      ++nth;
+      }
+    else
+      phase(0, rdata[ith].idx, mi) = phase(0, rdata[ith].midx, mi) = 0;
+    ++ith;
+    }
+  if (nth>0)
+    {
+    size_t nvec = (nth+VLEN-1)/VLEN;
+    size_t i2 = nvec*VLEN;
+    for (auto i=nth; i<i2; ++i)
+      {
+      d.s.csq[i]=d.s.csq[nth-1];
+      d.s.sth[i]=d.s.sth[nth-1];
+      }
+    for (size_t i=0; i<nvec; ++i)
+      d.v.p1r[i] = d.v.p1i[i] = d.v.p2r[i] = d.v.p2i[i] = 0;
+
+    init_lambda(gen, d.v, nvec);
+    }
+  }
+
+template<typename T> DUCC0_NOINLINE static void extract_a2m( size_t mi,
+  s0data_u &d, const array<size_t, nv0*VLEN> &idx,
+  const array<size_t, nv0*VLEN> &midx, const size_t &nth, const Tbv0 &cth,
+  const vmav<complex<T>,3> &phase)
+  {
+  size_t nvec = (nth+VLEN-1)/VLEN;
+  for (size_t i=0; i<nvec; ++i)
+    {
+    auto t1r = d.v.p1r[i];
+    auto t2r = d.v.p2r[i]*cth[i];
+    auto t1i = d.v.p1i[i];
+    auto t2i = d.v.p2i[i]*cth[i];
+    d.v.p1r[i] = t1r+t2r;
+    d.v.p1i[i] = t1i+t2i;
+    d.v.p2r[i] = t1r-t2r;
+    d.v.p2i[i] = t1i-t2i;
+    }
+  for (size_t i=0; i<nth; ++i)
+    {
+    //adjust for new algorithm
+    phase(0, idx[i], mi) = complex<T>(T(d.s.p1r[i]),T(d.s.p1i[i]));
+    if (idx[i]!=midx[i])
+      phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
+    }
+  }
+template<typename T> DUCC0_NOINLINE static void fill_a2m_spin(
+  const Ylmgen &gen, const vector<ringdata> &rdata,
+  const vmav<complex<T>,3> &phase, size_t mi, size_t &ith, sxdata_u &d,
+  array<size_t, nvx*VLEN> &idx, array<size_t, nvx*VLEN> &midx, size_t &nth)
+  {
+  constexpr size_t nval=nvx*VLEN;
+  nth=0;
+  while ((nth<nval)&&(ith<rdata.size()))
+    {
+    if (rdata[ith].mlim>=gen.m)
+      {
+      idx[nth] = rdata[ith].idx;
+      midx[nth] = rdata[ith].midx;
+      d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+      ++nth;
+      }
+    else
+      {
+      phase(0, rdata[ith].idx, mi) = phase(0, rdata[ith].midx, mi) = 0;
+      phase(1, rdata[ith].idx, mi) = phase(1, rdata[ith].midx, mi) = 0;
+      }
+    ++ith;
+    }
+  if (nth>0)
+    {
+    size_t nvec = (nth+VLEN-1)/VLEN;
+    size_t i2 = nvec*VLEN;
+    for (size_t i=nth; i<i2; ++i)
+      {
+      d.s.cth[i]=d.s.cth[nth-1];
+      d.s.sth[i]=d.s.sth[nth-1];
+      }
+    for (size_t i=0; i<nvec; ++i)
+      d.v.p1pr[i] = d.v.p1pi[i] = d.v.p2pr[i] = d.v.p2pi[i] =
+      d.v.p1mr[i] = d.v.p1mi[i] = d.v.p2mr[i] = d.v.p2mi[i] = 0;
+
+    init_lambda_spin(gen, d.v, nvec);
+    }
+  }
+template<typename T> DUCC0_NOINLINE static void extract_a2m_spin(
+  const Ylmgen &gen, size_t mi, sxdata_u &d, const array<size_t, nvx*VLEN> &idx,
+  const array<size_t, nvx*VLEN> &midx, const size_t &nth,
+  const vmav<complex<T>,3> &phase)
+  {
+  size_t nvec = (nth+VLEN-1)/VLEN;
+  double fct = ((gen.mhi-gen.m+gen.s)&1) ? -1.: 1.;
+  for (size_t i=0; i<nvec; ++i)
+    {
+    Tv tmp;
+    tmp = d.v.p1pr[i]; d.v.p1pr[i] -= d.v.p2mi[i]; d.v.p2mi[i] += tmp;
+    tmp = d.v.p1pi[i]; d.v.p1pi[i] += d.v.p2mr[i]; d.v.p2mr[i] -= tmp;
+    tmp = d.v.p1mr[i]; d.v.p1mr[i] += d.v.p2pi[i]; d.v.p2pi[i] -= tmp;
+    tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
+    }
+  for (size_t i=0; i<nvec; ++i)
+    {
+    auto p1pr=d.v.p1pr[i], p1pi=d.v.p1pi[i],
+         p2pr=d.v.p2pr[i], p2pi=d.v.p2pi[i],
+         p1mr=d.v.p1mr[i], p1mi=d.v.p1mi[i],
+         p2mr=d.v.p2mr[i], p2mi=d.v.p2mi[i];
+    d.v.p1pr[i] = p1pr+p2pr;
+    d.v.p1pi[i] = p1pi+p2pi;
+    d.v.p1mr[i] = p1mr+p2mr;
+    d.v.p1mi[i] = p1mi+p2mi;
+    d.v.p2pr[i] = fct*(p1pr-p2pr);
+    d.v.p2pi[i] = fct*(p1pi-p2pi);
+    d.v.p2mr[i] = fct*(p1mr-p2mr);
+    d.v.p2mi[i] = fct*(p1mi-p2mi);
+    }
+  for (size_t i=0; i<nth; ++i)
+    {
+    dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
+           q2(d.s.p2pr[i], d.s.p2pi[i]),
+           u1(d.s.p1mr[i], d.s.p1mi[i]),
+           u2(d.s.p2mr[i], d.s.p2mi[i]);
+    phase(0, idx[i], mi) = complex<T>(T(d.s.p1pr[i]), T(d.s.p1pi[i]));
+    phase(1, idx[i], mi) = complex<T>(T(d.s.p1mr[i]), T(d.s.p1mi[i]));
+    if (idx[i]!=midx[i])
+      {
+      phase(0, midx[i], mi) = complex<T>(T(d.s.p2pr[i]), T(d.s.p2pi[i]));
+      phase(1, midx[i], mi) = complex<T>(T(d.s.p2mr[i]), T(d.s.p2mi[i]));
+      }
+    }
+  }
+
 template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
   const vmav<complex<double>,2> &almtmp,
   const vmav<complex<T>,3> &phase, const vector<ringdata> &rdata,
@@ -1479,106 +1628,57 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       }
 
     constexpr size_t nval=nv0*VLEN;
-
-#ifdef DUCC0_SHT_LBLOCK
-    vector<s0data_u> v_d;
-    vector<array<size_t, nval>> v_idx, v_midx;
-    vector<Tbv0> v_cth;
-    vector<size_t> v_nth;
-#endif
-    size_t ith=0;
-    while (ith<rdata.size())
+    if (gen.lmax+1-gen.m > lstep)
       {
-      s0data_u d;
-      array<size_t, nval> idx, midx;
-      Tbv0 cth;
-      size_t nth=0;
-      while ((nth<nval)&&(ith<rdata.size()))
+      vector<s0data_u> v_d;
+      vector<array<size_t, nval>> v_idx, v_midx;
+      vector<Tbv0> v_cth;
+      vector<size_t> v_nth;
+
+      size_t ith=0;
+      while (ith<rdata.size())
         {
-        if (rdata[ith].mlim>=gen.m)
-          {
-          idx[nth] = rdata[ith].idx;
-          midx[nth] = rdata[ith].midx;
-          auto lcth = rdata[ith].cth;
-          cth[nth/VLEN][nth%VLEN] = lcth;
-          if (abs(lcth)>0.99)
-            d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
-          else
-            d.s.csq[nth]=lcth*lcth;
-          d.s.sth[nth]=rdata[ith].sth;
-          ++nth;
-          }
-        else
-          phase(0, rdata[ith].idx, mi) = phase(0, rdata[ith].midx, mi) = 0;
-        ++ith;
+        v_d.push_back({}); v_idx.push_back({}); v_midx.push_back({});
+        v_cth.push_back({}); v_nth.push_back(0);
+        fill_a2m(gen, rdata, phase, mi, ith, v_d.back(), v_idx.back(),
+                 v_midx.back(), v_cth.back(), v_nth.back());
+        if (v_nth.back()==0)
+          v_d.pop_back();
         }
-      if (nth>0)
+
+      size_t lstart = gen.m;
+      while (lstart<=gen.lmax)
         {
-        size_t nvec = (nth+VLEN-1)/VLEN;
-        size_t i2 = nvec*VLEN;
-        for (auto i=nth; i<i2; ++i)
-          {
-          d.s.csq[i]=d.s.csq[nth-1];
-          d.s.sth[i]=d.s.sth[nth-1];
-          }
-        for (size_t i=0; i<nvec; ++i)
-          d.v.p1r[i] = d.v.p1i[i] = d.v.p2r[i] = d.v.p2i[i] = 0;
-
-        init_lambda(gen, d.v, nvec);
-
-#ifdef DUCC0_SHT_LBLOCK
-        v_d.push_back(d);
-        v_idx.push_back(idx);
-        v_midx.push_back(midx);
-        v_nth.push_back(nth);
-        v_cth.push_back(cth);
+        size_t lstop = min(gen.lmax+1, lstart+lstep);
+        for (size_t vi=0; vi<v_d.size(); ++vi)
+          calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+        lstart = lstop;
         }
-      }
 
-    size_t lstart = gen.m;
-    while (lstart<=gen.lmax)
-      {
-      size_t lstop = min(gen.lmax+1, lstart+lstep);
       for (size_t vi=0; vi<v_d.size(); ++vi)
-        calc_alm2map (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-      lstart = lstop;
+        extract_a2m(mi, v_d[vi], v_idx[vi], v_midx[vi], v_nth[vi], v_cth[vi], phase);
       }
-
-    for (size_t vi=0; vi<v_d.size(); ++vi)
+    else
       {
-      auto &d = v_d[vi];
-      const auto &idx = v_idx[vi];
-      const auto &midx = v_midx[vi];
-      const auto nth = v_nth[vi];
-      size_t nvec = (nth+VLEN-1)/VLEN;
-      auto cth = v_cth[vi];
-
-#else
-      calc_alm2map (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
-#endif
-
-      for (size_t i=0; i<nvec; ++i)
+      size_t ith=0;
+      while (ith<rdata.size())
         {
-        auto t1r = d.v.p1r[i];
-        auto t2r = d.v.p2r[i]*cth[i];
-        auto t1i = d.v.p1i[i];
-        auto t2i = d.v.p2i[i]*cth[i];
-        d.v.p1r[i] = t1r+t2r;
-        d.v.p1i[i] = t1i+t2i;
-        d.v.p2r[i] = t1r-t2r;
-        d.v.p2i[i] = t1i-t2i;
-        }
-      for (size_t i=0; i<nth; ++i)
-        {
-        //adjust for new algorithm
-        phase(0, idx[i], mi) = complex<T>(T(d.s.p1r[i]),T(d.s.p1i[i]));
-        if (idx[i]!=midx[i])
-          phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
+        s0data_u d;
+        array<size_t, nval> idx, midx;
+        Tbv0 cth;
+        size_t nth=0;
+        while ((nth<nval)&&(ith<rdata.size()))
+          {
+          fill_a2m(gen, rdata, phase, mi, ith, d, idx, midx, cth, nth);
+
+          if (nth>0)
+            {
+            calc_alm2map (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
+            extract_a2m(mi, d, idx, midx, nth, cth, phase);
+            }
+          }
         }
       }
-#ifndef DUCC0_SHT_LBLOCK
-}
-#endif
     }
   else
     {
@@ -1587,126 +1687,149 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       for (size_t i=0; i<almtmp.shape(1); ++i)
         almtmp(l,i)*=gen.alpha[l];
 
-    constexpr size_t nval=nvx*VLEN;
-#ifdef DUCC0_SHT_LBLOCK
-    vector<sxdata_u> v_d;
-    vector<array<size_t, nval>> v_idx, v_midx;
-    vector<size_t> v_nth;
-#endif
-    size_t ith=0;
-    while (ith<rdata.size())
+    if (gen.lmax+1-gen.mhi > lstep)
+      {
+      vector<sxdata_u> v_d;
+      vector<array<size_t, nvx*VLEN>> v_idx, v_midx;
+      vector<size_t> v_nth;
+      size_t ith=0;
+      while (ith<rdata.size())
+        {
+        v_d.push_back({}); v_idx.push_back({}); v_midx.push_back({});
+        v_nth.push_back(0);
+        fill_a2m_spin(gen, rdata, phase, mi, ith, v_d.back(), v_idx.back(), v_midx.back(), v_nth.back());
+        if (v_nth.back()==0)
+          v_d.pop_back();
+        }
+
+      size_t lstart = gen.mhi;
+      while (lstart<=gen.lmax)
+        {
+        size_t lstop = min(gen.lmax+1, lstart+lstep);
+        for (size_t vi=0; vi<v_d.size(); ++vi)
+          {
+          if (mode==STANDARD)
+            calc_alm2map_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+          else // GRAD_ONLY or DERIV1
+            calc_alm2map_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+          }
+        lstart = lstop;
+        }
+
+      for (size_t vi=0; vi<v_d.size(); ++vi)
+        extract_a2m_spin(gen, mi, v_d[vi], v_idx[vi], v_midx[vi], v_nth[vi], phase);
+      }
+    else
       {
       sxdata_u d;
-      array<size_t, nval> idx, midx;
-      size_t nth=0;
-      while ((nth<nval)&&(ith<rdata.size()))
+      array<size_t, nvx*VLEN> idx, midx;
+      size_t nth;
+      size_t ith=0;
+      while (ith<rdata.size())
         {
-        if (rdata[ith].mlim>=gen.m)
+        fill_a2m_spin(gen, rdata, phase, mi, ith, d, idx, midx, nth);
+        if (nth>0)
           {
-          idx[nth] = rdata[ith].idx;
-          midx[nth] = rdata[ith].midx;
-          d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
-          ++nth;
-          }
-        else
-          {
-          phase(0, rdata[ith].idx, mi) = phase(0, rdata[ith].midx, mi) = 0;
-          phase(1, rdata[ith].idx, mi) = phase(1, rdata[ith].midx, mi) = 0;
-          }
-        ++ith;
-        }
-      if (nth>0)
-        {
-        size_t nvec = (nth+VLEN-1)/VLEN;
-        size_t i2 = nvec*VLEN;
-        for (size_t i=nth; i<i2; ++i)
-          {
-          d.s.cth[i]=d.s.cth[nth-1];
-          d.s.sth[i]=d.s.sth[nth-1];
-          }
-        for (size_t i=0; i<nvec; ++i)
-          d.v.p1pr[i] = d.v.p1pi[i] = d.v.p2pr[i] = d.v.p2pi[i] =
-          d.v.p1mr[i] = d.v.p1mi[i] = d.v.p2mr[i] = d.v.p2mi[i] = 0;
+          if (mode==STANDARD)
+            calc_alm2map_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+          else // GRAD_ONLY or DERIV1
+            calc_alm2map_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
 
-        init_lambda_spin(gen, d.v, nvec);
-
-#ifdef DUCC0_SHT_LBLOCK
-        v_d.push_back(d);
-        v_idx.push_back(idx);
-        v_midx.push_back(midx);
-        v_nth.push_back(nth);
+          extract_a2m_spin(gen, mi, d, idx, midx, nth, phase);
+          }
         }
       }
+    }
+  }
 
-    size_t lstart = gen.mhi;
-    while (lstart<=gen.lmax)
+template<typename T> DUCC0_NOINLINE static void fill_m2a(const Ylmgen &gen,
+  const vector<ringdata> &rdata, const cmav<complex<T>,3> &phase,
+  size_t mi, size_t &ith, s0data_u &d, size_t &nth)
+  {
+  constexpr size_t nval = nv0*VLEN;
+  nth=0;
+  while ((nth<nval)&&(ith<rdata.size()))
+    {
+    if (rdata[ith].mlim>=gen.m)
       {
-      size_t lstop = min(gen.lmax+1, lstart+lstep);
-      for (size_t vi=0; vi<v_d.size(); ++vi)
-        {
-        if (mode==STANDARD)
-          calc_alm2map_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-        else // GRAD_ONLY or DERIV1
-          calc_alm2map_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-        }
-      lstart = lstop;
+      if (abs(rdata[ith].cth)>0.99)
+        d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
+      else
+        d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
+      d.s.sth[nth]=rdata[ith].sth;
+      dcmplx ph1=phase(0, rdata[ith].idx, mi);
+      dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi);
+      d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
+      d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
+      //adjust for new algorithm
+      d.s.p2r[nth]*=rdata[ith].cth;
+      d.s.p2i[nth]*=rdata[ith].cth;
+      ++nth;
+      }
+    ++ith;
+    }
+  if (nth>0)
+    {
+    size_t nvec = (nth+VLEN-1)/VLEN;
+    size_t i2 = nvec*VLEN;
+    for (size_t i=nth; i<i2; ++i)
+      {
+      d.s.csq[i]=d.s.csq[nth-1];
+      d.s.sth[i]=d.s.sth[nth-1];
+      d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
       }
 
-    for (size_t vi=0; vi<v_d.size(); ++vi)
+    init_lambda(gen, d.v, nvec);
+    }
+  }
+
+template<typename T> DUCC0_NOINLINE static void fill_m2a_spin(const Ylmgen &gen,
+  const vector<ringdata> &rdata, const cmav<complex<T>,3> &phase,
+  size_t mi, size_t &ith, sxdata_u &d, size_t &nth)
+  {
+  constexpr size_t nval = nvx*VLEN;
+  nth=0;
+  while ((nth<nval)&&(ith<rdata.size()))
+    {
+    if (rdata[ith].mlim>=gen.m)
       {
-      auto &d = v_d[vi];
-      const auto &idx = v_idx[vi];
-      const auto &midx = v_midx[vi];
-      const auto nth = v_nth[vi];
-      size_t nvec = (nth+VLEN-1)/VLEN;
-#else
-      if (mode==STANDARD)
-        calc_alm2map_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
-      else // GRAD_ONLY or DERIV1
-        calc_alm2map_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
-#endif
-      double fct = ((gen.mhi-gen.m+gen.s)&1) ? -1.: 1.;
-      for (size_t i=0; i<nvec; ++i)
-        {
-        Tv tmp;
-        tmp = d.v.p1pr[i]; d.v.p1pr[i] -= d.v.p2mi[i]; d.v.p2mi[i] += tmp;
-        tmp = d.v.p1pi[i]; d.v.p1pi[i] += d.v.p2mr[i]; d.v.p2mr[i] -= tmp;
-        tmp = d.v.p1mr[i]; d.v.p1mr[i] += d.v.p2pi[i]; d.v.p2pi[i] -= tmp;
-        tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
-        }
-      for (size_t i=0; i<nvec; ++i)
-        {
-        auto p1pr=d.v.p1pr[i], p1pi=d.v.p1pi[i],
-             p2pr=d.v.p2pr[i], p2pi=d.v.p2pi[i],
-             p1mr=d.v.p1mr[i], p1mi=d.v.p1mi[i],
-             p2mr=d.v.p2mr[i], p2mi=d.v.p2mi[i];
-        d.v.p1pr[i] = p1pr+p2pr;
-        d.v.p1pi[i] = p1pi+p2pi;
-        d.v.p1mr[i] = p1mr+p2mr;
-        d.v.p1mi[i] = p1mi+p2mi;
-        d.v.p2pr[i] = fct*(p1pr-p2pr);
-        d.v.p2pi[i] = fct*(p1pi-p2pi);
-        d.v.p2mr[i] = fct*(p1mr-p2mr);
-        d.v.p2mi[i] = fct*(p1mi-p2mi);
-        }
-      for (size_t i=0; i<nth; ++i)
-        {
-        dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
-               q2(d.s.p2pr[i], d.s.p2pi[i]),
-               u1(d.s.p1mr[i], d.s.p1mi[i]),
-               u2(d.s.p2mr[i], d.s.p2mi[i]);
-        phase(0, idx[i], mi) = complex<T>(T(d.s.p1pr[i]), T(d.s.p1pi[i]));
-        phase(1, idx[i], mi) = complex<T>(T(d.s.p1mr[i]), T(d.s.p1mi[i]));
-        if (idx[i]!=midx[i])
-          {
-          phase(0, midx[i], mi) = complex<T>(T(d.s.p2pr[i]), T(d.s.p2pi[i]));
-          phase(1, midx[i], mi) = complex<T>(T(d.s.p2mr[i]), T(d.s.p2mi[i]));
-          }
-        }
+      d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
+      dcmplx p1Q=phase(0, rdata[ith].idx, mi),
+             p1U=phase(1, rdata[ith].idx, mi),
+             p2Q=(rdata[ith].idx!=rdata[ith].midx) ? phase(0, rdata[ith].midx, mi):0.,
+             p2U=(rdata[ith].idx!=rdata[ith].midx) ? phase(1, rdata[ith].midx, mi):0.;
+      if ((gen.mhi-gen.m+gen.s)&1)
+        { p2Q=-p2Q; p2U=-p2U; }
+      d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
+      d.s.p1mr[nth]=(p1U+p2U).real(); d.s.p1mi[nth]=(p1U+p2U).imag();
+      d.s.p2pr[nth]=(p1Q-p2Q).real(); d.s.p2pi[nth]=(p1Q-p2Q).imag();
+      d.s.p2mr[nth]=(p1U-p2U).real(); d.s.p2mi[nth]=(p1U-p2U).imag();
+      ++nth;
       }
-#ifndef DUCC0_SHT_LBLOCK
-}
-#endif
+    ++ith;
+    }
+  if (nth>0)
+    {
+    size_t nvec = (nth+VLEN-1)/VLEN;
+    size_t i2 = nvec*VLEN;
+    for (size_t i=nth; i<i2; ++i)
+      {
+      d.s.cth[i]=d.s.cth[nth-1];
+      d.s.sth[i]=d.s.sth[nth-1];
+      d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
+      d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
+      }
+
+    init_lambda_spin(gen, d.v, nvec);
+
+    for (size_t i=0; i<nvec; ++i)
+      {
+      Tv tmp;
+      tmp = d.v.p1pr[i]; d.v.p1pr[i] -= d.v.p2mi[i]; d.v.p2mi[i] += tmp;
+      tmp = d.v.p1pi[i]; d.v.p1pi[i] += d.v.p2mr[i]; d.v.p2mr[i] -= tmp;
+      tmp = d.v.p1mr[i]; d.v.p1mr[i] += d.v.p2pi[i]; d.v.p2pi[i] -= tmp;
+      tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
+      }
     }
   }
 
@@ -1717,68 +1840,43 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
   {
   if (gen.s==0)
     {
-    constexpr size_t nval=nv0*VLEN;
-#ifdef DUCC0_SHT_LBLOCK
-    vector<s0data_u> v_d;
-    vector<size_t> v_nth;
-#endif
-    size_t ith=0;
-    while (ith<rdata.size())
+    if (gen.lmax+1-gen.m > lstep)
+      {
+      vector<s0data_u> v_d;
+      vector<size_t> v_nth;
+
+      size_t ith=0;
+      while (ith<rdata.size())
+        {
+        v_d.push_back({});
+        v_nth.push_back(0);
+        fill_m2a(gen, rdata, phase, mi, ith, v_d.back(), v_nth.back());
+        if (v_nth.back()==0)
+          v_d.pop_back();
+        }
+
+      size_t lstart = gen.m;
+      while (lstart<=gen.lmax)
+        {
+        size_t lstop = min(gen.lmax+1, lstart+lstep);
+        for (size_t vi=0; vi<v_d.size(); ++vi)
+          calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+        lstart = lstop;
+        }
+      }
+    else
       {
       s0data_u d;
-      size_t nth=0;
-      while ((nth<nval)&&(ith<rdata.size()))
+      size_t nth;
+
+      size_t ith=0;
+      while (ith<rdata.size())
         {
-        if (rdata[ith].mlim>=gen.m)
-          {
-          if (abs(rdata[ith].cth)>0.99)
-            d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
-          else
-            d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
-          d.s.sth[nth]=rdata[ith].sth;
-          dcmplx ph1=phase(0, rdata[ith].idx, mi);
-          dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi);
-          d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
-          d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
-          //adjust for new algorithm
-          d.s.p2r[nth]*=rdata[ith].cth;
-          d.s.p2i[nth]*=rdata[ith].cth;
-          ++nth;
-          }
-        ++ith;
-        }
-      if (nth>0)
-        {
-        size_t nvec = (nth+VLEN-1)/VLEN;
-        size_t i2 = nvec*VLEN;
-        for (size_t i=nth; i<i2; ++i)
-          {
-          d.s.csq[i]=d.s.csq[nth-1];
-          d.s.sth[i]=d.s.sth[nth-1];
-          d.s.p1r[i]=d.s.p1i[i]=d.s.p2r[i]=d.s.p2i[i]=0.;
-          }
-
-        init_lambda(gen, d.v, nvec);
-
-#ifdef DUCC0_SHT_LBLOCK
-        v_d.push_back(d);
-        v_nth.push_back(nth);
+        fill_m2a(gen, rdata, phase, mi, ith, d, nth);
+        if (nth>0)
+          calc_map2alm (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
         }
       }
-
-    size_t lstart = gen.m;
-    while (lstart<=gen.lmax)
-      {
-      size_t lstop = min(gen.lmax+1, lstart+lstep);
-      for (size_t vi=0; vi<v_d.size(); ++vi)
-        calc_map2alm (almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-      lstart = lstop;
-      }
-#else
-        calc_map2alm (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
-        }
-      }
-#endif
 
     //adjust the a_lm for the new algorithm
     dcmplx * DUCC0_RESTRICT alm=almtmp.data();
@@ -1796,85 +1894,51 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
     }
   else
     {
-    constexpr size_t nval=nvx*VLEN;
-#ifdef DUCC0_SHT_LBLOCK
-    vector<sxdata_u> v_d;
-    vector<size_t> v_nth;
-#endif
-    size_t ith=0;
-    while (ith<rdata.size())
+    if (gen.lmax+1-gen.mhi > lstep)
+      {
+      vector<sxdata_u> v_d;
+      vector<size_t> v_nth;
+      size_t ith=0;
+      while (ith<rdata.size())
+        {
+        v_d.push_back({});
+        v_nth.push_back(0);
+        fill_m2a_spin(gen, rdata, phase, mi, ith, v_d.back(), v_nth.back());
+        if (v_nth.back()==0)
+          v_d.pop_back();
+        }
+
+      size_t lstart = gen.mhi;
+      while (lstart<=gen.lmax)
+        {
+        size_t lstop = min(gen.lmax+1, lstart+lstep);
+        for (size_t vi=0; vi<v_d.size(); ++vi)
+          {
+          if (mode==STANDARD)
+            calc_map2alm_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+          else
+            calc_map2alm_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
+          }
+        lstart = lstop;
+        }
+      }
+    else
       {
       sxdata_u d;
-      size_t nth=0;
-      while ((nth<nval)&&(ith<rdata.size()))
+      size_t nth;
+      size_t ith=0;
+      while (ith<rdata.size())
         {
-        if (rdata[ith].mlim>=gen.m)
+        fill_m2a_spin(gen, rdata, phase, mi, ith, d, nth);
+        if (nth>0)
           {
-          d.s.cth[nth]=rdata[ith].cth; d.s.sth[nth]=rdata[ith].sth;
-          dcmplx p1Q=phase(0, rdata[ith].idx, mi),
-                 p1U=phase(1, rdata[ith].idx, mi),
-                 p2Q=(rdata[ith].idx!=rdata[ith].midx) ? phase(0, rdata[ith].midx, mi):0.,
-                 p2U=(rdata[ith].idx!=rdata[ith].midx) ? phase(1, rdata[ith].midx, mi):0.;
-          if ((gen.mhi-gen.m+gen.s)&1)
-            { p2Q=-p2Q; p2U=-p2U; }
-          d.s.p1pr[nth]=(p1Q+p2Q).real(); d.s.p1pi[nth]=(p1Q+p2Q).imag();
-          d.s.p1mr[nth]=(p1U+p2U).real(); d.s.p1mi[nth]=(p1U+p2U).imag();
-          d.s.p2pr[nth]=(p1Q-p2Q).real(); d.s.p2pi[nth]=(p1Q-p2Q).imag();
-          d.s.p2mr[nth]=(p1U-p2U).real(); d.s.p2mi[nth]=(p1U-p2U).imag();
-          ++nth;
+          if (mode==STANDARD)
+            calc_map2alm_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
+          else
+            calc_map2alm_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
           }
-        ++ith;
-        }
-      if (nth>0)
-        {
-        size_t nvec = (nth+VLEN-1)/VLEN;
-        size_t i2 = nvec*VLEN;
-        for (size_t i=nth; i<i2; ++i)
-          {
-          d.s.cth[i]=d.s.cth[nth-1];
-          d.s.sth[i]=d.s.sth[nth-1];
-          d.s.p1pr[i]=d.s.p1pi[i]=d.s.p2pr[i]=d.s.p2pi[i]=0.;
-          d.s.p1mr[i]=d.s.p1mi[i]=d.s.p2mr[i]=d.s.p2mi[i]=0.;
-          }
-
-        init_lambda_spin(gen, d.v, nvec);
-
-        for (size_t i=0; i<nvec; ++i)
-          {
-          Tv tmp;
-          tmp = d.v.p1pr[i]; d.v.p1pr[i] -= d.v.p2mi[i]; d.v.p2mi[i] += tmp;
-          tmp = d.v.p1pi[i]; d.v.p1pi[i] += d.v.p2mr[i]; d.v.p2mr[i] -= tmp;
-          tmp = d.v.p1mr[i]; d.v.p1mr[i] += d.v.p2pi[i]; d.v.p2pi[i] -= tmp;
-          tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
-          }
-
-#ifdef DUCC0_SHT_LBLOCK
-        v_d.push_back(d);
-        v_nth.push_back(nth);
         }
       }
-
-    size_t lstart = gen.mhi;
-    while (lstart<=gen.lmax)
-      {
-      size_t lstop = min(gen.lmax+1, lstart+lstep);
-      for (size_t vi=0; vi<v_d.size(); ++vi)
-        {
-        if (mode==STANDARD)
-          calc_map2alm_spin(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-        else
-          calc_map2alm_spin_gradonly(almtmp.data(), gen, v_d[vi].v, v_nth[vi], lstart, lstop);
-        }
-      lstart = lstop;
-      }
-#else
-    if (mode==STANDARD)
-      calc_map2alm_spin(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
-    else
-      calc_map2alm_spin_gradonly(almtmp.data(), gen, d.v, nth, gen.mhi, gen.lmax+1);
-    }
-    }
-#endif
 
     //adjust the a_lm for the new algorithm
     for (size_t l=gen.mhi; l<=gen.lmax; ++l)
