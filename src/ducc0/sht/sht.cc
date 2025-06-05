@@ -407,6 +407,7 @@ static constexpr double sharp_ftol=0x1p-60;
 
 constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
+constexpr size_t lstep = 4096;  // MUST be divisible by 8!
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
@@ -570,8 +571,8 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
 
   while (below_limit)
     {
-    if (l+4>gen.lmax) {l_=gen.lmax+1;return;}
     if (l==lstop) { l_=l; il_=il; return; }
+    if (l+4>gen.lmax) {l_=gen.lmax+1;return;}
     below_limit=true;
     Tv a1=gen.coef[il  ].a, b1=gen.coef[il  ].b;
     Tv a2=gen.coef[il+1].a, b2=gen.coef[il+1].b;
@@ -877,8 +878,8 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
 
   while (below_limit)
     {
-    if (l+2>gen.lmax) {l_=gen.lmax+1;return;}
     if (l==lstop) { l_=l; return; }
+    if (l+2>gen.lmax) {l_=gen.lmax+1;return;}
     below_limit=true;
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
     Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
@@ -1104,7 +1105,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
       }
     l+=2;
     }
-//  if (l>lmax) return;
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
@@ -1337,7 +1338,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin_gradonly(const dcmplx * DUCC0_RESTR
       }
     l+=2;
     }
-//  if (l>lmax) return;
+  if (l>=lstop) return;
 
   for (size_t i=0; i<nv2; ++i)
     {
@@ -1530,7 +1531,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1628,7 +1628,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.mhi;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1753,7 +1752,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.m;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);
@@ -1839,7 +1837,6 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_m2a(SHT_mode mode,
 
 #if 1
     size_t lstart = gen.mhi;
-    constexpr size_t lstep = 128;  // MUST be divisible by 8!
     while (lstart<=gen.lmax)
       {
       size_t lstop = min(gen.lmax+1, lstart+lstep);

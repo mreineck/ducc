@@ -129,8 +129,34 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
         print("AAAAARGH: adjointness error:", err)
         raise RuntimeError
 
+def test_random_grad_adjointness_2d(lmax_max, nthreads_max):
+    geometries = ["CC", "F1", "MW", "MWflip", "GL", "DH", "F2"]
+    geometry = random.choice(geometries)
+    lmax = random.randint(1,lmax_max)
+    mmax = random.randint(0,lmax)
+    spin = random.randint(1,lmax)
+
+    nrings = random.randint(1, 3*lmax+3)
+    if geometry == "CC":
+        nrings = max(nrings, 2)
+    nphi = random.randint(1, 3*lmax+3)
+    nthreads = random.randint(1, nthreads_max)
+
+    print("testing gradient adjointness: lmax={}, mmax={}, spin={}, nthreads={}, geometry={}, nrings={}, nphi={}".format(lmax,mmax,spin,nthreads,geometry,nrings, nphi))
+    alm0 = random_alm(lmax, mmax, spin, 1)
+    map0 = np.random.uniform(0., 1., (2, nrings,nphi))
+    map1 = ducc0.sht.synthesis_2d(alm=alm0, lmax=lmax, mmax=mmax, spin=spin, ntheta=nrings, nphi=nphi, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
+    alm1 = ducc0.sht.adjoint_synthesis_2d(lmax=lmax, mmax=mmax, spin=spin, map=map0, nthreads=nthreads, geometry=geometry, mode="GRAD_ONLY")
+    v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(1)])
+    v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(2)])
+    err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
+    if err>1e-11:
+        print("AAAAARGH: grad adjointness error:", err)
+        raise RuntimeError
+
 
 while True:
     test_random_analysis_2d(2047, 8)
     test_random_adjointness_2d(2047, 8)
     test_random_analysis_adjointness_2d(2047, 8)
+    test_random_grad_adjointness_2d(2047, 8)
