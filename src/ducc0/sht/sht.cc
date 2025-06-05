@@ -405,9 +405,9 @@ using dcmplx = complex<double>;
 
 static constexpr double sharp_ftol=0x1p-60;
 
-constexpr size_t nv0 = 128/VLEN;
+constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
-constexpr size_t lstep = 8192;  // MUST be divisible by 8!
+constexpr size_t lstep = 4096;  // MUST be divisible by 8!
 
 using Tbv0 = std::array<Tv,nv0>;
 using Tbs0 = std::array<double,nv0*VLEN>;
