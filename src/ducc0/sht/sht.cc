@@ -811,6 +811,7 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
     {
     d.lam1[i] *= d.corfac[i];
     d.lam2[i] *= d.corfac[i];
+    d.scale[i] = 0;
     }
   map2alm_kernel(d, coef, alm, l, il, lstop-1, nv2);
   }
@@ -902,7 +903,7 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
   l_=l;
   }
 
-DUCC0_NOINLINE static size_t alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
+DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
   const vector<Ylmgen::dbl2> &fx, const dcmplx * DUCC0_RESTRICT alm,
   size_t l, size_t lmax, size_t nv2)
   {
@@ -1046,7 +1047,6 @@ DUCC0_NOINLINE static size_t alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
       }
     l+=2;
     }
-return l;
   }
 
 DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
@@ -1115,8 +1115,7 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
     d.l2m[i] *= d.cfm[i];
     d.scp[i] = d.scm[i] = 0;
     }
-  l=alm2map_spin_kernel(d, fx, alm, l, lstop-1, nv2);
-if ((lstop<=gen.lmax) && (l!=lstop)) cout << "uups" << endl;
+  alm2map_spin_kernel(d, fx, alm, l, lstop-1, nv2);
   }
 
 DUCC0_NOINLINE static void map2alm_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
@@ -1571,18 +1570,10 @@ template<typename T> DUCC0_NOINLINE static void extract_a2m_spin(
   double fct = ((gen.mhi-gen.m+gen.s)&1) ? -1.: 1.;
   for (size_t i=0; i<nvec; ++i)
     {
-    Tv tmp;
-    tmp = d.v.p1pr[i]; d.v.p1pr[i] -= d.v.p2mi[i]; d.v.p2mi[i] += tmp;
-    tmp = d.v.p1pi[i]; d.v.p1pi[i] += d.v.p2mr[i]; d.v.p2mr[i] -= tmp;
-    tmp = d.v.p1mr[i]; d.v.p1mr[i] += d.v.p2pi[i]; d.v.p2pi[i] -= tmp;
-    tmp = d.v.p1mi[i]; d.v.p1mi[i] -= d.v.p2pr[i]; d.v.p2pr[i] += tmp;
-    }
-  for (size_t i=0; i<nvec; ++i)
-    {
-    auto p1pr=d.v.p1pr[i], p1pi=d.v.p1pi[i],
-         p2pr=d.v.p2pr[i], p2pi=d.v.p2pi[i],
-         p1mr=d.v.p1mr[i], p1mi=d.v.p1mi[i],
-         p2mr=d.v.p2mr[i], p2mi=d.v.p2mi[i];
+    auto p1pr = d.v.p1pr[i]-d.v.p2mi[i], p1pi = d.v.p1pi[i]+d.v.p2mr[i],
+         p2pr = d.v.p2pr[i]+d.v.p1mi[i], p2pi = d.v.p2pi[i]-d.v.p1mr[i],
+         p1mr = d.v.p1mr[i]+d.v.p2pi[i], p1mi = d.v.p1mi[i]-d.v.p2pr[i],
+         p2mr = d.v.p2mr[i]-d.v.p1pi[i], p2mi = d.v.p2mi[i]+d.v.p1pr[i];
     d.v.p1pr[i] = p1pr+p2pr;
     d.v.p1pi[i] = p1pi+p2pi;
     d.v.p1mr[i] = p1mr+p2mr;

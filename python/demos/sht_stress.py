@@ -154,9 +154,11 @@ def test_random_grad_adjointness_2d(lmax_max, nthreads_max):
         print("AAAAARGH: grad adjointness error:", err)
         raise RuntimeError
 
+lmax = 2047
+nthreads_max = 8
 
 while True:
-    test_random_analysis_2d(2047, 8)
-    test_random_adjointness_2d(2047, 8)
-    test_random_analysis_adjointness_2d(2047, 8)
-    test_random_grad_adjointness_2d(2047, 8)
+    test_random_analysis_2d(lmax, nthreads_max)
+    test_random_adjointness_2d(lmax, nthreads_max)
+    test_random_analysis_adjointness_2d(lmax, nthreads_max)
+    test_random_grad_adjointness_2d(lmax, nthreads_max)
