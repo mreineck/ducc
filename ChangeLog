@@ -2,6 +2,7 @@
 - sht:
   - various improvements in the inner loops for AVX512, mainly in the
     synthesis direction.
+  - improved scaling behaviour for high thread counts
 
 
 0.38.0:

@@ -32,8 +32,8 @@ namespace detail_sht_inner_loop {
 
 using namespace std;
 
-static constexpr double sharp_fbig=0x1p+800,sharp_fsmall=0x1p-800;
-static constexpr double sharp_fbighalf=0x1p+400;
+static constexpr double sht_fbig=0x1p+800,sht_fsmall=0x1p-800;
+static constexpr double sht_fbighalf=0x1p+400;
 
 struct ringdata
   {
@@ -60,9 +60,9 @@ class YlmBase
   protected:
     inline void normalize (double &val, int &scale, double xfmax)
       {
-      while (abs(val)>xfmax) { val*=sharp_fsmall; ++scale; }
+      while (abs(val)>xfmax) { val*=sht_fsmall; ++scale; }
       if (val!=0.)
-        while (abs(val)<xfmax*sharp_fsmall) { val*=sharp_fbig; --scale; }
+        while (abs(val)<xfmax*sht_fsmall) { val*=sht_fbig; --scale; }
       }
 
   public:
@@ -135,17 +135,17 @@ class YlmBase
           {
           fac[i]=fac[i-1]*sqrt(i);
           facscale[i]=facscale[i-1];
-          normalize(fac[i],facscale[i],sharp_fbighalf);
+          normalize(fac[i],facscale[i],sht_fbighalf);
           }
         for (size_t i=0; i<=mmax; ++i)
           {
           size_t mlo_=min(s,i), mhi_=max(s,i);
           double tfac=fac[2*mhi_]/fac[mhi_+mlo_];
           int tscale=facscale[2*mhi_]-facscale[mhi_+mlo_];
-          normalize(tfac,tscale,sharp_fbighalf);
+          normalize(tfac,tscale,sht_fbighalf);
           tfac/=fac[mhi_-mlo_];
           tscale-=facscale[mhi_-mlo_];
-          normalize(tfac,tscale,sharp_fbighalf);
+          normalize(tfac,tscale,sht_fbighalf);
           prefac[i]=tfac;
           fscale[i]=tscale;
           }
@@ -275,7 +275,7 @@ static inline void vhsum_cmplx_special (Tv a, Tv b, Tv c, Tv d,
 
 using dcmplx = complex<double>;
 
-static constexpr double sharp_ftol=0x1p-60;
+static constexpr double sht_ftol=0x1p-60;
 
 constexpr size_t nv0 = 256/VLEN;
 constexpr size_t nvx = 128/VLEN;
@@ -329,8 +329,8 @@ static inline void Tvnormalize (Tv & DUCC0_RESTRICT val_,
   // This copying is necessary for MSVC ... no idea why
   Tv val = val_;
   Tv scale = scale_;
-  const Tv vfmin=sharp_fsmall*maxval, vfmax=maxval;
-  const Tv vfsmall=sharp_fsmall, vfbig=sharp_fbig;
+  const Tv vfmin=sht_fsmall*maxval, vfmax=maxval;
+  const Tv vfsmall=sht_fsmall, vfbig=sht_fbig;
   auto mask = abs(val)>vfmax;
   while (any_of(mask))
     {
@@ -370,18 +370,18 @@ static void mypow(Tv val, size_t npow, const vector<double> &powlimit,
   else
     {
     Tv scale=0, scaleint=0, res=1;
-    Tvnormalize(val,scaleint,sharp_fbighalf);
+    Tvnormalize(val,scaleint,sht_fbighalf);
     do
       {
       if (npow&1)
         {
         res*=val;
         scale+=scaleint;
-        Tvnormalize(res,scale,sharp_fbighalf);
+        Tvnormalize(res,scale,sht_fbighalf);
         }
       val*=val;
       scaleint+=scaleint;
-      Tvnormalize(val,scaleint,sharp_fbighalf);
+      Tvnormalize(val,scaleint,sht_fbighalf);
       }
     while(npow>>=1);
     resd=res;
@@ -394,11 +394,11 @@ static inline void getCorfac(Tv scale, Tv & DUCC0_RESTRICT corfac)
 // not sure why, but MSVC miscompiles the default code
 #if defined(_MSC_VER)
   for (size_t i=0; i<Tv::size(); ++i)
-    corfac[i] = (scale[i]<0) ? 0. : ((scale[i]<1) ? 1. : sharp_fbig);
+    corfac[i] = (scale[i]<0) ? 0. : ((scale[i]<1) ? 1. : sht_fbig);
 #else
   corfac = Tv(1.);
   where(scale<-0.5,corfac)=0;
-  where(scale>0.5,corfac)=sharp_fbig;
+  where(scale>0.5,corfac)=sht_fbig;
 #endif
   }
 
@@ -407,8 +407,8 @@ static inline bool rescale(Tv &v1, Tv &v2, Tv &s, Tv eps)
   auto mask = abs(v2)>eps;
   if (any_of(mask))
     {
-    where(mask,v1)*=sharp_fsmall;
-    where(mask,v2)*=sharp_fsmall;
+    where(mask,v1)*=sht_fsmall;
+    where(mask,v2)*=sht_fsmall;
     where(mask,s)+=1;
     return true;
     }
@@ -424,7 +424,7 @@ DUCC0_NOINLINE static void init_lambda(const Ylmgen &gen,
     d.lam1[i]=0;
     mypow(d.sth[i],gen.m,gen.powlimit,d.lam2[i],d.scale[i]);
     d.lam2[i] *= mfac;
-    Tvnormalize(d.lam2[i],d.scale[i],sharp_ftol);
+    Tvnormalize(d.lam2[i],d.scale[i],sht_ftol);
     }
   }
 
@@ -437,7 +437,7 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
 
   for (size_t i=0; i<nv2; ++i)
     {
-    rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol);
+    rescale(d.lam1[i], d.lam2[i], d.scale[i], sht_ftol);
     below_limit &= all_of(d.scale[i]<1);
     }
 
@@ -452,7 +452,7 @@ DUCC0_NOINLINE static void iter_to_ieee(const Ylmgen &gen,
       {
       d.lam1[i] = (a1*d.csq[i] + b1)*d.lam2[i] + d.lam1[i];
       d.lam2[i] = (a2*d.csq[i] + b2)*d.lam1[i] + d.lam2[i];
-      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
+      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sht_ftol))
         below_limit &= all_of(d.scale[i]<1);
       }
     l+=4; il+=2;
@@ -576,7 +576,7 @@ DUCC0_NOINLINE static void calc_alm2map (const dcmplx * DUCC0_RESTRICT alm,
       Tv tmp = (a*d.csq[i] + b)*d.lam2[i] + d.lam1[i];
       d.lam1[i] = d.lam2[i];
       d.lam2[i] = tmp;
-      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
+      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sht_ftol))
         getCorfac(d.scale[i], d.corfac[i]);
       full_ieee &= all_of(d.scale[i]>=0);
       }
@@ -669,7 +669,7 @@ DUCC0_NOINLINE static void calc_map2alm (dcmplx * DUCC0_RESTRICT alm,
       Tv tmp = (a*d.csq[i] + b)*d.lam2[i] + d.lam1[i];
       d.lam1[i] = d.lam2[i];
       d.lam2[i] = tmp;
-      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sharp_ftol))
+      if (rescale(d.lam1[i], d.lam2[i], d.scale[i], sht_ftol))
         getCorfac(d.scale[i], d.corfac[i]);
       full_ieee &= all_of(d.scale[i]>=0);
       }
@@ -714,8 +714,8 @@ DUCC0_NOINLINE static void init_lambda_spin (const Ylmgen &gen,
     d.scp[i] = prescale+ccps;
     d.l2m[i] = prefac*csp;
     d.scm[i] = prescale+csps;
-    Tvnormalize(d.l2m[i],d.scm[i],sharp_fbighalf);
-    Tvnormalize(d.l2p[i],d.scp[i],sharp_fbighalf);
+    Tvnormalize(d.l2m[i],d.scm[i],sht_fbighalf);
+    Tvnormalize(d.l2p[i],d.scp[i],sht_fbighalf);
     d.l2p[i] *= ssp;
     d.scp[i] += ssps;
     d.l2m[i] *= scp;
@@ -727,8 +727,8 @@ DUCC0_NOINLINE static void init_lambda_spin (const Ylmgen &gen,
     if (gen.s&1)
       d.l2p[i] = -d.l2p[i];
 
-    Tvnormalize(d.l2m[i],d.scm[i],sharp_ftol);
-    Tvnormalize(d.l2p[i],d.scp[i],sharp_ftol);
+    Tvnormalize(d.l2m[i],d.scm[i],sht_ftol);
+    Tvnormalize(d.l2p[i],d.scp[i],sht_ftol);
     }
   }
 
@@ -742,8 +742,8 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
   bool below_limit = true;
   for (size_t i=0; i<nv2; ++i)
     {
-    rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol);
-    rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol);
+    rescale(d.l1m[i], d.l2m[i], d.scm[i], sht_ftol);
+    rescale(d.l1p[i], d.l2p[i], d.scp[i], sht_ftol);
 
     below_limit &= all_of(d.scm[i]<1) &&
                    all_of(d.scp[i]<1);
@@ -764,8 +764,8 @@ DUCC0_NOINLINE static void iter_to_ieee_spin (const Ylmgen &gen,
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
       // The bitwise or operator is deliberate!
       // Silencing clang compiler warning by casting to int...
-      if (int(rescale(d.l1p[i],d.l2p[i],d.scp[i],sharp_ftol)) |
-          rescale(d.l1m[i],d.l2m[i],d.scm[i],sharp_ftol))
+      if (int(rescale(d.l1p[i],d.l2p[i],d.scp[i],sht_ftol)) |
+          rescale(d.l1m[i],d.l2m[i],d.scm[i],sht_ftol))
         below_limit &= all_of(d.scp[i]<1) &&
                        all_of(d.scm[i]<1);
       }
@@ -968,10 +968,10 @@ DUCC0_NOINLINE static void calc_alm2map_spin (const dcmplx * DUCC0_RESTRICT alm,
 
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
+      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sht_ftol))
         getCorfac(d.scp[i], d.cfp[i]);
       full_ieee &= all_of(d.scp[i]>=0);
-      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
+      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sht_ftol))
         getCorfac(d.scm[i], d.cfm[i]);
       full_ieee &= all_of(d.scm[i]>=0);
       }
@@ -1086,10 +1086,10 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
 
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
+      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sht_ftol))
         getCorfac(d.scp[i], d.cfp[i]);
       full_ieee &= all_of(d.scp[i]>=0);
-      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
+      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sht_ftol))
         getCorfac(d.scm[i], d.cfm[i]);
       full_ieee &= all_of(d.scm[i]>=0);
       }
@@ -1200,10 +1200,10 @@ DUCC0_NOINLINE static void calc_alm2map_spin_gradonly(const dcmplx * DUCC0_RESTR
 
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
+      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sht_ftol))
         getCorfac(d.scp[i], d.cfp[i]);
       full_ieee &= all_of(d.scp[i]>=0);
-      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
+      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sht_ftol))
         getCorfac(d.scm[i], d.cfm[i]);
       full_ieee &= all_of(d.scm[i]>=0);
       }
@@ -1304,10 +1304,10 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
 
       d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
       d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sharp_ftol))
+      if (rescale(d.l1p[i], d.l2p[i], d.scp[i], sht_ftol))
         getCorfac(d.scp[i], d.cfp[i]);
       full_ieee &= all_of(d.scp[i]>=0);
-      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sharp_ftol))
+      if (rescale(d.l1m[i], d.l2m[i], d.scm[i], sht_ftol))
         getCorfac(d.scm[i], d.cfm[i]);
       full_ieee &= all_of(d.scm[i]>=0);
       }
