@@ -1116,6 +1116,35 @@ DUCC0_NOINLINE static void alm2map_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRIC
   size_t l, size_t lmax, size_t nv2)
   {
   size_t lsave=l;
+  if constexpr(Tv::size()>4)  // this loop seems to help AVX512
+    while (l+2<=lmax)
+      {
+      Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+      Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+      Tv fx30=fx[l+3].a,fx31=fx[l+3].b;
+      Tv fx40=fx[l+4].a,fx41=fx[l+4].b;
+      Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag(),
+         ar2=alm[l+1].real(), ai2=alm[l+1].imag(),
+         ar3=alm[l+2].real(), ai3=alm[l+2].imag(),
+         ar4=alm[l+3].real(), ai4=alm[l+3].imag();
+      for (size_t i=0; i<nv2; ++i)
+        {
+        d.l1p[i] = (d.cth[i]*fx10 - fx11)*d.l2p[i] - d.l1p[i];
+        d.p1pr[i] += ar1*d.l2p[i];
+        d.p1pi[i] += ai1*d.l2p[i];
+        d.p1mr[i] -= ai2*d.l1p[i];
+        d.p1mi[i] += ar2*d.l1p[i];
+        d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
+  
+        d.l1p[i] = (d.cth[i]*fx30 - fx31)*d.l2p[i] - d.l1p[i];
+        d.p1pr[i] += ar3*d.l2p[i];
+        d.p1pi[i] += ai3*d.l2p[i];
+        d.p1mr[i] -= ai4*d.l1p[i];
+        d.p1mi[i] += ar4*d.l1p[i];
+        d.l2p[i] = (d.cth[i]*fx40 - fx41)*d.l1p[i] - d.l2p[i];
+        }
+      l+=4;
+      }
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
@@ -1135,6 +1164,35 @@ DUCC0_NOINLINE static void alm2map_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRIC
     l+=2;
     }
   l=lsave;
+  if constexpr(Tv::size()>4)  // this loop seems to help AVX512
+    while (l+2<=lmax)
+      {
+      Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
+      Tv fx20=fx[l+2].a,fx21=fx[l+2].b;
+      Tv fx30=fx[l+3].a,fx31=fx[l+3].b;
+      Tv fx40=fx[l+4].a,fx41=fx[l+4].b;
+      Tv ar1=alm[l  ].real(), ai1=alm[l  ].imag(),
+         ar2=alm[l+1].real(), ai2=alm[l+1].imag(),
+         ar3=alm[l+2].real(), ai3=alm[l+2].imag(),
+         ar4=alm[l+3].real(), ai4=alm[l+3].imag();
+      for (size_t i=0; i<nv2; ++i)
+        {
+        d.l1m[i] = (d.cth[i]*fx10 + fx11)*d.l2m[i] - d.l1m[i];
+        d.p2mr[i] += ai1*d.l2m[i];
+        d.p2mi[i] -= ar1*d.l2m[i];
+        d.p2pr[i] += ar2*d.l1m[i];
+        d.p2pi[i] += ai2*d.l1m[i];
+        d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
+  
+        d.l1m[i] = (d.cth[i]*fx30 + fx31)*d.l2m[i] - d.l1m[i];
+        d.p2mr[i] += ai3*d.l2m[i];
+        d.p2mi[i] -= ar3*d.l2m[i];
+        d.p2pr[i] += ar4*d.l1m[i];
+        d.p2pi[i] += ai4*d.l1m[i];
+        d.l2m[i] = (d.cth[i]*fx40 + fx41)*d.l1m[i] - d.l2m[i];
+        }
+      l+=4;
+      }
   while (l<=lmax)
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
