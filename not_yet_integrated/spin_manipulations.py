@@ -50,22 +50,17 @@ def spin1_to_sphtor(alm, lmax, mmax):
     res[1] *= -1
     return res
 
-
-def shtns_alm_rec(lmax, mmax):
-    res = np.zeros((nalm(lmax,mmax),2))
+def rec_coeffs(lmax, mmax):
     el = alm_lval(lmax, mmax)
     em = alm_mval(lmax, mmax)
-
-#    res[:,0] = -np.sqrt((2*el+1)/(2*el-3) * (el-1+em)*(el-1-em)/((el+em)*(el-em)))
-
-    res[:,1] = np.sqrt((2*el+1)*(2*el-1)/((el+em)*(el-em)))
-#    res[0,:] = 0
+    el[0] = 1  # warning fix
+    res = np.sqrt((el+em)*(el-em)/((2*el+1)*(2*el-1)))
+    res[0] = 0
     return res
-
 
 def mul_costheta_matrix_shifted(lmax, mmax):
     res = np.zeros(2*nalm(lmax,mmax))
-    res[0:-2:2] = res[1:-1:2] = (1./shtns_alm_rec(lmax, mmax)[1:,1])
+    res[0:-2:2] = res[1:-1:2] = rec_coeffs(lmax, mmax)[1:]
     return res
 
 def stdt_matrix_shifted(lmax, mmax):
@@ -81,7 +76,7 @@ def apply_stdt_matrix(alm, lmax, mmax):
     ofs = ofs2 = 0
     for m in range(mmax+1):
         # contribution from l-1
-        res[ofs2+m+1:ofs2+lmax+2] += alm[ofs+m:ofs+lmax+1]*stdt[2*(ofs2+m+1)-1:2*(ofs2+lmax+2)-1:2]
+        res[ofs2+m+1:ofs2+lmax+2] += alm[ofs+m:ofs+lmax+1]*stdt[2*(ofs2+m)+1:2*(ofs2+lmax+1)+1:2]
         # contribution from l+1
         res[ofs2+m:ofs2+lmax] += alm[ofs+m+1:ofs+lmax+1]*stdt[2*(ofs2+m):2*(ofs2+lmax):2]
         ofs += lmax-m
@@ -172,9 +167,7 @@ def compare_spin1 (lmax, mmax):
     print(ducc0.misc.l2error(alm_ref,alm_test))
 
 
-compare_spin1(lmax=4, mmax=4)
 for i in range(20):
     lmax = np.random.randint(2,5000)
     mmax = np.random.randint(2,lmax)
     compare_spin1(lmax, mmax)
-#compare_spin1(lmax=2047)
