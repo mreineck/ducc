@@ -1,5 +1,4 @@
 import numpy as np
-import shtns
 import ducc0
 
 def nalm(lmax, mmax):
@@ -57,8 +56,10 @@ def shtns_alm_rec(lmax, mmax):
     el = alm_lval(lmax, mmax)
     em = alm_mval(lmax, mmax)
 
-    res[:,0] = -np.sqrt((2*el+1)/(2*el-3) * (el-1+em)*(el-1-em)/((el+em)*(el-em)))
+#    res[:,0] = -np.sqrt((2*el+1)/(2*el-3) * (el-1+em)*(el-1-em)/((el+em)*(el-em)))
+
     res[:,1] = np.sqrt((2*el+1)*(2*el-1)/((el+em)*(el-em)))
+#    res[0,:] = 0
     return res
 
 
@@ -88,18 +89,15 @@ def apply_stdt_matrix(alm, lmax, mmax):
     return res
 
 def apply_stdt_matrix_backwards(alm, lmax, mmax):
-    res = np.zeros((nalm(lmax+1,mmax),), dtype=np.complex128)
-    stdt = stdt_matrix_shifted(lmax+1, mmax)
-    ofs = ofs2 = 0
+    res = np.zeros((nalm(lmax,mmax),), dtype=np.complex128)
+    stdt = stdt_matrix_shifted(lmax, mmax)
+    ofs = 0
     for m in range(mmax+1):
-#Sl[l] = mx(l,m,1)*v(l+1,m) + mx(l-1,m,0)*v(l-1,m) - i*m*w(l,m)
-#Tl[l] = -mx(l,m,1)*w(l+1,m) -mx(l-1,m,0)*w(l-1,m) - i*m*v(l,m)
         # contribution from l-1
-        res[ofs2+m+1:ofs2+lmax+1] += alm[ofs+m:ofs+lmax]*stdt[2*(ofs2+m):2*(ofs2+lmax):2]
+        res[ofs+m+1:ofs+lmax+1] += alm[ofs+m:ofs+lmax]*stdt[2*(ofs+m):2*(ofs+lmax):2]
         # contribution from l+1
-        res[ofs2+m:ofs2+lmax] += alm[ofs+m+1:ofs+lmax+1]*stdt[2*(ofs2+m)+1:2*(ofs2+lmax)+1:2]
+        res[ofs+m:ofs+lmax] += alm[ofs+m+1:ofs+lmax+1]*stdt[2*(ofs+m)+1:2*(ofs+lmax)+1:2]
         ofs += lmax-m
-        ofs2 += lmax+1-m
     return res
 
 def apply_ddphi_matrix(alm, lmax, mmax):
@@ -122,8 +120,6 @@ def decrease_lmax_by_n(alm, lmax, mmax, n):
         ofs2 += lmax-n-m
     return res
 
-#/// Vlm =  st*d(Slm)/dtheta + I*m*Tlm
-#/// Wlm = -st*d(Tlm)/dtheta + I*m*Slm
 def spin1to0(alm, lmax, mmax):
     alm = spin1_to_sphtor(alm,lmax, mmax)
     phipart0 = increase_lmax_by_n(-apply_ddphi_matrix(alm[1],lmax,mmax),lmax,mmax,1)
@@ -132,59 +128,53 @@ def spin1to0(alm, lmax, mmax):
     thetapart1 =  apply_stdt_matrix(alm[1],lmax,mmax)
     return np.vstack([phipart0+thetapart0, phipart1+thetapart1])
 
-#/// Slm = - (I*m*Wlm + MX*Vlm) / (l*(l+1))		=> why does this work ??? (aliasing of 1/sin(theta) ???)
-#/// Tlm = - (I*m*Vlm - MX*Wlm) / (l*(l+1))
 def spin0to1(alm, lmax, mmax):
-    phipart0 = increase_lmax_by_n(-apply_ddphi_matrix(alm[1],lmax,mmax),lmax,mmax,1)
-    phipart1 = increase_lmax_by_n(-apply_ddphi_matrix(alm[0],lmax,mmax),lmax,mmax,1)
+    phipart0 = -apply_ddphi_matrix(alm[1],lmax,mmax)
+    phipart1 = -apply_ddphi_matrix(alm[0],lmax,mmax)
     thetapart0 =  apply_stdt_matrix_backwards(alm[0],lmax,mmax)
     thetapart1 = -apply_stdt_matrix_backwards(alm[1],lmax,mmax)
     res = np.vstack([phipart0+thetapart0, phipart1+thetapart1])
-    el = alm_lval(lmax+1, mmax)
+    el = alm_lval(lmax, mmax)
+    el[0] = 1  # warning fix
     res /= (el*(el+1)).reshape((1,-1))
     res[:,0] = 0
-    return sphtor_to_spin1(res, lmax+1, mmax)
+    return sphtor_to_spin1(res, lmax, mmax)
 
-def compare_spin1 (lmax):
-    print("lmax=",lmax)
-    mmax=lmax
-    rng = np.random.default_rng(42)
-    alm = random_alm(lmax, lmax, 1, 2, rng)
-
-#    print(alm)
-    # alm2 = spin1to0(alm, lmax, mmax)
-    # alm3 = spin0to1(alm2, lmax+1, mmax)
-    # # #almx = increase_lmax_by_1(increase_lmax_by_1(alm,lmax,mmax),lmax+1,mmax)
-    # print(alm)
-    # print(alm3)
-    # print(alm3[:,0:5]/alm[:,0:5])
-    # exit()
-
-    ntheta, nphi= lmax+2, 2*lmax+1
-
-    map_ref = ducc0.sht.synthesis_2d(alm=alm, lmax=lmax, mmax=mmax, spin=1, geometry="GL", ntheta=ntheta, nphi=nphi)
-
+def synthesis_spin1_via_spin0(alm, lmax, mmax, ntheta, nphi):
     almx = spin1to0(alm, lmax, mmax)
-    map2=[ducc0.sht.synthesis_2d(alm=ax.reshape((1,-1)), lmax=lmax+1, mmax=mmax, spin=0, geometry="GL", ntheta=ntheta, nphi=nphi)[0] for ax in almx]
-    sintheta = np.sin(ducc0.misc.GL_thetas(ntheta)).reshape((-1,1))
-    map2[0] /= -sintheta
-    map2[1] /= -sintheta
-    for mr, m2 in zip(map_ref, map2):
-        print(ducc0.misc.l2error(mr, m2))
+    res = np.vstack([ducc0.sht.synthesis_2d(alm=ax.reshape((1,-1)), lmax=lmax+1, mmax=mmax, spin=0, geometry="GL", ntheta=ntheta, nphi=nphi) for ax in almx])
+    sintheta = np.sin(ducc0.misc.GL_thetas(ntheta)).reshape((1,-1,1))
+    res /= -sintheta
+    return res
 
-    map2[0] /= sintheta
-    map2[1] /= sintheta
-    alm2=[ducc0.sht.analysis_2d(map=mp.reshape((1,ntheta,nphi)), lmax=lmax+1, mmax=mmax, spin=0, geometry="GL")[0] for mp in map2]
-    almy = spin0to1(alm2,lmax+1,mmax)
-    almy = np.array([decrease_lmax_by_n(ay,lmax+2,mmax,2) for ay in almy])
-  #  print(alm)
-  #  print(almy)
-    print(ducc0.misc.l2error(alm,almy))
-  #  exit()
-    # map3 = ducc0.sht.synthesis_2d(alm=almy, lmax=lmax+2, mmax=mmax, spin=1, geometry="GL", ntheta=ntheta, nphi=nphi)
-    # for mr, m3 in zip(map_ref, map3):
-        # print(ducc0.misc.l2error(mr, m3))
+def analysis_spin1_via_spin0(map, lmax, mmax):
+    ntheta, nphi = map.shape[1:]
+    sintheta = np.sin(ducc0.misc.GL_thetas(ntheta))
+    wgt = ducc0.misc.GL_weights(ntheta, nphi)
+    map2 = map*(wgt/sintheta).reshape((1,-1,1))
+    res = np.vstack([ducc0.sht.adjoint_synthesis_2d(map=mp.reshape((1,ntheta,nphi)), lmax=lmax+1, mmax=mmax, spin=0, geometry="GL") for mp in map2])
+    res = spin0to1(res,lmax+1,mmax)
+    res = np.array([decrease_lmax_by_n(r,lmax+1,mmax,1) for r in res])
+    return res
 
+def compare_spin1 (lmax, mmax):
+    print("lmax =",lmax, "mmax =", mmax)
+    rng = np.random.default_rng(42)
+    alm_ref = random_alm(lmax, mmax, 1, 2, rng)
+
+    ntheta, nphi= lmax+1, 2*mmax+1
+    map_ref = ducc0.sht.synthesis_2d(alm=alm_ref, lmax=lmax, mmax=mmax, spin=1, geometry="GL", ntheta=ntheta, nphi=nphi)
+
+    map_test = synthesis_spin1_via_spin0(alm_ref, lmax, mmax, ntheta, nphi)
+    print(ducc0.misc.l2error(map_ref, map_test))
+
+    alm_test = analysis_spin1_via_spin0(map_ref, lmax, mmax)
+    print(ducc0.misc.l2error(alm_ref,alm_test))
+
+
+compare_spin1(lmax=4, mmax=4)
 for i in range(20):
-    compare_spin1(lmax=np.random.randint(2,5000))
+    lmax = np.random.randint(2,5000)
+    mmax = np.random.randint(2,lmax)
+    compare_spin1(lmax, mmax)
 #compare_spin1(lmax=2047)
