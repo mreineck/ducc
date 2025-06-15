@@ -691,16 +691,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           int64_t inu = int(parent->nover[0]);
           int64_t inv = int(parent->nover[1]);
 
+          int64_t idxv0 = (b0[1]+inv)%inv;
+
           set<size_t> tile_y;
-          for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
-            {
-            tile_y.insert(py/tilesize);
-            py = (py+1)%inv;
-            }
+          for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+            tile_y.insert(idxv/tilesize);
 
           size_t old_x = ((b0[0]+inu)%inu)/tilesize;
           for (auto lockidy: tile_y) mutexes(old_x, lockidy).lock();
-          int64_t idxv0 = (b0[1]+inv)%inv;
           for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             size_t new_x = idxu/tilesize;
@@ -727,16 +725,15 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             {
             int64_t inu = int(parent->nover[0]);
             int64_t inv = int(parent->nover[1]);
+
+            int64_t idxv0 = (b0[1]+inv)%inv;
+
             set<size_t> tile_y;
-            for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<nshift; ++cnt)
-              {
-              tile_y.insert(py/tilesize);
-              py = (py+1)%inv;
-              }
+            for (int64_t iv=0, idxv=idxv0; iv<nshift; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              tile_y.insert(idxv/tilesize);
 
             size_t old_x = ((b0[0]+inu)%inu)/tilesize;
             for (auto lockidy: tile_y) mutexes(old_x, lockidy).lock();
-            int64_t idxv0 = (b0[1]+inv)%inv;
             for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
               {
               size_t new_x = idxu/tilesize;
@@ -1116,23 +1113,18 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           int64_t inv = int(parent->nover[1]);
           int64_t inw = int(parent->nover[2]);
 
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw)%inw;
+
           set<size_t> tile_y, tile_z;
-          for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
-            {
-            tile_y.insert(py/tilesize);
-            py = (py+1)%inv;
-            }
-          for (size_t cnt=0, pz=(b0[2]+inw)%inw; cnt<sw; ++cnt)
-            {
-            tile_z.insert(pz/tilesize);
-            pz = (pz+1)%inw;
-            }
+          for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+            tile_y.insert(idxv/tilesize);
+          for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+            tile_z.insert(idxw/tilesize);
 
           size_t old_x = ((b0[0]+inu)%inu)/tilesize;
           for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).lock();
 
-          int64_t idxv0 = (b0[1]+inv)%inv;
-          int64_t idxw0 = (b0[2]+inw)%inw;
           for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
             size_t new_x = idxu/tilesize;
@@ -1162,23 +1154,17 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             int64_t inv = int(parent->nover[1]);
             int64_t inw = int(parent->nover[2]);
 
+            int64_t idxv0 = (b0[1]+inv)%inv;
+            int64_t idxw0 = (b0[2]+inw)%inw;
+
             set<size_t> tile_y, tile_z;
-            for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
-              {
-              tile_y.insert(py/tilesize);
-              py = (py+1)%inv;
-              }
-            for (size_t cnt=0, pz=(b0[2]+inw)%inw; cnt<nshift; ++cnt)
-              {
-              tile_z.insert(pz/tilesize);
-              pz = (pz+1)%inw;
-              }
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              tile_y.insert(idxv/tilesize);
+            for (int64_t iw=0, idxw=idxw0; iw<nshift; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+              tile_z.insert(idxw/tilesize);
 
             size_t old_x = ((b0[0]+inu)%inu)/tilesize;
             for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).lock();
-
-            int64_t idxv0 = (b0[1]+inv)%inv;
-            int64_t idxw0 = (b0[2]+inw)%inw;
 
             for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
               {
