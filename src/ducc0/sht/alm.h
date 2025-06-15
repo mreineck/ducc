@@ -668,10 +668,118 @@ template<typename T> void rotate_alm (const Alm_Base &base_in, const cmav<comple
     }
   }
 
+template<typename T> void spin1to0 (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+  const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out, size_t nthreads)
+  {
+  using dcplx = complex<double>;
+  MR_assert(base_in.Lmax()>1, "input lmax must be at least 2");
+  MR_assert(base_out.Lmax()==base_in.Lmax()+1, "output lmax must be input lmax + 1");
+  MR_assert(base_in.Mmax()==base_out.Mmax(), "mmax mismatch");
+  MR_assert(alm_in.shape(0)==2, "need exactly two input a_lm components");
+  MR_assert(alm_out.shape(0)==2, "need exactly two output a_lm components");
+  MR_assert(alm_in.shape(1)==base_in.Num_Alms(), "alm_in size mismatch");
+  MR_assert(alm_out.shape(1)==base_out.Num_Alms(), "alm_out size mismatch");
+  execDynamic(base_in.Mmax()+1, nthreads, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for (auto m=rng.lo; m<rng.hi; ++m)
+        {
+        double em = double(m);
+        for (size_t l=m; l<=base_out.Lmax(); ++l)
+          {
+          double el = double(l);
+          dcplx coeff0(0), coeff1(0);
+          auto pos_in = base_in.index(l,m);
+          // contribution from l
+          if ((l>0) && (l<=base_in.Lmax()))
+            {
+            auto fct = dcplx(0., em)/sqrt(el*(el+1.));
+            coeff0 +=  fct*dcplx(alm_in(1,pos_in));
+            coeff1 += -fct*dcplx(alm_in(0,pos_in));
+            }
+          // contribution from l-1
+          if ((l>m) && (l>1))
+            {
+            double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (el-1.);
+            stdtx /= sqrt(el*(el-1.));
+            coeff0 += -stdtx*dcplx(alm_in(0,pos_in-1));
+            coeff1 += -stdtx*dcplx(alm_in(1,pos_in-1));
+            }
+          //contribution from l+1
+          if (l<base_in.Lmax())
+            {
+            double stdtx = sqrt((el+1.+em)*(el+1.-em)/((2.*el+3.)*(2.*el+1.))) * (-el-2.);
+            stdtx /= sqrt((el+1.)*(el+2.));
+            coeff0 += -stdtx*dcplx(alm_in(0,pos_in+1));
+            coeff1 += -stdtx*dcplx(alm_in(1,pos_in+1));
+            }
+          auto pos_out = base_out.index(l,m);
+          alm_out(0,pos_out) = complex<T>(coeff0);
+          alm_out(1,pos_out) = complex<T>(coeff1);
+          }
+        }
+    });
+  }
+
+template<typename T> void spin0to1 (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+  const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out, size_t nthreads)
+  {
+  using dcplx = complex<double>;
+  MR_assert(base_in.Lmax()>1, "input lmax must be at least 2");
+  MR_assert(base_out.Lmax()+1==base_in.Lmax(), "output lmax must be input lmax - 1");
+  MR_assert(base_in.Mmax()==base_out.Mmax(), "mmax mismatch");
+  MR_assert(alm_in.shape(0)==2, "need exactly two input a_lm components");
+  MR_assert(alm_out.shape(0)==2, "need exactly two output a_lm components");
+  MR_assert(alm_in.shape(1)==base_in.Num_Alms(), "alm_in size mismatch");
+  MR_assert(alm_out.shape(1)==base_out.Num_Alms(), "alm_out size mismatch");
+  execDynamic(base_in.Mmax()+1, nthreads, 1, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for (auto m=rng.lo; m<rng.hi; ++m)
+        {
+        double em = double(m);
+        for (size_t l=m; l<=base_out.Lmax(); ++l)
+          {
+          double el = double(l);
+          dcplx coeff0(0), coeff1(0);
+          auto pos_in = base_in.index(l,m);
+          // contribution from l
+          if (l>0)
+            {
+            auto fct = dcplx(0., em);
+            coeff0 += -fct*dcplx(alm_in(1,pos_in));
+            coeff1 += -fct*dcplx(alm_in(0,pos_in));
+            }
+          // contribution from l-1
+          if (l>m)
+            {
+            double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (-el-1.);
+            coeff0 +=  stdtx*dcplx(alm_in(0,pos_in-1));
+            coeff1 += -stdtx*dcplx(alm_in(1,pos_in-1));
+            }
+          //contribution from l+1;
+          if (true) // (l<base_in.Lmax())
+            {
+            double stdtx = sqrt((el+1.+em)*(el+1.-em)/((2.*el+3.)*(2.*el+1.))) * el;
+            coeff0 +=  stdtx*dcplx(alm_in(0,pos_in+1));
+            coeff1 += -stdtx*dcplx(alm_in(1,pos_in+1));
+            }
+          auto pos_out = base_out.index(l,m);
+          double norm = (l>0) ? 1./sqrt(el*(el+1)) : 0;
+          alm_out(0,pos_out) = complex<T>(norm*coeff0);
+          alm_out(1,pos_out) = complex<T>(-norm*coeff1);
+          }
+        }
+    });
+  }
+
 }
 
 using detail_alm::Alm_Base;
 using detail_alm::rotate_alm;
+
+using detail_alm::spin1to0;
+using detail_alm::spin0to1;
 }
 
 #endif
