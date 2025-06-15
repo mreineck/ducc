@@ -80,13 +80,8 @@ template<> constexpr inline int log2tile_<double, 1> = 9;
 template<> constexpr inline int log2tile_<float , 1> = 9;
 template<> constexpr inline int log2tile_<double, 2> = 4;
 template<> constexpr inline int log2tile_<float , 2> = 5;
-#ifdef NEW_DUMP
-template<> constexpr inline int log2tile_<double, 3> = 5;
-template<> constexpr inline int log2tile_<float , 3> = 5;
-#else
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
-#endif
 
 template<size_t ndim> constexpr inline size_t max_ntile=~size_t(0);
 template<> constexpr inline size_t max_ntile<1> = (~uint32_t(0))-10;
@@ -345,20 +340,22 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           {
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
           int64_t inu = int(parent->nover[0]);
-          set<size_t> tile_x;
-          for (size_t cnt=0, px=(b0[0]+inu)%inu; cnt<su; ++cnt)
-            {
-            tile_x.insert(px/tilesize);
-            px = (px+1)%inu;
-            }
-          
-          for (auto lockidx: tile_x) mutexes(lockidx).lock();
+
+          size_t old_x = ((b0[0]+inu)%inu)/tilesize;
+          mutexes(old_x).lock();
           for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
             {
+            size_t new_x = idxu/tilesize;
+            if (new_x!=old_x)
+              {
+              mutexes(old_x).unlock();
+              mutexes(new_x).lock();
+              old_x = new_x;
+              }
             grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
             bufr(iu) = bufi(iu) = 0;
             }
-          for (auto lockidx: tile_x) mutexes(lockidx).unlock();
+          mutexes(old_x).unlock();
           }
 
       public:
@@ -693,31 +690,33 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           if (b0[0]<-nsafe) return; // nothing written into buffer yet
           int64_t inu = int(parent->nover[0]);
           int64_t inv = int(parent->nover[1]);
-          set<size_t> tile_x, tile_y;
-          for (size_t cnt=0, px=(b0[0]+inu)%inu; cnt<su; ++cnt)
-            {
-            tile_x.insert(px/tilesize);
-            px = (px+1)%inu;
-            }
+
+          set<size_t> tile_y;
           for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
             {
             tile_y.insert(py/tilesize);
             py = (py+1)%inv;
             }
 
+          size_t old_x = ((b0[0]+inu)%inu)/tilesize;
+          for (auto lockidy: tile_y) mutexes(old_x, lockidy).lock();
           int64_t idxv0 = (b0[1]+inv)%inv;
-          for (auto lockidx: tile_x)
-            for (auto lockidy: tile_y)
-              mutexes(lockidx, lockidy).lock();
           for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            {
+            size_t new_x = idxu/tilesize;
+            if (new_x!=old_x)
+              {
+              for (auto lockidy: tile_y) mutexes(old_x, lockidy).unlock();
+              for (auto lockidy: tile_y) mutexes(new_x, lockidy).lock();
+              old_x = new_x;
+              }
             for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
               grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
               gbuf(iu,iv) = 0;
               }
-          for (auto lockidx: tile_x)
-            for (auto lockidy: tile_y)
-              mutexes(lockidx, lockidy).unlock();
+            }
+          for (auto lockidy: tile_y) mutexes(old_x, lockidy).unlock();
           }
         DUCC0_NOINLINE void dumpshift(const array<int64_t,ndim> &b0new)
           {
@@ -728,24 +727,25 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             {
             int64_t inu = int(parent->nover[0]);
             int64_t inv = int(parent->nover[1]);
-            set<size_t> tile_x, tile_y;
-            for (size_t cnt=0, px=(b0[0]+inu)%inu; cnt<su; ++cnt)
-              {
-              tile_x.insert(px/tilesize);
-              px = (px+1)%inu;
-              }
+            set<size_t> tile_y;
             for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<nshift; ++cnt)
               {
               tile_y.insert(py/tilesize);
               py = (py+1)%inv;
               }
 
+            size_t old_x = ((b0[0]+inu)%inu)/tilesize;
+            for (auto lockidy: tile_y) mutexes(old_x, lockidy).lock();
             int64_t idxv0 = (b0[1]+inv)%inv;
-            for (auto lockidx: tile_x)
-              for (auto lockidy: tile_y)
-                mutexes(lockidx, lockidy).lock();
             for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
               {
+              size_t new_x = idxu/tilesize;
+              if (new_x!=old_x)
+                {
+                for (auto lockidy: tile_y) mutexes(old_x, lockidy).unlock();
+                for (auto lockidy: tile_y) mutexes(new_x, lockidy).lock();
+                old_x = new_x;
+                }
               for (int64_t iv=0, idxv=idxv0; iv<nshift; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
                 {
                 grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
@@ -757,9 +757,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                 gbuf(iu,iv) = 0;
                 }
               }
-            for (auto lockidx: tile_x)
-              for (auto lockidy: tile_y)
-                mutexes(lockidx, lockidy).unlock();
+            for (auto lockidy: tile_y) mutexes(old_x, lockidy).unlock();
             }
           else
             dump();
@@ -1106,9 +1104,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         const vmav<complex<Tcalc>,ndim> &grid;
         array<int64_t,ndim> i0; // start index of the current nonuniform point
         array<int64_t,ndim> b0; // start index of the current buffer
-#ifdef NEW_DUMP
-        array<int64_t,ndim> imin,imax;
-#endif
 
         vmav<complex<Tacc>,ndim> gbuf;
         complex<Tacc> *px0;
@@ -1121,12 +1116,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           int64_t inv = int(parent->nover[1]);
           int64_t inw = int(parent->nover[2]);
 
-          set<size_t> tile_x, tile_y, tile_z;
-          for (size_t cnt=0, px=(b0[0]+inu)%inu; cnt<su; ++cnt)
-            {
-            tile_x.insert(px/tilesize);
-            px = (px+1)%inu;
-            }
+          set<size_t> tile_y, tile_z;
           for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
             {
             tile_y.insert(py/tilesize);
@@ -1138,27 +1128,20 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             pz = (pz+1)%inw;
             }
 
-          for (auto lockidx: tile_x)
-            for (auto lockidy: tile_y)
-              for (auto lockidz: tile_z)
-                mutexes(lockidx, lockidy, lockidz).lock();
+          size_t old_x = ((b0[0]+inu)%inu)/tilesize;
+          for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).lock();
 
-#ifdef NEW_DUMP
-          int64_t idxv0 = (imin[1]+b0[1]+inv)%inv;
-          int64_t idxw0 = (imin[2]+b0[2]+inw)%inw;
-          for (int64_t iu=imin[0], idxu=(imin[0]+b0[0]+inu)%inu; iu<imax[0]; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
-            for (int64_t iv=imin[1], idxv=idxv0; iv<imax[1]; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
-              for (int64_t iw=imin[2], idxw=idxw0; iw<imax[2]; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
-                {
-                auto t=gbuf(iu,iv,iw);
-                grid(idxu,idxv,idxw) += complex<Tcalc>(t);
-                gbuf(iu,iv,iw) = 0;
-                }
-          imin={1000,1000,1000}; imax={-1000,-1000,-1000};
-#else
           int64_t idxv0 = (b0[1]+inv)%inv;
           int64_t idxw0 = (b0[2]+inw)%inw;
           for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            {
+            size_t new_x = idxu/tilesize;
+            if (new_x!=old_x)
+              {
+              for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).unlock();
+              for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(new_x, lockidy, lockidz).lock();
+              old_x = new_x;
+              }
             for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
@@ -1166,11 +1149,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
                 grid(idxu,idxv,idxw) += complex<Tcalc>(t);
                 gbuf(iu,iv,iw) = 0;
                 }
-#endif
-          for (auto lockidx: tile_x)
-            for (auto lockidy: tile_y)
-              for (auto lockidz: tile_z)
-                mutexes(lockidx, lockidy, lockidz).unlock();
+            }
+          for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).unlock();
           }
         DUCC0_NOINLINE void dumpshift(const array<int64_t,ndim> &b0new)
           {
@@ -1182,12 +1162,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             int64_t inv = int(parent->nover[1]);
             int64_t inw = int(parent->nover[2]);
 
-            set<size_t> tile_x, tile_y, tile_z;
-            for (size_t cnt=0, px=(b0[0]+inu)%inu; cnt<su; ++cnt)
-              {
-              tile_x.insert(px/tilesize);
-              px = (px+1)%inu;
-              }
+            set<size_t> tile_y, tile_z;
             for (size_t cnt=0, py=(b0[1]+inv)%inv; cnt<sv; ++cnt)
               {
               tile_y.insert(py/tilesize);
@@ -1199,15 +1174,21 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               pz = (pz+1)%inw;
               }
 
-            for (auto lockidx: tile_x)
-              for (auto lockidy: tile_y)
-                for (auto lockidz: tile_z)
-                  mutexes(lockidx, lockidy, lockidz).lock();
+            size_t old_x = ((b0[0]+inu)%inu)/tilesize;
+            for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).lock();
 
             int64_t idxv0 = (b0[1]+inv)%inv;
             int64_t idxw0 = (b0[2]+inw)%inw;
 
             for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+              {
+              size_t new_x = idxu/tilesize;
+              if (new_x!=old_x)
+                {
+                for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).unlock();
+                for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(new_x, lockidy, lockidz).lock();
+                old_x = new_x;
+                }
               for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
                 {
                 for (int64_t iw=0, idxw=idxw0; iw<nshift; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
@@ -1222,11 +1203,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
                   gbuf(iu,iv,iw) = 0;
                   }
                 }
-
-            for (auto lockidx: tile_x)
-              for (auto lockidy: tile_y)
-                for (auto lockidz: tile_z)
-                  mutexes(lockidx, lockidy, lockidz).unlock();
+              }
+            for (auto lockidy: tile_y) for (auto lockidz: tile_z) mutexes(old_x, lockidy, lockidz).unlock();
             }
           else
             dump();
@@ -1247,9 +1225,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           vmav<Mutex,ndim> &mutexes_)
           : parent(parent_), tkrn(*parent->krn), grid(grid_),
             i0{-1000000, -1000000, -1000000}, b0{-1000000, -1000000, -1000000},
-#ifdef NEW_DUMP
-            imin{1000,1000,1000},imax{-1000,-1000,-1000},
-#endif
             gbuf({size_t(su),size_t(sv),size_t(sw)}),
             px0(gbuf.data()), mutexes(mutexes_) {}
         ~HelperNu2u() { dump(); }
@@ -1277,13 +1252,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             dumpshift(b0new);
             b0=b0new;
             }
-#ifdef NEW_DUMP
-          for (size_t i=0; i<ndim; ++i)
-            {
-            imin[i]=min<int>(imin[i],i0[i]-b0[i]);
-            imax[i]=max<int>(imax[i],i0[i]-b0[i]+supp);
-            }
-#endif
           p0 = px0 + (i0[0]-b0[0])*sv*sw + (i0[1]-b0[1])*sw + (i0[2]-b0[2]);
           }
       };
