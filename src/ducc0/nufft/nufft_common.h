@@ -223,7 +223,6 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters_type3(double ep
     }
   return make_tuple(minidx, bigdims, vssafe);
   }
-//#define NEW_DUMP
 
 }} // close namespaces
 
