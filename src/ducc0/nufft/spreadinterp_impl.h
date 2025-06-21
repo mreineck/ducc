@@ -116,6 +116,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
 
     // the base-2 logarithm of the linear dimension of a computational tile.
     constexpr static int log2tile = log2tile_<Tacc,ndim>;
+    constexpr static int tilesize = 1<<log2tile;
 
     static_assert(sizeof(Tcalc)<=sizeof(Tacc),
       "Tacc must be at least as accurate as Tcalc");
@@ -222,7 +223,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
     using parent::coord_idx, parent::nthreads, parent::supp, \
           parent::krn, \
           parent::nover, parent::shift, parent::corigin, parent::maxi0, \
-          parent::log2tile, parent::sort_coords; \
+          parent::log2tile, parent::tilesize, parent::sort_coords; \
  \
     vmav<Tcoord,2> coords_sorted; \
  \
@@ -306,14 +307,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
     static constexpr size_t ndim=1;
 
   DUCC0_SPREADINTERP_BOILERPLATE
-
-  private:
-    constexpr static size_t tilesize = size_t(1)<<log2tile;
-
-    vmav<Mutex,ndim> make_mutexes() const
-      {
-      return vmav<Mutex,ndim>({(nover[0]+tilesize-1)/tilesize});
-      }
 
     template<size_t supp> class HelperNu2u
       {
@@ -448,7 +441,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      auto mutexes = make_mutexes();
+      vmav<Mutex,ndim> mutexes({(nover[0]+tilesize-1)/tilesize});
       size_t npoints = points.shape(0);
 
       TemplateKernel<SUPP, mysimd<Tacc>> tkrn(*parent::krn);
@@ -656,14 +649,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
     static constexpr size_t ndim=2;
 
   DUCC0_SPREADINTERP_BOILERPLATE
-
-    constexpr static size_t tilesize = size_t(1)<<log2tile;
-
-    vmav<Mutex,ndim> make_mutexes() const
-      {
-      return vmav<Mutex,ndim>({(nover[0]+tilesize-1)/tilesize,
-                               (nover[1]+tilesize-1)/tilesize});
-      }
 
     template<size_t supp> class HelperNu2u
       {
@@ -915,7 +900,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       MR_assert(supp==SUPP, "requested support out of range");
       bool sorted = coords_sorted.size()!=0;
 
-      auto mutexes = make_mutexes();
+      vmav<Mutex, ndim> mutexes ({(nover[0]+tilesize-1)/tilesize,
+                                  (nover[1]+tilesize-1)/tilesize});
 
       size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
       execDynamic(coord_idx.size(), nthreads, chunksz, [&](Scheduler &sched)
@@ -1076,15 +1062,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
     static constexpr size_t ndim=3;
 
   DUCC0_SPREADINTERP_BOILERPLATE
-
-    constexpr static size_t tilesize = size_t(1)<<log2tile;
-
-    vmav<Mutex,ndim> make_mutexes() const
-      {
-      return vmav<Mutex,ndim>({(nover[0]+tilesize-1)/tilesize,
-                               (nover[1]+tilesize-1)/tilesize,
-                               (nover[2]+tilesize-1)/tilesize});
-      }
 
     template<size_t supp> class HelperNu2u
       {
@@ -1364,7 +1341,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
       bool sorted = coords_sorted.size()!=0;
       size_t npoints = points.shape(0);
 
-      auto mutexes = make_mutexes();
+      vmav<Mutex, ndim> mutexes ({(nover[0]+tilesize-1)/tilesize,
+                                  (nover[1]+tilesize-1)/tilesize,
+                                  (nover[2]+tilesize-1)/tilesize});
 
       size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
       execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
