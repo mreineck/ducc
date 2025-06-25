@@ -124,8 +124,7 @@ template<typename T> static NpArr c2c_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<complex<T>>(in, "a");
-  auto out = get_optional_Pyarr<complex<T>>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<complex<T>>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<complex<T>>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -140,8 +139,7 @@ template<typename T> static NpArr c2c_sym_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<complex<T>>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<complex<T>>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<complex<T>>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -179,8 +177,7 @@ template<typename T> static NpArr r2c_internal(const CNpArr &in,
   auto ain = to_cfmav<T>(in, "a");
   auto dims_out(ain.shape());
   dims_out[axes.back()] = (dims_out[axes.back()]>>1)+1;
-  auto out = get_optional_Pyarr<complex<T>>(out_, dims_out, "out");
-  auto aout = to_vfmav<complex<T>>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<complex<T>>(out_, dims_out, "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -202,8 +199,7 @@ template<typename T> static NpArr r2r_fftpack_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -226,8 +222,7 @@ template<typename T> static NpArr r2r_fftw_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -249,8 +244,7 @@ template<typename T> static NpArr dct_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
@@ -275,8 +269,7 @@ template<typename T> static NpArr dst_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
@@ -307,8 +300,7 @@ template<typename T> static NpArr c2r_internal(const NpArr &in,
   if ((lastsize/2) + 1 != ain_c.shape(axis))
     throw invalid_argument("bad lastsize");
   dims_out[axis] = lastsize;
-  auto out = get_optional_Pyarr<T>(out_, dims_out, "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, dims_out, "out");
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
   if (allow_overwriting_input)
     {
@@ -339,8 +331,7 @@ template<typename T> static NpArr separable_hartley_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -361,8 +352,7 @@ template<typename T> static NpArr genuine_hartley_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -383,8 +373,7 @@ template<typename T> static NpArr separable_fht_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
@@ -405,8 +394,7 @@ template<typename T> static NpArr genuine_fht_internal(const CNpArr &in,
   {
   auto axes = makeaxes(in, axes_);
   auto ain = to_cfmav<T>(in, "a");
-  auto out = get_optional_Pyarr<T>(out_, ain.shape(), "out");
-  auto aout = to_vfmav<T>(out, "out");
+  auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, ain.shape(), "out");
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);

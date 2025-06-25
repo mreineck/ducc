@@ -1,3 +1,38 @@
+0.39.0:
+- sht:
+  - various improvements in the inner loops for AVX512, mainly in the
+    synthesis direction.
+  - improved scaling behaviour for high thread counts
+  - experimental support routines for transforming between spin 1 and spin 0
+    a_lm for faster spin-1 SHTs via a detour to spin 0.
+
+-nufft:
+  - improved mutex usage in Type 1 transforms, which should enable better
+    scaling for high thread counts
+
+
+0.38.0:
+- sht:
+  - `rotate_alm` can now transform several sets of `a_lm` simultaneously and
+    avoids unnecessary operations if `mmax` of input and/or output is lower
+    than `lmax`.
+
+- nufft:
+  - fix cost model for type 3 transforms: this should reduce memory consumption
+    and slightly improve performance
+
+- pointingprovider:
+  - fixed a bug that was introduced in version 0.35.
+
+- healpix:
+  - most Healpix support functions now take an optional "out" argument, which
+    will be used to store the output values if provided
+
+- general:
+  - increased the minimum required version for `pybind11` to avoid problematic
+    interactions with recent C++ compilers.
+
+
 0.37.1:
 - general:
   - disable all interface functions with `long double` parameters when

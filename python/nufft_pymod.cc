@@ -57,8 +57,8 @@ template<typename Tgrid, typename Tcoord> static NpArr Py2_u2nu(const CNpArr &gr
   auto grid = to_cfmav_with_optional_leading_dimensions<complex<Tgrid>>(grid_,ndim+1);
   MR_assert((grid.ndim()==ndim)||(grid.ndim()==ndim+1), "bad dimensionality of grid");
   auto out_ = (ndim==size_t(grid_.ndim()))
-            ? get_optional_Pyarr<complex<Tpoints>>(out__, {coord.shape(0)}, "out")
-            : get_optional_Pyarr<complex<Tpoints>>(out__, {grid.shape(0), coord.shape(0)}, "out");
+            ? get_OptNpArr<complex<Tpoints>>(out__, {coord.shape(0)}, "out")
+            : get_OptNpArr<complex<Tpoints>>(out__, {grid.shape(0), coord.shape(0)}, "out");
   auto out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(out_, "out");
   {
   py::gil_scoped_release release;
@@ -180,8 +180,8 @@ template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2nu(const CNpArr 
   auto coord_out = to_cmav<Tcoord,2>(coord_out_, "coord_out");
   auto points_in = to_cmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_in_, "points_in");
   auto points_out_ = (points_in_.ndim()==1)
-    ? get_optional_Pyarr<complex<Tpoints>>(points_out__, {coord_out.shape(0)}, "points_out")
-    : get_optional_Pyarr<complex<Tpoints>>(points_out__, {points_in.shape(0),coord_out.shape(0)}, "points_out");
+    ? get_OptNpArr<complex<Tpoints>>(points_out__, {coord_out.shape(0)}, "points_out")
+    : get_OptNpArr<complex<Tpoints>>(points_out__, {points_in.shape(0),coord_out.shape(0)}, "points_out");
   auto points_out = to_vmav_with_optional_leading_dimensions<complex<Tpoints>,2>(points_out_, "points_out");
   {
   py::gil_scoped_release release;
@@ -262,7 +262,7 @@ class Py_Nufftplan
       if (points_.ndim()==2)
         uni_shape.push_back(points.shape(0));
       for(auto v:uniform_shape) uni_shape.push_back(v);
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uni_shape, "out");
+      auto uniform_ = get_OptNpArr<complex<T>>(uniform__, uni_shape, "out");
       auto uniform = to_vfmav_with_optional_leading_dimensions<complex<T>>(uniform_,uniform_shape.size()+1, "out");
       {
       py::gil_scoped_release release;
@@ -282,8 +282,8 @@ class Py_Nufftplan
       {
       auto uniform = to_cfmav_with_optional_leading_dimensions<complex<T>>(uniform_, uniform_shape.size()+1, "grid");
       auto points_ = (size_t(uniform_.ndim())==uniform_shape.size())
-        ? get_optional_Pyarr<complex<T>>(points__, {npoints}, "out")
-        : get_optional_Pyarr<complex<T>>(points__, {uniform.shape(0), npoints}, "out");
+        ? get_OptNpArr<complex<T>>(points__, {npoints}, "out")
+        : get_OptNpArr<complex<T>>(points__, {uniform.shape(0), npoints}, "out");
       auto points = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_, "out");
       {
       py::gil_scoped_release release;
@@ -379,8 +379,7 @@ class Py_incremental_nu2u
       vfmav<complex<T>> &grid,
       const OptNpArr &uniform__)
       {
-      auto uniform_ = get_optional_Pyarr<complex<T>>(uniform__, uniform_shape, "uniform");
-      auto uniform = to_vfmav<complex<T>>(uniform_, "uniform");
+      auto [uniform_, uniform] = get_OptNpArr_and_vfmav<complex<T>>(uniform__, uniform_shape, "uniform");
       {
       py::gil_scoped_release release;
       ptr->spread_finish(forward, grid, uniform);
@@ -462,8 +461,7 @@ class Py_incremental_u2nu
       const cfmav<complex<T>> &grid) const
       {
       auto coord = to_cmav<T,2>(coord_, "coord");
-      auto values_ = get_optional_Pyarr<complex<T>>(values__, {coord.shape(0)}, "points");
-      auto values = to_vmav<complex<T>,1>(values_, "points");
+      auto [values_, values] = get_OptNpArr_and_vmav<complex<T>,1>(values__, {coord.shape(0)}, "points");
       {
       py::gil_scoped_release release;
       ptr->interp(coord, values, grid);
@@ -532,8 +530,8 @@ class Py_Nufft3plan
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
-        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_out}, "points_out")
-        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_out}, "points_out");
+        ? get_OptNpArr<complex<T>>(points_out__, {npoints_out}, "points_out")
+        : get_OptNpArr<complex<T>>(points_out__, {points_in.shape(0),npoints_out}, "points_out");
       auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_, "points_out");
       {
       py::gil_scoped_release release;
@@ -549,8 +547,8 @@ class Py_Nufft3plan
       {
       auto points_in = to_cmav_with_optional_leading_dimensions<complex<T>,2>(points_in_, "points_in");
       auto points_out_ = (points_in_.ndim()==1)
-        ? get_optional_Pyarr<complex<T>>(points_out__, {npoints_in}, "points_out")
-        : get_optional_Pyarr<complex<T>>(points_out__, {points_in.shape(0),npoints_in}, "points_out");
+        ? get_OptNpArr<complex<T>>(points_out__, {npoints_in}, "points_out")
+        : get_OptNpArr<complex<T>>(points_out__, {points_in.shape(0),npoints_in}, "points_out");
       auto points_out = to_vmav_with_optional_leading_dimensions<complex<T>,2>(points_out_);
       {
       py::gil_scoped_release release;

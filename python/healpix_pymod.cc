@@ -70,7 +70,7 @@ template<typename T1, typename T2, size_t nd1, size_t nd2>
   {
   auto in = to_cfmav<T1>(ain);
   auto oshp = repl_dim(in.shape(), a1, a2);
-  return get_optional_Pyarr<T2>(out, oshp);
+  return get_OptNpArr<T2>(out, oshp);
   }
 
 #define DUCC0_DISPATCH(Ti1, Ti2, To1, To2, Tni1, Tni2, arr, func, args) \
@@ -238,8 +238,7 @@ class Pyhpbase
       size_t nthreads, const OptNpArr &out_) const
       {
       const auto ring = to_cfmav<Tin>(in);
-      auto out = get_optional_Pyarr<int64_t>(out_, ring.shape());
-      auto nest = to_vfmav<int64_t>(out);
+      auto [out, nest] = get_OptNpArr_and_vfmav<int64_t>(out_, ring.shape());
       {
       py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
@@ -254,8 +253,7 @@ class Pyhpbase
       size_t nthreads, const OptNpArr &out_) const
       {
       const auto nest = to_cfmav<Tin>(in);
-      auto out = get_optional_Pyarr<int64_t>(out_, nest.shape());
-      auto ring = to_vfmav<int64_t>(out);
+      auto [out, ring] = get_OptNpArr_and_vfmav<int64_t>(out_, nest.shape());
       {
       py::gil_scoped_release release;
       flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
@@ -277,14 +275,13 @@ class Pyhpbase
       py::gil_scoped_release release;
       base.query_disc(pointing(ptg2(0),ptg2(1)), radius, pixset);
       }
-      auto res = make_Pyarr<int64_t>(shape_t({pixset.nranges(),2}));
-      auto oref = to_vmav<int64_t,2>(res);
+      auto [res_, res] = make_Pyarr_and_vmav<int64_t,2>({pixset.nranges(),2});
       for (size_t i=0; i<pixset.nranges(); ++i)
         {
-        oref(i,0)=pixset.ivbegin(i);
-        oref(i,1)=pixset.ivend(i);
+        res(i,0)=pixset.ivbegin(i);
+        res(i,1)=pixset.ivend(i);
         }
-      return res;
+      return res_;
       }
     NpArr query_disc(const CNpArr &ptg, double radius) const
       DUCC0_DISPATCH(double, float, double, float, "f8", "f4", ptg,
@@ -294,14 +291,10 @@ class Pyhpbase
       MR_assert(base.Scheme()==RING, "RING scheme required for SHTs");
       auto nside = base.Nside();
       auto nrings = size_t(4*nside-1);
-      auto theta_= make_Pyarr<double>(shape_t({nrings}));
-      auto theta = to_vmav<double,1>(theta_);
-      auto phi0_ = make_Pyarr<double>(shape_t({nrings}));
-      auto phi0 = to_vmav<double,1>(phi0_);
-      auto nphi_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto nphi = to_vmav<size_t,1>(nphi_);
-      auto ringstart_ = make_Pyarr<size_t>(shape_t({nrings}));
-      auto ringstart = to_vmav<size_t,1>(ringstart_);
+      auto [theta_, theta] = make_Pyarr_and_vmav<double,1>({nrings});
+      auto [phi0_, phi0] = make_Pyarr_and_vmav<double,1>({nrings});
+      auto [nphi_, nphi] = make_Pyarr_and_vmav<size_t,1>({nrings});
+      auto [ringstart_, ringstart] = make_Pyarr_and_vmav<size_t,1>({nrings});
       {
       py::gil_scoped_release release;
       for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)

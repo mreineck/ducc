@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
@@ -111,8 +111,17 @@ inline bool preallocate_memory(double gbytes)
   free(blob);
   return true;
   }
+inline bool set_heap_trim_limit(double gbytes)
+  {
+  auto nbytes = size_t(1e9*gbytes);
+  mallopt(M_MMAP_THRESHOLD, nbytes);  // never do mmap() on smaller allocations
+  mallopt(M_TRIM_THRESHOLD, nbytes);  // never give memory back to OS
+  return true;
+  }
 #else
 inline bool preallocate_memory(double /*gbytes*/)
+  { return false; }
+inline bool set_heap_trim_limit(double /*gbytes*/)
   { return false; }
 #endif
 
@@ -121,6 +130,7 @@ inline bool preallocate_memory(double /*gbytes*/)
 using detail_misc_utils::calcShare;
 using detail_misc_utils::noncritical_shape;
 using detail_misc_utils::preallocate_memory;
+using detail_misc_utils::set_heap_trim_limit;
 
 }
 

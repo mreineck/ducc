@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <optional>
 #include <variant>
+#include <tuple>
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -211,7 +212,7 @@ template<typename T> vfmav<T> to_vfmav(const NpArr &obj, const string &name="")
   return vfmav<T>(reinterpret_cast<T *>(obj.data()),
     copy_shape(CNpArr(obj), spec), copy_strides<T,true>(CNpArr(obj), spec));
 #else
-  auto arr = py::array_t<T>(obj);
+  auto arr = NpArrT<T>(obj);
   return vfmav<T>(reinterpret_cast<T *>(arr.mutable_data()),
     copy_shape(CNpArr(obj), spec), copy_strides<T,true>(CNpArr(obj), spec));
 #endif
@@ -241,32 +242,47 @@ template<typename T, size_t ndim> vmav<T,ndim> to_vmav_with_optional_leading_dim
 template<typename T> void zero_Pyarr(const NpArr &arr, size_t nthreads=1)
   { mav_apply([](T &v){ v=T(0); }, nthreads, to_vfmav<T>(arr)); }
 
-template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false)
+template<typename T> NpArr make_Pyarr(const shape_t &dims, bool zero=false, size_t nthreads=1)
   {
 #ifdef DUCC0_USE_NANOBIND
-  auto *res = new vfmav<T>(dims);
+  auto *res = new vfmav<T>(dims, PAGE_IN(nthreads));
   py::capsule owner(res, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
   NpArr res_(NpArrT<T>(res->data(), dims.size(), dims.data(), owner));
 #else
-  auto res_=NpArr(py::array_t<T>(dims));
+  auto res_=NpArr(NpArrT<T>(dims));
+  page_in_memory(reinterpret_cast<T *>(res_.mutable_data()), res_.size(), nthreads);
 #endif
-  if (zero) zero_Pyarr<T>(res_);
+  if (zero) zero_Pyarr<T>(res_, nthreads);
   return res_;
   }
 template<typename T, size_t ndim> NpArr make_Pyarr
   (const array<size_t,ndim> &dims, bool zero=false)
   { return make_Pyarr<T>(shape_t(dims.begin(), dims.end()), zero); }
+template<typename T, size_t ndim> auto make_Pyarr_and_vmav
+  (const shape_t &dims, bool zero=false, size_t nthreads=1)
+  {
+  auto res_py = make_Pyarr<T>(dims, zero, nthreads);
+  auto res_mav = to_vmav<T,ndim>(res_py);
+  return std::make_tuple(res_py, res_mav);
+  }
+template<typename T> auto make_Pyarr_and_vfmav
+  (const shape_t &dims, bool zero=false, size_t nthreads=1)
+  {
+  auto res_py = make_Pyarr<T>(dims, zero, nthreads);
+  auto res_vfmav = to_vfmav<T>(res_py);
+  return std::make_tuple(res_py, res_vfmav);
+  }
 
-template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zero=false)
+template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zero=false, size_t nthreads=1)
   {
   auto ndim = shape.size();
   if (ndim==1) return make_Pyarr<T>(shape);
   auto shape2 = noncritical_shape(shape, sizeof(T));
   NpArr res;
 #ifdef DUCC0_USE_NANOBIND
-  auto *tmp = new vfmav<T>(shape2, UNINITIALIZED);
+  auto *tmp = new vfmav<T>(shape2, PAGE_IN(nthreads));
   py::capsule owner(tmp, [](void *p) noexcept {
       delete reinterpret_cast<vfmav<T> *>(p);
     });
@@ -285,21 +301,22 @@ template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zer
     res = NpArr(res_);
     }
 #else
-  py::array_t<T> tmp(shape2);
+  NpArrT<T> tmp(shape2);
+  page_in_memory(reinterpret_cast<T *>(tmp.mutable_data()), tmp.size(), nthreads);
   py::list slices;
   for (size_t i=0; i<ndim; ++i)
     slices.append(py::slice(0, shape[i], 1));
-  py::array_t<T> res_(tmp[py::tuple(slices)]);
+  NpArrT<T> res_(tmp[py::tuple(slices)]);
   res = NpArr(res_);
 #endif
-  if (zero) zero_Pyarr<T>(res);
+  if (zero) zero_Pyarr<T>(res, nthreads);
   return res;
   }
 
-template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
-  const shape_t &dims, const string &name="")
+template<typename T> NpArr get_OptNpArr(const OptNpArr &arr_,
+  const shape_t &dims, const string &name="", size_t nthreads=1)
   {
-  if (!arr_) return make_Pyarr<T>(dims, false);
+  if (!arr_) return make_Pyarr<T>(dims, false, nthreads);
   const auto spec = makeSpec(name);
   auto val = arr_.value();
   MR_assert(isPyarr<T>(val), spec, "incorrect data type");
@@ -308,11 +325,38 @@ template<typename T> NpArr get_optional_Pyarr(const OptNpArr &arr_,
     MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
   return val;
   }
-
-template<typename T> NpArr get_optional_Pyarr_minshape
-  (const OptNpArr &arr_, const shape_t &dims, const string &name="")
+template<typename T> auto get_OptNpArr_and_vfmav(const OptNpArr &arr_,
+  const shape_t &dims, const string &name="", size_t nthreads=1)
   {
-  if (!arr_) return make_Pyarr<T>(dims, false);
+  if (!arr_) return make_Pyarr_and_vfmav<T>(dims, false, nthreads);
+  const auto spec = makeSpec(name);
+  auto val = arr_.value();
+  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
+  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
+  auto res_vfmav = to_vfmav<T>(val);
+  return std::make_tuple(val, res_vfmav);
+  }
+ template<typename T, size_t ndim> auto get_OptNpArr_and_vmav(const OptNpArr &arr_,
+  const shape_t &dims, const string &name="", size_t nthreads=1)
+  {
+  if (!arr_) return make_Pyarr_and_vmav<T, ndim>(dims, false, nthreads);
+  const auto spec = makeSpec(name);
+  auto val = arr_.value();
+  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
+  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
+  MR_assert(dims.size()==ndim, spec, "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
+  auto res_vmav = to_vmav<T,ndim>(val);
+  return std::make_tuple(val, res_vmav);
+  }
+
+template<typename T> NpArr get_OptNpArr_minshape
+  (const OptNpArr &arr_, const shape_t &dims, const string &name="", size_t nthreads=1)
+  {
+  if (!arr_) return make_Pyarr<T>(dims, false, nthreads);
   const auto spec = makeSpec(name);
   auto val = arr_.value();
   MR_assert(isPyarr<T>(val), spec, "incorrect data type");
@@ -322,7 +366,7 @@ template<typename T> NpArr get_optional_Pyarr_minshape
   return val;
   }
 
-template<typename T> CNpArr get_optional_const_Pyarr(
+template<typename T> CNpArr get_OptCNpArr(
   const OptCNpArr &arr_, const shape_t &dims, const string &name="")
   {
   if (!arr_) return CNpArr(make_Pyarr<T>(shape_t(dims.size(), 0)));
@@ -374,10 +418,13 @@ using detail_pybind::OptCNpArr;
 using detail_pybind::None;
 using detail_pybind::isPyarr;
 using detail_pybind::make_Pyarr;
+using detail_pybind::make_Pyarr_and_vmav;
 using detail_pybind::make_noncritical_Pyarr;
-using detail_pybind::get_optional_Pyarr;
-using detail_pybind::get_optional_Pyarr_minshape;
-using detail_pybind::get_optional_const_Pyarr;
+using detail_pybind::get_OptNpArr;
+using detail_pybind::get_OptNpArr_and_vfmav;
+using detail_pybind::get_OptNpArr_and_vmav;
+using detail_pybind::get_OptNpArr_minshape;
+using detail_pybind::get_OptCNpArr;
 using detail_pybind::to_cfmav;
 using detail_pybind::to_vfmav;
 using detail_pybind::to_cmav;

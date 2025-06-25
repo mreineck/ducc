@@ -434,7 +434,7 @@ template<typename T> class ConvolverPlan
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
 
       Alm_Base base(lmax, lmax);
-      vmav<complex<T>,2> aarr({nplanes,base.Num_Alms()}, UNINITIALIZED);
+      vmav<complex<T>,2> aarr({nplanes,base.Num_Alms()}, PAGE_IN(nthreads));
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
           {
@@ -644,7 +644,7 @@ template<typename T> class ConvolverPlan
       for (size_t i=0; i<=lmax; ++i)
         lnorm[i]=T(std::sqrt(4*pi/(2*i+1.)));
       Alm_Base base(lmax,lmax);
-      vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()}, UNINITIALIZED);
+      vmav<complex<T>,2> aarr({nplanes, base.Num_Alms()}, PAGE_IN(nthreads));
       leg2alm(aarr, leg_s, mbeam, lmax, mval, mstart, 1, theta, nthreads, STANDARD);
       for (size_t m=0; m<=lmax; ++m)
         for (size_t l=m; l<=lmax; ++l)
@@ -700,11 +700,13 @@ template<typename T> class ConvolverPlan
 
     vmav<T,4> buildCube(size_t nplanes) const
       {
-      auto cube_ = vmav<T,5>::build_noncritical({nplanes, Npsi(), Ntheta(), (Nphi()+1)/2, 2}, UNINITIALIZED);
+      auto cube_ = vmav<T,5>::build_noncritical({nplanes, Npsi(), Ntheta(), (Nphi()+1)/2, 2}, PAGE_IN(nthreads));
       vmav<T,4> cube = cube_.template reinterpret<4>(
         {nplanes, Npsi(), Ntheta(), Nphi()}, {cube_.stride(0), cube_.stride(1), cube_.stride(2), 1});
       return cube;
       }
+
+    size_t Nthreads() const { return nthreads; }    
   };
 
 }

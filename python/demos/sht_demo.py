@@ -35,7 +35,7 @@ print(f"Map analysis demo for lmax={lmax}")
 nlon = ducc0.fft.good_size(2*lmax+1,True)
 
 # create a set of spherical harmonic coefficients to transform
-# Libsharp works exclusively on real-valued maps. The corresponding harmonic
+# ducc0.sht works exclusively on real-valued maps. The corresponding harmonic
 # coefficients are termed a_lm; they are complex numbers with 0<=m<=lmax and
 # m<=l<=lmax.
 # Symmetry: a_l,-m = (-1)**m*conj(a_l,m).

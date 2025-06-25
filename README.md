@@ -13,6 +13,7 @@ interface.
 
 - [Python >= 3.8](https://www.python.org/)
 - only when compiling from source: [pybind11](https://github.com/pybind/pybind11)
+- only when compiling from source: [nanobind](https://github.com/wjakob/nanobind)
 - only when compiling from source: a C++17-capable compiler, e.g.
   - `g++` 7 or later
   - `clang++`
@@ -25,6 +26,12 @@ interface.
 The latest version of DUCC can be obtained by cloning the repository via
 
     git clone https://gitlab.mpcdf.mpg.de/mtr/ducc.git
+
+It can be installed via
+
+    pip3 install .
+
+with optional additional flags, depending on personal preferences.
 
 ### Licensing terms
 - All source code in this package is released under the terms of the GNU
@@ -139,8 +146,7 @@ The central algorithms are derived from Paul Swarztrauber's
 ducc.nufft
 ----------
 
-Library for non-uniform FFTs in 1D/2D/3D
-(currently only supports transform types 1 and 2).
+Library for non-uniform FFTs in 1D/2D/3D (all transform types).
 The goal is to provide similar or better performance and accuracy than
 [FINUFFT](https://github.com/flatironinstitute/finufft), making use of lessons
 learned during the implementation of the `wgridder` module (see below).

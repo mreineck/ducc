@@ -48,7 +48,7 @@ template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spe
   using Tsimd = native_simd<double>;
   constexpr size_t vlen = Tsimd::size();
   auto lmax_spec_used = min(2*lmax, lmax_spec);
-  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, UNINITIALIZED));
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t i=0; i<nspec; ++i)
       spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
@@ -233,7 +233,7 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   constexpr size_t vlen = Tsimd::size();
   auto lmax_spec_used = min(2*lmax, lmax_spec);
   auto spec2(vmav<double,3>::build_noncritical
-    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
+    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t j=0; j<ncomp_spec; ++j)
       for (size_t i=0; i<nspec; ++i)
@@ -436,7 +436,7 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
   auto lmax_spec = spec.shape(2)-1;
   auto lmax_spec_used = min(2*lmax, lmax_spec);
   auto spec2(vmav<double,3>::build_noncritical
-    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, UNINITIALIZED));
+    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t j=0; j<ncomp_spec; ++j)
       for (size_t i=0; i<nspec; ++i)

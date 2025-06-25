@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2024 Max-Planck-Society
+/* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_COMMON_H
@@ -147,29 +147,29 @@ template<typename Tcalc, typename Tacc> auto findNufftKernel(double epsilon,
     grid size for the provided Type 3 problem parameters. */
 template<typename Tcalc, typename Tacc> auto findNufftParameters_type3(double epsilon,
   double sigma_min, double sigma_max, const vector<double> &hdelta_in, const vector<double> &hdelta_out,
-  size_t npoints, size_t nthreads)
+  size_t npoints_in, size_t npoints_out, size_t nthreads)
   {
   auto vlen = mysimd<Tacc>::size();
   auto ndim = hdelta_in.size();
 
-vector<double> rawdim(ndim), vssafe(ndim);
-for (size_t idim=0; idim<ndim; ++idim)
-  {
-  double Xsafe = hdelta_in[idim],
-         Ssafe = hdelta_out[idim];
-  if ((Xsafe==0) && (Ssafe==0))
-    Xsafe = Ssafe = 1.0;
-  else
+  vector<double> rawdim(ndim), vssafe(ndim);
+  for (size_t idim=0; idim<ndim; ++idim)
     {
-    if (Xsafe==0) Xsafe = 1./Ssafe;
-    if (Ssafe==0) Ssafe = 1./Xsafe;
+    double Xsafe = hdelta_in[idim],
+           Ssafe = hdelta_out[idim];
+    if ((Xsafe==0) && (Ssafe==0))
+      Xsafe = Ssafe = 1.0;
+    else
+      {
+      if (Xsafe==0) Xsafe = 1./Ssafe;
+      if (Ssafe==0) Ssafe = 1./Xsafe;
+      }
+    rawdim[idim] = 2*Ssafe*Xsafe/pi;
+    vssafe[idim] = Ssafe;
     }
-  rawdim[idim] = 2*Ssafe*Xsafe/pi;
-  vssafe[idim] = Ssafe;
-  }
 
-
-  auto idx = getAvailableKernels<Tcalc>(epsilon, ndim, sigma_min, sigma_max);
+  // using epsilon*0.5 here, since a type 3 consists of two transforms
+  auto idx = getAvailableKernels<Tcalc>(epsilon*0.5, ndim, sigma_min, sigma_max);
   double mincost = 1e300;
   constexpr double nref_fft=2048;
   constexpr double costref_fft=0.0693;
@@ -182,23 +182,26 @@ for (size_t idim=0; idim<ndim; ++idim)
     auto nvec = (supp+vlen-1)/vlen;
     auto ofactor = krn.ofactor;
     vector<size_t> lbigdims(ndim,0);
-    double gridsize=1;
+    double gridsize2=1;
     for (size_t idim=0; idim<ndim; ++idim)
       {
-// new type3 stuff here
-double tmp = rawdim[idim]*ofactor+supp+1;
-      lbigdims[idim] = 2*good_size_complex(size_t(tmp*0.5)+1);
-lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
-lbigdims[idim] = max<size_t>(lbigdims[idim], 2*supp);  // FINUFFT does this ... why exactly?
-      gridsize *= lbigdims[idim];
+      double tmp = rawdim[idim]*ofactor+supp+1;
+      lbigdims[idim] = size_t(ceil(tmp)); // no need to find good FFT size here
+      lbigdims[idim] += lbigdims[idim]&1;  // make even
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 2*supp);  // FINUFFT does this ... why exactly?
+      // now determine grid size for the actual FFT, which is oversampled once more
+      tmp = lbigdims[idim]*ofactor+supp+1;
+      gridsize2 *= 2*good_size_complex(size_t(tmp*0.5)+1);
       }
-    double logterm = log(gridsize)/log(nref_fft*nref_fft);
-    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
+    double logterm = log(gridsize2)/log(nref_fft*nref_fft);
+    double fftcost = gridsize2/(nref_fft*nref_fft)*logterm*costref_fft;
     size_t kernelpoints = nvec*vlen;
     for (size_t idim=0; idim+1<ndim; ++idim)
       kernelpoints*=supp;
-    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
-    gridcost *= sizeof(Tacc)/sizeof(Tcalc);
+    // "npoints" is already the sum of input and output points, so no need to multiply by 2 here
+    double gridcost = 2.2e-10*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
+    gridcost *= sizeof(Tacc)/sizeof(Tcalc)*npoints_in + npoints_out;
     // FIXME: heuristics could be improved
     gridcost /= nthreads;  // assume perfect scaling for now
     constexpr double max_fft_scaling = 6;
@@ -220,7 +223,6 @@ lbigdims[idim] = max<size_t>(lbigdims[idim], 2*supp);  // FINUFFT does this ... 
     }
   return make_tuple(minidx, bigdims, vssafe);
   }
-//#define NEW_DUMP
 
 }} // close namespaces
 

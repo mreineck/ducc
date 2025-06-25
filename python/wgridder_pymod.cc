@@ -40,14 +40,14 @@ template<typename T> static NpArr Py2_vis2dirty_tuning(const CNpArr &uvw_,
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
   auto vis = to_cmav<complex<T>,2>(vis_);
-  auto wgt = get_optional_const_Pyarr<T>(wgt_, {vis.shape(0),vis.shape(1)});
+  auto wgt = get_OptCNpArr<T>(wgt_, {vis.shape(0),vis.shape(1)});
   auto wgt2 = to_cmav<T,2>(wgt);
-  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask = get_OptCNpArr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
   auto dirty = (npix_x==0) ? dirty_.value()
-                           : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
+                           : get_OptNpArr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {
   py::gil_scoped_release release;
@@ -159,14 +159,14 @@ template<typename T> static NpArr Py2_vis2dirty(const CNpArr &uvw_,
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
   auto vis = to_cmav<complex<T>,2>(vis_);
-  auto wgt = get_optional_const_Pyarr<T>(wgt_, {vis.shape(0),vis.shape(1)});
+  auto wgt = get_OptCNpArr<T>(wgt_, {vis.shape(0),vis.shape(1)});
   auto wgt2 = to_cmav<T,2>(wgt);
-  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask = get_OptCNpArr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_cmav<uint8_t,2>(mask);
   // sizes must be either both zero or both nonzero
   MR_assert((npix_x==0)==(npix_y==0), "inconsistent dirty image dimensions");
   auto dirty = (npix_x==0) ? dirty_.value()
-                           : get_optional_Pyarr<T>(dirty_, {npix_x, npix_y});
+                           : get_OptNpArr<T>(dirty_, {npix_x, npix_y});
   auto dirty2 = to_vmav<T,2>(dirty);
   {
   py::gil_scoped_release release;
@@ -273,12 +273,11 @@ template<typename T> static NpArr Py2_dirty2vis_tuning(const CNpArr &uvw_,
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
   auto dirty = to_cmav<T,2>(dirty_);
-  auto wgt = get_optional_const_Pyarr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
+  auto wgt = get_OptCNpArr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
   auto wgt2 = to_cmav<T,2>(wgt);
-  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask = get_OptCNpArr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_cmav<uint8_t,2>(mask);
-  auto vis = get_optional_Pyarr<complex<T>>(vis_, {uvw.shape(0),freq.shape(0)});
-  auto vis2 = to_vmav<complex<T>,2>(vis);
+  auto [vis, vis2] = get_OptNpArr_and_vmav<complex<T>,2>(vis_, {uvw.shape(0),freq.shape(0)});
   {
   py::gil_scoped_release release;
   dirty2ms_tuning<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
@@ -371,12 +370,11 @@ template<typename T> static NpArr Py2_dirty2vis(const CNpArr &uvw_,
   auto uvw = to_cmav<double,2>(uvw_);
   auto freq = to_cmav<double,1>(freq_);
   auto dirty = to_cmav<T,2>(dirty_);
-  auto wgt = get_optional_const_Pyarr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
+  auto wgt = get_OptCNpArr<T>(wgt_, {uvw.shape(0),freq.shape(0)});
   auto wgt2 = to_cmav<T,2>(wgt);
-  auto mask = get_optional_const_Pyarr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
+  auto mask = get_OptCNpArr<uint8_t>(mask_, {uvw.shape(0),freq.shape(0)});
   auto mask2 = to_cmav<uint8_t,2>(mask);
-  auto vis = get_optional_Pyarr<complex<T>>(vis_, {uvw.shape(0),freq.shape(0)});
-  auto vis2 = to_vmav<complex<T>,2>(vis);
+  auto [vis, vis2] = get_OptNpArr_and_vmav<complex<T>,2>(vis_, {uvw.shape(0),freq.shape(0)});
   {
   py::gil_scoped_release release;
   dirty2ms<T,T>(uvw,freq,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
