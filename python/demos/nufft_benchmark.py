@@ -203,7 +203,7 @@ class Bench3:
         # Produce "ground truth", i.e. run NUFFT with the best available
         # precision
         print("computing reference results with high precision ...")
-        eps = 1.0001*ducc0.nufft.bestEpsilon(ndim=ndim, singleprec=False)
+        eps = 1.0001*2*ducc0.nufft.bestEpsilon(ndim=ndim, singleprec=False)
         self._res_fiducial = ducc0.nufft.experimental.nu2nu(
             points_in=self._points.astype(np.complex128),
             coord_in=self._coord_in.astype(np.float64),
@@ -243,7 +243,7 @@ class Bench3:
             del plan, out
 
         if do_unplanned:
-            out = np.ones((npoints_in,), dtype=dtype)
+            out = np.ones((npoints_out,), dtype=dtype)
             t0 = time()
             out = ducc0.nufft.experimental.nu2nu(points_in=points, coord_in=coord_in, coord_out=coord_out, forward=True, epsilon=epsilon, verbosity=0, nthreads=nthreads, points_out=out)
             res["ducc_3_unplanned_time_full"] = time()-t0
@@ -282,6 +282,11 @@ class Bench3:
 
         return res
 
+def getarr(res, name):
+    return np.array([r[name] for r in res])
+
+def geterr(res, name, use_real_errors, eps):
+    return np.maximum(eps,getarr(res,name)) if use_real_errors else eps
 
 def plot(res, fname, use_real_errors=True):
     import matplotlib.pyplot as plt
@@ -289,37 +294,37 @@ def plot(res, fname, use_real_errors=True):
     have_planned = "ducc_1_planned_time_exec" in  res[0]
     have_unplanned = "ducc_1_unplanned_time_full" in  res[0]
     have_finufft = "finufft_1_planned_time_exec" in res[0] or "finufft_1_unplanned_time_full" in res[0]
-    eps = np.array([r["epsilon"] for r in res])
+    eps = getarr(res, "epsilon")
     plt.xscale("log")
     plt.yscale("log")
 
     if have_planned:
-        tducct1 = fct*np.array([r["ducc_1_planned_time_exec"] for r in res])
-        tducct2 = fct*np.array([r["ducc_2_planned_time_exec"] for r in res])
-        educct1 = np.array([r["ducc_1_planned_err"] for r in res]) if use_real_errors else eps
-        educct2 = np.array([r["ducc_2_planned_err"] for r in res]) if use_real_errors else eps
+        tducct1 = fct*getarr(res, "ducc_1_planned_time_exec")
+        tducct2 = fct*getarr(res, "ducc_2_planned_time_exec")
+        educct1 = geterr(res, "ducc_1_planned_err", use_real_errors, eps)
+        educct2 = geterr(res, "ducc_2_planned_err", use_real_errors, eps)
         plt.plot(educct1,tducct1,label="ducc planned, type 1")
         plt.plot(educct2,tducct2,label="ducc planned, type 2")
     if have_unplanned:
-        tducc1 = fct*np.array([r["ducc_1_unplanned_time_full"] for r in res])
-        tducc2 = fct*np.array([r["ducc_2_unplanned_time_full"] for r in res])
-        educc1 = np.array([r["ducc_1_unplanned_err"] for r in res]) if use_real_errors else eps
-        educc2 = np.array([r["ducc_2_unplanned_err"] for r in res]) if use_real_errors else eps
+        tducc1 = fct*getarr(res, "ducc_1_unplanned_time_full")
+        tducc2 = fct*getarr(res, "ducc_2_unplanned_time_full")
+        educc1 = geterr(res, "ducc_1_unplanned_err", use_real_errors, eps)
+        educc2 = geterr(res, "ducc_2_unplanned_err", use_real_errors, eps)
         plt.plot(educc1,tducc1,label="ducc unplanned, type 1")
         plt.plot(educc2,tducc2,label="ducc unplanned, type 2")
     if have_finufft:
         if have_planned:
-            tfinufftt1 = fct*np.array([r["finufft_1_planned_time_exec"] for r in res])
-            tfinufftt2 = fct*np.array([r["finufft_2_planned_time_exec"] for r in res])
-            efinufftt1 = np.array([r["finufft_1_planned_err"] for r in res]) if use_real_errors else eps
-            efinufftt2 = np.array([r["finufft_2_planned_err"] for r in res]) if use_real_errors else eps
+            tfinufftt1 = fct*getarr(res, "finufft_1_planned_time_exec")
+            tfinufftt2 = fct*getarr(res, "finufft_2_planned_time_exec")
+            efinufftt1 = geterr(res, "finufft_1_planned_err", use_real_errors, eps)
+            efinufftt2 = geterr(res, "finufft_2_planned_err", use_real_errors, eps)
             plt.plot(efinufftt1,tfinufftt1,label="finufft planned, type 1")
             plt.plot(efinufftt2,tfinufftt2,label="finufft planned, type 2")
         if have_unplanned:
-            tfinufft1 = fct*np.array([r["finufft_1_unplanned_time_full"] for r in res])
-            tfinufft2 = fct*np.array([r["finufft_2_unplanned_time_full"] for r in res])
-            efinufft1 = np.array([r["finufft_1_unplanned_err"] for r in res]) if use_real_errors else eps
-            efinufft2 = np.array([r["finufft_2_unplanned_err"] for r in res]) if use_real_errors else eps
+            tfinufft1 = fct*getarr(res, "finufft_1_unplanned_time_full")
+            tfinufft2 = fct*getarr(res, "finufft_2_unplanned_time_full")
+            efinufft1 = geterr(res, "finufft_1_unplanned_err", use_real_errors, eps)
+            efinufft2 = geterr(res, "finufft_2_unplanned_err", use_real_errors, eps)
             plt.plot(efinufft1,tfinufft1,label="finufft unplanned, type 1")
             plt.plot(efinufft2,tfinufft2,label="finufft unplanned, type 2")
 
@@ -337,26 +342,26 @@ def plot3(res, fname, use_real_errors=True):
     have_finufft = "finufft_3_planned_time_exec" in res[0] or "finufft_3_unplanned_time_full" in res[0]
     have_planned = "ducc_3_planned_time_exec" in  res[0]
     have_unplanned = "ducc_3_unplanned_time_full" in  res[0]
-    eps = np.array([r["epsilon"] for r in res])
+    eps = getarr(res, "epsilon")
     plt.xscale("log")
     plt.yscale("log")
 
     if have_planned:
-        tducct3 = fct*np.array([r["ducc_3_planned_time_exec"] for r in res])
-        educct3 = np.array([r["ducc_3_planned_err"] for r in res]) if use_real_errors else eps
+        tducct3 = fct*getarr(res, "ducc_3_planned_time_exec")
+        educct3 = geterr(res, "ducc_3_planned_err", use_real_errors, eps)
         plt.plot(educct3,tducct3,label="ducc planned, type 3")
     if have_unplanned:
-        tducc3 = fct*np.array([r["ducc_3_unplanned_time_full"] for r in res])
-        educc3 = np.array([r["ducc_3_unplanned_err"] for r in res]) if use_real_errors else eps
+        tducc3 = fct*getarr(res, "ducc_3_unplanned_time_full")
+        educc3 = geterr(res, "ducc_3_unplanned_err", use_real_errors, eps)
         plt.plot(educc3,tducc3,label="ducc unplanned, type 3")
     if have_finufft:
         if have_planned:
-            tfinufftt3 = fct*np.array([r["finufft_3_planned_time_exec"] for r in res])
-            efinufftt3 = np.array([r["finufft_3_planned_err"] for r in res]) if use_real_errors else eps
+            tfinufftt3 = fct*getarr(res, "finufft_3_planned_time_exec")
+            efinufftt3 = geterr(res, "finufft_3_planned_err", use_real_errors, eps)
             plt.plot(efinufftt3,tfinufftt3,label="finufft planned, type 3")
         if have_unplanned:
-            tfinufft3 = fct*np.array([r["finufft_3_unplanned_time_full"] for r in res])
-            efinufft3 = np.array([r["finufft_3_unplanned_err"] for r in res]) if use_real_errors else eps
+            tfinufft3 = fct*getarr(res, "finufft_3_unplanned_time_full")
+            efinufft3 = geterr(res, "finufft_3_unplanned_err", use_real_errors, eps)
             plt.plot(efinufft3,tfinufft3,label="finufft unplanned, type 3")
     plt.title("npoints_in={}, npoint_out={}, nthreads={}".format(res[0]["npoints_in"], res[0]["npoints_out"], res[0]["nthreads"]))
     plt.xlabel("real error" if use_real_errors else "requested accuracy")
@@ -384,9 +389,9 @@ def runbench3(npoints_in, npoints_out, minmax_in, minmax_out, nthreads, fname, s
     mybench = Bench3(npoints_in, npoints_out, minmax_in, minmax_out)
     ndim = minmax_in.shape[1]
     if singleprec:
-        epslist = [[2.5e-7, 4.5e-7, 8.2e-7][ndim-1], 1e-5, 1e-4, 1e-3, 1e-2]
+        epslist = [[2.5e-7, 4.5e-7, 8.2e-7][ndim-1]*2, 1e-5, 1e-4, 1e-3, 1e-2]
     else:
-        epslist = [[4e-15, 8e-15, 2e-14][ndim-1], 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
+        epslist = [[4e-15, 8e-15, 2e-14][ndim-1]*2, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
     for eps in epslist:
         print(f"{ndim}D, M_in={npoints_in}, M_out={npoints_out}, epsilon={eps}, nthreads={nthreads}:")
         res.append(mybench.run(eps, singleprec, nthreads))
