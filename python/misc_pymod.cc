@@ -845,7 +845,9 @@ f_min : float
 f_samp : float
     sampling frequency in Hz at which the noise samples should be generated.
 slope : float
-    the slope of the spectrum between f_min and f_knee. Must be in [0; -2]
+    the slope of the spectrum between f_min and f_knee. Must be in [0; 2];
+    the resulting noise will have a spectrum proportional to 1/f**slope between
+    f_min and f_knee.
 )""";
 
 constexpr const char *Py_OofaNoise_filterGaussian_DS = R"""(
