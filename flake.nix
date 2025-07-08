@@ -17,6 +17,8 @@
           version = "0.37.0";
           pyproject = true;
 
+          # stdenv = pkgs.clangStdenv;
+
           inherit src;
           postPatch = ''
             substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6", ' ""
