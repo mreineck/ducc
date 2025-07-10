@@ -1,51 +1,31 @@
-image: $CONTAINER_TEST_IMAGE
-
-variables:
-  CONTAINER_TEST_IMAGE: gitlab-registry.mpcdf.mpg.de/$CI_PROJECT_PATH:$CI_COMMIT_REF_NAME
+image: python:latest
 
 stages:
-  - build_docker
   - testing
-#  - demos
   - release
 
-build_docker:
-  image: docker
-  stage: build_docker
-  script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN gitlab-registry.mpcdf.mpg.de
-    - docker build -t $CONTAINER_TEST_IMAGE .
-    - docker push $CONTAINER_TEST_IMAGE
+before_script:
+  - apt-get update
+  - pip install build pytest-xdist
 
 test_gcc:
   stage: testing
   script:
     - python3 -m build --sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
+    - 'cd ducc0-* && pip install . && pytest -n auto -q python/test'
 
 test_clang:
   stage: testing
   script:
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y clang
     - python3 -m build --sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && CC=clang CXX=clang++ python3 -m pip install --user --break-system-packages . && python3 -m pytest -q python/test'
-
-test_rust:
-  stage: testing
-  image: rust:latest
-  script:
-    - cd rust && cargo build
-
-#wgridding_demo:
-#  stage: demos
-#  script:
-#    - python3 -m pip install --user --break-system-packages . && python3 python/demos/wgridder_python_implementations.py
+    - 'cd ducc0-* && CC=clang CXX=clang++ pip install . && pytest -n auto -q python/test'
 
 release:
   stage: release
   script:
-    - rm -rf rust .pytest_cache  # kludge
     - python3 -m build --sdist
     - 'mv dist/*.tar.gz .'
   artifacts:
@@ -55,7 +35,9 @@ release:
 pages:
   stage: release
   script:
-    - DUCC0_OPTIMIZATION=none python3 -m pip install --user --break-system-packages .
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y doxygen graphviz
+    - pip install sphinx pydata-sphinx-theme
+    - DUCC0_OPTIMIZATION=none pip install .
     - make -C doc html
     - 'cd src/doc && doxygen Doxyfile && cd ../..'
     - mv doc/build/html public
