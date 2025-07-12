@@ -142,7 +142,7 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
     res[i] = tmp/st;
 #endif
     if constexpr(rw)
-      MR_assert((arr.shape(int(i))==1) || (tmp!=0),
+      MR_assert((arr.shape(int(i))<=1) || (tmp!=0),
         spec, "detected zero stride in writable array");
     }
   return res;
