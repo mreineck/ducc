@@ -130,6 +130,11 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
   const string &spec="")
   {
   stride_t res(size_t(arr.ndim()));
+  bool zerosized = false;
+  if constexpr(rw)
+    for (size_t i=0; i<res.size(); ++i)
+      if (arr.shape(i)==0)
+        zerosized=true;
   for (size_t i=0; i<res.size(); ++i)
     {
 #ifdef DUCC0_USE_NANOBIND
@@ -142,8 +147,9 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
     res[i] = tmp/st;
 #endif
     if constexpr(rw)
-      MR_assert((arr.shape(int(i))<=1) || (tmp!=0),
-        spec, "detected zero stride in writable array");
+      if (!zerosized)  // if the array has no elements, we needn't worry
+        MR_assert((arr.shape(int(i))==1) || (tmp!=0),
+          spec, "detected zero stride in writable array");
     }
   return res;
   }
