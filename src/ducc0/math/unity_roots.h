@@ -181,6 +181,7 @@ template<typename T, typename Tc> class UnityRoots
       }
 
     size_t size() const { return N; }
+    size_t footprint() const { return (v1.size()+v2.size())*sizeof(cmplx_); }
 
     Tc operator[](size_t idx) const
       {

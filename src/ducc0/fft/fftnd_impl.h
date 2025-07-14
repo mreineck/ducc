@@ -168,9 +168,6 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
 #ifdef DUCC0_NO_FFT_CACHE
   return make_shared<T>(length, vectorize);
 #else
-  if (!T::cache_me(length))
-    return make_shared<T>(length, vectorize);
-
   constexpr size_t nmax=10;
   struct entry { size_t n; bool vectorize; shared_ptr<T> ptr; };
   static array<entry, nmax> cache{{{0,0,nullptr}}};
@@ -204,6 +201,9 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   if (p) return p;
   }
   auto plan = make_shared<T>(length, vectorize);
+  size_t size_limit = size_t(1)<<20;  // crude limit, can be made more sophisticated
+  if (plan->footprint() > size_limit)  // too large for caching
+    return plan;
   {
   LockGuard lock(mut);
 
@@ -1351,8 +1351,6 @@ struct ExecR2R
 template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
   {
   public:
-    static bool cache_me(size_t /*length*/) { return true; }
-
     Long1dPlan(size_t length, bool)
       : UnityRoots<T,complex<T>>(length) {}
   };

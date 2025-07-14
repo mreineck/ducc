@@ -177,6 +177,7 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
     cfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
+    virtual size_t footprint() const { return 0; }
 
     virtual void *exec(const type_index & /*ti*/, void * in, void * /*copy*/,
       void * /*buf*/, bool /*fwd*/, size_t /*nthreads*/) const
@@ -244,6 +245,7 @@ template <typename Tfs> class cfftp2: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -331,6 +333,7 @@ template <typename Tfs> class cfftp3: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -414,6 +417,7 @@ template <typename Tfs> class cfftp4: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -516,6 +520,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -623,6 +628,7 @@ template <typename Tfs> class cfftp7: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -810,6 +816,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return l1>1; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -927,6 +934,7 @@ template <typename Tfs> class cfftp11: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -1067,6 +1075,8 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const
+      { return (wa.size()+csarr.size())*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -1206,6 +1216,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
 
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return need_cpy; }
+    virtual size_t footprint() const
+      { return subplan->footprint() + (wa.size()+bk.size()+bkf.size())*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -1632,6 +1644,12 @@ MR_fail("must not get here");
 
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return need_cpy; }
+    virtual size_t footprint() const
+      {
+      size_t res = myroots->footprint();
+      for (const auto &p: passes) res += p->footprint(); 
+      return res;
+      }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -1706,6 +1724,8 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       }
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return false; }
+    virtual size_t footprint() const
+      { return spass->footprint()+vpass->footprint(); }
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const
       {
@@ -1848,6 +1868,7 @@ template <typename Tfs> class rfftp1: public rfftpass<Tfs>
     rfftp1() {}
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return false; }
+    virtual size_t footprint() const { return 0; }
 
     virtual void *exec(const type_index & /*ti*/, void * in, void * /*copy*/,
       void * /*buf*/, bool /*fwd*/, size_t /*nthreads*/) const
@@ -1939,6 +1960,7 @@ template <typename Tfs> class rfftp2: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2052,6 +2074,7 @@ template <typename Tfs> class rfftp3: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2179,6 +2202,7 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2318,6 +2342,7 @@ template <typename Tfs> class rfftp5: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2634,6 +2659,8 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const
+      { return (wa.size()+csarr.size())*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2774,6 +2801,8 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 4*ip + 2*cplan->bufsize(); }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const
+      { return wa.size()*sizeof(Tfs) + cplan->footprint(); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2857,6 +2886,12 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return need_cpy; }
+    virtual size_t footprint() const
+      {
+      size_t res = wa.size()*sizeof(Tfs);
+      for (const auto &p: passes) res += p->footprint(); 
+      return res;
+      }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2929,6 +2964,8 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
 
     virtual size_t bufsize() const { return 2*pass->bufsize(); }
     virtual bool needs_copy() const { return true; }
+    virtual size_t footprint() const
+      { return pass->footprint() + roots->footprint(); }
 
     POCKETFFT_EXEC_DISPATCH
   };

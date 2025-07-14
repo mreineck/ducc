@@ -188,6 +188,8 @@ template <typename Tfs> class cfftpass
     // number of Tcd values required as scratch space during "exec"
     // will be provided in "buf"
     virtual size_t bufsize() const = 0;
+    // approximate memory consumption of this pass (plus potential sub-passes)
+    virtual size_t footprint() const = 0;
     virtual bool needs_copy() const = 0;
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const = 0;
@@ -235,6 +237,8 @@ template <typename Tfs> class rfftpass
     // number of Tfd values required as scratch space during "exec"
     // will be provided in "buf"
     virtual size_t bufsize() const = 0;
+    // approximate memory consumption of this pass (plus potential sub-passes)
+    virtual size_t footprint() const = 0;
     virtual bool needs_copy() const = 0;
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const = 0;
@@ -282,13 +286,12 @@ template<typename Tfs> class pocketfft_c
     Tcpass<Tfs> plan;
 
   public:
-    static bool cache_me(size_t /*length*/) { return true; }
-
     pocketfft_c(size_t n, bool vectorize=false)
       : N(n), critbuf(((N&1023)==0) ? 16 : 0),
         plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+2*critbuf+plan->bufsize(); }
+    size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
@@ -332,13 +335,11 @@ template<typename Tfs> class pocketfft_r
     Trpass<Tfs> plan;
 
   public:
-    static bool cache_me(size_t length)
-      { return ((length&1)==0) || (length<10000); }
-
     pocketfft_r(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
+    size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       bool fwd, size_t nthreads=1) const
       {
@@ -383,13 +384,11 @@ template<typename Tfs> class pocketfft_hartley
     Trpass<Tfs> plan;
 
   public:
-    static bool cache_me(size_t length)
-      { return ((length&1)==0) || (length<10000); }
-
     pocketfft_hartley(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
+    size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       size_t nthreads=1) const
       {
@@ -431,13 +430,11 @@ template<typename Tfs> class pocketfft_fht
     Trpass<Tfs> plan;
 
   public:
-    static bool cache_me(size_t length)
-      { return ((length&1)==0) || (length<10000); }
-
     pocketfft_fht(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
+    size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       size_t nthreads=1) const
       {
@@ -480,13 +477,11 @@ template<typename Tfs> class pocketfft_fftw
     Trpass<Tfs> plan;
 
   public:
-    static bool cache_me(size_t length)
-      { return ((length&1)==0) || (length<10000); }
-
     pocketfft_fftw(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
+    size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Tfd *exec(Tfd *in, Tfd *buf, Tfs fct,
       bool fwd, size_t nthreads=1) const
       {
@@ -549,8 +544,6 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    static bool cache_me(size_t length) { return length<5000; }
-
     DUCC0_NOINLINE T_dct1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length-1)) {}
 
@@ -587,6 +580,7 @@ template<typename T0> class T_dct1
 
     size_t length() const { return fftplan.length()/2+1; }
     size_t bufsize() const { return fftplan.length()+fftplan.bufsize(); }
+    size_t footprint() const { return fftplan.footprint(); }
   };
 
 template<typename T0> class T_dst1
@@ -595,8 +589,6 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    static bool cache_me(size_t length) { return length<5000; }
-
     DUCC0_NOINLINE T_dst1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length+1)) {}
 
@@ -627,6 +619,7 @@ template<typename T0> class T_dst1
 
     size_t length() const { return fftplan.length()/2-1; }
     size_t bufsize() const { return fftplan.length()+fftplan.bufsize(); }
+    size_t footprint() const { return fftplan.footprint(); }
   };
 
 template<typename T0> class T_dcst23
@@ -636,8 +629,6 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
-    static bool cache_me(size_t length) { return length<5000; }
-
     DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
       : fftplan(length), twiddle(length)
       {
@@ -723,6 +714,8 @@ template<typename T0> class T_dcst23
 
     size_t length() const { return fftplan.length(); }
     size_t bufsize() const { return fftplan.bufsize(); }
+    size_t footprint() const
+      { return fftplan.footprint() + twiddle.size()*sizeof(T0); }
   };
 
 template<typename T0> class T_dcst4
@@ -735,8 +728,6 @@ template<typename T0> class T_dcst4
     size_t bufsz;
 
   public:
-    static bool cache_me(size_t length) { return length<5000; }
-
     DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
       : N(length),
         fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
@@ -842,6 +833,13 @@ template<typename T0> class T_dcst4
 
     size_t length() const { return N; }
     size_t bufsize() const { return bufsz; }
+    size_t footprint() const
+      {
+      size_t res = C2.size()*sizeof(Cmplx<T0>);
+      if (fft) res += fft->footprint();
+      if (rfft) res += rfft->footprint();
+      return res;
+      }
   };
 
 using shape_t=fmav_info::shape_t;
