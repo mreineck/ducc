@@ -282,6 +282,8 @@ template<typename Tfs> class pocketfft_c
     Tcpass<Tfs> plan;
 
   public:
+    static bool cache_me(size_t /*length*/) { return true; }
+
     pocketfft_c(size_t n, bool vectorize=false)
       : N(n), critbuf(((N&1023)==0) ? 16 : 0),
         plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
@@ -330,6 +332,9 @@ template<typename Tfs> class pocketfft_r
     Trpass<Tfs> plan;
 
   public:
+    static bool cache_me(size_t length)
+      { return ((length&1)==0) || (length<10000); }
+
     pocketfft_r(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
@@ -378,6 +383,9 @@ template<typename Tfs> class pocketfft_hartley
     Trpass<Tfs> plan;
 
   public:
+    static bool cache_me(size_t length)
+      { return ((length&1)==0) || (length<10000); }
+
     pocketfft_hartley(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
@@ -423,6 +431,9 @@ template<typename Tfs> class pocketfft_fht
     Trpass<Tfs> plan;
 
   public:
+    static bool cache_me(size_t length)
+      { return ((length&1)==0) || (length<10000); }
+
     pocketfft_fht(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
@@ -469,6 +480,9 @@ template<typename Tfs> class pocketfft_fftw
     Trpass<Tfs> plan;
 
   public:
+    static bool cache_me(size_t length)
+      { return ((length&1)==0) || (length<10000); }
+
     pocketfft_fftw(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
@@ -535,6 +549,8 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
+    static bool cache_me(size_t length) { return length<5000; }
+
     DUCC0_NOINLINE T_dct1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length-1)) {}
 
@@ -579,6 +595,8 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
+    static bool cache_me(size_t length) { return length<5000; }
+
     DUCC0_NOINLINE T_dst1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length+1)) {}
 
@@ -618,6 +636,8 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
+    static bool cache_me(size_t length) { return length<5000; }
+
     DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
       : fftplan(length), twiddle(length)
       {
@@ -715,6 +735,8 @@ template<typename T0> class T_dcst4
     size_t bufsz;
 
   public:
+    static bool cache_me(size_t length) { return length<5000; }
+
     DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
       : N(length),
         fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),

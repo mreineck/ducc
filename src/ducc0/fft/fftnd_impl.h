@@ -168,6 +168,9 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
 #ifdef DUCC0_NO_FFT_CACHE
   return make_shared<T>(length, vectorize);
 #else
+  if (!T::cache_me(length))
+    return make_shared<T>(length, vectorize);
+
   constexpr size_t nmax=10;
   struct entry { size_t n; bool vectorize; shared_ptr<T> ptr; };
   static array<entry, nmax> cache{{{0,0,nullptr}}};
@@ -1012,7 +1015,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = make_unique<pocketfft_r<T>>(in.shape(axis));
+  auto plan = get_plan<pocketfft_r<T>>(in.shape(axis), in.ndim()==1);
   size_t len=in.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1130,7 +1133,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = make_unique<pocketfft_r<T>>(out.shape(axis));
+  auto plan = get_plan<pocketfft_r<T>>(out.shape(axis), in.ndim()==1);
   size_t len=out.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1348,6 +1351,8 @@ struct ExecR2R
 template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
   {
   public:
+    static bool cache_me(size_t /*length*/) { return true; }
+
     Long1dPlan(size_t length, bool)
       : UnityRoots<T,complex<T>>(length) {}
   };
@@ -1634,12 +1639,10 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, const vfmav<T> &ou
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
-  unique_ptr<Tplan> plan1, plan2;
-
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
   MR_assert(kernel.size()==l_in, "bad kernel size");
-  plan1 = make_unique<Tplan>(l_in);
-  plan2 = make_unique<Tplan>(l_out);
+  auto plan1 = get_plan<Tplan>(l_in, in.ndim()==1);
+  auto plan2 = get_plan<Tplan>(l_out, in.ndim()==1);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
   vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);
