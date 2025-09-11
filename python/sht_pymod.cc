@@ -868,6 +868,40 @@ NpArr Py_spin0to1 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t 
   {
   DISPATCH_C(alm, Py2_spin0to1, (alm, lmax, mmax, nthreads))
   }
+template<typename T> static NpArr Py2_spin2to0(const CNpArr &alm_, size_t lmax,
+  const OptSizeT &mmax_, size_t nthreads)
+  {
+  size_t mmax  = mmax_ ? mmax_.value() : lmax;
+  Alm_Base base_in(lmax, mmax), base_out(lmax+2, mmax);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
+  {
+  py::gil_scoped_release release;
+  spin2to0(base_in, alm, base_out, alm_out, nthreads);
+  }
+  return alm_out_;
+  }
+NpArr Py_spin2to0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
+  {
+  DISPATCH_C(alm, Py2_spin2to0, (alm, lmax, mmax, nthreads))
+  }
+template<typename T> static NpArr Py2_spin0to2(const CNpArr &alm_, size_t lmax,
+  const OptSizeT &mmax_, size_t nthreads)
+  {
+  size_t mmax  = mmax_ ? mmax_.value() : lmax;
+  Alm_Base base_in(lmax, mmax), base_out(lmax-2, mmax);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
+  {
+  py::gil_scoped_release release;
+  spin0to2(base_in, alm, base_out, alm_out, nthreads);
+  }
+  return alm_out_;
+  }
+NpArr Py_spin0to2 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
+  {
+  DISPATCH_C(alm, Py2_spin0to2, (alm, lmax, mmax, nthreads))
+  }
 
 
 template<typename T> class Py_sharpjob
@@ -1904,7 +1938,7 @@ lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 maxiter: int >= 0
     the maximum number of iterations before stopping the algorithm
-epsilon: float >= 0
+epsilon: float > 0
     the relative tolerance used as a stopping criterion
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
@@ -2136,7 +2170,7 @@ loc : numpy.array((npix, 2), dtype=numpy.float64)
     the locations on the sphere at which the alm should be evaluated.
     loc[:, 0] contains colatitude values (range [0;pi]),
     loc[:, 1] contains longitude values (range [0;2pi])
-epsilon: float >= 0
+epsilon: float > 0
     the relative tolerance used as a stopping criterion
     NOTE: for the "epsilon" paraeter of the underlyig NUFFT calls,
     `0.1*epsilon` will be used.
@@ -2330,6 +2364,8 @@ void add_sht(py::module_ &msup)
 
   m2.def("spin1to0", &Py_spin1to0, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
   m2.def("spin0to1", &Py_spin0to1, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
+  m2.def("spin2to0", &Py_spin2to0, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
+  m2.def("spin0to2", &Py_spin0to2, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
   }
 
 }

@@ -773,6 +773,197 @@ template<typename T> void spin0to1 (const Alm_Base &base_in, const cmav<complex<
     });
   }
 
+static inline void mul_cth(vmav<complex<double>,2> &clm, size_t m, size_t lmax)
+  {
+  using dcplx = complex<double>;
+  dcplx oldm0=0, oldm1=0;
+  for (size_t l=m; l<=lmax+1; ++l)
+    {
+    dcplx r0=0, r1=0;
+    if (l>m)
+      {
+      double fct = sqrt((l+m)*(l-m)/((2.*l+1.)*(2.*l-1.)));
+      r0 += oldm0*fct;
+      r1 += oldm1*fct;
+      }
+    if (l<lmax)
+      {
+      double fct = sqrt((l+1.+m)*(l+1.-m)/((2.*l+3.)*(2.*l+1.)));
+      r0 += clm(0,l+1)*fct;
+      r1 += clm(1,l+1)*fct;
+      }
+    oldm0=clm(0,l);
+    oldm1=clm(1,l);
+    clm(0,l) = r0;
+    clm(1,l) = r1;
+    }
+  }
+
+template<typename T> void spin2to0 (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+  const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out, size_t nthreads)
+  {
+  using dcplx = complex<double>;
+  MR_assert(base_in.Lmax()>2, "input lmax must be at least 3");
+  MR_assert(base_out.Lmax()==base_in.Lmax()+2, "output lmax must be input lmax + 2");
+  MR_assert(base_in.Mmax()==base_out.Mmax(), "mmax mismatch");
+  MR_assert(alm_in.shape(0)==2, "need exactly two input a_lm components");
+  MR_assert(alm_out.shape(0)==2, "need exactly two output a_lm components");
+  MR_assert(alm_in.shape(1)==base_in.Num_Alms(), "alm_in size mismatch");
+  MR_assert(alm_out.shape(1)==base_out.Num_Alms(), "alm_out size mismatch");
+
+  constexpr dcplx img(0.,1.);
+
+  size_t lmax = base_in.Lmax();
+
+  vmav<double,1> f1({lmax+1}), f2({lmax+1});
+  f1(0) = f2(0) = f2(1) = 0;
+  for (size_t l=1; l<=lmax; ++l)
+    f1(l) = (2.*l+3.)/(2.*l+1.) / (l*(l+1.)*(l+2.)*(l+3.));
+  for (size_t l=2; l<=lmax; ++l)
+    f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
+
+  execDynamic(base_in.Mmax()+1, nthreads, 1, [&](Scheduler &sched)
+    {
+    vmav<complex<double>,2> glm({2,lmax+3}), clm({2,lmax+3});
+    while (auto rng=sched.getNext())
+      for (auto m=rng.lo; m<rng.hi; ++m)
+        {
+        double em = double(m);
+        // copy in glm
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto idx = base_in.index(l,m);
+          // component alm_in(1) needs sign flipped, no idea why
+          glm(0,l) = -dcplx(alm_in(0,idx)) - img*dcplx(alm_in(1,idx));
+          glm(1,l) = -dcplx(alm_in(0,idx)) + img*dcplx(alm_in(1,idx));
+          }
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) = glm(0,l)*f2(l)*el*(el-1.);
+          clm(1,l) = glm(1,l)*f2(l)*el*(el-1.);
+          }
+        mul_cth(clm, m, lmax);
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) += -glm(0,l)*f2(l)*2.*em*(el-1.);
+          clm(1,l) +=  glm(1,l)*f2(l)*2.*em*(el-1.);
+          if (l<lmax)
+            {
+            double fct = 2.*sqrt(f1(l)*((el+1.)*(el+1.)-em*em));
+            clm(0,l) += glm(0,l+1)*fct;
+            clm(1,l) += glm(1,l+1)*fct;
+            }
+          }
+        mul_cth(clm, m, lmax+1);
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) += glm(0,l)*f2(l)*(2.*em*em-el*(el+1.));
+          clm(1,l) += glm(1,l)*f2(l)*(2.*em*em-el*(el+1.));
+          if (l<lmax)
+            {
+            double fct = 2.*em*sqrt(f1(l)*((el+1.)*(el+1.)-em*em));
+            clm(0,l) +=  glm(0,l+1)*fct;
+            clm(1,l) += -glm(1,l+1)*fct;
+            }
+          }
+        // copy to result
+        for (size_t l=m; l<=lmax+2; ++l)
+          {
+          auto idx = base_out.index(l,m);
+          // component alm_out(0) needs sign flipped, no idea why
+          alm_out(0,idx) = 0.5*(clm(1,l)+clm(0,l));
+          alm_out(1,idx) = 0.5*img*(clm(1,l)-clm(0,l));
+          }
+        }
+    });
+  }
+
+template<typename T> void spin0to2 (const Alm_Base &base_in, const cmav<complex<T>,2> &alm_in,
+  const Alm_Base &base_out, const vmav<complex<T>,2> &alm_out, size_t nthreads)
+  {
+  using dcplx = complex<double>;
+  MR_assert(base_in.Lmax()>2, "input lmax must be at least 3");
+  MR_assert(base_out.Lmax()+2==base_in.Lmax(), "output lmax must be input lmax - 1");
+  MR_assert(base_in.Mmax()==base_out.Mmax(), "mmax mismatch");
+  MR_assert(alm_in.shape(0)==2, "need exactly two input a_lm components");
+  MR_assert(alm_out.shape(0)==2, "need exactly two output a_lm components");
+  MR_assert(alm_in.shape(1)==base_in.Num_Alms(), "alm_in size mismatch");
+  MR_assert(alm_out.shape(1)==base_out.Num_Alms(), "alm_out size mismatch");
+
+  constexpr dcplx img(0.,1.);
+
+  size_t lmax = base_out.Lmax();
+
+  vmav<double,1> f2({lmax+1});
+  f2(0) = f2(1) = 0;
+  for (size_t l=2; l<=lmax; ++l)
+    f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
+
+  execDynamic(base_in.Mmax()+1, nthreads, 1, [&](Scheduler &sched)
+    {
+    vmav<complex<double>,2> glm({2,lmax+5}), clm({2,lmax+5});
+    while (auto rng=sched.getNext())
+      for (auto m=rng.lo; m<rng.hi; ++m)
+        {
+        double em = double(m);
+        // zero the glm
+        mav_apply([](dcplx &v){v=0;}, 1, glm); 
+        // copy in glm
+        for (size_t l=m; l<=lmax+2; ++l)
+          {
+          auto idx = base_in.index(l,m);
+          // component alm_in(0) needs sign flipped, no idea why
+          glm(0,l) = dcplx(alm_in(0,idx)) + img*dcplx(alm_in(1,idx));
+          glm(1,l) = dcplx(alm_in(0,idx)) - img*dcplx(alm_in(1,idx));
+          }
+        // zero the clm
+        mav_apply([](dcplx &v){v=0;}, 1, clm); 
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) += (2.*em*em-el*(el+1))*glm(0,l);
+          clm(1,l) += (2.*em*em-el*(el+1))*glm(1,l);
+          if (l>m)
+            {
+            clm(0,l) +=  2.*sqrt((2.*el+1.)/(2.*el-1.)*(el*el-em*em))*em*glm(0,l-1);
+            clm(1,l) += -2.*sqrt((2.*el+1.)/(2.*el-1.)*(el*el-em*em))*em*glm(1,l-1);
+            }
+          }
+        mul_cth(glm, m, lmax+2);
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) += -2.*em*(el-1.)*glm(0,l);
+          clm(1,l) +=  2.*em*(el-1.)*glm(1,l);
+          if (l>m)
+            {
+            clm(0,l) += 2.*sqrt((2.*el+1.)/(2.*el-1.)*(el*el-em*em))*glm(0,l-1);
+            clm(1,l) += 2.*sqrt((2.*el+1.)/(2.*el-1.)*(el*el-em*em))*glm(1,l-1);
+            }
+          }
+        mul_cth(glm, m, lmax+3);
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          double el=l;
+          clm(0,l) += el*(el-1)*glm(0,l);
+          clm(1,l) += el*(el-1)*glm(1,l);
+          clm(0,l) *= f2(l);
+          clm(1,l) *= f2(l);
+          }
+        // copy to result
+        for (size_t l=m; l<=lmax; ++l)
+          {
+          auto idx = base_out.index(l,m);
+          // component alm_out(1) needs sign flipped, no idea why
+          alm_out(0,idx) = -0.5*(clm(1,l)+clm(0,l));
+          alm_out(1,idx) = -0.5*img*(clm(1,l)-clm(0,l));
+          }
+        }
+    });
+  }
 }
 
 using detail_alm::Alm_Base;
@@ -780,6 +971,8 @@ using detail_alm::rotate_alm;
 
 using detail_alm::spin1to0;
 using detail_alm::spin0to1;
+using detail_alm::spin2to0;
+using detail_alm::spin0to2;
 }
 
 #endif
