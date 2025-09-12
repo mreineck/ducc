@@ -78,6 +78,7 @@ template<typename T> void map2leg(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
 template<typename T> void leg2map(  // FFT
@@ -86,6 +87,7 @@ template<typename T> void leg2map(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
 
@@ -100,6 +102,7 @@ template<typename T> void synthesis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   SHT_mode mode,
@@ -116,6 +119,7 @@ template<typename T> void adjoint_synthesis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   SHT_mode mode,
@@ -132,6 +136,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
@@ -147,6 +152,7 @@ template<typename T> void synthesis_2d(
   ptrdiff_t lstride,
   const string &geometry,
   double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads,
   SHT_mode mode);
 
@@ -159,6 +165,7 @@ template<typename T> void adjoint_synthesis_2d(
   ptrdiff_t lstride,
   const string &geometry,
   double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads,
   SHT_mode mode);
 
@@ -171,6 +178,7 @@ template<typename T> void analysis_2d(
   ptrdiff_t lstride,
   const string &geometry,
   double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads);
 
 template<typename T> void adjoint_analysis_2d(
@@ -182,6 +190,7 @@ template<typename T> void adjoint_analysis_2d(
   ptrdiff_t lstride,
   const string &geometry,
   double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(

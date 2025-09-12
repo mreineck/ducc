@@ -565,6 +565,7 @@ template<typename T> void leg2map(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads)
   {
@@ -602,11 +603,12 @@ template<typename T> void leg2map(  // FFT
         {
         for (size_t iring=lo; iring<hi; ++iring)
           {
-          xmap(icomp, iring, 0) = leg(icomp, iring, 0).real();
+          double rf = ringfactor(iring);
+          xmap(icomp, iring, 0) = leg(icomp, iring, 0).real()*rf;
           for (size_t m=1; m<=mmax; ++m)
             {
-            xmap(icomp, iring, 2*m-1) = leg(icomp, iring, m).real();
-            xmap(icomp, iring, 2*m  ) = leg(icomp, iring, m).imag();
+            xmap(icomp, iring, 2*m-1) = leg(icomp, iring, m).real()*rf;
+            xmap(icomp, iring, 2*m  ) = leg(icomp, iring, m).imag()*rf;
             }
           for (size_t ix=2*mmax+1; ix<nphmax; ++ix) xmap(icomp, iring, ix) = T(0);
           }
@@ -623,12 +625,13 @@ template<typename T> void leg2map(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
           auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
           helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
           for (size_t i=0; i<nphi(ith); ++i)
-            map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1));
+            map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1)*rf);
           }
         }
       }); /* end of parallel region */
@@ -640,6 +643,7 @@ template<typename T> void map2leg(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads)
   {
@@ -685,10 +689,11 @@ template<typename T> void map2leg(  // FFT
           r2r_fftpack(xmapf,buff,{1},true,true,T(1),1);
           for (size_t iring=r0; iring<r1; ++iring)
             {
-            leg(icomp, iring, 0) = buf(iring-r0, 0);
+            double rf = ringfactor(iring);
+            leg(icomp, iring, 0) = buf(iring-r0, 0)*rf;
             for (size_t m=1; m<=mmax; ++m)
-              leg(icomp, iring, m) = complex<T>(buf(iring-r0, 2*m-1),
-                                                buf(iring-r0, 2*m));
+              leg(icomp, iring, m) = complex<T>(buf(iring-r0, 2*m-1)*rf,
+                                                buf(iring-r0, 2*m)*rf);
             }
           }
       });
@@ -701,10 +706,11 @@ template<typename T> void map2leg(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
           for (size_t i=0; i<nphi(ith); ++i)
-            ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride);
+            ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride)*rf;
           auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
           helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
           }
@@ -944,6 +950,7 @@ void sanity_checks(
   const mav_info<1> &phi0, // (nrings)
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   size_t spin,
   SHT_mode mode)
   {
@@ -955,7 +962,8 @@ void sanity_checks(
   MR_assert(nrings>0, "need at least one ring");
   MR_assert((phi0.shape(0)==nrings) &&
             (nphi.shape(0)==nrings) &&
-            (ringstart.shape(0)==nrings),
+            (ringstart.shape(0)==nrings) &&
+            (ringfactor.shape(0)==nrings),
     "inconsistency in the number of rings");
   if ((mode==DERIV1) || (mode==GRAD_ONLY))
     {
@@ -982,12 +990,13 @@ template<typename T> void synthesis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol)
   {
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, ringfactor, spin, mode);
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
@@ -1004,13 +1013,13 @@ template<typename T> void synthesis(
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, theta_interpol);
     resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
-    leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
+    leg2map(map, lego, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     }
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
-    leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    leg2map(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     }
   }
 
@@ -1055,7 +1064,7 @@ void get_ringtheta_2d(const string &type, const vmav<double, 1> &theta)
 
 template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, const vmav<T,3> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0,
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor,
   size_t nthreads, SHT_mode mode)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
@@ -1069,15 +1078,15 @@ template<typename T> void synthesis_2d(const cmav<complex<T>,2> &alm, const vmav
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  synthesis(alm, map2, spin, lmax, mstart, lstride, theta, nphi, phi0_, ringstart, pixstride, nthreads,
+  synthesis(alm, map2, spin, lmax, mstart, lstride, theta, nphi, phi0_, ringstart, ringfactor, pixstride, nthreads,
   mode);
   }
 template void synthesis_2d(const cmav<complex<double>,2> &alm, const vmav<double,3> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads, SHT_mode mode);
 template void synthesis_2d(const cmav<complex<float>,2> &alm, const vmav<float,3> &map,
   size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads, SHT_mode mode);
 
 template<typename T> void adjoint_synthesis(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -1090,12 +1099,13 @@ template<typename T> void adjoint_synthesis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol)
   {
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, mode);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, ringfactor, spin, mode);
   vmav<size_t,1> mval({mstart.shape(0)}, UNINITIALIZED);
   for (size_t i=0; i<mstart.shape(0); ++i)
     mval(i) = i;
@@ -1110,14 +1120,14 @@ template<typename T> void adjoint_synthesis(
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, PAGE_IN(nthreads)));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
-    map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+    map2leg(map, legi, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
     leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,mode,theta_interpol);
     }
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
-    map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    map2leg(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode, theta_interpol);
     }
   }
@@ -1132,6 +1142,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
@@ -1141,12 +1152,12 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   auto op = [&](const cmav<complex<T>,2> &xalm, const vmav<T,2> &xmap)
     {
     synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi, phi0,
-              ringstart, pixstride, nthreads, STANDARD, theta_interpol);
+              ringstart, ringfactor, pixstride, nthreads, STANDARD, theta_interpol);
     };
   auto op_adj = [&](const cmav<T,2> &xmap, const vmav<complex<T>,2> &xalm)
     {
     adjoint_synthesis(xalm, xmap, spin, lmax, mstart, lstride, theta, nphi,
-                      phi0, ringstart, pixstride, nthreads, STANDARD, theta_interpol);
+                      phi0, ringstart, ringfactor, pixstride, nthreads, STANDARD, theta_interpol);
     };
   auto mapnorm = [&](const cmav<T,2> &xmap)
     {
@@ -1155,7 +1166,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
       for (size_t iring=0; iring<ringstart.shape(0); ++iring)
         for (size_t ipix=0; ipix<nphi(iring); ++ipix)
           {
-          auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride);
+          auto tmp = xmap(icomp,ringstart(iring)+ipix*pixstride)*ringfactor(iring);
           res += tmp*tmp;
           }
     return sqrt(res);
@@ -1195,6 +1206,7 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
@@ -1211,6 +1223,7 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   size_t maxiter,
@@ -1220,7 +1233,7 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
 template<typename T> void adjoint_synthesis_2d(const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode)
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads, SHT_mode mode)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
@@ -1233,16 +1246,16 @@ template<typename T> void adjoint_synthesis_2d(const vmav<complex<T>,2> &alm,
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  adjoint_synthesis(alm, map2, spin, lmax, mstart, lstride, theta, nphi, phi0_, ringstart, pixstride, nthreads, mode);
+  adjoint_synthesis(alm, map2, spin, lmax, mstart, lstride, theta, nphi, phi0_, ringstart, ringfactor, pixstride, nthreads, mode);
   }
 template void adjoint_synthesis_2d(const vmav<complex<double>,2> &alm,
   const cmav<double,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads, SHT_mode mode);
 template void adjoint_synthesis_2d(const vmav<complex<float>,2> &alm,
   const cmav<float,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads, SHT_mode mode);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads, SHT_mode mode);
 
 template<typename T> void analysis_2d(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
@@ -1255,6 +1268,7 @@ template<typename T> void analysis_2d(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads)
   {
@@ -1273,7 +1287,7 @@ template<typename T> void analysis_2d(
     mval(i) = i;
   vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, STANDARD);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, ringfactor, spin, STANDARD);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
     {
     bool npi, spi;
@@ -1290,7 +1304,8 @@ template<typename T> void analysis_2d(
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), max(ntheta_leg,theta.shape(0)), mstart.shape(0)}, PAGE_IN(nthreads)));
     auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
-    map2leg(map, legi, nphi, phi0, ringstart, pixstride, nthreads);
+    map2leg(map, legi, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
+// FIXME: absorb into ringfactor!
 #if 1
     vmav<T,1> xnphi({nphi.shape(0)});
     for (size_t i=0; i<nphi.shape(0); ++i)
@@ -1319,7 +1334,8 @@ template<typename T> void analysis_2d(
     {
     auto wgt = get_gridweights(geometry, theta.shape(0));
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0), theta.shape(0), mstart.shape(0)}, PAGE_IN(nthreads)));
-    map2leg(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    map2leg(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
+// FIXME: absorb into ringfactor!
     for (size_t i=0; i<leg.shape(0); ++i)
       for (size_t j=0; j<leg.shape(1); ++j)
         {
@@ -1334,7 +1350,7 @@ template<typename T> void analysis_2d(
 template<typename T> void analysis_2d(const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads)
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
@@ -1346,16 +1362,16 @@ template<typename T> void analysis_2d(const vmav<complex<T>,2> &alm,
   auto map2(map.template reinterpret<2>({map.shape(0), 1/*placeholder*/},
                                         {map.stride(0), 1}));
 
-  analysis_2d(alm, map2, spin, lmax, mstart, lstride, geometry, nphi, phi0_, ringstart, pixstride, nthreads);
+  analysis_2d(alm, map2, spin, lmax, mstart, lstride, geometry, nphi, phi0_, ringstart, ringfactor, pixstride, nthreads);
   }
 template void analysis_2d(const vmav<complex<double>,2> &alm,
   const cmav<double,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads);
 template void analysis_2d(const vmav<complex<float>,2> &alm,
   const cmav<float,3> &map, size_t spin, size_t lmax,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride,
-  const string &geometry, double phi0, size_t nthreads);
+  const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads);
 
 template<typename T> void adjoint_analysis_2d(
   const cmav<complex<T>,2> &alm, // (ncomp, *)
@@ -1368,6 +1384,7 @@ template<typename T> void adjoint_analysis_2d(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads)
   {
@@ -1386,7 +1403,7 @@ template<typename T> void adjoint_analysis_2d(
     mval(i) = i;
   vmav<double,1> theta({nphi.shape(0)}, UNINITIALIZED);
   get_ringtheta_2d(geometry, theta);
-  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, spin, STANDARD);
+  sanity_checks(alm, lmax, mstart, map, theta, phi0, nphi, ringstart, ringfactor, spin, STANDARD);
   if ((geometry=="CC")||(geometry=="F1")||(geometry=="MW")||(geometry=="MWflip"))
     {
     bool npo, spo;
@@ -1416,7 +1433,7 @@ template<typename T> void adjoint_analysis_2d(
         for (size_t k=0; k<lego.shape(2); ++k)
           lego(i,j,k) *= wgt1;
         }
-    leg2map(map, lego, nphi, phi0, ringstart, pixstride, nthreads);
+    leg2map(map, lego, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     return;
     }
   else
@@ -1431,12 +1448,12 @@ template<typename T> void adjoint_analysis_2d(
         for (size_t k=0; k<leg.shape(2); ++k)
           leg(i,j,k) *= wgt1;
         }
-    leg2map(map, leg, nphi, phi0, ringstart, pixstride, nthreads);
+    leg2map(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     }
   }
 
 template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, const vmav<T,3> &map,
-  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0, size_t nthreads)
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads)
   {
   auto nphi = cmav<size_t,1>::build_uniform({map.shape(1)}, map.shape(2));
   auto phi0_ = cmav<double,1>::build_uniform({map.shape(1)}, phi0);
@@ -1449,12 +1466,12 @@ template<typename T> void adjoint_analysis_2d(const cmav<complex<T>,2> &alm, con
                                         {map.stride(0), 1}));
   vmav<double,1> theta({map.shape(1)}, UNINITIALIZED);
   adjoint_analysis_2d(alm, map2, spin, lmax, mstart, lstride, geometry, nphi, phi0_,
-    ringstart, pixstride, nthreads);
+    ringstart, ringfactor, pixstride, nthreads);
   }
 template void adjoint_analysis_2d(const cmav<complex<double>,2> &alm, const vmav<double,3> &map,
-  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0_, size_t nthreads);
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads);
 template void adjoint_analysis_2d(const cmav<complex<float>,2> &alm, const vmav<float,3> &map,
-  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0, size_t nthreads);
+  size_t spin, size_t lmax, const cmav<size_t,1> &mstart, ptrdiff_t lstride, const string &geometry, double phi0, const cmav<double,1> &ringfactor, size_t nthreads);
 
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm, const vmav<T,2> &map,
