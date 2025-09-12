@@ -834,73 +834,47 @@ py::tuple Py_pseudo_analysis_general(
        spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride, mmax_, verbose))
   }
 
-template<typename T> static NpArr Py2_spin1to0(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t nthreads)
+template<typename T> static NpArr Py2_raise_spin_from_0(const CNpArr &alm_, size_t lmax,
+  const OptSizeT &mmax_, size_t spin, size_t nthreads, const OptNpArr &out__)
   {
+  MR_assert((spin==1) || (spin==2), "spin must be 1 or 2");
   size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax+1, mmax);
+  Alm_Base base_in(lmax, mmax), base_out(lmax-spin, mmax);
   auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
+  auto [alm_out_, alm_out] = get_OptNpArr_and_vmav<complex<T>,2>
+    (out__, {2, base_out.Num_Alms()}, "out", nthreads);
   {
   py::gil_scoped_release release;
-  spin1to0(base_in, alm, base_out, alm_out, nthreads);
+  (spin==1) ? spin0to1(base_in, alm, base_out, alm_out, nthreads)
+            : spin0to2(base_in, alm, base_out, alm_out, nthreads);
   }
   return alm_out_;
   }
-NpArr Py_spin1to0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
+NpArr Py_raise_spin_from_0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax,
+                            size_t spin, size_t nthreads, const OptNpArr &out)
   {
-  DISPATCH_C(alm, Py2_spin1to0, (alm, lmax, mmax, nthreads))
+  DISPATCH_C(alm, Py2_raise_spin_from_0, (alm, lmax, mmax, spin, nthreads, out))
   }
-template<typename T> static NpArr Py2_spin0to1(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t nthreads)
+template<typename T> static NpArr Py2_lower_spin_to_0(const CNpArr &alm_, size_t lmax,
+  const OptSizeT &mmax_, size_t spin, size_t nthreads, const OptNpArr &out__)
   {
+  MR_assert((spin==1) || (spin==2), "spin must be 1 or 2");
   size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax-1, mmax);
+  Alm_Base base_in(lmax, mmax), base_out(lmax+spin, mmax);
   auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
+  auto [alm_out_, alm_out] = get_OptNpArr_and_vmav<complex<T>,2>
+    (out__, {2, base_out.Num_Alms()}, "out", nthreads);
   {
   py::gil_scoped_release release;
-  spin0to1(base_in, alm, base_out, alm_out, nthreads);
+  (spin==1) ? spin1to0(base_in, alm, base_out, alm_out, nthreads)
+            : spin2to0(base_in, alm, base_out, alm_out, nthreads);
   }
   return alm_out_;
   }
-NpArr Py_spin0to1 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
+NpArr Py_lower_spin_to_0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax,
+                          size_t spin, size_t nthreads, const OptNpArr &out)
   {
-  DISPATCH_C(alm, Py2_spin0to1, (alm, lmax, mmax, nthreads))
-  }
-template<typename T> static NpArr Py2_spin2to0(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t nthreads)
-  {
-  size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax+2, mmax);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
-  {
-  py::gil_scoped_release release;
-  spin2to0(base_in, alm, base_out, alm_out, nthreads);
-  }
-  return alm_out_;
-  }
-NpArr Py_spin2to0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
-  {
-  DISPATCH_C(alm, Py2_spin2to0, (alm, lmax, mmax, nthreads))
-  }
-template<typename T> static NpArr Py2_spin0to2(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t nthreads)
-  {
-  size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax-2, mmax);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = make_Pyarr_and_vmav<complex<T>,2>({2, base_out.Num_Alms()});
-  {
-  py::gil_scoped_release release;
-  spin0to2(base_in, alm, base_out, alm_out, nthreads);
-  }
-  return alm_out_;
-  }
-NpArr Py_spin0to2 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax, size_t nthreads)
-  {
-  DISPATCH_C(alm, Py2_spin0to2, (alm, lmax, mmax, nthreads))
+  DISPATCH_C(alm, Py2_lower_spin_to_0, (alm, lmax, mmax, spin, nthreads, out))
   }
 
 
@@ -2362,10 +2336,10 @@ void add_sht(py::module_ &msup)
   m2.def("alm2flm", &Py_alm2flm, "alm"_a, "spin"_a, "flm"_a=None);
   m2.def("flm2alm", &Py_flm2alm, "flm"_a, "spin"_a, "alm"_a=None, "real"_a=false);
 
-  m2.def("spin1to0", &Py_spin1to0, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
-  m2.def("spin0to1", &Py_spin0to1, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
-  m2.def("spin2to0", &Py_spin2to0, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
-  m2.def("spin0to2", &Py_spin0to2, "alm"_a, "lmax"_a, "mmax"_a=None, "nthreads"_a=1);
+  m2.def("lower_spin_to_0", &Py_lower_spin_to_0, "alm"_a, "lmax"_a, "mmax"_a=None,
+    "spin"_a, "nthreads"_a=1, "out"_a=None);
+  m2.def("raise_spin_from_0", &Py_raise_spin_from_0, "alm"_a, "lmax"_a, "mmax"_a=None,
+    "spin"_a, "nthreads"_a=1, "out"_a=None);
   }
 
 }

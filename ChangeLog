@@ -3,8 +3,8 @@
   - various improvements in the inner loops for AVX512, mainly in the
     synthesis direction.
   - improved scaling behaviour for high thread counts
-  - experimental support routines for transforming between spin 1 and spin 0
-    a_lm for faster spin-1 SHTs via a detour to spin 0.
+  - experimental support routines for transforming between spins 1/2 and spin 0
+    a_lm for faster spin-1/2 SHTs via a detour to spin 0.
 
 - nufft:
   - improved mutex usage in Type 1 transforms, which should enable better

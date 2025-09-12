@@ -714,8 +714,8 @@ template<typename T> void spin1to0 (const Alm_Base &base_in, const cmav<complex<
             coeff1 += -stdtx*dcplx(alm_in(1,pos_in+1));
             }
           auto pos_out = base_out.index(l,m);
-          alm_out(0,pos_out) = complex<T>(coeff0);
-          alm_out(1,pos_out) = complex<T>(coeff1);
+          alm_out(0,pos_out) = -complex<T>(coeff0);
+          alm_out(1,pos_out) = -complex<T>(coeff1);
           }
         }
     });
