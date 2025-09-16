@@ -641,6 +641,9 @@ phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the beginning of the calculation.
 pixstride: int
     the index stride in the second dimension of `map` between two subsequent
     pixels in a ring
@@ -712,6 +715,9 @@ phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
 pixstride: int
     the index stride in the second dimension of `map` between two subsequent
     pixels in a ring
@@ -815,6 +821,9 @@ mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
 lstride: int
     the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -892,6 +901,9 @@ mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
 lstride: int
     the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -1028,6 +1040,9 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           from the poles.
 phi0: float
     the azimuth (in radians) of the first pixel in each ring
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1043,98 +1058,6 @@ Returns
 numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the computed map. If the map parameter was specified, this is identical with
     map.
-
-Notes
------
-nmaps = 1 if spin == 0 else 2
-nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
-)""";
-
-template<typename T> static NpArr Py2_adjoint_synthesis_2d(
-  const CNpArr &map_, size_t spin, size_t lmax, const string &geometry,
-  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &alm__, const string &mode_,
-  double phi0, const OptCNpArr &ringfactor_, const OptCNpArr &mstart_, ptrdiff_t lstride)
-  {
-  auto mode = get_mode(mode_);
-  auto map = to_cmav<T,3>(map_, "map");
-  auto ringfactor = get_optional_cmav<double,1>(ringfactor_, {map.shape(1)}, 1., "ringfactor");
-  auto mstart = get_mstart(lmax, mmax_, mstart_);
-  vector<size_t> almshp{get_nalm(spin,mode), min_almdim(lmax, mstart, lstride)};
-  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
-  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
-  {
-  py::gil_scoped_release release;
-  adjoint_synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0,
-    ringfactor, nthreads, mode);
-  }
-  return alm_;
-  }
-NpArr Py_adjoint_synthesis_2d(
-  const CNpArr &map, size_t spin, size_t lmax, const string &geometry,
-  const OptSizeT &mmax, size_t nthreads, const OptNpArr &alm,
-  const string &mode, double phi0, const OptCNpArr &ringfactor,
-  const OptCNpArr &mstart, ptrdiff_t lstride)
-  {
-  DISPATCH_R(map, Py2_adjoint_synthesis_2d, (map, spin, lmax, geometry, mmax,
-      nthreads, alm, mode, phi0, ringfactor, mstart, lstride))
-  }
-constexpr const char *adjoint_synthesis_2d_DS = R"""(
-Transforms one or two 2D maps to spherical harmonic coefficients.
-This is the adjoint operation of `synthesis_2D`.
-
-Parameters
-----------
-alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
-    storage for the spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-    If not supplied, a new array is allocated.
-map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
-    The input map.
-spin: int >= 0
-    the spin to use for the transform.
-lmax: int >= 0
-    the maximum l (and m) moment of the transform (inclusive)
-mmax: int >= 0 <= lmax
-    the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the last dimension of `alm` on which the
-    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
-    scheme in the order m=0,1,2,... is assumed.
-lstride: int
-    the index stride in the last dimension of `alm` between the entries for
-    `l` and `l+1`, but the same `m`.
-geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
-    the distribution of rings over the theta range
-        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
-        - F1: Fejer's first rule, equidistant, first and last ring half a ring
-          width from the poles
-        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
-          the north pole, last ring on the south pole
-        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
-          north pole, last ring half a ring width from the south pole
-        - GL: Gauss-Legendre, non-equidistant
-        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
-          ring width from the south pole
-        - F2: Fejer's second rule, equidistant, first and last ring one ring width
-          from the poles.
-phi0: float
-    the azimuth (in radians) of the first pixel in each ring
-nthreads: int >= 0
-    the number of threads to use for the computation.
-    If 0, use as many threads as there are hardware threads available on the system
-mode: str
-    the transform mode
-      | "STANDARD": standard transform
-      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
-      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        multiplied by sqrt(l*(l+1))
-
-Returns
--------
-numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
-    the computed spherical harmonic coefficients
-    If the `alm` parameter was specified, this is identical to `alm`.
 
 Notes
 -----
@@ -1194,6 +1117,9 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           from the poles.
 phi0: float
     the azimuth (in radians) of the first pixel in each ring
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1203,6 +1129,94 @@ Returns
 numpy.ndarray((2, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
     the maps containing the derivatives with respect to theta and phi.
     If the map parameter was specified, this is identical with map.
+)""";
+
+template<typename T> static NpArr Py2_synthesis_general(const CNpArr &alm_,
+  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon,
+  const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, const OptNpArr &map__, double sigma_min, double sigma_max,
+  const string &mode_, bool verbose)
+  {
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto loc = to_cmav<double,2>(loc_, "loc");
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(alm.shape(0)==get_nalm(spin,mode), "number of components mismatch in alm");
+  auto [map_, map] = get_OptNpArr_and_vmav<T,2>(map__, {get_nmaps(spin,mode), loc.shape(0)}, "map", nthreads);
+  {
+  py::gil_scoped_release release;
+  synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon,
+  sigma_min, sigma_max, nthreads, mode, verbose);
+  }
+  return map_;
+  }
+NpArr Py_synthesis_general(const CNpArr &alm, size_t spin, size_t lmax,
+  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride,
+  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &map, double sigma_min,
+  double sigma_max, const string &mode, bool verbose=false)
+  {
+  DISPATCH_C(alm, Py2_synthesis_general, (alm, spin, lmax, loc, epsilon, mstart,
+  lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose));
+  }
+constexpr const char *synthesis_general_DS = R"""(
+Evaluate a_lm at arbitrary positions on the sphere
+
+Parameters
+----------
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is derived from `mstart`; if that is not supplied
+    either, it is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+map: None or numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
+    the map pixel data.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
+
+Returns
+-------
+numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
+    the pixel values at the locations specified by `loc`.
+    If the map parameter was specified, this is identical with map.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 template<typename T> static NpArr Py2_adjoint_synthesis(const OptNpArr &alm__,
@@ -1286,6 +1300,9 @@ mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the beginning of the calculation.
 lstride: int
     the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -1317,6 +1334,192 @@ numpy.ndarray(([ntrans,] nalm, x), dtype=numpy.complex of same accuracy as `map`
     the set(s) of spherical harmonic coefficients.
     If `alm` was supplied, this will be the same object
     If newly allocated, the smallest possible last dimension will be chosen.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
+)""";
+
+template<typename T> static NpArr Py2_adjoint_synthesis_2d(
+  const CNpArr &map_, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &alm__, const string &mode_,
+  double phi0, const OptCNpArr &ringfactor_, const OptCNpArr &mstart_, ptrdiff_t lstride)
+  {
+  auto mode = get_mode(mode_);
+  auto map = to_cmav<T,3>(map_, "map");
+  auto ringfactor = get_optional_cmav<double,1>(ringfactor_, {map.shape(1)}, 1., "ringfactor");
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  vector<size_t> almshp{get_nalm(spin,mode), min_almdim(lmax, mstart, lstride)};
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
+  auto alm = to_vmav<complex<T>,2>(alm_, "alm");
+  {
+  py::gil_scoped_release release;
+  adjoint_synthesis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0,
+    ringfactor, nthreads, mode);
+  }
+  return alm_;
+  }
+NpArr Py_adjoint_synthesis_2d(
+  const CNpArr &map, size_t spin, size_t lmax, const string &geometry,
+  const OptSizeT &mmax, size_t nthreads, const OptNpArr &alm,
+  const string &mode, double phi0, const OptCNpArr &ringfactor,
+  const OptCNpArr &mstart, ptrdiff_t lstride)
+  {
+  DISPATCH_R(map, Py2_adjoint_synthesis_2d, (map, spin, lmax, geometry, mmax,
+      nthreads, alm, mode, phi0, ringfactor, mstart, lstride))
+  }
+constexpr const char *adjoint_synthesis_2d_DS = R"""(
+Transforms one or two 2D maps to spherical harmonic coefficients.
+This is the adjoint operation of `synthesis_2D`.
+
+Parameters
+----------
+alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
+    storage for the spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If not supplied, a new array is allocated.
+map: numpy.ndarray((nmaps, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+    The input map.
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l (and m) moment of the transform (inclusive)
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
+    the distribution of rings over the theta range
+        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
+        - F1: Fejer's first rule, equidistant, first and last ring half a ring
+          width from the poles
+        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
+          the north pole, last ring on the south pole
+        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
+          north pole, last ring half a ring width from the south pole
+        - GL: Gauss-Legendre, non-equidistant
+        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
+          ring width from the south pole
+        - F2: Fejer's second rule, equidistant, first and last ring one ring width
+          from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the beginning of the calculation.
+nthreads: int >= 0
+    the number of threads to use for the computation.
+    If 0, use as many threads as there are hardware threads available on the system
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
+
+Returns
+-------
+numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
+
+Notes
+-----
+nmaps = 1 if spin == 0 else 2
+nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
+)""";
+
+template<typename T> static NpArr Py2_adjoint_synthesis_general(const CNpArr &map_,
+  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon,
+  const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
+  size_t nthreads, const OptNpArr &alm__, double sigma_min, double sigma_max,
+  const string &mode_, bool verbose)
+  {
+  auto mode = get_mode(mode_);
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto map = to_cmav<T,2>(map_, "map");
+  auto loc = to_cmav<double,2>(loc_, "loc");
+  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
+  MR_assert(map.shape(0)==get_nmaps(spin,mode), "number of components mismatch in map");
+  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, {get_nalm(spin, mode),
+    min_almdim(lmax, mstart, lstride)}, "alm", nthreads);
+  auto alm = to_vmav<complex<T>,2>(alm_,"alm");
+
+  {
+  py::gil_scoped_release release;
+  adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon,
+    sigma_min, sigma_max, nthreads, mode, verbose);
+  }
+  return alm_;
+  }
+NpArr Py_adjoint_synthesis_general(const CNpArr &map, size_t spin, size_t lmax,
+  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride,
+  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &alm, double sigma_min,
+  double sigma_max, const string &mode, bool verbose=false)
+  {
+  DISPATCH_R(map, Py2_adjoint_synthesis_general, (map, spin, lmax, loc, epsilon,
+    mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose))
+  }
+constexpr const char *adjoint_synthesis_general_DS = R"""(
+This is the adjoint operation of `synthesis_general`.
+
+Parameters
+----------
+map: numpy.ndarray((nmaps, npix), dtype=numpy.float32 or numpy.float64
+    The pixel values at the locations specified by `loc`.
+spin: int >= 0
+    the spin to use for the transform.
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+mmax: int >= 0 and <= lmax
+    the maximum m moment of the transform (inclusive).
+    If not supplied, mmax is derived from `mstart`; if that is not supplied
+    either, it is assumed to be equal to lmax.
+loc : numpy.array((npix, 2), dtype=numpy.float64)
+    the locations on the sphere at which the alm should be evaluated.
+    loc[:, 0] contains colatitude values (range [0;pi]),
+    loc[:, 1] contains longitude values (range [0;2pi])
+epsilon : float
+    desired accuracy
+    for single precision inputs, this must be >1e-6, for double precision it
+    must be >2e-13
+nthreads: int >= 0
+    the number of threads to use for the computation
+    if 0, use as many threads as there are hardware threads available on the system
+alm: None or numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
+    the set(s) of spherical harmonic coefficients.
+    The last dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+    If `None`, a new suitable array is allocated.
+sigma_min, sigma_max: float
+    minimum and maximum allowed oversampling factors for the NUFFT component
+    1.2 <= sigma_min < sigma_max <= 2.5
+mode: str
+    the transform mode
+      | "STANDARD": standard transform
+      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
+      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
+        multiplied by sqrt(l*(l+1))
+
+Returns
+-------
+numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
+    the computed spherical harmonic coefficients
+    If the `alm` parameter was specified, this is identical to `alm`.
 
 Notes
 -----
@@ -1429,6 +1632,9 @@ mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
 ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the beginning of the calculation.
 lstride: int
     the index stride in the last dimension of `alm` between the entries for
     `l` and `l+1`, but the same `m`.
@@ -1546,6 +1752,9 @@ geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
           from the poles.
 phi0: float
     the azimuth (in radians) of the first pixel in each ring
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the beginning of the calculation.
 nthreads: int >= 0
     the number of threads to use for the computation.
     If 0, use as many threads as there are hardware threads available on the system
@@ -1573,274 +1782,6 @@ For the CC and F1 geometries this limit is considerably higher than the one
 obtainable by simply applying quadrature weights. This improvement is achieved
 by temporary upsampling along meridians to apply the weights at a higher
 resolution.
-)""";
-
-template<typename T> static NpArr Py2_adjoint_analysis_2d(const CNpArr &alm_,
-  size_t spin, size_t lmax, const string &geometry, const OptSizeT &ntheta,
-  const OptSizeT &nphi, const OptSizeT &mmax_, size_t nthreads,
-  const OptNpArr &map__, double phi0, const OptCNpArr &ringfactor_,
-  const OptCNpArr &mstart_, ptrdiff_t lstride)
-  {
-  auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi, nthreads);
-  auto map = to_vmav<T,3>(map_, "map");
-  auto ringfactor = get_optional_cmav<double,1>(ringfactor_, {map.shape(1)}, 1., "ringfactor");
-  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
-  {
-  py::gil_scoped_release release;
-  adjoint_analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0,
-    ringfactor, nthreads);
-  }
-  return map_;
-  }
-NpArr Py_adjoint_analysis_2d(const CNpArr &alm, size_t spin, size_t lmax,
-  const string &geometry, const OptSizeT &ntheta, const OptSizeT &nphi,
-  const OptSizeT &mmax, size_t nthreads, const OptNpArr &map, double phi0,
-  const OptCNpArr &ringfactor, const OptCNpArr &mstart, ptrdiff_t lstride)
-  {
-  DISPATCH_C(alm, Py2_adjoint_analysis_2d, (alm, spin, lmax, geometry, ntheta,
-    nphi, mmax, nthreads, map, phi0, ringfactor, mstart, lstride))
-  }
-constexpr const char *adjoint_analysis_2d_DS = R"""(
-Transforms one or two sets of spherical harmonic coefficients to 2D maps.
-This is the adjoint operation of `analysis_2D`.
-
-Parameters
-----------
-alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
-    the set of spherical harmonic coefficients.
-    The second dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
-    storage for the output map.
-    If not supplied, a new array is allocated.
-ntheta, nphi: int > 0
-    dimensions of the output map.
-    If not supplied, `map` must be supplied.
-    If supplied, and `map` is also supplied, must match with the array dimensions
-spin: int >= 0
-    the spin to use for the transform.
-    If spin==0, ncomp must be 1, otherwise 2
-lmax: int >= 0
-    the maximum l moment of the transform (inclusive).
-mmax: int >= 0 <= lmax
-    the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the last dimension of `alm` on which the
-    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
-    scheme in the order m=0,1,2,... is assumed.
-lstride: int
-    the index stride in the last dimension of `alm` between the entries for
-    `l` and `l+1`, but the same `m`.
-geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
-    the distribution of rings over the theta range
-        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
-        - F1: Fejer's first rule, equidistant, first and last ring half a ring
-          width from the poles
-        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
-          the north pole, last ring on the south pole
-        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
-          north pole, last ring half a ring width from the south pole
-        - GL: Gauss-Legendre, non-equidistant
-        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
-          ring width from the south pole
-        - F2: Fejer's second rule, equidistant, first and last ring one ring width
-          from the poles.
-phi0: float
-    the azimuth (in radians) of the first pixel in each ring
-nthreads: int >= 0
-    the number of threads to use for the computation.
-    If 0, use as many threads as there are hardware threads available on the system
-
-Returns
--------
-numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
-    the computed map. If the map parameter was specified, this is identical with
-    map.
-
-Notes
------
-For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
-)""";
-
-template<typename T> static NpArr Py2_synthesis_general(const CNpArr &alm_,
-  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon,
-  const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
-  size_t nthreads, const OptNpArr &map__, double sigma_min, double sigma_max,
-  const string &mode_, bool verbose)
-  {
-  auto mode = get_mode(mode_);
-  auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto loc = to_cmav<double,2>(loc_, "loc");
-  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
-  MR_assert(alm.shape(0)==get_nalm(spin,mode), "number of components mismatch in alm");
-  auto [map_, map] = get_OptNpArr_and_vmav<T,2>(map__, {get_nmaps(spin,mode), loc.shape(0)}, "map", nthreads);
-  {
-  py::gil_scoped_release release;
-  synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon,
-  sigma_min, sigma_max, nthreads, mode, verbose);
-  }
-  return map_;
-  }
-NpArr Py_synthesis_general(const CNpArr &alm, size_t spin, size_t lmax,
-  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride,
-  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &map, double sigma_min,
-  double sigma_max, const string &mode, bool verbose=false)
-  {
-  DISPATCH_C(alm, Py2_synthesis_general, (alm, spin, lmax, loc, epsilon, mstart,
-  lstride, mmax_, nthreads, map, sigma_min, sigma_max, mode, verbose));
-  }
-constexpr const char *synthesis_general_DS = R"""(
-Evaluate a_lm at arbitrary positions on the sphere
-
-Parameters
-----------
-alm: numpy.ndarray((nalm, x), dtype=numpy.complex64 or numpy.complex128)
-    the set(s) of spherical harmonic coefficients.
-    The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-spin: int >= 0
-    the spin to use for the transform.
-lmax: int >= 0
-    the maximum l moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the last dimension of `alm` on which the
-    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
-    scheme in the order m=0,1,2,... is assumed.
-lstride: int
-    the index stride in the last dimension of `alm` between the entries for
-    `l` and `l+1`, but the same `m`.
-mmax: int >= 0 and <= lmax
-    the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is derived from `mstart`; if that is not supplied
-    either, it is assumed to be equal to lmax.
-loc : numpy.array((npix, 2), dtype=numpy.float64)
-    the locations on the sphere at which the alm should be evaluated.
-    loc[:, 0] contains colatitude values (range [0;pi]),
-    loc[:, 1] contains longitude values (range [0;2pi])
-epsilon : float
-    desired accuracy
-    for single precision inputs, this must be >1e-6, for double precision it
-    must be >2e-13
-nthreads: int >= 0
-    the number of threads to use for the computation
-    if 0, use as many threads as there are hardware threads available on the system
-map: None or numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
-    the map pixel data.
-    If `None`, a new suitable array is allocated.
-sigma_min, sigma_max: float
-    minimum and maximum allowed oversampling factors for the NUFFT component
-    1.2 <= sigma_min < sigma_max <= 2.5
-mode: str
-    the transform mode
-      | "STANDARD": standard transform
-      | "GRAD_ONLY": only valid for spin>0, curl a_lm are assumed to be zero
-      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        multiplied by sqrt(l*(l+1))
-
-Returns
--------
-numpy.ndarray((nmaps, npix), dtype=numpy.float of same accuracy as `alm`
-    the pixel values at the locations specified by `loc`.
-    If the map parameter was specified, this is identical with map.
-
-Notes
------
-nmaps = 1 if spin == 0 else 2
-nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
-)""";
-
-template<typename T> static NpArr Py2_adjoint_synthesis_general(const CNpArr &map_,
-  size_t spin, size_t lmax, const CNpArr &loc_, double epsilon,
-  const OptCNpArr &mstart_, ptrdiff_t lstride, const OptSizeT &mmax_,
-  size_t nthreads, const OptNpArr &alm__, double sigma_min, double sigma_max,
-  const string &mode_, bool verbose)
-  {
-  auto mode = get_mode(mode_);
-  auto mstart = get_mstart(lmax, mmax_, mstart_);
-  auto map = to_cmav<T,2>(map_, "map");
-  auto loc = to_cmav<double,2>(loc_, "loc");
-  MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
-  MR_assert(map.shape(0)==get_nmaps(spin,mode), "number of components mismatch in map");
-  auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, {get_nalm(spin, mode),
-    min_almdim(lmax, mstart, lstride)}, "alm", nthreads);
-  auto alm = to_vmav<complex<T>,2>(alm_,"alm");
-
-  {
-  py::gil_scoped_release release;
-  adjoint_synthesis_general(alm, map, spin, lmax, mstart, lstride, loc, epsilon,
-    sigma_min, sigma_max, nthreads, mode, verbose);
-  }
-  return alm_;
-  }
-NpArr Py_adjoint_synthesis_general(const CNpArr &map, size_t spin, size_t lmax,
-  const CNpArr &loc, double epsilon, const OptCNpArr &mstart, ptrdiff_t lstride,
-  const OptSizeT &mmax_, size_t nthreads, const OptNpArr &alm, double sigma_min,
-  double sigma_max, const string &mode, bool verbose=false)
-  {
-  DISPATCH_R(map, Py2_adjoint_synthesis_general, (map, spin, lmax, loc, epsilon,
-    mstart, lstride, mmax_, nthreads, alm, sigma_min, sigma_max, mode, verbose))
-  }
-constexpr const char *adjoint_synthesis_general_DS = R"""(
-This is the adjoint operation of `synthesis_general`.
-
-Parameters
-----------
-map: numpy.ndarray((nmaps, npix), dtype=numpy.float32 or numpy.float64
-    The pixel values at the locations specified by `loc`.
-spin: int >= 0
-    the spin to use for the transform.
-lmax: int >= 0
-    the maximum l moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
-    the (hypothetical) index in the last dimension of `alm` on which the
-    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
-    scheme in the order m=0,1,2,... is assumed.
-lstride: int
-    the index stride in the last dimension of `alm` between the entries for
-    `l` and `l+1`, but the same `m`.
-mmax: int >= 0 and <= lmax
-    the maximum m moment of the transform (inclusive).
-    If not supplied, mmax is derived from `mstart`; if that is not supplied
-    either, it is assumed to be equal to lmax.
-loc : numpy.array((npix, 2), dtype=numpy.float64)
-    the locations on the sphere at which the alm should be evaluated.
-    loc[:, 0] contains colatitude values (range [0;pi]),
-    loc[:, 1] contains longitude values (range [0;2pi])
-epsilon : float
-    desired accuracy
-    for single precision inputs, this must be >1e-6, for double precision it
-    must be >2e-13
-nthreads: int >= 0
-    the number of threads to use for the computation
-    if 0, use as many threads as there are hardware threads available on the system
-alm: None or numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
-    the set(s) of spherical harmonic coefficients.
-    The last dimension must be large enough to accommodate all entries, which
-    are stored according to the healpy convention.
-    If `None`, a new suitable array is allocated.
-sigma_min, sigma_max: float
-    minimum and maximum allowed oversampling factors for the NUFFT component
-    1.2 <= sigma_min < sigma_max <= 2.5
-mode: str
-    the transform mode
-      | "STANDARD": standard transform
-      | "GRAD_ONLY": only valid for spin>0, curl a_lm are not computed
-      | "DERIV1": same as "GRAD_ONLY", but spin is assumed to be 1 and a_lm are
-        multiplied by sqrt(l*(l+1))
-
-Returns
--------
-numpy.ndarray((nalm, x), dtype=complex, same accuracy as `map`)
-    the computed spherical harmonic coefficients
-    If the `alm` parameter was specified, this is identical to `alm`.
-
-Notes
------
-nmaps = 1 if spin == 0 else 2
-nalm = 1 if spin == 0 else (2 if mode == "STANDARD" else 1)
 )""";
 
 template<typename T> static py::tuple Py2_pseudo_analysis_general(
@@ -1952,6 +1893,98 @@ float
 
 float
     the quality of the least-squares solution
+)""";
+
+template<typename T> static NpArr Py2_adjoint_analysis_2d(const CNpArr &alm_,
+  size_t spin, size_t lmax, const string &geometry, const OptSizeT &ntheta,
+  const OptSizeT &nphi, const OptSizeT &mmax_, size_t nthreads,
+  const OptNpArr &map__, double phi0, const OptCNpArr &ringfactor_,
+  const OptCNpArr &mstart_, ptrdiff_t lstride)
+  {
+  auto mstart = get_mstart(lmax, mmax_, mstart_);
+  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
+  auto map_ = check_build_map<T>(map__, alm.shape(0), ntheta, nphi, nthreads);
+  auto map = to_vmav<T,3>(map_, "map");
+  auto ringfactor = get_optional_cmav<double,1>(ringfactor_, {map.shape(1)}, 1., "ringfactor");
+  MR_assert(map.shape(0)==alm.shape(0), "bad number of components in map array");
+  {
+  py::gil_scoped_release release;
+  adjoint_analysis_2d(alm, map, spin, lmax, mstart, lstride, geometry, phi0,
+    ringfactor, nthreads);
+  }
+  return map_;
+  }
+NpArr Py_adjoint_analysis_2d(const CNpArr &alm, size_t spin, size_t lmax,
+  const string &geometry, const OptSizeT &ntheta, const OptSizeT &nphi,
+  const OptSizeT &mmax, size_t nthreads, const OptNpArr &map, double phi0,
+  const OptCNpArr &ringfactor, const OptCNpArr &mstart, ptrdiff_t lstride)
+  {
+  DISPATCH_C(alm, Py2_adjoint_analysis_2d, (alm, spin, lmax, geometry, ntheta,
+    nphi, mmax, nthreads, map, phi0, ringfactor, mstart, lstride))
+  }
+constexpr const char *adjoint_analysis_2d_DS = R"""(
+Transforms one or two sets of spherical harmonic coefficients to 2D maps.
+This is the adjoint operation of `analysis_2D`.
+
+Parameters
+----------
+alm: numpy.ndarray((ncomp, x), dtype=numpy.complex64 or numpy.complex128)
+    the set of spherical harmonic coefficients.
+    The second dimension must be large enough to accommodate all entries, which
+    are stored according to the healpy convention.
+map: numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+    storage for the output map.
+    If not supplied, a new array is allocated.
+ntheta, nphi: int > 0
+    dimensions of the output map.
+    If not supplied, `map` must be supplied.
+    If supplied, and `map` is also supplied, must match with the array dimensions
+spin: int >= 0
+    the spin to use for the transform.
+    If spin==0, ncomp must be 1, otherwise 2
+lmax: int >= 0
+    the maximum l moment of the transform (inclusive).
+mmax: int >= 0 <= lmax
+    the maximum m moment of the transform (inclusive).
+mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+    the (hypothetical) index in the last dimension of `alm` on which the
+    entry with (l=0, m) would be stored. If not supplied, a contiguous storage
+    scheme in the order m=0,1,2,... is assumed.
+lstride: int
+    the index stride in the last dimension of `alm` between the entries for
+    `l` and `l+1`, but the same `m`.
+geometry: one of "CC", "F1", "MW", "MWflip", "GL", "DH", "F2"
+    the distribution of rings over the theta range
+        - CC: Clenshaw-Curtis, equidistant, first and last ring on poles
+        - F1: Fejer's first rule, equidistant, first and last ring half a ring
+          width from the poles
+        - MW: McEwen & Wiaux scheme, equidistant, first ring half a ring width from
+          the north pole, last ring on the south pole
+        - MWflip: flipped McEwen & Wiaux scheme, equidistant, first ring on the
+          north pole, last ring half a ring width from the south pole
+        - GL: Gauss-Legendre, non-equidistant
+        - DH: Driscoll-Healy, equidistant, first ring on north pole, last ring one
+          ring width from the south pole
+        - F2: Fejer's second rule, equidistant, first and last ring one ring width
+          from the poles.
+phi0: float
+    the azimuth (in radians) of the first pixel in each ring
+ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
+    if provided, the values in each ring will be multiplied by the respective
+    values in this array at the end of the calculation.
+nthreads: int >= 0
+    the number of threads to use for the computation.
+    If 0, use as many threads as there are hardware threads available on the system
+
+Returns
+-------
+numpy.ndarray((ncomp, ntheta, nphi), dtype=numpy.float of same accuracy as alm)
+    the computed map. If the map parameter was specified, this is identical with
+    map.
+
+Notes
+-----
+For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
 )""";
 
 template<typename T> static NpArr Py2_raise_spin_from_0(const CNpArr &alm_, size_t lmax,
@@ -2310,68 +2343,6 @@ void add_pythonfuncs(py::module_ &m)
   {
   using namespace py::literals;
 
-  m.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a,
-    "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
-    "ringfactor"_a=None, "spin"_a, "lstride"_a=1, "pixstride"_a=1,
-    "nthreads"_a=1, "map"_a=None, "mmax"_a=None, "mode"_a="STANDARD",
-    "theta_interpol"_a=false);
-  m.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS,
-    py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
-    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "spin"_a, "lstride"_a=1,
-    "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "mmax"_a=None,
-    "mode"_a="STANDARD","theta_interpol"_a=false);
-  m.def("pseudo_analysis", &Py_pseudo_analysis, pseudo_analysis_DS,
-    py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
-    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "spin"_a, "lstride"_a=1,
-    "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a,
-    "mmax"_a=None,"theta_interpol"_a=false);
-  m.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS,
-    py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
-    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "lstride"_a=1,
-    "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None,
-    "theta_interpol"_a=false);
-
-  m.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(),
-    "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None,
-    "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD",
-    "phi0"_a=0., "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
-  m.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS,
-    py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None,
-    "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD", "phi0"_a=0.,
-    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
-  m.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS,
-    py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None,
-    "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.,
-    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
-  m.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(),
-    "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1,
-    "alm"_a=None, "phi0"_a=0., "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
-  m.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS,
-    py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None,
-    "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.,
-    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
-
-  m.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS,
-    py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a,
-    "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None,
-    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
-  m.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general,
-    adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a,
-    "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None,
-    "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
-    "mode"_a="STANDARD", "verbose"_a=false);
-  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general,
-    pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a,
-    "spin"_a, "nthreads"_a=1, "maxiter"_a, "epsilon"_a, "sigma_min"_a=1.1,
-    "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None,
-    "alm"_a=None, "verbose"_a=false);
-
-  m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS,
-    "geometry"_a, "ntheta"_a);
-
-  m.def("maximum_safe_l", &maximum_safe_l, maximum_safe_l_DS, "geometry"_a,
-    "ntheta"_a);
-
   m.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a,
     "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1,
     "nthreads"_a=1, "leg"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);
@@ -2381,12 +2352,76 @@ void add_pythonfuncs(py::module_ &m)
   m.def("leg2alm", &Py_leg2alm, leg2alm_DS, py::kw_only(), "leg"_a, "lmax"_a,
     "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1,
     "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD","theta_interpol"_a=false);
+
   m.def("map2leg", &Py_map2leg, map2leg_DS, py::kw_only(), "map"_a, "nphi"_a,
     "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "mmax"_a, "pixstride"_a=1,
     "nthreads"_a=1, "leg"_a=None);
   m.def("leg2map", &Py_leg2map, leg2map_DS, py::kw_only(), "leg"_a, "nphi"_a,
     "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "pixstride"_a=1,
     "nthreads"_a=1, "map"_a=None);
+
+  m.def("synthesis", &Py_synthesis, synthesis_DS, py::kw_only(), "alm"_a,
+    "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a, "phi0"_a, "ringstart"_a,
+    "ringfactor"_a=None, "spin"_a, "lstride"_a=1, "pixstride"_a=1,
+    "nthreads"_a=1, "map"_a=None, "mmax"_a=None, "mode"_a="STANDARD",
+    "theta_interpol"_a=false);
+  m.def("synthesis_deriv1", &Py_synthesis_deriv1, synthesis_deriv1_DS,
+    py::kw_only(), "alm"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
+    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "lstride"_a=1,
+    "pixstride"_a=1, "nthreads"_a=1, "map"_a=None, "mmax"_a=None,
+    "theta_interpol"_a=false);
+  m.def("synthesis_2d", &Py_synthesis_2d, synthesis_2d_DS, py::kw_only(),
+    "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None, "nphi"_a=None,
+    "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "mode"_a="STANDARD",
+    "phi0"_a=0., "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
+  m.def("synthesis_2d_deriv1", &Py_synthesis_2d_deriv1, synthesis_2d_deriv1_DS,
+    py::kw_only(), "alm"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None,
+    "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.,
+    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
+  m.def("synthesis_general", &Py_synthesis_general, synthesis_general_DS,
+    py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "loc"_a, "epsilon"_a,
+    "mstart"_a=None, "lstride"_a=1, "mmax"_a=None, "nthreads"_a=1, "map"_a=None,
+    "sigma_min"_a=1.1, "sigma_max"_a=2.6, "mode"_a="STANDARD", "verbose"_a=false);
+
+  m.def("adjoint_synthesis", &Py_adjoint_synthesis, adjoint_synthesis_DS,
+    py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
+    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "spin"_a, "lstride"_a=1,
+    "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "mmax"_a=None,
+    "mode"_a="STANDARD","theta_interpol"_a=false);
+  m.def("adjoint_synthesis_2d", &Py_adjoint_synthesis_2d, adjoint_synthesis_2d_DS,
+    py::kw_only(), "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None,
+    "nthreads"_a=1, "alm"_a=None, "mode"_a="STANDARD", "phi0"_a=0.,
+    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
+  m.def("adjoint_synthesis_general", &Py_adjoint_synthesis_general,
+    adjoint_synthesis_general_DS, py::kw_only(), "map"_a, "spin"_a, "lmax"_a,
+    "loc"_a, "epsilon"_a, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None,
+    "nthreads"_a=1, "alm"_a=None, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+    "mode"_a="STANDARD", "verbose"_a=false);
+
+  m.def("pseudo_analysis", &Py_pseudo_analysis, pseudo_analysis_DS,
+    py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
+    "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "spin"_a, "lstride"_a=1,
+    "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a,
+    "mmax"_a=None,"theta_interpol"_a=false);
+  m.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(),
+    "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1,
+    "alm"_a=None, "phi0"_a=0., "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
+  m.def("pseudo_analysis_general", &Py_pseudo_analysis_general,
+    pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a,
+    "spin"_a, "nthreads"_a=1, "maxiter"_a, "epsilon"_a, "sigma_min"_a=1.1,
+    "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None,
+    "alm"_a=None, "verbose"_a=false);
+
+  m.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS,
+    py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None,
+    "nphi"_a=None, "mmax"_a=None, "nthreads"_a=1, "map"_a=None, "phi0"_a=0.,
+    "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
+
+  m.def("get_gridweights", &Py_get_gridweights, get_gridweights_DS,
+    "geometry"_a, "ntheta"_a);
+
+  m.def("maximum_safe_l", &maximum_safe_l, maximum_safe_l_DS, "geometry"_a,
+    "ntheta"_a);
   }
 
 void add_sht(py::module_ &msup)
