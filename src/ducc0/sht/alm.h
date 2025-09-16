@@ -690,14 +690,14 @@ template<typename T> void spin1to0 (const Alm_Base &base_in, const cmav<complex<
           double el = double(l);
           dcplx coeff0(0), coeff1(0);
           auto pos_in = base_in.index(l,m);
-          // contribution from l
+          // contribution from l; identical to 0 if m==0 or l==0
           if ((l>0) && (l<=base_in.Lmax()))
             {
             auto fct = dcplx(0., em)/sqrt(el*(el+1.));
             coeff0 +=  fct*dcplx(alm_in(1,pos_in));
             coeff1 += -fct*dcplx(alm_in(0,pos_in));
             }
-          // contribution from l-1
+          // contribution from l-1; identical to 0 if l<2
           if ((l>m) && (l>1))
             {
             double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (el-1.);

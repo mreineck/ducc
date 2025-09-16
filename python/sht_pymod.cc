@@ -63,6 +63,7 @@ static SHT_mode get_mode(const string &smode)
   if (smode=="STANDARD") return STANDARD;
   if (smode=="GRAD_ONLY") return GRAD_ONLY;
   if (smode=="DERIV1") return DERIV1;
+  if (smode=="FASTSPIN12") return FASTSPIN12;
   MR_fail("unknown SHT mode");
   }
 
@@ -70,7 +71,7 @@ static size_t get_nmaps(size_t spin, SHT_mode /*mode*/)
   { return 1+(spin>0); }
 
 static size_t get_nalm(size_t spin, SHT_mode mode)
-  { return (spin==0) ? 1 : ((mode==STANDARD) ? 2 : 1); }
+  { return (spin==0) ? 1 : (((mode==STANDARD)||(mode==FASTSPIN12)) ? 2 : 1); }
 
 template<typename T> static NpArr Py2_rotate_alm(const CNpArr &alm_in_,
   size_t lmax, double psi, double theta, double phi, size_t nthreads,
