@@ -401,8 +401,8 @@ void spin0to1 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
     if (l>m)
       {
       double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (-el-1.);
-      coeff0 +=  stdtx*last0;//alm(0,l-1);
-      coeff1 += -stdtx*last1;//alm(1,l-1);
+      coeff0 +=  stdtx*last0;
+      coeff1 += -stdtx*last1;
       }
     // contribution from l+1;
     if (true) // (l<base_in.Lmax())
@@ -473,15 +473,6 @@ void spin0to2 (const vmav<complex<double>,2> &alm,
     alm(1,l) = -0.5*img*(t1-t0);
     }
   }
-void raise_spin_from_0 (const vmav<complex<double>,2> &alm,
-  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m, size_t spin)
-  {
-  if (spin==1)
-    return spin0to1(alm, lmax, m);
-  if (spin==2)
-    return spin0to2(alm, f2, glm, lmax, m);
-  MR_fail("bad spin (need 1 or 2)");
-  }
 void spin1to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
   {
   double em = double(m);
@@ -502,8 +493,8 @@ void spin1to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
       {
       double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (el-1.);
       stdtx /= sqrt(el*(el-1.));
-      coeff0 += -stdtx*last0;//alm(0,l-1);
-      coeff1 += -stdtx*last1;//alm(1,l-1);
+      coeff0 += -stdtx*last0;
+      coeff1 += -stdtx*last1;
       }
     // contribution from l+1
     if (l<lmax)
@@ -573,15 +564,6 @@ void spin2to0 (const vmav<complex<double>,2> &alm, const cmav<double,1> &f1,
     alm(0,l) = 0.5*(t1+t0);
     alm(1,l) = 0.5*img*(t1-t0);
     }
-  }
-void lower_spin_to_0 (const vmav<complex<double>,2> &alm, const cmav<double,1> &f1,
-  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m, size_t spin)
-  {
-  if (spin==1)
-    return spin1to0(alm, lmax, m);
-  if (spin==2)
-    return spin2to0(alm, f1, f2, glm, lmax, m);
-  MR_fail("bad spin (need 1 or 2)");
   }
 
 template<typename T> void alm2leg(  // associated Legendre transform
@@ -714,7 +696,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
           for (size_t l=lmin; l<=lmax; ++l)
             almtmp(ialm,l) = alm(ialm,mstart(mi)+l*lstride);
           }
-        lower_spin_to_0(almtmp, f1, f2, glm, lmax, m, spin);
+        (spin==1) ? spin1to0(almtmp, lmax, m)
+                  : spin2to0(almtmp, f1, f2, glm, lmax, m);
 // zero alm beyond lmax+spin
         for (size_t ialm=0; ialm<nalm; ++ialm)
           almtmp(ialm,lmax+spin+1) = 0;
@@ -875,7 +858,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
             almtmp(ialm,l) *= norm_l[l];
         for (size_t ialm=0; ialm<nalm; ++ialm)
           almtmp(ialm,lmax+spin+1) = 0.;
-        raise_spin_from_0(almtmp, f2, glm, lmax, m, spin);
+        (spin==1) ? spin0to1(almtmp, lmax, m)
+                  : spin0to2(almtmp, f2, glm, lmax, m);
         auto lmin=max(spin,m);
         for (size_t l=m; l<lmin; ++l)
           for (size_t ialm=0; ialm<nalm; ++ialm)
