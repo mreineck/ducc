@@ -381,10 +381,11 @@ static void mul_cth(const vmav<complex<double>,2> &clm, size_t m, size_t lmax)
     clm(1,l) = r1;
     }
   }
+
 void spin0to1 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
   {
   double em = double(m);
-  vmav<dcmplx,2> tmp(alm.shape());
+  dcmplx last0=0, last1=0;
   for (size_t l=m; l<=lmax; ++l)
     {
     double el = double(l);
@@ -400,8 +401,8 @@ void spin0to1 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
     if (l>m)
       {
       double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (-el-1.);
-      coeff0 +=  stdtx*alm(0,l-1);
-      coeff1 += -stdtx*alm(1,l-1);
+      coeff0 +=  stdtx*last0;//alm(0,l-1);
+      coeff1 += -stdtx*last1;//alm(1,l-1);
       }
     // contribution from l+1;
     if (true) // (l<base_in.Lmax())
@@ -410,29 +411,19 @@ void spin0to1 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
       coeff0 +=  stdtx*alm(0,l+1);
       coeff1 += -stdtx*alm(1,l+1);
       }
+    last0 = alm(0,l);
+    last1 = alm(1,l);
     double norm = (l>0) ? 1./sqrt(el*(el+1)) : 0;
-    tmp(0,l) = norm*coeff0;
-    tmp(1,l) =-norm*coeff1;
-    }
-  for (size_t l=m; l<=lmax; ++l)
-    {
-    alm(0,l) = tmp(0,l);
-    alm(1,l) = tmp(1,l);
+    alm(0,l) = norm*coeff0;
+    alm(1,l) =-norm*coeff1;
     }
   }
-void spin0to2 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
+void spin0to2 (const vmav<complex<double>,2> &alm,
+  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m)
   {
   constexpr dcmplx img(0.,1.);
 
-  vmav<double,1> f2({lmax+1});
-  f2(0) = f2(1) = 0;
-  for (size_t l=2; l<=lmax; ++l)
-    f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
-
   double em = double(m);
-  // zero the glm
-  vmav<dcmplx,2> glm({2,lmax+5});
-  mav_apply([](dcmplx &v){v=0;}, 1, glm); 
   // copy in glm
   for (size_t l=m; l<=lmax+2; ++l)
     {
@@ -440,13 +431,11 @@ void spin0to2 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
     glm(0,l) = alm(0,l) + img*alm(1,l);
     glm(1,l) = alm(0,l) - img*alm(1,l);
     }
-  // zero the alm
-  mav_apply([](dcmplx &v){v=0;}, 1, alm);
   for (size_t l=m; l<=lmax; ++l)
     {
     double el=l;
-    alm(0,l) += (2.*em*em-el*(el+1))*glm(0,l);
-    alm(1,l) += (2.*em*em-el*(el+1))*glm(1,l);
+    alm(0,l) = (2.*em*em-el*(el+1))*glm(0,l);
+    alm(1,l) = (2.*em*em-el*(el+1))*glm(1,l);
     if (l>m)
       {
       alm(0,l) +=  2.*sqrt((2.*el+1.)/(2.*el-1.)*(el*el-em*em))*em*glm(0,l-1);
@@ -484,18 +473,19 @@ void spin0to2 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
     alm(1,l) = -0.5*img*(t1-t0);
     }
   }
-void raise_spin_from_0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m, size_t spin)
+void raise_spin_from_0 (const vmav<complex<double>,2> &alm,
+  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m, size_t spin)
   {
   if (spin==1)
     return spin0to1(alm, lmax, m);
   if (spin==2)
-    return spin0to2(alm, lmax, m);
+    return spin0to2(alm, f2, glm, lmax, m);
   MR_fail("bad spin (need 1 or 2)");
   }
 void spin1to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
   {
   double em = double(m);
-  vmav<dcmplx,2> tmp(alm.shape());
+  dcmplx last0=0, last1=0;
   for (size_t l=m; l<=lmax+1; ++l)
     {
     double el = double(l);
@@ -512,8 +502,8 @@ void spin1to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
       {
       double stdtx = sqrt((el+em)*(el-em)/((2.*el+1.)*(2.*el-1.))) * (el-1.);
       stdtx /= sqrt(el*(el-1.));
-      coeff0 += -stdtx*alm(0,l-1);
-      coeff1 += -stdtx*alm(1,l-1);
+      coeff0 += -stdtx*last0;//alm(0,l-1);
+      coeff1 += -stdtx*last1;//alm(1,l-1);
       }
     // contribution from l+1
     if (l<lmax)
@@ -523,26 +513,17 @@ void spin1to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
       coeff0 += -stdtx*alm(0,l+1);
       coeff1 += -stdtx*alm(1,l+1);
       }
-    tmp(0,l) = -coeff0;
-    tmp(1,l) = -coeff1;
-    }
-  for (size_t l=m; l<=lmax+1; ++l)
-    {
-    alm(0,l) = tmp(0,l);
-    alm(1,l) = tmp(1,l);
+    last0 = alm(0,l);
+    last1 = alm(1,l);
+    alm(0,l) = -coeff0;
+    alm(1,l) = -coeff1;
     }
   }
-void spin2to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
+void spin2to0 (const vmav<complex<double>,2> &alm, const cmav<double,1> &f1,
+  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m)
   {
   constexpr dcmplx img(0.,1.);
-  vmav<double,1> f1({lmax+1}), f2({lmax+1});
-  f1(0) = f2(0) = f2(1) = 0;
-  for (size_t l=1; l<=lmax; ++l)
-    f1(l) = (2.*l+3.)/(2.*l+1.) / (l*(l+1.)*(l+2.)*(l+3.));
-  for (size_t l=2; l<=lmax; ++l)
-    f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
 
-  vmav<complex<double>,2> glm({2,lmax+3});
   double em = double(m);
   // copy in glm
   for (size_t l=m; l<=lmax; ++l)
@@ -593,12 +574,13 @@ void spin2to0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m)
     alm(1,l) = 0.5*img*(t1-t0);
     }
   }
-void lower_spin_to_0 (const vmav<complex<double>,2> &alm, size_t lmax, size_t m, size_t spin)
+void lower_spin_to_0 (const vmav<complex<double>,2> &alm, const cmav<double,1> &f1,
+  const cmav<double,1> &f2, const vmav<dcmplx,2> &glm, size_t lmax, size_t m, size_t spin)
   {
   if (spin==1)
     return spin1to0(alm, lmax, m);
   if (spin==2)
-    return spin2to0(alm, lmax, m);
+    return spin2to0(alm, f1, f2, glm, lmax, m);
   MR_fail("bad spin (need 1 or 2)");
   }
 
@@ -680,7 +662,12 @@ template<typename T> void alm2leg(  // associated Legendre transform
       } 
     }
 
-  if (((spin==1)||(spin==2)) && (mode==FASTSPIN12))
+  double minsth=1;
+  if (mode==FASTSPIN12)
+    for (size_t ith=0; ith<theta.shape(0); ++ith)
+      minsth = min(minsth, abs(sin(theta(ith))));
+
+  if ((mode==FASTSPIN12) && (minsth>=1e-7) && ((spin==1)||(spin==2)))
     {
     auto norm_l = Ylmgen::get_norm (lmax+spin, 0);
     auto rdata = make_ringdata(theta, lmax+spin, 0);
@@ -694,11 +681,22 @@ template<typename T> void alm2leg(  // associated Legendre transform
       ringfct[i] = 1./(sin(theta(i)));
       if (spin==2) ringfct[i] *= ringfct[i];
       }
+    size_t isspin2 = (spin==2) ? 1 : 0;
+    vmav<double,1> f1({isspin2*(lmax+1)}, UNINITIALIZED), f2({isspin2*(lmax+1)}, UNINITIALIZED);
+    if (spin==2)
+      {
+      f1(0) = f2(0) = f2(1) = 0;
+      for (size_t l=1; l<=lmax; ++l)
+        f1(l) = (2.*l+3.)/(2.*l+1.) / (l*(l+1.)*(l+2.)*(l+3.));
+      for (size_t l=2; l<=lmax; ++l)
+        f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
+      }
 
     ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({nalm,lmax+2+spin}, UNINITIALIZED);
+      vmav<complex<double>,2> glm({nalm,isspin2*(lmax+3)}, UNINITIALIZED);
 // FIXME
       auto almtmp0 = subarray<2>(almtmp,{{0,1},{}});
       auto almtmp1 = subarray<2>(almtmp,{{1,2},{}});
@@ -716,7 +714,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
           for (size_t l=lmin; l<=lmax; ++l)
             almtmp(ialm,l) = alm(ialm,mstart(mi)+l*lstride);
           }
-        lower_spin_to_0(almtmp, lmax, m, spin);
+        lower_spin_to_0(almtmp, f1, f2, glm, lmax, m, spin);
 // zero alm beyond lmax+spin
         for (size_t ialm=0; ialm<nalm; ++ialm)
           almtmp(ialm,lmax+spin+1) = 0;
@@ -728,11 +726,11 @@ template<typename T> void alm2leg(  // associated Legendre transform
         gen.prepare(m);
         inner_loop_a2m (mode, almtmp0, leg0, rdata, gen, mi);
         inner_loop_a2m (mode, almtmp1, leg1, rdata, gen, mi);
-// FIXME: apply the division by 1/sin(theta)**spin
         }
       }); /* end of parallel region */
     return;
     }
+
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
@@ -830,7 +828,12 @@ template<typename T> void leg2alm(  // associated Legendre transform
       }
     }
 
-  if (((spin==1)||(spin==2)) && (mode==FASTSPIN12))
+  double minsth=1;
+  if (mode==FASTSPIN12)
+    for (size_t ith=0; ith<theta.shape(0); ++ith)
+      minsth = min(minsth, abs(sin(theta(ith))));
+
+  if ((mode==FASTSPIN12) && (minsth>=1e-7) && ((spin==1)||(spin==2)))
     {
     auto norm_l = Ylmgen::get_norm (lmax+spin, 0);
     auto rdata = make_ringdata(theta, lmax+spin, 0);
@@ -838,11 +841,20 @@ template<typename T> void leg2alm(  // associated Legendre transform
     for (size_t ith=0; ith<rdata.size(); ++ith)
       rdata[ith].wgt = 1./ ((spin==1) ? rdata[ith].sth : (rdata[ith].sth*rdata[ith].sth));
     YlmBase base(lmax+spin, mmax, 0);
+    size_t isspin2 = (spin==2) ? 1 : 0;
+    vmav<double,1> f2({isspin2*(lmax+1)}, UNINITIALIZED);
+    if (spin==2)
+      {
+      f2(0) = f2(1) = 0;
+      for (size_t l=2; l<=lmax; ++l)
+        f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
+      }
 
     ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({2, lmax+2+spin}, UNINITIALIZED);
+      vmav<complex<double>,2> glm({nalm,isspin2*(lmax+5)}, UNINITIALIZED);
 // FIXME
       auto almtmp0 = subarray<2>(almtmp,{{0,1},{}});
       auto almtmp1 = subarray<2>(almtmp,{{1,2},{}});
@@ -863,7 +875,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
             almtmp(ialm,l) *= norm_l[l];
         for (size_t ialm=0; ialm<nalm; ++ialm)
           almtmp(ialm,lmax+spin+1) = 0.;
-        raise_spin_from_0(almtmp, lmax, m, spin);
+        raise_spin_from_0(almtmp, f2, glm, lmax, m, spin);
         auto lmin=max(spin,m);
         for (size_t l=m; l<lmin; ++l)
           for (size_t ialm=0; ialm<nalm; ++ialm)
@@ -875,6 +887,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
       }); /* end of parallel region */
     return;
     }
+
   auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
                                  Ylmgen::get_norm (lmax, spin);
   auto rdata = make_ringdata(theta, lmax, spin);
