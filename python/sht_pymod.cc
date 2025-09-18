@@ -1988,49 +1988,6 @@ Notes
 For limits on ``lmax`` and ``mmax`` see the documentation of ``analysis_2d``.
 )""";
 
-template<typename T> static NpArr Py2_raise_spin_from_0(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t spin, size_t nthreads, const OptNpArr &out__)
-  {
-  MR_assert((spin==1) || (spin==2), "spin must be 1 or 2");
-  size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax-spin, mmax);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = get_OptNpArr_and_vmav<complex<T>,2>
-    (out__, {2, base_out.Num_Alms()}, "out", nthreads);
-  {
-  py::gil_scoped_release release;
-  (spin==1) ? spin0to1(base_in, alm, base_out, alm_out, nthreads)
-            : spin0to2(base_in, alm, base_out, alm_out, nthreads);
-  }
-  return alm_out_;
-  }
-NpArr Py_raise_spin_from_0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax,
-                            size_t spin, size_t nthreads, const OptNpArr &out)
-  {
-  DISPATCH_C(alm, Py2_raise_spin_from_0, (alm, lmax, mmax, spin, nthreads, out))
-  }
-template<typename T> static NpArr Py2_lower_spin_to_0(const CNpArr &alm_, size_t lmax,
-  const OptSizeT &mmax_, size_t spin, size_t nthreads, const OptNpArr &out__)
-  {
-  MR_assert((spin==1) || (spin==2), "spin must be 1 or 2");
-  size_t mmax  = mmax_ ? mmax_.value() : lmax;
-  Alm_Base base_in(lmax, mmax), base_out(lmax+spin, mmax);
-  auto alm = to_cmav<complex<T>,2>(alm_, "alm");
-  auto [alm_out_, alm_out] = get_OptNpArr_and_vmav<complex<T>,2>
-    (out__, {2, base_out.Num_Alms()}, "out", nthreads);
-  {
-  py::gil_scoped_release release;
-  (spin==1) ? spin1to0(base_in, alm, base_out, alm_out, nthreads)
-            : spin2to0(base_in, alm, base_out, alm_out, nthreads);
-  }
-  return alm_out_;
-  }
-NpArr Py_lower_spin_to_0 (const CNpArr &alm, size_t lmax, const OptSizeT &mmax,
-                          size_t spin, size_t nthreads, const OptNpArr &out)
-  {
-  DISPATCH_C(alm, Py2_lower_spin_to_0, (alm, lmax, mmax, spin, nthreads, out))
-  }
-
 
 template<typename T> class Py_sharpjob
   {
@@ -2469,11 +2426,6 @@ void add_sht(py::module_ &msup)
 
   m2.def("alm2flm", &Py_alm2flm, "alm"_a, "spin"_a, "flm"_a=None);
   m2.def("flm2alm", &Py_flm2alm, "flm"_a, "spin"_a, "alm"_a=None, "real"_a=false);
-
-  m2.def("lower_spin_to_0", &Py_lower_spin_to_0, "alm"_a, "lmax"_a,
-    "mmax"_a=None, "spin"_a, "nthreads"_a=1, "out"_a=None);
-  m2.def("raise_spin_from_0", &Py_raise_spin_from_0, "alm"_a, "lmax"_a,
-    "mmax"_a=None, "spin"_a, "nthreads"_a=1, "out"_a=None);
   }
 
 }

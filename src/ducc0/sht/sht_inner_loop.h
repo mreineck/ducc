@@ -39,7 +39,7 @@ struct ringdata
   {
   size_t mlim, idx, midx;
   double cth, sth;
-  double wgt=1.;
+  double wgt=1.;  // currently only used for spin 1/2 SHT accelerated via spin 0
   };
 
 class YlmBase

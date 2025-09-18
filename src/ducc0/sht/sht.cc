@@ -679,9 +679,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({nalm,lmax+2+spin}, UNINITIALIZED);
       vmav<complex<double>,2> glm({nalm,isspin2*(lmax+3)}, UNINITIALIZED);
-// FIXME
-      auto almtmp0 = subarray<2>(almtmp,{{0,1},{}});
-      auto almtmp1 = subarray<2>(almtmp,{{1,2},{}});
+      vmav<complex<double>,2> almtmp0(&almtmp(0,0), {almtmp.shape(1),1}, {1,1});
+      vmav<complex<double>,2> almtmp1(&almtmp(1,0), {almtmp.shape(1),1}, {1,1});
       auto leg0 = subarray<3>(leg,{{0,1},{},{}});
       auto leg1 = subarray<3>(leg,{{1,2},{},{}});
 
@@ -838,9 +837,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({2, lmax+2+spin}, UNINITIALIZED);
       vmav<complex<double>,2> glm({nalm,isspin2*(lmax+5)}, UNINITIALIZED);
-// FIXME
-      auto almtmp0 = subarray<2>(almtmp,{{0,1},{}});
-      auto almtmp1 = subarray<2>(almtmp,{{1,2},{}});
+      vmav<complex<double>,2> almtmp0(&almtmp(0,0), {almtmp.shape(1),1}, {1,1});
+      vmav<complex<double>,2> almtmp1(&almtmp(1,0), {almtmp.shape(1),1}, {1,1});
       auto leg0 = subarray<3>(leg,{{0,1},{},{}});
       auto leg1 = subarray<3>(leg,{{1,2},{},{}});
 
