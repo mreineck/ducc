@@ -3,8 +3,9 @@
   - various improvements in the inner loops for AVX512, mainly in the
     synthesis direction.
   - improved scaling behaviour for high thread counts
-  - experimental support routines for transforming between spins 1 or 2 and
-    spin 0 a_lm for faster spin 1 or 2 SHTs via a detour to spin 0.
+  - Standard SHT with spins 1 or 2 should now be significanty faster
+    (up to a factor of 2 for large band limits).
+    DERIV1 and GRAD_ONLY modes have not changed.
   - functions taking or returning a ring-based map now take an optional
     argument with ring weights that are applied before resp. after the
     transform.
