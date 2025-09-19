@@ -644,15 +644,20 @@ template<typename T> void alm2leg(  // associated Legendre transform
       } 
     }
 
-  double minsth=1;
-  if (mode==FASTSPIN12)
-    for (size_t ith=0; ith<theta.shape(0); ++ith)
-      minsth = min(minsth, abs(sin(theta(ith))));
-
-  if ((mode==FASTSPIN12) && (minsth>=1e-7) && ((spin==1)||(spin==2)))
+  vector<ringdata> rdata_normal, rdata_fast;
+  if (((spin==1)||(spin==2))&&(mode==STANDARD))
+    {
+    auto rdata = make_ringdata(theta, lmax, spin);
+    for (const auto &rd: rdata)
+      (abs(rd.sth)>=1e-7) ? rdata_fast.push_back(rd) : rdata_normal.push_back(rd);
+    }
+  else
+    rdata_normal = make_ringdata(theta, lmax, spin);
+ 
+  if (!rdata_fast.empty())
     {
     auto norm_l = Ylmgen::get_norm (lmax+spin, 0);
-    auto rdata = make_ringdata(theta, lmax+spin, 0);
+    auto &rdata(rdata_fast);
     // adjust ring weights
     for (size_t ith=0; ith<rdata.size(); ++ith)
       rdata[ith].wgt = 1./ ((spin==1) ? rdata[ith].sth : (rdata[ith].sth*rdata[ith].sth));
@@ -710,35 +715,37 @@ template<typename T> void alm2leg(  // associated Legendre transform
         inner_loop_a2m (mode, almtmp1, leg1, rdata, gen, mi);
         }
       }); /* end of parallel region */
-    return;
     }
 
-  auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
-                                 Ylmgen::get_norm (lmax, spin);
-  auto rdata = make_ringdata(theta, lmax, spin);
-  YlmBase base(lmax, mmax, spin);
-
-  ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+  if (!rdata_normal.empty())
     {
-    Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
-
-    while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+    auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
+                                   Ylmgen::get_norm (lmax, spin);
+    auto &rdata(rdata_normal);
+    YlmBase base(lmax, mmax, spin);
+  
+    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
       {
-      auto m=mval(mi);
-      auto lmin=max(spin,m);
-      for (size_t ialm=0; ialm<nalm; ++ialm)
+      Ylmgen gen(base);
+      vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
+  
+      while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
-        for (size_t l=m; l<lmin; ++l)
-          almtmp(l,ialm) = 0;
-        for (size_t l=lmin; l<=lmax; ++l)
-          almtmp(l,ialm) = alm(ialm,mstart(mi)+l*lstride)*T(norm_l[l]);
-        almtmp(lmax+1,ialm) = 0;
+        auto m=mval(mi);
+        auto lmin=max(spin,m);
+        for (size_t ialm=0; ialm<nalm; ++ialm)
+          {
+          for (size_t l=m; l<lmin; ++l)
+            almtmp(l,ialm) = 0;
+          for (size_t l=lmin; l<=lmax; ++l)
+            almtmp(l,ialm) = alm(ialm,mstart(mi)+l*lstride)*T(norm_l[l]);
+          almtmp(lmax+1,ialm) = 0;
+          }
+        gen.prepare(m);
+        inner_loop_a2m (mode, almtmp, leg, rdata, gen, mi);
         }
-      gen.prepare(m);
-      inner_loop_a2m (mode, almtmp, leg, rdata, gen, mi);
-      }
-    }); /* end of parallel region */
+      }); /* end of parallel region */
+    }
   }
 
 template<typename T> void leg2alm(  // associated Legendre transform
@@ -810,15 +817,20 @@ template<typename T> void leg2alm(  // associated Legendre transform
       }
     }
 
-  double minsth=1;
-  if (mode==FASTSPIN12)
-    for (size_t ith=0; ith<theta.shape(0); ++ith)
-      minsth = min(minsth, abs(sin(theta(ith))));
+  vector<ringdata> rdata_normal, rdata_fast;
+  if (((spin==1)||(spin==2))&&(mode==STANDARD))
+    {
+    auto rdata = make_ringdata(theta, lmax, spin);
+    for (const auto &rd: rdata)
+      (abs(rd.sth)>=1e-7) ? rdata_fast.push_back(rd) : rdata_normal.push_back(rd);
+    }
+  else
+    rdata_normal = make_ringdata(theta, lmax, spin);
 
-  if ((mode==FASTSPIN12) && (minsth>=1e-7) && ((spin==1)||(spin==2)))
+  if (!rdata_fast.empty())
     {
     auto norm_l = Ylmgen::get_norm (lmax+spin, 0);
-    auto rdata = make_ringdata(theta, lmax+spin, 0);
+    auto &rdata(rdata_fast);
     // adjust ring weights
     for (size_t ith=0; ith<rdata.size(); ++ith)
       rdata[ith].wgt = 1./ ((spin==1) ? rdata[ith].sth : (rdata[ith].sth*rdata[ith].sth));
@@ -867,36 +879,45 @@ template<typename T> void leg2alm(  // associated Legendre transform
             alm(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(ialm,l));
         }
       }); /* end of parallel region */
-    return;
     }
 
-  auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
-                                 Ylmgen::get_norm (lmax, spin);
-  auto rdata = make_ringdata(theta, lmax, spin);
-  YlmBase base(lmax, mmax, spin);
-
-  ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+  if (!rdata_normal.empty())
     {
-    Ylmgen gen(base);
-    vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
+    auto norm_l = (mode==DERIV1) ? Ylmgen::get_d1norm (lmax) :
+                                   Ylmgen::get_norm (lmax, spin);
+    auto &rdata(rdata_normal);
+    YlmBase base(lmax, mmax, spin);
 
-    while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
       {
-      auto m=mval(mi);
-      gen.prepare(m);
-      for (size_t l=m; l<almtmp.shape(0); ++l)
-        for (size_t ialm=0; ialm<nalm; ++ialm)
-          almtmp(l,ialm) = 0.;
-      inner_loop_m2a (mode, almtmp, leg, rdata, gen, mi);
-      auto lmin=max(spin,m);
-      for (size_t l=m; l<lmin; ++l)
-        for (size_t ialm=0; ialm<nalm; ++ialm)
-          alm(ialm,mstart(mi)+l*lstride) = 0;
-      for (size_t l=lmin; l<=lmax; ++l)
-        for (size_t ialm=0; ialm<nalm; ++ialm)
-          alm(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(l,ialm)*norm_l[l]);
-      }
-    }); /* end of parallel region */
+      Ylmgen gen(base);
+      vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
+  
+      while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
+        {
+        auto m=mval(mi);
+        gen.prepare(m);
+        for (size_t l=m; l<almtmp.shape(0); ++l)
+          for (size_t ialm=0; ialm<nalm; ++ialm)
+            almtmp(l,ialm) = 0.;
+        inner_loop_m2a (mode, almtmp, leg, rdata, gen, mi);
+        auto lmin=max(spin,m);
+        if (rdata_fast.empty())
+          {
+          for (size_t l=m; l<lmin; ++l)
+            for (size_t ialm=0; ialm<nalm; ++ialm)
+              alm(ialm,mstart(mi)+l*lstride) = 0;
+          for (size_t l=lmin; l<=lmax; ++l)
+            for (size_t ialm=0; ialm<nalm; ++ialm)
+              alm(ialm,mstart(mi)+l*lstride) = complex<T>(almtmp(l,ialm)*norm_l[l]);
+          }
+        else
+          for (size_t l=lmin; l<=lmax; ++l)
+            for (size_t ialm=0; ialm<nalm; ++ialm)
+              alm(ialm,mstart(mi)+l*lstride) += complex<T>(almtmp(l,ialm)*norm_l[l]);
+        }
+      }); /* end of parallel region */
+    }
   }
 
 template<typename T> void leg2map(  // FFT
@@ -1322,8 +1343,6 @@ void sanity_checks(
     MR_assert((alm.shape(0)==ncomp) && (map.shape(0)==ncomp),
       "inconsistent number of components");
     }
-  if (mode==FASTSPIN12)
-    MR_assert((spin==1)||(spin==2), "bad spin: must be 1 or 2");
   }
 
 template<typename T> void synthesis(

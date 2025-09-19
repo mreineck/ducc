@@ -37,7 +37,7 @@ namespace detail_sht {
 
 using namespace std;
 
-enum SHT_mode { STANDARD, GRAD_ONLY, DERIV1, FASTSPIN12 };
+enum SHT_mode { STANDARD, GRAD_ONLY, DERIV1 };
 
 void get_gridweights(const string &type, const vmav<double,1> &wgt);
 vmav<double,1> get_gridweights(const string &type, size_t nrings);
@@ -234,7 +234,6 @@ using detail_sht::SHT_mode;
 using detail_sht::STANDARD;
 using detail_sht::GRAD_ONLY;
 using detail_sht::DERIV1;
-using detail_sht::FASTSPIN12;
 using detail_sht::get_gridweights;
 using detail_sht::maximum_safe_l;
 using detail_sht::alm2leg;
