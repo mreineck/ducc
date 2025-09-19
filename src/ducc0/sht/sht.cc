@@ -645,7 +645,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
     }
 
   vector<ringdata> rdata_normal, rdata_fast;
-  if (((spin==1)||(spin==2))&&(mode==STANDARD))
+  if ((lmax>=500)&&(mode==STANDARD)&&((spin==1)||(spin==2)))
     {
     auto rdata = make_ringdata(theta, lmax, spin);
     for (const auto &rd: rdata)
@@ -818,7 +818,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
     }
 
   vector<ringdata> rdata_normal, rdata_fast;
-  if (((spin==1)||(spin==2))&&(mode==STANDARD))
+  if ((lmax>=500)&&(mode==STANDARD)&&((spin==1)||(spin==2)))
     {
     auto rdata = make_ringdata(theta, lmax, spin);
     for (const auto &rd: rdata)
