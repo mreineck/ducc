@@ -1517,10 +1517,6 @@ template<typename T> DUCC0_NOINLINE static void extract_a2m_spin(
     }
   for (size_t i=0; i<nth; ++i)
     {
-    dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
-           q2(d.s.p2pr[i], d.s.p2pi[i]),
-           u1(d.s.p1mr[i], d.s.p1mi[i]),
-           u2(d.s.p2mr[i], d.s.p2mi[i]);
     phase(0, idx[i], mi) = complex<T>(T(d.s.p1pr[i]), T(d.s.p1pi[i]));
     phase(1, idx[i], mi) = complex<T>(T(d.s.p1mr[i]), T(d.s.p1mi[i]));
     if (idx[i]!=midx[i])
