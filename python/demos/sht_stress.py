@@ -128,7 +128,7 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
-    if err>3e-9:
+    if err>5e-11:
         print("AAAAARGH: adjointness error:", err)
         raise RuntimeError
 
