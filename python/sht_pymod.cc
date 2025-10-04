@@ -1532,7 +1532,8 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
   const CNpArr &map_, const CNpArr &theta_, const CNpArr &phi0_,
   const CNpArr &nphi_, const CNpArr &ringstart_, const OptCNpArr &ringfactor_, size_t spin,
   ptrdiff_t pixstride, size_t nthreads, size_t maxiter, double epsilon,
-  const OptSizeT &mmax_, bool theta_interpol=false)
+  const OptSizeT &mmax_, bool theta_interpol=false,
+  bool alm_contains_initial_guess=false)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto theta = to_cmav<double,1>(theta_, "theta");
@@ -1545,6 +1546,9 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
   vector<size_t> almshp(map_.ndim());
   for(size_t i=0; i<almshp.size(); ++i) almshp[i] = map_.shape(i);
   almshp[almshp.size()-1] = min_almdim(lmax, mstart, lstride);
+  if (alm_contains_initial_guess)
+    MR_assert(bool(alm__),
+      "alm must be supplied if alm_contains_initial_guess is True");
   auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__, almshp, "alm", nthreads);
   auto alm = to_vmav_with_optional_leading_dimensions<complex<T>,3>(alm_, "alm");
   MR_assert(map.shape(0)==alm.shape(0), "bad number of components in alm array");
@@ -1565,7 +1569,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
         auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(
           subarray<2>(alm, {{itrans},{},{}}), subarray<2>(map, {{itrans},{},{}}),
           spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, ringfactor, pixstride,
-          nthreads, maxiter, epsilon, theta_interpol);
+          nthreads, maxiter, epsilon, theta_interpol, alm_contains_initial_guess);
         itn[itrans] = xitn;
         istop[itrans] = xistop;
         rnorm[itrans] = xrnorm;
@@ -1600,10 +1604,11 @@ py::tuple Py_pseudo_analysis(const CNpArr &map, const CNpArr &theta,
   ptrdiff_t lstride, ptrdiff_t pixstride,
   size_t nthreads,
   const OptNpArr &alm, size_t maxiter, double epsilon, const OptSizeT &mmax_,
-  bool theta_interpol=false)
+  bool theta_interpol=false,
+  bool alm_contains_initial_guess=false)
   {
   DISPATCH_R(map, Py2_pseudo_analysis, (alm, lmax, mstart, lstride, map, theta,
-    phi0, nphi, ringstart, ringfactor, spin, pixstride, nthreads, maxiter, epsilon, mmax_, theta_interpol))
+    phi0, nphi, ringstart, ringfactor, spin, pixstride, nthreads, maxiter, epsilon, mmax_, theta_interpol, alm_contains_initial_guess))
   }
 constexpr const char *pseudo_analysis_DS = R"""(
 Tries to extract spherical harmonic coefficients from (sets of) one or two maps
@@ -1658,6 +1663,9 @@ mmax: int >= 0 <= lmax
 theta_interpol: bool
     if the input grid is irregularly spaced in theta, try to accelerate the
     transform by using an intermediate equidistant theta grid and a 1D NUFFT.
+alm_contains_initial_guess: bool
+    is this is True, `alm` must be supplied; it will be used as the initial
+    guess for the iterative solver.
 
 Returns
 -------
@@ -1788,7 +1796,8 @@ template<typename T> static py::tuple Py2_pseudo_analysis_general(
   const OptNpArr &alm__, size_t lmax, const CNpArr &map_, const CNpArr &loc_,
   size_t spin, size_t nthreads, size_t maxiter, double epsilon,
   double sigma_min, double sigma_max, const OptCNpArr &mstart_,
-  ptrdiff_t lstride, const OptSizeT &mmax_, bool verbose)
+  ptrdiff_t lstride, const OptSizeT &mmax_, bool verbose,
+  bool alm_contains_initial_guess)
   {
   auto mstart = get_mstart(lmax, mmax_, mstart_);
   auto map = to_cmav<T,2>(map_, "map");
@@ -1796,6 +1805,9 @@ template<typename T> static py::tuple Py2_pseudo_analysis_general(
   MR_assert(loc.shape(1)==2, "last dimension of loc must have size 2");
   size_t ncomp = (spin==0) ? 1 : 2;
   MR_assert(map.shape(0)==ncomp, "number of components mismatch in map");
+  if (alm_contains_initial_guess)
+    MR_assert(bool(alm__),
+      "alm must be supplied if alm_contains_initial_guess is True");
   auto alm_ = get_OptNpArr_minshape<complex<T>>(alm__,
     {get_nalm(spin, STANDARD), min_almdim(lmax, mstart, lstride)}, "alm", nthreads);
   auto alm = to_vmav<complex<T>,2>(alm_, "alm");
@@ -1806,7 +1818,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis_general(
   py::gil_scoped_release release;
   auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis_general(alm, map, spin,
     lmax, mstart, lstride, loc, sigma_min, sigma_max, nthreads, maxiter,
-    epsilon, verbose);
+    epsilon, verbose, alm_contains_initial_guess);
   istop = xistop;
   itn = xitn;
   rnorm = xrnorm;
@@ -1819,11 +1831,12 @@ py::tuple Py_pseudo_analysis_general(
   const CNpArr &map, const CNpArr &loc, size_t spin,
   size_t nthreads, size_t maxiter, double epsilon, double sigma_min, 
   double sigma_max, const OptCNpArr &mstart, ptrdiff_t lstride,
-  const OptSizeT &mmax_, const OptNpArr &alm, bool verbose=false)
+  const OptSizeT &mmax_, const OptNpArr &alm, bool verbose=false,
+  bool alm_contains_initial_guess=false)
   {
   DISPATCH_R(map, Py2_pseudo_analysis_general, (alm, lmax, map, loc,
     spin, nthreads, maxiter, epsilon, sigma_min, sigma_max, mstart, lstride,
-    mmax_, verbose))
+    mmax_, verbose, alm_contains_initial_guess))
   }
 constexpr const char *pseudo_analysis_general_DS = R"""(
 Tries to extract spherical harmonic coefficients from one or two maps
@@ -1870,6 +1883,9 @@ sigma_min, sigma_max: float
     1.2 <= sigma_min < sigma_max <= 2.5
 maxiter: int >= 0
     the maximum number of iterations before stopping the algorithm
+alm_contains_initial_guess: bool
+    is this is True, `alm` must be supplied; it will be used as the initial
+    guess for the iterative solver.
 
 Returns
 -------
@@ -2359,7 +2375,7 @@ void add_pythonfuncs(py::module_ &m)
     py::kw_only(), "map"_a, "theta"_a, "lmax"_a, "mstart"_a=None, "nphi"_a,
     "phi0"_a, "ringstart"_a, "ringfactor"_a=None, "spin"_a, "lstride"_a=1,
     "pixstride"_a=1, "nthreads"_a=1, "alm"_a=None, "maxiter"_a, "epsilon"_a,
-    "mmax"_a=None,"theta_interpol"_a=false);
+    "mmax"_a=None,"theta_interpol"_a=false, "alm_contains_initial_guess"_a=false);
   m.def("analysis_2d", &Py_analysis_2d, analysis_2d_DS, py::kw_only(),
     "map"_a, "spin"_a, "lmax"_a, "geometry"_a, "mmax"_a=None, "nthreads"_a=1,
     "alm"_a=None, "phi0"_a=0., "ringfactor"_a=None, "mstart"_a=None, "lstride"_a=1);
@@ -2367,7 +2383,7 @@ void add_pythonfuncs(py::module_ &m)
     pseudo_analysis_general_DS, py::kw_only(), "lmax"_a, "map"_a, "loc"_a,
     "spin"_a, "nthreads"_a=1, "maxiter"_a, "epsilon"_a, "sigma_min"_a=1.1,
     "sigma_max"_a=2.6, "mstart"_a=None, "lstride"_a=1, "mmax"_a=None,
-    "alm"_a=None, "verbose"_a=false);
+    "alm"_a=None, "verbose"_a=false, "alm_contains_initial_guess"_a=false);
 
   m.def("adjoint_analysis_2d", &Py_adjoint_analysis_2d, adjoint_analysis_2d_DS,
     py::kw_only(), "alm"_a, "spin"_a, "lmax"_a, "geometry"_a, "ntheta"_a=None,

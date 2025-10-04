@@ -17,7 +17,7 @@
 /*! \file sht.h
  *  Functionality related to spherical harmonic transforms
  *
- *  \copyright Copyright (C) 2020-2023 Max-Planck-Society
+ *  \copyright Copyright (C) 2020-2025 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -191,7 +191,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool theta_interpol=false);
+  bool theta_interpol=false,
+  bool alm_contains_initial_guess=false);
 template<typename T> void analysis_2d(
   const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map,
@@ -215,7 +216,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool verbose=false);
+  bool verbose=false,
+  bool alm_contains_initial_guess=false);
 
 template<typename T> void adjoint_analysis_2d(
   const cmav<complex<T>,2> &alm,

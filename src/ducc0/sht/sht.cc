@@ -637,6 +637,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
+      // FIXME: we may be able to re-use "leg" for storing "leg_tmp", like so ...
+      // auto leg_tmp(subarray<3>(leg,{{},{0,ntheta_tmp},{}}));
       vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
@@ -1525,7 +1527,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool theta_interpol)
+  bool theta_interpol,
+  bool alm_contains_initial_guess)
   {
   auto op = [&](const cmav<complex<T>,2> &xalm, const vmav<T,2> &xmap)
     {
@@ -1561,16 +1564,17 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
           }
     return sqrt(res);
     };
-  auto alm0 = alm.build_uniform(alm.shape(), 0.);
   // try to estimate ATOL according to Paige & Saunders
   // assuming an absolute error of machine epsilon in every matrix element
   // and a sum of squares of 1 along every row/column
   size_t npix=0;
   mav_apply([&npix](size_t v){npix+=v;}, 1, nphi);
   double atol = 1e-14*sqrt(npix);
+  if (!alm_contains_initial_guess)  // start with a zero vector guess
+    mav_apply([](auto &v){v=0;}, nthreads, alm);
   auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
     = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
-           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
+           0., atol, epsilon, 1e8, maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 template tuple<size_t, size_t, double, double> pseudo_analysis(
@@ -1589,7 +1593,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool theta_interpol);
+  bool theta_interpol,
+  bool alm_contains_initial_guess);
 template tuple<size_t, size_t, double, double> pseudo_analysis(
   const vmav<complex<float>,2> &alm, // (ncomp, *)
   const cmav<float,2> &map, // (ncomp, *)
@@ -1606,7 +1611,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool theta_interpol);
+  bool theta_interpol,
+  bool alm_contains_initial_guess);
 
 template<typename T> void adjoint_synthesis_2d(const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map, size_t spin, size_t lmax,
@@ -1920,7 +1926,8 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool verbose)
+  bool verbose,
+  bool alm_contains_initial_guess)
   {
   auto op = [&](const cmav<complex<T>,2> &xalm, const vmav<T,2> &xmap)
     {
@@ -1955,13 +1962,14 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
           }
     return sqrt(res);
     };
-  auto alm0 = alm.build_uniform(alm.shape(), 0.);
   // try to estimate ATOL according to Paige & Saunders
   // assuming an absolute error of machine epsilon in every matrix element
   double atol = 1e-14*sqrt(map.shape(1));
+  if (!alm_contains_initial_guess)  // start with a zero vector guess
+    mav_apply([](auto &v){v=0;}, nthreads, alm);
   auto [dum, istop, itn, normr, normar, normA, condA, normx, normb]
     = lsmr(op, op_adj, almnorm, mapnorm, map, alm,
-           alm0, 0., atol, epsilon, 1e8, maxiter, false, nthreads);
+           0., atol, epsilon, 1e8, maxiter, false, nthreads);
   return make_tuple(istop, itn, normr/normb, normar/(normA*normr));
   }
 template tuple<size_t, size_t, double, double> pseudo_analysis_general(
@@ -1976,7 +1984,8 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool verbose);
+  bool verbose,
+  bool alm_contains_initial_guess);
 template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const vmav<complex<double>,2> &alm, // (ncomp, *)
   const cmav<double,2> &map, // (ncomp, npix)
@@ -1989,6 +1998,7 @@ template tuple<size_t, size_t, double, double> pseudo_analysis_general(
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool verbose);
+  bool verbose,
+  bool alm_contains_initial_guess);
 
 }}

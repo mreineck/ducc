@@ -9,6 +9,8 @@
   - functions taking or returning a ring-based map now take an optional
     argument with ring weights that are applied before resp. after the
     transform.
+  - pseudo_analysis and pseudo_analysis_general now allow providing an initial
+    guess for the solution.
 
 - nufft:
   - improved mutex usage in Type 1 transforms, which should enable better
