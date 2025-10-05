@@ -129,22 +129,34 @@ struct util // hack to avoid duplicate symbols
     if (inplace) MR_assert(a1.stride()==a2.stride(), "stride mismatch");
     }
   DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
-    const fmav_info &ar, const shape_t &axes)
-    {
-    sanity_check_axes(ac.ndim(), axes);
-    MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
-    for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i) == ((i==axes.back()) ? (ar.shape(i)/2+1) : ar.shape(i)),
-        "axis length mismatch");
-    }
-  DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
-    const fmav_info &ar, const size_t axis)
+    const fmav_info &ar, bool inplace, const size_t axis)
     {
     if (axis>=ac.ndim()) throw invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     for (size_t i=0; i<ac.ndim(); ++i)
-      MR_assert(ac.shape(i) == ((i==axis) ? (ar.shape(i)/2+1) : ar.shape(i)),
-        "axis length mismatch");
+      {
+      if (i==axis)
+        {
+        MR_assert(ac.shape(i) == ar.shape(i)/2+1, "axis length mismatch");
+        if (inplace)
+          {
+          MR_assert(ac.stride(i)==1, "stride on halfcomplex axis must be 1");
+          MR_assert(ar.stride(i)==1, "stride on halfcomplex axis must be 1");
+          }
+        }
+      else
+        {
+        MR_assert(ac.shape(i) == ar.shape(i), "axis length mismatch");
+        if (inplace)
+          MR_assert(2*ac.stride(i)==ar.stride(i), "stride mismatch");
+        }
+      }
+    }
+  DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
+    const fmav_info &ar, bool inplace, const shape_t &axes)
+    {
+    sanity_check_axes(ac.ndim(), axes);
+    sanity_check_cr(ac, ar, inplace, axes.back());
     }
 
   static size_t thread_count (size_t nthreads, const fmav_info &info,
@@ -201,6 +213,9 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   if (p) return p;
   }
   auto plan = make_shared<T>(length, vectorize);
+  size_t size_limit = size_t(1)<<20;  // crude limit, can be made more sophisticated
+  if (plan->footprint() > size_limit)  // too large for caching
+    return plan;
   {
   LockGuard lock(mut);
 
@@ -1012,7 +1027,7 @@ template<typename T> DUCC0_NOINLINE void general_r2c(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = make_unique<pocketfft_r<T>>(in.shape(axis));
+  auto plan = get_plan<pocketfft_r<T>>(in.shape(axis), in.ndim()==1);
   size_t len=in.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1130,7 +1145,7 @@ template<typename T> DUCC0_NOINLINE void general_c2r(
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = make_unique<pocketfft_r<T>>(out.shape(axis));
+  auto plan = get_plan<pocketfft_r<T>>(out.shape(axis), in.ndim()==1);
   size_t len=out.shape(axis);
   execParallel(
     util::thread_count(nthreads, in, axis, fft_simdlen<T>),
@@ -1460,7 +1475,8 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   const vfmav<complex<T>> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
-  util::sanity_check_cr(out, in, axis);
+  bool inplace = in.data() == reinterpret_cast<const T*>(out.data());
+  util::sanity_check_cr(out, in, inplace, axis);
   if (in.size()==0) return;
   const auto &out2(reinterpret_cast<const vfmav<Cmplx<T>>&>(out));
   general_r2c(in, out2, axis, forward, fct, nthreads);
@@ -1470,7 +1486,8 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
   const vfmav<complex<T>> &out, const shape_t &axes,
   bool forward, T fct, size_t nthreads)
   {
-  util::sanity_check_cr(out, in, axes);
+  bool inplace = in.data() == reinterpret_cast<const T*>(out.data());
+  util::sanity_check_cr(out, in, inplace, axes);
   if (in.size()==0) return;
   r2c(in, out, axes.back(), forward, fct, nthreads);
   if (axes.size()==1) return;
@@ -1482,24 +1499,11 @@ template<typename T> DUCC0_NOINLINE void r2c(const cfmav<T> &in,
 template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
   const vfmav<T> &out,  size_t axis, bool forward, T fct, size_t nthreads)
   {
-  util::sanity_check_cr(in, out, axis);
+  bool inplace = reinterpret_cast<const T*>(in.data()) == out.data();
+  util::sanity_check_cr(in, out, inplace, axis);
   if (in.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T>>&>(in));
   general_c2r(in2, out, axis, forward, fct, nthreads);
-  }
-
-template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
-  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
-  size_t nthreads)
-  {
-  if (axes.size()==1)
-    return c2r(in, out, axes[0], forward, fct, nthreads);
-  util::sanity_check_cr(in, out, axes);
-  if (in.size()==0) return;
-  auto atmp(vfmav<complex<T>>::build_noncritical(in.shape(), PAGE_IN(nthreads)));
-  auto newaxes = shape_t{axes.begin(), --axes.end()};
-  c2c(in, atmp, newaxes, forward, T(1), nthreads);
-  c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
 template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<complex<T>> &in,
@@ -1508,11 +1512,32 @@ template<typename T> DUCC0_NOINLINE void c2r_mut(const vfmav<complex<T>> &in,
   {
   if (axes.size()==1)
     return c2r(in, out, axes[0], forward, fct, nthreads);
-  util::sanity_check_cr(in, out, axes);
+  bool inplace = reinterpret_cast<const T*>(in.data()) == out.data();
+  util::sanity_check_cr(in, out, inplace, axes);
   if (in.size()==0) return;
   auto newaxes = shape_t{axes.begin(), --axes.end()};
   c2c(in, in, newaxes, forward, T(1), nthreads);
   c2r(in, out, axes.back(), forward, fct, nthreads);
+  }
+
+template<typename T> DUCC0_NOINLINE void c2r(const cfmav<complex<T>> &in,
+  const vfmav<T> &out, const shape_t &axes, bool forward, T fct,
+  size_t nthreads)
+  {
+  if (axes.size()==1)
+    return c2r(in, out, axes[0], forward, fct, nthreads);
+  bool inplace = reinterpret_cast<const T*>(in.data()) == out.data();
+  util::sanity_check_cr(in, out, inplace, axes);
+  if (in.size()==0) return;
+  if (inplace)  // OK, we can overwrite the complex array after all
+    {
+    vfmav<complex<T>> in2(const_cast<complex<T> *>(in.data()), in.shape(), in.stride());
+    return c2r_mut(in2, out, axes, forward, fct, nthreads);
+    }
+  auto atmp(vfmav<complex<T>>::build_noncritical(in.shape(), PAGE_IN(nthreads)));
+  auto newaxes = shape_t{axes.begin(), --axes.end()};
+  c2c(in, atmp, newaxes, forward, T(1), nthreads);
+  c2r(atmp, out, axes.back(), forward, fct, nthreads);
   }
 
 template<typename T> DUCC0_NOINLINE void r2r_fftpack(const cfmav<T> &in,
@@ -1634,12 +1659,10 @@ DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, const vfmav<T> &ou
   const size_t axis, const cmav<T,1> &kernel, size_t nthreads,
   const Exec &exec)
   {
-  unique_ptr<Tplan> plan1, plan2;
-
   size_t l_in=in.shape(axis), l_out=out.shape(axis);
   MR_assert(kernel.size()==l_in, "bad kernel size");
-  plan1 = make_unique<Tplan>(l_in);
-  plan2 = make_unique<Tplan>(l_out);
+  auto plan1 = get_plan<Tplan>(l_in, in.ndim()==1);
+  auto plan2 = get_plan<Tplan>(l_out, in.ndim()==1);
   size_t bufsz = max(plan1->bufsize(), plan2->bufsize());
 
   vmav<T,1> fkernel({kernel.shape(0)}, UNINITIALIZED);

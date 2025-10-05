@@ -1826,6 +1826,27 @@ thread pool size) to standard output; useful for debugging in CI on exotic
 hard- and software.
 )""";
 
+static py::tuple native_vector_lengths()
+  {
+  int vlen_f32=1, vlen_f64=1;
+  if constexpr (vectorizable<float>)
+    vlen_f32 = int(native_simd<float>::size());
+  if constexpr (vectorizable<double>)
+    vlen_f64 = int(native_simd<double>::size());
+  py::list res;
+  res.append (vlen_f32);
+  res.append (vlen_f64);
+  return py::tuple(res);
+  }
+
+const char *native_vector_lengths_DS = R"""(
+Returns the vector lengths for float32 and float64 supported by this ducc library.
+
+Returns
+-------
+tuple(int) : supported vector lengths for float32 and float64, respectively
+)""";
+
 constexpr const char *misc_DS = R"""(
 Various unsorted utilities
 
@@ -1902,6 +1923,7 @@ void add_misc(py::module_ &msup)
   m.def("ptg2quat", ptg2quat, ptg2quat_DS, "ptg"_a, "nthreads"_a=1, "out"_a=None);
 
   m.def("print_diagnostics", print_diagnostics, print_diagnostics_DS);
+  m.def("native_vector_lengths", native_vector_lengths, native_vector_lengths_DS);
   }
 
 }

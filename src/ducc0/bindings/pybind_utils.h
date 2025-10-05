@@ -130,6 +130,11 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
   const string &spec="")
   {
   stride_t res(size_t(arr.ndim()));
+  bool zerosized = false;
+  if constexpr(rw)
+    for (size_t i=0; i<res.size(); ++i)
+      if (arr.shape(i)==0)
+        zerosized=true;
   for (size_t i=0; i<res.size(); ++i)
     {
 #ifdef DUCC0_USE_NANOBIND
@@ -142,8 +147,9 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
     res[i] = tmp/st;
 #endif
     if constexpr(rw)
-      MR_assert((arr.shape(int(i))==1) || (tmp!=0),
-        spec, "detected zero stride in writable array");
+      if (!zerosized)  // if the array has no elements, we needn't worry
+        MR_assert((arr.shape(int(i))==1) || (tmp!=0),
+          spec, "detected zero stride in writable array");
     }
   return res;
   }
@@ -352,6 +358,19 @@ template<typename T> auto get_OptNpArr_and_vfmav(const OptNpArr &arr_,
   auto res_vmav = to_vmav<T,ndim>(val);
   return std::make_tuple(val, res_vmav);
   }
+ template<typename T, size_t ndim> auto get_optional_cmav(const OptCNpArr &arr_,
+  const typename mav_info<ndim>::shape_t &dims, const T &defaultval, const string &name="")
+  {
+  if (!arr_) return cmav<T,ndim>::build_uniform(dims, defaultval);
+  const auto spec = makeSpec(name);
+  auto val = arr_.value();
+  MR_assert(isPyarr<T>(val), spec, "incorrect data type");
+  MR_assert(dims.size()==size_t(val.ndim()), spec, "dimension mismatch");
+  MR_assert(dims.size()==ndim, spec, "dimension mismatch");
+  for (size_t i=0; i<dims.size(); ++i)
+    MR_assert(dims[i]==size_t(val.shape(int(i))), spec, "dimension mismatch");
+  return to_cmav<T,ndim>(val);
+  }
 
 template<typename T> NpArr get_OptNpArr_minshape
   (const OptNpArr &arr_, const shape_t &dims, const string &name="", size_t nthreads=1)
@@ -435,6 +454,7 @@ using detail_pybind::to_vmav_with_optional_leading_dimensions;
 using detail_pybind::to_vfmav_with_optional_leading_dimensions;
 using detail_pybind::normalizeDtype;
 using detail_pybind::isDtype;
+using detail_pybind::get_optional_cmav;
 
 }
 

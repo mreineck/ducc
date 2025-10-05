@@ -404,3 +404,17 @@ def test_multi_iter_bug():
     a=np.zeros((128000,),dtype=np.complex128)
     # this used to raise an exception
     fft.c2c(a[::2],axes=(0,),nthreads=8)
+
+
+@pmp("shp", shapes2D+shapes3D)
+def test_inplace_r2c_c2r(shp):
+    shpc = list(shp)
+    shpc[-1] = shp[-1]//2 + 1
+    buf = np.empty(shpc, dtype=np.complex128)
+    slc_r = tuple(slice(0,lim) for lim in shp)
+    bufr = buf.view(np.float64)[slc_r]
+    bufr[()] = np.random.random(shp)
+    ref = bufr.copy()
+    ducc0.fft.r2c(bufr, out=buf)
+    ducc0.fft.c2r(buf, out=bufr,inorm=2, lastsize=shp[-1], forward=False)
+    _assert_close(ref, bufr, 1e-12)

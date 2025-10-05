@@ -39,6 +39,7 @@ struct ringdata
   {
   size_t mlim, idx, midx;
   double cth, sth;
+  double wgt=1.;  // currently only used for spin 1/2 SHT accelerated via spin 0
   };
 
 class YlmBase
@@ -1388,7 +1389,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin_gradonly (dcmplx * DUCC0_RESTRICT a
 template<typename T> DUCC0_NOINLINE static void fill_a2m(const Ylmgen &gen,
   const vector<ringdata> &rdata, const vmav<complex<T>,3> &phase,
   size_t mi, size_t &ith, s0data_u &d, array<size_t, nv0*VLEN> &idx,
-  array<size_t, nv0*VLEN> &midx, Tbv0 &cth, size_t &nth)
+  array<size_t, nv0*VLEN> &midx, Tbv0 &cth, array<double, nv0*VLEN> &wgt, size_t &nth)
   {
   constexpr size_t nval=nv0*VLEN;
   nth=0;
@@ -1400,6 +1401,7 @@ template<typename T> DUCC0_NOINLINE static void fill_a2m(const Ylmgen &gen,
       midx[nth] = rdata[ith].midx;
       auto lcth = rdata[ith].cth;
       cth[nth/VLEN][nth%VLEN] = lcth;
+      wgt[nth] = rdata[ith].wgt;
       if (abs(lcth)>0.99)
         d.s.csq[nth]=(1.-rdata[ith].sth)*(1.+rdata[ith].sth);
       else
@@ -1430,7 +1432,7 @@ template<typename T> DUCC0_NOINLINE static void fill_a2m(const Ylmgen &gen,
 template<typename T> DUCC0_NOINLINE static void extract_a2m( size_t mi,
   s0data_u &d, const array<size_t, nv0*VLEN> &idx,
   const array<size_t, nv0*VLEN> &midx, const size_t &nth, const Tbv0 &cth,
-  const vmav<complex<T>,3> &phase)
+  const array<double, nv0*VLEN> &wgt, const vmav<complex<T>,3> &phase)
   {
   size_t nvec = (nth+VLEN-1)/VLEN;
   for (size_t i=0; i<nvec; ++i)
@@ -1447,9 +1449,9 @@ template<typename T> DUCC0_NOINLINE static void extract_a2m( size_t mi,
   for (size_t i=0; i<nth; ++i)
     {
     //adjust for new algorithm
-    phase(0, idx[i], mi) = complex<T>(T(d.s.p1r[i]),T(d.s.p1i[i]));
+    phase(0, idx[i], mi) = complex<T>(T(wgt[i]*d.s.p1r[i]),T(wgt[i]*d.s.p1i[i]));
     if (idx[i]!=midx[i])
-      phase(0, midx[i], mi) = complex<T>(T(d.s.p2r[i]),T(d.s.p2i[i]));
+      phase(0, midx[i], mi) = complex<T>(T(wgt[i]*d.s.p2r[i]),T(wgt[i]*d.s.p2i[i]));
     }
   }
 template<typename T> DUCC0_NOINLINE static void fill_a2m_spin(
@@ -1515,10 +1517,6 @@ template<typename T> DUCC0_NOINLINE static void extract_a2m_spin(
     }
   for (size_t i=0; i<nth; ++i)
     {
-    dcmplx q1(d.s.p1pr[i], d.s.p1pi[i]),
-           q2(d.s.p2pr[i], d.s.p2pi[i]),
-           u1(d.s.p1mr[i], d.s.p1mi[i]),
-           u2(d.s.p2mr[i], d.s.p2mi[i]);
     phase(0, idx[i], mi) = complex<T>(T(d.s.p1pr[i]), T(d.s.p1pi[i]));
     phase(1, idx[i], mi) = complex<T>(T(d.s.p1mr[i]), T(d.s.p1mi[i]));
     if (idx[i]!=midx[i])
@@ -1554,15 +1552,16 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
       vector<s0data_u> v_d;
       vector<array<size_t, nval>> v_idx, v_midx;
       vector<Tbv0> v_cth;
+      vector<array<double, nval>> v_wgt;
       vector<size_t> v_nth;
 
       size_t ith=0;
       while (ith<rdata.size())
         {
         v_d.push_back({}); v_idx.push_back({}); v_midx.push_back({});
-        v_cth.push_back({}); v_nth.push_back(0);
+        v_cth.push_back({}); v_nth.push_back(0); v_wgt.push_back({});
         fill_a2m(gen, rdata, phase, mi, ith, v_d.back(), v_idx.back(),
-                 v_midx.back(), v_cth.back(), v_nth.back());
+                 v_midx.back(), v_cth.back(), v_wgt.back(), v_nth.back());
         if (v_nth.back()==0)
           v_d.pop_back();
         }
@@ -1577,7 +1576,7 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         }
 
       for (size_t vi=0; vi<v_d.size(); ++vi)
-        extract_a2m(mi, v_d[vi], v_idx[vi], v_midx[vi], v_nth[vi], v_cth[vi], phase);
+        extract_a2m(mi, v_d[vi], v_idx[vi], v_midx[vi], v_nth[vi], v_cth[vi], v_wgt[vi], phase);
       }
     else
       {
@@ -1586,16 +1585,17 @@ template<typename T> DUCC0_NOINLINE static void inner_loop_a2m(SHT_mode mode,
         {
         s0data_u d;
         array<size_t, nval> idx, midx;
+        array<double, nval> wgt;
         Tbv0 cth;
         size_t nth=0;
         while ((nth<nval)&&(ith<rdata.size()))
           {
-          fill_a2m(gen, rdata, phase, mi, ith, d, idx, midx, cth, nth);
+          fill_a2m(gen, rdata, phase, mi, ith, d, idx, midx, cth, wgt, nth);
 
           if (nth>0)
             {
             calc_alm2map (almtmp.data(), gen, d.v, nth, gen.m, gen.lmax+1);
-            extract_a2m(mi, d, idx, midx, nth, cth, phase);
+            extract_a2m(mi, d, idx, midx, nth, cth, wgt, phase);
             }
           }
         }
@@ -1678,8 +1678,9 @@ template<typename T> DUCC0_NOINLINE static void fill_m2a(const Ylmgen &gen,
       else
         d.s.csq[nth]=rdata[ith].cth*rdata[ith].cth;
       d.s.sth[nth]=rdata[ith].sth;
-      dcmplx ph1=phase(0, rdata[ith].idx, mi);
-      dcmplx ph2=(rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi);
+      double wgt = rdata[ith].wgt;
+      dcmplx ph1 = wgt*dcmplx(phase(0, rdata[ith].idx, mi));
+      dcmplx ph2 = wgt*dcmplx((rdata[ith].idx==rdata[ith].midx) ? 0 : phase(0, rdata[ith].midx, mi));
       d.s.p1r[nth]=(ph1+ph2).real(); d.s.p1i[nth]=(ph1+ph2).imag();
       d.s.p2r[nth]=(ph1-ph2).real(); d.s.p2i[nth]=(ph1-ph2).imag();
       //adjust for new algorithm
