@@ -140,15 +140,18 @@ struct util // hack to avoid duplicate symbols
         MR_assert(ac.shape(i) == ar.shape(i)/2+1, "axis length mismatch");
         if (inplace)
           {
-          MR_assert(ac.stride(i)==1, "stride on halfcomplex axis must be 1");
-          MR_assert(ar.stride(i)==1, "stride on halfcomplex axis must be 1");
+          MR_assert((ac.shape(i)==1) || (ac.stride(i)==1),
+            "stride on halfcomplex axis must be 1");
+          MR_assert((ar.shape(i)==1) || (ar.stride(i)==1),
+            "stride on halfcomplex axis must be 1");
           }
         }
       else
         {
         MR_assert(ac.shape(i) == ar.shape(i), "axis length mismatch");
         if (inplace)
-          MR_assert(2*ac.stride(i)==ar.stride(i), "stride mismatch");
+          MR_assert((ac.shape(i)==1) || (2*ac.stride(i)==ar.stride(i)),
+            "stride mismatch");
         }
       }
     }
