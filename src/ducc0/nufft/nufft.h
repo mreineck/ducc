@@ -289,7 +289,7 @@ size_t krn_id;
            << supp << ", eps=" << epsilon << endl << "  npoints=" << npoints
            << endl << "  memory overhead: "
            << npoints*sizeof(uint32_t)/double(1<<30) << "GB (index) + "
-           << accumulate(nover.begin(), nover.end(), 1, multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
+           << accumulate(nover.begin(), nover.end(), size_t(1), multiplies<>())*sizeof(complex<Tcalc>)/double(1<<30) << "GB (oversampled grid)" << endl;
       }
 
   public:

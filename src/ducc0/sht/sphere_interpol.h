@@ -134,9 +134,6 @@ template<typename T> class SphereInterpol
         union kbuf {
           T scalar[2*nvec*vlen];
           Tsimd simd[2*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 

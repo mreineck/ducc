@@ -69,7 +69,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
     /*! Returns the number of the next ring to the north of \a z=cos(theta).
         It may return 0; in this case \a z lies north of all rings. */
     inline I ring_above (double z) const;
-    void in_ring (I iz, double phi0, double dphi, rangeset<I> &pixset) const;
+//    void in_ring (I iz, double phi0, double dphi, rangeset<I> &pixset) const;
 
     template<typename I2> void query_multidisc (const vector<vec3> &norm,
       const vector<double> &rad, int fact, rangeset<I2> &pixset) const;
