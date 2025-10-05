@@ -750,9 +750,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         union kbuf {
           Tacc scalar[2*nvec*vlen];
           mysimd<Tacc> simd[2*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 
@@ -852,9 +849,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         union kbuf {
           Tcalc scalar[2*nvec*vlen];
           mysimd<Tcalc> simd[2*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 
@@ -1178,9 +1172,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         union kbuf {
           Tacc scalar[3*nvec*vlen];
           mysimd<Tacc> simd[3*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 
@@ -1289,9 +1280,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         union kbuf {
           Tcalc scalar[3*nvec*vlen];
           mysimd<Tcalc> simd[3*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 

@@ -249,7 +249,7 @@ template<typename T> static NpArr dct_internal(const CNpArr &in,
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
-  bool ortho = inorm == true;
+  bool ortho = (inorm==1);
   ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
@@ -274,7 +274,7 @@ template<typename T> static NpArr dst_internal(const CNpArr &in,
   py::gil_scoped_release release;
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
-  bool ortho = inorm == true;
+  bool ortho = (inorm==1);
   ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
