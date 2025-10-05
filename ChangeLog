@@ -1,10 +1,16 @@
 0.39.0:
 - sht:
+  - Standard SHT with spins 1 or 2 should now be significantly faster
+    (up to a factor of 2 for large band limits).
+    DERIV1 and GRAD_ONLY modes have not changed.
   - various improvements in the inner loops for AVX512, mainly in the
     synthesis direction.
   - improved scaling behaviour for high thread counts
-  - experimental support routines for transforming between spin 1 and spin 0
-    a_lm for faster spin-1 SHTs via a detour to spin 0.
+  - functions taking or returning a ring-based map now take an optional
+    argument with ring weights that are applied before resp. after the
+    transform.
+  - pseudo_analysis and pseudo_analysis_general now allow providing an initial
+    guess for the solution.
 
 - nufft:
   - improved mutex usage in Type 1 transforms, which should enable better

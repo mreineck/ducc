@@ -23,7 +23,7 @@
 /** \file ducc0/math/solvers.h
  *  Various solvers for linear equation systems
  *
- *  \copyright Copyright (C) 2022-2023 Max-Planck-Society
+ *  \copyright Copyright (C) 2022-2025 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -57,10 +57,11 @@ template<typename T> auto sym_ortho(T a, T b, T &c, T &s, T &r)
    C. C. Paige and M. A. Saunders, Algorithm 583; LSQR: Sparse linear
    equations and least-squares problems, TOMS 8(2), 195--209 (1982).
 */
+/* NOTE: "x" must contain an initial guess (if in doubt, use a zero vector) */
 template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
   auto lsqr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
-            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
+            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
@@ -78,10 +79,8 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto bnorm = fnormb(b);
-  MR_assert(x.shape()==x0.shape(), "shape mismatch");
-  mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
-  vmav<Tx, xdim> xtmp(x0.shape(), UNINITIALIZED);
+  vmav<Tx, xdim> xtmp(x.shape(), UNINITIALIZED);
   vmav<Tb, bdim> btmp(b.shape(), UNINITIALIZED);
   {
   op(x,btmp);
@@ -89,7 +88,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   }
   auto beta = fnormb(u);
 
-  vmav<Tx, xdim> v(x0.shape(), UNINITIALIZED);
+  vmav<Tx, xdim> v(x.shape(), UNINITIALIZED);
   double alpha = 0;
   if (beta>0)
     {
@@ -103,7 +102,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   if (alpha>0)
     mav_apply([xalpha=Tfx(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
 
-  vmav<Tx, xdim> w(x0.shape(), UNINITIALIZED);
+  vmav<Tx, xdim> w(x.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, w, v);
 
   size_t istop = 0,
@@ -127,7 +126,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   if (conlim>0)
     ctol = 1/conlim;
 
-  if (arnorm==0)  // x0 is a solution
+  if (arnorm==0)  // initial guess is a solution
     return make_tuple(x, istop, itn, rnorm, arnorm, anorm, acond, xnorm, bnorm);
 
   for (itn=1; itn<=maxiter; ++itn)
@@ -283,10 +282,11 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
    Michael Saunders                saunders@stanford.edu
    Systems Optimization Laboratory
    Dept of MS&E, Stanford University. */
+/* NOTE: "x" must contain an initial guess (if in doubt, use a zero vector) */
 template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
   auto lsmr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
-            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x, const cmav<Tx,xdim> &x0,
+            const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
@@ -304,14 +304,12 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto normb = fnormb(b);
-  MR_assert(x.shape()==x0.shape(), "shape mismatch");
-  mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, x, x0);
 
   // we don't need both temporary arrays at the same time, so we can overlay
   // them in memory. Don't try this at home!
-  auto maxbytes = max(x0.size()*sizeof(Tx), b.size()*sizeof(Tb));
+  auto maxbytes = max(x.size()*sizeof(Tx), b.size()*sizeof(Tb));
   aligned_array<char> tmpstorage(maxbytes);
-  vmav<Tx, xdim> xtmp(reinterpret_cast<Tx *>(tmpstorage.data()), x0.shape());
+  vmav<Tx, xdim> xtmp(reinterpret_cast<Tx *>(tmpstorage.data()), x.shape());
   vmav<Tb, bdim> btmp(reinterpret_cast<Tb *>(tmpstorage.data()), b.shape());
   {
   op(x,btmp);
@@ -319,7 +317,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   }
   auto beta = fnormb(u);
 
-  vmav<Tx, xdim> v(x0.shape(), UNINITIALIZED);
+  vmav<Tx, xdim> v(x.shape(), UNINITIALIZED);
   double alpha = 0;
   if (beta>0)
     {
@@ -374,7 +372,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   if (verbose)
     cout << "0" << " " << normr << " " << normar << " " << normA << " " << condA << endl;
 
-  if (normar==0)  // x0 is a solution
+  if (normar==0)  // initial guess is a solution
     return make_tuple(x, istop, itn, normr, normar, normA, condA, normx, normb);
 
   if (normb==0)  // zero vector is a solution

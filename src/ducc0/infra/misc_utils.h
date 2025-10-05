@@ -115,7 +115,7 @@ inline bool set_heap_trim_limit(double gbytes)
   {
   auto nbytes = size_t(1e9*gbytes);
   mallopt(M_MMAP_THRESHOLD, nbytes);  // never do mmap() on smaller allocations
-  mallopt(M_TRIM_THRESHOLD, nbytes);  // never give memory back to OS
+  mallopt(M_TRIM_THRESHOLD, nbytes);
   return true;
   }
 #else

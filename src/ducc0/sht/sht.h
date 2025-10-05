@@ -17,7 +17,7 @@
 /*! \file sht.h
  *  Functionality related to spherical harmonic transforms
  *
- *  \copyright Copyright (C) 2020-2023 Max-Planck-Society
+ *  \copyright Copyright (C) 2020-2025 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -78,6 +78,7 @@ template<typename T> void map2leg(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
 template<typename T> void leg2map(  // FFT
@@ -86,6 +87,7 @@ template<typename T> void leg2map(  // FFT
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
 
@@ -100,44 +102,11 @@ template<typename T> void synthesis(
   const cmav<size_t,1> &nphi, // (nrings)
   const cmav<double,1> &phi0, // (nrings)
   const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol=false);
-
-template<typename T> void adjoint_synthesis(
-  const vmav<complex<T>,2> &alm, // (ncomp, *)
-  const cmav<T,2> &map, // (ncomp, *)
-  size_t spin,
-  size_t lmax,
-  const cmav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const cmav<double,1> &theta, // (nrings)
-  const cmav<size_t,1> &nphi, // (nrings)
-  const cmav<double,1> &phi0, // (nrings)
-  const cmav<size_t,1> &ringstart, // (nrings)
-  ptrdiff_t pixstride,
-  size_t nthreads,
-  SHT_mode mode,
-  bool theta_interpol=false);
-
-template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
-  const vmav<complex<T>,2> &alm, // (ncomp, *)
-  const cmav<T,2> &map, // (ncomp, *)
-  size_t spin,
-  size_t lmax,
-  const cmav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const cmav<double,1> &theta, // (nrings)
-  const cmav<size_t,1> &nphi, // (nrings)
-  const cmav<double,1> &phi0, // (nrings)
-  const cmav<size_t,1> &ringstart, // (nrings)
-  ptrdiff_t pixstride,
-  size_t nthreads,
-  size_t maxiter,
-  double epsilon,
-  bool theta_interpol=false);
-
 template<typename T> void synthesis_2d(
   const cmav<complex<T>,2> &alm,
   const vmav<T,3> &map,
@@ -147,43 +116,9 @@ template<typename T> void synthesis_2d(
   ptrdiff_t lstride,
   const string &geometry,
   double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads,
   SHT_mode mode);
-
-template<typename T> void adjoint_synthesis_2d(
-  const vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map,
-  size_t spin,
-  size_t lmax,
-  const cmav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const string &geometry,
-  double phi0,
-  size_t nthreads,
-  SHT_mode mode);
-
-template<typename T> void analysis_2d(
-  const vmav<complex<T>,2> &alm,
-  const cmav<T,3> &map,
-  size_t spin,
-  size_t lmax,
-  const cmav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const string &geometry,
-  double phi0,
-  size_t nthreads);
-
-template<typename T> void adjoint_analysis_2d(
-  const cmav<complex<T>,2> &alm,
-  const vmav<T,3> &map,
-  size_t spin,
-  size_t lmax,
-  const cmav<size_t,1> &mstart, // (mmax+1)
-  ptrdiff_t lstride,
-  const string &geometry,
-  double phi0,
-  size_t nthreads);
-
 template<typename T, typename Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm,
   const vmav<T,2> &map,
@@ -198,6 +133,34 @@ template<typename T, typename Tloc> void synthesis_general(
   SHT_mode mode,
   bool verbose=false);
 
+template<typename T> void adjoint_synthesis(
+  const vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol=false);
+template<typename T> void adjoint_synthesis_2d(
+  const vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
+  size_t nthreads,
+  SHT_mode mode);
 template<typename T, typename Tloc> void adjoint_synthesis_general(
   const vmav<complex<T>,2> &alm,
   const cmav<T,2> &map,
@@ -212,6 +175,35 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   SHT_mode mode,
   bool verbose=false);
 
+template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
+  const vmav<complex<T>,2> &alm, // (ncomp, *)
+  const cmav<T,2> &map, // (ncomp, *)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  const cmav<size_t,1> &nphi, // (nrings)
+  const cmav<double,1> &phi0, // (nrings)
+  const cmav<size_t,1> &ringstart, // (nrings)
+  const cmav<double,1> &ringfactor, // (nrings)
+  ptrdiff_t pixstride,
+  size_t nthreads,
+  size_t maxiter,
+  double epsilon,
+  bool theta_interpol=false,
+  bool alm_contains_initial_guess=false);
+template<typename T> void analysis_2d(
+  const vmav<complex<T>,2> &alm,
+  const cmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
+  size_t nthreads);
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
   const cmav<T,2> &map, // (ncomp, npix)
@@ -224,7 +216,20 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   size_t nthreads,
   size_t maxiter,
   double epsilon,
-  bool verbose=false);
+  bool verbose=false,
+  bool alm_contains_initial_guess=false);
+
+template<typename T> void adjoint_analysis_2d(
+  const cmav<complex<T>,2> &alm,
+  const vmav<T,3> &map,
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mstart, // (mmax+1)
+  ptrdiff_t lstride,
+  const string &geometry,
+  double phi0,
+  const cmav<double,1> &ringfactor, // (ntheta)
+  size_t nthreads);
 }
 
 using detail_sht::SHT_mode;
@@ -238,15 +243,15 @@ using detail_sht::leg2alm;
 using detail_sht::map2leg;
 using detail_sht::leg2map;
 using detail_sht::synthesis;
-using detail_sht::adjoint_synthesis;
-using detail_sht::pseudo_analysis;
 using detail_sht::synthesis_2d;
-using detail_sht::adjoint_synthesis_2d;
-using detail_sht::analysis_2d;
-using detail_sht::adjoint_analysis_2d;
 using detail_sht::synthesis_general;
+using detail_sht::adjoint_synthesis;
+using detail_sht::adjoint_synthesis_2d;
 using detail_sht::adjoint_synthesis_general;
+using detail_sht::pseudo_analysis;
+using detail_sht::analysis_2d;
 using detail_sht::pseudo_analysis_general;
+using detail_sht::adjoint_analysis_2d;
 }
 
 #endif

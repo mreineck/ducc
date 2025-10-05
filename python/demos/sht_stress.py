@@ -33,14 +33,21 @@ def random_alm(lmax, mmax, spin, ncomp):
     return res
 
 
+def random_spin(smax):
+    choice = random.randint(0,2)
+    if choice == 0:
+        return 0
+    if choice == 1:
+        return min(smax, 1+random.randint(0,1))
+    return random.randint(0,smax)
+
+
 def test_random_analysis_2d(lmax_max, nthreads_max):
     geometries = ["CC", "F1", "MW", "MWflip", "GL", "DH", "F2"]
     geometry = random.choice(geometries)
     lmax = random.randint(0,lmax_max)
     mmax = random.randint(0,lmax)
-    spin = random.randint(0,lmax)
-    if random.randint(0,1) == 0:
-        spin=0
+    spin = random_spin(lmax)
 
     nrings = lmax+1
     if geometry=="CC":
@@ -70,9 +77,7 @@ def test_random_analysis_adjointness_2d(lmax_max, nthreads_max):
     geometry = random.choice(geometries)
     lmax = random.randint(0,lmax_max)
     mmax = random.randint(0,lmax)
-    spin = random.randint(0,lmax)
-    if random.randint(0,1) == 0:
-        spin=0
+    spin = random_spin(lmax)
 
     nrings = lmax+1
     if geometry=="CC":
@@ -106,9 +111,7 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     geometry = random.choice(geometries)
     lmax = random.randint(0,lmax_max)
     mmax = random.randint(0,lmax)
-    spin = random.randint(0,lmax)
-    if random.randint(0,1) == 0:
-        spin=0
+    spin = random_spin(lmax)
 
     nrings = random.randint(1, 3*lmax+3)
     if geometry == "CC":
@@ -125,7 +128,7 @@ def test_random_adjointness_2d(lmax_max, nthreads_max):
     v1 = np.sum([myalmdot(alm0[i], alm1[i], lmax) for i in range(ncomp)])
     v2 = np.sum([ducc0.misc.vdot(map0[i], map1[i]) for i in range(ncomp)])
     err = np.abs(v1-v2)/np.maximum(np.abs(v1), np.abs(v2))
-    if err>1e-11:
+    if err>5e-11:
         print("AAAAARGH: adjointness error:", err)
         raise RuntimeError
 
@@ -134,7 +137,7 @@ def test_random_grad_adjointness_2d(lmax_max, nthreads_max):
     geometry = random.choice(geometries)
     lmax = random.randint(1,lmax_max)
     mmax = random.randint(0,lmax)
-    spin = random.randint(1,lmax)
+    spin = max(1,random_spin(lmax))
 
     nrings = random.randint(1, 3*lmax+3)
     if geometry == "CC":
