@@ -639,7 +639,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       // FIXME: we may be able to re-use "leg" for storing "leg_tmp", like so ...
       // auto leg_tmp(subarray<3>(leg,{{},{0,ntheta_tmp},{}}));
-      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads));
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical
+        ({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads)));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
       return;
@@ -813,7 +814,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      vmav<complex<T>,3> leg_tmp({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads));
+      auto leg_tmp(vmav<complex<T>,3>::build_noncritical
+        ({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads)));
       resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
       leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       return;
