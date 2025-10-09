@@ -615,19 +615,11 @@ template<typename T> void alm2leg(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      if (ntheta_tmp<=nrings)
-        {
-        auto leg_tmp(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
-        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
-        }
-      else
-        {
-        auto leg_tmp(vmav<complex<T>,3>::build_noncritical
-          ({leg.shape(0),ntheta_tmp,leg.shape(2)}, PAGE_IN(nthreads)));
-        alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
-        resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
-        }
+      auto leg_tmp = (ntheta_tmp<=nrings) ?
+        subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
+        vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads));
+      alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       return;
       }
   
@@ -637,10 +629,9 @@ template<typename T> void alm2leg(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      // FIXME: we may be able to re-use "leg" for storing "leg_tmp", like so ...
-      // auto leg_tmp(subarray<3>(leg,{{},{0,ntheta_tmp},{}}));
-      auto leg_tmp(vmav<complex<T>,3>::build_noncritical
-        ({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads)));
+      auto leg_tmp = (ntheta_tmp<=leg.shape(1)) ?
+        subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
+        vmav<complex<T>,3>::build_noncritical({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads));
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
       return;
@@ -752,9 +743,9 @@ template<typename T> void alm2leg(  // associated Legendre transform
     }
   }
 
-template<typename T> void leg2alm(  // associated Legendre transform
+template<typename T> void leg2alm_internal(  // associated Legendre transform
   const vmav<complex<T>,2> &alm, // (ncomp, lmidx)
-  const cmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  const vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   size_t spin,
   size_t lmax,
   const cmav<size_t,1> &mval, // (nm)
@@ -763,7 +754,8 @@ template<typename T> void leg2alm(  // associated Legendre transform
   const cmav<double,1> &theta, // (nrings)
   size_t nthreads,
   SHT_mode mode,
-  bool theta_interpol)
+  bool theta_interpol,
+  bool leg_can_be_overwritten)
   {
   // sanity checks
   auto nrings=theta.shape(0);
@@ -801,10 +793,12 @@ template<typename T> void leg2alm(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      auto leg_tmp(vmav<complex<T>,3>::build_noncritical
-        ({leg.shape(0), ntheta_tmp, leg.shape(2)}, PAGE_IN(nthreads)));
+      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<leg.shape(1)) ?
+        subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
+        vmav<complex<T>,3>::build_noncritical
+          ({leg.shape(0), ntheta_tmp, leg.shape(2)}, PAGE_IN(nthreads));
       resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
-      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      leg2alm_internal(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, false, true);
       return;
       }
   
@@ -814,10 +808,12 @@ template<typename T> void leg2alm(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      auto leg_tmp(vmav<complex<T>,3>::build_noncritical
-        ({leg.shape(0), ntheta_tmp, leg.shape(2)},PAGE_IN(nthreads)));
+      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<leg.shape(1)) ?
+        subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
+        vmav<complex<T>,3>::build_noncritical
+          ({leg.shape(0), ntheta_tmp, leg.shape(2)}, PAGE_IN(nthreads));
       resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
-      leg2alm(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
+      leg2alm_internal(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, false, true);
       return;
       }
     }
@@ -924,6 +920,23 @@ template<typename T> void leg2alm(  // associated Legendre transform
         }
       }); /* end of parallel region */
     }
+  }
+template<typename T> void leg2alm(  // associated Legendre transform
+  const vmav<complex<T>,2> &alm, // (ncomp, lmidx)
+  const cmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mval, // (nm)
+  const cmav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol)
+  {
+  vmav<complex<T>,3> leg2(const_cast<complex<T> *>(leg.data()), leg.shape(), leg.stride());
+  leg2alm_internal(alm, leg2, spin, lmax, mval, mstart, lstride, theta, nthreads,
+    mode, theta_interpol, false);
   }
 
 template<typename T> void leg2map(  // FFT
@@ -1123,6 +1136,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
         {
         auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
+// FIXME: this needs to be blocked, otherwise access patterns are really bad!
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1236,6 +1250,7 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
         {
         auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
+// FIXME: this needs to be blocked, otherwise access patterns are really bad!
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1501,16 +1516,16 @@ template<typename T> void adjoint_synthesis(
     auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     map2leg(map, legi, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
-    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,
-      mode, theta_interpol);
+    leg2alm_internal(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp,
+      nthreads, mode, theta_interpol, true);
     }
   else
     {
     auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),
       theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
     map2leg(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads,
-      mode, theta_interpol);
+    leg2alm_internal(alm, leg, spin, lmax, mval, mstart, lstride, theta,
+      nthreads, mode, theta_interpol, true);
     }
   }
 template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
@@ -1694,12 +1709,15 @@ template<typename T> void analysis_2d(
     for (size_t i=0; i<nphi.shape(0); ++i)
       ringfactor2(i) = ringfactor(i)/nphi(i);
     map2leg(map, legi, nphi, phi0, ringstart, ringfactor2, pixstride, nthreads);
-
+SimpleTimer t0;
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
+cout << t0() << endl;
+for (size_t i=0; i<3; ++i)
+  cout << leg.stride(i) << endl;
     vmav<double,1> newtheta({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       newtheta(i) = (pi*i)/(ntheta_leg-1);
-    leg2alm(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads, STANDARD);
+    leg2alm_internal(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads, STANDARD,false, true);
     return;
     }
   else
@@ -1710,7 +1728,7 @@ template<typename T> void analysis_2d(
     for (size_t i=0; i<nphi.shape(0); ++i)
       ringfactor2(i) = ringfactor(i)*wgt(i)/nphi(i);
     map2leg(map, leg, nphi, phi0, ringstart, ringfactor2, pixstride, nthreads);
-    leg2alm(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD);
+    leg2alm_internal(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, STANDARD, false, true);
     }
   }
 
