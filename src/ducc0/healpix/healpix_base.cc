@@ -115,7 +115,7 @@ template<typename I, typename I2> inline void check_pixel (size_t o, size_t orde
       }
     else // (1<=zone<=2)
       for (size_t i=0; i<4; ++i)
-        stk.push_back(make_pair(4*pix+3-i,o+1)); // add children
+        stk.push_back(make_pair(I(4*pix+3-i),o+1)); // add children
     }
   else if (o>order_) // this implies that inclusive==true
     {
@@ -128,7 +128,7 @@ template<typename I, typename I2> inline void check_pixel (size_t o, size_t orde
       {
       if (o<omax) // check sublevels
         for (int i=0; i<4; ++i) // add children in reverse order
-          stk.push_back(make_pair(4*pix+3-i,o+1));
+          stk.push_back(make_pair(I(4*pix+3-i),o+1));
       else // at resolution limit
         {
         pixset.append(pix>>(2*(o-order_))); // output the parent pixel at order_
@@ -146,7 +146,7 @@ template<typename I, typename I2> inline void check_pixel (size_t o, size_t orde
         {
         stacktop=stk.size(); // remember current stack position
         for (size_t i=0; i<4; ++i) // add children in reverse order
-          stk.push_back(make_pair(4*pix+3-i,o+1));
+          stk.push_back(make_pair(I(4*pix+3-i),o+1));
         }
       else // at resolution limit
         pixset.append(pix); // output the pixel

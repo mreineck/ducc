@@ -295,9 +295,6 @@ union s0data_u
   {
   s0data_v v;
   s0data_s s;
-#if defined(_MSC_VER)
-  s0data_u() {}
-#endif
   };
 
 using Tbvx = std::array<Tv,nvx>;
@@ -319,9 +316,6 @@ union sxdata_u
   {
   sxdata_v v;
   sxdata_s s;
-#if defined(_MSC_VER)
-  sxdata_u() {}
-#endif
   };
 
 static inline void Tvnormalize (Tv & DUCC0_RESTRICT val_,

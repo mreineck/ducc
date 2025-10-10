@@ -478,8 +478,9 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
           auto tmp = subarray<2>(wig, {{}, {size_t(el3min), size_t(el3max+2)}});
           constexpr array<int,6> m1 {{0, -2, -2, -2, -2, -2}};
           constexpr array<int,6> m2 {{0,  2,  1,  0,  1,  0}};
-          array<Tsimd,6> xl1 {{el1, el1, el1, el1, el2, el2}};
-          array<Tsimd,6> xl2 {{el2, el2, el2, el2, el1, el1}};
+          Tsimd tel1(el1);
+          array<Tsimd,6> xl1 {{tel1, tel1, tel1, tel1,  el2,  el2}};
+          array<Tsimd,6> xl2 {{ el2,  el2,  el2,  el2, tel1, tel1}};
           for (size_t ii=0; ii<6; ++ii)
             flexible_wigner3j_vec(xl1[ii], xl2[ii], m1[ii], m2[ii],
               Tsimd(el3min)+lofs, subarray<1>(tmp, {{ii}, {}}));

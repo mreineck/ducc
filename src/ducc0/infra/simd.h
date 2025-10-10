@@ -204,16 +204,9 @@ template<typename T, size_t len> struct vmask_
     Tm v;
 
   public:
-#if defined(_MSC_VER)
-    vmask_() {}
-    vmask_(const vmask_ &other) : v(other.v) {}
-    vmask_ &operator=(const vmask_ &other)
-      { v = other.v; return *this; }
-#else
     vmask_() = default;
     vmask_(const vmask_ &other) = default;
     vmask_ &operator=(const vmask_ &other) = default;
-#endif
     vmask_(Tm v_): v(v_) {}
     operator Tm() const  { return v; }
     bool none() const { return hlp::mask_none(v); }
@@ -240,16 +233,9 @@ template<typename T, size_t len> class vtp
     Tv v;
 
   public:
-#if defined(_MSC_VER)
-    vtp() {}
-    vtp(const vtp &other): v(other.v) {}
-    vtp &operator=(const vtp &other)
-      { v=other.v; return *this; }
-#else
     vtp() = default;
     vtp(const vtp &other) = default;
     vtp &operator=(const vtp &other) = default;
-#endif
     vtp(T other): vtp(hlp::from_scalar(other)) {}
     vtp(const Tv &other) : v(other) {}
     vtp &operator=(const T &other) { v=hlp::from_scalar(other); return *this; }
@@ -370,16 +356,9 @@ template<typename T> class pseudoscalar
     T v;
 
   public:
-#if defined(_MSC_VER)
-    pseudoscalar() {}
-    pseudoscalar(const pseudoscalar &other) : v(other.v) {}
-    pseudoscalar & operator=(const pseudoscalar &other)
-      { v=other.v; return *this; }
-#else
     pseudoscalar() = default;
     pseudoscalar(const pseudoscalar &other) = default;
     pseudoscalar & operator=(const pseudoscalar &other) = default;
-#endif
     pseudoscalar(T v_):v(v_) {}
     pseudoscalar operator-() const { return pseudoscalar(-v); }
     pseudoscalar operator+(pseudoscalar other) const { return pseudoscalar(v+other.v); }

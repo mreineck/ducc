@@ -975,9 +975,6 @@ timers.pop();
         union kbuf {
           Tacc scalar[2*nvec*vlen];
           mysimd<Tacc> simd[2*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 
@@ -1071,9 +1068,6 @@ timers.pop();
         union kbuf {
           Tcalc scalar[2*nvec*vlen];
           mysimd<Tcalc> simd[2*nvec];
-#if defined(_MSC_VER)
-          kbuf() {}
-#endif
           };
         kbuf buf;
 
