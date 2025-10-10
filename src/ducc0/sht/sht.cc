@@ -793,7 +793,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<leg.shape(1)) ?
+      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<=leg.shape(1)) ?
         subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
         vmav<complex<T>,3>::build_noncritical
           ({leg.shape(0), ntheta_tmp, leg.shape(2)}, PAGE_IN(nthreads));
@@ -808,7 +808,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
       vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
-      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<leg.shape(1)) ?
+      auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<=leg.shape(1)) ?
         subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
         vmav<complex<T>,3>::build_noncritical
           ({leg.shape(0), ntheta_tmp, leg.shape(2)}, PAGE_IN(nthreads));
@@ -1098,6 +1098,7 @@ template<typename T> void map2leg(  // FFT
       }); /* end of parallel region */
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi,
   bool npi, bool spi, const vmav<complex<T>,3> &lego, size_t spin, size_t lmax,
   size_t nthreads)
@@ -1136,7 +1137,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
         {
         auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
-// FIXME: this needs to be blocked, otherwise access patterns are really bad!
+// FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1212,6 +1213,7 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
     });
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &legi,
   const vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t lmax,
   size_t nthreads)
@@ -1250,7 +1252,7 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
         {
         auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
-// FIXME: this needs to be blocked, otherwise access patterns are really bad!
+// FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -1709,15 +1711,12 @@ template<typename T> void analysis_2d(
     for (size_t i=0; i<nphi.shape(0); ++i)
       ringfactor2(i) = ringfactor(i)/nphi(i);
     map2leg(map, legi, nphi, phi0, ringstart, ringfactor2, pixstride, nthreads);
-SimpleTimer t0;
+
     resample_to_prepared_CC(legi, npi, spi, lego, spin, lmax, nthreads);
-cout << t0() << endl;
-for (size_t i=0; i<3; ++i)
-  cout << leg.stride(i) << endl;
     vmav<double,1> newtheta({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
       newtheta(i) = (pi*i)/(ntheta_leg-1);
-    leg2alm_internal(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads, STANDARD,false, true);
+    leg2alm_internal(alm, lego, spin, lmax, mval, mstart, lstride, newtheta, nthreads, STANDARD, false, true);
     return;
     }
   else
