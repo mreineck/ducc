@@ -44,6 +44,7 @@ inline bool even_odd_m(const cmav<size_t,1> &mval)
   return true;
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
   const vmav<complex<T>,3> &lego, bool npo, bool spo, size_t spin, size_t nthreads, bool adjoint)
   {
@@ -77,6 +78,7 @@ template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool np
         {
         auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
+// FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -135,6 +137,7 @@ template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool np
     });
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &legi, bool npi, bool spi,
   const vmav<complex<T>,3> &lego, bool npo, bool spo, const vector<double> &kernel, size_t spin, size_t nthreads, bool adjoint)
   {
@@ -169,6 +172,7 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
         {
         auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
         auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
+// FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
           // fill dark side
@@ -235,6 +239,7 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
     });
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> &legi, const vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
   MR_assert(even_odd_m(mval), "bad set of m values");
@@ -316,6 +321,7 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
     });
   }
 
+// NOTE: legi and lego may overlap, with identical start address and strides 
 template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> &legi, const vmav<complex<T>,3> &lego, const cmav<double,1> &theta, size_t spin, const cmav<size_t,1> &mval, size_t nthreads)
   {
   MR_assert(even_odd_m(mval), "bad set of m values");
