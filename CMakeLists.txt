@@ -83,7 +83,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
         -Wfatal-errors -Wfloat-conversion -W -Wall -Wstrict-aliasing
         -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual
         -Wcast-align -Wpointer-arith -Wnon-virtual-dtor
-        -Wzero-as-null-pointer-constant)
+        -Wzero-as-null-pointer-constant -Wno-psabi)
 #    set (DUCC0_OPT_FLAGS -O3 -ffp-contract=fast -fexcess-precision=fast -fno-math-errno -fno-signed-zeros -fno-trapping-math -fassociative-math -freciprocal-math)
     # we can use -ffast-math here because the flags will not be used for linking
     set (DUCC0_OPT_FLAGS -O3 -ffast-math)

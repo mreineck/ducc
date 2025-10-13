@@ -83,6 +83,8 @@ namespace detail_fft {
 
 using namespace std;
 
+namespace {
+
 template<typename T> constexpr inline size_t fft1d_simdlen
   = min<size_t>(8, native_simd<T>::size());
 template<> constexpr inline size_t fft1d_simdlen<double>
@@ -1739,6 +1741,8 @@ template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
       }
   };
 
+} // unnamed namespace
+
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
@@ -1784,6 +1788,8 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   else // more than one factor, need a multipass
     return make_shared<cfft_multipass<Tfs>>(l1, ido, ip, roots, vectorize);
   }
+
+namespace {
 
 #define POCKETFFT_EXEC_DISPATCH \
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf, \
@@ -2970,6 +2976,8 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 #undef POCKETFFT_EXEC_DISPATCH
+
+} // unnamed namespace
 
 template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
