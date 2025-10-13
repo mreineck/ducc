@@ -93,6 +93,8 @@ namespace detail_fft {
 
 using namespace std;
 
+namespace {
+
 template<typename T> constexpr inline size_t fft_simdlen
   = min<size_t>(8, native_simd<T>::size());
 template<> constexpr inline size_t fft_simdlen<double>
@@ -1363,6 +1365,8 @@ struct ExecR2R
     }
   };
 
+} // unnamed namespace
+
 template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
   {
   public:
@@ -1581,6 +1585,8 @@ template<typename T> DUCC0_NOINLINE void r2r_separable_fht(const cfmav<T> &in,
     ExecFHT{}, false);
   }
 
+namespace {
+
 template<typename T> void oscarize(const vfmav<T> &data, size_t ax0, size_t ax1,
   size_t nthreads)
   {
@@ -1606,6 +1612,8 @@ template<typename T> void oscarize(const vfmav<T> &data, size_t ax0, size_t ax1,
     hh = v-tll;
     }, nthreads, all, ahl, ahh, alh);
   }
+
+} // unnamed namespace
 
 template<typename T> void r2r_genuine_hartley(const cfmav<T> &in,
   const vfmav<T> &out, const shape_t &axes, T fct, size_t nthreads)
@@ -1656,6 +1664,8 @@ template<typename T> void r2r_genuine_fht(const cfmav<T> &in,
     r1 = ccopy.real()+ccopy.imag();
     }, nthreads);
   }
+
+namespace {
 
 template<typename Tplan, typename T0, typename T, typename Exec>
 DUCC0_NOINLINE void general_convolve_axis(const cfmav<T> &in, const vfmav<T> &out,
@@ -1802,6 +1812,8 @@ struct ExecConv1C
     copy_output(it, res, out);
     }
   };
+
+} // unnamed namespace
 
 template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
   const vfmav<T> &out, size_t axis, const cmav<T,1> &kernel, size_t nthreads)

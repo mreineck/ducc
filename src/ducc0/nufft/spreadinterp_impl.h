@@ -1598,7 +1598,7 @@ void Spreadinterp2<Tcalc, Tacc, Tcoord, Tidx>::interp(
   if (si2) si2->interp(cmav<complex<Tgrid>,2>(grid), coords, points);
   if (si3) si3->interp(cmav<complex<Tgrid>,3>(grid), coords, points);
   }
- 
+
 }}
 
 #endif

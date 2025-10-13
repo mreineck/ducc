@@ -351,6 +351,8 @@ thread_pool *get_active_pool()
 #endif
 
 #ifdef DUCC0_NO_LOWLEVEL_THREADING
+size_t available_hardware_threads() { return 1; }
+size_t ducc0_default_num_threads() { return 1; }
 
 size_t available_hardware_threads()
   { return 1; }

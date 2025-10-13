@@ -58,6 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory>
 #include <numeric>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <tuple>
 #include "ducc0/infra/useful_macros.h"
