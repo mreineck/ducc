@@ -1372,7 +1372,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             xdata.c[cw]=kw[cw]*v;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
 // this is quite voodoo, but helps a lot, at least on my machine
-if constexpr(SUPP<=8)
+if constexpr(false)//(SUPP<=8)
   {
           const Tsimd * DUCC0_RESTRICT fptr1=xdata.v.data();
           for (size_t cu=0; cu<SUPP; ++cu)
