@@ -1,3 +1,15 @@
+0.39.1:
+- general:
+  - Workaround for compilation problems on Alpine Linux
+    (possibly a compiler bug?)
+
+- sht:
+  - reduced memory usage in transforms where resampling in theta was
+    performed
+  - performance tweak for theta interpolation mode (only relevant for SHTs
+    with theta_interpol=True)
+
+
 0.39.0:
 - sht:
   - Standard SHT with spins 1 or 2 should now be significantly faster
