@@ -1371,6 +1371,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           for (size_t cw=0; cw<SUPP; ++cw)
             xdata.c[cw]=kw[cw]*v;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
+// This didn't work with Alpine Linux at release 0.39.
+// I suspect a compiler bug, but I'm not absolutely sure.
+#ifndef DUCC0_ALPINE_LINUX_WORKAROUND
 // this is quite voodoo, but helps a lot, at least on my machine
 if constexpr(SUPP<=8)
   {
@@ -1388,6 +1391,7 @@ if constexpr(SUPP<=8)
               }
   }
 else
+#endif
   {
           const Tacc * DUCC0_RESTRICT fptr1=xdata.f.data();
           const auto j1 = 2*ljump;
