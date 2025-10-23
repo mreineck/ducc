@@ -742,6 +742,30 @@ template<typename T> void alm2leg(  // associated Legendre transform
       }); /* end of parallel region */
     }
   }
+template void alm2leg(  // associated Legendre transform
+  const cmav<complex<float>,2> &alm, // (ncomp, lmidx)
+  const vmav<complex<float>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mval, // (nm)
+  const cmav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol);
+template void alm2leg(  // associated Legendre transform
+  const cmav<complex<double>,2> &alm, // (ncomp, lmidx)
+  const vmav<complex<double>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mval, // (nm)
+  const cmav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol);
 
 template<typename T> void leg2alm_internal(  // associated Legendre transform
   const vmav<complex<T>,2> &alm, // (ncomp, lmidx)
@@ -938,6 +962,30 @@ template<typename T> void leg2alm(  // associated Legendre transform
   leg2alm_internal(alm, leg2, spin, lmax, mval, mstart, lstride, theta, nthreads,
     mode, theta_interpol, false);
   }
+template void leg2alm(  // associated Legendre transform
+  const vmav<complex<float>,2> &alm, // (ncomp, lmidx)
+  const cmav<complex<float>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mval, // (nm)
+  const cmav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol);
+template void leg2alm(  // associated Legendre transform
+  const vmav<complex<double>,2> &alm, // (ncomp, lmidx)
+  const cmav<complex<double>,3> &leg, // (ncomp, nrings, nm)
+  size_t spin,
+  size_t lmax,
+  const cmav<size_t,1> &mval, // (nm)
+  const cmav<size_t,1> &mstart, // (nm)
+  ptrdiff_t lstride,
+  const cmav<double,1> &theta, // (nrings)
+  size_t nthreads,
+  SHT_mode mode,
+  bool theta_interpol);
 
 template<typename T> void leg2map(  // FFT
   const vmav<T,2> &map, // (ncomp, pix)

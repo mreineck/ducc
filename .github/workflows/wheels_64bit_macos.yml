@@ -7,19 +7,19 @@ jobs:
       matrix:
         os: [macos-15]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: python -m pip install --user --upgrade cibuildwheel
       - run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ARCHS: auto64
-          CIBW_SKIP: cp36-* cp37-* pp*
+          CIBW_SKIP: 
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable MACOSX_DEPLOYMENT_TARGET=10.14
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
-          CIBW_TEST_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-* cp311-* pp36-* pp37-* pp38-* pp39-* pp311-* pp312-*
+          CIBW_TEST_SKIP: cp38-* cp39-* cp310-* cp311-* cp312-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
