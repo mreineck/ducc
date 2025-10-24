@@ -617,7 +617,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (ntheta_tmp<=nrings) ?
         subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
-        vmav<complex<T>,3>::build_noncritical({leg.shape(0), leg.shape(2), ntheta_tmp},PAGE_IN(nthreads)).transpose({0,2,1});
+        vmav<complex<T>,3>::build_noncritical(
+          {leg.shape(0), leg.shape(2), ntheta_tmp},PAGE_IN(nthreads)).transpose({0,2,1});
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
       return;
@@ -631,7 +632,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (ntheta_tmp<=leg.shape(1)) ?
         subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
-        vmav<complex<T>,3>::build_noncritical({leg.shape(0), leg.shape(2), ntheta_tmp},PAGE_IN(nthreads)).transpose({0,2,1});
+        vmav<complex<T>,3>::build_noncritical(
+          {leg.shape(0), leg.shape(2), ntheta_tmp},PAGE_IN(nthreads)).transpose({0,2,1});
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
       return;
