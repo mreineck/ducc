@@ -1460,8 +1460,12 @@ template<typename T> void synthesis(
     vmav<double,1> theta_tmp({ntheta_tmp}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_tmp; ++i)
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),
-      max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, PAGE_IN(nthreads)));
+//    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),
+//      max(theta.shape(0),ntheta_tmp),mstart.shape(0)}, PAGE_IN(nthreads)));
+auto leg_(vmav<complex<T>,3>::build_noncritical({map.shape(0),
+      mstart.shape(0), max(theta.shape(0),ntheta_tmp)}, PAGE_IN(nthreads)));
+vmav<complex<T>,3> leg(leg_.data(), {leg_.shape(0), leg_.shape(2), leg_.shape(1)},
+{leg_.stride(0), leg_.stride(2), leg_.stride(1)});
     auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
     auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,
@@ -1471,8 +1475,12 @@ template<typename T> void synthesis(
     }
   else
     {
-    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),
-      theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
+//    auto leg(vmav<complex<T>,3>::build_noncritical({map.shape(0),
+//      theta.shape(0),mstart.shape(0)}, PAGE_IN(nthreads)));
+auto leg_(vmav<complex<T>,3>::build_noncritical({map.shape(0),
+      mstart.shape(0), theta.shape(0)}, PAGE_IN(nthreads)));
+vmav<complex<T>,3> leg(leg_.data(), {leg_.shape(0), leg_.shape(2), leg_.shape(1)},
+{leg_.stride(0), leg_.stride(2), leg_.stride(1)});
     alm2leg(alm, leg, spin, lmax, mval, mstart, lstride, theta, nthreads, mode,
       theta_interpol);
     leg2map(map, leg, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
