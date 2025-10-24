@@ -1006,6 +1006,13 @@ template<typename T> void leg2map(  // FFT
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
 
+vector<size_t> ringidx(nphi.size());
+for (size_t i=0; i<ringidx.size(); ++i) ringidx[i]=i;
+stable_sort(ringidx.begin(), ringidx.end(),[&nphi, &phi0](size_t a, size_t b){
+//  if (nphi(a)==nphi(b)) return phi0(a)<phi0(b);
+  return nphi(a)>nphi(b);
+  });
+
 //  bool well_behaved=true;
 //  if (nrings==1) well_behaved=false;
 //  size_t dring = (nrings>1) ? ringstart(1)-ringstart(0) : ~size_t(0);
@@ -1051,8 +1058,9 @@ template<typename T> void leg2map(  // FFT
       {
       ringhelper helper;
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+      while (auto rng=sched.getNext()) for(auto ith0=rng.lo; ith0<rng.hi; ++ith0)
         {
+size_t ith=ringidx[ith0];
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
@@ -1096,6 +1104,12 @@ template<typename T> void map2leg(  // FFT
 //    if ((i>0) && (ringstart(i)-ringstart(i-1) != dring)) well_behaved=false;
     }
 //  if (nphmax<2*mmax+1) well_behaved=false;
+vector<size_t> ringidx(nphi.size());
+for (size_t i=0; i<ringidx.size(); ++i) ringidx[i]=i;
+stable_sort(ringidx.begin(), ringidx.end(),[&nphi, &phi0](size_t a, size_t b){
+//  if (nphi(a)==nphi(b)) return phi0(a)<phi0(b);
+  return nphi(a)>nphi(b);
+  });
 
 #if 0
   if (well_behaved)
@@ -1132,8 +1146,9 @@ template<typename T> void map2leg(  // FFT
       {
       ringhelper helper;
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
+      while (auto rng=sched.getNext()) for(auto ith0=rng.lo; ith0<rng.hi; ++ith0)
         {
+size_t ith=ringidx[ith0];
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
