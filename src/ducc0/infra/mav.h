@@ -356,10 +356,15 @@ class fmav_info
       }
     fmav_info transpose(const shape_t &axes) const
       {
+      MR_assert(axes.size()==ndim(), "bad axes length");
       shape_t shp2(ndim());
       stride_t str2(ndim());
+      shape_t control(ndim(),0);
       for (size_t i=0; i<ndim(); ++i)
         {
+        MR_assert(axes[i]<ndim(), "invalid axis number");
+        MR_assert(control[axes[i]]==0, "repeated axis");
+        control[axes[i]] = 1;
         shp2[i] = shp[axes[i]];
         str2[i] = str[axes[i]];
         }
@@ -537,8 +542,13 @@ template<size_t ndim> class mav_info
       {
       shape_t shp2;
       stride_t str2;
+      shape_t control;
+      for (auto &c:control) c=0;
       for (size_t i=0; i<ndim; ++i)
         {
+        MR_assert(axes[i]<ndim, "invalid axis number");
+        MR_assert(control[axes[i]]==0, "repeated axis");
+        control[axes[i]] = 1;
         shp2[i] = shp[axes[i]];
         str2[i] = str[axes[i]];
         }
