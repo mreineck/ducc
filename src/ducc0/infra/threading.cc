@@ -87,7 +87,7 @@ class latch
     using lock_t = UniqueLock;
 
   public:
-    latch(size_t n): num_left_(n) {}
+    explicit latch(size_t n): num_left_(n) {}
 
     void count_down()
       {

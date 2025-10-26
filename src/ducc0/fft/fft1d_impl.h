@@ -469,7 +469,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP5b(u1,u2,twar,twbr,twai,twbi) \
         { \
-        Tcd ca,cb,da,db; \
+        Tcd ca,cb; \
         ca.r=t0.r+twar*t1.r+twbr*t2.r; \
         ca.i=t0.i+twar*t1.i+twbr*t2.i; \
         cb.i=twai*t4.r twbi*t3.r; \

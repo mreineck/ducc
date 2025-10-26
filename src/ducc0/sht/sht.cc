@@ -995,11 +995,11 @@ template void leg2alm(  // associated Legendre transform
   SHT_mode mode,
   bool theta_interpol);
 
-cmav<size_t,1> get_ringidx(const cmav<size_t,1> &nphi, const cmav<double,1> &phi0)
+cmav<size_t,1> get_ringidx(const cmav<size_t,1> &nphi, const cmav<double,1> &/*phi0*/)
   {
   vmav<size_t,1> res({nphi.shape(0)});
   for (size_t i=0; i<res.shape(0); ++i) res(i)=i;
-  stable_sort(res.data(), res.data()+res.shape(0), [&nphi, &phi0](size_t a, size_t b){
+  stable_sort(res.data(), res.data()+res.shape(0), [&nphi /*, &phi0*/](size_t a, size_t b){
 //    if (nphi(a)==nphi(b)) return phi0(a)<phi0(b);
     return nphi(a)>nphi(b);
     });
