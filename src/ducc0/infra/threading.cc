@@ -130,7 +130,7 @@ size_t ducc0_default_num_threads()
   static const size_t num_threads_ = []()
     {
     static size_t res = available_hardware_threads();
-    auto evar=getenv("DUCC0_NUM_THREADS");
+    auto *evar=getenv("DUCC0_NUM_THREADS");
     // fallback
     if (!evar)
       evar=getenv("OMP_NUM_THREADS");
@@ -150,7 +150,7 @@ int pin_info()
   {
   static const int pin_info_ = []()
     {
-    auto evar=getenv("DUCC0_PIN_DISTANCE");
+    auto *evar=getenv("DUCC0_PIN_DISTANCE");
     if (!evar)
       return -1; // do nothing at all
     auto res = stringToData<long>(trim(std::string(evar)));
@@ -162,7 +162,7 @@ int pin_offset()
   {
   static const int pin_offset_ = []()
     {
-    auto evar=getenv("DUCC0_PIN_OFFSET");
+    auto *evar=getenv("DUCC0_PIN_OFFSET");
     if (!evar)
       return 0;
     auto res = stringToData<long>(trim(std::string(evar)));
@@ -395,7 +395,7 @@ class ducc_thread_pool: public thread_pool
 // return a pointer to a singleton thread_pool, which is always available
 inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new ducc_thread_pool(ducc0_default_num_threads()-1);
+  static auto *master_pool = new ducc_thread_pool(ducc0_default_num_threads()-1);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -662,7 +662,7 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
   // Alternatively we could put a "no-threading" thread pool onto the executing
   // threads, which executes everything sequentially on its own thread,
   // automatically prohibiting nested parallelism.
-  auto pool = get_active_pool();
+  auto *pool = get_active_pool();
 
 #ifdef DUCC0_HIERARCHICAL_SUBMISSION
 
