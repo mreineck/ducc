@@ -995,6 +995,7 @@ template void leg2alm(  // associated Legendre transform
   SHT_mode mode,
   bool theta_interpol);
 
+#if 0
 cmav<size_t,1> get_ringidx(const cmav<size_t,1> &nphi, const cmav<double,1> &/*phi0*/)
   {
   vmav<size_t,1> res({nphi.shape(0)});
@@ -1005,6 +1006,7 @@ cmav<size_t,1> get_ringidx(const cmav<size_t,1> &nphi, const cmav<double,1> &/*p
     });
   return res;
   }
+#endif
 
 template<typename T> void leg2map(  // FFT
   const vmav<T,2> &map, // (ncomp, pix)
@@ -1024,8 +1026,6 @@ template<typename T> void leg2map(  // FFT
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");
   size_t mmax=leg.shape(2)-1;
-
-  auto ringidx(get_ringidx(nphi, phi0));
 
 //  bool well_behaved=true;
 //  if (nrings==1) well_behaved=false;
@@ -1072,9 +1072,8 @@ template<typename T> void leg2map(  // FFT
       {
       ringhelper helper;
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-      while (auto rng=sched.getNext()) for(auto ith0=rng.lo; ith0<rng.hi; ++ith0)
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
-size_t ith=ringidx(ith0);
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
@@ -1119,8 +1118,6 @@ template<typename T> void map2leg(  // FFT
     }
 //  if (nphmax<2*mmax+1) well_behaved=false;
 
-  auto ringidx(get_ringidx(nphi, phi0));
-
 #if 0
   if (well_behaved)
     {
@@ -1156,9 +1153,8 @@ template<typename T> void map2leg(  // FFT
       {
       ringhelper helper;
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
-      while (auto rng=sched.getNext()) for(auto ith0=rng.lo; ith0<rng.hi; ++ith0)
+      while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
-size_t ith=ringidx(ith0);
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
